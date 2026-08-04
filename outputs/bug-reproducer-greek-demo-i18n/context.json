@@ -1,0 +1,55 @@
+{
+  "title": "Greek demo crashes on review tones and shows Russian copy",
+  "project": "LocalOS",
+  "generated_at": "2026-08-04",
+  "mode": "prove-fix",
+  "original_report": "On the multilingual demo, a Greek guided-tour step crashes with TypeError: Cannot read properties of undefined (reading 'tones'); the Progress and Maps pages also show Russian system copy while Greek is selected.",
+  "discovery_scope": [
+    "frontend/src/i18n/LanguageContext.tsx and Greek locale structure",
+    "frontend/src/components/ReviewReplyAssistant.tsx translation access",
+    "frontend/src/pages/dashboard/ProgressPage.tsx and progressPageCopy.ts",
+    "frontend/src/pages/dashboard/CardOverviewPage.tsx visible services start screen"
+  ],
+  "candidates": [],
+  "expected": "Selecting Greek keeps every tested demo step renderable and displays Greek system copy on review replies, business progress, and the maps/services start screen.",
+  "actual": "ReviewReplyAssistant dereferenced a missing reviewReply.tones object and crashed; Progress and CardOverview rendered Russian labels and API-derived Russian strings.",
+  "environment": "React 18, Vitest 4.1.10, jsdom, macOS arm64 local frontend workspace",
+  "reproduction": "Three focused component/page tests select Greek through the real LanguageProvider, render the reported routes with deterministic API fixtures, and assert the review workflow renders plus the Progress and Maps screens contain their Greek headings without Cyrillic system copy.",
+  "failure_signal": "Before the fix, the focused run had 3 failed tests and an unhandled TypeError at ReviewReplyAssistant.tsx:313 reading reviewReply.tones.friendly.",
+  "root_cause": "LanguageProvider replaced the complete English dictionary with an incomplete locale object, so absent nested branches were undefined. In addition, Progress API labels and CardOverview presentation strings had Russian-only or Russian/English-only rendering paths.",
+  "fix_summary": "Deep-merge the selected locale over the complete English dictionary, supply the Greek review-reply branch, localize Greek progress/API copy, and route the visible CardOverview services start screen through Greek page copy.",
+  "why_causal": "The merge guarantees the nested tones contract for every locale, while the added Greek dictionaries replace the exact hardcoded and API-derived strings asserted by the route tests.",
+  "reproduction_files": [
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/components/ReviewReplyAssistant.i18n.test.tsx", "line": 1, "summary": "Reproduces the missing Greek reviewReply.tones crash."},
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/pages/dashboard/ProgressPage.i18n.test.tsx", "line": 1, "summary": "Covers Greek localization of structured progress data."},
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/pages/dashboard/CardOverviewPage.i18n.test.tsx", "line": 1, "summary": "Covers the Greek maps/services start screen and Cyrillic leakage."}
+  ],
+  "fix_files": [
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/i18n/LanguageContext.tsx", "line": 17, "summary": "Recursively fills missing locale branches from English."},
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/i18n/locales/el.ts", "line": 1, "summary": "Adds Greek card and review-reply copy."},
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/pages/dashboard/progressPageCopy.ts", "line": 1, "summary": "Adds Greek progress labels and API-copy normalization."},
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/pages/dashboard/CardOverviewPage.tsx", "line": 77, "summary": "Uses localized copy on the maps/services start screen."},
+    {"path": "/tmp/localos-demo-i18n-20260804/frontend/src/pages/dashboard/cardOverviewPageCopy.ts", "line": 1, "summary": "Defines English, Russian, and Greek page-level presentation copy."}
+  ],
+  "checks": [
+    {"name": "Exact reproducer", "status": "passed", "detail": "Same command changed from exit 1 with 3 failures to exit 0 with 4 passing tests."},
+    {"name": "Relevant demo and tour tests", "status": "passed", "detail": "27 tests passed across six files."},
+    {"name": "Targeted ESLint", "status": "passed", "detail": "No errors; 20 pre-existing warnings remain in legacy files."},
+    {"name": "Production frontend build", "status": "passed", "detail": "Vite production build completed successfully in 8.80 seconds."}
+  ],
+  "reproduce": [
+    "cd frontend && ./node_modules/.bin/vitest run src/components/ReviewReplyAssistant.i18n.test.tsx src/pages/dashboard/ProgressPage.i18n.test.tsx src/pages/dashboard/CardOverviewPage.i18n.test.tsx"
+  ],
+  "limitations": [
+    "The focused CardOverview fixture covers the initial empty-services screen; deeper service dialogs and every tab are outside this reproducer.",
+    "English fallback prevents crashes for untranslated nested keys but intentionally remains visible until a locale supplies its own translation."
+  ],
+  "residual_risks": [
+    "Older shared service-filter controls still contain Russian literals when a non-empty service list is opened; translating that shared component requires a separately scoped change.",
+    "Other Greek dashboard pages not included in the supplied screenshots may still fall back to English where Greek keys are absent."
+  ],
+  "notes": [
+    "No API, route, production data, external send, or action behavior changed.",
+    "The existing root bug-reproducer report belongs to another task, so this evidence is stored in a task-specific output directory."
+  ]
+}
