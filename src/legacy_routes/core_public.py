@@ -362,14 +362,13 @@ def index():
 def serve_assets(filename):
     """Раздача ассетов Vite/SPA"""
     assets_dir = os.path.join(FRONTEND_DIST_DIR, 'assets')
-    if not os.path.isfile(os.path.join(assets_dir, filename)):
-        current_chunk = resolve_current_lazy_chunk(FRONTEND_DIST_DIR, filename)
-        if current_chunk:
-            logger.warning("Serving current Vite chunk %s for stale request %s", current_chunk, filename)
-            response = send_from_directory(assets_dir, current_chunk)
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            response.headers["X-LocalOS-Asset-Fallback"] = current_chunk
-            return response
+    current_chunk = resolve_current_lazy_chunk(FRONTEND_DIST_DIR, filename)
+    if current_chunk and current_chunk != filename:
+        logger.warning("Serving current Vite chunk %s for stale request %s", current_chunk, filename)
+        response = send_from_directory(assets_dir, current_chunk)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["X-LocalOS-Asset-Fallback"] = current_chunk
+        return response
     return send_from_directory(assets_dir, filename)
 
 @app.route('/public-audit/<path:filename>')

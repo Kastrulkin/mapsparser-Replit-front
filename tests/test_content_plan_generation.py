@@ -202,6 +202,32 @@ def test_content_plan_skeleton_respects_allowed_period_and_sources():
     assert any(item["content_type"] == "audit" for item in plan["items"])
 
 
+@pytest.mark.parametrize(
+    ("density", "expected_items"),
+    [
+        ("light", 9),
+        ("standard", 13),
+        ("active", 30),
+    ],
+)
+def test_content_plan_density_matches_frequency_shown_to_user(density, expected_items):
+    plan = build_content_plan_skeleton(
+        {
+            "business": {"name": "Тестовый бизнес", "city": "Санкт-Петербург"},
+            "services": [],
+            "seo_keywords": [],
+            "sales_signals": [],
+            "audit_signals": [],
+        },
+        period_days=30,
+        density=density,
+        content_mix={"seasonal": True},
+        period_start=date(2026, 8, 1),
+    )
+
+    assert len(plan["items"]) == expected_items
+
+
 def test_content_plan_skeleton_uses_grounded_goals_for_each_signal_type():
     context = {
         "business": {"name": "LocalOS Cafe", "city": "Кудрово"},

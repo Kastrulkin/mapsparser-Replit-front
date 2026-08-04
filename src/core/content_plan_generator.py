@@ -46,10 +46,10 @@ def _safe_text(value: Any) -> str:
 def _weekly_frequency_by_density(density: str) -> int:
     normalized = _safe_text(density).lower()
     if normalized == "light":
-        return 1
+        return 2
     if normalized == "active":
-        return 3
-    return 2
+        return 7
+    return 3
 
 
 def _content_mix_value(content_mix: dict[str, Any], key: str, fallback: bool = True) -> bool:

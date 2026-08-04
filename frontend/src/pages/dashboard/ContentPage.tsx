@@ -291,6 +291,17 @@ const DEFAULT_CREATE_DRAFT: CreatePlanDraft = {
   },
 };
 
+const CONTENT_FREQUENCY_PER_WEEK: Record<string, number> = {
+  light: 2,
+  standard: 3,
+  active: 7,
+};
+
+const plannedPublicationCount = (periodDays: number, frequency: string) => {
+  const publicationsPerWeek = CONTENT_FREQUENCY_PER_WEEK[frequency] || CONTENT_FREQUENCY_PER_WEEK.standard;
+  return Math.max(4, Math.round(periodDays / 7 * publicationsPerWeek));
+};
+
 const buildChannelSelection = (selectedChannels?: string[]) => {
   const selected = new Set((selectedChannels || []).map((value) => String(value || '').trim()).filter(Boolean));
   return CHANNELS.reduce<Record<string, boolean>>((result, channel) => {
@@ -1726,7 +1737,7 @@ export function ContentPage() {
               <div className="rounded-3xl bg-slate-950 p-5 text-white">
                 <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Будет создано</div>
                 <div className="mt-3 text-3xl font-semibold">
-                  около {Math.max(8, Math.round(createDraft.periodDays * (createDraft.frequency === 'active' ? 1 : createDraft.frequency === 'light' ? 0.35 : 0.55)))} публикаций
+                  {plannedPublicationCount(createDraft.periodDays, createDraft.frequency)} публикаций
                 </div>
                 <div className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
                   <div className="rounded-2xl bg-white/10 px-3 py-3">{getSelectedCount(createDraft.contentTypes)} типов контента</div>
