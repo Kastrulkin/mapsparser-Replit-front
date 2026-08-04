@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 type ResearchSource = {
   id: string;
@@ -62,6 +64,8 @@ type TelegramResearchSetupProps = {
 };
 
 export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = 'business' }: TelegramResearchSetupProps) => {
+  const { language } = useLanguage();
+  const demoCopy = getDemoWorkspaceCopy(language).telegram;
   const [status, setStatus] = useState<ResearchStatus | null>(null);
   const [dialogs, setDialogs] = useState<TelegramDialog[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -262,10 +266,10 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
             <MessageSquareText className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold text-slate-950">Источники Telegram</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Сначала подключите отдельный Telegram-аккаунт для чтения выбранных каналов и чатов.</p>
+            <h3 className="text-base font-semibold text-slate-950">{demoCopy.sources} Telegram</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600">{demoCopy.settingsDescription}</p>
             <Button type="button" variant="outline" asChild className="mt-4 min-h-10 bg-white">
-              <Link to="/dashboard/settings?focus=telegram">Подключить аккаунт</Link>
+              <Link to="/dashboard/settings?focus=telegram">{demoCopy.connect}</Link>
             </Button>
           </div>
         </div>
