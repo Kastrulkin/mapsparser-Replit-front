@@ -74,6 +74,7 @@ describe('OperatorPage localization', () => {
     expect(screen.getByText('Τα προσχέδια ειδήσεων χρειάζονται απόφαση · 4')).toBeInTheDocument();
     expect(screen.getByText(/Βαθμολογία στον χάρτη:/)).toBeInTheDocument();
     expect(screen.getByText(/Κριτικές στους χάρτες:/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Αναφορά προβλήματος' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
     expect(container.textContent).not.toContain('News drafts need a decision');
     expect(container.textContent).not.toContain('Map data should be updated');
