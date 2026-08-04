@@ -257,7 +257,8 @@ export const es = {
       finance: "Finanzas",
       aiChatPromotion: "Promoción Chat IA",
       settings: "Ajustes",
-      network: "Gestión de Red"
+      network: "Gestión de Red",
+      greeting: "¡Libérate de la rutina! 🚀"
     },
     subscription: {
       currentSubscription: "Suscripción Actual",

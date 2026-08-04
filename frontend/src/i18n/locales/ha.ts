@@ -242,7 +242,8 @@ export const ha = {
       finance: "Kudi",
       aiChatPromotion: "Tallan Hirar AI",
       settings: "Saituna",
-      network: "Gudanar da hanyar sadarwa"
+      network: "Gudanar da hanyar sadarwa",
+      greeting: "Rabu da aikin yau da kullum! 🚀"
     },
     subscription: {
       currentSubscription: "Biyan Kuɗi na Yanzu",
