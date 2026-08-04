@@ -29,59 +29,46 @@ class GigaChatConfig:
     
     # Доступные модели GigaChat
     AVAILABLE_MODELS = {
-        "GigaChat-Pro": {
-            "name": "GigaChat-Pro",
+        "GigaChat-2": {
+            "name": "GigaChat-2",
+            "description": "Быстрая модель для простых задач и первичной проверки",
+            "max_tokens": 4000,
+            "supports_images": True,
+            "recommended_for": ["простые ответы", "классификация", "первичная корректура"]
+        },
+        "GigaChat-2-Pro": {
+            "name": "GigaChat-2-Pro",
             "description": "Сбалансированная модель для большинства задач",
             "max_tokens": 4000,
             "supports_images": True,
             "recommended_for": ["ответы на отзывы", "генерация новостей", "AI агенты", "общие задачи"]
         },
-        "GigaChat-Max": {
-            "name": "GigaChat-Max",
+        "GigaChat-2-Max": {
+            "name": "GigaChat-2-Max",
             "description": "Самая мощная модель для сложных аналитических задач",
             "max_tokens": 4000,
             "supports_images": True,
             "recommended_for": ["анализ и оптимизация услуг", "сложный анализ", "стратегические задачи"]
         },
-        "GigaChat-Lite": {
-            "name": "GigaChat-Lite",
-            "description": "Быстрая и экономичная модель для простых задач",
-            "max_tokens": 2000,
-            "supports_images": False,
-            "recommended_for": ["простые ответы", "шаблонные задачи"]
-        },
-        # Обратная совместимость со старыми названиями
-        "GigaChat-2-Pro": {
-            "name": "GigaChat-Pro",
-            "description": "Сбалансированная модель для большинства задач",
+        "GigaChat-3-Ultra": {
+            "name": "GigaChat-3-Ultra",
+            "description": "Резерв для сложных задач и независимой проверки",
             "max_tokens": 4000,
             "supports_images": True,
-            "recommended_for": ["ответы на отзывы", "генерация новостей", "AI агенты", "общие задачи"]
+            "recommended_for": ["сложная проверка", "чувствительный резерв", "большой контекст"]
         },
-        "GigaChat-3": {
-            "name": "GigaChat-Pro",
-            "description": "Сбалансированная модель для большинства задач",
-            "max_tokens": 4000,
-            "supports_images": True,
-            "recommended_for": ["ответы на отзывы", "генерация новостей", "AI агенты", "общие задачи"]
-        },
-        "GigaChat-2.5": {
-            "name": "GigaChat-Pro",
-            "description": "Сбалансированная модель для большинства задач",
-            "max_tokens": 4000,
-            "supports_images": True,
-            "recommended_for": ["ответы на отзывы", "генерация новостей", "AI агенты", "общие задачи"]
-        }
     }
     
     def __init__(self):
         # Модель по умолчанию (можно изменить через переменную окружения)
-        default_model = os.getenv('GIGACHAT_MODEL', 'GigaChat-Max')
+        default_model = os.getenv('GIGACHAT_MODEL', 'GigaChat-2-Pro')
         # Маппинг старых названий на новые
         model_mapping = {
-            'GigaChat-2-Pro': 'GigaChat-Pro',
-            'GigaChat-3': 'GigaChat-Pro',
-            'GigaChat-2.5': 'GigaChat-Pro'
+            'GigaChat-3': 'GigaChat-2-Pro',
+            'GigaChat-2.5': 'GigaChat-2-Pro',
+            'GigaChat-Lite': 'GigaChat-2',
+            'GigaChat-Pro': 'GigaChat-2-Pro',
+            'GigaChat-Max': 'GigaChat-2-Max'
         }
         self.model = model_mapping.get(default_model, default_model)
         
@@ -95,23 +82,23 @@ class GigaChatConfig:
         
         # Валидация модели
         if self.model not in self.AVAILABLE_MODELS:
-            print(f"⚠️ Предупреждение: Модель '{self.model}' не найдена в списке доступных. Используется GigaChat-Max")
-            self.model = 'GigaChat-Max'
+            print(f"⚠️ Предупреждение: Модель '{self.model}' не найдена в списке доступных. Используется GigaChat-2-Pro")
+            self.model = 'GigaChat-2-Pro'
     
     def get_model_info(self):
         """Возвращает информацию о текущей модели"""
         return self.AVAILABLE_MODELS.get(self.model, self.AVAILABLE_MODELS['GigaChat-2-Pro'])
     
-    def get_model_config(self, task_type: str = None):
+    def get_model_config(self, task_type: str = None, model_override: str = ""):
         """Возвращает конфигурацию для API запроса
         
         Args:
             task_type: Ключ задачи из единого services.llm registry.
         """
-        model_name = self.get_model_for_task(task_type or "")
+        model_name = str(model_override or "").strip() or self.get_model_for_task(task_type or "")
         
         # Получаем информацию о модели
-        model_info = self.AVAILABLE_MODELS.get(model_name, self.AVAILABLE_MODELS['GigaChat-Pro'])
+        model_info = self.AVAILABLE_MODELS.get(model_name, self.AVAILABLE_MODELS['GigaChat-2-Pro'])
         
         return {
             "model": model_info['name'],
@@ -136,7 +123,7 @@ class GigaChatConfig:
     def list_available_models(self):
         """Возвращает список доступных моделей (без дубликатов для обратной совместимости)"""
         # Возвращаем только основные модели
-        return ["GigaChat-Pro", "GigaChat-Max", "GigaChat-Lite"]
+        return ["GigaChat-2", "GigaChat-2-Pro", "GigaChat-2-Max", "GigaChat-3-Ultra"]
     
     def set_model(self, model_name: str):
         """Устанавливает модель"""

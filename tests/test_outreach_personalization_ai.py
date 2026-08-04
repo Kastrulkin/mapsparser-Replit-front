@@ -12,10 +12,10 @@ from services.outreach_personalization_ai import (
 )
 
 
-def test_outreach_personalization_uses_gigachat_max() -> None:
+def test_outreach_personalization_uses_gigachat_pro_for_russian_copy() -> None:
     config = GigaChatConfig()
 
-    assert config.get_model_config(task_type="outreach_personalization")["model"] == "GigaChat-Max"
+    assert config.get_model_config(task_type="outreach_personalization")["model"] == "GigaChat-2-Pro"
 
 
 OBSERVATION = "Рейтинг - 4,1; публичных отзывов - 27."

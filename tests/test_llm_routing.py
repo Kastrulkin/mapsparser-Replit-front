@@ -3,7 +3,7 @@ import threading
 
 from services.llm import LLMTaskRequest, LLMTaskResult
 from services.llm import gateway
-from services.llm.adapters import DeepSeekAdapter
+from services.llm.adapters import DeepSeekAdapter, GigaChatAdapter
 from services.llm.policy import most_restrictive_data_class, prepare_prompt_for_provider
 from services.llm.registry import get_task_definition, list_task_definitions, model_for_definition
 from services.llm.metrics import normalize_pilot_metric, pilot_metrics_select
@@ -41,6 +41,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "review_signal_classify",
         "review_signal_synthesis",
         "lead_audit_enrichment",
+        "knowledge_semantic_analysis",
     }
     expected_tasks = {
         "review_reply",
@@ -78,18 +79,29 @@ def test_finance_sales_recognition_is_registered_as_sensitive_json():
     assert definition.response_schema["required"] == ["transactions"]
 
 
-def test_all_gigachat_tasks_default_to_max(monkeypatch):
+def test_gigachat_tasks_use_role_specific_models(monkeypatch):
     monkeypatch.delenv("GIGACHAT_MODEL", raising=False)
+    monkeypatch.delenv("GIGACHAT_MODEL_LITE", raising=False)
+    monkeypatch.delenv("GIGACHAT_MODEL_PRO", raising=False)
     monkeypatch.delenv("GIGACHAT_MODEL_MAX", raising=False)
+    monkeypatch.delenv("GIGACHAT_MODEL_ULTRA", raising=False)
 
-    models = {
-        model_for_definition(item)
-        for item in list_task_definitions()
-        if item.primary_provider == "gigachat"
-    }
+    outreach = get_task_definition("outreach_personalization")
+    review = get_task_definition("review_reply")
+    finance = get_task_definition("finance_sales_recognition")
 
-    assert models == {"GigaChat-Max"}
-    assert "GigaChat-Pro" not in models
+    assert outreach is not None and model_for_definition(outreach) == "GigaChat-2-Pro"
+    assert review is not None and model_for_definition(review) == "GigaChat-2-Pro"
+    assert finance is not None and model_for_definition(finance) == "GigaChat-2-Max"
+
+
+def test_legacy_gigachat_model_environment_names_are_normalized(monkeypatch):
+    definition = get_task_definition("outreach_personalization")
+    assert definition is not None
+
+    monkeypatch.setenv("GIGACHAT_MODEL_PRO", "GigaChat-Pro")
+
+    assert model_for_definition(definition) == "GigaChat-2-Pro"
 
 
 def test_unknown_task_fails_closed():
@@ -166,7 +178,7 @@ def test_schema_validator_reports_required_and_nested_type_errors():
 def test_router_uses_deepseek_only_for_enabled_cohort(monkeypatch):
     calls = []
 
-    def fake_generate(request, definition, *, provider, prompt, shadow=False):
+    def fake_generate(request, definition, *, provider, prompt, shadow=False, **kwargs):
         calls.append((provider, shadow, prompt))
         return LLMTaskResult(
             status="completed",
@@ -238,14 +250,11 @@ def test_public_platform_audit_uses_deepseek_without_tenant_id(monkeypatch):
     assert calls == ["deepseek"]
 
 
-def test_shadow_keeps_gigachat_result_and_records_deepseek_attempt(monkeypatch):
+def test_deepseek_remains_primary_when_shadow_mode_is_enabled(monkeypatch):
     calls = []
-    shadow_finished = threading.Event()
 
     def fake_generate(request, definition, *, provider, prompt, shadow=False):
         calls.append((provider, shadow))
-        if shadow:
-            shadow_finished.set()
         return LLMTaskResult(
             status="completed",
             content='{"source":"manual","destination":"manual"}',
@@ -263,13 +272,83 @@ def test_shadow_keeps_gigachat_result_and_records_deepseek_attempt(monkeypatch):
         LLMTaskRequest(task_key="agent_compiler", prompt="build", business_id="business-1")
     )
 
-    assert result.provider == "gigachat"
+    assert result.provider == "deepseek"
     assert result.shadow is False
-    assert shadow_finished.wait(timeout=1)
-    assert calls == [("gigachat", False), ("deepseek", True)]
+    assert calls == [("deepseek", False)]
 
 
-def test_shadow_saturation_does_not_change_user_result(monkeypatch):
+def test_gigachat_pro_provider_failure_escalates_once_to_max(monkeypatch):
+    calls = []
+
+    def fake_generate(request, definition, *, provider, prompt, shadow=False, model_override=""):
+        calls.append((provider, model_override))
+        if model_override == "GigaChat-2-Pro":
+            return LLMTaskResult(
+                status="provider_error",
+                provider=provider,
+                model=model_override,
+                fallback_reason="GIGACHAT_REQUEST_FAILED",
+            )
+        return LLMTaskResult(
+            status="completed",
+            provider=provider,
+            model=model_override,
+            content="Готовый русский текст",
+        )
+
+    monkeypatch.setattr(gateway, "_generate_once", fake_generate)
+
+    result = gateway.run_llm_task(
+        LLMTaskRequest(task_key="outreach_personalization", prompt="Напиши сообщение")
+    )
+
+    assert result.status == "completed"
+    assert result.model == "GigaChat-2-Max"
+    assert calls == [
+        ("gigachat", "GigaChat-2-Pro"),
+        ("gigachat", "GigaChat-2-Max"),
+    ]
+    assert result.attempt_chain == [
+        {
+            "provider": "gigachat",
+            "model": "GigaChat-2-Pro",
+            "status": "provider_error",
+            "reason": "GIGACHAT_REQUEST_FAILED",
+        },
+        {
+            "provider": "gigachat",
+            "model": "GigaChat-2-Max",
+            "status": "completed",
+            "reason": "",
+        },
+    ]
+
+
+def test_gigachat_adapter_passes_selected_fallback_model_to_client(monkeypatch):
+    observed = {}
+
+    class FakeClient:
+        def analyze_text(self, prompt, **kwargs):
+            observed.update(kwargs)
+            return "Русский текст", {"total_tokens": 12}
+
+    monkeypatch.setattr("services.gigachat_client.get_gigachat_client", lambda: FakeClient())
+
+    definition = get_task_definition("outreach_personalization")
+    assert definition is not None
+    result = GigaChatAdapter().generate(
+        LLMTaskRequest(task_key="outreach_personalization", prompt="Черновик"),
+        definition,
+        prompt="Черновик",
+        model_override="GigaChat-2-Max",
+    )
+
+    assert result.status == "completed"
+    assert result.model == "GigaChat-2-Max"
+    assert observed["model_override"] == "GigaChat-2-Max"
+
+
+def test_shadow_saturation_does_not_replace_deepseek_primary_result(monkeypatch):
     calls = []
 
     class BusyShadowSlots:
@@ -298,8 +377,8 @@ def test_shadow_saturation_does_not_change_user_result(monkeypatch):
     )
 
     assert result.status == "completed"
-    assert result.provider == "gigachat"
-    assert calls == [("gigachat", False)]
+    assert result.provider == "deepseek"
+    assert calls == [("deepseek", False)]
 
 
 def test_shadow_uses_same_single_schema_correction_retry(monkeypatch):
@@ -389,7 +468,7 @@ def test_second_invalid_json_requires_deterministic_fallback(monkeypatch):
     assert recorded == ["fallback_required"]
 
 
-def test_max_failure_uses_deepseek_once_and_records_both_attempts(monkeypatch):
+def test_gigachat_chain_failure_uses_deepseek_once_and_records_attempts(monkeypatch):
     calls = []
     recorded = []
 
@@ -408,13 +487,14 @@ def test_max_failure_uses_deepseek_once_and_records_both_attempts(monkeypatch):
 
     result = gateway.run_llm_task(LLMTaskRequest(task_key="news_generation", prompt="Новость"))
 
-    assert calls == ["gigachat", "deepseek"]
+    assert calls == ["gigachat", "gigachat", "deepseek"]
     assert result.status == "completed"
     assert result.provider == "deepseek"
     assert result.primary_provider == "gigachat"
     assert result.fallback_provider == "deepseek"
     assert result.primary_failure_reason == "MAX_DOWN"
     assert len(recorded) == 2
+    assert len(recorded[0][2]["attempt_chain"]) == 2
 
 
 def test_review_fallback_requires_explicit_sanitized_prompt(monkeypatch):
@@ -431,7 +511,10 @@ def test_review_fallback_requires_explicit_sanitized_prompt(monkeypatch):
     )
 
     assert result.status == "provider_error"
-    assert calls == [("gigachat", "Телефон +7 999 123-45-67")]
+    assert calls == [
+        ("gigachat", "Телефон +7 999 123-45-67"),
+        ("gigachat", "Телефон +7 999 123-45-67"),
+    ]
 
 
 def test_analytics_payloads_are_aggregated_and_anonymized():

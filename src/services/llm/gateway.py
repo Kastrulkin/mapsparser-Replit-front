@@ -7,7 +7,7 @@ import threading
 from services.llm.adapters import DeepSeekAdapter, GigaChatAdapter, _record_llm_usage
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
 from services.llm.policy import most_restrictive_data_class, prepare_prompt_for_provider
-from services.llm.registry import get_task_definition
+from services.llm.registry import get_task_definition, model_for_definition
 from services.llm.schema import parse_json_value, validate_json_schema
 
 
@@ -21,6 +21,19 @@ def _positive_env_int(name: str, default: int) -> int:
 _SHADOW_SEMAPHORE = threading.BoundedSemaphore(
     _positive_env_int("LLM_SHADOW_MAX_CONCURRENCY", 4)
 )
+
+
+GIGACHAT_MODEL_CHAINS = {
+    "GigaChat-2": ("GigaChat-2", "GigaChat-2-Pro", "GigaChat-2-Max"),
+    "GigaChat-2-Pro": ("GigaChat-2-Pro", "GigaChat-2-Max"),
+    "GigaChat-2-Max": ("GigaChat-2-Max", "GigaChat-3-Ultra", "GigaChat-2-Pro"),
+    "GigaChat-3-Ultra": ("GigaChat-3-Ultra", "GigaChat-2-Max", "GigaChat-2-Pro"),
+}
+GIGACHAT_TECHNICAL_FALLBACK_STATUSES = {
+    "provider_error",
+    "provider_unavailable",
+    "empty_response",
+}
 
 
 def _env_enabled(name: str, default: bool = False) -> bool:
@@ -53,8 +66,6 @@ def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest
         and definition.data_class == "public"
     )
     if not platform_public_task and not _deepseek_business_allowed(request.business_id):
-        return "gigachat"
-    if _env_enabled("LLM_SHADOW_MODE") and definition.shadow_allowed:
         return "gigachat"
     return "deepseek"
 
@@ -103,6 +114,7 @@ def _generate_once(
     prompt: str,
     shadow: bool = False,
     data_class_override: str = "",
+    model_override: str = "",
 ) -> LLMTaskResult:
     decision = prepare_prompt_for_provider(
         prompt,
@@ -127,7 +139,81 @@ def _generate_once(
             fallback_reason="LLM_PROVIDER_UNKNOWN",
             shadow=shadow,
         )
-    return selected.generate(request, definition, prompt=decision.prompt, shadow=shadow)
+    return selected.generate(
+        request,
+        definition,
+        prompt=decision.prompt,
+        shadow=shadow,
+        model_override=model_override,
+    )
+
+
+def _attempt_payload(result: LLMTaskResult, *, provider: str, model: str) -> dict[str, str]:
+    return {
+        "provider": provider,
+        "model": str(result.model or model),
+        "status": result.status,
+        "reason": str(result.fallback_reason or ""),
+    }
+
+
+def _gigachat_primary_model(definition: LLMTaskDefinition) -> str:
+    if definition.model_profile.startswith("gigachat_"):
+        return model_for_definition(definition)
+    return str(os.getenv("GIGACHAT_MODEL_ANALYSIS_FALLBACK") or "GigaChat-2-Max").strip()
+
+
+def _generate_with_provider_fallback(
+    request: LLMTaskRequest,
+    definition: LLMTaskDefinition,
+    *,
+    provider: str,
+    prompt: str,
+    shadow: bool = False,
+    data_class_override: str = "",
+) -> LLMTaskResult:
+    if provider != "gigachat":
+        generation_options = {}
+        if data_class_override:
+            generation_options["data_class_override"] = data_class_override
+        return _validated_result(
+            _generate_once(
+                request,
+                definition,
+                provider=provider,
+                prompt=prompt,
+                shadow=shadow,
+                **generation_options,
+            ),
+            request,
+            definition,
+        )
+
+    primary_model = _gigachat_primary_model(definition)
+    models = GIGACHAT_MODEL_CHAINS.get(primary_model, (primary_model,))
+    attempts: list[dict[str, str]] = []
+    result = LLMTaskResult(status="provider_unavailable", provider="gigachat", model=primary_model)
+    for model in models:
+        generation_options = {"model_override": model}
+        if data_class_override:
+            generation_options["data_class_override"] = data_class_override
+        result = _validated_result(
+            _generate_once(
+                request,
+                definition,
+                provider=provider,
+                prompt=prompt,
+                shadow=shadow,
+                **generation_options,
+            ),
+            request,
+            definition,
+        )
+        attempts.append(_attempt_payload(result, provider=provider, model=model))
+        if result.status not in GIGACHAT_TECHNICAL_FALLBACK_STATUSES:
+            break
+    result.attempt_chain = attempts
+    return result
 
 
 def _run_shadow_request(
@@ -210,6 +296,7 @@ def _usage_metadata(
         "fallback_provider": result.fallback_provider,
         "primary_failure_reason": result.primary_failure_reason,
         "output_source": result.output_source or result.provider,
+        "attempt_chain": result.attempt_chain,
     }
 
 
@@ -282,10 +369,12 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
             shadow=request.shadow,
         )
     provider = _provider_for_request(definition, request)
-    result = _validated_result(
-        _generate_once(request, definition, provider=provider, prompt=request.prompt, shadow=request.shadow),
+    result = _generate_with_provider_fallback(
         request,
         definition,
+        provider=provider,
+        prompt=request.prompt,
+        shadow=request.shadow,
     )
     first_result = result
     correction_attempted = False
@@ -297,10 +386,12 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
             + "Ошибки схемы: "
             + json.dumps(result.validation_errors, ensure_ascii=False)
         )
-        corrected_result = _validated_result(
-            _generate_once(request, definition, provider=provider, prompt=correction, shadow=request.shadow),
+        corrected_result = _generate_with_provider_fallback(
             request,
             definition,
+            provider=provider,
+            prompt=correction,
+            shadow=request.shadow,
         )
         corrected_result.usage = _combined_usage(first_result, corrected_result)
         corrected_result.latency_ms += first_result.latency_ms
@@ -328,17 +419,13 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
             result,
             correction_attempted=correction_attempted,
         )
-        fallback = _validated_result(
-            _generate_once(
-                request,
-                definition,
-                provider="deepseek",
-                prompt=request.fallback_prompt or request.prompt,
-                shadow=False,
-                data_class_override=definition.fallback_data_class,
-            ),
+        fallback = _generate_with_provider_fallback(
             request,
             definition,
+            provider="deepseek",
+            prompt=request.fallback_prompt or request.prompt,
+            shadow=False,
+            data_class_override=definition.fallback_data_class,
         )
         fallback.primary_provider = "gigachat"
         fallback.fallback_provider = "deepseek"

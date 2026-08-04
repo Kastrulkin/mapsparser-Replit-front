@@ -67,3 +67,4 @@ class LLMTaskResult:
     fallback_provider: str = ""
     primary_failure_reason: str = ""
     output_source: str = ""
+    attempt_chain: list[dict[str, str]] = field(default_factory=list)

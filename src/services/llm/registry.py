@@ -129,7 +129,7 @@ def _task(
     key: str,
     *,
     provider: str = "gigachat",
-    profile: str = "gigachat_max",
+    profile: str = "gigachat_pro",
     data_class: str = "business_internal",
     response_kind: str = "text",
     schema: dict[str, Any] | None = None,
@@ -187,13 +187,21 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "ai_agent_booking_complex": _task("ai_agent_booking_complex", profile="gigachat_max", data_class="pii"),
     "ai_agent_marketing": _task("ai_agent_marketing", prompt_version="ai_agent_marketing_v1"),
     "agent_custom_message_draft": _task("agent_custom_message_draft"),
-    "knowledge_semantic_analysis": _task("knowledge_semantic_analysis", prompt_version="knowledge_semantic_analysis_v1"),
+    "knowledge_semantic_analysis": _task(
+        "knowledge_semantic_analysis",
+        provider="deepseek",
+        profile="deepseek_reasoning",
+        prompt_version="knowledge_semantic_analysis_v1",
+        shadow_allowed=True,
+        pipeline_stage="analysis",
+    ),
     "average_ticket_matrix": _task(
         "average_ticket_matrix", data_class="financial_sensitive", allow_text_fallback=True,
         fallback_data_class="financial_aggregated", pipeline_stage="copy",
     ),
     "finance_sales_recognition": _task(
         "finance_sales_recognition",
+        profile="gigachat_max",
         data_class="financial_sensitive",
         response_kind="json",
         schema=FINANCE_SALES_RECOGNITION_SCHEMA,
@@ -288,9 +296,20 @@ def list_task_definitions() -> list[LLMTaskDefinition]:
 
 def model_for_definition(definition: LLMTaskDefinition) -> str:
     profiles = {
-        "gigachat_default": os.getenv("GIGACHAT_MODEL", "GigaChat-Max"),
-        "gigachat_max": os.getenv("GIGACHAT_MODEL_MAX", "GigaChat-Max"),
+        "gigachat_default": os.getenv("GIGACHAT_MODEL", "GigaChat-2-Pro"),
+        "gigachat_lite": os.getenv("GIGACHAT_MODEL_LITE", "GigaChat-2"),
+        "gigachat_pro": os.getenv("GIGACHAT_MODEL_PRO", "GigaChat-2-Pro"),
+        "gigachat_max": os.getenv("GIGACHAT_MODEL_MAX", "GigaChat-2-Max"),
+        "gigachat_ultra": os.getenv("GIGACHAT_MODEL_ULTRA", "GigaChat-3-Ultra"),
         "deepseek_fast": os.getenv("DEEPSEEK_MODEL_FAST", "deepseek-v4-flash"),
         "deepseek_reasoning": os.getenv("DEEPSEEK_MODEL_REASONING", "deepseek-v4-pro"),
     }
-    return profiles.get(definition.model_profile, definition.model_profile)
+    selected = profiles.get(definition.model_profile, definition.model_profile)
+    aliases = {
+        "GigaChat-Lite": "GigaChat-2",
+        "GigaChat-Pro": "GigaChat-2-Pro",
+        "GigaChat-Max": "GigaChat-2-Max",
+        "GigaChat-3": "GigaChat-2-Pro",
+        "GigaChat-2.5": "GigaChat-2-Pro",
+    }
+    return aliases.get(selected, selected)

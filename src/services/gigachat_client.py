@@ -16,7 +16,9 @@ from gigachat_config import get_gigachat_config
 class GigaChatClient:
     def __init__(self):
         """Инициализация с поддержкой ротации ключей"""
-        self.base_url = "https://gigachat.devices.sberbank.ru/api/v1"
+        self.base_url = str(
+            os.getenv("GIGACHAT_API_BASE_URL") or "https://api.giga.chat/v1"
+        ).rstrip("/")
         self.oauth_url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
         self.credentials_pool: List[Tuple[str, str]] = []
         self.current_index = 0
@@ -331,7 +333,8 @@ class GigaChatClient:
     def analyze_text(self, prompt: str, task_type: str = None, functions: List[Dict] = None,
                      business_id: str = None, user_id: str = None,
                      usage_reference: str = None, prompt_version: str = None,
-                     shadow: bool = False, record_usage: bool = True) -> Tuple[str, Dict[str, Any]]:
+                     shadow: bool = False, record_usage: bool = True,
+                     model_override: str = "") -> Tuple[str, Dict[str, Any]]:
         """Анализ текста с поддержкой Function Calling
         
         Args:
@@ -355,7 +358,10 @@ class GigaChatClient:
                 "Content-Type": "application/json"
             }
             
-            model_config = self.config.get_model_config(task_type=task_type)
+            model_config = self.config.get_model_config(
+                task_type=task_type,
+                model_override=model_override,
+            )
             data = {
                 "model": model_config["model"],
                 "messages": [

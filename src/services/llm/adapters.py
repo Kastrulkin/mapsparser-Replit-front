@@ -92,12 +92,19 @@ class GigaChatAdapter:
         *,
         prompt: str,
         shadow: bool = False,
+        model_override: str = "",
     ) -> LLMTaskResult:
         from services.gigachat_client import get_gigachat_client
         from gigachat_config import get_gigachat_config
 
         started = time.monotonic()
-        model = str(get_gigachat_config().get_model_config(task_type=request.task_key).get("model") or "")
+        model = str(
+            get_gigachat_config().get_model_config(
+                task_type=request.task_key,
+                model_override=model_override,
+            ).get("model")
+            or ""
+        )
         try:
             content, usage = get_gigachat_client().analyze_text(
                 prompt,
@@ -108,6 +115,7 @@ class GigaChatAdapter:
                 prompt_version=request.prompt_version or definition.prompt_version,
                 shadow=shadow,
                 record_usage=False,
+                model_override=model,
             )
             result = LLMTaskResult(
                 status="completed",
@@ -145,6 +153,7 @@ class DeepSeekAdapter:
         *,
         prompt: str,
         shadow: bool = False,
+        model_override: str = "",
     ) -> LLMTaskResult:
         model = (
             model_for_definition(definition)
