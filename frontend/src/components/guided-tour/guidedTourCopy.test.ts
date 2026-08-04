@@ -27,9 +27,11 @@ describe('guided tour localization', () => {
       title: expect.any(String),
       body: expect.any(String),
     });
-    expect(stepEntries.find(([key]) => key === 'agents-workspace')?.[1]).toMatchObject({
-      title: expect.any(String),
-      body: expect.any(String),
+    ['agents-signals', 'agents-today', 'agents-employees', 'agents-control'].forEach((key) => {
+      expect(stepEntries.find(([stepKey]) => stepKey === key)?.[1]).toMatchObject({
+        title: expect.any(String),
+        body: expect.any(String),
+      });
     });
   });
 

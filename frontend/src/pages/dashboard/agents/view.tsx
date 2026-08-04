@@ -835,7 +835,7 @@ export const AgentBlueprintsView = ({ scope }) => {
 
       {currentBusinessId ? (
         <div className="space-y-4">
-          <section className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+          <section data-tour-target="agents-today" className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
               <span className="font-semibold text-slate-950">{pageCopy.today}</span>
               <span><strong className="tabular-nums text-slate-950">{todaySummary.completedRuns}</strong> {pageCopy.completed}</span>
@@ -876,6 +876,7 @@ export const AgentBlueprintsView = ({ scope }) => {
             </div>
           </section>
           <div className="grid gap-5 lg:grid-cols-[28rem_minmax(0,1fr)]">
+            <div data-tour-target="agents-employees">
             <EmployeeAgentsList
               blueprints={filteredBlueprints}
               detailsById={employeeListDetailsById}
@@ -892,8 +893,9 @@ export const AgentBlueprintsView = ({ scope }) => {
                 setRecentPostCreateHandoff(null);
               }}
             />
+            </div>
 
-            <main className="min-w-0 space-y-4">
+            <main data-tour-target="agents-control" className="min-w-0 space-y-4">
               {selectedBlueprint && selectedEmployeeAction && !runAnimation ? (
                 <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Разделы агента">
                   {([

@@ -121,7 +121,75 @@ const ha = adapt(en, { title: 'Operator', description: 'Rubuta aiki da yare mai 
 
 const copyByLanguage: Record<Language, OperatorPageCopy> = { ru, en, fr, es, el, de, th, ar, ha, tr };
 
-export const operatorPageCopyForLanguage = (language: Language) => copyByLanguage[language];
+type OperatorSummaryCopy = Pick<OperatorPageCopy, 'attention' | 'metrics' | 'sources' | 'mismatchTemplate'>;
+
+const summary = (
+  pendingNews: AttentionCopy,
+  staleMaps: AttentionCopy,
+  metrics: Record<string, string>,
+  sources: Record<string, string>,
+  mismatchTemplate: string,
+): OperatorSummaryCopy => ({
+  attention: { ...en.attention, pending_news: pendingNews, map_data_stale: staleMaps }, metrics, sources, mismatchTemplate,
+});
+
+const summaryByLanguage: Partial<Record<Language, OperatorSummaryCopy>> = {
+  fr: summary(
+    { title: 'Les brouillons d’actualités attendent une décision', description: 'Vérifiez les contenus enregistrés avant de publier ou de poursuivre.' },
+    { title: 'Les données cartographiques doivent être actualisées', description: 'Les dernières données connues sont affichées. Leur actualisation est une action externe payante.' },
+    { provider_rating: 'Note sur la carte', provider_reviews_total: 'Avis sur les cartes', imported_reviews_total: 'Chargés dans LocalOS', imported_reviews_unanswered: 'Sans réponse dans LocalOS' },
+    { cards: 'Cartes', reviews: 'Avis LocalOS' },
+    'Les cartes affichent {provider} avis et LocalOS en contient {imported}. Actualisez les données pour charger la liste complète.',
+  ),
+  es: summary(
+    { title: 'Los borradores de noticias esperan una decisión', description: 'Revisa los materiales guardados antes de publicar o continuar.' },
+    { title: 'Conviene actualizar los datos del mapa', description: 'Se muestran los últimos datos conocidos. Actualizarlos es una acción externa de pago.' },
+    { provider_rating: 'Valoración en el mapa', provider_reviews_total: 'Reseñas en mapas', imported_reviews_total: 'Cargadas en LocalOS', imported_reviews_unanswered: 'Sin respuesta en LocalOS' },
+    { cards: 'Mapas', reviews: 'Reseñas de LocalOS' },
+    'Los mapas muestran {provider} reseñas y LocalOS contiene {imported}. Actualiza los datos para cargar la lista completa.',
+  ),
+  el: summary(
+    { title: 'Τα προσχέδια ειδήσεων χρειάζονται απόφαση', description: 'Ελέγξτε τα αποθηκευμένα υλικά πριν από τη δημοσίευση ή τη συνέχεια της εργασίας.' },
+    { title: 'Τα δεδομένα χαρτών χρειάζονται ενημέρωση', description: 'Εμφανίζονται τα τελευταία γνωστά δεδομένα. Η ενημέρωση χαρτών είναι εξωτερική ενέργεια επί πληρωμή.' },
+    { provider_rating: 'Βαθμολογία στον χάρτη', provider_reviews_total: 'Κριτικές στους χάρτες', imported_reviews_total: 'Φορτώθηκαν στο LocalOS', imported_reviews_unanswered: 'Χωρίς απάντηση στο LocalOS' },
+    { cards: 'Χάρτες', reviews: 'Κριτικές LocalOS' },
+    'Οι χάρτες εμφανίζουν {provider} κριτικές, ενώ στο LocalOS έχουν φορτωθεί {imported}. Ενημερώστε τα δεδομένα για την πλήρη λίστα.',
+  ),
+  de: summary(
+    { title: 'Nachrichtenentwürfe brauchen eine Entscheidung', description: 'Prüfen Sie gespeicherte Inhalte vor der Veröffentlichung oder Weiterarbeit.' },
+    { title: 'Kartendaten sollten aktualisiert werden', description: 'Die letzten bekannten Daten werden angezeigt. Die Aktualisierung ist eine kostenpflichtige externe Aktion.' },
+    { provider_rating: 'Kartenbewertung', provider_reviews_total: 'Bewertungen auf Karten', imported_reviews_total: 'In LocalOS geladen', imported_reviews_unanswered: 'In LocalOS unbeantwortet' },
+    { cards: 'Karten', reviews: 'LocalOS-Bewertungen' },
+    'Karten zeigen {provider} Bewertungen, in LocalOS sind {imported} geladen. Aktualisieren Sie die Daten für die vollständige Liste.',
+  ),
+  th: summary(
+    { title: 'ฉบับร่างข่าวรอการตัดสินใจ', description: 'ตรวจสอบเนื้อหาที่บันทึกไว้ก่อนเผยแพร่หรือทำงานต่อ' },
+    { title: 'ควรอัปเดตข้อมูลแผนที่', description: 'กำลังแสดงข้อมูลล่าสุดที่ทราบ การรีเฟรชแผนที่เป็นการดำเนินการภายนอกที่มีค่าใช้จ่าย' },
+    { provider_rating: 'คะแนนบนแผนที่', provider_reviews_total: 'รีวิวบนแผนที่', imported_reviews_total: 'โหลดเข้า LocalOS', imported_reviews_unanswered: 'ยังไม่ตอบใน LocalOS' },
+    { cards: 'แผนที่', reviews: 'รีวิว LocalOS' },
+    'แผนที่แสดง {provider} รีวิว แต่ LocalOS โหลดไว้ {imported} รีวิว โปรดอัปเดตข้อมูลเพื่อดูรายการทั้งหมด',
+  ),
+  ar: summary(
+    { title: 'مسودات الأخبار تنتظر قرارًا', description: 'راجع المواد المحفوظة قبل النشر أو متابعة العمل.' },
+    { title: 'ينبغي تحديث بيانات الخرائط', description: 'تظهر أحدث البيانات المعروفة. تحديث الخرائط إجراء خارجي مدفوع.' },
+    { provider_rating: 'تقييم الخريطة', provider_reviews_total: 'مراجعات الخرائط', imported_reviews_total: 'المحمّل إلى LocalOS', imported_reviews_unanswered: 'بلا رد في LocalOS' },
+    { cards: 'الخرائط', reviews: 'مراجعات LocalOS' },
+    'تعرض الخرائط {provider} مراجعة، بينما حُمّلت {imported} إلى LocalOS. حدّث البيانات للقائمة الكاملة.',
+  ),
+  ha: summary(
+    { title: 'Daftarin labarai suna jiran shawara', description: 'Duba kayan da aka ajiye kafin wallafawa ko ci gaba da aiki.' },
+    { title: 'Ya kamata a sabunta bayanan taswira', description: 'Ana nuna bayanan ƙarshe da aka sani. Sabunta taswira aiki ne na waje mai kuɗi.' },
+    { provider_rating: 'Makin taswira', provider_reviews_total: 'Sharhi a taswira', imported_reviews_total: 'An loda zuwa LocalOS', imported_reviews_unanswered: 'Ba a amsa a LocalOS ba' },
+    { cards: 'Taswira', reviews: 'Sharhin LocalOS' },
+    'Taswira tana nuna sharhi {provider}, amma an loda {imported} zuwa LocalOS. Sabunta bayanai don cikakken jerin.',
+  ),
+};
+
+export const operatorPageCopyForLanguage = (language: Language) => {
+  const base = copyByLanguage[language];
+  const localizedSummary = summaryByLanguage[language];
+  return localizedSummary ? { ...base, ...localizedSummary } : base;
+};
 
 export const fillOperatorTemplate = (template: string, values: Record<string, string | number>) => (
   Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), template)
