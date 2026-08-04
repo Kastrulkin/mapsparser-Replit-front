@@ -55,6 +55,10 @@ const tr: ProgressPageCopy = {
   eyebrow: 'İşletmenin genel görünümü', title: 'İşletme ilerlemesi', description: 'Nelerin tamamlandığını, nerede desteğe ihtiyaç olduğunu ve hangi adımın bir sonraki somut sonucu getireceğini görün.', selectBusinessDescription: 'Tamamlanan işleri ve sonraki adımı görmek için bir işletme seçin.', loadingDescription: 'LocalOS çalışma alanlarındaki doğrulanmış sonuçlar toplanıyor.', fallbackDescription: 'Tamamlanan çalışmaların ve sonraki adımların genel görünümü.', refresh: 'Yenile', retry: 'Tekrar dene', loadErrorTitle: 'Genel görünüm oluşturulamadı', loadErrorDescription: 'Verileri yenilemeyi deneyin.', staleData: 'Yeni özet henüz yüklenmedi. Önceki doğrulanmış veriler gösteriliyor.', newResult: 'Yeni sonuç', confirmedPath: 'Doğrulanmış ilerleme', confirmedSteps: 'adım gerçek verilerle doğrulandı', resultsIn30Days: 'son 30 gündeki sonuç', activeAreas: 'başlatılan alan', needAttention: 'dikkat gerektiriyor', currentPriority: 'Şu anda en önemli', continueWorking: 'Çalışmaya devam edin', result: 'Sonuç', growthAreas: 'Büyüme alanları', growthAreasDescription: 'Tamamlananları ve sonraki adımı görmek için bir alanı açın.', completed: 'Tamamlandı', of: '/', path: 'İlerleme', nextStepOutcome: 'Sonraki adımın sağlayacağı sonuç', currentAudit: 'Mevcut denetim', auditReady: 'Denetim hazır', auditReadyUpdated: 'son güncelleme', auditReadySuffix: 'Kart bilgilerini ve öncelikleri görmek için açın.', auditPending: 'İlk başarılı veri toplama işleminden sonra tam denetim burada görünecek.', viewFullAudit: 'Tam denetimi görüntüle', mapsAndReputation: 'Haritalar ve itibar', fullAudit: 'İşletme kartının tam denetimi', location: 'Konum', auditDescription: 'Veriler, sorunların nedenleri ve somut adımlar.', selectAuditLocation: 'Denetim için konum seçin', selectLocation: 'Konum seçin', hideFullAudit: 'Tam denetimi gizle', parseQueued: 'Veri toplama başlatılmayı bekliyor. Mevcut denetim kullanılabilir.', parseProcessing: 'Güncel veriler toplanıyor. Mevcut denetim ekranda kalacak.', cardHistory: 'İşletme kartı güncelleme geçmişi', recentResults: 'Son sonuçlar', recentResultsEmpty: 'Doğrulanmış sonuçlar burada görünecek: tamamlanan denetim, içerik planı, bulunan iş ortakları, bitirilen görevler ve uygulanan ek satışlar.',
 };
 
+const el: ProgressPageCopy = {
+  eyebrow: 'Επισκόπηση επιχείρησης', title: 'Πρόοδος επιχείρησης', description: 'Δείτε τι έχει ολοκληρωθεί, πού χρειάζεται βοήθεια και ποιο βήμα θα φέρει το επόμενο πρακτικό αποτέλεσμα.', selectBusinessDescription: 'Επιλέξτε επιχείρηση για να δείτε την πρόοδο και το επόμενο βήμα.', loadingDescription: 'Συλλέγουμε επιβεβαιωμένα αποτελέσματα από τις ενότητες του LocalOS.', fallbackDescription: 'Συνολική εικόνα ολοκληρωμένης εργασίας και επόμενων ενεργειών.', refresh: 'Ανανέωση', retry: 'Δοκιμή ξανά', loadErrorTitle: 'Δεν ήταν δυνατή η δημιουργία της επισκόπησης', loadErrorDescription: 'Δοκιμάστε να ανανεώσετε τα δεδομένα.', staleData: 'Η νέα σύνοψη δεν φορτώθηκε ακόμη. Εμφανίζονται τα προηγούμενα επιβεβαιωμένα δεδομένα.', newResult: 'Νέο αποτέλεσμα', confirmedPath: 'Επιβεβαιωμένη πρόοδος', confirmedSteps: 'βήματα επιβεβαιώθηκαν με πραγματικά δεδομένα', resultsIn30Days: 'αποτελέσματα σε 30 ημέρες', activeAreas: 'τομείς ξεκίνησαν', needAttention: 'χρειάζονται προσοχή', currentPriority: 'Πιο σημαντικό τώρα', continueWorking: 'Συνεχίστε την εργασία', result: 'Αποτέλεσμα', growthAreas: 'Τομείς ανάπτυξης', growthAreasDescription: 'Ανοίξτε έναν τομέα για να δείτε τι ολοκληρώθηκε και ποιο είναι το επόμενο βήμα.', completed: 'Ολοκληρώθηκε', of: 'από', path: 'Διαδρομή', nextStepOutcome: 'Τι θα προσφέρει το επόμενο βήμα', currentAudit: 'Τρέχων έλεγχος', auditReady: 'Ο έλεγχος είναι έτοιμος', auditReadyUpdated: 'ενημερώθηκε', auditReadySuffix: 'Ανοίξτε τον για να δείτε τα στοιχεία και τις προτεραιότητες της καταχώρισης.', auditPending: 'Ο πλήρης έλεγχος θα εμφανιστεί εδώ μετά την πρώτη επιτυχημένη συλλογή δεδομένων.', viewFullAudit: 'Προβολή πλήρους ελέγχου', mapsAndReputation: 'Χάρτες και φήμη', fullAudit: 'Πλήρης έλεγχος καταχώρισης', location: 'Τοποθεσία', auditDescription: 'Δεδομένα, αιτίες προβλημάτων και συγκεκριμένες ενέργειες.', selectAuditLocation: 'Επιλέξτε τοποθεσία για έλεγχο', selectLocation: 'Επιλέξτε τοποθεσία', hideFullAudit: 'Απόκρυψη πλήρους ελέγχου', parseQueued: 'Η συλλογή δεδομένων περιμένει να ξεκινήσει. Ο τρέχων έλεγχος παραμένει διαθέσιμος.', parseProcessing: 'Συλλέγονται νέα δεδομένα. Ο τρέχων έλεγχος παραμένει στην οθόνη.', cardHistory: 'Ιστορικό ενημερώσεων καταχώρισης', recentResults: 'Πρόσφατα αποτελέσματα', recentResultsEmpty: 'Εδώ θα εμφανιστούν επιβεβαιωμένα αποτελέσματα: ολοκληρωμένος έλεγχος, πλάνο περιεχομένου, συνεργάτες, εργασίες και πρόσθετες πωλήσεις.',
+};
+
 const statusTr: Record<string, string> = {
   healthy: 'Çalışıyor',
   in_progress: 'Devam ediyor',
@@ -70,6 +74,9 @@ const areaTr: Record<string, string> = {
   automation: 'Otomasyon',
   upsells: 'Ek satışlar',
 };
+
+const statusEl: Record<string, string> = { healthy: 'Λειτουργεί', in_progress: 'Σε εξέλιξη', needs_attention: 'Χρειάζεται προσοχή', not_started: 'Δεν ξεκίνησε', unavailable: 'Χωρίς δεδομένα' };
+const areaEl: Record<string, string> = { maps: 'Χάρτες και φήμη', content: 'Περιεχόμενο', partnerships: 'Συνεργασίες', automation: 'Αυτοματοποίηση', upsells: 'Πρόσθετες πωλήσεις' };
 
 const milestoneTr: Record<string, string> = {
   map_connected: 'Harita bağlandı',
@@ -92,8 +99,54 @@ const milestoneTr: Record<string, string> = {
   upsells_bought: 'Satış kaydedildi',
 };
 
+const milestoneEl: Record<string, string> = {
+  map_connected: 'Ο χάρτης συνδέθηκε', map_audited: 'Λήφθηκαν δεδομένα και έλεγχος', map_profile_ready: 'Συμπληρώθηκαν τα βασικά στοιχεία', map_profile_complete: 'Συμπληρώθηκαν τα βασικά στοιχεία', reputation_started: 'Ξεκίνησε η διαχείριση φήμης', content_plan_created: 'Δημιουργήθηκε πλάνο περιεχομένου', content_draft_ready: 'Ετοιμάστηκε υλικό', content_published: 'Η δημοσίευση επιβεβαιώθηκε', partner_found: 'Βρέθηκε πιθανός συνεργάτης', partner_proposal_ready: 'Ετοιμάστηκε πρόταση', partner_contacted: 'Έγινε επικοινωνία', partner_result: 'Λήφθηκε απάντηση ή αποτέλεσμα', agent_tested: 'Ο agent δοκιμάστηκε', agent_enabled: 'Ο agent ενεργοποιήθηκε', agent_completed: 'Η εργασία ολοκληρώθηκε', upsells_calculated: 'Υπολογίστηκαν προτάσεις', upsells_enabled: 'Η πρόταση εφαρμόστηκε', upsells_bought: 'Καταγράφηκε πώληση',
+};
+
 const metricTr: Record<string, string> = {
   Карты: 'Haritalar', Отзывы: 'Yorumlar', 'Без ответа': 'Yanıtsız', Планы: 'Planlar', Готово: 'Hazır', Опубликовано: 'Yayınlandı', Найдено: 'Bulundu', 'В контакте': 'İletişimde', Результаты: 'Sonuçlar', Создано: 'Oluşturuldu', Работают: 'Çalışıyor', Выполнено: 'Tamamlandı', Рассчитано: 'Hesaplandı', Внедрено: 'Uygulandı', Покупки: 'Satın almalar',
+};
+
+const metricEl: Record<string, string> = { Карты: 'Χάρτες', Отзывы: 'Κριτικές', 'Без ответа': 'Χωρίς απάντηση', Планы: 'Πλάνα', Готово: 'Έτοιμα', Опубликовано: 'Δημοσιεύτηκαν', Найдено: 'Βρέθηκαν', 'В контакте': 'Σε επικοινωνία', Результаты: 'Αποτελέσματα', Создано: 'Δημιουργήθηκαν', Работают: 'Λειτουργούν', Выполнено: 'Ολοκληρώθηκαν', Рассчитано: 'Υπολογίστηκαν', Внедрено: 'Εφαρμόστηκαν', Покупки: 'Αγορές' };
+
+const textEl: Record<string, string> = {
+  'Подключена': 'Συνδέθηκε', 'Не подключена': 'Δεν συνδέθηκε',
+  'Карта подключена, но свежих данных и аудита ещё нет.': 'Ο χάρτης είναι συνδεδεμένος, αλλά δεν υπάρχουν ακόμη νέα δεδομένα ή έλεγχος.',
+  'Получите данные карты': 'Λήψη δεδομένων χάρτη',
+  'Появится аудит с конкретными проблемами карточки.': 'Θα εμφανιστεί έλεγχος με συγκεκριμένα προβλήματα της καταχώρισης.',
+  'Обновить карту': 'Ανανέωση χάρτη',
+  'Карта подключена, аудит ещё не готов': 'Ο χάρτης συνδέθηκε, ο έλεγχος δεν είναι ακόμη έτοιμος',
+  'Данные временно недоступны': 'Τα δεδομένα δεν είναι προσωρινά διαθέσιμα',
+  'LocalOS не смог получить состояние этого направления.': 'Το LocalOS δεν μπόρεσε να λάβει την κατάσταση αυτού του τομέα.',
+  'После восстановления данных прогресс появится автоматически.': 'Η πρόοδος θα εμφανιστεί αυτόματα όταν αποκατασταθούν τα δεδομένα.',
+  'Открыть раздел': 'Άνοιγμα ενότητας',
+  'Проверьте состояние непосредственно в рабочем разделе.': 'Ελέγξτε την κατάσταση απευθείας στην ενότητα εργασίας.',
+  'Вы увидите доступные действия и текущие данные.': 'Θα δείτε τις διαθέσιμες ενέργειες και τα τρέχοντα δεδομένα.',
+  'Автоматизированные задачи ещё не настроены.': 'Δεν έχουν ρυθμιστεί ακόμη αυτοματοποιημένες εργασίες.',
+  'Автоматизированных задач пока нет': 'Δεν υπάρχουν ακόμη αυτοματοποιημένες εργασίες',
+  'Допродажи ещё не рассчитаны': 'Οι πρόσθετες πωλήσεις δεν έχουν ακόμη υπολογιστεί',
+  'Контент-план ещё не запущен': 'Το πλάνο περιεχομένου δεν έχει ακόμη ξεκινήσει',
+  'Поиск партнёров ещё не запускался': 'Η αναζήτηση συνεργατών δεν έχει ακόμη ξεκινήσει',
+  'Зафиксированная дополнительная выручка': 'Καταγεγραμμένα πρόσθετα έσοδα',
+};
+
+const translateDynamicEl = (value: string) => {
+  const rules: Array<[RegExp, (...values: string[]) => string]> = [
+    [/^(\d+) из (\d+)$/, (completed, total) => `${completed} από ${total}`],
+    [/^Планов: (\d+), готовых материалов: (\d+), опубликовано: (\d+)$/, (plans, drafts, published) => `Πλάνα: ${plans}, έτοιμο υλικό: ${drafts}, δημοσιεύτηκαν: ${published}`],
+    [/^Найдено: (\d+), предложений: (\d+), результатов: (\d+)$/, (leads, proposals, results) => `Βρέθηκαν: ${leads}, προτάσεις: ${proposals}, αποτελέσματα: ${results}`],
+    [/^Агентов: (\d+), работают: (\d+), выполнено задач: (\d+)$/, (agents, active, completed) => `Agents: ${agents}, ενεργοί: ${active}, ολοκληρωμένες εργασίες: ${completed}`],
+    [/^Расчётов: (\d+), внедрено: (\d+), покупок: (\d+)$/, (calculated, active, bought) => `Υπολογισμοί: ${calculated}, εφαρμόστηκαν: ${active}, αγορές: ${bought}`],
+    [/^Без ответа осталось отзывов: (\d+)\.$/, (count) => `Κριτικές χωρίς απάντηση: ${count}.`],
+    [/^Обновлено карточек: (\d+)$/, (count) => `Ενημερωμένες καταχωρίσεις: ${count}`],
+    [/^Услуг в карточке: (\d+)$/, (count) => `Υπηρεσίες στην καταχώριση: ${count}`],
+    [/^Отзывов: (\d+)$/, (count) => `Κριτικές: ${count}`],
+    [/^Планов: (\d+)$/, (count) => `Πλάνα: ${count}`], [/^Материалов: (\d+)$/, (count) => `Υλικά: ${count}`], [/^Публикаций: (\d+)$/, (count) => `Δημοσιεύσεις: ${count}`],
+    [/^Лидов: (\d+)$/, (count) => `Πιθανοί συνεργάτες: ${count}`], [/^Предложений: (\d+)$/, (count) => `Προτάσεις: ${count}`], [/^Контактов: (\d+)$/, (count) => `Επαφές: ${count}`], [/^Результатов: (\d+)$/, (count) => `Αποτελέσματα: ${count}`],
+    [/^Тестов: (\d+)$/, (count) => `Δοκιμές: ${count}`], [/^Работают: (\d+)$/, (count) => `Ενεργοί: ${count}`], [/^Расчётов: (\d+)$/, (count) => `Υπολογισμοί: ${count}`], [/^Активно: (\d+)$/, (count) => `Ενεργά: ${count}`], [/^Покупок: (\d+)$/, (count) => `Αγορές: ${count}`],
+  ];
+  for (const [pattern, render] of rules) { const match = value.match(pattern); if (match) return render(...match.slice(1)); }
+  return value;
 };
 
 const textTr: Record<string, string> = {
@@ -230,32 +283,34 @@ const translateDynamicTr = (value: string) => {
   return value;
 };
 
-export const progressPageCopyForLanguage = (language: Language) => language === 'tr' ? tr : ru;
+export const progressPageCopyForLanguage = (language: Language) => language === 'tr' ? tr : language === 'el' ? el : ru;
 
 export const localizedGrowthStatus = (language: Language, status: string, fallback: string) => (
-  language === 'tr' ? statusTr[status] || fallback : fallback
+  language === 'tr' ? statusTr[status] || fallback : language === 'el' ? statusEl[status] || fallback : fallback
 );
 
 export const localizedGrowthArea = (language: Language, key: string, fallback: string) => (
-  language === 'tr' ? areaTr[key] || fallback : fallback
+  language === 'tr' ? areaTr[key] || fallback : language === 'el' ? areaEl[key] || fallback : fallback
 );
 
 export const localizedGrowthMilestone = (language: Language, key: string, fallback: string) => (
-  language === 'tr' ? milestoneTr[key] || fallback : fallback
+  language === 'tr' ? milestoneTr[key] || fallback : language === 'el' ? milestoneEl[key] || fallback : fallback
 );
 
 export const localizedGrowthMetric = (language: Language, fallback: string) => (
-  language === 'tr' ? metricTr[fallback] || translateDynamicTr(fallback) : fallback
+  language === 'tr' ? metricTr[fallback] || translateDynamicTr(fallback) : language === 'el' ? metricEl[fallback] || translateDynamicEl(fallback) : fallback
 );
 
 export const localizedGrowthText = (language: Language, value?: string | null) => {
   const normalized = String(value || '').trim();
-  if (language !== 'tr' || !normalized) return normalized;
-  return textTr[normalized] || translateDynamicTr(normalized);
+  if (!normalized) return normalized;
+  if (language === 'tr') return textTr[normalized] || translateDynamicTr(normalized);
+  if (language === 'el') return textEl[normalized] || translateDynamicEl(normalized);
+  return normalized;
 };
 
 export const localizedProgressBusinessName = (language: Language, value?: string | null) => {
   const normalized = String(value || '').trim();
-  if (language === 'tr' && normalized.toLowerCase() === 'рога и копыта') return 'Roga i Kopyta';
+  if ((language === 'tr' || language === 'el') && normalized.toLowerCase() === 'рога и копыта') return 'Roga i Kopyta';
   return normalized;
 };
