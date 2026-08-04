@@ -96,4 +96,23 @@ describe('ProgressPage localization', () => {
     await waitFor(() => expect(screen.getByText('Haritalar ve itibar')).toBeInTheDocument());
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
+
+  it('renders Greek system and structured growth copy when the API payload contains Russian labels', async () => {
+    window.localStorage.setItem('language', 'el');
+    const { container } = render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<ProgressPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Πρόοδος επιχείρησης' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Χάρτες και φήμη')).toBeInTheDocument());
+    expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
 });

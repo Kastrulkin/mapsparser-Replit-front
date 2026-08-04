@@ -14,6 +14,24 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const isTranslationRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const mergeTranslations = (
+  fallback: Record<string, unknown>,
+  selected: unknown,
+): Record<string, unknown> => {
+  const result = { ...fallback };
+  if (!isTranslationRecord(selected)) return result;
+  Object.entries(selected).forEach(([key, value]) => {
+    const fallbackValue = fallback[key];
+    result[key] = isTranslationRecord(fallbackValue) && isTranslationRecord(value)
+      ? mergeTranslations(fallbackValue, value)
+      : value;
+  });
+  return result;
+};
+
 const detectInitialLanguage = (): Language => {
   const pathname = typeof window === "undefined" ? "" : window.location.pathname;
   const search = typeof window === "undefined" ? "" : window.location.search;
@@ -84,9 +102,10 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     const applyTranslations = async () => {
       try {
         const loadedTranslations = await loadTranslations(language);
+        const fallbackTranslations = language === 'en' ? loadedTranslations : await loadTranslations('en');
 
         if (active) {
-          setTranslations(loadedTranslations);
+          setTranslations(mergeTranslations(fallbackTranslations, loadedTranslations));
         }
       } catch (error) {
         console.error("Failed to load translations:", error);
