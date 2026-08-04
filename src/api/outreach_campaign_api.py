@@ -1246,8 +1246,8 @@ def review_campaign_touch_edits(campaign_id: str):
         campaign = _campaign_payload(cursor, campaign_id)
         if not campaign:
             return jsonify({"success": False, "error": "Campaign not found"}), 404
-        if campaign.get("status") != "draft":
-            return jsonify({"success": False, "error": "Only a draft campaign can be reviewed"}), 409
+        if campaign.get("status") not in {"draft", "paused"}:
+            return jsonify({"success": False, "error": "Only a draft or paused campaign can be reviewed"}), 409
 
         touches = list(campaign.get("touches") or [])
         if not touches:

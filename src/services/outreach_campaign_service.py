@@ -193,7 +193,7 @@ def update_draft_campaign_touch(
     generated_text: str,
     user_id: str,
 ) -> dict[str, Any]:
-    """Persist one manually edited message without changing campaign version or state."""
+    """Persist one editable draft or paused unsent message without resuming delivery."""
     normalized_text = generated_text.strip() if isinstance(generated_text, str) else ""
     normalized_subject = _text(subject)
     if not normalized_text:
@@ -218,10 +218,29 @@ def update_draft_campaign_touch(
     existing = _dict(cursor.fetchone())
     if not existing:
         raise LookupError("Campaign touch not found")
-    if existing.get("campaign_status") != "draft" or existing.get("status") != "draft":
-        raise ValueError("Only a draft campaign message can be edited")
+    draft_edit = existing.get("campaign_status") == "draft" and existing.get("status") == "draft"
+    paused_edit = existing.get("campaign_status") == "paused" and existing.get("status") == "paused"
+    if not draft_edit and not paused_edit:
+        raise ValueError("Only a draft or paused unsent campaign message can be edited")
     if existing.get("channel") == "email" and not normalized_subject:
         raise ValueError("Email subject is required")
+
+    paused_queue = {}
+    if paused_edit:
+        cursor.execute(
+            """
+            SELECT id, draft_id, delivery_status
+            FROM outreachsendqueue
+            WHERE campaign_touch_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (touch_id,),
+        )
+        paused_queue = _dict(cursor.fetchone())
+        if paused_queue.get("delivery_status") != "paused" or not paused_queue.get("draft_id"):
+            raise ValueError("Pause the unsent message before editing it")
 
     raw_message_brief = existing.get("message_brief_json")
     message_brief = dict(raw_message_brief) if isinstance(raw_message_brief, dict) else {}
@@ -283,6 +302,27 @@ def update_draft_campaign_touch(
     updated = _dict(cursor.fetchone())
     if not updated:
         raise LookupError("Campaign touch not found")
+    if paused_edit:
+        cursor.execute(
+            """
+            UPDATE outreachmessagedrafts
+            SET generated_text = %s,
+                edited_text = %s,
+                approved_text = NULL,
+                status = 'draft',
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (normalized_text, normalized_text, str(paused_queue["draft_id"])),
+        )
+        cursor.execute(
+            """
+            UPDATE outreach_campaigns
+            SET approved_snapshot_hash = NULL, updated_at = NOW()
+            WHERE id = %s AND status = 'paused'
+            """,
+            (campaign_id,),
+        )
     updated["campaign_version"] = int(existing.get("campaign_version") or 0)
     record_campaign_event(
         cursor,
@@ -331,10 +371,10 @@ def apply_draft_campaign_review(
     reviewed_touches: list[dict[str, Any]],
     user_id: str,
 ) -> dict[str, Any]:
-    """Persist a server-side review of the current draft without creating a version."""
+    """Review draft messages or edited paused messages without creating a version."""
     cursor.execute(
         """
-        SELECT id, version, status
+        SELECT *
         FROM outreach_campaigns
         WHERE id = %s
         FOR UPDATE
@@ -344,13 +384,12 @@ def apply_draft_campaign_review(
     campaign = _dict(cursor.fetchone())
     if not campaign:
         raise LookupError("Campaign not found")
-    if campaign.get("status") != "draft":
-        raise ValueError("Only a draft campaign can be reviewed")
+    if campaign.get("status") not in {"draft", "paused"}:
+        raise ValueError("Only a draft or paused campaign can be reviewed")
 
     cursor.execute(
         """
-        SELECT id, campaign_id, sequence_index, status, subject, generated_text,
-               message_brief_json
+        SELECT *
         FROM outreach_campaign_touches
         WHERE campaign_id = %s
         ORDER BY sequence_index
@@ -360,8 +399,20 @@ def apply_draft_campaign_review(
     existing_touches = [_dict(row) for row in cursor.fetchall()]
     if not existing_touches:
         raise ValueError("Campaign has no messages to review")
-    if any(touch.get("status") != "draft" for touch in existing_touches):
-        raise ValueError("Only draft campaign messages can be reviewed")
+    if campaign.get("status") == "draft":
+        review_targets = existing_touches
+        if any(touch.get("status") != "draft" for touch in review_targets):
+            raise ValueError("Only draft campaign messages can be reviewed")
+    else:
+        review_targets = [
+            touch
+            for touch in existing_touches
+            if bool((touch.get("message_brief_json") or {}).get("manual_edit_review_required"))
+        ]
+        if not review_targets:
+            raise ValueError("Paused campaign has no edited messages to review")
+        if any(touch.get("status") != "paused" for touch in review_targets):
+            raise ValueError("Only paused unsent campaign messages can be reviewed")
 
     reviewed_by_index: dict[int, dict[str, Any]] = {}
     for item in reviewed_touches or []:
@@ -378,13 +429,15 @@ def apply_draft_campaign_review(
             raise ValueError("Reviewed touch quality gate is required")
         reviewed_by_index[sequence_index] = item
 
-    expected_indexes = {int(touch.get("sequence_index") or 0) for touch in existing_touches}
-    if set(reviewed_by_index) != expected_indexes:
+    expected_indexes = {int(touch.get("sequence_index") or 0) for touch in review_targets}
+    if campaign.get("status") == "draft" and set(reviewed_by_index) != expected_indexes:
         raise ValueError("Review must include every campaign message")
+    if campaign.get("status") == "paused" and not expected_indexes.issubset(set(reviewed_by_index)):
+        raise ValueError("Review must include every edited campaign message")
 
     reviewed_at = datetime.now(timezone.utc).isoformat()
     all_passed = True
-    for touch in existing_touches:
+    for touch in review_targets:
         sequence_index = int(touch.get("sequence_index") or 0)
         reviewed = reviewed_by_index[sequence_index]
         reviewed_text = reviewed.get("text")
@@ -443,11 +496,44 @@ def apply_draft_campaign_review(
             """,
             (Json(gate), Json(brief), campaign_id, str(touch["id"])),
         )
+        touch["quality_gate_json"] = gate
+        touch["message_brief_json"] = brief
+        if campaign.get("status") == "paused" and passed:
+            cursor.execute(
+                """
+                UPDATE outreachmessagedrafts
+                SET generated_text = %s,
+                    edited_text = %s,
+                    approved_text = %s,
+                    status = 'approved',
+                    updated_at = NOW()
+                WHERE id = (
+                    SELECT draft_id FROM outreach_campaign_touches WHERE id = %s
+                )
+                """,
+                (
+                    str(touch.get("generated_text") or ""),
+                    str(touch.get("generated_text") or ""),
+                    str(touch.get("generated_text") or ""),
+                    str(touch["id"]),
+                ),
+            )
+
+    if campaign.get("status") == "paused" and all_passed:
+        snapshot_hash = approval_snapshot_hash(campaign, existing_touches)
+        cursor.execute(
+            """
+            UPDATE outreach_campaigns
+            SET approved_snapshot_hash = %s, updated_at = NOW()
+            WHERE id = %s AND status = 'paused'
+            """,
+            (snapshot_hash, campaign_id),
+        )
 
     result = {
         "campaign_id": campaign_id,
         "campaign_version": int(campaign.get("version") or 0),
-        "reviewed_touch_count": len(existing_touches),
+        "reviewed_touch_count": len(review_targets),
         "all_passed": all_passed,
     }
     record_campaign_event(
@@ -2973,13 +3059,30 @@ def change_campaign_status(
     if action not in transitions:
         raise ValueError("Unsupported campaign action")
     allowed_from, next_status = transitions[action]
-    cursor.execute("SELECT id, status FROM outreach_campaigns WHERE id = %s FOR UPDATE", (campaign_id,))
+    cursor.execute("SELECT id, status, approved_snapshot_hash FROM outreach_campaigns WHERE id = %s FOR UPDATE", (campaign_id,))
     campaign = _dict(cursor.fetchone())
     if not campaign:
         raise LookupError("Campaign not found")
     if campaign.get("status") not in allowed_from:
         raise ValueError(f"Cannot {action} campaign from {campaign.get('status')}")
     if action == "resume":
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM outreach_campaign_touches
+            WHERE campaign_id = %s
+              AND (
+                  COALESCE((message_brief_json->>'manual_edit_review_required')::boolean, FALSE)
+                  OR (
+                      COALESCE((message_brief_json->>'human_edited')::boolean, FALSE)
+                      AND NOT COALESCE((quality_gate_json->>'passed')::boolean, FALSE)
+                  )
+              )
+            """,
+            (campaign_id,),
+        )
+        if int(_scalar(cursor.fetchone(), "count") or 0) > 0 or not campaign.get("approved_snapshot_hash"):
+            raise ValueError("Review edited campaign messages before resuming")
         cursor.execute(
             """
             SELECT COUNT(*)

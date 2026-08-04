@@ -1663,6 +1663,28 @@ def test_accept_touch_edits_persists_current_draft_without_campaign_version():
     assert '@outreach_campaign_bp.patch("/api/outreach/campaigns/<campaign_id>/touches/<touch_id>")' in api_source
 
 
+def test_queued_touch_edit_respects_paused_queue_contract():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    service_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+
+    edit_guard_start = admin_source.index("const canEditSavedTouch")
+    edit_guard_end = admin_source.index(";", edit_guard_start)
+    edit_guard = admin_source[edit_guard_start:edit_guard_end]
+    assert "campaignStatus === 'draft' && touchStatus === 'draft'" in edit_guard
+    assert "campaignStatus === 'paused' && touchStatus === 'paused'" in edit_guard
+
+    editor_start = admin_source.index("<OutreachTouchMessageEditor", admin_source.index("savedConversationTouches.map"))
+    editor_end = admin_source.index("/>", editor_start)
+    editor_block = admin_source[editor_start:editor_end]
+
+    assert "touchCanBeEdited" in admin_source[admin_source.index("savedConversationTouches.map"):editor_start]
+    assert "editableTouch && touchCanBeEdited" in admin_source[admin_source.index("savedConversationTouches.map"):editor_start]
+    assert 'paused_edit = existing.get("campaign_status") == "paused"' in service_source
+    assert 'paused_queue.get("delivery_status") != "paused"' in service_source
+    assert 'approved_snapshot_hash = NULL' in service_source
+    assert 'Review edited campaign messages before resuming' in service_source
+
+
 def test_review_saved_touch_edits_does_not_require_a_new_campaign_version():
     admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
     api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()

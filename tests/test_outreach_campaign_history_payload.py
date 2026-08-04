@@ -15,7 +15,10 @@ class CampaignHistoryCursor:
                 "status": "stopped",
                 "last_reply_at": "2026-07-23T10:30:00+00:00",
             }]
-        elif "from outreach_campaign_touches where campaign_id" in normalized:
+        elif (
+            "from outreach_campaign_touches where campaign_id" in normalized
+            or "from outreach_campaign_touches touch" in normalized
+        ):
             self.rows = [{
                 "id": "touch-1",
                 "campaign_id": "campaign-1",
@@ -143,6 +146,81 @@ def test_accept_touch_edit_updates_current_draft_without_creating_campaign_versi
     assert not any("update outreach_campaigns" in query for query, _ in cursor.queries)
 
 
+class PausedTouchUpdateCursor:
+    def __init__(self):
+        self.rows = []
+        self.queries = []
+
+    def execute(self, query, params=None):
+        normalized = " ".join(query.lower().split())
+        self.queries.append((normalized, params))
+        if "from outreach_campaign_touches t" in normalized and "join outreach_campaigns c" in normalized:
+            self.rows = [{
+                "id": "touch-queued",
+                "campaign_id": "campaign-paused",
+                "campaign_status": "paused",
+                "campaign_version": 11,
+                "channel": "vk",
+                "status": "paused",
+                "generated_text": "Старый текст VK",
+                "message_brief_json": {},
+            }]
+        elif "from outreachsendqueue" in normalized and "for update" in normalized:
+            self.rows = [{
+                "id": "queue-1",
+                "draft_id": "draft-1",
+                "delivery_status": "paused",
+            }]
+        elif "update outreach_campaign_touches" in normalized:
+            self.rows = [{
+                "id": "touch-queued",
+                "campaign_id": "campaign-paused",
+                "sequence_index": 2,
+                "channel": "vk",
+                "status": "paused",
+                "generated_text": params[1],
+                "message_brief_json": {"human_edited": True, "manual_edit_review_required": True},
+            }]
+        elif "update outreachmessagedrafts" in normalized:
+            self.rows = []
+        elif "update outreach_campaigns" in normalized:
+            self.rows = []
+        elif "insert into outreach_campaign_events" in normalized:
+            self.rows = []
+        else:
+            raise AssertionError(f"Unexpected query: {normalized}")
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+
+def test_paused_queued_touch_edit_updates_linked_draft_without_resuming(monkeypatch):
+    from services.outreach_campaign_service import update_draft_campaign_touch
+
+    cursor = PausedTouchUpdateCursor()
+    monkeypatch.setattr(
+        "services.outreach_campaign_service.record_learning_event",
+        lambda *_args, **_kwargs: "learning-1",
+    )
+
+    result = update_draft_campaign_touch(
+        cursor,
+        campaign_id="campaign-paused",
+        touch_id="touch-queued",
+        subject=None,
+        generated_text="Новый проверяемый текст VK",
+        user_id="user-1",
+    )
+
+    assert result["campaign_version"] == 11
+    assert result["status"] == "paused"
+    assert result["generated_text"] == "Новый проверяемый текст VK"
+    assert any("update outreachmessagedrafts" in query for query, _ in cursor.queries)
+    assert any("approved_text = null" in query for query, _ in cursor.queries)
+    assert any("approved_snapshot_hash = null" in query for query, _ in cursor.queries)
+    assert not any("delivery_status = 'queued'" in query for query, _ in cursor.queries)
+
+
 class DraftCampaignReviewCursor:
     def __init__(self):
         self.rows = []
@@ -225,6 +303,130 @@ def test_review_saved_touch_edits_updates_current_draft_without_new_version():
     assert cursor.updated_touch_ids == ["touch-0", "touch-1", "touch-2", "touch-3"]
     assert not any("insert into outreach_campaigns" in query for query, _ in cursor.queries)
     assert not any("update outreach_campaigns" in query for query, _ in cursor.queries)
+
+
+class PausedCampaignReviewCursor:
+    def __init__(self):
+        self.rows = []
+        self.queries = []
+        self.updated_touch_ids = []
+
+    def execute(self, query, params=None):
+        normalized = " ".join(query.lower().split())
+        self.queries.append((normalized, params))
+        if "from outreach_campaigns" in normalized and "for update" in normalized:
+            self.rows = [{
+                "id": "campaign-paused",
+                "version": 11,
+                "status": "paused",
+                "workstream_id": "workstream-1",
+                "lead_id": "lead-1",
+                "policy_json": {},
+            }]
+        elif "from outreach_campaign_touches" in normalized and "order by sequence_index" in normalized:
+            self.rows = [
+                {
+                    "id": "touch-sent",
+                    "campaign_id": "campaign-paused",
+                    "sequence_index": 0,
+                    "status": "sent",
+                    "channel": "email",
+                    "generated_text": "Уже отправлено",
+                    "message_brief_json": {},
+                    "quality_gate_json": {"passed": True},
+                },
+                {
+                    "id": "touch-paused",
+                    "campaign_id": "campaign-paused",
+                    "sequence_index": 2,
+                    "status": "paused",
+                    "channel": "vk",
+                    "generated_text": "Новый проверяемый текст VK",
+                    "message_brief_json": {
+                        "human_edited": True,
+                        "manual_edit_review_required": True,
+                    },
+                    "quality_gate_json": {"passed": False},
+                },
+            ]
+        elif "update outreach_campaign_touches" in normalized:
+            self.updated_touch_ids.append(str(params[-1]))
+            self.rows = []
+        elif "update outreachmessagedrafts" in normalized:
+            self.rows = []
+        elif "update outreach_campaigns" in normalized:
+            self.rows = []
+        elif "insert into outreach_campaign_events" in normalized:
+            self.rows = []
+        else:
+            raise AssertionError(f"Unexpected query: {normalized}")
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return list(self.rows)
+
+
+def test_paused_campaign_review_updates_only_edited_unsent_touch_and_restores_snapshot():
+    from services.outreach_campaign_service import apply_draft_campaign_review
+
+    cursor = PausedCampaignReviewCursor()
+    result = apply_draft_campaign_review(
+        cursor,
+        campaign_id="campaign-paused",
+        reviewed_touches=[{
+            "sequence_index": 2,
+            "text": "Новый проверяемый текст VK",
+            "quality_gate": {
+                "passed": True,
+                "verdict": "approve",
+                "reason_codes": [],
+            },
+        }],
+        user_id="user-1",
+    )
+
+    assert result["reviewed_touch_count"] == 1
+    assert result["all_passed"] is True
+    assert cursor.updated_touch_ids == ["touch-paused"]
+    assert any("approved_text = %s" in query for query, _ in cursor.queries)
+    assert any("approved_snapshot_hash = %s" in query for query, _ in cursor.queries)
+
+
+class PendingReviewResumeCursor:
+    def __init__(self):
+        self.rows = []
+
+    def execute(self, query, _params=None):
+        normalized = " ".join(query.lower().split())
+        if "select id, status, approved_snapshot_hash" in normalized:
+            self.rows = [{
+                "id": "campaign-paused",
+                "status": "paused",
+                "approved_snapshot_hash": None,
+            }]
+        elif "from outreach_campaign_touches" in normalized and "select count" in normalized:
+            self.rows = [{"count": 1}]
+        else:
+            raise AssertionError(f"Unexpected query: {normalized}")
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+
+def test_paused_campaign_cannot_resume_before_edited_message_review():
+    import pytest
+
+    from services.outreach_campaign_service import change_campaign_status
+
+    with pytest.raises(ValueError, match="Review edited campaign messages before resuming"):
+        change_campaign_status(
+            PendingReviewResumeCursor(),
+            "campaign-paused",
+            "resume",
+            user_id="user-1",
+        )
 
 
 def test_successful_manual_edit_review_removes_the_review_blocker_from_every_touch():

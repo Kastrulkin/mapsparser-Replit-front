@@ -610,6 +610,30 @@ const contactTypeLabels: Record<string, string> = {
 
 const recipientContactTypeForChannel = (channel: string) => channel === 'vk_manual' ? 'vk' : channel;
 
+const outreachChannelHref = (channel: string, rawContact: string) => {
+  const contact = rawContact.trim();
+  if (!contact) return '';
+
+  if (channel === 'email') {
+    const email = contact.replace(/^mailto:/i, '').trim();
+    return email ? `mailto:${email}` : '';
+  }
+
+  if (channel === 'phone') {
+    const phone = contact.replace(/^tel:/i, '').replace(/[^\d+]/g, '');
+    return phone ? `tel:${phone}` : '';
+  }
+
+  if (/^https?:\/\//i.test(contact)) return contact;
+  if (/^(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:[/?#].*)?$/i.test(contact)) return `https://${contact}`;
+  if (channel === 'telegram' && /^@?[\w\d_]+$/.test(contact)) return `https://t.me/${contact.replace(/^@/, '')}`;
+  if (channel === 'whatsapp' && /^\+?[\d\s()-]+$/.test(contact)) {
+    const phone = contact.replace(/\D/g, '');
+    return phone ? `https://wa.me/${phone}` : '';
+  }
+  return '';
+};
+
 const outreachTouchStatusLabels: Record<string, string> = {
   contact_ready: 'Контакт найден',
   recipient_missing: 'Нет контакта',
@@ -631,6 +655,11 @@ const outreachTouchStatusLabels: Record<string, string> = {
   dlq: 'Нужна помощь',
   reply_cancelled: 'Остановлено после ответа',
 };
+
+const canEditSavedTouch = (campaignStatus: string, touchStatus: string) => (
+  (campaignStatus === 'draft' && touchStatus === 'draft')
+  || (campaignStatus === 'paused' && touchStatus === 'paused')
+);
 
 const outreachReplyClassificationLabels: Record<string, string> = {
   interested: 'Интерес',
@@ -2705,26 +2734,50 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
                   {conversationChannels.length > 0 ? (
                     <div className="mt-4 space-y-2">
-                      {conversationChannels.map((item) => (
-                        <div key={item.channel} className="rounded-xl bg-white px-3 py-3 shadow-sm shadow-slate-900/5">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-950">{item.label}</div>
-                              <div className="mt-1 truncate text-xs text-slate-500">
-                                {item.contact || (item.touchCount > 0 ? 'Добавлен в цепочку' : 'Контакт получателя не найден')}
+                      {conversationChannels.map((item) => {
+                        const href = outreachChannelHref(item.channel, item.contact);
+                        const cardClassName = `block rounded-xl bg-white px-3 py-3 shadow-sm shadow-slate-900/5 ${href ? 'cursor-pointer transition-[box-shadow,transform] duration-150 hover:shadow-md hover:shadow-slate-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 active:scale-[0.96]' : ''}`;
+                        const cardContent = (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-950">{item.label}</div>
+                                <div className={`mt-1 flex min-w-0 items-center gap-1 text-xs ${href ? 'text-sky-700' : 'text-slate-500'}`}>
+                                  <span className="truncate">
+                                    {item.contact || (item.touchCount > 0 ? 'Добавлен в цепочку' : 'Контакт получателя не найден')}
+                                  </span>
+                                  {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
+                                </div>
                               </div>
+                              <Badge variant="outline" className={`shrink-0 ${outreachStatusTone(item.status)}`}>
+                                {outreachTouchStatusLabels[item.status] || item.status}
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className={`shrink-0 ${outreachStatusTone(item.status)}`}>
-                              {outreachTouchStatusLabels[item.status] || item.status}
-                            </Badge>
+                            {item.touchCount > 0 ? (
+                              <div className="mt-2 text-[11px] font-medium text-slate-400 tabular-nums">
+                                Касаний в цепочке: {item.touchCount}
+                              </div>
+                            ) : null}
+                          </>
+                        );
+
+                        return href ? (
+                          <a
+                            key={item.channel}
+                            href={href}
+                            target={/^https?:\/\//i.test(href) ? '_blank' : undefined}
+                            rel={/^https?:\/\//i.test(href) ? 'noreferrer' : undefined}
+                            aria-label={`Открыть ${item.label}: ${item.contact}`}
+                            className={cardClassName}
+                          >
+                            {cardContent}
+                          </a>
+                        ) : (
+                          <div key={item.channel} className={cardClassName}>
+                            {cardContent}
                           </div>
-                          {item.touchCount > 0 ? (
-                            <div className="mt-2 text-[11px] font-medium text-slate-400 tabular-nums">
-                              Касаний в цепочке: {item.touchCount}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="mt-4 rounded-xl bg-white px-3 py-4 text-pretty text-sm leading-6 text-slate-600 shadow-sm shadow-slate-900/5">
@@ -2754,6 +2807,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         const status = String(delivery?.delivery_status || touch.status || 'draft');
                         const touchIndex = Number(touch.sequence_index || 0);
                         const editableTouch = savedCampaignDisplayTouches.find((item) => item.sequence_index === touchIndex);
+                        const touchCanBeEdited = canEditSavedTouch(
+                          String(savedOutreachCampaign?.status || ''),
+                          String(touch.status || ''),
+                        );
                         const touchDraft = touchEdits[touchIndex];
                         const sentMoment = formatOutreachMoment(delivery?.sent_at);
                         const scheduledMoment = formatOutreachMoment(delivery?.scheduled_at || touch.scheduled_at);
@@ -2769,7 +2826,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
-                              {editableTouch ? (
+                              {editableTouch && touchCanBeEdited ? (
                                 <OutreachTouchMessageEditor
                                   touch={editableTouch}
                                   draft={touchDraft}
@@ -2793,9 +2850,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                   onReset={() => resetTouchEdit(touchIndex)}
                                 />
                               ) : (
-                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                                  {String(touch.approved_text || touch.generated_text || 'Текст сообщения ещё не подготовлен.')}
-                                </p>
+                                <>
+                                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                                    {String(touch.approved_text || touch.generated_text || 'Текст сообщения ещё не подготовлен.')}
+                                  </p>
+                                  {editableTouch && !['sent', 'delivered', 'read', 'replied'].includes(status) ? (
+                                    <p className="mt-3 text-pretty text-xs leading-5 text-slate-500">
+                                      Чтобы изменить неотправленное сообщение, сначала поставьте цепочку на паузу. Перед возобновлением текст потребует повторной проверки.
+                                    </p>
+                                  ) : null}
+                                </>
                               )}
                               {sentMoment || scheduledMoment ? (
                                 <div className="mt-3 text-xs text-slate-500 tabular-nums">

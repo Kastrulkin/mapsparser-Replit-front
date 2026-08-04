@@ -1,0 +1,25 @@
+{
+  "classification": "FIX_PROVEN",
+  "bug": "Paused queued outreach touch could be edited in the UI but the draft-only API rejected the save",
+  "date": "2026-08-04",
+  "reproduction": {
+    "command": "arch -arm64 /usr/local/bin/python3 -m pytest -q tests/test_founder_outreach_campaigns.py -k queued_touch_edit",
+    "result": "failed",
+    "failure": "The UI rendered OutreachTouchMessageEditor without a campaign/touch state guard while the service accepted only draft/draft"
+  },
+  "fixed": {
+    "targeted_command": "arch -arm64 /usr/local/bin/python3 -m pytest -q tests/test_founder_outreach_campaigns.py tests/test_outreach_campaign_history_payload.py -k \"queued_touch_edit or paused_queued_touch_edit or paused_campaign_review\"",
+    "targeted_result": "3 passed",
+    "broader_command": "arch -arm64 /usr/local/bin/python3 -m pytest -q tests/test_founder_outreach_campaigns.py tests/test_outreach_campaign_history_payload.py",
+    "broader_result": "97 passed",
+    "frontend_build": "passed",
+    "frontend_lint": "0 errors, 4 pre-existing exhaustive-deps warnings"
+  },
+  "safety": {
+    "sent_touches_immutable": true,
+    "paused_queue_required": true,
+    "approval_snapshot_invalidated_on_edit": true,
+    "review_required_before_resume": true,
+    "external_dispatch_performed": false
+  }
+}
