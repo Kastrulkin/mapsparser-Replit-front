@@ -4282,6 +4282,9 @@ def _content_generation_v2_prompt(
     voice: dict[str, Any],
     language: str,
 ) -> str:
+    voice_preferences = voice.get("preferences") if isinstance(voice.get("preferences"), dict) else {}
+    business_description = str(voice_preferences.get("business_description") or "").strip()
+    audience_description = str(voice_preferences.get("audience_description") or "").strip()
     examples = "\n\n".join(
         f"Пример {index + 1}: {item.get('text')}"
         for index, item in enumerate(voice.get("examples") or [])
@@ -4295,6 +4298,8 @@ def _content_generation_v2_prompt(
         "\"used_fact_ids\":[\"source_id\"],\"unsupported_facts\":[]}]}\n\n"
         f"Факты о бизнесе:\n{_build_content_plan_business_fact_block(business_facts)}\n\n"
         f"Редакторский бриф:\n{_content_brief_prompt_block(brief)}\n\n"
+        f"Подтверждённое описание бизнеса от владельца: {business_description or 'нет дополнительного описания'}\n"
+        f"Клиенты бизнеса со слов владельца: {audience_description or 'нет дополнительного описания'}\n"
         f"Голос бизнеса: {voice.get('summary') or 'спокойный, конкретный, без рекламных клише'}\n"
         f"Запрещённые формулировки: {', '.join(voice.get('forbidden_phrases') or []) or 'нет дополнительных'}\n"
         f"Эталонные публикации:\n{examples}"

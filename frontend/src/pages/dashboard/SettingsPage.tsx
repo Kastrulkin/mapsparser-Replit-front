@@ -19,7 +19,6 @@ import {
 } from '@/components/dashboard/DashboardPrimitives';
 import { featureFlags } from '@/config/featureFlags';
 import {
-  SettingsHubPage,
   SettingsIntegrationsPage,
   SettingsPublicationsPage,
 } from './settings/SettingsHubPage';
@@ -239,7 +238,7 @@ export const SettingsPage = () => {
   }
 
   if (location.pathname.endsWith('/diagnostics')) {
-    return <Navigate to={`/dashboard/settings/integrations${location.search}`} replace />;
+    return <Navigate to={`/dashboard/settings${location.search}`} replace />;
   }
 
   if (location.pathname.endsWith('/publications')) {
@@ -247,8 +246,8 @@ export const SettingsPage = () => {
   }
 
   if (location.pathname.endsWith('/integrations')) {
-    return <SettingsIntegrationsPage />;
+    return <Navigate to={`/dashboard/settings${location.search}`} replace />;
   }
 
-  return <SettingsHubPage />;
+  return <SettingsIntegrationsPage />;
 };

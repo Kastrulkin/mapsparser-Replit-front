@@ -2,6 +2,7 @@ import json
 
 from src.services.content_plan_service import (
     _build_content_brief_v1,
+    _content_generation_v2_prompt,
     _load_publication_matrix_override,
     _parse_content_candidates,
     _score_content_candidate,
@@ -110,6 +111,29 @@ def test_voice_profile_is_derived_without_applying_hidden_rules():
     assert profile["summary"]
     assert profile["preferences"]["average_length"] > 0
     assert isinstance(profile["typical_ctas"], list)
+
+
+def test_generation_prompt_uses_confirmed_business_and_audience_descriptions():
+    prompt = _content_generation_v2_prompt(
+        business_facts={"name": "Каток", "services": []},
+        brief={
+            "event": "Лекция 7 августа",
+            "confirmed_details": ["Начало в 19:00"],
+            "sources": [{"id": "event", "label": "Афиша", "fact": "Лекция 7 августа"}],
+        },
+        voice={
+            "summary": "Спокойно и конкретно",
+            "preferences": {
+                "business_description": "Культурный центр для жителей района",
+                "audience_description": "Жители, которые ищут события рядом с домом",
+            },
+            "examples": [],
+        },
+        language="ru",
+    )
+
+    assert "Культурный центр для жителей района" in prompt
+    assert "Жители, которые ищут события рядом с домом" in prompt
 
 
 def test_missing_optional_prompt_does_not_abort_generation_transaction():

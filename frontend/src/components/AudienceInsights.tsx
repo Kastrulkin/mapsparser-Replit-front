@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, EyeOff, Lightbulb, Loader2, MessageCircleQuestion, RefreshCw, Save } from 'lucide-react';
+import { CheckCircle2, EyeOff, Lightbulb, Loader2, MessageCircleQuestion, RefreshCw, Save, Settings2 } from 'lucide-react';
 
+import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { newAuth } from '@/lib/auth_new';
 
 type AudienceInsight = {
@@ -33,6 +35,7 @@ export const AudienceInsights = ({ businessId }: { businessId: string }) => {
   const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,15 +79,34 @@ export const AudienceInsights = ({ businessId }: { businessId: string }) => {
 
   return (
     <section className="space-y-5" aria-labelledby="audience-insights-title">
+      <Sheet open={sourcesOpen} onOpenChange={setSourcesOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+          <SheetHeader>
+            <SheetTitle>Добавить канал конкурента</SheetTitle>
+            <SheetDescription>
+              Выберите публичные Telegram-каналы и чаты, за темами которых хотите следить. LocalOS ищет повторяющиеся вопросы, а не копирует чужие посты.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <TelegramResearchSetup businessId={businessId} mode="sources" />
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Знания рынка</div>
           <h2 id="audience-insights-title" className="mt-1 text-2xl font-semibold text-slate-950">Что волнует аудиторию</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Повторяющиеся вопросы и проблемы из выбранных источников. Закрытые сообщения не цитируются и не показываются другим бизнесам.</p>
         </div>
-        <Button type="button" variant="outline" onClick={() => void load()} disabled={loading} className="min-h-10">
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Обновить
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => setSourcesOpen(true)} className="min-h-10 bg-slate-950 text-white hover:bg-slate-800">
+            <Settings2 className="mr-2 h-4 w-4" /> Настроить источники
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading} className="min-h-10">
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Обновить
+          </Button>
+        </div>
       </div>
 
       {error ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-100">{error}</div> : null}
@@ -96,7 +118,8 @@ export const AudienceInsights = ({ businessId }: { businessId: string }) => {
         <div className="rounded-3xl bg-white px-6 py-12 text-center ring-1 ring-slate-200">
           <MessageCircleQuestion className="mx-auto h-8 w-8 text-slate-400" />
           <p className="mt-3 font-semibold text-slate-900">Повторяющихся тем пока нет</p>
-          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">Подключите Telegram-источники в настройках. LocalOS загрузит последние 90 дней и будет обновлять их раз в день.</p>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">Добавьте публичный канал конкурента или другой полезный источник. LocalOS загрузит доступную историю и будет обновлять темы раз в день.</p>
+          <Button type="button" onClick={() => setSourcesOpen(true)} className="mt-5 min-h-10 bg-slate-950 text-white hover:bg-slate-800">Добавить канал конкурента</Button>
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">

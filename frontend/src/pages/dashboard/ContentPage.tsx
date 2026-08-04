@@ -105,6 +105,11 @@ type GenerationDetails = {
 type VoiceExample = { id: string; text: string; business_id?: string; platform?: string };
 type VoiceProfile = {
   summary?: string;
+  preferences?: {
+    business_description?: string;
+    audience_description?: string;
+    [key: string]: unknown;
+  };
   status?: string;
   version?: number;
   examples?: VoiceExample[];
@@ -225,6 +230,7 @@ type CalendarView = 'month' | 'week' | 'list';
 type ContentSection = 'calendar' | 'media' | 'audience';
 type MediaFilter = 'all' | 'maps' | 'posts' | 'weak';
 type ModalStep = 'setup' | 'preview';
+type ContentSetupStep = 'business' | 'audience' | 'voice';
 
 type CreatePlanDraft = {
   goal: string;
@@ -649,6 +655,9 @@ export function ContentPage() {
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
   const [voiceSummary, setVoiceSummary] = useState('');
+  const [businessDescription, setBusinessDescription] = useState('');
+  const [audienceDescription, setAudienceDescription] = useState('');
+  const [contentSetupStep, setContentSetupStep] = useState<ContentSetupStep>('business');
   const [voiceExampleInput, setVoiceExampleInput] = useState('');
   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
@@ -789,6 +798,7 @@ export function ContentPage() {
 
   const openVoiceSettings = async () => {
     if (!currentBusinessId) return;
+    setContentSetupStep('business');
     setVoiceOpen(true);
     setVoiceLoading(true);
     try {
@@ -796,6 +806,8 @@ export function ContentPage() {
       const profile = response.profile || null;
       setVoiceProfile(profile);
       setVoiceSummary(String(profile?.summary || ''));
+      setBusinessDescription(String(profile?.preferences?.business_description || ''));
+      setAudienceDescription(String(profile?.preferences?.audience_description || ''));
     } catch (voiceError) {
       setError(voiceError instanceof Error ? voiceError.message : 'Не удалось загрузить стиль публикаций');
     } finally {
@@ -837,11 +849,20 @@ export function ContentPage() {
     try {
       const response = await newAuth.makeRequest('/content-voice', {
         method: 'PATCH',
-        body: JSON.stringify({ business_id: currentBusinessId, summary: voiceSummary, confirm: true }),
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          summary: voiceSummary,
+          preferences: {
+            ...(voiceProfile?.preferences || {}),
+            business_description: businessDescription.trim(),
+            audience_description: audienceDescription.trim(),
+          },
+          confirm: true,
+        }),
       });
       setVoiceProfile(response.profile || null);
       setVoiceOpen(false);
-      setActionMessage('Стиль публикаций сохранён. LocalOS будет учитывать его в новых текстах.');
+      setActionMessage('Настройки контента сохранены. LocalOS будет учитывать их в новых текстах.');
     } catch (voiceError) {
       setError(voiceError instanceof Error ? voiceError.message : 'Не удалось сохранить стиль');
     } finally {
@@ -2702,57 +2723,94 @@ export function ContentPage() {
     );
   };
 
+  const contentSetupSteps: { key: ContentSetupStep; label: string }[] = [
+    { key: 'business', label: 'О бизнесе' },
+    { key: 'audience', label: 'О клиентах' },
+    { key: 'voice', label: 'Как писать' },
+  ];
+  const contentSetupStepIndex = contentSetupSteps.findIndex((step) => step.key === contentSetupStep);
+
   const renderVoiceDialog = () => (
     <Dialog open={voiceOpen} onOpenChange={setVoiceOpen}>
       <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[28px] sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-balance text-2xl">Как должен звучать ваш бизнес</DialogTitle>
+          <DialogTitle className="text-balance text-2xl">Настроить контент</DialogTitle>
           <DialogDescription className="text-pretty">
-            Добавьте несколько публикаций, которые вам нравятся. LocalOS сам выделит общий стиль.
+            Три коротких шага, чтобы тексты были похожи на вас и понятны вашим клиентам.
           </DialogDescription>
         </DialogHeader>
         {voiceLoading && !voiceProfile ? (
-          <div className="flex min-h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загружаем примеры...</div>
+          <div className="flex min-h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загружаем настройки...</div>
         ) : (
           <div className="space-y-5 py-2">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Понравившийся пост</div>
-              <Textarea
-                value={voiceExampleInput}
-                onChange={(event) => setVoiceExampleInput(event.target.value)}
-                placeholder="Вставьте полный текст публикации"
-                className="mt-2 min-h-28 rounded-2xl"
-              />
-              <Button type="button" variant="outline" onClick={() => { void addVoiceExample(); }} disabled={voiceLoading || voiceExampleInput.trim().length < 20} className="mt-2 min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
-                <Plus className="mr-2 h-4 w-4" />Добавить пример
-              </Button>
+            <div className="grid grid-cols-3 gap-2" aria-label="Шаги настройки контента">
+              {contentSetupSteps.map((step, index) => (
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => setContentSetupStep(step.key)}
+                  className={cn(
+                    'min-h-12 rounded-2xl px-2 py-2 text-xs font-semibold transition-colors',
+                    contentSetupStep === step.key ? 'bg-slate-950 text-white' : index < contentSetupStepIndex ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                  )}
+                >
+                  <span className="block text-[11px] opacity-70">Шаг {index + 1}</span>
+                  {step.label}
+                </button>
+              ))}
             </div>
-            {(voiceProfile?.examples || []).length > 0 ? (
+
+            {contentSetupStep === 'business' ? (
               <div>
-                <div className="text-sm font-semibold text-slate-900">Примеры · {(voiceProfile?.examples || []).length}</div>
-                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-                  {(voiceProfile?.examples || []).map((example) => (
-                    <div key={example.id} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
-                      <p className="line-clamp-3 min-w-0 flex-1 text-pretty text-sm leading-6 text-slate-600">{example.text}</p>
-                      <button type="button" onClick={() => { void deleteVoiceExample(example.id); }} className="grid min-h-10 min-w-10 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-white hover:text-red-600" aria-label="Удалить пример"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  ))}
-                </div>
+                <div className="text-sm font-semibold text-slate-900">Что важно знать о бизнесе</div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Коротко: чем вы занимаетесь, чем отличаетесь и что нельзя искажать в текстах.</p>
+                <Textarea value={businessDescription} onChange={(event) => setBusinessDescription(event.target.value)} placeholder="Например: культурный центр для жителей района; главное — реальная афиша и конкретные события" className="mt-3 min-h-36 rounded-2xl" />
               </div>
-            ) : (
-              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">Начните с трёх примеров. Уже после первого LocalOS предложит черновое описание стиля.</div>
-            )}
-            <div>
-              <div className="text-sm font-semibold text-slate-900">LocalOS понял стиль так</div>
-              <Textarea value={voiceSummary} onChange={(event) => setVoiceSummary(event.target.value)} placeholder="Например: конкретно, тепло, без рекламных вопросов" className="mt-2 min-h-24 rounded-2xl" />
-              <p className="mt-2 text-pretty text-xs leading-5 text-slate-500">Вы подтверждаете только это короткое описание. Источники и технические правила останутся внутри.</p>
-            </div>
-            {voiceProfile?.learning_suggestion?.text ? <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">{voiceProfile.learning_suggestion.text}</div> : null}
+            ) : null}
+
+            {contentSetupStep === 'audience' ? (
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Кто ваши клиенты</div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Опишите их ситуации, вопросы и причины выбрать вас. Не нужны сложные сегменты.</p>
+                <Textarea value={audienceDescription} onChange={(event) => setAudienceDescription(event.target.value)} placeholder="Например: жители района, которые ищут интересные события рядом с домом и хотят заранее знать дату и формат" className="mt-3 min-h-36 rounded-2xl" />
+              </div>
+            ) : null}
+
+            {contentSetupStep === 'voice' ? (
+              <div className="space-y-5">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Как должны звучать тексты</div>
+                  <Textarea value={voiceSummary} onChange={(event) => setVoiceSummary(event.target.value)} placeholder="Например: конкретно, тепло, без рекламных вопросов" className="mt-2 min-h-28 rounded-2xl" />
+                </div>
+                <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">Примеры понравившихся постов · {(voiceProfile?.examples || []).length}</summary>
+                  <div className="mt-4">
+                    <Textarea value={voiceExampleInput} onChange={(event) => setVoiceExampleInput(event.target.value)} placeholder="Вставьте полный текст публикации" className="min-h-28 rounded-2xl bg-white" />
+                    <Button type="button" variant="outline" onClick={() => { void addVoiceExample(); }} disabled={voiceLoading || voiceExampleInput.trim().length < 20} className="mt-2 min-h-11 rounded-2xl bg-white active:scale-[0.96] transition-transform"><Plus className="mr-2 h-4 w-4" />Добавить пример</Button>
+                    {(voiceProfile?.examples || []).length > 0 ? (
+                      <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+                        {(voiceProfile?.examples || []).map((example) => (
+                          <div key={example.id} className="flex items-start gap-3 rounded-2xl bg-white p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+                            <p className="line-clamp-3 min-w-0 flex-1 text-pretty text-sm leading-6 text-slate-600">{example.text}</p>
+                            <button type="button" onClick={() => { void deleteVoiceExample(example.id); }} className="grid min-h-10 min-w-10 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-slate-50 hover:text-red-600" aria-label="Удалить пример"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="mt-3 text-xs leading-5 text-slate-600">Можно начать без примеров и добавить их позже.</p>}
+                  </div>
+                </details>
+                {voiceProfile?.learning_suggestion?.text ? <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">{voiceProfile.learning_suggestion.text}</div> : null}
+              </div>
+            ) : null}
           </div>
         )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setVoiceOpen(false)} className="min-h-11 rounded-2xl">Закрыть</Button>
-          <Button type="button" onClick={() => { void saveVoiceProfile(); }} disabled={voiceLoading || !voiceSummary.trim()} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Сохранить стиль</Button>
+          {contentSetupStepIndex > 0 ? <Button type="button" variant="outline" onClick={() => setContentSetupStep(contentSetupSteps[contentSetupStepIndex - 1].key)} className="min-h-11 rounded-2xl">Назад</Button> : <Button type="button" variant="outline" onClick={() => setVoiceOpen(false)} className="min-h-11 rounded-2xl">Закрыть</Button>}
+          {contentSetupStepIndex < contentSetupSteps.length - 1 ? (
+            <Button type="button" onClick={() => setContentSetupStep(contentSetupSteps[contentSetupStepIndex + 1].key)} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Дальше</Button>
+          ) : (
+            <Button type="button" onClick={() => { void saveVoiceProfile(); }} disabled={voiceLoading || !voiceSummary.trim()} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Сохранить</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2783,7 +2841,7 @@ export function ContentPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
-            <Star className="mr-2 h-4 w-4" />Настроить стиль
+            <Star className="mr-2 h-4 w-4" />Настроить контент
           </Button>
           <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} className="min-h-12 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform">
             <Plus className="mr-2 h-4 w-4" />Создать новый план
