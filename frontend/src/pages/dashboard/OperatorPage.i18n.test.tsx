@@ -47,7 +47,7 @@ const ContextRoute = () => (
 describe('OperatorPage localization', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    window.localStorage.setItem('language', 'tr');
+    window.localStorage.setItem('language', 'el');
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url === '/operator/summary') {
         return Promise.resolve({ data: { summary } });
@@ -56,7 +56,7 @@ describe('OperatorPage localization', () => {
     });
   });
 
-  it('renders Turkish system copy even when the structured summary contains Russian labels', async () => {
+  it('renders Greek system copy even when the structured summary contains Russian labels', async () => {
     const { container } = render(
       <MemoryRouter>
         <LanguageProvider>
@@ -69,8 +69,13 @@ describe('OperatorPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Operatör' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('Harita verileri güncellenmeli · 40')).toBeInTheDocument());
+    expect(await screen.findByRole('heading', { name: 'Χειριστής' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Τα δεδομένα χαρτών χρειάζονται ενημέρωση · 40')).toBeInTheDocument());
+    expect(screen.getByText('Τα προσχέδια ειδήσεων χρειάζονται απόφαση · 4')).toBeInTheDocument();
+    expect(screen.getByText(/Βαθμολογία στον χάρτη:/)).toBeInTheDocument();
+    expect(screen.getByText(/Κριτικές στους χάρτες:/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    expect(container.textContent).not.toContain('News drafts need a decision');
+    expect(container.textContent).not.toContain('Map data should be updated');
   });
 });

@@ -23,6 +23,9 @@ export type CardOverviewPageCopy = {
   expand: string;
   allMaps: string;
   yandex: string;
+  servicesTab: string;
+  reviewsTab: string;
+  newsTab: string;
   keywordsTab: string;
   competitorsTab: string;
   ratingDescription: string;
@@ -51,15 +54,23 @@ export type CardOverviewPageCopy = {
   emptyFiltered: string;
   edit: string;
   automationLocked: string;
+  parseAlreadyRunning: string;
+  parseInProgress: string;
+  parseQueued: string;
+  parseDone: string;
+  parseError: string;
+  parseIdle: string;
+  nextRefresh: string;
 };
 
 const en: CardOverviewPageCopy = {
   eyebrow: 'Business listing', title: 'Maps management', subtitle: 'Manage listing data, services, reviews, news, search visibility, and competitors in one place.',
   refresh: 'Refresh listing data', refreshing: 'Starting refresh...', refreshAll: 'Refresh card data', refreshHint: 'Refreshes only the selected map listing. Costs about 10 credits, depending on the amount of listing data.', refreshAllHint: 'Refreshes all added map listings. Costs about 10 credits, depending on the amount of listing data.', refreshTitle: 'Starts collecting fresh data from your map listing.', auditTitle: 'Opens the listing audit, metrics, and change history.',
   rating: 'Rating', ratingHint: 'Average map listing rating.', reviews: 'Reviews', reviewsHint: 'Current review volume in the listing.', lastRefresh: 'Last refresh', lastRefreshHint: 'When the section data was last refreshed.', mapSources: 'Map sources', mapSourcesHint: 'Connected map profiles for this location.',
-  now: 'Now:', supportedSources: 'Refresh is currently supported for Yandex, 2GIS, and Google.', collapse: 'Collapse', expand: 'Expand', allMaps: 'All maps', yandex: 'Yandex', keywordsTab: 'SEO (Wordstat)', competitorsTab: 'Competitors', ratingDescription: 'A short summary of the listing rating and reviews.',
+  now: 'Now:', supportedSources: 'Refresh is currently supported for Yandex, 2GIS, and Google.', collapse: 'Collapse', expand: 'Expand', allMaps: 'All maps', yandex: 'Yandex', servicesTab: 'Services', reviewsTab: 'Reviews', newsTab: 'News', keywordsTab: 'SEO (Wordstat)', competitorsTab: 'Competitors', ratingDescription: 'A short summary of the listing rating and reviews.',
   servicesTitle: 'Services', servicesDescription: 'Check how services will appear in map listings and search. Improve weak descriptions and review prepared SEO suggestions.', processProblematic: 'Process weak services', processingProblematic: 'Processing...', processProblematicHint: 'Finds services with weak or missing descriptions and improves up to 10 of the weakest in one run.', findQueries: 'Find queries', findingQueries: 'Searching...', findQueriesHint: 'Finds SEO queries for services that do not have them using a safe Wordstat search.', optimizing: 'Optimizing...', optimizeAllHint: 'Generates SEO names and descriptions for all services. Use carefully for large lists.', compressMenu: 'Simplify service menu', compressMenuHint: 'Shows which services can be combined into categories and variants. Nothing changes automatically.', addServiceHint: 'Add a service manually when it is missing from the listing data or needs a separate wording review.', settings: 'Settings', settingsHint: 'Opens tone, language, region, file import, and additional generation options.', listingUpdated: 'Listing last updated:',
   total: 'Total', ready: 'Ready', needsReview: 'Needs improvement', manualReview: 'Manual review', noQueries: 'No queries', source: 'Source', emptyFiltered: 'Nothing found for the selected filters', edit: 'Edit', automationLocked: 'Automation is available with a paid plan.',
+  parseAlreadyRunning: 'Data collection is already running', parseInProgress: 'Data collection in progress', parseQueued: 'Data collection is queued', parseDone: 'Card data updated', parseError: 'Could not update card data', parseIdle: 'Card data has not been collected yet', nextRefresh: 'Next refresh will be available on {date}',
 };
 
 const ru: CardOverviewPageCopy = {
@@ -86,15 +97,21 @@ const ar: CardOverviewPageCopy = { ...en, eyebrow: 'ملف النشاط', title:
 const ha: CardOverviewPageCopy = { ...en, eyebrow: 'Bayanan kasuwanci', title: 'Gudanar da taswira', subtitle: 'Gudanar da jeri, ayyuka, sharhi, labarai, bayyanar nema da masu gasa a wuri ɗaya.', refresh: 'Sabunta jeri', refreshing: 'Ana sabuntawa...', refreshAll: 'Sabunta jerin', rating: 'Maki', ratingHint: 'Matsakaicin makin jeri.', reviews: 'Sharhi', reviewsHint: 'Yawan sharhi na yanzu.', lastRefresh: 'Sabuntawa ta ƙarshe', lastRefreshHint: 'Lokacin sabunta bayanai na ƙarshe.', mapSources: 'Tushen taswira', mapSourcesHint: 'Jerin taswirar da aka haɗa.', now: 'Yanzu:', collapse: 'Rufe', expand: 'Buɗe', allMaps: 'Duk taswirori', keywordsTab: 'SEO (Wordstat)', competitorsTab: 'Masu gasa', servicesTitle: 'Ayyuka', servicesDescription: 'Duba yadda ayyuka suke bayyana kuma inganta bayanin da bai da ƙarfi.', total: 'Duka', ready: 'A shirye', needsReview: 'Na buƙatar gyara', manualReview: 'Binciken hannu', noQueries: 'Babu tambayoyi', source: 'Tushe', edit: 'Gyara' };
 const tr: CardOverviewPageCopy = { ...en, eyebrow: 'İşletme kaydı', title: 'Harita Yönetimi', subtitle: 'Kayıtları, hizmetleri, yorumları, haberleri, arama görünürlüğünü ve rakipleri tek yerde yönetin.', refresh: 'Kaydı yenile', refreshing: 'Yenileniyor...', refreshAll: 'Kayıtları yenile', rating: 'Puan', ratingHint: 'Harita kaydının ortalama puanı.', reviews: 'Yorumlar', reviewsHint: 'Güncel yorum sayısı.', lastRefresh: 'Son yenileme', lastRefreshHint: 'Verilerin son yenilenme zamanı.', mapSources: 'Harita kaynakları', mapSourcesHint: 'Bu konum için bağlı kayıtlar.', now: 'Şimdi:', collapse: 'Daralt', expand: 'Genişlet', allMaps: 'Tüm haritalar', keywordsTab: 'SEO (Wordstat)', competitorsTab: 'Rakipler', servicesTitle: 'Hizmetler', servicesDescription: 'Hizmetlerin görünümünü kontrol edin ve zayıf açıklamaları geliştirin.', total: 'Toplam', ready: 'Hazır', needsReview: 'Geliştirilmeli', manualReview: 'Elle inceleme', noQueries: 'Sorgu yok', source: 'Kaynak', edit: 'Düzenle' };
 
+type CardRuntimeCopy = Pick<CardOverviewPageCopy, 'servicesTab' | 'reviewsTab' | 'newsTab' | 'parseAlreadyRunning' | 'parseInProgress' | 'parseQueued' | 'parseDone' | 'parseError' | 'parseIdle' | 'nextRefresh'>;
+const runtimeByLanguage: Record<string, CardRuntimeCopy> = {
+  en: { servicesTab: 'Services', reviewsTab: 'Reviews', newsTab: 'News', parseAlreadyRunning: 'Data collection is already running', parseInProgress: 'Data collection in progress', parseQueued: 'Data collection is queued', parseDone: 'Card data updated', parseError: 'Could not update card data', parseIdle: 'Card data has not been collected yet', nextRefresh: 'Next refresh will be available on {date}' },
+  ru: { servicesTab: 'Услуги', reviewsTab: 'Отзывы', newsTab: 'Новости', parseAlreadyRunning: 'Сбор данных уже выполняется', parseInProgress: 'Сбор данных выполняется', parseQueued: 'Сбор данных в очереди', parseDone: 'Данные карточки обновлены', parseError: 'Не удалось обновить данные', parseIdle: 'Данные карточки ещё не обновлялись', nextRefresh: 'Следующее обновление доступно {date}' },
+  fr: { servicesTab: 'Services', reviewsTab: 'Avis', newsTab: 'Actualités', parseAlreadyRunning: 'La collecte est déjà en cours', parseInProgress: 'Collecte des données en cours', parseQueued: 'Collecte des données en attente', parseDone: 'Données de la fiche actualisées', parseError: 'Impossible d’actualiser les données', parseIdle: 'Les données n’ont pas encore été collectées', nextRefresh: 'Prochaine actualisation disponible le {date}' },
+  es: { servicesTab: 'Servicios', reviewsTab: 'Reseñas', newsTab: 'Noticias', parseAlreadyRunning: 'La recopilación ya está en curso', parseInProgress: 'Recopilando datos', parseQueued: 'Recopilación en cola', parseDone: 'Datos de la ficha actualizados', parseError: 'No se pudieron actualizar los datos', parseIdle: 'Los datos aún no se han recopilado', nextRefresh: 'Próxima actualización disponible el {date}' },
+  el: { servicesTab: 'Υπηρεσίες', reviewsTab: 'Κριτικές', newsTab: 'Νέα', parseAlreadyRunning: 'Η συλλογή δεδομένων εκτελείται ήδη', parseInProgress: 'Η συλλογή δεδομένων βρίσκεται σε εξέλιξη', parseQueued: 'Η συλλογή δεδομένων βρίσκεται στην ουρά', parseDone: 'Τα δεδομένα της καταχώρισης ενημερώθηκαν', parseError: 'Δεν ήταν δυνατή η ενημέρωση των δεδομένων της καταχώρισης', parseIdle: 'Τα δεδομένα δεν έχουν συλλεχθεί ακόμη', nextRefresh: 'Η επόμενη ενημέρωση θα είναι διαθέσιμη στις {date}' },
+  de: { servicesTab: 'Leistungen', reviewsTab: 'Rezensionen', newsTab: 'Neuigkeiten', parseAlreadyRunning: 'Datenerfassung läuft bereits', parseInProgress: 'Daten werden erfasst', parseQueued: 'Datenerfassung ist eingeplant', parseDone: 'Kartendaten aktualisiert', parseError: 'Kartendaten konnten nicht aktualisiert werden', parseIdle: 'Kartendaten wurden noch nicht erfasst', nextRefresh: 'Nächste Aktualisierung verfügbar am {date}' },
+  th: { servicesTab: 'บริการ', reviewsTab: 'รีวิว', newsTab: 'ข่าว', parseAlreadyRunning: 'กำลังเก็บข้อมูลอยู่แล้ว', parseInProgress: 'กำลังเก็บข้อมูล', parseQueued: 'การเก็บข้อมูลอยู่ในคิว', parseDone: 'อัปเดตข้อมูลแล้ว', parseError: 'อัปเดตข้อมูลไม่ได้', parseIdle: 'ยังไม่ได้เก็บข้อมูล', nextRefresh: 'รีเฟรชครั้งถัดไปได้ใน {date}' },
+  ar: { servicesTab: 'الخدمات', reviewsTab: 'المراجعات', newsTab: 'الأخبار', parseAlreadyRunning: 'جمع البيانات قيد التشغيل بالفعل', parseInProgress: 'جارٍ جمع البيانات', parseQueued: 'جمع البيانات في قائمة الانتظار', parseDone: 'تم تحديث بيانات القائمة', parseError: 'تعذر تحديث بيانات القائمة', parseIdle: 'لم تُجمع البيانات بعد', nextRefresh: 'يتاح التحديث التالي في {date}' },
+  ha: { servicesTab: 'Ayyuka', reviewsTab: 'Sharhi', newsTab: 'Labarai', parseAlreadyRunning: 'Ana tattara bayanai yanzu', parseInProgress: 'Ana tattara bayanai', parseQueued: 'An saka tattara bayanai a layi', parseDone: 'An sabunta bayanan jeri', parseError: 'Ba a iya sabunta bayanan jeri ba', parseIdle: 'Ba a tattara bayanai ba tukuna', nextRefresh: 'Sabuntawa na gaba zai samu a {date}' },
+  tr: { servicesTab: 'Hizmetler', reviewsTab: 'Yorumlar', newsTab: 'Haberler', parseAlreadyRunning: 'Veri toplama zaten çalışıyor', parseInProgress: 'Veriler toplanıyor', parseQueued: 'Veri toplama sırada', parseDone: 'Kayıt verileri güncellendi', parseError: 'Kayıt verileri güncellenemedi', parseIdle: 'Kayıt verileri henüz toplanmadı', nextRefresh: 'Sonraki yenileme {date} tarihinde kullanılabilir' },
+};
+
 export const getCardOverviewPageCopy = (language: string): CardOverviewPageCopy => {
-  if (language === 'ru') return ru;
-  if (language === 'el') return el;
-  if (language === 'fr') return fr;
-  if (language === 'es') return es;
-  if (language === 'de') return de;
-  if (language === 'th') return th;
-  if (language === 'ar') return ar;
-  if (language === 'ha') return ha;
-  if (language === 'tr') return tr;
-  return en;
+  const localized = language === 'ru' ? ru : language === 'el' ? el : language === 'fr' ? fr : language === 'es' ? es : language === 'de' ? de : language === 'th' ? th : language === 'ar' ? ar : language === 'ha' ? ha : language === 'tr' ? tr : en;
+  return { ...localized, ...(runtimeByLanguage[language] || runtimeByLanguage.en) };
 };
