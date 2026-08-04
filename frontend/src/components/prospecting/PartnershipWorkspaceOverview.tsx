@@ -4,6 +4,8 @@ import {
   DashboardCompactMetricsRow,
   DashboardPageHeader,
 } from '@/components/dashboard/DashboardPrimitives';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 
 type PartnershipWorkspaceOverviewProps = {
   workspaceView: string;
@@ -16,16 +18,6 @@ type PartnershipWorkspaceOverviewProps = {
   onWorkspaceChange: (value: string) => void;
 };
 
-const workspaceLabelByValue: Record<string, string> = {
-  overview: 'обзор кампании',
-  raw: 'кандидаты',
-  pipeline: 'отбор',
-  drafts: 'письма',
-  queue: 'отправка',
-  sent: 'ответы',
-  analytics: 'отчёт',
-};
-
 export function PartnershipWorkspaceOverview({
   workspaceView,
   currentBusinessId,
@@ -36,28 +28,40 @@ export function PartnershipWorkspaceOverview({
   visibleReactionsCount,
   onWorkspaceChange,
 }: PartnershipWorkspaceOverviewProps) {
+  const { language } = useLanguage();
+  const copy = getPartnershipWorkspaceCopy(language);
+  const workspaceLabelByValue: Record<string, string> = {
+    overview: copy.overview,
+    raw: copy.candidates,
+    pipeline: copy.pipeline,
+    drafts: copy.drafts,
+    queue: copy.sending,
+    sent: copy.replies,
+    analytics: copy.report,
+  };
+
   return (
     <>
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Поиск партнёров"
-        description="Один экран для поиска партнёров: кандидаты, отбор, письма, ручная отправка, ответы и отчётность разделены по вкладкам."
+        title={copy.title}
+        description={copy.description}
       />
 
       <DashboardCompactMetricsRow
         items={[
-          { label: 'Кандидаты', value: rawLeadCount, hint: 'Найденные компании, которые ещё не взяли в работу.' },
-          { label: 'В отборе', value: pipelineLeadCount, hint: 'Партнёры, с которыми уже работаем.' },
-          { label: 'Письма', value: visibleDraftsCount, hint: 'Первые письма и КП, которые ждут проверки.' },
-          { label: 'Очередь', value: visibleBatchesCount, hint: 'Письма, подготовленные к ручной отправке.' },
-          { label: 'Ответы', value: visibleReactionsCount, hint: 'Зафиксированные реакции партнёров.' },
+          { label: copy.candidates, value: rawLeadCount, hint: copy.candidatesHint },
+          { label: copy.pipeline, value: pipelineLeadCount, hint: copy.pipelineHint },
+          { label: copy.drafts, value: visibleDraftsCount, hint: copy.draftsHint },
+          { label: copy.queue, value: visibleBatchesCount, hint: copy.queueHint },
+          { label: copy.replies, value: visibleReactionsCount, hint: copy.repliesHint },
         ]}
       />
 
       <DashboardActionPanel
-        title="Следующий шаг"
-        description="Двигайтесь слева направо: поиск → отбор → письма → ручная отправка → результат. Каждый экран показывает только действия текущего шага."
-        status={!currentBusinessId ? 'Сначала выберите бизнес в переключателе сверху.' : `Сейчас открыт слой: ${workspaceLabelByValue[workspaceView] || 'рабочий экран'}.`}
+        title={copy.nextStep}
+        description={copy.nextStepDescription}
+        status={!currentBusinessId ? copy.selectBusiness : `${copy.currentLayer}: ${workspaceLabelByValue[workspaceView] || copy.workspace}.`}
         tone={!currentBusinessId ? 'amber' : 'default'}
       />
 
@@ -66,13 +70,13 @@ export function PartnershipWorkspaceOverview({
           activeWorkspace={workspaceView}
           onWorkspaceChange={onWorkspaceChange}
           workspaces={[
-            { value: 'overview', label: 'Обзор' },
-            { value: 'raw', label: 'Кандидаты', count: rawLeadCount },
-            { value: 'pipeline', label: 'Отбор', count: pipelineLeadCount },
-            { value: 'drafts', label: 'Письма', count: visibleDraftsCount },
-            { value: 'queue', label: 'Отправка', count: visibleBatchesCount },
-            { value: 'sent', label: 'Ответы', count: visibleReactionsCount },
-            { value: 'analytics', label: 'Отчёт' },
+            { value: 'overview', label: copy.overview },
+            { value: 'raw', label: copy.candidates, count: rawLeadCount },
+            { value: 'pipeline', label: copy.pipeline, count: pipelineLeadCount },
+            { value: 'drafts', label: copy.drafts, count: visibleDraftsCount },
+            { value: 'queue', label: copy.sending, count: visibleBatchesCount },
+            { value: 'sent', label: copy.replies, count: visibleReactionsCount },
+            { value: 'analytics', label: copy.report },
           ]}
         />
       </div>
