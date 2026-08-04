@@ -3,6 +3,8 @@ import { Building2, ChevronDown, MapPin } from 'lucide-react';
 import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { newAuth } from '@/lib/auth_new';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { localizeDemoBusinessName, operatorPageCopyForLanguage } from '@/pages/dashboard/operatorPageCopy';
 
 interface NetworkLocation {
     id: string;
@@ -22,6 +24,8 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     currentBusinessId,
     onLocationChange,
 }) => {
+    const { language } = useLanguage();
+    const copy = operatorPageCopyForLanguage(language).location;
     const [isOpen, setIsOpen] = useState(false);
     const [locations, setLocations] = useState<NetworkLocation[]>([]);
     const [selectedLocation, setSelectedLocation] = useState<NetworkLocation | null>(null);
@@ -37,8 +41,8 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     })();
 
     const getLocationLabel = (location: NetworkLocation | null) => {
-        if (!location) return 'Выберите точку';
-        const baseName = String(location.name || '').trim() || 'Точка';
+        if (!location) return copy.select;
+        const baseName = localizeDemoBusinessName(location.name, language) || copy.fallback;
         if (parentLocationId && String(location.id || '').trim() === parentLocationId) {
             return `👑 ${baseName}`;
         }
@@ -103,7 +107,7 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
         return (
             <div className="flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-500">Загрузка...</span>
+                <span className="text-sm text-gray-500">{copy.loading}</span>
             </div>
         );
     }

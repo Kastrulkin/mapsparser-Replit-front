@@ -14,6 +14,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { operatorPageCopyForLanguage } from '@/pages/dashboard/operatorPageCopy';
 
 type BetaFeedbackBannerProps = {
   area: 'agents' | 'operator';
@@ -32,6 +34,8 @@ export const BetaFeedbackBanner = ({
 }: BetaFeedbackBannerProps) => {
   const location = useLocation();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const copy = operatorPageCopyForLanguage(language).feedback;
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -40,8 +44,8 @@ export const BetaFeedbackBanner = ({
     const normalizedMessage = message.trim();
     if (!normalizedMessage) {
       toast({
-        title: 'Опишите проблему',
-        description: 'Добавьте пару слов: что именно сломалось или выглядит неправильно.',
+        title: copy.emptyTitle,
+        description: copy.emptyDescription,
         variant: 'destructive',
       });
       return;
@@ -57,15 +61,15 @@ export const BetaFeedbackBanner = ({
         message: normalizedMessage,
       });
       toast({
-        title: 'Сообщение отправлено',
-        description: 'Спасибо. Мы сохранили проблему и вернёмся к ней в beta-разборе.',
+        title: copy.successTitle,
+        description: copy.successDescription,
       });
       setOpen(false);
       setMessage('');
     } catch (error) {
       toast({
-        title: 'Не удалось отправить сообщение',
-        description: error instanceof Error ? error.message : 'Попробуйте ещё раз через минуту.',
+        title: copy.errorTitle,
+        description: error instanceof Error ? error.message : copy.errorDescription,
         variant: 'destructive',
       });
     } finally {
@@ -88,7 +92,7 @@ export const BetaFeedbackBanner = ({
           <div className="flex shrink-0 items-center">
             <Button type="button" variant="outline" className="min-h-10 rounded-xl bg-white/90" onClick={() => setOpen(true)}>
               <MessageSquareWarning className="mr-2 h-4 w-4" />
-              Сообщить о проблеме
+              {copy.button}
             </Button>
           </div>
         </div>
@@ -98,31 +102,29 @@ export const BetaFeedbackBanner = ({
         <DialogContent className="max-w-2xl rounded-3xl border-slate-200 p-0">
           <div className="px-6 py-6">
             <DialogHeader>
-              <DialogTitle>Сообщить о проблеме</DialogTitle>
-              <DialogDescription>
-                Опишите, что вы увидели в разделе. Мы сохраним сообщение вместе с контекстом страницы и бизнеса.
-              </DialogDescription>
+              <DialogTitle>{copy.title}</DialogTitle>
+              <DialogDescription>{copy.description}</DialogDescription>
             </DialogHeader>
             <div className="mt-5 space-y-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
-                Раздел: <span className="font-medium text-slate-900">{title}</span>
+                {copy.section}: <span className="font-medium text-slate-900">{title}</span>
                 {businessName ? <span className="ml-2 text-slate-500">· {businessName}</span> : null}
               </div>
               <Textarea
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder="Например: после запуска теста не видно результат, кнопка не срабатывает, таблица выглядит сломанной..."
+                placeholder={copy.placeholder}
                 className="min-h-[150px] rounded-2xl"
               />
             </div>
           </div>
           <DialogFooter className="border-t border-slate-100 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
-              Отмена
+              {copy.cancel}
             </Button>
             <Button type="button" onClick={submit} disabled={submitting || !message.trim()}>
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Отправить
+              {copy.send}
             </Button>
           </DialogFooter>
         </DialogContent>
