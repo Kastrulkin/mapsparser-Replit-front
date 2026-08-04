@@ -11,7 +11,7 @@ export const partnerTypeOptions: PartnerTypeOption[] = [
   { id: 'food', label: 'Кафе и рестораны' },
   { id: 'photo_events', label: 'Фото и мероприятия' },
   { id: 'pets', label: 'Ветеринария и зоотовары' },
-  { id: 'beauty', label: 'Красота и wellness' },
+  { id: 'beauty', label: 'Красота и уход' },
   { id: 'children_retail', label: 'Детские товары и одежда' },
   { id: 'children_education', label: 'Детские сады и обучение' },
   { id: 'children_leisure', label: 'Детский досуг и культура' },

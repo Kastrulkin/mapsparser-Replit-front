@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { partnerTypeForCategory } from './partnerTypeFilter';
+import { partnerTypeForCategory, partnerTypeOptions } from './partnerTypeFilter';
 
 describe('partnerTypeForCategory', () => {
+  it('показывает русское название категории красоты и ухода', () => {
+    expect(partnerTypeOptions.find((item) => item.id === 'beauty')?.label).toBe('Красота и уход');
+  });
+
   it('groups residential complexes and apartment hotels together', () => {
     expect(partnerTypeForCategory('Жилой комплекс')).toBe('residential');
     expect(partnerTypeForCategory('Апарт-отель / жилой комплекс')).toBe('residential');
