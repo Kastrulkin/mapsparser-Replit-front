@@ -27,7 +27,6 @@ import { OutreachEmailSetup } from '../OutreachEmailSetup';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
 import { OutreachSuppressionManager } from './OutreachSuppressionManager';
 import { OutreachMessageQueue } from './OutreachMessageQueue';
-import { partnerTypeForCategory, partnerTypeOptions } from './partnerTypeFilter';
 import {
   buildProjectedOutreachTouches,
   defaultOutreachStartValue,
@@ -77,6 +76,12 @@ interface BusinessOption {
 interface ClientFilterOption {
   id: string;
   name: string;
+}
+
+interface PartnerTypeFilterOption {
+  id: string;
+  label: string;
+  count?: number;
 }
 
 interface WorkstreamState {
@@ -465,6 +470,8 @@ interface LeadItem {
   id: string;
   name?: string;
   category?: string;
+  partner_type?: string;
+  partner_type_label?: string;
   city?: string;
   address?: string;
   phone?: string;
@@ -818,6 +825,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [messageChannel, setMessageChannel] = useState('');
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [clientFilterOptions, setClientFilterOptions] = useState<ClientFilterOption[]>([]);
+  const [partnerTypeFilterOptions, setPartnerTypeFilterOptions] = useState<PartnerTypeFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -891,6 +899,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const payload = await newAuth.makeRequest(`/admin/prospecting/leads?${params.toString()}`);
       setLeads(Array.isArray(payload?.leads) ? payload.leads : []);
       setClientFilterOptions(Array.isArray(payload?.client_options) ? payload.client_options : []);
+      setPartnerTypeFilterOptions(Array.isArray(payload?.partner_type_options) ? payload.partner_type_options : []);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить лидов');
     } finally {
@@ -925,7 +934,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const workstreams = lead.workstreams || [];
       if (partnerType) {
         const isPartnerLead = workstreams.some((item) => item.workstream_type === 'client_partnership');
-        if (!isPartnerLead || partnerTypeForCategory(lead.category) !== partnerType) return false;
+        if (!isPartnerLead || lead.partner_type !== partnerType) return false;
       }
       if (signalStrength && !workstreams.some((item) => item.research?.signal_label === signalStrength)) return false;
       if (view === 'results') {
@@ -935,18 +944,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     });
   }, [leads, partnerType, query, signalStrength, view]);
 
-  const visiblePartnerTypeOptions = useMemo(() => {
-    const counts: Record<string, number> = {};
-    leads.forEach((lead) => {
-      const isPartnerLead = (lead.workstreams || []).some((item) => item.workstream_type === 'client_partnership');
-      if (!isPartnerLead) return;
-      const type = partnerTypeForCategory(lead.category);
-      counts[type] = (counts[type] || 0) + 1;
-    });
-    return partnerTypeOptions
-      .filter((option) => Boolean(counts[option.id]))
-      .map((option) => ({ ...option, count: counts[option.id] }));
-  }, [leads]);
+  const visiblePartnerTypeOptions = partnerTypeFilterOptions;
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) || null;
   const selectedWorkstream = selectedLead?.workstreams?.find((item) => item.id === selectedWorkstreamId)

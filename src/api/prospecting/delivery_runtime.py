@@ -70,6 +70,7 @@ from services.lead_workstream_service import (
     normalize_workstream_type,
     update_workstream,
 )
+from services import lead_partner_type_service
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -1055,6 +1056,13 @@ def get_leads():
             display_lead = _normalize_lead_for_display(lead)
             if not display_lead:
                 continue
+            canonical_partner_type = lead_partner_type_service.partner_type_for_category(
+                display_lead.get("category")
+            )
+            display_lead["partner_type"] = canonical_partner_type
+            display_lead["partner_type_label"] = lead_partner_type_service.partner_type_label(
+                canonical_partner_type
+            )
             lead_id = str(display_lead.get("id") or "").strip()
             offer = offer_by_lead_id.get(str(display_lead.get("id") or "").strip())
             sales_room = sales_room_by_lead_id.get(lead_id)
@@ -1167,11 +1175,23 @@ def get_leads():
                 lead for lead in filtered
                 if any(str(group.get("id") or "") == group_id for group in (lead.get("groups") or []))
             ]
+        partner_type_counts: dict[str, int] = {}
+        for lead in filtered:
+            if not any(
+                str(item.get("workstream_type") or "").strip() == "client_partnership"
+                for item in (lead.get("workstreams") or [])
+            ):
+                continue
+            canonical_partner_type = str(lead.get("partner_type") or "other").strip() or "other"
+            partner_type_counts[canonical_partner_type] = partner_type_counts.get(canonical_partner_type, 0) + 1
         response_payload = _to_json_compatible(
             {
                 "leads": filtered,
                 "count": len(filtered),
                 "client_options": client_options,
+                "partner_type_options": lead_partner_type_service.partner_type_options(
+                    partner_type_counts
+                ),
             }
         )
         if compact_mode and "gzip" in str(request.headers.get("Accept-Encoding") or "").lower():

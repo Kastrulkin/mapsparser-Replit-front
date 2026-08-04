@@ -126,6 +126,45 @@ def test_candidate_query_can_limit_run_to_beauty_categories() -> None:
     assert params[-1] == "(салон красоты|парикмах|косметолог)"
 
 
+def test_batch_filter_uses_canonical_partner_type_before_limit() -> None:
+    class CandidateCursor(BatchCursor):
+        def fetchall(self):
+            return [
+                {"id": "ws-1", "lead_category": "Медицинский центр / косметология"},
+                {"id": "ws-2", "lead_category": "Салон красоты"},
+                {"id": "ws-3", "lead_category": "Студия массажа"},
+            ]
+
+    cursor = CandidateCursor()
+    rows = outreach_batch_preparation_service._load_candidates(
+        cursor,
+        workstream_type="localos_sales",
+        business_ids=[],
+        workstream_ids=[],
+        partner_types=["beauty"],
+        limit=1,
+    )
+    assert [row["id"] for row in rows] == ["ws-2"]
+    assert rows[0]["partner_type"] == "beauty"
+    assert cursor.executed[-1][1] == ["localos_sales"]
+
+
+def test_batch_filter_rejects_unknown_partner_type() -> None:
+    try:
+        outreach_batch_preparation_service._load_candidates(
+            BatchCursor(),
+            workstream_type="localos_sales",
+            business_ids=[],
+            workstream_ids=[],
+            partner_types=["wellness"],
+            limit=None,
+        )
+    except ValueError as exc:
+        assert "Unsupported partner type: wellness" in str(exc)
+    else:
+        raise AssertionError("Unknown partner type must be rejected")
+
+
 def test_current_campaign_requires_selected_email_sender() -> None:
     class CurrentCampaignCursor(BatchCursor):
         fetch_count = 0
