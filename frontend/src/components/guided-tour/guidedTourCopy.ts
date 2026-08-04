@@ -6,7 +6,7 @@ type GuidedTourStepText = {
 };
 
 export type GuidedTourCopy = {
-  chapters: Record<'network-pulse' | 'card-content' | 'partnership', string>;
+  chapters: Record<'network-pulse' | 'card-content' | 'partnership', string> & Partial<Record<'automation', string>>;
   steps: Record<string, GuidedTourStepText>;
   entry: {
     pageTitle: string;
@@ -423,7 +423,28 @@ export const supportedGuidedTourLanguages: Language[] = ['ru', 'en', 'fr', 'es',
 
 const copyByLanguage: Record<Language, GuidedTourCopy> = { ru, en, fr, es, el, de, th, ar, ha, tr };
 
-export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy => copyByLanguage[language];
+const automationCopy: Record<Language, { chapter: string; nav: GuidedTourStepText; workspace: GuidedTourStepText }> = {
+  ru: { chapter: 'Автоматизация', nav: { title: 'От сигналов — к выполненной работе', body: 'Владелец получает сигналы из карт, отзывов, соцсетей и новостей. LocalOS показывает, что важно сделать; агенты берут повторяющиеся шаги на себя.' }, workspace: { title: 'Агенты автоматизируют рутину', body: 'Агент работает один раз, по кнопке или по расписанию, сохраняет результат и статус. Публикации, внешние отправки и другие ответственные действия остаются на ручном подтверждении.' } },
+  en: { chapter: 'Automation', nav: { title: 'From signals to completed work', body: 'The owner receives signals from maps, reviews, social channels, and news. LocalOS shows what matters; agents take over the repeatable steps.' }, workspace: { title: 'Agents automate the routine', body: 'An agent works once, on demand, or on schedule and keeps the result and status visible. Publishing, external sends, and other sensitive actions still require manual approval.' } },
+  fr: { chapter: 'Automatisation', nav: { title: 'Des signaux au travail accompli', body: 'Le propriétaire reçoit des signaux des cartes, avis, réseaux sociaux et actualités. LocalOS indique la priorité ; les agents prennent en charge les étapes répétitives.' }, workspace: { title: 'Les agents automatisent la routine', body: 'Un agent travaille une fois, à la demande ou selon un calendrier, avec résultat et statut visibles. Les publications et envois externes restent soumis à validation humaine.' } },
+  es: { chapter: 'Automatización', nav: { title: 'De las señales al trabajo terminado', body: 'El propietario recibe señales de mapas, reseñas, redes sociales y noticias. LocalOS indica qué importa y los agentes asumen los pasos repetitivos.' }, workspace: { title: 'Los agentes automatizan la rutina', body: 'Un agente trabaja una vez, bajo demanda o por horario y conserva el resultado y el estado. Publicaciones y envíos externos siguen requiriendo aprobación manual.' } },
+  el: { chapter: 'Αυτοματοποίηση', nav: { title: 'Από τα σήματα στην ολοκληρωμένη εργασία', body: 'Ο ιδιοκτήτης λαμβάνει σήματα από χάρτες, κριτικές, κοινωνικά δίκτυα και ειδήσεις. Το LocalOS δείχνει τι έχει σημασία και οι πράκτορες αναλαμβάνουν τα επαναλαμβανόμενα βήματα.' }, workspace: { title: 'Οι πράκτορες αυτοματοποιούν τη ρουτίνα', body: 'Ένας πράκτορας εκτελείται μία φορά, κατά απαίτηση ή με πρόγραμμα και διατηρεί ορατό αποτέλεσμα και κατάσταση. Δημοσιεύσεις και εξωτερικές αποστολές απαιτούν χειροκίνητη έγκριση.' } },
+  de: { chapter: 'Automatisierung', nav: { title: 'Von Signalen zu erledigter Arbeit', body: 'Der Inhaber erhält Signale aus Karten, Bewertungen, sozialen Netzwerken und Nachrichten. LocalOS zeigt die Priorität; Agenten übernehmen wiederkehrende Schritte.' }, workspace: { title: 'Agenten automatisieren Routinearbeit', body: 'Ein Agent arbeitet einmalig, auf Abruf oder nach Zeitplan und zeigt Ergebnis und Status. Veröffentlichungen und externe Sendungen benötigen weiterhin eine manuelle Freigabe.' } },
+  th: { chapter: 'ระบบอัตโนมัติ', nav: { title: 'จากสัญญาณสู่งานที่เสร็จ', body: 'เจ้าของได้รับสัญญาณจากแผนที่ รีวิว โซเชียล และข่าว LocalOS ชี้ว่าสิ่งใดสำคัญ แล้วเอเจนต์รับช่วงขั้นตอนที่ทำซ้ำ' }, workspace: { title: 'เอเจนต์ทำงานประจำให้เป็นอัตโนมัติ', body: 'เอเจนต์ทำงานครั้งเดียว ตามคำสั่ง หรือตามเวลา พร้อมแสดงผลและสถานะ การเผยแพร่และส่งข้อมูลภายนอกยังต้องได้รับการอนุมัติจากคน' } },
+  ar: { chapter: 'الأتمتة', nav: { title: 'من الإشارات إلى العمل المنجز', body: 'يتلقى المالك إشارات من الخرائط والمراجعات والشبكات الاجتماعية والأخبار. يوضح LocalOS الأولوية، ويتولى الوكلاء الخطوات المتكررة.' }, workspace: { title: 'الوكلاء يؤتمتون الأعمال الروتينية', body: 'يعمل الوكيل مرة واحدة أو عند الطلب أو وفق جدول، مع إظهار النتيجة والحالة. يظل النشر والإرسال الخارجي خاضعًا للموافقة اليدوية.' } },
+  ha: { chapter: 'Automation', nav: { title: 'Daga alamomi zuwa aikin da aka kammala', body: 'Mai kasuwanci yana karɓar alamomi daga taswira, reviews, social media da labarai. LocalOS yana nuna abin da ya fi muhimmanci; wakilai su ɗauki matakan da ake maimaitawa.' }, workspace: { title: 'Wakilai suna sarrafa ayyukan yau da kullum', body: 'Wakili yana aiki sau ɗaya, bisa buƙata ko jadawali, yana nuna sakamako da matsayi. Wallafawa da aikawa waje har yanzu suna buƙatar amincewar mutum.' } },
+  tr: { chapter: 'Otomasyon', nav: { title: 'Sinyallerden tamamlanan işe', body: 'İşletme sahibi haritalar, yorumlar, sosyal medya ve haberlerden sinyaller alır. LocalOS önceliği gösterir; ajanlar tekrarlanan adımları üstlenir.' }, workspace: { title: 'Ajanlar rutini otomatikleştirir', body: 'Ajan bir kez, talep üzerine veya zamanlamayla çalışır; sonuç ve durum görünür kalır. Yayınlama ve dış gönderimler manuel onay gerektirir.' } },
+};
+
+export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy => {
+  const base = copyByLanguage[language];
+  const automation = automationCopy[language];
+  return {
+    ...base,
+    chapters: { ...base.chapters, automation: automation.chapter },
+    steps: { ...base.steps, 'agents-nav': automation.nav, 'agents-workspace': automation.workspace },
+  };
+};
 
 export const fillGuidedTourTemplate = (template: string, values: Record<string, string | number>) => (
   Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), template)

@@ -4,6 +4,10 @@ import type { Language } from '@/i18n/LanguageContext';
 import { GUIDED_TOUR_STEP_LAYOUTS } from '@/components/guided-tour/tourConfig';
 import { guidedTourStepsForLanguage } from '@/components/guided-tour/tourConfig';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
+import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
+import { getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
+import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
+import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
 const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
@@ -11,11 +15,11 @@ const localizedCardLanguages = supportedLanguages.filter((language) => language 
 const nonRussianLanguages = supportedLanguages.filter((language) => language !== 'ru');
 
 describe('demo language coverage', () => {
-  it('keeps the language contract aligned with all 26 guided-tour steps', () => {
+  it('keeps the language contract aligned with all 28 guided-tour steps', () => {
     expect(supportedLanguages).toHaveLength(10);
-    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(26);
+    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(28);
     supportedLanguages.forEach((language) => {
-      expect(guidedTourStepsForLanguage(language)).toHaveLength(26);
+      expect(guidedTourStepsForLanguage(language)).toHaveLength(28);
     });
   });
 
@@ -33,6 +37,11 @@ describe('demo language coverage', () => {
     const renderedCopy = JSON.stringify(localized);
 
     expect(renderedCopy).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getDashboardNavigationCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getContentWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getAgentsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getPublicSalesRoomCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getPublicSalesRoomAuditCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     if (language !== 'en') {
       expect(localized.telegram.pageTitle).not.toBe(english.telegram.pageTitle);
       expect(localized.averageTicket.title).not.toBe(english.averageTicket.title);

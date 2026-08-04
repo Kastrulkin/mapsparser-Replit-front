@@ -17,6 +17,22 @@ describe('guided tour localization', () => {
     expect(steps.map((step) => step.key)).toEqual(GUIDED_TOUR_STEP_LAYOUTS.map((step) => step.key));
   });
 
+  it.each(supportedGuidedTourLanguages)('explains the agents automation bridge for %s', (language) => {
+    const copy = guidedTourCopyForLanguage(language);
+    const chapterEntries = Object.entries(copy.chapters);
+    const stepEntries = Object.entries(copy.steps);
+
+    expect(chapterEntries.find(([key]) => key === 'automation')?.[1]).toBeTruthy();
+    expect(stepEntries.find(([key]) => key === 'agents-nav')?.[1]).toMatchObject({
+      title: expect.any(String),
+      body: expect.any(String),
+    });
+    expect(stepEntries.find(([key]) => key === 'agents-workspace')?.[1]).toMatchObject({
+      title: expect.any(String),
+      body: expect.any(String),
+    });
+  });
+
   it.each(supportedGuidedTourLanguages.filter((language) => language !== 'ru'))('does not fall back to Russian steps for %s', (language) => {
     const localizedSteps = guidedTourStepsForLanguage(language);
     const russianSteps = guidedTourStepsForLanguage('ru');
@@ -29,6 +45,10 @@ describe('guided tour localization', () => {
   it('uses the demo link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/demo', '?lang=tr', 'ru', 'de-DE')).toBe('tr');
     expect(resolveInitialLanguage('/demo', '?lang=ar', null, 'en-US')).toBe('ar');
+  });
+
+  it('uses an explicit public-room link language before saved and browser preferences', () => {
+    expect(resolveInitialLanguage('/room/room-test-audit-offer-20260629', '?lang=el', 'ru', 'ru-RU')).toBe('el');
   });
 
   it('falls back to saved, browser, and English preferences in that order', () => {
