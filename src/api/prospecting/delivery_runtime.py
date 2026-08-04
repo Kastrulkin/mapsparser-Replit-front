@@ -1059,10 +1059,18 @@ def get_leads():
             canonical_partner_type = lead_partner_type_service.partner_type_for_category(
                 display_lead.get("category")
             )
+            canonical_categories = list(
+                lead_partner_type_service.partner_types_for_category(display_lead.get("category"))
+            )
             display_lead["partner_type"] = canonical_partner_type
             display_lead["partner_type_label"] = lead_partner_type_service.partner_type_label(
                 canonical_partner_type
             )
+            display_lead["canonical_categories"] = canonical_categories
+            display_lead["canonical_category_labels"] = [
+                lead_partner_type_service.partner_type_label(item)
+                for item in canonical_categories
+            ]
             lead_id = str(display_lead.get("id") or "").strip()
             offer = offer_by_lead_id.get(str(display_lead.get("id") or "").strip())
             sales_room = sales_room_by_lead_id.get(lead_id)
@@ -1165,7 +1173,11 @@ def get_leads():
             filtered = [
                 lead for lead in filtered
                 if any(
-                    str((item.get("next_action") or {}).get("code") or "").strip().lower() == action_state
+                    (
+                        (not workstream_type or str(item.get("workstream_type") or "").strip().lower() == workstream_type)
+                        and (not client_business_id or str(item.get("client_business_id") or "").strip() == client_business_id)
+                        and str((item.get("next_action") or {}).get("code") or "").strip().lower() == action_state
+                    )
                     for item in (lead.get("workstreams") or [])
                 )
             ]
@@ -1177,21 +1189,20 @@ def get_leads():
             ]
         partner_type_counts: dict[str, int] = {}
         for lead in filtered:
-            if not any(
-                str(item.get("workstream_type") or "").strip() == "client_partnership"
-                for item in (lead.get("workstreams") or [])
-            ):
-                continue
-            canonical_partner_type = str(lead.get("partner_type") or "other").strip() or "other"
-            partner_type_counts[canonical_partner_type] = partner_type_counts.get(canonical_partner_type, 0) + 1
+            canonical_categories = lead.get("canonical_categories") or [
+                str(lead.get("partner_type") or "other").strip() or "other"
+            ]
+            for canonical_partner_type in dict.fromkeys(canonical_categories):
+                normalized_partner_type = str(canonical_partner_type or "other").strip() or "other"
+                partner_type_counts[normalized_partner_type] = partner_type_counts.get(normalized_partner_type, 0) + 1
+        category_options = lead_partner_type_service.partner_type_options(partner_type_counts)
         response_payload = _to_json_compatible(
             {
                 "leads": filtered,
                 "count": len(filtered),
                 "client_options": client_options,
-                "partner_type_options": lead_partner_type_service.partner_type_options(
-                    partner_type_counts
-                ),
+                "business_category_options": category_options,
+                "partner_type_options": category_options,
             }
         )
         if compact_mode and "gzip" in str(request.headers.get("Accept-Encoding") or "").lower():

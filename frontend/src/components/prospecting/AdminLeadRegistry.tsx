@@ -463,6 +463,16 @@ interface LeadWorkstream {
   enrichment_state?: EnrichmentState | null;
   message_readiness?: MessageReadiness;
   service_compatibility_score?: number | null;
+  campaign_state?: {
+    id?: string;
+    status?: string;
+    version?: number;
+    touches_count?: number;
+    created_at?: string;
+    updated_at?: string;
+    approved_at?: string | null;
+    stop_reason?: string | null;
+  } | null;
   legacy?: boolean;
 }
 
@@ -472,6 +482,8 @@ interface LeadItem {
   category?: string;
   partner_type?: string;
   partner_type_label?: string;
+  canonical_categories?: string[];
+  canonical_category_labels?: string[];
   city?: string;
   address?: string;
   phone?: string;
@@ -560,6 +572,39 @@ const statusLabels: Record<string, string> = {
   postponed: 'Отложен',
   not_relevant: 'Не подходит',
   closed_lost: 'Закрыт',
+};
+
+const campaignRegistryStatusLabels: Record<string, string> = {
+  draft: 'Черновик',
+  approved: 'Подтверждена',
+  active: 'Запущена',
+  paused: 'На паузе',
+  completed: 'Завершена',
+  cancelled: 'Отменена',
+  stopped: 'Остановлена',
+};
+
+const workstreamsForRegistry = (
+  lead: LeadItem,
+  scope: ScopeFilter,
+  clientBusinessId: string,
+) => (lead.workstreams || []).filter((workstream) => {
+  if (scope !== 'all' && workstream.workstream_type !== scope) return false;
+  if (clientBusinessId && workstream.client_business_id !== clientBusinessId) return false;
+  return true;
+});
+
+const matchesCampaignRegistryFilter = (
+  workstreams: LeadWorkstream[],
+  campaignFilter: string,
+) => {
+  if (!campaignFilter) return true;
+  const campaignStates = workstreams
+    .map((workstream) => workstream.campaign_state)
+    .filter((campaignState) => Boolean(campaignState));
+  if (campaignFilter === 'with_campaign') return campaignStates.length > 0;
+  if (campaignFilter === 'without_campaign') return campaignStates.length === 0;
+  return campaignStates.some((campaignState) => campaignState?.status === campaignFilter);
 };
 
 const sourceLabel = (lead: LeadItem) => {
@@ -820,6 +865,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [actionState, setActionState] = useState('');
   const [signalStrength, setSignalStrength] = useState('');
   const [partnerType, setPartnerType] = useState('');
+  const [campaignFilter, setCampaignFilter] = useState('');
   const [query, setQuery] = useState('');
   const [messageStatus, setMessageStatus] = useState('');
   const [messageChannel, setMessageChannel] = useState('');
@@ -899,7 +945,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const payload = await newAuth.makeRequest(`/admin/prospecting/leads?${params.toString()}`);
       setLeads(Array.isArray(payload?.leads) ? payload.leads : []);
       setClientFilterOptions(Array.isArray(payload?.client_options) ? payload.client_options : []);
-      setPartnerTypeFilterOptions(Array.isArray(payload?.partner_type_options) ? payload.partner_type_options : []);
+      setPartnerTypeFilterOptions(
+        Array.isArray(payload?.business_category_options)
+          ? payload.business_category_options
+          : Array.isArray(payload?.partner_type_options)
+            ? payload.partner_type_options
+            : [],
+      );
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить лидов');
     } finally {
@@ -921,7 +973,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     }
   }, [leads]);
 
-  const filteredLeads = useMemo(() => {
+  const categoryFilteredLeads = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return leads.filter((lead) => {
       if (normalized) {
@@ -933,8 +985,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       }
       const workstreams = lead.workstreams || [];
       if (partnerType) {
-        const isPartnerLead = workstreams.some((item) => item.workstream_type === 'client_partnership');
-        if (!isPartnerLead || lead.partner_type !== partnerType) return false;
+        const canonicalCategories = lead.canonical_categories || [lead.partner_type || 'other'];
+        if (!canonicalCategories.includes(partnerType)) return false;
       }
       if (signalStrength && !workstreams.some((item) => item.research?.signal_label === signalStrength)) return false;
       if (view === 'results') {
@@ -943,6 +995,40 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       return true;
     });
   }, [leads, partnerType, query, signalStrength, view]);
+
+  const campaignFilterCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      with_campaign: 0,
+      without_campaign: 0,
+      draft: 0,
+      approved: 0,
+      active: 0,
+      paused: 0,
+      completed: 0,
+      cancelled: 0,
+      stopped: 0,
+    };
+    categoryFilteredLeads.forEach((lead) => {
+      const relevantWorkstreams = workstreamsForRegistry(lead, scope, clientBusinessId);
+      const campaignStates = relevantWorkstreams
+        .map((workstream) => workstream.campaign_state)
+        .filter((campaignState) => Boolean(campaignState));
+      if (campaignStates.length) counts.with_campaign += 1;
+      else counts.without_campaign += 1;
+      const statuses = new Set(campaignStates.map((campaignState) => campaignState?.status).filter(Boolean));
+      statuses.forEach((status) => {
+        if (status && status in counts) counts[status] += 1;
+      });
+    });
+    return counts;
+  }, [categoryFilteredLeads, clientBusinessId, scope]);
+
+  const filteredLeads = useMemo(() => categoryFilteredLeads.filter((lead) => (
+    matchesCampaignRegistryFilter(
+      workstreamsForRegistry(lead, scope, clientBusinessId),
+      campaignFilter,
+    )
+  )), [campaignFilter, categoryFilteredLeads, clientBusinessId, scope]);
 
   const visiblePartnerTypeOptions = partnerTypeFilterOptions;
 
@@ -2344,7 +2430,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
         <div className={`mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 ${
           view === 'leads'
-            ? 'md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(240px,1.2fr)_auto_minmax(170px,1fr)_minmax(180px,1fr)_minmax(170px,1fr)_minmax(180px,1fr)]'
+            ? 'md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5'
             : 'lg:grid-cols-[minmax(280px,1fr)_auto_minmax(190px,240px)]'
         }`}>
           <div className="relative min-w-0">
@@ -2363,7 +2449,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 type="button"
                 onClick={() => {
                   setScope(item.id);
-                  if (item.id === 'localos_sales') setPartnerType('');
+                  if (item.id === 'localos_sales') setClientBusinessId('');
                 }}
                 className={`min-h-8 whitespace-nowrap rounded px-3 text-xs font-semibold transition-colors ${
                   scope === item.id ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950'
@@ -2376,39 +2462,40 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           <select
             value={clientBusinessId}
             onChange={(event) => setClientBusinessId(event.target.value)}
+            disabled={scope === 'localos_sales'}
             className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Фильтр по клиенту"
           >
-            <option value="">Все клиенты</option>
+            <option value="">{scope === 'localos_sales' ? 'Клиент не применяется' : 'Все клиенты'}</option>
             {clientFilterOptions.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
           </select>
           {view === 'leads' ? (
             <>
               <select
                 value={partnerType}
-                onChange={(event) => {
-                  const nextPartnerType = event.target.value;
-                  setPartnerType(nextPartnerType);
-                  if (nextPartnerType) setScope('client_partnership');
-                }}
+                onChange={(event) => setPartnerType(event.target.value)}
                 className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
-                aria-label="Фильтр по типу партнёра"
+                aria-label="Фильтр по категории бизнеса"
               >
-                <option value="">Любой тип партнёра</option>
+                <option value="">Любая категория бизнеса</option>
                 {visiblePartnerTypeOptions.map((option) => (
                   <option key={option.id} value={option.id}>{option.label} · {option.count}</option>
                 ))}
               </select>
               <select
-                value={signalStrength}
-                onChange={(event) => setSignalStrength(event.target.value)}
+                value={campaignFilter}
+                onChange={(event) => setCampaignFilter(event.target.value)}
                 className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
-                aria-label="Фильтр по силе сигнала"
+                aria-label="Фильтр по состоянию цепочки"
               >
-                <option value="">Любой сигнал</option>
-                <option value="strong_signal">Сильный сигнал</option>
-                <option value="reason_to_check">Есть повод</option>
-                <option value="fit_only">Только соответствие</option>
+                <option value="">Любое состояние цепочки</option>
+                <option value="with_campaign">Цепочка создана · {campaignFilterCounts.with_campaign}</option>
+                <option value="without_campaign">Цепочки нет · {campaignFilterCounts.without_campaign}</option>
+                {Object.entries(campaignRegistryStatusLabels).map(([status, label]) => (
+                  campaignFilterCounts[status] > 0 || campaignFilter === status
+                    ? <option key={status} value={status}>{label} · {campaignFilterCounts[status]}</option>
+                    : null
+                ))}
               </select>
               <select
                 value={actionState}
@@ -2416,13 +2503,34 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
                 aria-label="Фильтр по следующему действию"
               >
-                <option value="">Любое действие</option>
+                <option value="">Любой следующий шаг</option>
                 <option value="find_contact">Найти контакт</option>
                 <option value="prepare_room">Подготовить комнату</option>
+                <option value="review_draft">Проверить черновик</option>
                 <option value="review_message">Проверить сообщение</option>
+                <option value="check_campaign">Проверить кампанию</option>
                 <option value="wait_or_follow_up">Проверить ответ</option>
                 <option value="record_result">Зафиксировать результат</option>
               </select>
+              <details className="md:col-span-2 xl:col-span-3 2xl:col-span-5">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-950">
+                  Дополнительные фильтры
+                  {signalStrength ? <Badge variant="outline" className="tabular-nums">Выбрано</Badge> : null}
+                </summary>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  <select
+                    value={signalStrength}
+                    onChange={(event) => setSignalStrength(event.target.value)}
+                    className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                    aria-label="Фильтр по силе сигнала"
+                  >
+                    <option value="">Любой сигнал</option>
+                    <option value="strong_signal">Сильный сигнал</option>
+                    <option value="reason_to_check">Есть повод</option>
+                    <option value="fit_only">Только соответствие</option>
+                  </select>
+                </div>
+              </details>
             </>
           ) : null}
         </div>
@@ -2462,7 +2570,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </div>
             ) : null}
             <div className="flex items-center justify-between gap-3 pb-3 text-sm text-slate-500">
-              <span className="tabular-nums">{loading ? 'Загружаем…' : `${filteredLeads.length} компаний`}</span>
+              <span className="tabular-nums">
+                {loading
+                  ? 'Загружаем…'
+                  : filteredLeads.length === leads.length
+                    ? `${filteredLeads.length} компаний`
+                    : `Показано ${filteredLeads.length} из ${leads.length}`}
+              </span>
               <button type="button" onClick={loadLeads} className="flex min-h-10 items-center gap-2 px-2 font-medium hover:text-slate-950">
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Обновить
@@ -2488,7 +2602,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <div className="divide-y divide-slate-200">
             {filteredLeads.map((lead) => {
               const workstreams = lead.workstreams || [];
-              const primary = workstreams[0];
+              const relevantWorkstreams = workstreamsForRegistry(lead, scope, clientBusinessId);
+              const primary = relevantWorkstreams[0] || workstreams[0];
               const contacts = availableContacts(lead);
               const contactSummary = primary?.contact_summary;
               const recipient = primary?.selected_recipient;
@@ -2526,6 +2641,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     {research && (
                       <Badge variant="outline" className={signalTone(research)}>
                         {signalLabel(research)} · {Number(research.score || 0)}
+                      </Badge>
+                    )}
+                    {primary?.campaign_state ? (
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
+                        Цепочка · {campaignRegistryStatusLabels[String(primary.campaign_state.status || '')] || 'Создана'}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
+                        Цепочки нет
                       </Badge>
                     )}
                   </div>

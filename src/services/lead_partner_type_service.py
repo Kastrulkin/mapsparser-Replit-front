@@ -7,6 +7,7 @@ bulk outreach preparation.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -39,46 +40,80 @@ def _includes_any(category: str, keywords: tuple[str, ...]) -> bool:
     return any(keyword in category for keyword in keywords)
 
 
-def partner_type_for_category(value: Any) -> str:
-    """Return one stable product type for a raw provider category.
+def _includes_standalone(category: str, keyword: str) -> bool:
+    return re.search(
+        rf"(?<![0-9a-zа-я]){re.escape(keyword)}(?![0-9a-zа-я])",
+        category,
+    ) is not None
 
-    Precedence is intentional.  A mixed ``медицинский центр / косметология``
-    category is medicine; a mixed medical/dentistry category is dentistry.
-    Every consumer receives the same result from this function.
+
+def partner_types_for_category(value: Any) -> tuple[str, ...]:
+    """Return every canonical category supported by a provider category.
+
+    Map providers often return several categories for one company.  Keeping all
+    matching canonical categories lets the leads registry answer practical
+    completeness questions: a medical centre with cosmetology remains visible
+    both under medicine and under beauty.
     """
     category = _normalized_category(value)
     if not category:
-        return "other"
-    if _includes_any(category, ("жилой комплекс", "жилые комплексы", "апарт-отель", "апартаменты", "жк")):
-        return "residential"
-    if _includes_any(category, ("ветерин", "ветклиник", "зоомагазин", "кинолог", "питом", "амуници")):
-        return "pets"
-    if _includes_any(category, ("стоматолог", "зуботех", "dental")):
-        return "dentistry"
-    if _includes_any(category, ("медицин", "медцентр", "клиник", "диагност", "коррекция зрения", "поликлиник")):
-        return "medicine"
-    if _includes_any(category, ("фитнес", "спорт", "секци", "бассейн", "единоборств", "танц", "йог", "каток", "скалолаз")):
-        return "sport"
-    if _includes_any(category, ("ресторан", "кафе", "бар", "кофе", "столов", "быстрое питание", "доставка еды")):
-        return "food"
-    if _includes_any(category, ("фотостуд", "фотоуслуг", "видеосъем", "мероприят", "праздник", "свадеб")):
-        return "photo_events"
-    if _includes_any(category, ("beauty", "бьюти", "красот", "космет", "парфюм", "spa", "wellness", "массаж", "ногт")):
-        return "beauty"
-    if (
+        return ("other",)
+
+    matches: list[str] = []
+
+    def add(partner_type: str, matched: bool) -> None:
+        if matched and partner_type not in matches:
+            matches.append(partner_type)
+
+    add(
+        "residential",
+        _includes_any(category, ("жилой комплекс", "жилые комплексы", "апарт-отель", "апартаменты", "жк")),
+    )
+    add("pets", _includes_any(category, ("ветерин", "ветклиник", "зоомагазин", "кинолог", "питом", "амуници")))
+    add("dentistry", _includes_any(category, ("стоматолог", "зуботех", "dental")))
+    add(
+        "medicine",
+        _includes_any(category, ("медицин", "медцентр", "клиник", "диагност", "коррекция зрения", "поликлиник")),
+    )
+    add("sport", _includes_any(category, ("фитнес", "спорт", "секци", "бассейн", "единоборств", "танц", "йог", "каток", "скалолаз")))
+    add(
+        "food",
+        _includes_any(category, ("ресторан", "кафе", "кофе", "столов", "быстрое питание", "доставка еды"))
+        or _includes_standalone(category, "бар"),
+    )
+    add("photo_events", _includes_any(category, ("фотостуд", "фотоуслуг", "видеосъем", "мероприят", "праздник", "свадеб")))
+    add(
+        "beauty",
+        _includes_any(
+            category,
+            (
+                "beauty", "бьюти", "красот", "космет", "парфюм", "spa", "wellness",
+                "массаж", "ногт", "парикмахер", "барбершоп", "эпиляц", "шугаринг",
+                "бров", "ресниц", "перманент", "стилист", "солярий", "подолог",
+            ),
+        ),
+    )
+    children_retail = (
         _includes_any(category, ("детск", "ребен", "ребенок"))
         and _includes_any(category, ("магазин", "одеж", "обув", "товар", "игруш", "питание", "коляск", "мебель", "бутик"))
-    ):
-        return "children_retail"
-    if _includes_any(category, ("детский сад", "ясли", "центр развития", "школа", "обучен", "образован", "логопед", "дефектолог", "репетитор", "курсы", "музыкаль")):
-        return "children_education"
-    if _includes_any(category, ("детск", "семейн", "досуг", "развлекатель", "игров", "аттракцион", "театр", "музей", "зоопарк", "экскурси", "мастерская", "город профессий")):
-        return "children_leisure"
-    if _includes_any(category, ("бизнес-центр", "торговый комплекс", "торговый центр")):
-        return "commercial_centers"
-    if _includes_any(category, ("магазин", "бутик", "торгов")):
-        return "retail"
-    return "other"
+    )
+    add("children_retail", children_retail)
+    add("children_education", _includes_any(category, ("детский сад", "ясли", "центр развития", "школа", "обучен", "образован", "логопед", "дефектолог", "репетитор", "курсы", "музыкаль")))
+    add("children_leisure", _includes_any(category, ("досуг", "развлекатель", "игров", "аттракцион", "театр", "музей", "зоопарк", "экскурси", "мастерская", "город профессий")))
+    add("commercial_centers", _includes_any(category, ("бизнес-центр", "торговый комплекс", "торговый центр")))
+    add("retail", not children_retail and _includes_any(category, ("магазин", "бутик", "торгов")))
+    return tuple(matches or ["other"])
+
+
+def partner_type_for_category(value: Any) -> str:
+    """Return the primary stable product type for compatibility.
+
+    Precedence is intentional.  A mixed ``медицинский центр / косметология``
+    category is medicine; a mixed medical/dentistry category is dentistry.
+    Filtering and completeness checks should use ``partner_types_for_category``
+    so a company is not lost from its secondary category.
+    """
+    return partner_types_for_category(value)[0]
 
 
 def partner_type_label(partner_type: Any) -> str:
