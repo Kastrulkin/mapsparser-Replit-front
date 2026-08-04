@@ -24,6 +24,7 @@ import logo from '../assets/images/logo.png';
 import { cn } from '../lib/utils';
 import { DESIGN_TOKENS } from '../lib/design-tokens';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
@@ -40,6 +41,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
 }) => {
   const location = useLocation();
   const { t, language } = useLanguage();
+  const demoCopy = getDemoWorkspaceCopy(language).sidebar;
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
@@ -126,12 +128,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'telegram-radar',
-      label: language === 'ru' ? 'Telegram-радар' : 'Telegram Radar',
+      label: demoCopy.telegramRadar,
       icon: Radar,
       path: '/dashboard/telegram-radar',
-      tooltip: language === 'ru'
-        ? 'Рабочий inbox сообщений из выбранных Telegram-чатов: ответить, сохранить идею или скрыть.'
-        : 'Work inbox for selected Telegram chats: reply, save an idea, or dismiss.',
+      tooltip: demoCopy.telegramRadarHint,
     },
     {
       id: 'finance',
@@ -144,21 +144,17 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'average-ticket',
-      label: language === 'ru' ? 'Допродажи' : 'Upsells',
+      label: demoCopy.upsells,
       icon: BadgeDollarSign,
       path: '/dashboard/average-ticket',
-      tooltip: language === 'ru'
-        ? 'Допродажи, кросс-продажи, скрипты и пакеты по реальным записям.'
-        : 'Upsells, cross-sells, scripts, and packages based on real bookings.',
+      tooltip: demoCopy.upsellsHint,
     },
     {
       id: 'ai-chat-promotion',
       label: t.dashboard.sidebar.aiChatPromotion,
       icon: Sparkles,
       path: '/dashboard/ai-chat-promotion',
-      tooltip: language === 'ru'
-        ? 'GEO-продвижение и сценарии видимости бизнеса в AI-поиске.'
-        : 'Configure AI communication and promotion workflows.',
+      tooltip: demoCopy.geoPromotionHint,
     },
     {
       id: 'settings',

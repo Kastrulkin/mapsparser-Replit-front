@@ -46,6 +46,8 @@ import {
 } from '@/components/dashboard/DashboardPrimitives';
 import { useToast } from '@/hooks/use-toast';
 import { newAuth } from '@/lib/auth_new';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 type OutletContext = {
   currentBusinessId?: string | null;
@@ -186,12 +188,12 @@ type LinkWithRow = {
 };
 
 const rub = (value?: number | null) => {
-  if (value == null) return 'н/д';
+  if (value == null) return '—';
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value);
 };
 
 const pct = (value?: number | null) => {
-  if (value == null) return 'н/д';
+  if (value == null) return '—';
   return `${value}%`;
 };
 
@@ -227,9 +229,9 @@ const eventLabel: Record<string, string> = {
 };
 
 const flattenLinks = (matrix?: AverageTicketMatrix | null): LinkWithRow[] => {
-  const rows = matrix?.upsell_matrix || [];
+  const rows = Array.isArray(matrix?.upsell_matrix) ? matrix.upsell_matrix : [];
   return rows.flatMap((row) =>
-    (row.recommended_addons || []).map((addon) => ({
+    (Array.isArray(row.recommended_addons) ? row.recommended_addons : []).map((addon) => ({
       row,
       addon,
     })),
@@ -255,6 +257,8 @@ const emptyLinkDraft: AverageTicketAddon = {
 export const AverageTicketPage = () => {
   const { currentBusinessId } = useOutletContext<OutletContext>();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const copy = getDemoWorkspaceCopy(language).averageTicket;
   const [overview, setOverview] = useState<AverageTicketOverview | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -286,10 +290,12 @@ export const AverageTicketPage = () => {
 
   const matrix = overview?.latest_matrix?.matrix || null;
   const links = useMemo(() => flattenLinks(matrix), [matrix]);
-  const services = overview?.services || [];
+  const services = Array.isArray(overview?.services) ? overview.services : [];
   const activeLinks = overview?.stats?.active_links || 0;
   const totalLinks = overview?.stats?.links || 0;
-  const packages = overview?.packages || matrix?.packages || [];
+  const packages = Array.isArray(overview?.packages)
+    ? overview.packages
+    : Array.isArray(matrix?.packages) ? matrix.packages : [];
 
   const loadOverview = useCallback(async () => {
     if (!currentBusinessId) return;
@@ -299,14 +305,14 @@ export const AverageTicketPage = () => {
       setOverview(data);
     } catch (error) {
       toast({
-        title: 'Не удалось загрузить Допродажи',
-        description: error instanceof Error ? error.message : 'Проверьте соединение и попробуйте снова.',
+        title: copy.loadError,
+        description: error instanceof Error ? error.message : copy.retry,
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  }, [currentBusinessId, toast]);
+  }, [copy.loadError, copy.retry, currentBusinessId, toast]);
 
   useEffect(() => {
     void loadOverview();
@@ -476,44 +482,44 @@ export const AverageTicketPage = () => {
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Допродажи"
-        description="Допродажи, кросс-продажи скрипты, пакеты и план предложений по реальным записям. Финансы остаются источником диагноза, здесь работает операционная команда."
+        title={copy.title}
+        description={copy.description}
         icon={CircleDollarSign}
         actions={
           <>
             <Button variant="outline" className="gap-2" onClick={() => setManualLinkOpen(true)} disabled={!matrix}>
               <Plus className="h-4 w-4" />
-              Связка
+              {copy.link}
             </Button>
             <Button asChild variant="outline" className="gap-2">
               <Link to="/dashboard/finance">
                 <TrendingUp className="h-4 w-4" />
-                Финансы
+                {copy.finance}
               </Link>
             </Button>
             <Button variant="outline" className="gap-2" onClick={loadOverview} disabled={loading || !currentBusinessId}>
               <RefreshCcw className="h-4 w-4" />
-              Обновить
+              {copy.refresh}
             </Button>
             <Button className="gap-2" onClick={generateMatrix} disabled={generating || !currentBusinessId}>
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Сгенерировать
+              {copy.generate}
             </Button>
           </>
         }
       />
 
       {!currentBusinessId ? (
-        <DashboardEmptyState title="Выберите бизнес" description="Матрица среднего чека строится по услугам конкретного бизнеса." />
+        <DashboardEmptyState title={copy.chooseBusiness} description={copy.chooseBusinessDescription} />
       ) : (
         <>
           <DashboardCompactMetricsRow
             items={[
-              { label: 'Средний чек', value: rub(overview?.kpis?.average_ticket), hint: `30 дней: ${pct(overview?.kpis?.average_ticket_delta_30d)}` },
-              { label: 'Add-on rate', value: pct(overview?.kpis?.add_on_rate), hint: 'Доля визитов с допродажей' },
-              { label: 'Выручка допродаж', value: rub(overview?.kpis?.upsell_revenue), hint: 'По событиям купил/пакет куплен', tone: overview?.kpis?.upsell_revenue ? 'positive' : 'default' },
-              { label: 'Пакеты', value: overview?.kpis?.package_sales ?? 0, hint: `Конверсия: ${pct(overview?.kpis?.package_conversion)}` },
-              { label: 'Потенциал', value: rub(overview?.kpis?.potential_growth), hint: 'Оценка по активным связкам' },
+              { label: copy.averageTicket, value: rub(overview?.kpis?.average_ticket), hint: `${copy.averageTicketHint}: ${pct(overview?.kpis?.average_ticket_delta_30d)}` },
+              { label: copy.addOnRate, value: pct(overview?.kpis?.add_on_rate), hint: copy.addOnRateHint },
+              { label: copy.upsellRevenue, value: rub(overview?.kpis?.upsell_revenue), hint: copy.upsellRevenueHint, tone: overview?.kpis?.upsell_revenue ? 'positive' : 'default' },
+              { label: copy.packages, value: overview?.kpis?.package_sales ?? 0, hint: `${copy.conversion}: ${pct(overview?.kpis?.package_conversion)}` },
+              { label: copy.potential, value: rub(overview?.kpis?.potential_growth), hint: copy.potentialHint },
             ]}
           />
 
@@ -526,9 +532,9 @@ export const AverageTicketPage = () => {
             </DashboardSection>
           ) : !matrix ? (
             <DashboardEmptyState
-              title="Матрица ещё не создана"
-              description="LocalOS возьмёт услуги из “Работы с картами” и подготовит черновик допродаж, скриптов и пакетов."
-              action={<Button className="gap-2" onClick={generateMatrix} disabled={generating}><Sparkles className="h-4 w-4" />Сгенерировать черновик</Button>}
+              title={copy.emptyTitle}
+              description={copy.emptyDescription}
+              action={<Button className="gap-2" onClick={generateMatrix} disabled={generating}><Sparkles className="h-4 w-4" />{copy.generateDraft}</Button>}
             />
           ) : (
             <Tabs defaultValue="daily" className="space-y-6">
@@ -559,7 +565,7 @@ export const AverageTicketPage = () => {
                             <Badge variant="outline">{item.status || 'запись'}</Badge>
                           </div>
                           <div className="mt-4 grid gap-3">
-                            {item.recommendations.map((addon) => (
+                            {(Array.isArray(item.recommendations) ? item.recommendations : []).map((addon) => (
                               <div key={`${item.booking_id}-${addon.id}`} className="rounded-lg bg-slate-50 p-3">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                   <div className="max-w-3xl">
@@ -707,7 +713,7 @@ export const AverageTicketPage = () => {
             </Tabs>
           )}
 
-          {overview?.kpis?.by_category?.length ? (
+          {Array.isArray(overview?.kpis?.by_category) && overview.kpis.by_category.length ? (
             <DashboardSection title="Конверсии" description="Первые агрегаты по событиям: предложили, купили и конверсия по категориям.">
               <div className="grid gap-3 md:grid-cols-3">
                 {overview.kpis.by_category.slice(0, 6).map((item) => (
@@ -721,7 +727,7 @@ export const AverageTicketPage = () => {
             </DashboardSection>
           ) : null}
 
-          {matrix?.implementation_priorities?.length ? (
+          {Array.isArray(matrix?.implementation_priorities) && matrix.implementation_priorities.length ? (
             <DashboardSection title="Что улучшить в первую очередь">
               <div className="grid gap-3 md:grid-cols-3">
                 {matrix.implementation_priorities.map((item) => (
