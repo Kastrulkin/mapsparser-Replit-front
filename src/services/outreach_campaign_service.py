@@ -72,7 +72,7 @@ DEFAULT_SEQUENCE = (
     ("email", 0, "signal"),
     ("telegram", 3, "founder_story"),
     ("max", 7, "proof"),
-    ("vk", 12, "audit_step"),
+    ("vk_manual", 12, "audit_step"),
     ("phone", 18, "phone_handoff"),
     ("email", 25, "respectful_close"),
 )

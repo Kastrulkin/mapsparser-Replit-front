@@ -170,7 +170,7 @@ type PilotReadiness = {
 const ANGLES = ['signal', 'founder_story', 'proof', 'audit_step', 'phone_handoff', 'respectful_close'] as const;
 const ANGLE_LABELS = ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Практический шаг', 'Короткий звонок', 'Завершение'];
 const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'phone', 'manual', 'vk_manual']);
-const DEFAULT_CHANNELS = ['email', 'telegram', 'max', 'vk', 'phone', 'email'];
+const DEFAULT_CHANNELS = ['email', 'telegram', 'max', 'vk_manual', 'phone', 'email'];
 const DEFAULT_DAYS = [0, 3, 7, 12, 18, 25];
 
 const CHANNEL_STATUS_LABELS: Record<string, string> = {

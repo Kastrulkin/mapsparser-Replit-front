@@ -78,7 +78,7 @@ def _complete_preview(status="needs_channel_setup"):
 def test_sequence_selects_localosgo_without_enabling_delivery() -> None:
     sequence = outreach_batch_preparation_service._sequence("sender-localosgo", "localos")
     assert [item["channel"] for item in sequence] == [
-        "email", "telegram", "max", "vk", "phone", "email",
+        "email", "telegram", "max", "vk_manual", "phone", "email",
     ]
     assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12, 18, 25]
     assert [item["angle"] for item in sequence] == [

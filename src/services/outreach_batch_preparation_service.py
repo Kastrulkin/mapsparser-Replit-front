@@ -189,7 +189,7 @@ def _sequence(email_sender_id: str | None, sender_mode: str) -> list[dict[str, A
         first_email_touch,
         {"channel": "telegram", "day_offset": 3, "angle": second_angle, "skip_if_unavailable": True},
         {"channel": "max", "day_offset": 7, "angle": "proof", "skip_if_unavailable": True},
-        {"channel": "vk", "day_offset": 12, "angle": "audit_step", "skip_if_unavailable": True},
+        {"channel": "vk_manual", "day_offset": 12, "angle": "audit_step", "skip_if_unavailable": True},
         {"channel": "phone", "day_offset": 18, "angle": "phone_handoff", "skip_if_unavailable": True},
         closing_email_touch,
     ]
