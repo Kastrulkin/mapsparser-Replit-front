@@ -170,18 +170,28 @@ def _sequence(email_sender_id: str | None, sender_mode: str) -> list[dict[str, A
         if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER
         else "founder_story"
     )
-    email_touch: dict[str, Any] = {
+    first_email_touch: dict[str, Any] = {
         "channel": "email",
-        "day_offset": 3,
-        "angle": second_angle,
+        "day_offset": 0,
+        "angle": "signal",
+        "skip_if_unavailable": True,
+    }
+    closing_email_touch: dict[str, Any] = {
+        "channel": "email",
+        "day_offset": 25,
+        "angle": "respectful_close",
+        "skip_if_unavailable": True,
     }
     if email_sender_id:
-        email_touch["sender_account_id"] = email_sender_id
+        first_email_touch["sender_account_id"] = email_sender_id
+        closing_email_touch["sender_account_id"] = email_sender_id
     return [
-        {"channel": "telegram", "day_offset": 0, "angle": "signal"},
-        email_touch,
-        {"channel": "next", "day_offset": 7, "angle": "proof"},
-        {"channel": "next", "day_offset": 12, "angle": "respectful_close"},
+        first_email_touch,
+        {"channel": "telegram", "day_offset": 3, "angle": second_angle, "skip_if_unavailable": True},
+        {"channel": "max", "day_offset": 7, "angle": "proof", "skip_if_unavailable": True},
+        {"channel": "vk", "day_offset": 12, "angle": "audit_step", "skip_if_unavailable": True},
+        {"channel": "phone", "day_offset": 18, "angle": "phone_handoff", "skip_if_unavailable": True},
+        closing_email_touch,
     ]
 
 
@@ -460,24 +470,24 @@ def _save_preparation_blocker(
 
 
 def _enforce_complete_sequence(preview: dict[str, Any]) -> dict[str, Any]:
-    """Reject previews that cannot represent the approved four-touch cadence.
+    """Reject previews without a usable, contiguous touch sequence.
 
     ``build_preview`` may legitimately return ``needs_channel_setup`` with only
     the channels that exist for the recipient.  Such a preview is useful in the
     UI, but it is not a complete campaign draft and must not be versioned by the
-    bulk runner.  Persisting it also made every following run regenerate the
-    same workstream because a current campaign requires four touches.
+    bulk runner. The default may contain fewer than six touches when a lead has
+    fewer public channels, but every retained touch must be contiguous.
     """
     touches = preview.get("touches") if isinstance(preview.get("touches"), list) else []
     status = _text(preview.get("status")) or "unknown"
     if not touches and status not in {"ready", "needs_channel_setup"}:
         return preview
     indexes = [touch.get("sequence_index") for touch in touches if isinstance(touch, dict)]
-    if len(touches) == 4 and indexes == [0, 1, 2, 3]:
+    if 1 <= len(touches) <= 6 and indexes == list(range(len(touches))):
         return preview
     missing = list(preview.get("missing") or [])
-    if "four_touch_sequence" not in missing:
-        missing.append("four_touch_sequence")
+    if "usable_touch_sequence" not in missing:
+        missing.append("usable_touch_sequence")
     return {
         **preview,
         "status": "invalid_sequence",
@@ -488,7 +498,7 @@ def _enforce_complete_sequence(preview: dict[str, Any]) -> dict[str, Any]:
 def _sequence_is_complete(preview: dict[str, Any]) -> bool:
     touches = preview.get("touches") if isinstance(preview.get("touches"), list) else []
     indexes = [touch.get("sequence_index") for touch in touches if isinstance(touch, dict)]
-    return len(touches) == 4 and indexes == [0, 1, 2, 3]
+    return 1 <= len(touches) <= 6 and indexes == list(range(len(touches)))
 
 
 def _load_candidates(
@@ -597,7 +607,7 @@ def _campaign_is_current(
         return False
     cursor.execute(
         """
-        SELECT channel, sender_account_id, message_brief_json, quality_gate_json
+        SELECT sequence_index, channel, sender_account_id, message_brief_json, quality_gate_json
         FROM outreach_campaign_touches
         WHERE campaign_id = %s
         ORDER BY sequence_index
@@ -610,7 +620,8 @@ def _campaign_is_current(
         for touch in touches
         if touch.get("channel") == "email"
     )
-    return len(touches) == 4 and email_sender_current and all(
+    indexes = [touch.get("sequence_index") for touch in touches]
+    return 1 <= len(touches) <= 6 and indexes == list(range(len(touches))) and email_sender_current and all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),

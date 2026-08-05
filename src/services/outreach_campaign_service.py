@@ -53,7 +53,7 @@ from services.outreach_safety_service import (
 
 
 AUTOMATIC_CHANNELS = {"telegram", "email", "vk"}
-MANUAL_CHANNELS = {"max", "whatsapp", "sms", "manual", "vk_manual"}
+MANUAL_CHANNELS = {"max", "whatsapp", "sms", "phone", "manual", "vk_manual"}
 SUPPORTED_CHANNELS = AUTOMATIC_CHANNELS | MANUAL_CHANNELS
 SENDER_MODE_LOCALOS = "localos"
 SENDER_MODE_PARTNER_BUSINESS = "partner_business"
@@ -69,10 +69,12 @@ CAMPAIGN_BUSINESS_OUTCOMES = {
     "hard_no", "not_relevant", "lost", "meeting_booked", "converted",
 }
 DEFAULT_SEQUENCE = (
-    ("telegram", 0, "signal"),
-    ("email", 3, "founder_story"),
-    ("next", 7, "proof"),
-    ("next", 12, "respectful_close"),
+    ("email", 0, "signal"),
+    ("telegram", 3, "founder_story"),
+    ("max", 7, "proof"),
+    ("vk", 12, "audit_step"),
+    ("phone", 18, "phone_handoff"),
+    ("email", 25, "respectful_close"),
 )
 NON_RECIPIENT_EMAIL_DOMAINS = {
     "company24.com",
@@ -1901,7 +1903,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
         sender_row = _dict(row)
         senders_by_channel.setdefault(str(sender_row.get("channel")), []).append(sender_row)
     result: dict[str, dict[str, Any]] = {}
-    for channel in ("telegram", "email", "whatsapp", "max", "vk", "vk_manual", "sms", "manual"):
+    for channel in ("telegram", "email", "whatsapp", "max", "vk", "vk_manual", "sms", "phone", "manual"):
         contact = contacts_by_type.get("vk" if channel == "vk_manual" else channel)
         if channel == "email" and not contact and context.get("email"):
             fallback = {
@@ -2088,13 +2090,15 @@ def _quality_gate(
             founder_led_beauty
             and (
                 (_text(angle) == "signal" and grounded_observation)
-                or _text(angle) in {"founder_story", "proof", "respectful_close"}
+                or _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff", "respectful_close"}
             )
             and (
                 contains(candidate.get("founder_story"))
                 or contains(candidate.get("founder_proof"))
                 or respectful_close
                 or grounded_observation
+                or "разбор" in normalized_text
+                or "localos" in normalized_text
             )
         ),
         "bridge": (
@@ -2116,8 +2120,8 @@ def _quality_gate(
             )
             or bool(
                 founder_led_beauty
-                and _text(angle) in {"founder_story", "proof", "respectful_close"}
-                and "localos" in normalized_text
+                and _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff", "respectful_close"}
+                and ("localos" in normalized_text or "разбор" in normalized_text)
             )
             or operator_idea_present
             or residential_relevance
@@ -2143,7 +2147,7 @@ def _quality_gate(
                 or grounded_observation
                 or bool(
                     founder_led_beauty
-                    and _text(angle) in {"founder_story", "proof"}
+                    and _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff"}
                     and any(
                         marker in normalized_text
                         for marker in ("частного специалиста", "салона", "сети салонов", "карточк", "отзыв", "контент")
@@ -2438,6 +2442,8 @@ def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
         "business_reputation": "идея для знакомства компаний",
         "matching_authority": "основание для знакомства компаний",
         "proof": "пример, который может быть полезен",
+        "audit_step": "практический шаг из разбора",
+        "phone_handoff": "короткий вопрос по разбору",
         "respectful_close": "закрою тему",
     }
     recipient = _text(candidate.get("recipient"))[:100]
@@ -2593,7 +2599,12 @@ def build_preview(
             "touches": [],
         }
     selected_sequence = sequence or [
-        {"channel": channel, "day_offset": day, "angle": angle}
+        {
+            "channel": channel,
+            "day_offset": day,
+            "angle": angle,
+            "skip_if_unavailable": True,
+        }
         for channel, day, angle in DEFAULT_SEQUENCE
     ]
     if sequence is None and context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS:
@@ -2643,6 +2654,7 @@ def build_preview(
             requested_channel = _resolve_next_sequence_channel(usable, touches)
         if not requested_channel or requested_channel not in SUPPORTED_CHANNELS:
             continue
+        availability_item = dict(availability[requested_channel])
         angle = _text(item.get("angle") or "proof")
         day_offset = max(0, int(item.get("day_offset") or 0))
         if angle in previous_angles:
@@ -2654,7 +2666,6 @@ def build_preview(
         # explicit personalization selection and a new approval version.
         candidate = primary_candidate
         message = _message_for_angle(angle, candidate, story, previous_angles)
-        availability_item = dict(availability[requested_channel])
         requested_sender_id = _text(item.get("sender_account_id"))
         if requested_channel in AUTOMATIC_CHANNELS and requested_sender_id:
             sender_option = next(
@@ -2671,6 +2682,11 @@ def build_preview(
             else:
                 availability_item["status"] = "sender_selection_required"
                 availability_item["sender_account_id"] = None
+        if (
+            item.get("skip_if_unavailable") is True
+            and availability_item.get("status") not in {"ready", "manual"}
+        ):
+            continue
         gate = _quality_gate(
             message,
             candidate,

@@ -167,11 +167,11 @@ type PilotReadiness = {
   }>;
 };
 
-const ANGLES = ['signal', 'founder_story', 'proof', 'respectful_close'] as const;
-const ANGLE_LABELS = ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'];
-const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'manual', 'vk_manual']);
-const DEFAULT_CHANNELS = ['telegram', 'email', 'max', 'vk'];
-const DEFAULT_DAYS = [0, 3, 7, 12];
+const ANGLES = ['signal', 'founder_story', 'proof', 'audit_step', 'phone_handoff', 'respectful_close'] as const;
+const ANGLE_LABELS = ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Практический шаг', 'Короткий звонок', 'Завершение'];
+const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'phone', 'manual', 'vk_manual']);
+const DEFAULT_CHANNELS = ['email', 'telegram', 'max', 'vk', 'phone', 'email'];
+const DEFAULT_DAYS = [0, 3, 7, 12, 18, 25];
 
 const CHANNEL_STATUS_LABELS: Record<string, string> = {
   ready: 'готов',
@@ -193,6 +193,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   vk_manual: 'VK · вручную',
   whatsapp: 'WhatsApp · вручную',
   sms: 'SMS · вручную',
+  phone: 'Телефон · вручную',
   manual: 'Ручной канал',
 };
 
@@ -366,6 +367,7 @@ export function OutreachCampaignBuilder({
     day_offset: days[index],
     angle,
     sender_account_id: senderSelections[index] || undefined,
+    skip_if_unavailable: true,
   }));
 
   const invalidateDraft = () => {
@@ -776,6 +778,7 @@ export function OutreachCampaignBuilder({
                 <option value="vk_manual">VK · вручную</option>
                 <option value="whatsapp">WhatsApp · вручную</option>
                 <option value="sms">SMS · вручную</option>
+                <option value="phone">Телефон · вручную</option>
               </select>
               <Input
                 aria-label={`День касания ${index + 1}`}

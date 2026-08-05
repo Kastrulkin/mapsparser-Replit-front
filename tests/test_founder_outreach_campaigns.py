@@ -107,6 +107,19 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     )
 
 
+def test_founder_led_beauty_extended_sequence_has_distinct_audit_and_phone_touches():
+    candidate = _private_beauty_founder_candidate()
+    candidate["public_audit_url"] = "https://localos.pro/example-audit"
+
+    audit_text = _message_for_angle("audit_step", candidate, None, [])
+    phone_text = _message_for_angle("phone_handoff", candidate, None, [])
+
+    assert "https://localos.pro/example-audit" in audit_text
+    assert "Подсказать, с какого шага я бы начал?" in audit_text
+    assert "Это Александр Демьянов, LocalOS" in phone_text
+    assert "Удобно коротко поговорить об этом?" in phone_text
+
+
 def test_founder_led_beauty_segmentation_is_deterministic_and_conservative():
     assert localos_beauty_segment(
         "Косметология / услуги частных специалистов",

@@ -71,6 +71,7 @@ const channelLabels: Record<string, string> = {
   vk_manual: 'VK · вручную',
   whatsapp: 'WhatsApp',
   max: 'MAX',
+  phone: 'Телефон',
   manual: 'Вручную',
 };
 

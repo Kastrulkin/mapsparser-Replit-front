@@ -3836,7 +3836,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   />
                 </div>
 
-                {['max', 'whatsapp', 'sms', 'manual', 'vk_manual'].includes(sequenceChannels[0]) ? (
+                {['max', 'whatsapp', 'sms', 'phone', 'manual', 'vk_manual'].includes(sequenceChannels[0]) ? (
                   <div className="mt-3 rounded-md bg-sky-50 px-3 py-3 text-pretty text-sm leading-6 text-sky-900">
                     Первое касание выполняется вручную. Кампания подождёт вашей отметки и через 48 часов перейдёт в «Нужно внимание» — автоматическое продолжение не начнётся скрытно.
                   </div>

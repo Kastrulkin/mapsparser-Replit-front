@@ -26,6 +26,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   vk_manual: 'VK · вручную',
   whatsapp: 'WhatsApp',
   sms: 'SMS',
+  phone: 'Телефон',
   manual: 'Вручную',
 };
 
@@ -37,6 +38,7 @@ const CHANNEL_TONES: Record<string, string> = {
   vk_manual: 'bg-slate-100 text-slate-900 ring-slate-200',
   whatsapp: 'bg-emerald-50 text-emerald-950 ring-emerald-200',
   sms: 'bg-amber-50 text-amber-950 ring-amber-200',
+  phone: 'bg-orange-50 text-orange-950 ring-orange-200',
   manual: 'bg-slate-100 text-slate-900 ring-slate-200',
 };
 

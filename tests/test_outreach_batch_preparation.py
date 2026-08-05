@@ -71,15 +71,22 @@ def _candidate(**overrides):
 def _complete_preview(status="needs_channel_setup"):
     return {
         "status": status,
-        "touches": [{"sequence_index": index} for index in range(4)],
+        "touches": [{"sequence_index": index} for index in range(6)],
     }
 
 
 def test_sequence_selects_localosgo_without_enabling_delivery() -> None:
     sequence = outreach_batch_preparation_service._sequence("sender-localosgo", "localos")
-    assert [item["channel"] for item in sequence] == ["telegram", "email", "next", "next"]
-    assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12]
-    assert sequence[1]["sender_account_id"] == "sender-localosgo"
+    assert [item["channel"] for item in sequence] == [
+        "email", "telegram", "max", "vk", "phone", "email",
+    ]
+    assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12, 18, 25]
+    assert [item["angle"] for item in sequence] == [
+        "signal", "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
+    ]
+    assert sequence[0]["sender_account_id"] == "sender-localosgo"
+    assert sequence[5]["sender_account_id"] == "sender-localosgo"
+    assert all(item["skip_if_unavailable"] is True for item in sequence)
 
 
 def test_localos_for_partner_sequence_uses_matching_authority() -> None:
@@ -476,7 +483,7 @@ def test_incomplete_sequence_is_not_persisted_or_retried(monkeypatch) -> None:
         preview_calls.append(kwargs)
         return {
             "status": "needs_channel_setup",
-            "touches": [{"sequence_index": 0}, {"sequence_index": 1}],
+            "touches": [{"sequence_index": 0}, {"sequence_index": 2}],
         }
 
     monkeypatch.setattr(
@@ -511,7 +518,7 @@ def test_incomplete_sequence_is_not_persisted_or_retried(monkeypatch) -> None:
     ]
     assert update_params
     assert update_params[0][0].adapted["code"] == "invalid_sequence"
-    assert "four_touch_sequence" in update_params[0][0].adapted["missing"]
+    assert "usable_touch_sequence" in update_params[0][0].adapted["missing"]
 
 
 def test_complete_preflight_reaches_ai_even_if_deterministic_text_needs_evidence(
@@ -568,11 +575,11 @@ def test_complete_preflight_reaches_ai_even_if_deterministic_text_needs_evidence
 def test_incomplete_preflight_overrides_deterministic_content_status() -> None:
     preview = outreach_batch_preparation_service._enforce_complete_sequence({
         "status": "needs_evidence",
-        "touches": [{"sequence_index": 0}, {"sequence_index": 1}],
+        "touches": [{"sequence_index": 0}, {"sequence_index": 2}],
     })
 
     assert preview["status"] == "invalid_sequence"
-    assert preview["missing"] == ["four_touch_sequence"]
+    assert preview["missing"] == ["usable_touch_sequence"]
 
 
 def test_repeated_quality_failure_becomes_stable_needs_evidence() -> None:

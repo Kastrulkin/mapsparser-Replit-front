@@ -16,7 +16,7 @@ from services.outreach_founder_led_copy import (
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v10"
+PROMPT_VERSION = "outreach_personalization_v11"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",
@@ -340,7 +340,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Не предлагай аудит карточки, 20-минутный созвон, интеграцию или автоматическую рассылку. "
         "Каждое касание должно иметь новый угол, один простой CTA и работать отдельно. "
         "Для localos_sales в сегментах beauty signal служит только входом в разговор: "
-        "не повторяй observation и bridge в founder_story, proof и respectful_close. "
+        "не повторяй observation и bridge в founder_story, proof, audit_step, phone_handoff и respectful_close. "
         "Founder story объясняет личный опыт отправителя, proof показывает накопленную практику, "
         "а respectful_close снимает давление. "
         "Не используй ритуальные комплименты, давление, ложную срочность, длинное тире и кавычки-ёлочки. "
@@ -363,7 +363,7 @@ def _review_prompt(record: dict[str, Any]) -> str:
         "single_cta_and_length, state_and_suppression_safety. "
         "approve допустим только при сумме >=15, без блокирующей ошибки и при наличии источника для каждого факта. "
         "Для founder-led localos_sales в beauty-сегментах recipient observation обязателен только в angle=signal. "
-        "В angle=founder_story, proof и respectful_close его отсутствие правильно: ставь observation_accuracy=2, "
+        "В angle=founder_story, proof, audit_step, phone_handoff и respectful_close его отсутствие правильно: ставь observation_accuracy=2, "
         "если сообщение не добавляет новых фактов о получателе и сохраняет заявленный угол. "
         "Иначе verdict=revise или reject. reason_codes могут быть только: "
         f"{', '.join(sorted(CANONICAL_REASON_CODES))}. "
@@ -453,7 +453,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         normalized_text = _normalized_grounded_fragment(text)
         if not normalized_text or (
             angle != "respectful_close"
-            and not (founder_led_beauty and angle in {"founder_story", "proof"})
+            and not (founder_led_beauty and angle in {"founder_story", "proof", "audit_step", "phone_handoff"})
             and not (founder_led_beauty and observation_is_grounded(text, observation))
             and _normalized_grounded_fragment(observation) not in normalized_text
         ):
@@ -470,7 +470,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
             and not (
                 founder_led_beauty
                 and (
-                    angle in {"founder_story", "proof", "respectful_close"}
+                    angle in {"founder_story", "proof", "audit_step", "phone_handoff", "respectful_close"}
                     or observation_is_grounded(text, observation)
                 )
             )
