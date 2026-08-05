@@ -78,8 +78,8 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     }
 
     assert "3 отзыва и рейтинг 4,2" in messages["signal"]
-    assert "сначала нужно работать с клиентами" in messages["signal"]
-    assert "сделать самостоятельно" in messages["signal"]
+    assert "проверяемые наблюдения и конкретные шаги" in messages["signal"]
+    assert "сначала нужно работать с клиентами" not in messages["signal"]
     assert "3 отзыва" not in messages["founder_story"]
     assert "3 отзыва" not in messages["proof"]
     assert "3 отзыва" not in messages["respectful_close"]

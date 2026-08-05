@@ -216,12 +216,36 @@ def founder_led_localos_text(
                 "Посмотреть разбор?"
             )
         observation = natural_observation(candidate)
+        audit_url = clean_copy(candidate.get("public_audit_url"))
+        approved_offer = clean_copy(candidate.get("next_step"))
+        price_line = (
+            " - от 1200 рублей в месяц"
+            if re.search(r"(?:1\s*200|1200)", approved_offer)
+            else ""
+        )
+        if (
+            clean_copy(candidate.get("evidence_kind")) == "telegram_post"
+            and observation
+            and audit_url
+        ):
+            observation_for_sentence = observation[:1].lower() + observation[1:]
+            return (
+                f"Здравствуйте! Я {introduction}.\n\n"
+                f"Увидел, что {observation_for_sentence}. "
+                "То есть вы уже регулярно работаете с привлечением клиентов онлайн.\n\n"
+                "Мы посмотрели, как компания представлена в Яндекс Картах, "
+                "и собрали короткий разбор с конкретными шагами:\n"
+                f"{audit_url}\n\n"
+                "Шаги можно выполнить самостоятельно. Если захотите, часть работы "
+                f"можно поручить LocalOS{price_line}.\n\n"
+                "Посмотреть разбор?"
+            )
         return (
             f"Здравствуйте! Я {introduction}.\n\n"
             f"Посмотрел ваши открытые площадки. {observation}.\n\n"
-            f"{_owner_context(segment)}.\n\n"
-            "Могу прислать короткий разбор: что можно сделать самостоятельно, "
-            "а что при желании поручить LocalOS?"
+            "Мы собрали короткий разбор по публичным данным компании. "
+            "В нём только проверяемые наблюдения и конкретные шаги.\n\n"
+            "Посмотреть разбор?"
         )
 
     if angle == "founder_story":

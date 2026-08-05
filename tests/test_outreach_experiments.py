@@ -150,6 +150,32 @@ def test_treatment_copy_uses_social_map_contrast_audit_and_only_approved_price()
     assert "теряете клиентов" not in text
 
 
+def test_active_social_copy_uses_audit_without_inventing_owner_pain():
+    candidate = {
+        "sender_mode": "localos",
+        "recipient": "Freedom Beauty Studio",
+        "recipient_segment": "beauty_team",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "evidence_kind": "telegram_post",
+        "observed_fact": (
+            'В публичном Telegram-источнике "FREEDOM | beauty studio" '
+            'опубликовано: "Горящие окошки на завтра".'
+        ),
+        "public_audit_url": "https://localos.pro/freedom-beauty-studio",
+        "next_step": "Работа LocalOS от 1200 рублей в месяц",
+    }
+    text = founder_led_localos_text("signal", candidate, None)
+    assert text is not None
+    assert "в Telegram вы публикуете свободные окна для записи" in text
+    assert "регулярно работаете с привлечением клиентов онлайн" in text
+    assert "https://localos.pro/freedom-beauty-studio" in text
+    assert "от 1200 рублей в месяц" in text
+    assert "остаются на владельце" not in text
+    assert "не хватает времени" not in text
+    assert text.endswith("Посмотреть разбор?")
+
+
 def test_corpus_compiler_uses_deepseek_then_gigachat_max_review():
     extract = get_task_definition("outreach_corpus_pattern_extract")
     review = get_task_definition("outreach_corpus_pattern_review")
