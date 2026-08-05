@@ -23,15 +23,39 @@ PAIN_LIBRARY_TITLE = "Язык болей владельцев салонов и
 MIN_DOCUMENTS = 3
 MIN_SOURCES = 2
 MAX_SOURCE_PHRASES_PER_PAIN = 8
+COMPILER_VERSION = "owner_language_v2"
 
-PAIN_MARKERS: dict[str, tuple[str, ...]] = {
-    "marketing_and_clients": ("клиент", "запис", "реклам", "контент", "соцсет"),
-    "staff_and_processes": ("мастер", "сотрудник", "администратор", "ваканси", "команд"),
-    "reviews_and_service": ("отзыв", "жалоб", "репутац", "недовол", "сервис"),
-    "pricing_and_average_ticket": ("цен", "скидк", "средний чек", "чек", "подня"),
-    "operations_and_burnout": ("операцион", "устал", "выгоран", "если не я", "жить некогда", "работаю за"),
-    "retention": ("возврат", "не возвращ", "увёл клиент", "уводят клиент", "база клиент"),
-    "revenue_without_profit": ("прибыл", "выручк", "денег нет", "остаются копейки", "оборот"),
+PAIN_PATTERNS: dict[str, tuple[str, ...]] = {
+    "marketing_and_clients": (
+        r"клиент\w*\s+(?:нет|мало|не хватает)", r"(?:нет|мало)\s+клиент",
+        r"реклам\w*.*(?:не работает|не помогает|впустую|коту под хвост)",
+        r"(?:запис|обращени)\w*.*(?:нет|мало)", r"не знаю,?\s+что публиков",
+    ),
+    "staff_and_processes": (
+        r"мастер\w*.*(?:уход|увод|сабот|не хотят)", r"не могу.*(?:мастер|сотрудник|администратор)",
+        r"(?:ваканси|отклик)\w*.*(?:нет|мало)", r"сотрудник\w*.*(?:уход|не работают)",
+    ),
+    "reviews_and_service": (
+        r"плох\w*\s+отзыв", r"как реагировать.*жалоб", r"не потерять репутац",
+        r"клиент\w*.*недовол", r"разбираться.*владельц",
+    ),
+    "pricing_and_average_ticket": (
+        r"боюсь.*(?:цен|стоимост)", r"подня\w*\s+цен", r"средний чек.*(?:мал|низк)",
+        r"отменить скид", r"неудобно.*(?:цен|стоимост)",
+    ),
+    "operations_and_burnout": (
+        r"если не я,?\s+то никто", r"работаю за .*?(?:администратор|управляющ|бухгалтер)",
+        r"(?:устал|устала|выгорел|выгорела).*бизнес", r"жить некогда", r"не могу уехать",
+        r"(?:тону|тонуть) в операцион", r"тащить всё сам", r"тащить всё сама",
+    ),
+    "retention": (
+        r"клиент\w*.*не возвращ", r"возвратност\w*.*низк", r"ув[её]л\w*\s+клиент",
+        r"уводят клиент", r"забрал\w*\s+(?:с собой\s+)?баз",
+    ),
+    "revenue_without_profit": (
+        r"выручка есть,?\s+а прибыли нет", r"(?:бизнес|салон) работает,?\s+а денег нет",
+        r"остаются копейки", r"оборот.*(?:а|но).*прибыл", r"владельц\w*\s+ничего не оста[её]тся",
+    ),
 }
 
 
@@ -48,13 +72,13 @@ def _sentences(value: Any) -> list[str]:
 def classify_owner_language(documents: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Extract short source-backed phrases and keep their provenance."""
 
-    result: dict[str, list[dict[str, Any]]] = {key: [] for key in PAIN_MARKERS}
-    seen: dict[str, set[str]] = {key: set() for key in PAIN_MARKERS}
+    result: dict[str, list[dict[str, Any]]] = {key: [] for key in PAIN_PATTERNS}
+    seen: dict[str, set[str]] = {key: set() for key in PAIN_PATTERNS}
     for document in documents:
         for phrase in _sentences(document.get("content") or document.get("content_text")):
             normalized = phrase.lower()
-            for pain_key, markers in PAIN_MARKERS.items():
-                if not any(marker in normalized for marker in markers):
+            for pain_key, patterns in PAIN_PATTERNS.items():
+                if not any(re.search(pattern, normalized) for pattern in patterns):
                     continue
                 fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
                 if fingerprint in seen[pain_key] or len(result[pain_key]) >= MAX_SOURCE_PHRASES_PER_PAIN:
@@ -129,7 +153,7 @@ def compile_pain_library_draft(cursor: Any, documents: list[dict[str, Any]], *, 
     latest_row = cursor.fetchone()
     latest = dict(latest_row) if latest_row else {}
     latest_result = latest.get("compiler_result_json") if isinstance(latest.get("compiler_result_json"), dict) else {}
-    if latest_result.get("source_hash") == source_hash:
+    if latest_result.get("source_hash") == source_hash and latest_result.get("compiler_version") == COMPILER_VERSION:
         return {"id": str(latest.get("id")), "version": latest.get("version"), "status": latest.get("status"), "unchanged": True}
 
     extracted = classify_owner_language(documents)
@@ -186,7 +210,12 @@ def compile_pain_library_draft(cursor: Any, documents: list[dict[str, Any]], *, 
             Json(source_refs),
             len(documents),
             len(sources),
-            Json({"source_hash": source_hash, "compiled_at": datetime.now(timezone.utc).isoformat(), "compiled_by_user": user_id}),
+            Json({
+                "source_hash": source_hash,
+                "compiler_version": COMPILER_VERSION,
+                "compiled_at": datetime.now(timezone.utc).isoformat(),
+                "compiled_by_user": user_id,
+            }),
         ),
     )
     return {"id": pattern_id, "version": version, "status": "draft", "unchanged": False}

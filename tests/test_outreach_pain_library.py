@@ -54,6 +54,21 @@ def test_pain_language_is_classified_with_exact_source_provenance():
     assert operations["source_id"] == "source-1"
 
 
+def test_pain_language_rejects_editorial_keyword_matches():
+    library = classify_owner_language([
+        {
+            "id": "doc-2",
+            "source_id": "source-2",
+            "content": (
+                "Всё равно зарегистрируйтесь в боте, там будет запись конференции. "
+                "Компания работает с корпоративными клиентами по всей стране. "
+                "Обороты росли: 8,6 млн, 43 млн и 76 млн."
+            ),
+        }
+    ])
+    assert all(not phrases for phrases in library.values())
+
+
 def test_compiler_creates_draft_and_never_activates_raw_channel_language():
     cursor = PatternCursor()
     documents = [
