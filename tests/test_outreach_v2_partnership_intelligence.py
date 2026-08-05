@@ -6,6 +6,7 @@ from services.outreach_decision_service import (
     build_outreach_decision,
     offer_candidates,
     score_evidence,
+    select_offer,
     trust_candidates,
 )
 from services.outreach_relationship_service import _json_safe, build_relationship_delta, build_room_preview
@@ -44,6 +45,34 @@ def test_signal_score_redistributes_missing_engagement_weight():
     assert result["engagement_omitted"] is True
     assert sum(item["weight"] for item in result["components"].values()) == 90
     assert result["score"] >= 90
+
+
+def test_localos_default_offer_combines_approved_audit_and_price_terms():
+    offers = offer_candidates(
+        {
+            "platform_sender_profile": {
+                "confirmed_at": "2026-08-05T12:00:00+00:00",
+                "allowed_offers_json": [
+                    {
+                        "fact": "Короткий публичный аудит карточки с конкретными шагами.",
+                        "status": "approved",
+                    },
+                    {
+                        "fact": "Начать работу с LocalOS можно с тарифа «Начальный» - 1200 ₽ в месяц.",
+                        "status": "approved",
+                    },
+                ],
+            },
+        },
+        "localos",
+    )
+
+    selected = select_offer(offers)
+
+    assert selected["source"] == "approved_sender_profile"
+    assert "аудит" in selected["text"].lower()
+    assert "1200" in selected["text"]
+    assert selected["cta"] == selected["text"]
 
 
 def test_suppression_is_stronger_than_high_scores():

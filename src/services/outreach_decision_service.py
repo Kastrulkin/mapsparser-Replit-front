@@ -360,6 +360,37 @@ def offer_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str
         else ""
     )
     candidates = []
+    if sender_mode == "localos":
+        audit_offer = next(
+            (
+                value
+                for value in values
+                if re.search(r"\b(?:аудит|разбор)\b", value, flags=re.IGNORECASE)
+            ),
+            "",
+        )
+        priced_offer = next(
+            (
+                value
+                for value in values
+                if re.search(r"(?:1\s*200|1200)\s*(?:₽|руб)", value, flags=re.IGNORECASE)
+            ),
+            "",
+        )
+        if audit_offer and priced_offer and audit_offer != priced_offer:
+            combined_offer = f"{audit_offer.rstrip('.')}. {priced_offer.lstrip()}"
+            payload = {
+                "text": combined_offer,
+                "sender_mode": sender_mode,
+                "source": source,
+            }
+            candidates.append({
+                "id": _stable_id("offer", payload),
+                "text": combined_offer,
+                "source": source,
+                "sender_mode": sender_mode,
+                "cta": combined_offer,
+            })
     if operator_approved_reason:
         payload = {
             "text": operator_approved_reason,
