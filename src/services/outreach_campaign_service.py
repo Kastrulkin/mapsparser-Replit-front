@@ -1110,11 +1110,7 @@ def _review_record(
     })
 
 
-def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
-    if _text(contact.get("contact_type")) != "email":
-        return True
-    if _text(contact.get("verification_status")) not in {"verified", "confirmed_source"}:
-        return False
+def _email_recipient_structure_eligible(contact: dict[str, Any]) -> bool:
     value = _text(contact.get("value")).lower()
     if "@" not in value:
         return False
@@ -1124,6 +1120,25 @@ def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
         return False
     normalized_local = re.sub(r"[^a-zа-яё0-9-]", "", local_part.lower())
     return not any(normalized_local.startswith(prefix) for prefix in EMAIL_ROLE_MISMATCH_PREFIXES)
+
+
+def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
+    if _text(contact.get("contact_type")) != "email":
+        return True
+    if _text(contact.get("verification_status")) not in {"verified", "confirmed_source"}:
+        return False
+    return _email_recipient_structure_eligible(contact)
+
+
+def _selected_recipient_contact_eligible(contact: dict[str, Any]) -> bool:
+    """Allow a human-selected, structurally safe email without auto-selecting it."""
+    if _recipient_contact_eligible(contact):
+        return True
+    if _text(contact.get("contact_type")) != "email":
+        return False
+    if _text(contact.get("verification_status")) != "valid_format":
+        return False
+    return _email_recipient_structure_eligible(contact)
 
 
 def _contact_outreach_rank(contact: dict[str, Any]) -> tuple[int, int, int, float, str]:
@@ -1762,18 +1777,20 @@ def _strategy_dimensions(
 
 
 def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    all_contacts = context.get("contacts") or []
     contacts_by_type: dict[str, dict[str, Any]] = {}
     eligible_contacts = [
         contact
-        for contact in context.get("contacts") or []
+        for contact in all_contacts
         if _recipient_contact_eligible(contact)
     ]
     selected_contact_id = _text(context.get("selected_contact_point_id"))
     selected_contact = next(
         (
             contact
-            for contact in eligible_contacts
+            for contact in all_contacts
             if _text(contact.get("id")) == selected_contact_id
+            and _selected_recipient_contact_eligible(contact)
         ),
         None,
     )

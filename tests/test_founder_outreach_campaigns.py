@@ -2453,3 +2453,60 @@ def test_campaign_preview_always_surfaces_result_and_next_action():
     assert "outreachPreview?.status === 'needs_contact'" in source
     assert "outreachPreview?.status === 'needs_sender_setup'" in source
     assert "Цепочка пока не создана" in source
+
+
+def test_explicitly_selected_valid_format_email_is_available_for_campaign():
+    class SenderCursor:
+        def execute(self, _query, _params):
+            return None
+
+        def fetchall(self):
+            return []
+
+    availability = channel_availability(
+        SenderCursor(),
+        {
+            "sender_mode": "localos",
+            "selected_contact_point_id": "selected-email",
+            "contacts": [
+                {
+                    "id": "selected-email",
+                    "contact_type": "email",
+                    "value": "sepasta4@mail.ru",
+                    "verification_status": "valid_format",
+                    "confidence": 0.8,
+                    "source_type": "map_card",
+                },
+            ],
+        },
+    )
+
+    assert availability["email"]["contact_point_id"] == "selected-email"
+    assert availability["email"]["recipient"] == "sepasta4@mail.ru"
+    assert availability["email"]["status"] == "connect_required"
+
+
+def test_lead_drawer_renders_message_editor_only_in_messages_section():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    conversation_start = source.index('title="Сообщения и каналы"')
+    sequence_start = source.index('title="Цепочка, расписание и запуск"')
+    sender_start = source.index('title="Отправитель и подключения"', sequence_start)
+    conversation_block = source[conversation_start:sequence_start]
+    sequence_block = source[sequence_start:sender_start]
+
+    assert "<OutreachTouchMessageEditor" in conversation_block
+    assert "<OutreachTouchMessageEditor" not in sequence_block
+    assert "displayedOutreachTouches.map" not in sequence_block
+
+
+def test_unsaved_campaign_setup_is_restored_for_same_workstream_after_reload():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "outreachCampaignSetupStorageKey" in source
+    assert "localos:outreach-campaign-setup:" in source
+    assert "sequenceChannels" in source
+    assert "sequenceDays" in source
+    assert "sequenceSenders" in source
+    assert "localStorage.setItem(outreachCampaignSetupStorageKey" in source
+    assert "localStorage.getItem(outreachCampaignSetupStorageKey" in source

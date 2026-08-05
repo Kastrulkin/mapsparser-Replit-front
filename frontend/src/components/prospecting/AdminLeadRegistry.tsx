@@ -403,6 +403,17 @@ interface SavedOutreachCampaign {
   deliveries?: OutreachDelivery[];
 }
 
+interface OutreachCampaignSetupDraft {
+  workstreamId: string;
+  baseCampaignId: string;
+  baseCampaignVersion: number;
+  sequenceChannels: string[];
+  sequenceDays: number[];
+  sequenceStartAt: string;
+  sequenceSenders: Record<number, string>;
+  senderMode: SenderMode;
+}
+
 interface OutreachSenderAccountSummary {
   id: string;
   channel?: string;
@@ -1207,6 +1218,24 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     if (!workstreamId || !campaignId || !campaignVersion) return '';
     return `localos:outreach-touch-edits:${workstreamId}:${campaignId}:${campaignVersion}`;
   }, [savedOutreachCampaign?.id, savedOutreachCampaign?.version, selectedWorkstream?.id]);
+  const outreachCampaignSetupStorageKey = useMemo(() => {
+    const workstreamId = String(selectedWorkstream?.id || '');
+    return workstreamId ? `localos:outreach-campaign-setup:${workstreamId}` : '';
+  }, [selectedWorkstream?.id]);
+  const persistOutreachCampaignSetup = (changes: Partial<OutreachCampaignSetupDraft>) => {
+    if (!outreachCampaignSetupStorageKey || !selectedWorkstream?.id) return;
+    const draft: OutreachCampaignSetupDraft = {
+      workstreamId: String(selectedWorkstream.id),
+      baseCampaignId: String(savedOutreachCampaign?.id || ''),
+      baseCampaignVersion: Number(savedOutreachCampaign?.version || 0),
+      sequenceChannels: changes.sequenceChannels || sequenceChannels,
+      sequenceDays: changes.sequenceDays || sequenceDays,
+      sequenceStartAt: changes.sequenceStartAt ?? sequenceStartAt,
+      sequenceSenders: changes.sequenceSenders || sequenceSenders,
+      senderMode: changes.senderMode || senderMode,
+    };
+    localStorage.setItem(outreachCampaignSetupStorageKey, JSON.stringify(draft));
+  };
   const outreachCalendarTouches = (outreachPreview?.touches || []).length > 0
     ? outreachPreview?.touches || []
     : campaignSetupDirty
@@ -1450,8 +1479,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     });
     const addedIndexes = Object.keys(additions).map(Number);
     if (addedIndexes.length === 0) return;
-    setSequenceSenders((current) => ({ ...current, ...additions }));
+    const nextSenders = { ...sequenceSenders, ...additions };
+    setSequenceSenders(nextSenders);
     if (savedOutreachCampaign) {
+      persistOutreachCampaignSetup({ sequenceSenders: nextSenders });
       const steps = addedIndexes.map((index) => index + 1).join(', ');
       setCampaignSetupDirty(true);
       setOutreachPreview(null);
@@ -1573,6 +1604,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         setSavedOutreachCampaign(latestCampaign);
         const latestTouches = [...(latestCampaign?.touches || [])]
           .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
+        let restoredCampaignSetup = false;
         if (latestTouches.length > 0) {
           const nextChannels = ['telegram', 'email', 'max', 'vk'];
           const nextDays = [0, 3, 7, 12];
@@ -1608,13 +1640,66 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           setSequenceStartAt(outreachLocalDateTimeValue(firstScheduledAt));
           setSequenceSenders(nextSenders);
         }
+        if (outreachCampaignSetupStorageKey) {
+          try {
+            const storedValue = localStorage.getItem(outreachCampaignSetupStorageKey);
+            const parsedValue = storedValue ? JSON.parse(storedValue) : null;
+            const expectedCampaignId = String(latestCampaign?.id || '');
+            const expectedCampaignVersion = Number(latestCampaign?.version || 0);
+            const sameBaseCampaign = Boolean(
+              parsedValue
+              && parsedValue.workstreamId === workstreamId
+              && String(parsedValue.baseCampaignId || '') === expectedCampaignId
+              && Number(parsedValue.baseCampaignVersion || 0) === expectedCampaignVersion,
+            );
+            const validChannels = sameBaseCampaign
+              && Array.isArray(parsedValue.sequenceChannels)
+              && parsedValue.sequenceChannels.length === 4
+              && parsedValue.sequenceChannels.every((channel: unknown) => typeof channel === 'string');
+            const validDays = sameBaseCampaign
+              && Array.isArray(parsedValue.sequenceDays)
+              && parsedValue.sequenceDays.length === 4
+              && parsedValue.sequenceDays.every((day: unknown) => Number.isFinite(Number(day)));
+            const validStartAt = sameBaseCampaign && typeof parsedValue.sequenceStartAt === 'string';
+            const validSenders = sameBaseCampaign
+              && parsedValue.sequenceSenders
+              && typeof parsedValue.sequenceSenders === 'object'
+              && !Array.isArray(parsedValue.sequenceSenders);
+            const validSenderMode = ['localos', 'partner_business', 'localos_for_partner']
+              .includes(String(parsedValue?.senderMode || ''));
+            if (validChannels && validDays && validStartAt && validSenders && validSenderMode) {
+              const restoredSenders: Record<number, string> = {};
+              Object.entries(parsedValue.sequenceSenders).forEach(([rawIndex, rawSenderId]) => {
+                const senderIndex = Number(rawIndex);
+                if (Number.isInteger(senderIndex) && typeof rawSenderId === 'string') {
+                  restoredSenders[senderIndex] = rawSenderId;
+                }
+              });
+              setSequenceChannels(parsedValue.sequenceChannels);
+              setSequenceDays(parsedValue.sequenceDays.map((day: unknown) => Number(day)));
+              setSequenceStartAt(parsedValue.sequenceStartAt);
+              setSequenceSenders(restoredSenders);
+              setSenderMode(parsedValue.senderMode);
+              restoredCampaignSetup = true;
+              setNotice('Восстановили несохранённые каналы, отправителей и расписание. Проверьте и сохраните новую версию цепочки.');
+            } else if (storedValue) {
+              localStorage.removeItem(outreachCampaignSetupStorageKey);
+            }
+          } catch {
+            localStorage.removeItem(outreachCampaignSetupStorageKey);
+          }
+        }
         setOutreachPreview(null);
         setCampaignSetupDirty(false);
+        if (restoredCampaignSetup) setCampaignSetupDirty(true);
         const savedMode = latestCampaign?.policy_json?.sender_mode;
         if (
+          !restoredCampaignSetup
+          && (
           savedMode === 'localos'
           || savedMode === 'partner_business'
           || savedMode === 'localos_for_partner'
+          )
         ) {
           setSenderMode(savedMode);
         }
@@ -1626,7 +1711,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     return () => {
       active = false;
     };
-  }, [selectedWorkstream?.id]);
+  }, [outreachCampaignSetupStorageKey, selectedWorkstream?.id]);
 
   useEffect(() => {
     if (!outreachTouchEditsStorageKey) return;
@@ -2007,14 +2092,19 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   };
 
   const updateSequenceChannel = (index: number, channel: string) => {
-    setSequenceChannels((current) => current.map((item, itemIndex) => itemIndex === index ? channel : item));
-    setSequenceSenders((current) => ({ ...current, [index]: '' }));
+    const nextChannels = sequenceChannels.map((item, itemIndex) => itemIndex === index ? channel : item);
+    const nextSenders = { ...sequenceSenders, [index]: '' };
+    setSequenceChannels(nextChannels);
+    setSequenceSenders(nextSenders);
+    persistOutreachCampaignSetup({ sequenceChannels: nextChannels, sequenceSenders: nextSenders });
     setOutreachPreview(null);
     setCampaignSetupDirty(true);
   };
 
   const updateSequenceDay = (index: number, day: number) => {
-    setSequenceDays((current) => current.map((item, itemIndex) => itemIndex === index ? Math.max(0, day) : item));
+    const nextDays = sequenceDays.map((item, itemIndex) => itemIndex === index ? Math.max(0, day) : item);
+    setSequenceDays(nextDays);
+    persistOutreachCampaignSetup({ sequenceDays: nextDays });
     setOutreachPreview(null);
     setCampaignSetupDirty(true);
   };
@@ -2024,13 +2114,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const matchingIndexes = sequenceChannels
       .map((item, itemIndex) => item === channel ? itemIndex : -1)
       .filter((itemIndex) => itemIndex >= 0);
-    setSequenceSenders((current) => {
-      const next = { ...current };
-      matchingIndexes.forEach((itemIndex) => {
-        next[itemIndex] = senderAccountId;
-      });
-      return next;
+    const nextSenders = { ...sequenceSenders };
+    matchingIndexes.forEach((itemIndex) => {
+      nextSenders[itemIndex] = senderAccountId;
     });
+    setSequenceSenders(nextSenders);
+    persistOutreachCampaignSetup({ sequenceSenders: nextSenders });
     setOutreachPreview(null);
     setCampaignSetupDirty(true);
     const steps = matchingIndexes.map((itemIndex) => itemIndex + 1).join(', ');
@@ -2042,6 +2131,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const updateSenderMode = (mode: SenderMode) => {
     setSenderMode(mode);
     setSequenceSenders({});
+    persistOutreachCampaignSetup({ senderMode: mode, sequenceSenders: {} });
     setOutreachPreview(null);
     setCampaignSetupDirty(true);
     setNotice('Способ представления изменён. Подготовьте новый preview и проверьте всю цепочку.');
@@ -2243,6 +2333,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       if (payload?.campaign) {
         setSavedOutreachCampaign(payload.campaign);
         setCampaignSetupDirty(false);
+        if (outreachCampaignSetupStorageKey) localStorage.removeItem(outreachCampaignSetupStorageKey);
         if (outreachTouchEditsStorageKey) localStorage.removeItem(outreachTouchEditsStorageKey);
         setTouchEdits({});
         setEditingTouchIndex(null);
@@ -2960,6 +3051,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         const touchDraft = touchEdits[touchIndex];
                         const sentMoment = formatOutreachMoment(delivery?.sent_at);
                         const scheduledMoment = formatOutreachMoment(delivery?.scheduled_at || touch.scheduled_at);
+                        const operatorApprovedIdea = touch.message_brief_json?.evidence_kind === 'operator_approved_partnership_reason';
                         return (
                           <article key={touch.id || `${touch.sequence_index}-${touch.channel}`} className="overflow-hidden rounded-xl bg-white shadow-sm shadow-slate-900/5">
                             <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
@@ -2972,6 +3064,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
+                              {touch.message_brief_json?.observation || touch.message_brief_json?.problem_hypothesis || touch.message_brief_json?.relevance_bridge ? (
+                                <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
+                                  {touch.message_brief_json?.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.message_brief_json.observation}</p> : null}
+                                  {touch.message_brief_json?.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.message_brief_json.problem_hypothesis}</p> : null}
+                                  {touch.message_brief_json?.relevance_bridge ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.message_brief_json.relevance_bridge}</p> : null}
+                                </div>
+                              ) : null}
                               {editableTouch && touchCanBeEdited ? (
                                 <OutreachTouchMessageEditor
                                   touch={editableTouch}
@@ -3007,6 +3106,39 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                   ) : null}
                                 </>
                               )}
+                              {touch.quality_gate_json ? (
+                                <details open={!touch.quality_gate_json.passed} className="mt-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
+                                  <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold text-slate-800">
+                                    Почему такая оценка ·{' '}
+                                    <span className="tabular-nums">
+                                      {Number(touch.quality_gate_json.total_score ?? touch.quality_gate_json.score ?? 0)}/{Number(touch.quality_gate_json.max_score || 18)}
+                                    </span>
+                                    {' '}· {outreachQualityVerdictLabels[String(touch.quality_gate_json.verdict || '')] || 'Нужна проверка'}
+                                  </summary>
+                                  <div className="grid gap-x-4 gap-y-2 pb-3 sm:grid-cols-2">
+                                    {Object.entries(touch.quality_gate_json.criterion_scores || {}).map(([criterion, score]) => (
+                                      <div key={criterion} className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                                        <span>{outreachQualityCriterionLabels[criterion] || criterion}</span>
+                                        <span className={`shrink-0 tabular-nums font-semibold ${Number(score) === 2 ? 'text-emerald-700' : Number(score) === 1 ? 'text-amber-700' : 'text-rose-700'}`}>
+                                          {Number(score)}/2
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {(touch.quality_gate_json.reason_codes || []).length > 0 ? (
+                                    <div className="border-t border-slate-200 py-3">
+                                      <div className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">Что исправить</div>
+                                      <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-700">
+                                        {(touch.quality_gate_json.reason_codes || []).map((reasonCode) => (
+                                          <li key={reasonCode}>• {outreachQualityReasonLabels[reasonCode] || reasonCode}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ) : (
+                                    <p className="border-t border-slate-200 py-3 text-sm text-emerald-700">Критических замечаний нет.</p>
+                                  )}
+                                </details>
+                              ) : null}
                               {sentMoment || scheduledMoment ? (
                                 <div className="mt-3 text-xs text-slate-500 tabular-nums">
                                   {sentMoment ? `Отправлено ${sentMoment}` : `Запланировано ${scheduledMoment}`}
@@ -3617,6 +3749,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     value={sequenceStartAt}
                     onChange={(value) => {
                       setSequenceStartAt(value);
+                      persistOutreachCampaignSetup({ sequenceStartAt: value });
                       setOutreachPreview(null);
                       setCampaignSetupDirty(true);
                     }}
@@ -3816,84 +3949,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
 
                 {displayedOutreachTouches.length > 0 ? (
-                  <div className="mt-3 space-y-2">
-                    {!outreachPreview?.touches?.length && savedOutreachCampaign ? (
-                      <div className="rounded-md bg-sky-50 px-3 py-2 text-sm leading-6 text-sky-900">
-                        Показана сохранённая цепочка версии {savedOutreachCampaign.version}. Для просмотра повторная генерация не нужна.
-                      </div>
-                    ) : null}
-                    {displayedOutreachTouches.map((touch) => {
-                      const operatorApprovedIdea = touch.evidence_kind === 'operator_approved_partnership_reason';
-                      return <article key={`${touch.sequence_index}-${touch.channel}`} className="rounded-md bg-white p-3 ring-1 ring-slate-200">
-                        <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
-                          <span>День {touch.day_offset} · {touch.channel}</span>
-                          <span className={touch.quality_gate?.passed ? 'text-emerald-700' : 'text-amber-700'}>{touch.quality_gate?.passed ? 'Факты проверены' : 'Нужна проверка'}</span>
-                        </div>
-                        {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
-                          <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
-                            {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
-                            {touch.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.problem_hypothesis}</p> : null}
-                            {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.relevance_bridge}</p> : null}
-                          </div>
-                        ) : null}
-                        <OutreachTouchMessageEditor
-                          touch={touch}
-                          draft={touchEdits[touch.sequence_index]}
-                          editing={editingTouchIndex === touch.sequence_index}
-                          disabled={Boolean(busyAction)}
-                          saving={busyAction === `accept-touch-${touch.sequence_index}`}
-                          persisted={Boolean(touch.human_edited)}
-                          onStart={() => startTouchEdit(touch)}
-                          onChange={(draft) => {
-                            setTouchEdits((current) => {
-                              const next = { ...current, [touch.sequence_index]: draft };
-                              if (outreachTouchEditsStorageKey) {
-                                localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
-                              }
-                              return next;
-                            });
-                            setTouchEditsValidated(false);
-                          }}
-                          onAccept={(draft) => void acceptTouchEdit(touch.sequence_index, draft)}
-                          onCancel={() => resetTouchEdit(touch.sequence_index)}
-                          onReset={() => resetTouchEdit(touch.sequence_index)}
-                        />
-                        {touch.source_url ? <a href={touch.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-700">Источник <ExternalLink className="h-3.5 w-3.5" /></a> : null}
-                        {touch.quality_gate ? (
-                          <details open={!touch.quality_gate.passed} className="mt-3 rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
-                            <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold text-slate-800">
-                              Почему такая оценка ·{' '}
-                              <span className="tabular-nums">
-                                {Number(touch.quality_gate.total_score ?? touch.quality_gate.score ?? 0)}/{Number(touch.quality_gate.max_score || 18)}
-                              </span>
-                              {' '}· {outreachQualityVerdictLabels[String(touch.quality_gate.verdict || '')] || 'Нужна проверка'}
-                            </summary>
-                            <div className="grid gap-x-4 gap-y-2 pb-3 sm:grid-cols-2">
-                              {Object.entries(touch.quality_gate.criterion_scores || {}).map(([criterion, score]) => (
-                                <div key={criterion} className="flex items-center justify-between gap-3 text-xs text-slate-600">
-                                  <span>{outreachQualityCriterionLabels[criterion] || criterion}</span>
-                                  <span className={`shrink-0 tabular-nums font-semibold ${Number(score) === 2 ? 'text-emerald-700' : Number(score) === 1 ? 'text-amber-700' : 'text-rose-700'}`}>
-                                    {Number(score)}/2
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            {(touch.quality_gate.reason_codes || []).length > 0 ? (
-                              <div className="border-t border-slate-200 py-3">
-                                <div className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">Что исправить</div>
-                                <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-700">
-                                  {(touch.quality_gate.reason_codes || []).map((reasonCode) => (
-                                    <li key={reasonCode}>• {outreachQualityReasonLabels[reasonCode] || reasonCode}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : (
-                              <p className="border-t border-slate-200 py-3 text-sm text-emerald-700">Критических замечаний нет.</p>
-                            )}
-                          </details>
-                        ) : null}
-                      </article>;
-                    })}
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md bg-sky-50 px-3 py-3 text-sm leading-6 text-sky-900">
+                    <span>Тексты и их проверка находятся в разделе «Сообщения и каналы».</span>
+                    <Button type="button" variant="outline" onClick={() => scrollToLeadSection('lead-conversation')} className="min-h-10 bg-white">
+                      Открыть сообщения
+                    </Button>
                   </div>
                 ) : null}
                 </div>
