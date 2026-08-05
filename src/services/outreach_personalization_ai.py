@@ -16,7 +16,7 @@ from services.outreach_founder_led_copy import (
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v8"
+PROMPT_VERSION = "outreach_personalization_v9"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",
@@ -217,6 +217,36 @@ def _request_record(
     hypothesis = _clean(candidate.get("problem_hypothesis")) or None
     sender_mode = _clean(candidate.get("sender_mode"))
     represented_business_voice = sender_mode == "localos_for_partner"
+    evidence_records = [{
+        "evidence_id": _clean(candidate.get("evidence_id")),
+        "kind": _clean(candidate.get("evidence_kind")) or "other",
+        "observation": _clean(candidate.get("observed_fact")),
+        "source_url": _clean(candidate.get("source_url")),
+        "source_type": _clean(candidate.get("source_type")) or "public",
+        "source_date": candidate.get("observed_at"),
+        "confidence": candidate.get("confidence"),
+        "freshness": _clean(candidate.get("freshness")),
+        "usable_for_outreach": True,
+    }]
+    for item in candidate.get("supporting_evidence") or []:
+        if not isinstance(item, dict):
+            continue
+        evidence_id = _clean(item.get("evidence_id") or item.get("id"))
+        observation = _clean(item.get("observation") or item.get("fact"))
+        source_url = _clean(item.get("source_url"))
+        if not evidence_id or not observation or not source_url:
+            continue
+        evidence_records.append({
+            "evidence_id": evidence_id,
+            "kind": _clean(item.get("kind")) or "other",
+            "observation": observation,
+            "source_url": source_url,
+            "source_type": _clean(item.get("source_type") or item.get("kind")) or "public",
+            "source_date": item.get("observed_at") or item.get("source_date"),
+            "confidence": item.get("confidence"),
+            "freshness": _clean(item.get("freshness")),
+            "usable_for_outreach": True,
+        })
     return {
         "schema_version": SCHEMA_VERSION,
         "motion": _clean(motion),
@@ -228,21 +258,12 @@ def _request_record(
             "recipient_category": _clean(candidate.get("recipient_category")),
             "recipient_segment": _clean(candidate.get("recipient_segment")),
         },
-        "evidence": [{
-            "evidence_id": _clean(candidate.get("evidence_id")),
-            "kind": _clean(candidate.get("evidence_kind")) or "other",
-            "observation": _clean(candidate.get("observed_fact")),
-            "source_url": _clean(candidate.get("source_url")),
-            "source_type": _clean(candidate.get("source_type")) or "public",
-            "source_date": candidate.get("observed_at"),
-            "confidence": candidate.get("confidence"),
-            "freshness": _clean(candidate.get("freshness")),
-            "usable_for_outreach": True,
-        }],
+        "evidence": evidence_records,
         "personalization": {
             "observation": _clean(candidate.get("observed_fact")),
             "evidence_ids": list(candidate.get("evidence_ids") or [candidate.get("evidence_id")]),
             "signal_combo": _clean(candidate.get("signal_combo")),
+            "map_observation": _clean(candidate.get("map_observation")),
             "public_audit_url": _clean(candidate.get("public_audit_url")),
             "problem_hypothesis": hypothesis,
             "problem_hypothesis_status": "hypothesis" if hypothesis else "missing",
@@ -574,6 +595,7 @@ def _assemble_policy_bound_text(
         "sender_mode": sender_mode,
         "observed_fact": request_record.get("personalization", {}).get("observation"),
         "signal_combo": request_record.get("personalization", {}).get("signal_combo"),
+        "map_observation": request_record.get("personalization", {}).get("map_observation"),
         "public_audit_url": request_record.get("personalization", {}).get("public_audit_url"),
         "next_step": request_record.get("sender", {}).get("offer"),
         "evidence_kind": (

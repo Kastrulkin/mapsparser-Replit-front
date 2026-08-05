@@ -91,7 +91,8 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     assert "3 отзыва" not in messages["founder_story"]
     assert "3 отзыва" not in messages["proof"]
     assert "3 отзыва" not in messages["respectful_close"]
-    assert "не просто выдаёт список рекомендаций" in messages["founder_story"]
+    assert "клиенты и ежедневная операционка всегда срочнее" in messages["founder_story"]
+    assert "не просто выдаёт список рекомендаций" not in messages["founder_story"]
     assert "240 точках" in messages["proof"]
     assert "больше напоминать не буду" in messages["respectful_close"]
     assert all(message.count("?") == 1 for message in messages.values())

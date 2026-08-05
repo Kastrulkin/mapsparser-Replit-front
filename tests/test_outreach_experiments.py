@@ -119,7 +119,7 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
 
 
 def test_corpus_copy_change_invalidates_old_drafts():
-    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v8"
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v9"
 
 
 def test_migration_has_three_versioned_experiment_tables():
@@ -167,18 +167,37 @@ def test_active_social_copy_uses_audit_without_inventing_owner_pain():
             'В публичном Telegram-источнике "FREEDOM | beauty studio" '
             'опубликовано: "Горящие окошки на завтра".'
         ),
+        "map_observation": "Рейтинг - 4,3; публичных отзывов - 5.",
         "public_audit_url": "https://localos.pro/freedom-beauty-studio",
         "next_step": "Работа LocalOS от 1200 рублей в месяц",
     }
     text = founder_led_localos_text("signal", candidate, None)
     assert text is not None
     assert "в Telegram вы публикуете свободные окна для записи" in text
-    assert "регулярно работаете с привлечением клиентов онлайн" in text
+    assert "При этом в карточке рейтинг 4,3 и всего 5 отзывов" in text
+    assert "регулярно работаете" not in text
     assert "https://localos.pro/freedom-beauty-studio" in text
     assert "от 1200 рублей в месяц" in text
     assert "остаются на владельце" not in text
     assert "не хватает времени" not in text
-    assert text.endswith("Посмотреть разбор?")
+    assert text.endswith("Вам может быть это интересно?")
+
+
+def test_founder_follow_up_uses_operator_empathy_instead_of_product_abstraction():
+    candidate = {
+        "sender_mode": "localos",
+        "recipient": "Линия красоты",
+        "recipient_segment": "beauty_team",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "founder_story": "Сам больше десяти лет в бизнесе.",
+    }
+
+    text = founder_led_localos_text("founder_story", candidate, None)
+
+    assert "клиенты и ежедневная операционка всегда срочнее" in text
+    assert "Сам больше десяти лет в бизнесе" in text
+    assert "LocalOS не просто выдаёт" not in text
 
 
 def test_corpus_compiler_uses_deepseek_then_gigachat_max_review():

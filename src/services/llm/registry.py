@@ -189,7 +189,7 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "social_post_generation": _task("social_post_generation", data_class="public", prompt_version="social_post_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_optimization": _task("service_optimization", prompt_version="service_optimization_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_copy_generation": _task("service_copy_generation", response_kind="json", allow_text_fallback=True, pipeline_stage="copy"),
-    "outreach_personalization": _task("outreach_personalization", data_class="pii", prompt_version="outreach_personalization_v8", pipeline_stage="copy"),
+    "outreach_personalization": _task("outreach_personalization", data_class="pii", prompt_version="outreach_personalization_v9", pipeline_stage="copy"),
     "outreach_corpus_pattern_extract": _task(
         "outreach_corpus_pattern_extract",
         provider="deepseek",

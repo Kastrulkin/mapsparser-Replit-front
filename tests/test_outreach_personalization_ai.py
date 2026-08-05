@@ -55,6 +55,15 @@ def test_request_record_preserves_corpus_signal_and_public_audit_link():
             "source_url": "https://t.me/example/1",
             "signal_combo": "active_social_with_map_gap",
             "public_audit_url": "https://localos.pro/example-audit",
+            "supporting_evidence": [{
+                "evidence_id": "map-rating",
+                "kind": "map_rating",
+                "observation": "Рейтинг - 4,3; публичных отзывов - 5.",
+                "source_url": "https://maps.example/line",
+                "source_type": "public_map",
+                "confidence": 0.95,
+                "freshness": "current_snapshot",
+            }],
         },
         founder_story={"story": "Опыт основателя", "offer": "LocalOS от 1200 рублей в месяц"},
         sequence=[{"sequence_index": 0, "channel": "email", "angle": "signal", "day_offset": 0}],
@@ -62,6 +71,7 @@ def test_request_record_preserves_corpus_signal_and_public_audit_link():
     )
     assert record["personalization"]["signal_combo"] == "active_social_with_map_gap"
     assert record["personalization"]["public_audit_url"] == "https://localos.pro/example-audit"
+    assert [item["evidence_id"] for item in record["evidence"]] == ["telegram-1", "map-rating"]
 
 
 def test_request_record_prefers_campaign_offer_over_legacy_profile_offer():

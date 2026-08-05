@@ -1688,6 +1688,20 @@ def build_personalization_candidates(
         return []
     candidates = []
     lead_name = _text(context.get("lead_name"))
+    supporting_map_evidence = next(
+        (
+            item
+            for item in ledger
+            if _text(item.get("kind")) in {"map_rating", "map_issue"}
+            and re.search(
+                r"рейтинг\s*[\-—]\s*[0-9]+(?:[.,][0-9]+)?;\s*"
+                r"публичных отзывов\s*[\-—]\s*\d+",
+                _text(item.get("fact")),
+                flags=re.IGNORECASE,
+            )
+        ),
+        None,
+    )
     recipient_type = (
         "residential_complex"
         if _is_residential_recipient(context)
@@ -1707,6 +1721,26 @@ def build_personalization_candidates(
             ) or story
         problem_hypothesis = _text(evidence.get("hypothesis")) or None
         relevance_to_offer = _outreach_bridge(evidence)
+        evidence_ids = [_text(evidence.get("id"))]
+        supporting_evidence = []
+        map_observation = ""
+        if (
+            supporting_map_evidence
+            and _text(evidence.get("kind")) in {"telegram_post", "social_post", "vk_post", "instagram_post"}
+            and _text(supporting_map_evidence.get("id")) not in evidence_ids
+        ):
+            map_observation = _text(supporting_map_evidence.get("fact"))
+            evidence_ids.append(_text(supporting_map_evidence.get("id")))
+            supporting_evidence.append({
+                "evidence_id": _text(supporting_map_evidence.get("id")),
+                "kind": _text(supporting_map_evidence.get("kind")),
+                "observation": map_observation,
+                "source_url": _text(supporting_map_evidence.get("source_url")),
+                "source_type": _text(supporting_map_evidence.get("source_type")) or "public_map",
+                "observed_at": supporting_map_evidence.get("observed_at"),
+                "confidence": supporting_map_evidence.get("confidence"),
+                "freshness": supporting_map_evidence.get("freshness"),
+            })
         candidates.append({
             "id": f"personalization-{index + 1}",
             "recipient": lead_name,
@@ -1714,8 +1748,10 @@ def build_personalization_candidates(
             "recipient_category": _text(context.get("category")),
             "recipient_segment": recipient_segment,
             "evidence_id": evidence["id"],
-            "evidence_ids": [evidence["id"]],
+            "evidence_ids": evidence_ids,
             "observed_fact": evidence["fact"],
+            "map_observation": map_observation,
+            "supporting_evidence": supporting_evidence,
             "problem_hypothesis": problem_hypothesis,
             "problem_hypothesis_status": "hypothesis" if problem_hypothesis else "missing",
             "relevance_to_offer": relevance_to_offer,

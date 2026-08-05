@@ -213,9 +213,22 @@ def founder_led_localos_text(
                 f"Вот короткий разбор с конкретными шагами:{audit_block}\n\n"
                 "Шаги можно выполнить самостоятельно. Если захотите, часть работы "
                 f"можно поручить LocalOS{price_line}.\n\n"
-                "Посмотреть разбор?"
+                "Вам может быть это интересно?"
             )
         observation = natural_observation(candidate)
+        map_observation = clean_copy(candidate.get("map_observation"))
+        map_match = re.search(
+            r"рейтинг\s*[\-—]\s*([0-9]+(?:[.,][0-9]+)?);\s*"
+            r"публичных отзывов\s*[\-—]\s*(\d+)",
+            map_observation,
+            flags=re.IGNORECASE,
+        )
+        map_block = (
+            f"При этом в карточке рейтинг {map_match.group(1)} "
+            f"и всего {map_match.group(2)} отзывов."
+            if map_match
+            else ""
+        )
         audit_url = clean_copy(candidate.get("public_audit_url"))
         approved_offer = clean_copy(candidate.get("next_step"))
         price_line = (
@@ -231,14 +244,14 @@ def founder_led_localos_text(
             observation_for_sentence = observation[:1].lower() + observation[1:]
             return (
                 f"Здравствуйте! Я {introduction}.\n\n"
-                f"Увидел, что {observation_for_sentence}. "
-                "То есть вы уже регулярно работаете с привлечением клиентов онлайн.\n\n"
+                f"Увидел, что {observation_for_sentence}.\n\n"
+                f"{map_block}\n\n"
                 "Мы посмотрели, как компания представлена в Яндекс Картах, "
                 "и собрали короткий разбор с конкретными шагами:\n"
                 f"{audit_url}\n\n"
                 "Шаги можно выполнить самостоятельно. Если захотите, часть работы "
                 f"можно поручить LocalOS{price_line}.\n\n"
-                "Посмотреть разбор?"
+                "Вам может быть это интересно?"
             )
         return (
             f"Здравствуйте! Я {introduction}.\n\n"
@@ -250,11 +263,12 @@ def founder_led_localos_text(
 
     if angle == "founder_story":
         return (
-            "Здравствуйте! Коротко объясню, почему написал.\n\n"
+            "Здравствуйте! Коротко дополню.\n\n"
+            "Понимаю, почему до карточек, отзывов и контента часто не доходят руки: "
+            "клиенты и ежедневная операционка всегда срочнее.\n\n"
             f"{approved_story}\n\n"
-            "LocalOS не просто выдаёт список рекомендаций. Он превращает "
-            "повторяющуюся работу с карточками, отзывами и контентом в понятный процесс.\n\n"
-            "Показать, как это выглядит на одном конкретном примере?"
+            "Поэтому в разборе мы оставили не длинный список советов, а конкретные шаги, с которых можно начать.\n\n"
+            "Подсказать, какой шаг я бы поставил первым?"
         )
 
     if angle == "proof":
