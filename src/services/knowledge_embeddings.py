@@ -197,7 +197,13 @@ def _vector_literal(vector: list[Any]) -> str:
     return "[" + ",".join(str(float(item)) for item in vector) + "]"
 
 
-def enqueue_document_chunks(conn, *, limit: int = 1000, document_id: str = "") -> dict[str, int]:
+def enqueue_document_chunks(
+    conn,
+    *,
+    limit: int = 1000,
+    document_id: str = "",
+    source_id: str = "",
+) -> dict[str, int]:
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     filters = [
         "d.invalidated_at IS NULL",
@@ -213,6 +219,9 @@ def enqueue_document_chunks(conn, *, limit: int = 1000, document_id: str = "") -
     if document_id:
         filters.append("d.id = %s")
         params.append(document_id)
+    if source_id:
+        filters.append("s.id = %s")
+        params.append(source_id)
     params.append(max(1, min(int(limit), 10000)))
     cursor.execute(
         f"""
