@@ -20,7 +20,9 @@ Grimbird на OpenClaw является единственным актуаль�
 
 ## Один Telegram-аккаунт для радара и аутрича
 
-LocalOS хранит одну зашифрованную Telethon session в `externalbusinessaccounts`, но проверяет два независимых разрешения в `telegram_account_permissions`:
+Этот контур не использует Bot API. В текущей BYO-модели каждый бизнес создаёт Telegram API application на `my.telegram.org`, а затем авторизует свой пользовательский аккаунт в LocalOS через номер, код и при необходимости 2FA.
+
+LocalOS хранит `api_id`, `api_hash` и одну Telethon session в зашифрованном `externalbusinessaccounts.auth_data_encrypted`, но не сохраняет пароль 2FA. Для аккаунта проверяются два независимых разрешения в `telegram_account_permissions`:
 
 - `radar_enabled` — чтение выбранных публичных источников и сохранение сигналов;
 - `outreach_enabled` — отправка только одобренных сообщений и обязательный reply sync.
@@ -28,6 +30,8 @@ LocalOS хранит одну зашифрованную Telethon session в `ex
 Отключение радара не блокирует отдельно разрешённый outreach. Отключение outreach немедленно запрещает новые Telegram sends, но не удаляет drafts и не отключает radar. Существующий radar account после миграции не получает outreach permission автоматически.
 
 Перед каждым чтением или отправкой используется concrete `account_id`; глобальный «последний подключённый аккаунт» не выбирается.
+
+API application само не определяет отправителя. Сообщения отправляются от пользовательского Telegram-аккаунта, которому принадлежит авторизованная session. `@LocalOspro_bot` и Mini App остаются отдельным control/publishing-контуром.
 
 ## Entity preflight
 

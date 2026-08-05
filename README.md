@@ -33,6 +33,7 @@ LocalOS помогает владельцам и управляющим лока
 
 ### Контент, новости и публичные материалы
 - Генерация черновиков новостей для карт, social post drafts, content history и работа с контент-планами.
+- Telegram-публикации используют Bot API: глобальный `@LocalOspro_bot` или отдельный бот бизнеса публикует подтверждённый пост в явно подключённый канал/чат. Для назначения нужен `telegram_chat_id`, а бот должен иметь право публикации. Это подключение не даёт доступ к личным контактам и не разрешает аутрич от имени пользователя.
 - VK-сообщество можно подключить ключом с правом на стену для контролируемой публикации подтверждённых текстовых постов. Фото пока проходят отдельный supervised flow; подключение и подготовка поста сами по себе ничего не публикуют.
 - Разделение обычных услуг и акций/сезонных предложений там, где это поддержано пользовательским workflow.
 - Публичные статьи, кейсы, документы, discovery pages, AI visibility content и конверсионные audit/sales-room материалы.
@@ -49,7 +50,8 @@ LocalOS помогает владельцам и управляющим лока
 ### Партнёрства и supervised outreach
 - Единый путь для потенциальных клиентов LocalOS и партнёров бизнеса: поиск/импорт → карточка → парсинг → аудит/matching → контактное обогащение → evidence ledger → founder-led personalization → versioned draft цепочки → approval → контролируемые касания → первый ответ.
 - Лиды остаются в `prospectingleads`; `lead_workstreams` разделяет `localos_sales` и `client_partnership`, не создавая вторую CRM.
-- Исходная категория карточки хранится без изменений, а единый backend-классификатор возвращает канонический `partner_type` для фильтров, счётчиков и batch-подготовки аутрича. Frontend не классифицирует категории самостоятельно.
+- Исходная категория карточки хранится без изменений, а единый backend-классификатор возвращает общие канонические категории для лидов LocalOS и лидов-партнёров. Смешанная карточка может входить в несколько фильтров одновременно: например, «медцентр / косметология» виден и в медицине, и в красоте. Frontend не классифицирует категории самостоятельно.
+- В реестре можно совместить фильтры «Категория бизнеса», «Состояние цепочки» и «Следующий шаг»: увидеть все компании выбранной категории, проверить полноту массового прохода через «Цепочка создана / Цепочки нет» и открыть очередь «Проверить черновик».
 - Контакты нормализуются из карты, raw/enrich payload и официального сайта с provenance. Website collector проверяет публичные contact/about/team pages, ссылки, формы и JSON-LD.
 - Telegram entity API отличает личный аккаунт, bot, broadcast channel и группы. Публичные каналы становятся источниками радара и не используются как DM-получатели; посты сохраняются как evidence.
 - Поддерживаются три явных sender mode: `localos` использует подтверждённую founder story LocalOS; `partner_business` пишет от лица бизнеса через его аккаунт; `localos_for_partner` после явного разрешения бизнеса также пишет от лица этого бизнеса, но доставляет сообщение через platform-scoped аккаунт LocalOS. Во внешнем тексте `localos_for_partner` используется голос «мы ваши соседи» без упоминания LocalOS, его founder story, кейсов или коммерческого оффера; технический отправитель и разрешение сохраняются во внутреннем audit trail.
@@ -82,34 +84,45 @@ LocalOS помогает владельцам и управляющим лока
 - Результат нормализован в `business_result`/`result_state`; approval показывается только для текущего run перед реальным внешним действием. Старые ожидания решения supersede-ятся.
 - Сертифицированные beta-capabilities охватывают read/draft/safe internal write: Google Sheets read, drafts для отзывов/новостей/услуг, content-plan draft, appointments read, support export и партнёрский analysis/draft. Request-only writes не активируются как beta workflow.
 - OpenClaw / ActionOrchestrator остаётся execution boundary для policy, approval, billing, audit, callbacks и recovery. Provider не является пользовательской моделью агента.
-- Production остаётся cohort beta: async runtime ограничен `AGENT_BETA_BUSINESS_IDS`; scheduler включён для двух безопасных read-only canary Riderra. Четыре последовательных реальных дня обоих расписаний подтверждены 20–23 июля 2026 года; семидневный gate продолжается до 26 июля. Массовый self-service запуск пока не заявляется.
+- Production остаётся cohort beta: async runtime ограничивается `AGENT_BETA_BUSINESS_IDS`, а scheduler и внешние действия включаются только для явно допущенных сценариев. Датированные canary-доказательства и незакрытые gates ведутся отдельно в `docs/AGENTS_BETA_PRODUCTION_STATUS.md`; README не является источником mutable production-счётчиков.
 
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
 - Для повторной заявки создан отдельный Google Cloud project `localos-gbp` (`649313441761`) и агентская организация `LocalOS`. В группу `Клиенты LocalOS` добавлена подтверждённая карточка клиента «Веселая расческа», проспект Энгельса, 154, с ролью менеджера без передачи основного владения.
-- Заявка на Basic API Access отправлена 18 июля 2026 года, Google case `7-6688000041542`; заявленный срок проверки — 7–10 рабочих дней. До одобрения новый OAuth-клиент не заменяет текущий production-клиент.
+- Повторная заявка на Basic API Access находится на рассмотрении. Номера обращений, дата последней проверки и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. До подтверждённого одобрения новый OAuth-клиент не заменяет текущий production-клиент.
 - AI-agent webhooks для Telegram и WhatsApp Business API используют business-level настройки и не обходят policy/approval.
 - Любой publish/send/payment/delete/bulk mutation/provider write требует явного review/approval и должен быть описан как поддержанный только после реализации, тестов и deployment checks.
 
 ### Архитектура Telegram-ботов и уведомлений
 
-- **Глобальный бот BeautyBot (`TELEGRAM_BOT_TOKEN`)**
-  - Используется по умолчанию для всех уведомлений владельцам салонов и как основной control-surface в Telegram.
+- **Глобальный бот LocalOS `@LocalOspro_bot` (`TELEGRAM_BOT_TOKEN`)**
+  - Используется по умолчанию для уведомлений владельцам бизнеса и как основной control-surface в Telegram.
   - Владелец привязывает свой Telegram к аккаунту (поле `telegram_id` в таблице `Users`).
   - Бот работает в двух режимах:
     - `guest mode`: быстрый аудит карточки по ссылке, вход с рекламы, первичный lead magnet.
     - `client mode`: меню управления LocalOS из Telegram (статус, партнёрства, feature requests, approvals и т.д.).
+  - Mini App открывается из этого бота и использует тот же tenant/access scope, что и web-кабинет.
+  - Для публикаций бот отправляет подтверждённые посты только в подключённый канал/чат, где у него есть соответствующее право.
+  - Bot API не позволяет этому боту читать личные контакты владельца или начинать аутрич от имени его пользовательского Telegram-аккаунта.
+- **Telegram API-приложение и аккаунт бизнеса (`telegram_app`)**
+  - Это отдельный MTProto/Telethon-контур для Telegram-радара и одобренных сообщений от имени самого бизнеса.
+  - В текущей BYO-модели бизнес создаёт Telegram API application на `my.telegram.org`, затем вводит в LocalOS номер, `api_id`, `api_hash`, код Telegram и при необходимости пароль 2FA.
+  - `api_id`, `api_hash` и созданная `session_string` сохраняются в зашифрованном `externalbusinessaccounts.auth_data_encrypted`, с tenant scope по `business_id`; пароль 2FA не сохраняется.
+  - Одна сессия бизнеса может иметь два независимых разрешения: `radar_enabled` для выбранных источников и `outreach_enabled` для одобренных сообщений с reply sync и stop-on-reply. Включение одного разрешения не включает второе.
+  - Получатель аутрича видит Telegram-аккаунт бизнеса, а не `@LocalOspro_bot`. API application является техническим клиентом, а фактическую личность отправителя задаёт авторизованная сессия.
 - **Боты конкретных бизнесов (`telegram_bot_token` в таблице `Businesses`)**
-  - Нужны только если салон хочет **свой брендированный бот** для клиентов и ИИ-агента.
+  - Нужны только если бизнес хочет **свой брендированный бот** для клиентов и ИИ-агента.
   - Используются в webhooks ИИ-агента (`/api/webhooks/telegram`), когда бот общается напрямую с клиентами.
-  - В уведомлениях владельцу (support-запросы, бронирования) поле `telegram_bot_token` опционально: если заполнено — уведомление может уйти через бот салона, если нет — через глобальный BeautyBot.
+  - В уведомлениях владельцу (support-запросы, бронирования) поле `telegram_bot_token` опционально: если заполнено — уведомление может уйти через бот бизнеса, если нет — через глобальный бот LocalOS.
 - **Текущий production runtime**
   - Основной owner-bot запускается как `openclaw-localos-telegram-bot.service`.
   - Telegram Bot API и внешние social HTTP API направляются через Grimbird HTTP proxy на OpenClaw.
   - Telethon/userbot использует Grimbird SOCKS5 proxy.
   - На LocalOS используются private endpoints `192.168.0.177:10809` и `192.168.0.177:10808`; loopback endpoints допустимы только на OpenClaw.
 - **Простой сценарий**
-  - Для большинства случаев достаточно одного глобального бота BeautyBot; `telegram_bot_token` заполняется только там, где действительно нужен свой брендированный вход для клиентов/ИИ-агента.
+  - Для управления LocalOS и публикаций в Telegram-канал обычно достаточно глобального бота LocalOS и `telegram_chat_id` назначения.
+  - Для радара или аутрича от имени бизнеса дополнительно подключается его Telegram API application и пользовательская сессия; бот этот контур не заменяет.
+  - `telegram_bot_token` бизнеса заполняется только там, где действительно нужен отдельный брендированный бот для клиентов/ИИ-агента.
 
 ## Технический стек
 
@@ -124,12 +137,12 @@ LocalOS помогает владельцам и управляющим лока
   - **Legacy**: SQLite (`src/reports.db`) используется только для старых отчётов и вспомогательных скриптов
   - **Основные таблицы (в PostgreSQL - имена в нижнем регистре)**: users, businesses, companies, company_locations, business_company_links, prospectingleads, lead_workstreams, userservices, parsequeue, cards, knowledge_sources, knowledge_documents, knowledge_source_subscriptions, externalbusinessaccounts, businessmaplinks, businessmetricshistory, externalbusinessstats, externalbusinessreviews; AIAgents, AIAgentConversations, AIAgentMessages, Bookings
   - **Иерархия доступа**: Users → Networks/Businesses задаёт tenant scope. `Company + CompanyLocation` хранит каноническую публичную идентичность; доступ к ней вычисляется из `business_company_links`, workstreams и отношений, а не из глобального каталога.
-  - **Публичные Telegram-источники**: один глобальный `knowledge_source` на канал, единые documents/embeddings и отдельные `knowledge_source_subscriptions` для тем и графика каждого бизнеса. Аудиты, поиск лидов и партнёров могут добавить в общую базу новый публичный URL; связь с компанией хранится отдельно и остаётся `unconfirmed` до проверки. Личные, закрытые и invite-only чаты не собираются.
+  - **Telegram-источники**: публичный канал хранится как общий `knowledge_source` с отдельными `knowledge_source_subscriptions` для тем и графика каждого бизнеса. Доступный авторизованному аккаунту закрытый источник сохраняется отдельно в tenant scope как `tenant_confidential`, не передаётся внешней AI-модели и очищается по политике хранения приватного контента. Он не может быть повышен до публичного через клиентский payload.
   - **Семантический профиль компании**: один `company_public_profile` объединяет город/адрес, категорию, карты, публичные услуги, наблюдения, аудиты и социальные источники с provenance. Структурные контакты остаются в Company Registry; перед embeddings текст очищается.
   - **Поэтапный запуск реестра**: `COMPANY_REGISTRY_ENABLED` → `COMPANY_PARSER_DUAL_WRITE_ENABLED` → `COMPANY_LOCATION_PARSER_ENABLED` → `COMPANY_REGISTRY_WEB_ENABLED` / `COMPANY_REGISTRY_MINIAPP_ENABLED`. `LEAD_SHADOW_BUSINESS_CREATION_ENABLED` отключается только после проверки паритета; в Docker Compose новые флаги по умолчанию выключены.
   - **AI/communication tables**: `AIAgents`, `AIAgentConversations`, `AIAgentMessages`, `agent_blueprints`, `agent_runs`, `agent_approvals` и связанные runtime/audit таблицы
   - **Безопасность**: Alembic migrations, production backups перед schema changes, tenant scope, approval/audit boundaries
-- **Внешние интеграции**: Яндекс.Бизнес, Google Business Profile, 2ГИС (с шифрованием auth_data)
+- **Внешние интеграции**: Яндекс.Бизнес, Google Business Profile, 2ГИС, Telegram Bot API/MTProto, VK и Meta там, где соответствующий read/write flow реализован и прошёл approval/preflight; секреты и сессии хранятся зашифрованно.
 
 ### Авторизация и блокировка пользователей (PostgreSQL)
 
@@ -512,7 +525,7 @@ python scripts/smoke_client_info_gate.py
 Создайте файл `.env` в корне проекта:
 ```bash
 # Telegram боты
-TELEGRAM_BOT_TOKEN=токен_для_Beautybotpor_bot
+TELEGRAM_BOT_TOKEN=токен_для_LocalOspro_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=токен_для_beautyreviewexchange_bot
 
 # Grimbird на OpenClaw; включать после проверки firewall/private route
@@ -550,33 +563,30 @@ YANDEX_BUSINESS_FAKE=0
 # SMTP (для отправки email)
 SMTP_SERVER=mail.hosting.reg.ru
 SMTP_PORT=587
-SMTP_USERNAME=info@beautybot.pro
+SMTP_USERNAME=info@localos.pro
 SMTP_PASSWORD=ваш_пароль
 ```
 
 ### 3. Запуск сервисов
 ```bash
-systemctl daemon-reload
-systemctl enable seo-worker
-systemctl start seo-worker
-systemctl enable openclaw-localos-telegram-bot
-systemctl start openclaw-localos-telegram-bot
-systemctl enable telegram-reviews-bot
-systemctl start telegram-reviews-bot
+cd /opt/seo-app
+docker compose up -d postgres app worker
+
+# Текущий production owner-bot работает отдельным host service.
+systemctl restart openclaw-localos-telegram-bot.service
+
+# Отдельный legacy-бот обмена отзывами, если он включён на хосте.
+systemctl restart telegram-reviews-bot.service
 ```
 
 ### 4. Проверка работы
 ```bash
-# Проверить все сервисы
-systemctl status seo-worker
-systemctl status openclaw-localos-telegram-bot
-systemctl status telegram-reviews-bot
-systemctl status nginx
-
-# Проверить порты
-lsof -i :8000  # Бэкенд API
-lsof -i :80    # Nginx HTTP
-lsof -i :443   # Nginx HTTPS
+cd /opt/seo-app
+docker compose ps
+docker compose logs --since 10m app worker
+curl -I http://localhost:8000
+systemctl status openclaw-localos-telegram-bot.service --no-pager
+systemctl status telegram-reviews-bot.service --no-pager
 ```
 
 ## Как коммитить изменения

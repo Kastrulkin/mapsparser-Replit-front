@@ -34,6 +34,20 @@ TELEGRAM_REVIEWS_BOT_TOKEN=your-reviews-bot-token
 API_BASE_URL=http://localhost:8000
 ```
 
+`TELEGRAM_BOT_TOKEN` относится к `@LocalOspro_bot`, Mini App, уведомлениям и публикациям в подключённые каналы. Он не используется для Telegram-радара или аутрича от имени пользовательского аккаунта бизнеса.
+
+### Telegram MTProto и proxy
+
+```bash
+TELEGRAM_HTTP_PROXY=http://192.168.0.177:10809
+TELEGRAM_USERBOT_PROXY=socks5://192.168.0.177:10808
+OUTBOUND_HTTP_PROXY=http://192.168.0.177:10809
+```
+
+`TELEGRAM_USERBOT_PROXY` используется Telethon/MTProto для Telegram-аккаунтов бизнеса. В текущей BYO-модели глобальные `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` не задаются: каждый бизнес вводит свои `api_id`/`api_hash` при подключении, после чего они вместе с `session_string` сохраняются в зашифрованном `externalbusinessaccounts.auth_data_encrypted`. Пароль 2FA не сохраняется.
+
+Подробный сетевой runbook: [`docs/TELEGRAM_PROXY_RUNBOOK.md`](docs/TELEGRAM_PROXY_RUNBOOK.md).
+
 ### Файлы цифровых комнат: S3-compatible Object Storage
 ```bash
 SALES_ROOM_STORAGE_BACKEND=s3

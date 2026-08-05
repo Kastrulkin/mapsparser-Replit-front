@@ -1,4 +1,6 @@
-# 🔌 Порты и сервисы проекта BeautyBot
+# Порты и сервисы LocalOS
+
+> Часть команд ниже сохранена как legacy-справка. Канонический production runtime для backend — Docker Compose из `/opt/seo-app`. Основной Telegram owner-bot на текущем production работает как `openclaw-localos-telegram-bot.service`.
 
 > 📖 **Связанная документация:**
 > - [README.md](./README.md) — основное описание проекта
@@ -9,10 +11,22 @@
 | Сервис | Порт | Протокол | Описание | Проверка |
 |--------|------|----------|----------|----------|
 | **Фронтенд (Dev)** | `3000` | HTTP | Vite dev server (разработка) | `http://localhost:3000` |
-| **Фронтенд (Prod)** | `80/443` | HTTP/HTTPS | Nginx (статический фронтенд) | `https://beautybot.pro` |
+| **Фронтенд (Prod)** | `80/443` | HTTP/HTTPS | LocalOS web | `https://localos.pro` |
 | **Бэкенд API** | `8000` | HTTP | Flask API сервер | `http://localhost:8000` |
-| **Бот управления** | - | - | Systemd сервис (polling) | `systemctl status telegram-bot` |
+| **Бот управления** | - | - | Host service (polling) | `systemctl status openclaw-localos-telegram-bot.service` |
 | **Бот обмена отзывами** | - | - | Systemd сервис (polling) | `systemctl status telegram-reviews-bot` |
+
+## Каноническая production-проверка
+
+```bash
+cd /opt/seo-app
+docker compose ps
+docker compose logs --since 10m app worker
+curl -I http://localhost:8000
+systemctl status openclaw-localos-telegram-bot.service --no-pager
+```
+
+Не запускайте одновременно host owner-bot и Compose-сервис `telegram-bot` с одним `TELEGRAM_BOT_TOKEN`: Telegram polling допускает только одного активного потребителя updates.
 
 ## 🔍 Проверка портов и процессов
 
@@ -54,14 +68,14 @@ ps aux | grep "telegram_reviews_bot.py" | grep -v grep
 ### 3. Проверить systemd сервисы
 
 ```bash
-# Статус всех сервисов
-systemctl status telegram-bot
-systemctl status telegram-reviews-bot
-systemctl status nginx
-systemctl status gunicorn  # если используется
+# Основной Telegram owner-bot текущего production
+systemctl status openclaw-localos-telegram-bot.service --no-pager
+
+# Legacy-бот обмена отзывами, только если включён
+systemctl status telegram-reviews-bot.service --no-pager
 
 # Список всех сервисов проекта
-systemctl list-units | grep -E "telegram|nginx|gunicorn|flask"
+systemctl list-units | grep -E "telegram|openclaw"
 ```
 
 ## 🚀 Запуск сервисов
@@ -69,7 +83,7 @@ systemctl list-units | grep -E "telegram|nginx|gunicorn|flask"
 ### Фронтенд (разработка)
 
 ```bash
-cd /root/mapsparser-Replit-front/frontend
+cd /path/to/localos/frontend
 npm run dev
 # Запускается на порту 3000
 ```
@@ -77,42 +91,26 @@ npm run dev
 ### Фронтенд (продакшен)
 
 ```bash
-# Сборка
-cd /root/mapsparser-Replit-front/frontend
+cd /opt/seo-app/frontend
 npm run build
-
-# Копирование в nginx
-cp -r dist/* /var/www/html/
-
-# Nginx уже должен быть запущен на портах 80/443
-systemctl status nginx
 ```
+
+Сборка попадает в production только через описанный в `AGENTS.md` partial deploy. Не копируйте её в legacy `/var/www/html`.
 
 ### Бэкенд API
 
 ```bash
-cd /root/mapsparser-Replit-front
-source venv/bin/activate
-python src/main.py
-# Запускается на порту 8000
-```
-
-Или через systemd (если настроен):
-```bash
-systemctl start flask-api  # если есть такой сервис
+cd /opt/seo-app
+docker compose up -d app worker
+docker compose ps
+curl -I http://localhost:8000
 ```
 
 ### Бот для управления аккаунтом
 
 ```bash
-# Через systemd (рекомендуется)
-systemctl start telegram-bot
-systemctl status telegram-bot
-
-# Или вручную
-cd /root/mapsparser-Replit-front
-source venv/bin/activate
-python src/telegram_bot.py
+systemctl restart openclaw-localos-telegram-bot.service
+systemctl status openclaw-localos-telegram-bot.service --no-pager
 ```
 
 **Порт:** Не используется (работает через Telegram polling API)
@@ -120,13 +118,10 @@ python src/telegram_bot.py
 ### Бот для обмена отзывами
 
 ```bash
-# Через systemd (рекомендуется)
-systemctl start telegram-reviews-bot
-systemctl status telegram-reviews-bot
+systemctl restart telegram-reviews-bot.service
+systemctl status telegram-reviews-bot.service --no-pager
 
-# Или вручную
-cd /root/mapsparser-Replit-front
-source venv/bin/activate
+# Локальная отладка из корня репозитория
 python src/telegram_reviews_bot.py
 ```
 
@@ -241,4 +236,3 @@ echo "Nginx (80/443):" && (systemctl is-active nginx > /dev/null && echo "✅ Р
 echo "Бот управления:" && (systemctl is-active telegram-bot > /dev/null && echo "✅ Работает" || echo "❌ Не работает") && \
 echo "Бот обмена отзывами:" && (systemctl is-active telegram-reviews-bot > /dev/null && echo "✅ Работает" || echo "❌ Не работает")
 ```
-

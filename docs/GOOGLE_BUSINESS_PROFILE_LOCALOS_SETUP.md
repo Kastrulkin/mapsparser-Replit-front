@@ -2,7 +2,7 @@
 
 Status: `beta / Google Basic API Access review pending`.
 
-Last verified: 19 July 2026.
+Last verified: 30 July 2026. No approval response was found in the connected mailbox at that check.
 
 ## Current Decision
 
@@ -113,7 +113,8 @@ The active repeat application was submitted with:
 
 Submitted on 2026-07-18.
 
-- Google support case ID: `7-6688000041542`
+- Google support case ID recorded in the setup work: `7-6688000041542`.
+- The user-facing help workflow later displayed confirmation ID `0-1749000041409` on 2026-07-19. Google has not confirmed whether these two references identify the same internal case, so both are retained for support searches.
 - Google-stated review time: approximately 7-10 business days.
 
 Historical application (not the current allowlist request):

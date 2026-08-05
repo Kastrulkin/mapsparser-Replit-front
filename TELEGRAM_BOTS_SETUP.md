@@ -1,4 +1,14 @@
-# Настройка Telegram-ботов
+# Настройка Telegram-контуров
+
+LocalOS использует Bot API и MTProto для разных пользовательских задач. Эти подключения нельзя подменять друг другом.
+
+| Контур | От чьего имени работает | Назначение |
+|---|---|---|
+| `@LocalOspro_bot` + Mini App | бот LocalOS | управление, уведомления, approvals, публикации в подключённый канал |
+| Telegram API application + Telethon session бизнеса | пользовательский аккаунт бизнеса | радар, контакты и одобренный аутрич от имени бизнеса |
+| Брендированный бот бизнеса | отдельный бот бизнеса | клиентский бот/ИИ-агент, если он действительно нужен |
+
+Bot API не читает личные контакты и не может отправлять сообщения как пользовательский Telegram-аккаунт. Для радара и аутрича бизнес создаёт собственное API application на `my.telegram.org`, затем авторизует номер в `Настройки → Подключения → Telegram-аккаунт бизнеса`. `api_id`, `api_hash` и session сохраняются зашифрованно; пароль 2FA не сохраняется.
 
 У нас два Telegram-бота:
 
@@ -9,7 +19,7 @@
 
 1. Python 3.11+
 2. Установленная зависимость `python-telegram-bot>=20.0`
-3. Токены обоих ботов от [@BotFather](https://t.me/BotFather)
+3. Токен `@LocalOspro_bot` от [@BotFather](https://t.me/BotFather). Токен бота обмена отзывами нужен только если этот legacy-контур включён.
 
 ## 🔧 Установка
 
@@ -27,7 +37,7 @@ pip install -r requirements.txt
 
 ### 2. Настройка токенов в .env
 
-Добавьте оба токена в `.env` файл:
+Добавьте токен owner-bot и, при необходимости, токен legacy-бота обмена отзывами в `.env`:
 
 ```bash
 # Бот для управления аккаунтом
@@ -37,29 +47,17 @@ TELEGRAM_BOT_TOKEN=ваш_токен_от_Local_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен_от_beautyreviewexchange_bot
 ```
 
-## 🚀 Запуск ботов
+## 🚀 Текущий production runtime
 
-### Вариант 1: Запуск через systemd (рекомендуется)
+Backend и worker работают в Docker Compose. На текущем production основной owner-bot запускается отдельным host service `openclaw-localos-telegram-bot.service`. Compose-сервис `telegram-bot` остаётся допустимым альтернативным runtime, но нельзя одновременно запускать два polling-процесса с одним токеном.
 
-#### Бот для управления аккаунтом:
+Все команды на сервере выполняются из `/opt/seo-app`:
 
 ```bash
-# Скопировать сервис
-cp telegram-bot.service /etc/systemd/system/
-
-# Подготовить отдельное окружение бота в runtime-каталоге
-python3 -m venv /opt/seo-app/telegram-bot-venv
-/opt/seo-app/telegram-bot-venv/bin/pip install "python-telegram-bot>=20.0" requests python-dotenv psycopg2-binary
-
-# Перезагрузить systemd
-systemctl daemon-reload
-
-# Включить автозапуск и запустить
-systemctl enable telegram-bot
-systemctl start telegram-bot
-
-# Проверить статус
-systemctl status telegram-bot
+cd /opt/seo-app
+docker compose ps
+systemctl status openclaw-localos-telegram-bot.service --no-pager
+journalctl -u openclaw-localos-telegram-bot.service -n 50 --no-pager
 ```
 
 После запуска для рабочего сценария используйте в Telegram:
@@ -77,24 +75,16 @@ systemctl status telegram-bot
 - очередь подтверждений (`pending approvals`);
 - support snapshot и recovery report.
 
-#### Бот для обмена отзывами:
+### Бот для обмена отзывами
+
+Этот отдельный bot runtime является legacy-контуром и нужен только там, где обмен отзывами действительно включён. Актуальный unit хранится на production host; архивные service-файлы репозитория не следует копировать как новый runtime.
 
 ```bash
-# Скопировать сервис
-cp telegram-reviews-bot.service /etc/systemd/system/
-
-# Перезагрузить systemd
-systemctl daemon-reload
-
-# Включить автозапуск и запустить
-systemctl enable telegram-reviews-bot
-systemctl start telegram-reviews-bot
-
-# Проверить статус
-systemctl status telegram-reviews-bot
+systemctl status telegram-reviews-bot.service --no-pager
+journalctl -u telegram-reviews-bot.service -n 50 --no-pager
 ```
 
-### Вариант 2: Запуск вручную
+### Локальная отладка
 
 ```bash
 # Бот для управления аккаунтом
@@ -106,11 +96,11 @@ python src/telegram_reviews_bot.py
 
 ## 🔍 Проверка работы
 
-### Проверка бота для управления аккаунтом:
+### Проверка бота для управления аккаунтом
 
 ```bash
-systemctl status telegram-bot
-journalctl -u telegram-bot -n 20
+systemctl status openclaw-localos-telegram-bot.service --no-pager
+journalctl -u openclaw-localos-telegram-bot.service -n 50 --no-pager
 ```
 
 ### Проверка бота для обмена отзывами:
@@ -128,13 +118,11 @@ journalctl -u telegram-reviews-bot -n 20
 
 ## 📋 Полезные команды
 
-### Управление ботом для управления аккаунтом:
+### Управление ботом для управления аккаунтом
 
 ```bash
-systemctl start telegram-bot
-systemctl stop telegram-bot
-systemctl restart telegram-bot
-journalctl -u telegram-bot -f
+systemctl restart openclaw-localos-telegram-bot.service
+journalctl -u openclaw-localos-telegram-bot.service -f
 ```
 
 ### Управление ботом для обмена отзывами:
@@ -148,8 +136,8 @@ journalctl -u telegram-reviews-bot -f
 
 ## ⚠️ Важные замечания
 
-- Оба бота должны иметь доступ к интернету для подключения к Telegram API
-- Убедитесь, что API сервер (`main.py`) запущен и доступен
+- Включённые боты должны иметь доступ к Telegram Bot API через актуальный HTTP proxy
+- Убедитесь, что контейнер `app` запущен и доступен
 - Проверьте, что база данных доступна и содержит необходимые таблицы
 - Для работы с фото нужен настроенный GigaChat API (только для бота управления аккаунтом)
 - Для human-in-the-loop доступны команды:

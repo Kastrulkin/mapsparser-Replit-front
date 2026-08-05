@@ -65,6 +65,18 @@ Every campaign has one explicit sender mode that is included in the approved ver
 
 `localos_for_partner` is authorised representation. The campaign remains scoped to the represented business and uses its name, services, audience, compatibility evidence and safe partnership offer. LocalOS supplies the technical account and internal matching infrastructure, but its name, founder story, proof and commercial offer are forbidden in the external copy. Messages use the represented business's plural voice, for example «Мы ваши соседи - [business]». The internal audit trail preserves the technical sender, represented business and authorisation. LocalOS must never silently fall back between sender modes or select a global account merely because it was connected last. A sender-mode change creates a new preview/version and requires a new approval.
 
+## Telegram Operating Model
+
+Telegram is three separate product capabilities and the UI/documentation must not merge their credentials or permissions:
+
+1. `@LocalOspro_bot` and the Mini App provide owner access, LocalOS controls, approvals and notifications. The bot may also publish an approved post to an explicitly connected channel/chat where it has permission.
+2. A business-scoped Telegram API application plus an authorised MTProto/Telethon session provides radar access and approved outreach from that business's user account. The current implementation is BYO: the business creates the application at `my.telegram.org` and provides its phone, `api_id` and `api_hash` during connection.
+3. An optional business-specific Bot API token is for a separate branded customer bot. It does not replace the user account used for radar/outreach.
+
+The Bot API cannot read the owner's personal contacts or send as the owner's user account. The API application is only the technical MTProto client; the authorised session determines the visible sender and tenant data. LocalOS encrypts `api_id`, `api_hash` and `session_string` in the business-scoped external account. A 2FA password is used only during authorisation and is never persisted.
+
+One authorised business session may expose two independent permissions: `radar_enabled` and `outreach_enabled`. Radar reads only selected allowed sources. Outreach sends only approved campaign messages, requires runtime preflight and reply sync, and applies stop-on-reply. Neither permission implicitly enables the other.
+
 ## Outreach Operating Model
 
 LocalOS treats outreach as one supervised lifecycle, not as a text generator:
