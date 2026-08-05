@@ -35,7 +35,7 @@ from services.outreach_founder_led_copy import (
     localos_beauty_segment,
     observation_is_grounded,
 )
-from services.outreach_experiment_service import derive_composite_signal
+from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
     mark_room_ready_after_positive_reply,
@@ -1762,6 +1762,10 @@ def build_personalization_candidates(
             "bridge": relevance_to_offer,
             "evidence_kind": evidence.get("kind"),
             "signal_combo": evidence.get("signal_combo"),
+            "signal_pain_key": evidence.get("pain_key"),
+            "signal_hypothesis_key": evidence.get("pattern_key"),
+            "signal_hypothesis_status": evidence.get("hypothesis_status"),
+            "safe_signal_formulation": evidence.get("safe_formulation"),
             "pattern_id": evidence.get("pattern_id"),
             "pattern_version": evidence.get("pattern_version"),
             "opening_type": evidence.get("opening_type"),
@@ -1831,6 +1835,9 @@ def _strategy_dimensions(
         "recipient_role": research_brief.get("buyer_persona"),
         "signal_kind": candidate.get("evidence_kind") or "public_signal",
         "signal_combo": candidate.get("signal_combo"),
+        "signal_pain_key": candidate.get("signal_pain_key"),
+        "signal_hypothesis_key": candidate.get("signal_hypothesis_key"),
+        "signal_hypothesis_status": candidate.get("signal_hypothesis_status"),
         "pattern_id": candidate.get("pattern_id"),
         "pattern_version": candidate.get("pattern_version"),
         "opening_type": candidate.get("opening_type"),
@@ -2521,9 +2528,21 @@ def build_preview(
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
-    composite_signal = derive_composite_signal(context, ledger)
-    if composite_signal and not any(item.get("id") == composite_signal["id"] for item in ledger):
-        ledger.insert(0, composite_signal)
+    pain_playbook = None
+    if (
+        context.get("workstream_type") == "localos_sales"
+        and localos_beauty_segment(context.get("category"), context.get("lead_name"))
+    ):
+        pain_playbook = load_approved_pain_library(cursor)
+        pain_hypotheses = derive_pain_signal_hypotheses(
+            context,
+            ledger,
+            playbook=pain_playbook,
+        )
+        known_evidence_ids = {_text(item.get("id")) for item in ledger}
+        for hypothesis in reversed(pain_hypotheses):
+            if _text(hypothesis.get("id")) not in known_evidence_ids:
+                ledger.insert(0, hypothesis)
     profile_completeness = evaluate_sender_profile_completeness(
         context.get("sender_profile") or {},
         workstream_type=_text(context.get("workstream_type") or "localos_sales"),
@@ -2657,7 +2676,7 @@ def build_preview(
         candidates[0],
     )
     if context.get("workstream_type") == "localos_sales" and primary_candidate.get("recipient_segment"):
-        primary_candidate["outreach_playbook"] = load_approved_pain_library(cursor)
+        primary_candidate["outreach_playbook"] = pain_playbook or load_approved_pain_library(cursor)
     override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()

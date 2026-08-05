@@ -15,7 +15,12 @@ from typing import Any
 
 from psycopg2.extras import Json
 
-from services.outreach_playbook import BEAUTY_OWNER_PAINS, beauty_outreach_guidance
+from services.outreach_playbook import (
+    BEAUTY_OWNER_PAINS,
+    BEAUTY_PAIN_SIGNAL_HYPOTHESES,
+    PAIN_SIGNAL_LIBRARY_VERSION,
+    beauty_outreach_guidance,
+)
 
 
 PAIN_LIBRARY_PATTERN_KEY = "beauty_owner_pain_library"
@@ -23,7 +28,7 @@ PAIN_LIBRARY_TITLE = "Язык болей владельцев салонов и
 MIN_DOCUMENTS = 3
 MIN_SOURCES = 2
 MAX_SOURCE_PHRASES_PER_PAIN = 8
-COMPILER_VERSION = "owner_language_v5"
+COMPILER_VERSION = "owner_language_v6_signal_hypotheses"
 
 PAIN_PATTERNS: dict[str, tuple[str, ...]] = {
     "marketing_and_clients": (
@@ -184,6 +189,19 @@ def compile_pain_library_draft(cursor: Any, documents: list[dict[str, Any]], *, 
         "library_version": f"pain-library-v{version}",
         "pain_language_status": "segment_hypothesis_only",
         "pains": pains,
+        "pain_signal_library_version": PAIN_SIGNAL_LIBRARY_VERSION,
+        "pain_signal_hypotheses": [
+            {
+                "key": item["key"],
+                "pain_key": item["pain_key"],
+                "required_signals": list(item["required_signals"]),
+                "hypothesis": item["hypothesis"],
+                "safe_formulation": item["safe_formulation"],
+                "contraindications": list(item["contraindications"]),
+                "status": item["status"],
+            }
+            for item in BEAUTY_PAIN_SIGNAL_HYPOTHESES
+        ],
         "usage_policy": {
             "recipient_fact_requires_separate_evidence": True,
             "one_pain_per_touch": True,
@@ -251,6 +269,14 @@ def load_approved_pain_library(cursor: Any) -> dict[str, Any]:
     guidance["pattern_id"] = str(pattern.get("id") or "")
     guidance["pattern_version"] = int(pattern.get("version") or 0)
     guidance["pain_library"] = list(rules.get("pains") or guidance["pain_library"])
+    guidance["pain_signal_library_version"] = str(
+        rules.get("pain_signal_library_version")
+        or guidance["pain_signal_library_version"]
+    )
+    guidance["pain_signal_hypotheses"] = list(
+        rules.get("pain_signal_hypotheses")
+        or guidance["pain_signal_hypotheses"]
+    )
     guidance["source_refs"] = list(pattern.get("source_refs_json") or [])
     guidance["pain_language_status"] = "segment_hypothesis_only"
     return guidance

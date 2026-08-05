@@ -296,10 +296,13 @@ def test_email_runtime_has_no_global_smtp_or_openclaw_fallback():
 
 def test_worker_syncs_telegram_and_email_before_dispatch():
     source = open("src/worker.py", encoding="utf-8").read()
+    sync_start = source.index("def _sync_outreach_replies_if_due()")
     function_start = source.index("def _dispatch_outreach_queue_if_due()")
     function_end = source.index("\ndef _run_card_automation_if_due()", function_start)
+    sync_block = source[sync_start:function_start]
     worker_block = source[function_start:function_end]
 
-    assert worker_block.index("_sync_telegram_app_replies") < worker_block.index("dispatch_due_outreach_queue")
-    assert worker_block.index("sync_email_replies") < worker_block.index("dispatch_due_outreach_queue")
-    assert "OUTREACH_REPLY_SYNC_FAIL_CLOSED" in worker_block
+    assert "_sync_telegram_app_replies" in sync_block
+    assert "sync_email_replies" in sync_block
+    assert worker_block.index("_sync_outreach_replies_if_due") < worker_block.index("dispatch_due_outreach_queue")
+    assert "OUTREACH_REPLY_SYNC_FAIL_CLOSED" in sync_block

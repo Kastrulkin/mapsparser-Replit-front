@@ -12,6 +12,7 @@ from typing import Any
 
 PLAYBOOK_VERSION = "localos_outreach_playbook_v1"
 CORPUS_TAG = "telegram_b2b"
+PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v1"
 
 B2B_METHOD_RULES = (
     "Начинать с проверяемого действия или артефакта получателя, а не с общего комплимента.",
@@ -90,6 +91,124 @@ BEAUTY_OWNER_PAINS = (
     },
 )
 
+# These mappings are hypotheses to test, never facts about a recipient.  Each
+# executable rule requires several public observations so that a single post,
+# vacancy or discount cannot be turned into a diagnosis about the owner.
+BEAUTY_PAIN_SIGNAL_HYPOTHESES = (
+    {
+        "key": "active_social_with_map_gap",
+        "pain_key": "marketing_and_clients",
+        "required_signals": ["active_official_social", "map_visibility_gap"],
+        "hypothesis": (
+            "Компания уже старается привлекать клиентов через контент, "
+            "а карты могут быть недоиспользованным каналом."
+        ),
+        "safe_formulation": (
+            "Вы активно ведёте соцсети. Карты тоже могли бы помогать вам привлекать клиентов."
+        ),
+        "contraindications": [
+            "Соцсеть не подтверждена как официальная.",
+            "Нет свежей регулярной активности.",
+            "Нет отдельного подтверждения слабой карточки на картах.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "repeated_open_slots",
+        "pain_key": "marketing_and_clients",
+        "required_signals": ["two_recent_official_open_slot_posts"],
+        "hypothesis": (
+            "Компания регулярно старается заполнить свободные окна; "
+            "системное привлечение записей может быть актуальной задачей."
+        ),
+        "safe_formulation": (
+            "Вы несколько раз публиковали свободные окна. Возможно, вам актуальны "
+            "дополнительные источники записи."
+        ),
+        "contraindications": [
+            "Найдено только одно объявление.",
+            "Публикация старше 30 дней.",
+            "Источник не принадлежит компании.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "unanswered_reviews_with_active_presence",
+        "pain_key": "reviews_and_service",
+        "required_signals": ["two_recent_unanswered_reviews", "active_official_presence"],
+        "hypothesis": (
+            "Компания развивает публичное присутствие, но регулярная работа с отзывами "
+            "может оставаться без внимания."
+        ),
+        "safe_formulation": (
+            "У вас есть свежие отзывы без ответа. Их можно разобрать и подготовить ответы."
+        ),
+        "contraindications": [
+            "Ответ владельца не проверен.",
+            "Отзывы не относятся к этой компании.",
+            "Отзыв только один или он старше 90 дней.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "repeated_discount_promotions",
+        "pain_key": "pricing_and_average_ticket",
+        "required_signals": ["three_recent_official_discount_posts"],
+        "hypothesis": (
+            "Компания регулярно стимулирует спрос скидками; может быть полезно проверить "
+            "средний чек и альтернативные механики предложения."
+        ),
+        "safe_formulation": (
+            "Вы регулярно публикуете акции. Можно проверить, какие предложения дают запись "
+            "без постоянного снижения цены."
+        ),
+        "contraindications": [
+            "Акция сезонная или единичная.",
+            "Нет трёх публикаций за 60 дней.",
+            "Нельзя утверждать, что средний чек низкий."
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "repeated_hiring_signals",
+        "pain_key": "staff_and_processes",
+        "required_signals": ["two_recent_official_hiring_posts"],
+        "hypothesis": (
+            "Компания несколько раз искала сотрудников; найм или организация работы команды "
+            "могут быть актуальной задачей."
+        ),
+        "safe_formulation": (
+            "Вы несколько раз публиковали вакансии. Возможно, сейчас актуальны найм и "
+            "понятные схемы работы команды."
+        ),
+        "contraindications": [
+            "Найдена одна вакансия.",
+            "Вакансия размещена агрегатором, а не компанией.",
+            "Нельзя делать вывод о текучести сотрудников."
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "multi_location_profile_inconsistency",
+        "pain_key": "operations_and_burnout",
+        "required_signals": ["multiple_locations", "verified_profile_inconsistency"],
+        "hypothesis": (
+            "У сети есть расхождения между карточками; стандартизация регулярных задач "
+            "может быть актуальна руководителю."
+        ),
+        "safe_formulation": (
+            "У нескольких точек отличаются данные в карточках. Это можно привести к одному "
+            "стандарту и дальше проверять автоматически."
+        ),
+        "contraindications": [
+            "Не подтверждено, что точки относятся к одной сети.",
+            "Расхождения не перечислены по каждой карточке.",
+            "Нельзя утверждать, что владелец выгорает."
+        ],
+        "status": "testable",
+    },
+)
+
 APPROVED_LOCALOS_PROOFS = (
     "Для салона красоты LocalOS помог поднять запись с 0 до 10 клиентов в день только за счёт карт.",
     "LocalOS применяется более чем в 240 точках малого бизнеса.",
@@ -117,6 +236,19 @@ def beauty_outreach_guidance() -> dict[str, Any]:
                 "support": item["support"],
             }
             for item in BEAUTY_OWNER_PAINS
+        ],
+        "pain_signal_library_version": PAIN_SIGNAL_LIBRARY_VERSION,
+        "pain_signal_hypotheses": [
+            {
+                "key": item["key"],
+                "pain_key": item["pain_key"],
+                "required_signals": list(item["required_signals"]),
+                "hypothesis": item["hypothesis"],
+                "safe_formulation": item["safe_formulation"],
+                "contraindications": list(item["contraindications"]),
+                "status": item["status"],
+            }
+            for item in BEAUTY_PAIN_SIGNAL_HYPOTHESES
         ],
         "approved_founder_origin": APPROVED_FOUNDER_ORIGIN,
         "approved_proofs": list(APPROVED_LOCALOS_PROOFS),
