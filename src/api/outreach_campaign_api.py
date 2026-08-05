@@ -35,6 +35,7 @@ from services.outreach_safety_service import (
     normalized_contact_hash,
     recipient_key,
     run_dispatch_preflight,
+    strategy_fingerprint,
 )
 from services.outreach_relationship_service import (
     approve_room_invitation,
@@ -47,6 +48,18 @@ from services.outreach_email_adapter import (
     EmailAdapterError,
     normalize_mailbox_config,
     preflight_mailbox,
+)
+from services.outreach_experiment_service import (
+    ACTIVE_SOCIAL_MAP_GAP,
+    assign_experiment_member,
+    compile_pattern_draft,
+    corpus_patterns_enabled,
+    create_beauty_experiment,
+    experiments_enabled,
+    extract_and_review_corpus_pattern,
+    list_experiments,
+    next_stage,
+    select_stage_candidates,
 )
 from services.outreach_sender_service import (
     change_sender_permission,
@@ -2176,6 +2189,296 @@ def learning_strategy_stats():
             "stats": stats_rows,
             "note": "Recommendations transfer strategy dimensions, never recipient facts.",
         })
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.get("/api/outreach/experiments")
+def get_outreach_experiments():
+    """Return staged tests inside the existing outreach results workflow."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    if not experiments_enabled():
+        return jsonify({"success": True, "enabled": False, "experiments": []})
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        return jsonify({"success": True, "enabled": True, "experiments": list_experiments(cursor)})
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/experiments")
+def create_outreach_experiment():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    if not experiments_enabled():
+        return jsonify({"success": False, "error": "Outreach experiments are disabled"}), 409
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        experiment = create_beauty_experiment(cursor, user_id=str(user_data.get("user_id") or "") or None)
+        conn.commit()
+        return jsonify({"success": True, "experiment": experiment}), 201
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/experiments/<experiment_id>/dry-run")
+def dry_run_outreach_experiment(experiment_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    if not experiments_enabled():
+        return jsonify({"success": False, "error": "Outreach experiments are disabled"}), 409
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        result = select_stage_candidates(cursor, experiment_id)
+        return jsonify({"success": True, "dry_run": True, "external_dispatch_performed": False, **result})
+    except LookupError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/experiments/<experiment_id>/prepare-drafts")
+def prepare_outreach_experiment_drafts(experiment_id: str):
+    """Persist only draft campaigns for the current explicit stage."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    if not experiments_enabled():
+        return jsonify({"success": False, "error": "Outreach experiments are disabled"}), 409
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        selection = select_stage_candidates(cursor, experiment_id)
+        cursor.execute(
+            """
+            SELECT * FROM outreach_knowledge_patterns
+            WHERE pattern_key = %s AND status = 'approved'
+            ORDER BY version DESC LIMIT 1
+            """,
+            (ACTIVE_SOCIAL_MAP_GAP,),
+        )
+        pattern = dict(cursor.fetchone() or {})
+        if selection["stage"]["variant"] == "treatment" and not pattern:
+            return jsonify({"success": False, "error": "Approved corpus pattern is required"}), 409
+        prepared = []
+        skipped = []
+        sequence = [
+            {"channel": "email", "day_offset": 0, "angle": "signal"},
+            {"channel": "email", "day_offset": 3, "angle": "founder_story"},
+            {"channel": "email", "day_offset": 7, "angle": "proof"},
+            {"channel": "email", "day_offset": 12, "angle": "respectful_close"},
+        ]
+        for candidate in selection["candidates"]:
+            preview = build_preview(cursor, candidate["workstream_id"], sequence=sequence, sender_mode="localos")
+            if preview.get("status") not in {"ready", "needs_channel_setup", "needs_revision", "needs_evidence"} or not preview.get("touches"):
+                skipped.append({"workstream_id": candidate["workstream_id"], "reason": preview.get("status")})
+                continue
+            for touch in preview["touches"]:
+                strategy = dict(touch.get("strategy") or {})
+                strategy.update({
+                    "experiment_id": experiment_id,
+                    "cohort": candidate["cohort"],
+                    "variant": candidate["variant"],
+                    "pattern_id": str(pattern.get("id") or "") or None,
+                    "pattern_version": pattern.get("version"),
+                    "signal_combo": ACTIVE_SOCIAL_MAP_GAP if candidate["variant"] == "treatment" else "map_gap_control",
+                })
+                touch["strategy"] = strategy
+                touch["strategy_fingerprint"] = strategy_fingerprint(strategy)
+            campaign = persist_preview(cursor, preview, user_id=str(user_data.get("user_id") or ""))
+            assign_experiment_member(
+                cursor,
+                experiment_id=experiment_id,
+                workstream_id=candidate["workstream_id"],
+                campaign_id=campaign["id"],
+                cohort=candidate["cohort"],
+                variant=candidate["variant"],
+                pattern=pattern or None,
+            )
+            cursor.execute(
+                """
+                UPDATE outreach_campaigns
+                SET policy_json = policy_json || %s::jsonb, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (Json({
+                    "experiment_id": experiment_id,
+                    "cohort": candidate["cohort"],
+                    "variant": candidate["variant"],
+                    "automatic_stage_advancement": False,
+                    "automatic_dispatch": False,
+                }), campaign["id"]),
+            )
+            prepared.append(campaign)
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "status": "drafts_prepared",
+            "prepared": prepared,
+            "skipped": skipped,
+            "approval_required": True,
+            "external_dispatch_performed": False,
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/experiments/<experiment_id>/advance")
+def advance_outreach_experiment(experiment_id: str):
+    """Advance only after every current-stage draft has been human reviewed."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    if not experiments_enabled():
+        return jsonify({"success": False, "error": "Outreach experiments are disabled"}), 409
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM outreach_experiments WHERE id = %s FOR UPDATE", (experiment_id,))
+        experiment = dict(cursor.fetchone() or {})
+        if not experiment:
+            return jsonify({"success": False, "error": "Experiment not found"}), 404
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE campaign.status IN ('approved', 'active', 'completed')) AS reviewed
+            FROM outreach_experiment_members member
+            JOIN outreach_campaigns campaign ON campaign.id = member.campaign_id
+            WHERE member.experiment_id = %s AND member.cohort = %s
+            """,
+            (experiment_id, experiment["current_stage"]),
+        )
+        counts = dict(cursor.fetchone() or {})
+        if not counts.get("total") or int(counts.get("reviewed") or 0) != int(counts.get("total") or 0):
+            return jsonify({"success": False, "error": "Current stage still requires human review"}), 409
+        following = next_stage(str(experiment["current_stage"]))
+        if not following:
+            cursor.execute("UPDATE outreach_experiments SET status = 'completed', updated_at = NOW() WHERE id = %s", (experiment_id,))
+        else:
+            cursor.execute("UPDATE outreach_experiments SET current_stage = %s, status = 'active', updated_at = NOW() WHERE id = %s", (following, experiment_id))
+        conn.commit()
+        return jsonify({"success": True, "current_stage": following, "external_dispatch_performed": False})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.get("/api/outreach/knowledge-patterns")
+def get_outreach_knowledge_patterns():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM outreach_knowledge_patterns ORDER BY pattern_key, version DESC")
+        return jsonify({"success": True, "enabled": corpus_patterns_enabled(), "patterns": [dict(row) for row in cursor.fetchall()]})
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/knowledge-patterns/compile")
+def compile_outreach_knowledge_pattern():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    if not corpus_patterns_enabled():
+        return jsonify({"success": False, "error": "Corpus patterns are disabled"}), 409
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            """
+            SELECT document.id, document.content_text AS content,
+                   document.permalink AS source_url, source.id AS source_id,
+                   source.title AS channel, document.published_at
+            FROM knowledge_documents document
+            JOIN knowledge_sources source ON source.id = document.source_id
+            WHERE document.metadata_json->>'corpus_tag' = 'telegram_b2b'
+              AND document.invalidated_at IS NULL
+              AND document.content_text ~* '(карт|отзыв|соцсет|telegram|контент|персонализ)'
+            ORDER BY document.published_at DESC
+            LIMIT 200
+            """
+        )
+        documents = [dict(row) for row in cursor.fetchall()]
+        compiler_result = extract_and_review_corpus_pattern(
+            documents,
+            user_id=str(user_data.get("user_id") or ""),
+        )
+        pattern = compile_pattern_draft(
+            cursor,
+            documents,
+            user_id=str(user_data.get("user_id") or ""),
+            compiler_result=compiler_result,
+        )
+        conn.commit()
+        return jsonify({"success": True, "pattern": pattern, "approval_required": True}), 201
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/knowledge-patterns/<pattern_id>/approve")
+def approve_outreach_knowledge_pattern(pattern_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            """
+            UPDATE outreach_knowledge_patterns
+            SET status = 'approved', reviewed_by = %s, approved_at = NOW(), updated_at = NOW()
+            WHERE id = %s AND status = 'draft'
+              AND support_document_count >= 3 AND support_source_count >= 2
+            RETURNING id, pattern_key, version, status
+            """,
+            (str(user_data.get("user_id") or "") or None, pattern_id),
+        )
+        pattern = cursor.fetchone()
+        if not pattern:
+            conn.rollback()
+            return jsonify({"success": False, "error": "Pattern is not ready for approval"}), 409
+        conn.commit()
+        return jsonify({"success": True, "pattern": dict(pattern)})
     finally:
         conn.close()
 

@@ -248,6 +248,19 @@ Outcomes хранятся раздельно: `sent`, `delivered`, `replied`, `p
 
 `strategy_fingerprint` позволяет сравнивать повторяющиеся связки без вывода о причинности на маленькой выборке. Публичные evidence documents и outcome events формируют датасет для последующей оценки и контролируемого обучения. Автоматического online fine-tuning production-модели сейчас нет.
 
+### B2B-корпус и поэтапные проверки
+
+Telegram-корпус B2B используется только после обязательного фильтра `metadata_json->>'corpus_tag' = 'telegram_b2b'`. Он даёт методику и гипотезы формулировок, но не факты о получателе. Каждый compiled pattern хранит ссылки на исходные документы, версию, противопоказания и уровень поддержки; для approval нужны минимум три уникальных документа из двух независимых источников.
+
+Первый паттерн — `active_social_with_map_gap`: бизнес регулярно ведёт официальную соцсеть, но карточка на картах проходит минимум два map-gap критерия. Само наблюдение не доказывает нехватку времени или потерю клиентов. Допустимая гипотеза: компания уже вкладывается в привлечение, а карты могут дополнять этот канал.
+
+Rollout не меняет существующий интерфейс и не создаёт вторую CRM. Отбор, формулировка и метрики работают внутри текущих лидов, цепочек и результатов. Этапы `1 → 10 treatment → 10 control → 10 treatment → 10 control → 50 → 100` переключаются человеком. Подготовка сохраняет только новые draft-версии; старые кампании не перезаписываются, а внешняя отправка по-прежнему проходит существующие approval и preflight.
+
+Feature flags по умолчанию выключены:
+
+- `OUTREACH_CORPUS_PATTERNS_ENABLED=false` — компиляция и применение corpus patterns;
+- `OUTREACH_EXPERIMENTS_ENABLED=false` — отбор групп и подготовка staged drafts.
+
 ## Основные данные
 
 - `prospectingleads` — единая идентичность лида;
@@ -263,6 +276,8 @@ Outcomes хранятся раздельно: `sent`, `delivered`, `replied`, `p
 - `sales_rooms`, `sales_room_messages`, `sales_room_events` — приватная переговорная инфраструктура и campaign-scoped mirror;
 - `outreach_suppressions` — stop-list;
 - `outreach_learning_events` и strategy stats — обучающая петля;
+- `outreach_knowledge_patterns` — проверенные и версионируемые правила из корпуса;
+- `outreach_experiments`, `outreach_experiment_members` — этап, группа и связь с существующим workstream/campaign;
 - legacy/transitional drafts, batches и queue остаются compatibility boundary там, где старый UI ещё их использует.
 
 ## Capability status

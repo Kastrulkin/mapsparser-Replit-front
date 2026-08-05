@@ -185,6 +185,36 @@ def founder_led_localos_text(
         approved_proof = clean_copy(story.get("proof"))
 
     if angle == "signal":
+        if clean_copy(candidate.get("signal_combo")) == "active_social_with_map_gap":
+            rating_match = re.search(
+                r"рейтинг\s+([0-9]+(?:[.,][0-9]+)?)\s+и\s+(\d+)\s+отзыв",
+                clean_copy(candidate.get("observed_fact")),
+                flags=re.IGNORECASE,
+            )
+            rating = rating_match.group(1) if rating_match else "ниже сильных конкурентов"
+            reviews = rating_match.group(2) if rating_match else "немного"
+            audit_url = clean_copy(candidate.get("public_audit_url"))
+            audit_block = f"\n{audit_url}" if audit_url else ""
+            approved_offer = clean_copy(candidate.get("next_step"))
+            price_line = (
+                " - от 1200 рублей в месяц"
+                if re.search(r"(?:1\s*200|1200)", approved_offer)
+                else ""
+            )
+            return (
+                f"Здравствуйте! Я {introduction}.\n\n"
+                "Увидел вашу компанию на картах. Вы активно ведёте соцсети, "
+                "но в карточке на картах есть над чем поработать.\n\n"
+                f"Сейчас в карточке рейтинг {rating} и только {reviews} отзыва. "
+                "Часто при таком количестве отзывов карточке сложнее подняться выше в выдаче. "
+                "Тогда её видит меньше людей, и может приходить меньше обращений.\n\n"
+                "Сам больше десяти лет в бизнесе и понимаю, почему регулярные задачи "
+                "проигрывают клиентам и операционке.\n\n"
+                f"Вот короткий разбор с конкретными шагами:{audit_block}\n\n"
+                "Шаги можно выполнить самостоятельно. Если захотите, часть работы "
+                f"можно поручить LocalOS{price_line}.\n\n"
+                "Посмотреть разбор?"
+            )
         observation = natural_observation(candidate)
         return (
             f"Здравствуйте! Я {introduction}.\n\n"

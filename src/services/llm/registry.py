@@ -123,6 +123,28 @@ LEAD_AUDIT_ENRICHMENT_SCHEMA: dict[str, Any] = {
     },
     "required": ["summary_text", "recommended_actions", "why_now"],
 }
+OUTREACH_PATTERN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "pattern_key": {"type": "string"},
+        "observation_rule": {"type": "string"},
+        "hypothesis_rule": {"type": "string"},
+        "bridge_rule": {"type": "string"},
+        "message_rules": {"type": "array", "items": {"type": "string"}},
+        "contraindications": {"type": "array", "items": {"type": "string"}},
+        "source_document_ids": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["pattern_key", "observation_rule", "hypothesis_rule", "bridge_rule", "message_rules", "contraindications", "source_document_ids"],
+}
+OUTREACH_PATTERN_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "approved": {"type": "boolean"},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "safe_message_rules": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["approved", "issues", "safe_message_rules"],
+}
 
 
 def _task(
@@ -168,6 +190,32 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "service_optimization": _task("service_optimization", prompt_version="service_optimization_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_copy_generation": _task("service_copy_generation", response_kind="json", allow_text_fallback=True, pipeline_stage="copy"),
     "outreach_personalization": _task("outreach_personalization", data_class="pii", prompt_version="outreach_personalization_v4", pipeline_stage="copy"),
+    "outreach_corpus_pattern_extract": _task(
+        "outreach_corpus_pattern_extract",
+        provider="deepseek",
+        profile="deepseek_reasoning",
+        data_class="public",
+        response_kind="json",
+        schema=OUTREACH_PATTERN_SCHEMA,
+        max_tokens=3000,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="outreach_corpus_pattern_extract_v1",
+        pipeline_stage="analysis",
+    ),
+    "outreach_corpus_pattern_review": _task(
+        "outreach_corpus_pattern_review",
+        provider="gigachat",
+        profile="gigachat_max",
+        data_class="public",
+        response_kind="json",
+        schema=OUTREACH_PATTERN_REVIEW_SCHEMA,
+        max_tokens=1800,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="outreach_corpus_pattern_review_v1",
+        pipeline_stage="review",
+    ),
     "lead_audit_enrichment": _task(
         "lead_audit_enrichment",
         provider="deepseek",

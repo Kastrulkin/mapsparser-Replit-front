@@ -33,6 +33,7 @@ from services.outreach_founder_led_copy import (
     localos_beauty_segment,
     observation_is_grounded,
 )
+from services.outreach_experiment_service import derive_composite_signal
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
     mark_room_ready_after_positive_reply,
@@ -1284,6 +1285,12 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
                l.rating, l.reviews_count, l.website, l.source_url,
                l.phone, l.email, l.telegram_url, l.whatsapp_url,
+               (
+                   SELECT 'https://localos.pro/' || public_offer.slug
+                   FROM adminprospectingleadpublicoffers public_offer
+                   WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
+                   LIMIT 1
+               ) AS public_audit_url,
                l.business_id AS lead_business_id,
                client.name AS client_business_name,
                client.business_type AS client_business_type,
@@ -1361,6 +1368,30 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         [_dict(row) for row in cursor.fetchall()],
         key=_contact_outreach_rank,
     )
+    cursor.execute(
+        """
+        SELECT MAX(document.published_at) AS last_post_at,
+               COUNT(*) FILTER (WHERE document.published_at >= NOW() - INTERVAL '30 days') AS posts_30d,
+               COUNT(*) FILTER (WHERE document.published_at >= NOW() - INTERVAL '90 days') AS posts_90d,
+               MAX(source.canonical_url) AS source_url
+        FROM lead_signal_links link
+        JOIN knowledge_sources source ON source.id::text = link.source_id
+        JOIN knowledge_documents document
+          ON document.source_id = source.id AND document.invalidated_at IS NULL
+        WHERE link.workstream_id = %s
+          AND link.source_type = 'telegram_knowledge_source'
+          AND link.status = 'selected'
+          AND source.status = 'active'
+          AND source.visibility = 'public'
+          AND document.document_type = 'telegram_message'
+        """,
+        (workstream_id,),
+    )
+    social_activity = _dict(cursor.fetchone())
+    workstream["official_social_activity"] = {
+        **social_activity,
+        "official": bool(social_activity.get("last_post_at")),
+    }
     if workstream.get("workstream_type") == "client_partnership":
         cursor.execute(
             "SELECT match_json FROM partnershipleadartifacts WHERE lead_id = %s",
@@ -1690,6 +1721,10 @@ def build_personalization_candidates(
             "relevance_to_offer": relevance_to_offer,
             "bridge": relevance_to_offer,
             "evidence_kind": evidence.get("kind"),
+            "signal_combo": evidence.get("signal_combo"),
+            "pattern_id": evidence.get("pattern_id"),
+            "pattern_version": evidence.get("pattern_version"),
+            "opening_type": evidence.get("opening_type"),
             "founder_story": relevant_story.get("story") if relevant_story else "",
             "founder_proof": relevant_story.get("proof") if relevant_story else "",
             "sender": (
@@ -1711,6 +1746,7 @@ def build_personalization_candidates(
             "offer_source": offer.get("source"),
             "next_step": next_step,
             "source_url": evidence.get("source_url"),
+            "public_audit_url": context.get("public_audit_url"),
             "source_type": evidence.get("source_type"),
             "confidence": evidence.get("confidence"),
             "freshness": evidence.get("freshness"),
@@ -1754,6 +1790,10 @@ def _strategy_dimensions(
         "segment": research_brief.get("segment") or context.get("category"),
         "recipient_role": research_brief.get("buyer_persona"),
         "signal_kind": candidate.get("evidence_kind") or "public_signal",
+        "signal_combo": candidate.get("signal_combo"),
+        "pattern_id": candidate.get("pattern_id"),
+        "pattern_version": candidate.get("pattern_version"),
+        "opening_type": candidate.get("opening_type"),
         "evidence_id": candidate.get("evidence_id"),
         "freshness": candidate.get("freshness"),
         "founder_story_id": str(context.get("sender_profile", {}).get("id") or ""),
@@ -2414,6 +2454,9 @@ def build_preview(
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
+    composite_signal = derive_composite_signal(context, ledger)
+    if composite_signal and not any(item.get("id") == composite_signal["id"] for item in ledger):
+        ledger.insert(0, composite_signal)
     profile_completeness = evaluate_sender_profile_completeness(
         context.get("sender_profile") or {},
         workstream_type=_text(context.get("workstream_type") or "localos_sales"),
