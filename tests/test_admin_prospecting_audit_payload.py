@@ -232,6 +232,30 @@ def test_build_admin_lead_offer_payload_exposes_current_state_top_level_facts() 
     assert payload["has_recent_activity"] is True
 
 
+def test_build_admin_lead_offer_payload_does_not_expose_internal_source_as_map_url() -> None:
+    payload = _build_admin_lead_offer_payload(
+        lead={
+            "id": "lead-1",
+            "name": "Волшебная миля",
+            "city": "Санкт-Петербург",
+            "address": "проспект Энгельса, 154",
+            "category": "Семейный интерактивный центр",
+            "source_url": "localos-doc://partnership/source/row",
+        },
+        preview={
+            "current_state": {
+                "rating": None,
+                "reviews_count": 0,
+                "services_count": 0,
+            },
+        },
+        preferred_language="ru",
+        enabled_languages=["ru"],
+    )
+
+    assert payload["source_url"] is None
+
+
 def test_extract_lead_import_payload_prefers_full_services_count_over_preview_len() -> None:
     payload = _extract_lead_import_payload(
         {

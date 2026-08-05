@@ -777,6 +777,19 @@ def generate_admin_prospecting_offer_page(lead_id):
             return jsonify({"error": "Lead is not available for public page"}), 404
 
         preview = build_lead_card_preview_snapshot(display_lead)
+        quality = evaluate_audit_quality(
+            preview,
+            expected_name=str(display_lead.get("name") or ""),
+            expected_address=str(display_lead.get("address") or ""),
+        )
+        if not quality.get("passed"):
+            return jsonify(
+                {
+                    "error": "Аудит не прошёл проверку качества.",
+                    "code": "AUDIT_QUALITY_BLOCKED",
+                    "quality": quality,
+                }
+            ), 422
         page_json = _to_json_compatible(
             _build_admin_lead_offer_payload(
                 lead=display_lead,
@@ -785,6 +798,7 @@ def generate_admin_prospecting_offer_page(lead_id):
                 enabled_languages=enabled_languages,
             )
         )
+        page_json["quality"] = quality
         ai_enrichment = _generate_lead_audit_enrichment(display_lead, preview, primary_language)
         audit_payload = page_json.get("audit") if isinstance(page_json.get("audit"), dict) else {}
         if audit_payload:

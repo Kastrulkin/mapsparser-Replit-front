@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
+import { AuditHowToRead } from '@/components/audit/AuditDisplayPrimitives';
 import {
-  AuditCtaPanel,
-  AuditHowToRead,
-  AuditProblemBlock,
-} from '@/components/audit/AuditDisplayPrimitives';
+  PublicAuditExperience,
+  type PublicAuditLabels,
+  type PublicAuditNews,
+  type PublicAuditProblem,
+  type PublicAuditReview,
+  type PublicAuditService,
+} from '@/components/audit/PublicAuditExperience';
+import {
+  publicAuditUiTextForLanguage,
+  supportedPublicAuditLanguages,
+  type PublicAuditLanguage,
+} from '@/components/audit/publicAuditCopy';
 import {
   auditScoreBusinessLabel,
   compactAuditText,
@@ -685,6 +693,29 @@ const buildAuditProblemCards = (
     ];
   }
 
+  const preferredIssues = Array.isArray(page.audit?.top_3_issues) ? page.audit?.top_3_issues || [] : [];
+  const preferredCards: AuditFunnelProblem[] = [];
+  preferredIssues.slice(0, 3).forEach((preferred) => {
+    const preferredId = String(preferred.id || '').trim();
+    const preferredTitle = translateAuditText(lang, preferred.title).trim();
+    const match = issueBlocks.find((item) => (
+      (preferredId && String(item.id || '').trim() === preferredId)
+      || (preferredTitle && translateAuditText(lang, item.title).trim() === preferredTitle)
+    ));
+    const title = preferredTitle || match?.title || (lang === 'ru' ? 'Проблема в карточке' : 'Listing problem');
+    if (preferredCards.some((item) => item.title.trim().toLowerCase() === title.trim().toLowerCase())) return;
+    preferredCards.push({
+      title,
+      problem: translateAuditText(lang, preferred.problem) || match?.problem || match?.evidence || (lang === 'ru' ? 'В аудите найдена точка роста.' : 'The audit found a point to improve.'),
+      clientImpact: match?.impact || (lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.'),
+      diy: match?.fix || (lang === 'ru' ? 'Исправить самый заметный пробел и повторно проверить карточку.' : 'Fix the most visible gap and check the listing again.'),
+      localos: lang === 'ru'
+        ? 'Соберём правки в понятный план, подготовим тексты и покажем, что изменилось.'
+        : 'We will turn this into a clear plan, prepare copy, and show what changed.',
+    });
+  });
+  if (preferredCards.length > 0) return preferredCards;
+
   const fallback = issueBlocks.slice(0, 3).map((item) => ({
     title: item.title || (lang === 'ru' ? 'Проблема в карточке' : 'Listing problem'),
     problem: item.problem || item.evidence || (lang === 'ru' ? 'В аудите найдено место, где клиенту сложнее принять решение.' : 'The audit found a point that makes customer decision harder.'),
@@ -703,6 +734,14 @@ const buildAuditProblemCards = (
       localos: lang === 'ru' ? 'Подготовим структуру карточки и регулярный план обновлений.' : 'We will prepare the listing structure and recurring update plan.',
     },
   ];
+};
+
+const splitAuditActions = (primary: string, fallbacks: string[]): string[] => {
+  const primaryItems = String(primary || '')
+    .split(/[\n;\u2022]+|\.\s+/)
+    .map((item) => item.trim().replace(/[.!?]+$/, ''))
+    .filter(Boolean);
+  return dedupeShortList([...primaryItems, ...fallbacks], 4);
 };
 
 const buildDiyChecklist = (page: OfferPagePayload, lang: PageLang, selfHelp: ReturnType<typeof buildSelfHelpMaterials>): string[] => {
@@ -1283,10 +1322,7 @@ const UI_TEXT_BASE = {
   },
 };
 
-type PageLang = 'ru' | 'en' | 'fr' | 'es' | 'el' | 'de' | 'th' | 'ar' | 'ha' | 'tr';
-
-const supportedPublicAuditLanguages: PageLang[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
-
+type PageLang = PublicAuditLanguage;
 const isPageLang = (value: string): value is PageLang =>
   value === 'ru' || value === 'en' || value === 'fr' || value === 'es' || value === 'el' || value === 'de' || value === 'th' || value === 'ar' || value === 'ha' || value === 'tr';
 
@@ -1303,14 +1339,17 @@ const normalizePageLanguages = (value?: string[] | null): PageLang[] => {
   return result;
 };
 
-const UI_TEXT: Record<PageLang, typeof UI_TEXT_BASE.ru> = {
-  ...UI_TEXT_BASE,
-  fr: UI_TEXT_BASE.en,
-  es: UI_TEXT_BASE.en,
-  de: UI_TEXT_BASE.en,
-  th: UI_TEXT_BASE.en,
-  ar: UI_TEXT_BASE.ar,
-  ha: UI_TEXT_BASE.en,
+const UI_TEXT = {
+  ru: { ...UI_TEXT_BASE.ru, ...publicAuditUiTextForLanguage('ru') },
+  en: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('en') },
+  fr: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('fr') },
+  es: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('es') },
+  el: { ...UI_TEXT_BASE.el, ...publicAuditUiTextForLanguage('el') },
+  de: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('de') },
+  th: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('th') },
+  ar: { ...UI_TEXT_BASE.ar, ...publicAuditUiTextForLanguage('ar') },
+  ha: { ...UI_TEXT_BASE.en, ...publicAuditUiTextForLanguage('ha') },
+  tr: { ...UI_TEXT_BASE.tr, ...publicAuditUiTextForLanguage('tr') },
 };
 
 const AUDIT_TEXT_TRANSLATIONS = {
@@ -2666,6 +2705,17 @@ const pickFirstNonEmpty = (...values: Array<string | null | undefined>): string 
   return '';
 };
 
+const normalizeExternalHttpUrl = (raw?: string | null): string => {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+};
+
 const extractStreet = (address?: string | null): string => {
   const text = String(address || '').trim();
   if (!text) return '';
@@ -3167,10 +3217,8 @@ const PublicPartnershipOfferPage: React.FC = () => {
     lang === 'en' ? 'Company' : lang === 'el' ? 'Εταιρεία' : lang === 'tr' ? 'İşletme' : lang === 'ar' ? 'الشركة' : 'Компания',
   );
   const mapsAnalysis = Array.isArray(page.maps_analysis) ? page.maps_analysis || [] : [];
-  const mapCardUrl = pickFirstNonEmpty(
-    page.source_url,
-    mapsAnalysis.find((item) => String(item?.url || '').trim())?.url,
-  );
+  const mapCardUrl = normalizeExternalHttpUrl(page.source_url)
+    || normalizeExternalHttpUrl(mapsAnalysis.find((item) => String(item?.url || '').trim())?.url);
   const multipleMaps = mapsAnalysis.length >= 2;
   const bestMapByReviews = mapsAnalysis.reduce<OfferPagePayload['maps_analysis'][number] | null>((best, item) => {
     if (!item) return best;
@@ -3426,564 +3474,259 @@ const PublicPartnershipOfferPage: React.FC = () => {
     },
   ];
 
-  return (
-    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_rgba(56,189,248,0.18),_transparent_45%),radial-gradient(ellipse_at_bottom_left,_rgba(14,165,233,0.16),_transparent_40%),linear-gradient(to_bottom,_#f8fafc,_#ffffff)]">
-      <div className="mx-auto max-w-6xl px-4 py-8 space-y-5">
-        <section className="overflow-hidden rounded-[2rem] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-          <div className="grid gap-0 lg:grid-cols-[1.45fr_0.55fr]">
-            <div className="p-6 md:p-8">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-center gap-4">
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl}
-                      alt={text.companyLogo}
-                      className="h-16 w-16 rounded-2xl object-cover bg-white shadow-sm outline outline-1 outline-black/10 md:h-20 md:w-20"
-                    />
-                  ) : null}
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-500">{funnelSummary.eyebrow}</div>
-                    <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight text-slate-950 [text-wrap:balance] md:text-5xl">
-                      {funnelSummary.title}
-                    </h1>
-                  </div>
-                </div>
-                {switchableLanguages.length > 1 ? (
-                  <div className="flex flex-wrap gap-2 md:justify-end">
-                    {switchableLanguages.map((code) => {
-                      const nextParams = new URLSearchParams(searchParams);
-                      nextParams.set('lang', code);
-                      const href = `${window.location.pathname}?${nextParams.toString()}`;
-                      const active = code === lang;
-                      return (
-                        <a
-                          key={code}
-                          href={href}
-                          className={`inline-flex min-h-10 items-center rounded-full border px-3 text-xs font-semibold transition-colors ${
-                            active
-                              ? 'border-sky-500 bg-sky-50 text-sky-700'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                          }`}
-                        >
-                          {languageLabels[code]}
-                        </a>
-                      );
-                    })}
-                  </div>
-                ) : null}
+  const publicAuditLabels: PublicAuditLabels = {
+    score: text.auditScore,
+    fixYourself: text.auditFixYourself,
+    prepareWithLocalOS: text.auditPrepareWithLocalOS,
+    fixToday: text.auditFixToday,
+    fixTodayHint: text.auditFixTodayHint,
+    whyImportant: text.auditWhyImportant,
+    actions: text.auditActions,
+    details: text.auditDetails,
+    hideDetails: text.auditHideDetails,
+    strengths: text.auditStrengths,
+    noStrengths: text.auditNoStrengths,
+    customerUnderstanding: text.auditCustomerUnderstanding,
+    strongAnswers: text.auditStrongAnswers,
+    weakAnswers: text.auditWeakAnswers,
+    missingPhotos: text.auditMissingPhotos,
+    needPhoto: text.auditNeedPhoto,
+    cardData: text.auditCardData,
+    services: text.servicesTitle,
+    photos: text.photosTitle,
+    reviews: text.reviews,
+    news: text.newsPosts,
+    showMore: text.auditShowMore,
+    showLess: text.auditShowLess,
+    noReply: text.auditNoReply,
+    hasReply: text.auditHasReply,
+    showFull: text.auditShowFull,
+    hideFull: text.auditHideFull,
+    fullPlan: text.auditFullPlan,
+    fullPlanHint: text.auditFullPlanHint,
+    hidePlan: text.auditHidePlan,
+    openMap: text.openMapCard,
+    companyLogo: text.companyLogo,
+  };
+
+  const presentationProblems: PublicAuditProblem[] = funnelProblems.slice(0, 3).map((item, index) => {
+    const matchingIssue = issueBlocks.find((issue) => (
+      String(issue.title || '').trim().toLowerCase() === item.title.trim().toLowerCase()
+    )) || issueBlocks[index];
+    const fallbackActions = [
+      localizedActionPlan.next_24h[index] || '',
+      localizedActionPlan.next_7d[index] || '',
+    ];
+    return {
+      id: `problem-${index + 1}`,
+      title: item.title,
+      importance: compactAuditText(
+        item.clientImpact,
+        lang === 'ru' ? 'Это влияет на доверие и решение клиента.' : 'This affects customer trust and choice.',
+      ),
+      actions: splitAuditActions(item.diy, fallbackActions),
+      problem: compactAuditText(item.problem, ''),
+      evidence: matchingIssue?.evidence ? translateAuditText(lang, matchingIssue.evidence) : '',
+      outcome: matchingIssue ? getIssueOutcome(matchingIssue, lang, page.audit?.audit_profile) : item.localos,
+    };
+  });
+
+  const confirmedStrengths = dedupeShortList([
+    Number(state.rating || 0) >= 4.5 ? `${text.rating}: ${Number(state.rating).toFixed(1)}` : '',
+    state.has_website ? text.websitePresent : '',
+    Number(state.services_count || 0) > 0 ? `${text.services}: ${formatValue(state.services_count)}` : '',
+    state.has_recent_activity ? text.activityPresent : '',
+    Number(state.photos_count || photos.length || 0) > 0
+      ? `${text.photosTitle}: ${formatValue(Number(state.photos_count || photos.length))}`
+      : '',
+    Number(state.reviews_count || 0) > 0
+      && state.unanswered_reviews_count !== undefined
+      && Number(state.unanswered_reviews_count) === 0
+      ? text.repliesExist
+      : '',
+  ], 4);
+
+  const publicServices: PublicAuditService[] = services.map((item) => ({
+    name: item.current_name || text.noDescription,
+    category: item.category,
+    description: item.description,
+    improvedName: item.improved_name,
+    price: item.price,
+  }));
+  const publicReviews: PublicAuditReview[] = reviews.map((item) => ({
+    author: item.author || text.client,
+    rating: item.rating,
+    text: item.text,
+    reply: item.orgReply,
+  }));
+  const publicNews: PublicAuditNews[] = news.map((item, index) => ({
+    id: `news-${index + 1}`,
+    title: item.title,
+    date: item.publishedAt ? formatDate(item.publishedAt, lang) : '',
+    text: item.text,
+  }));
+  const languageLinks = switchableLanguages.map((code) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('lang', code);
+    return {
+      code,
+      label: languageLabels[code],
+      href: `${window.location.pathname}?${nextParams.toString()}`,
+      active: code === lang,
+    };
+  });
+  const additionalIssues = showDetailedProblemBlocks
+    ? issueBlocks.slice(presentationProblems.length, 6)
+    : [];
+
+  const fullPlan = (
+    <div className="space-y-5">
+      <section>
+        <h3 className="text-balance text-lg font-bold text-slate-950">{text.currentStateTitle}</h3>
+        <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">{text.currentStateText}</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {quickState.map((row) => (
+            <div key={row.label} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+              <div className="flex items-center gap-2">
+                {row.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-rose-600" />}
+                <span className="font-medium text-slate-900">{row.label}</span>
               </div>
-              <p className="mt-6 max-w-4xl text-base leading-7 text-slate-650 [text-wrap:pretty] md:text-lg">
-                {funnelSummary.diagnosis}
-              </p>
-              {page.processing ? (
-                <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  {lang === 'ru' ? (page.processing_message || text.processingFallback) : text.processingFallback}
-                </p>
-              ) : null}
-              <div className="mt-7 grid grid-cols-1 gap-3 md:grid-cols-3">
-                {funnelSummary.facts.map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                    <div className="mt-2 text-2xl font-black tracking-tight text-slate-950 tabular-nums">{item.value}</div>
-                    <div className="mt-1 text-sm leading-5 text-slate-600">{item.hint}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-7 flex flex-wrap gap-3">
-                <a href="#self-help" className="inline-flex min-h-10 items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.96]">
-                  {lang === 'ru' ? 'Исправить самому по чек-листу' : 'Use the checklist'}
-                </a>
-                <button
-                  type="button"
-                  onClick={openDashboardRegistration}
-                  className="inline-flex min-h-10 items-center justify-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-transform hover:bg-orange-600 active:scale-[0.96]"
-                >
-                  {lang === 'ru' ? 'Передать исправления LocalOS' : 'Let LocalOS handle it'}
-                </button>
+              <p className="mt-1 text-pretty text-sm text-slate-600">{row.hint}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {multipleMaps ? (
+        <section className="border-t border-slate-100 pt-5">
+          <h3 className="text-balance text-lg font-bold text-slate-950">{text.allMapsTitle}</h3>
+          <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">{text.allMapsText}</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl bg-emerald-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{text.bestReviews}</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">{bestMapByReviews?.label || '—'}</div>
+              <div className="mt-1 text-sm tabular-nums text-slate-700">{formatValue(bestMapByReviews?.reviews_total)} {text.reviews.toLowerCase()}</div>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">{text.bestRating}</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">{bestMapByRating?.label || '—'}</div>
+              <div className="mt-1 text-sm tabular-nums text-slate-700">
+                {bestMapByRating?.rating !== null && bestMapByRating?.rating !== undefined ? Number(bestMapByRating.rating).toFixed(1) : '—'}
               </div>
             </div>
-            <aside className="bg-slate-950 p-6 text-white md:p-8">
-              <div className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
-                {lang === 'ru' ? 'Вспомогательная оценка' : 'Reference score'}
-              </div>
-              <div className="mt-5 flex items-end gap-2">
-                <div className="text-6xl font-black tracking-tight tabular-nums">{score || '—'}</div>
-                {score ? <div className="pb-2 text-lg font-semibold text-slate-400">/100</div> : null}
-              </div>
-              <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${stateBadgeClass(score)}`}>
-                {page.processing && lang !== 'ru' ? text.stateUnknown : (localizedHealth || text.stateUnknown)}
-              </div>
-              <p className="mt-5 text-sm leading-6 text-slate-300">{funnelSummary.scoreHint}</p>
-            </aside>
+            <div className="rounded-2xl bg-sky-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">{text.priority}</div>
+              <div className="mt-1 text-pretty text-sm text-slate-800">{priorityRecommendation}</div>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {mapsAnalysis.map((item, index) => {
+              const itemUrl = normalizeExternalHttpUrl(item.url);
+              return (
+                <div key={`${item.source || item.label || 'map'}-${index}`} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-900">{item.label || item.source || text.sourceFallback}</div>
+                    {itemUrl ? (
+                      <a href={itemUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+                        {text.open}<ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 space-y-1 text-sm text-slate-700">
+                    <div>{text.rating}: <span className="font-semibold tabular-nums text-slate-900">{item.rating !== null && item.rating !== undefined ? Number(item.rating).toFixed(1) : '—'}</span></div>
+                    <div>{text.reviews}: <span className="font-semibold tabular-nums text-slate-900">{formatValue(item.reviews_total)}</span></div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
+      ) : null}
 
-        <section className="rounded-[2rem] bg-white p-5 shadow-[0_16px_48px_rgba(15,23,42,0.06)] ring-1 ring-slate-200 md:p-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl font-black tracking-tight text-slate-950 [text-wrap:balance]">
-              {lang === 'ru' ? '3 проблемы, из-за которых карточки теряют доверие' : '3 problems that reduce listing trust'}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              {lang === 'ru'
-                ? 'Каждая проблема ниже сразу показывает, почему это важно для клиента, что можно сделать самостоятельно и где LocalOS ускоряет работу.'
-                : 'Each problem shows why it matters, what can be done manually, and where LocalOS speeds the work up.'}
-            </p>
-          </div>
-          <div className="mt-5 space-y-4">
-            {funnelProblems.map((item, idx) => (
-              <article key={`${item.title}-${idx}`} className="rounded-3xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] md:p-5">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sm font-black text-slate-950 shadow-sm">
-                    {idx + 1}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-950">{item.title}</h3>
-                    <p className="mt-1 text-sm leading-6 text-slate-700">{item.problem}</p>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl bg-white p-4">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">{lang === 'ru' ? 'Почему это важно' : 'Why it matters'}</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-700">{item.clientImpact}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white p-4">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">{lang === 'ru' ? 'Что можно сделать самому' : 'DIY action'}</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-700">{item.diy}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white p-4">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">{lang === 'ru' ? 'Что сделаем мы быстрее' : 'What we do faster'}</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-700">{item.localos}</div>
-                  </div>
-                </div>
+      {additionalIssues.length > 0 ? (
+        <section className="border-t border-slate-100 pt-5">
+          <h3 className="text-balance text-lg font-bold text-slate-950">{text.improveFirstTitle}</h3>
+          <div className="mt-3 space-y-3">
+            {additionalIssues.map((item, index) => (
+              <article key={`${item.id || item.title || 'issue'}-${index}`} className="rounded-2xl bg-slate-50 p-4">
+                <div className="font-semibold text-slate-950">{item.title || text.issueFallback}</div>
+                {item.problem ? <p className="mt-2 text-pretty text-sm leading-6 text-slate-700">{item.problem}</p> : null}
+                {item.evidence ? <p className="mt-2 text-pretty text-xs leading-5 text-slate-500">{text.fact}: {item.evidence}</p> : null}
+                {item.fix ? <p className="mt-2 text-pretty text-sm leading-6 text-slate-700"><span className="font-semibold">{text.whatToDo}: </span>{item.fix}</p> : null}
               </article>
             ))}
           </div>
         </section>
+      ) : null}
 
-        <section id="self-help" className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-[2rem] bg-white p-5 shadow-[0_16px_48px_rgba(15,23,42,0.06)] ring-1 ring-emerald-100 md:p-6">
-            <div className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">{lang === 'ru' ? 'Можно сделать самому' : 'You can do this yourself'}</div>
-            <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">{lang === 'ru' ? 'Чек-лист первых правок' : 'First fixes checklist'}</h2>
-            <div className="mt-4 space-y-3">
-              {diyChecklist.map((item) => (
-                <div key={item} className="flex items-start gap-3 text-sm leading-6 text-slate-700">
-                  <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-            <a href="#details" className="mt-5 inline-flex min-h-10 items-center rounded-xl border border-emerald-200 px-4 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50">
-              {lang === 'ru' ? 'Посмотреть детали проверки' : 'View audit details'}
-            </a>
-          </div>
-          <div className="rounded-[2rem] bg-slate-950 p-5 text-white shadow-[0_16px_48px_rgba(15,23,42,0.12)] md:p-6">
-            <div className="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">{lang === 'ru' ? 'Что мы можем сделать за вас за 7 дней' : 'What we can do for you in 7 days'}</div>
-            <h2 className="mt-3 text-2xl font-black tracking-tight">{lang === 'ru' ? 'Передать регулярную работу LocalOS' : 'Hand the recurring work to LocalOS'}</h2>
-            <div className="mt-4 space-y-3">
-              {localOsOfferTasks.map((item) => (
-                <div key={item} className="flex items-start gap-3 text-sm leading-6 text-slate-200">
-                  <Sparkles className="mt-1 h-4 w-4 shrink-0 text-orange-300" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={openDashboardRegistration}
-              className="mt-5 inline-flex min-h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition-transform hover:bg-slate-100 active:scale-[0.96]"
-            >
-              {lang === 'ru' ? 'Передать исправления LocalOS' : 'Let LocalOS handle it'}
-            </button>
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-5 shadow-[0_16px_48px_rgba(15,23,42,0.06)] ring-1 ring-slate-200 md:p-6">
-          <h2 className="text-2xl font-black tracking-tight text-slate-950">{lang === 'ru' ? 'Какой результат получит бизнес' : 'Business outcome'}</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {businessOutcomes.map((item) => (
-              <div key={item} className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
-                <CheckCircle2 className="mb-3 h-4 w-4 text-emerald-600" />
-                {item}
+      <section className="border-t border-slate-100 pt-5">
+        <h3 className="text-balance text-lg font-bold text-slate-950">{text.implementationPlan}</h3>
+        <div className="mt-3 rounded-2xl bg-sky-50 p-4 text-pretty text-sm leading-6 text-slate-700">
+          <div className="font-semibold text-slate-950">{text.cadenceTitle}</div>
+          <div className="mt-1">{interpolate(text.cadenceText, { news: cadenceNews, photos: cadencePhotos, hours: cadenceReplyHours })}</div>
+        </div>
+        {((actionPlan.next_24h || []).length > 0 || (actionPlan.next_7d || []).length > 0 || (actionPlan.ongoing || []).length > 0) ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {[
+              { title: text.in24h, items: localizedActionPlan.next_24h },
+              { title: text.in7d, items: localizedActionPlan.next_7d },
+              { title: text.ongoing, items: localizedActionPlan.ongoing },
+            ].map((group) => (
+              <div key={group.title} className="rounded-2xl bg-slate-50 p-4">
+                <div className="font-semibold text-slate-950">{group.title}</div>
+                <ul className="mt-2 space-y-2">
+                  {group.items.slice(0, 3).map((line) => <li key={line} className="text-pretty text-sm leading-6 text-slate-700">• {line}</li>)}
+                </ul>
               </div>
             ))}
           </div>
+        ) : null}
+      </section>
+
+      <AuditHowToRead
+        title={lang === 'ru' ? 'Как мы это проверяли' : 'How we checked this'}
+        items={methodologyDetails}
+      />
+
+      {page.message ? (
+        <section className="border-t border-slate-100 pt-5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{text.firstDraft}</div>
+          <div className="mt-2 whitespace-pre-wrap text-pretty text-sm leading-6 text-slate-800">{page.message}</div>
         </section>
+      ) : null}
 
-        <AuditCtaPanel
-          title={lang === 'ru' ? 'Что делать дальше' : 'What to do next'}
-          description={lang === 'ru'
-            ? 'Можно идти по чек-листу самостоятельно или передать исправления LocalOS, чтобы быстрее выровнять карточки, отзывы, публикации и контроль результата.'
-            : 'Use the checklist yourself or hand the improvements to LocalOS to align listings, reviews, posts, and result tracking faster.'}
-          bullets={[
-            lang === 'ru' ? 'Получить список первых правок' : 'Get the first fixes list',
-            lang === 'ru' ? 'Разобрать слабые филиалы' : 'Review weaker locations',
-            lang === 'ru' ? 'Запустить регулярный контроль' : 'Start recurring tracking',
-          ]}
-          primaryLabel={lang === 'ru' ? 'Передать исправления LocalOS' : 'Let LocalOS handle it'}
-          secondaryLabel={lang === 'ru' ? 'Исправить самому по чек-листу' : 'Use the checklist'}
-          onPrimary={openDashboardRegistration}
-          secondaryHref="#self-help"
-        />
-
-        <section id="details" className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-sky-600" />
-            {text.currentStateTitle}
-          </h2>
-          <p className="text-sm text-slate-600 mt-1">
-            {text.currentStateText}
-          </p>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            {quickState.map((row) => (
-              <div key={row.label} className="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
-                <div className="flex items-center gap-2">
-                  {row.ok ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-600" />
-                  )}
-                  <span className="font-medium text-slate-900">{row.label}</span>
-                </div>
-                <p className="mt-1 text-sm text-slate-600">{row.hint}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {(strongDemand.length > 0 || weakDemand.length > 0 || positioningWhy.length > 0 || photoShots.length > 0) ? (
-          <section className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-violet-600" />
-                {lang === 'en' ? 'What customers understand from the listing' : lang === 'el' ? 'Τι καταλαβαίνει ο πελάτης από την κάρτα' : lang === 'tr' ? 'Müşteri profilden ne anlıyor' : lang === 'ar' ? 'ما الذي يفهمه العميل من البطاقة' : 'Что клиент понимает из карточки'}
-              </h2>
-              {auditProfileLabel ? (
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                  {reasoningLabels.profile}: {auditProfileLabel}
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              {strongDemand.length > 0 ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{reasoningLabels.strongDemand}</div>
-                  <div className="mt-2 space-y-2 text-sm text-slate-700">
-                    {strongDemand.map((item, idx) => <div key={`best-${idx}`}>• {item}</div>)}
-                  </div>
-                </div>
-              ) : null}
-              {weakDemand.length > 0 ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{reasoningLabels.weakDemand}</div>
-                  <div className="mt-2 space-y-2 text-sm text-slate-700">
-                    {weakDemand.map((item, idx) => <div key={`weak-${idx}`}>• {item}</div>)}
-                  </div>
-                </div>
-              ) : null}
-              {positioningWhy.length > 0 ? (
-                <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{reasoningLabels.why}</div>
-                  <div className="mt-2 space-y-2 text-sm text-slate-700">
-                    {positioningWhy.map((item, idx) => <div key={`why-${idx}`}>• {item}</div>)}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            {photoShots.length > 0 ? (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{reasoningLabels.photos}</div>
-                  <div className="mt-2 space-y-2 text-sm text-slate-700">
-                    {photoShots.map((item, idx) => <div key={`photo-${idx}`}>• {item}</div>)}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        {multipleMaps ? (
-          <section className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">{text.allMapsTitle}</h2>
-            <p className="text-sm text-slate-600 mt-1">
-              {text.allMapsText}
-            </p>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
-                <div className="text-xs uppercase tracking-wide text-emerald-700">{text.bestReviews}</div>
-                <div className="mt-1 text-sm font-semibold text-slate-900">{bestMapByReviews?.label || '—'}</div>
-                <div className="mt-1 text-sm text-slate-700">{formatValue(bestMapByReviews?.reviews_total)} {text.reviews.toLowerCase()}</div>
-              </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-                <div className="text-xs uppercase tracking-wide text-amber-700">{text.bestRating}</div>
-                <div className="mt-1 text-sm font-semibold text-slate-900">{bestMapByRating?.label || '—'}</div>
-                <div className="mt-1 text-sm text-slate-700">
-                  {bestMapByRating?.rating !== null && bestMapByRating?.rating !== undefined ? Number(bestMapByRating.rating).toFixed(1) : '—'}
-                </div>
-              </div>
-              <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
-                <div className="text-xs uppercase tracking-wide text-sky-700">{text.priority}</div>
-                <div className="mt-1 text-sm text-slate-800">{priorityRecommendation}</div>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {mapsAnalysis.map((item, idx) => (
-                <div key={`${item.source || item.label || 'map'}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-slate-900">{item.label || item.source || text.sourceFallback}</div>
-                    {item.url ? (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-sky-700 hover:text-sky-800 inline-flex items-center gap-1"
-                      >
-                        {text.open}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 space-y-1 text-sm text-slate-700">
-                    <div>{text.rating}: <span className="font-semibold text-slate-900">{item.rating !== null && item.rating !== undefined ? Number(item.rating).toFixed(1) : '—'}</span></div>
-                    <div>{text.reviews}: <span className="font-semibold text-slate-900">{formatValue(item.reviews_total)}</span></div>
-                    {item.last_sync_at ? (
-                      <div className="text-xs text-slate-500">
-                        {text.updated}: {new Date(item.last_sync_at).toLocaleDateString(locale)}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-violet-600" />
-            {lang === 'ru' ? (showDetailedProblemBlocks ? 'Детали и план внедрения' : 'Дополнительные детали') : text.improveFirstTitle}
-          </h2>
-          {localizedSummary ? <p className="text-sm text-slate-600 mt-1">{localizedSummary}</p> : null}
-          {showDetailedProblemBlocks ? (
-            <div className="mt-4 space-y-3">
-              {issueBlocks.length > 0 ? (
-                issueBlocks.slice(0, 6).map((item, idx) => (
-                  <AuditProblemBlock
-                    key={`${item.id || item.title || 'item'}-${idx}`}
-                    title={`${idx + 1}. ${item.title || text.issueFallback}`}
-                    priority={item.priority}
-                    problem={compactAuditText(item.problem, text.noDescription)}
-                    evidence={item.evidence}
-                    meaning={compactAuditText(item.impact, lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.')}
-                    action={compactAuditText(item.fix, text.noDescription)}
-                    outcome={getIssueOutcome(item, lang, page.audit?.audit_profile)}
-                  />
-                ))
-              ) : (
-                (findings.length > 0 ? findings : actions).slice(0, 6).map((item, idx) => (
-                  <div key={`${item.title || 'item'}-${idx}`} className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
-                    <div className="text-sm font-semibold text-slate-900">{idx + 1}. {item.title || text.recommendationFallback}</div>
-                    <div className="text-sm text-slate-700 mt-1">{item.description || text.noDescription}</div>
-                  </div>
-                ))
-              )}
-            </div>
-          ) : null}
-          <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4">
-            <div className="text-sm font-semibold text-slate-900">{text.cadenceTitle}</div>
-            <div className="mt-2 text-sm text-slate-700">
-              {interpolate(text.cadenceText, { news: cadenceNews, photos: cadencePhotos, hours: cadenceReplyHours })}
-            </div>
-          </div>
-          {((actionPlan.next_24h || []).length > 0 || (actionPlan.next_7d || []).length > 0 || (actionPlan.ongoing || []).length > 0) ? (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-sm font-semibold text-slate-900">{text.implementationPlan}</div>
-              <div className="mt-2 text-sm text-slate-700 space-y-2">
-                <div>
-                  <div className="font-medium text-slate-900">{text.in24h}</div>
-                  {localizedActionPlan.next_24h.slice(0, 3).map((line, idx) => (
-                    <div key={`p24-${idx}`}>• {line}</div>
-                  ))}
-                </div>
-                <div>
-                  <div className="font-medium text-slate-900">{text.in7d}</div>
-                  {localizedActionPlan.next_7d.slice(0, 3).map((line, idx) => (
-                    <div key={`p7-${idx}`}>• {line}</div>
-                  ))}
-                </div>
-                <div>
-                  <div className="font-medium text-slate-900">{text.ongoing}</div>
-                  {localizedActionPlan.ongoing.slice(0, 3).map((line, idx) => (
-                    <div key={`pong-${idx}`}>• {line}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </section>
-
-        {!isShoppingCenter ? (
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {isNetworkAudit && lang === 'ru'
-              ? 'Меню и товары в карточках'
-              : lang === 'ru' && (auditProfileForWhy === 'fashion' || auditProfileForWhy === 'retail')
-                ? 'Товары в карточке'
-                : lang === 'ru' && auditProfileForWhy === 'education_children'
-                  ? 'Направления в карточке'
-                  : text.servicesTitle}
-          </h2>
-          {hasServicesPreviewOnly ? (
-            <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-              {lang === 'en'
-                ? 'Below are service examples from the card. We do not show the total count until the audit confirms it.'
-                : lang === 'tr'
-                  ? 'Aşağıda karttan alınan hizmet örnekleri var. Denetim toplam sayıyı doğrulamadan bu sayıyı göstermiyoruz.'
-                  : lang === 'ar'
-                    ? 'في الأسفل أمثلة على الخدمات من البطاقة. لا نعرض العدد الإجمالي حتى يؤكده التدقيق.'
-                    : lang === 'el'
-                      ? 'Παρακάτω εμφανίζονται παραδείγματα υπηρεσιών από την καταχώριση. Δεν προβάλλουμε συνολικό πλήθος μέχρι να επιβεβαιωθεί από τον έλεγχο.'
-                      : 'Ниже показаны примеры услуг из карточки. Общее количество не показываем, пока аудит его не подтвердил.'}
-            </div>
-          ) : null}
-          {services.length > 0 ? (
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {services.slice(0, 20).map((item, idx) => (
-                <div key={`${item.current_name || 'service'}-${idx}`} className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm text-slate-500">{text.current}</div>
-                  <div className="font-medium text-slate-900 mt-1">{item.current_name || text.noDescription}</div>
-                  {item.category ? (
-                    <div className="mt-1 text-xs text-slate-500">
-                      {text.category}: {item.category}
-                    </div>
-                  ) : null}
-                  {item.description ? (
-                    <div className="mt-2 text-sm text-slate-600">
-                      {item.description}
-                    </div>
-                  ) : null}
-                  {item.improved_name ? (
-                    <>
-                      <div className="text-sm text-slate-500 mt-3">{text.canShowLikeThis}</div>
-                      <div className="font-medium text-sky-700 mt-1">{item.improved_name}</div>
-                    </>
-                  ) : null}
-                  {item.price ? (
-                    <div className="mt-2 text-xs font-medium text-slate-700">
-                      {text.price}: {item.price}
-                    </div>
-                  ) : null}
-                  {item.source ? <div className="text-xs text-slate-500 mt-2">{text.source}: {item.source}</div> : null}
-                </div>
-              ))}
-            </div>
-          ) : isNetworkAudit && confirmedServicesCount > 0 && lang === 'ru' ? (
-            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
-              По сети найдено {formatValue(confirmedServicesCount)} позиций меню с ценами
-              {locationsCount > 0 ? ` по ${formatValue(locationsCount)} точкам` : ''}.
-              Детальные карточки позиций в этом публичном отчёте не приложены, но агрегированные данные учтены в аудите.
-            </div>
-          ) : (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              {text.servicesUnavailable}
-            </div>
-          )}
-        </section>
-        ) : null}
-
-        {photos.length > 0 ? (
-          <section className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">{text.photosTitle}</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
-              {photos.slice(0, 8).map((photo, index) => (
-                <img
-                  key={`${photo}-${index}`}
-                  src={normalizeMediaUrl(photo)}
-                  alt={interpolate(text.photoAlt, { index: index + 1 })}
-                  className="h-24 w-full rounded-md border border-slate-200 object-cover bg-white"
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {(reviews.length > 0 || news.length > 0) ? (
-          <section className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">{text.activityTitle}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="text-sm font-semibold text-slate-900">{text.reviews}</div>
-                {reviews.length > 0 ? (
-                  <div className="space-y-2 mt-2">
-                    {reviews.slice(0, 3).map((item, idx) => (
-                      <div key={`review-${idx}`} className="text-sm text-slate-700 border-b border-slate-100 pb-2">
-                        <div className="font-medium flex items-center gap-2">
-                          <span>{item.author || text.client}</span>
-                          {item.rating ? <span className="text-xs text-amber-600">★ {Number(item.rating).toFixed(1)}</span> : null}
-                        </div>
-                        {item.text ? <div>{item.text}</div> : null}
-                        {item.orgReply ? <div className="mt-1 text-xs text-slate-500">{text.businessReply}: {translateAuditText(lang, item.orgReply)}</div> : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 mt-2">{text.freshReviewsMissing}</p>
-                )}
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="text-sm font-semibold text-slate-900">{text.newsPosts}</div>
-                {news.length > 0 ? (
-                  <div className="space-y-2 mt-2">
-                    {news.slice(0, 3).map((item, idx) => (
-                      <div key={`news-${idx}`} className="text-sm text-slate-700 border-b border-slate-100 pb-2">
-                        {item.title ? <div className="font-medium">{item.title}</div> : null}
-                        {item.publishedAt ? (
-                          <div className="text-xs text-slate-500">{formatDate(item.publishedAt, lang)}</div>
-                        ) : null}
-                        {item.text ? <div>{item.text}</div> : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : hasOnlyStaleNews ? (
-                  <p className="text-sm text-slate-500 mt-2">
-                    {text.newsStale}
-                    {state.latest_news_at ? ` ${text.newsLatest}: ${formatDate(state.latest_news_at, lang)}.` : ''}
-                  </p>
-                ) : (
-                  <p className="text-sm text-slate-500 mt-2">{text.newsMissing}</p>
-                )}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        <AuditHowToRead
-          title={lang === 'ru' ? 'Как мы это проверяли' : 'How we checked this'}
-          items={methodologyDetails}
-        />
-        {mapCardUrl ? (
-          <footer className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <a
-              href={mapCardUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800 sm:w-auto"
-            >
-              {text.openMapCard}
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          </footer>
-        ) : null}
-        {page.message ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="rounded-xl border border-sky-200 bg-white p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-500">{text.firstDraft}</div>
-              <div className="text-sm text-slate-800 whitespace-pre-wrap mt-2">{page.message}</div>
-            </div>
-          </section>
-        ) : null}
-      </div>
+      {mapCardUrl ? (
+        <a href={mapCardUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2">
+          {text.openMapCard}<ExternalLink className="h-4 w-4" />
+        </a>
+      ) : null}
     </div>
+  );
+
+  return (
+    <PublicAuditExperience
+      direction={lang === 'ar' ? 'rtl' : 'ltr'}
+      eyebrow={funnelSummary.eyebrow}
+      title={funnelSummary.title}
+      diagnosis={funnelSummary.diagnosis}
+      score={score || undefined}
+      status={localizedHealth || text.stateUnknown}
+      logoUrl={logoUrl}
+      labels={publicAuditLabels}
+      languages={languageLinks}
+      problems={presentationProblems}
+      strengths={confirmedStrengths}
+      strongDemand={strongDemand}
+      weakDemand={weakDemand}
+      missingPhotos={photoShots}
+      services={publicServices}
+      photos={photos}
+      reviews={publicReviews}
+      news={publicNews}
+      photoAlt={(index) => interpolate(text.photoAlt, { index: index + 1 })}
+      onPrepareWithLocalOS={openDashboardRegistration}
+      fullPlan={fullPlan}
+    />
   );
 };
 

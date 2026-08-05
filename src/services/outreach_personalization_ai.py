@@ -8,6 +8,11 @@ import re
 from typing import Any, Callable
 
 from services.llm import analyze_text_with_gigachat
+from services.outreach_founder_led_copy import (
+    founder_led_localos_subject,
+    founder_led_localos_text,
+    observation_is_grounded,
+)
 
 
 SCHEMA_VERSION = "1.0"
@@ -134,28 +139,45 @@ def generate_personalized_sequence(
     generate = generator or _default_generator
     review = reviewer or generate
     try:
-        generation_prompt = _generation_prompt(request_record)
         touches: list[dict[str, Any]] = []
-        generation_error: Exception | None = None
-        for attempt in range(2):
-            retry_note = "" if attempt == 0 else (
-                "\n\nПредыдущий ответ отклонён валидатором: "
-                f"{generation_error}. Исправь только эту ошибку, не добавляй новые факты."
-            )
-            raw_generation = generate(
-                generation_prompt + retry_note,
-                business_id=business_id,
-                user_id=user_id,
-            )
-            try:
-                generated = _parse_json_object(raw_generation)
-                touches = _normalize_touches(generated.get("touches"), request_record)
-                generation_error = None
-                break
-            except ValueError as exc:
-                generation_error = exc
-        if generation_error is not None:
-            raise generation_error
+        founder_led_beauty = bool(
+            _clean(request_record.get("motion")) == "localos_sales"
+            and _clean(request_record.get("identity", {}).get("recipient_segment"))
+        )
+        if founder_led_beauty:
+            policy_bound_touches = [
+                {
+                    "sequence_index": item["sequence_index"],
+                    "channel": item["channel"],
+                    "angle": item["angle"],
+                    "opening_style": "direct",
+                    "cta_intent": "send_short_review",
+                }
+                for item in request_record["sequence"]
+            ]
+            touches = _normalize_touches(policy_bound_touches, request_record)
+        else:
+            generation_prompt = _generation_prompt(request_record)
+            generation_error: Exception | None = None
+            for attempt in range(2):
+                retry_note = "" if attempt == 0 else (
+                    "\n\nПредыдущий ответ отклонён валидатором: "
+                    f"{generation_error}. Исправь только эту ошибку, не добавляй новые факты."
+                )
+                raw_generation = generate(
+                    generation_prompt + retry_note,
+                    business_id=business_id,
+                    user_id=user_id,
+                )
+                try:
+                    generated = _parse_json_object(raw_generation)
+                    touches = _normalize_touches(generated.get("touches"), request_record)
+                    generation_error = None
+                    break
+                except ValueError as exc:
+                    generation_error = exc
+            if generation_error is not None:
+                raise generation_error
         review_record = {
             "schema_version": SCHEMA_VERSION,
             "request": request_record,
@@ -203,6 +225,8 @@ def _request_record(
             "contact_name": _clean(identity.get("contact_name")),
             "contact_role": _clean(identity.get("contact_role")),
             "recipient_type": _clean(candidate.get("recipient_type")) or "business",
+            "recipient_category": _clean(candidate.get("recipient_category")),
+            "recipient_segment": _clean(candidate.get("recipient_segment")),
         },
         "evidence": [{
             "evidence_id": _clean(candidate.get("evidence_id")),
@@ -276,7 +300,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Используй только INPUT_JSON и верни только JSON без markdown. "
         "Не добавляй факты, боли, результаты, коммерческие условия или знакомство, которых нет во входе. "
         "Observation - факт. problem_hypothesis - только гипотеза: не утверждай её как факт. "
-        "LocalOS сам вставит observation, bridge, founder story и proof без изменений. "
+        "LocalOS сам соберёт текст из observation, founder story и proof по правилам выбранного угла. "
         "Ты выбираешь только opening_style и cta_intent для каждого касания. "
         "opening_style: direct, warm или concise. "
         "Для localos_sales cta_intent: send_short_review, send_example или ask_permission. "
@@ -292,6 +316,10 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Не придумывай скидки, особые условия, подарки, мастер-классы или другие мероприятия: они допустимы только как подтверждённый offer во входе. "
         "Не предлагай аудит карточки, 20-минутный созвон, интеграцию или автоматическую рассылку. "
         "Каждое касание должно иметь новый угол, один простой CTA и работать отдельно. "
+        "Для localos_sales в сегментах beauty signal служит только входом в разговор: "
+        "не повторяй observation и bridge в founder_story, proof и respectful_close. "
+        "Founder story объясняет личный опыт отправителя, proof показывает накопленную практику, "
+        "а respectful_close снимает давление. "
         "Не используй ритуальные комплименты, давление, ложную срочность, длинное тире и кавычки-ёлочки. "
         "Telegram - максимум 90 слов, email - максимум 120 слов. "
         "Для email дай спокойную фактическую тему; для других каналов subject=null. "
@@ -311,6 +339,9 @@ def _review_prompt(record: dict[str, Any]) -> str:
         "offer_bridge, recipient_specificity, proof_integrity, channel_fit, "
         "single_cta_and_length, state_and_suppression_safety. "
         "approve допустим только при сумме >=15, без блокирующей ошибки и при наличии источника для каждого факта. "
+        "Для founder-led localos_sales в beauty-сегментах recipient observation обязателен только в angle=signal. "
+        "В angle=founder_story, proof и respectful_close его отсутствие правильно: ставь observation_accuracy=2, "
+        "если сообщение не добавляет новых фактов о получателе и сохраняет заявленный угол. "
         "Иначе verdict=revise или reject. reason_codes могут быть только: "
         f"{', '.join(sorted(CANONICAL_REASON_CODES))}. "
         "Верни только JSON без markdown: schema_version=1.0, reviews. "
@@ -337,6 +368,10 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
     expected_hypothesis = request_record["personalization"]["problem_hypothesis"]
     relevance_bridge = request_record["personalization"]["relevance_to_offer"]
     recipient = request_record["identity"]["company_name"]
+    founder_led_beauty = bool(
+        _clean(request_record.get("motion")) == "localos_sales"
+        and _clean(request_record.get("identity", {}).get("recipient_segment"))
+    )
     template_values = {
         "RECIPIENT": recipient,
         "SENDER_NAME": request_record["sender"]["name"],
@@ -357,7 +392,10 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         angle = _clean(item.get("angle"))
         template = _clean(item.get("text_template"))
         text = _clean(item.get("text"))
-        evidence_ids = [_clean(entry) for entry in item.get("evidence_ids") or [] if _clean(entry)]
+        # Evidence identity is server policy, not model output. The model may echo
+        # a stale or translated identifier; always bind the touch to the verified
+        # ledger entry from INPUT_JSON.
+        evidence_ids = sorted(allowed_evidence_ids)
         # Channel order and message angles are campaign policy, not model
         # output.  Preserve the approved structure even when the provider
         # echoes a translated or invented label alongside otherwise valid copy.
@@ -392,18 +430,31 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         normalized_text = _normalized_grounded_fragment(text)
         if not normalized_text or (
             angle != "respectful_close"
+            and not (founder_led_beauty and angle in {"founder_story", "proof"})
+            and not (founder_led_beauty and observation_is_grounded(text, observation))
             and _normalized_grounded_fragment(observation) not in normalized_text
         ):
             raise ValueError(f"Touch {index} does not preserve sourced observation")
         if (
             relevance_bridge
+            and not founder_led_beauty
             and _normalized_grounded_fragment(relevance_bridge) not in normalized_text
         ):
             raise ValueError(f"Touch {index} does not preserve the offer bridge")
-        if recipient and recipient.lower() not in text.lower():
+        if (
+            recipient
+            and recipient.lower() not in text.lower()
+            and not (
+                founder_led_beauty
+                and (
+                    angle in {"founder_story", "proof", "respectful_close"}
+                    or observation_is_grounded(text, observation)
+                )
+            )
+        ):
             raise ValueError(f"Touch {index} does not identify the recipient")
-        if not evidence_ids or not set(evidence_ids).issubset(allowed_evidence_ids):
-            raise ValueError(f"Touch {index} has unsupported evidence ids")
+        if not evidence_ids:
+            raise ValueError(f"Touch {index} has no verified evidence id")
         if any(claim.lower() in text.lower() for claim in forbidden_claims):
             raise ValueError(f"Touch {index} contains a forbidden claim")
         generated_hypothesis = _clean(item.get("problem_hypothesis")) or None
@@ -413,7 +464,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
             "sequence_index": index,
             "channel": channel,
             "angle": angle,
-            "subject": _safe_subject(channel, recipient, request_record),
+            "subject": _safe_subject(channel, recipient, request_record, angle),
             "text": text,
             "evidence_ids": evidence_ids,
             "observation": _clean(item.get("observation")) or observation,
@@ -511,6 +562,30 @@ def _assemble_policy_bound_text(
     if opening_style not in {"direct", "warm", "concise"}:
         raise ValueError(f"Touch {index} has unsupported opening_style")
     sender_mode = _clean(request_record.get("representation", {}).get("sender_mode"))
+    founder_led_candidate = {
+        "recipient": request_record.get("identity", {}).get("company_name"),
+        "recipient_category": request_record.get("identity", {}).get("recipient_category"),
+        "recipient_segment": request_record.get("identity", {}).get("recipient_segment"),
+        "sender": request_record.get("sender", {}).get("name"),
+        "sender_role": request_record.get("sender", {}).get("role"),
+        "sender_company": request_record.get("sender", {}).get("business"),
+        "sender_mode": sender_mode,
+        "observed_fact": request_record.get("personalization", {}).get("observation"),
+        "evidence_kind": (
+            request_record.get("evidence", [{}])[0].get("kind")
+            if request_record.get("evidence")
+            else ""
+        ),
+        "founder_story": request_record.get("sender", {}).get("founder_story"),
+        "founder_proof": request_record.get("sender", {}).get("proof"),
+    }
+    founder_led_message = founder_led_localos_text(
+        _clean(expected_item.get("angle")),
+        founder_led_candidate,
+        request_record.get("sender"),
+    )
+    if founder_led_message:
+        return founder_led_message
     partnership_motion = (
         _clean(request_record.get("motion")) == "client_partnership"
         or sender_mode in {"partner_business", "localos_for_partner"}
@@ -671,9 +746,20 @@ def _safe_subject(
     channel: str,
     recipient: str,
     request_record: dict[str, Any],
+    angle: str,
 ) -> str | None:
     if channel != "email":
         return None
+    founder_led_subject = founder_led_localos_subject(
+        angle,
+        {
+            "recipient": recipient,
+            "recipient_category": request_record.get("identity", {}).get("recipient_category"),
+            "recipient_segment": request_record.get("identity", {}).get("recipient_segment"),
+        },
+    )
+    if founder_led_subject:
+        return founder_led_subject
     sender_mode = _clean(request_record.get("representation", {}).get("sender_mode"))
     if (
         _clean(request_record.get("motion")) == "client_partnership"

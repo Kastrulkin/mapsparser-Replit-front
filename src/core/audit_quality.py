@@ -68,6 +68,16 @@ def evaluate_audit_quality(
     flags: list[dict[str, str]] = []
     public_text = _public_text(audit)
     profile = str(audit.get("audit_profile") or "").strip().lower()
+    parse_context = audit.get("parse_context") if isinstance(audit.get("parse_context"), dict) else {}
+    parse_status = str(parse_context.get("last_parse_status") or "").strip().lower()
+
+    if parse_status in {"error", "failed", "dlq", "cancelled", "canceled"}:
+        flags.append(
+            {
+                "code": "parse_failed",
+                "detail": str(parse_context.get("last_parse_error") or parse_status),
+            }
+        )
 
     for marker in TECHNICAL_MARKERS:
         if marker in public_text:

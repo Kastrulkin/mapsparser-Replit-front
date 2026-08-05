@@ -7,6 +7,7 @@ from services.outreach_personalization_ai import (
     REVIEW_PROMPT_VERSION,
     _generation_prompt,
     _request_record,
+    _review_prompt,
     generation_contract_current,
     generate_personalized_sequence,
 )
@@ -126,6 +127,84 @@ def test_generation_prompt_keeps_long_evidence_out_of_provider_output_contract()
     assert "Не повторяй в ответе observation" in prompt
     required_line = prompt.split("В каждом touch обязательны:", 1)[1].split("Не повторяй", 1)[0]
     assert "observation" not in required_line
+
+
+def test_review_prompt_does_not_require_repeating_recipient_observation_in_followups():
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate={
+            **_candidate(),
+            "recipient_category": "Косметология",
+            "recipient_segment": "private_beauty_specialist",
+        },
+        founder_story=_story(),
+        sequence=_sequence(),
+        voice_examples=[],
+    )
+
+    prompt = _review_prompt({"schema_version": "1.0", "request": record, "touches": []})
+
+    assert "recipient observation обязателен только в angle=signal" in prompt
+    assert "его отсутствие правильно" in prompt
+
+
+def test_founder_led_beauty_uses_ai_for_review_without_spending_generation_call():
+    candidate = {
+        **_candidate(),
+        "recipient_category": "Салон красоты",
+        "recipient_segment": "beauty_team",
+        "sender_mode": "localos",
+    }
+    sequence = [
+        {
+            "sequence_index": index,
+            "channel": "email",
+            "angle": angle,
+            "day_offset": day_offset,
+            "text": "deterministic",
+            "subject": "Тема",
+        }
+        for index, (day_offset, angle) in enumerate((
+            (0, "signal"),
+            (3, "founder_story"),
+            (7, "proof"),
+            (12, "respectful_close"),
+        ))
+    ]
+    response = {
+        "schema_version": "1.0",
+        "reviews": [
+            {
+                "sequence_index": index,
+                "scores": {criterion: 2 for criterion in QUALITY_CRITERIA},
+                "total_score": 18,
+                "verdict": "approve",
+                "reason_codes": [],
+                "notes": [],
+            }
+            for index in range(4)
+        ],
+    }
+    prompts = []
+
+    def review(prompt, **_kwargs):
+        prompts.append(prompt)
+        return json.dumps(response, ensure_ascii=False)
+
+    result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "Салон"},
+        candidate=candidate,
+        founder_story=_story(),
+        sequence=sequence,
+        generator=review,
+    )
+
+    assert result["status"] == "ready"
+    assert len(prompts) == 1
+    assert "независимый редактор" in prompts[0]
+    assert len(result["touches"]) == 4
 
 
 def _generation_response():
@@ -400,6 +479,28 @@ def test_policy_bound_choices_produce_clean_founder_led_copy():
     assert result["touches"][0]["text"].count("?") == 1
     assert result["touches"][1]["subject"] == "Короткий вопрос по карточке Клиника"
     assert "Гипотеза для проверки:" in result["touches"][0]["text"]
+
+
+def test_model_cannot_replace_verified_evidence_identity():
+    generated = _policy_bound_generation_response()
+    for touch in generated["touches"]:
+        touch["evidence_ids"] = ["invented-by-provider"]
+    responses = iter([
+        json.dumps(generated, ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(responses),
+    )
+
+    assert result["status"] == "ready"
+    assert all(touch["evidence_ids"] == ["map-rating"] for touch in result["touches"])
 
 
 def test_existing_hypothesis_label_is_not_duplicated() -> None:

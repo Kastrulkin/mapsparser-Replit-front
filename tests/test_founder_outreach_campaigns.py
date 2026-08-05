@@ -28,10 +28,224 @@ from services.outreach_decision_service import (
     offer_candidates,
     trust_candidates,
 )
+from services.outreach_founder_led_copy import (
+    localos_beauty_segment,
+    natural_observation,
+    observation_is_grounded,
+)
 from scripts.backfill_partnership_match_artifacts import _skip_reason
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _private_beauty_founder_candidate():
+    return {
+        "recipient": "Доктор-косметолог Татьяна Прокура",
+        "recipient_category": "Косметология / услуги частных специалистов",
+        "recipient_segment": "private_beauty_specialist",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "sender_company": "LocalOS",
+        "sender_mode": "localos",
+        "observed_fact": "Рейтинг - 4,2; публичных отзывов - 3.",
+        "bridge": "Можно проверить, как карточка формирует доверие",
+        "founder_story": (
+            "За десять лет предпринимательства я видел малый бизнес как основатель "
+            "и как разработчик систем автоматизации. Поэтому я создал LocalOS - "
+            "чтобы превращать повторяющиеся задачи в понятные рабочие сценарии."
+        ),
+        "founder_proof": "LocalOS уже применяется более чем в 240 точках малого бизнеса.",
+        "trust_statement": "Подтверждённый опыт основателя LocalOS",
+        "next_step": "Короткий разбор",
+        "evidence_kind": "map_issue",
+        "evidence_status": "observed",
+        "source_url": "https://example.test/maps/tatyana",
+        "freshness": "current_snapshot",
+    }
+
+
+def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
+    candidate = _private_beauty_founder_candidate()
+    story = {
+        "story": candidate["founder_story"],
+        "proof": candidate["founder_proof"],
+        "forbidden_claims": [],
+    }
+    messages = {
+        angle: _message_for_angle(angle, candidate, story, [])
+        for angle in ("signal", "founder_story", "proof", "respectful_close")
+    }
+
+    assert "3 отзыва и рейтинг 4,2" in messages["signal"]
+    assert "сначала нужно работать с клиентами" in messages["signal"]
+    assert "сделать самостоятельно" in messages["signal"]
+    assert "3 отзыва" not in messages["founder_story"]
+    assert "3 отзыва" not in messages["proof"]
+    assert "3 отзыва" not in messages["respectful_close"]
+    assert "не просто выдаёт список рекомендаций" in messages["founder_story"]
+    assert "240 точках" in messages["proof"]
+    assert "больше напоминать не буду" in messages["respectful_close"]
+    assert all(message.count("?") == 1 for message in messages.values())
+    assert all(
+        phrase not in " ".join(messages.values()).lower()
+        for phrase in (
+            "публичный снимок карточки",
+            "элемент присутствия компании",
+            "проверить соответствие",
+            "вы теряете клиентов",
+        )
+    )
+
+
+def test_founder_led_beauty_segmentation_is_deterministic_and_conservative():
+    assert localos_beauty_segment(
+        "Косметология / услуги частных специалистов",
+        "Доктор-косметолог Татьяна Прокура",
+    ) == "private_beauty_specialist"
+    assert localos_beauty_segment("Салон красоты", "Бьюти&Ревайвл") == "beauty_team"
+    assert localos_beauty_segment("Салон красоты", "Сеть салонов Лето") == "beauty_network"
+    assert localos_beauty_segment(
+        "Салон красоты",
+        "Beauty Today",
+        'В Telegram-источнике "Beauty Today | сеть студий в СПб"',
+    ) == "beauty_network"
+    assert localos_beauty_segment(
+        "Косметология",
+        "Студия Дарьи Кушнир",
+        (
+            'В Telegram-источнике "Дарья Кушнир" опубликовано: '
+            '"для всей сети задача важна"'
+        ),
+    ) == "beauty_team"
+    assert localos_beauty_segment("Стоматология", "Клиника") is None
+
+
+def test_telegram_observation_does_not_turn_promotion_into_procedure_explanation():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "recipient": "The Garden",
+        "recipient_category": "Салон красоты",
+        "recipient_segment": "beauty_team",
+        "evidence_kind": "telegram_post",
+        "observed_fact": (
+            'В публичном Telegram-источнике "The Garden" '
+            'опубликовано: "До конца лотереи осталось пару дней"'
+        ),
+    })
+    message = _message_for_angle("signal", candidate, None, [])
+
+    assert "напоминаете клиентам о лотерее" in message
+    assert "объясняете клиентам процедуры" not in message
+
+
+def test_collagen_telegram_observation_preserves_the_sourced_topic():
+    source = (
+        'В публичном Telegram-источнике "BeautyPLAN" опубликовано: '
+        '"Зачем коже коллаген?".'
+    )
+
+    assert observation_is_grounded(
+        "В Telegram вы разбираете, зачем коже коллаген.",
+        source,
+    )
+    assert not observation_is_grounded(
+        "Увидел вашу публикацию в Telegram.",
+        source,
+    )
+
+
+def test_hot_slots_can_be_safely_normalized_as_available_slots():
+    source = (
+        'В публичном Telegram-источнике "Freedom" опубликовано: '
+        '"Горящие окошки на завтра".'
+    )
+
+    assert observation_is_grounded(
+        "В Telegram вы публикуете свободные окна для записи.",
+        source,
+    )
+
+
+@pytest.mark.parametrize(
+    ("post", "expected"),
+    (
+        ("СЕГОДНЯ СВОБОДНЫЕ ОКНА: 16:00, 17:00", "свободные окна для записи"),
+        ("На завтра есть несколько свободных окошек", "свободные окна для записи"),
+        ("ГОРЯЩИЕ ОКОШКИ - ЗАВТРА", "свободные окна для записи"),
+        ("про фотостарение и хорошие солнцезащитные средства", "фотостарении и солнцезащитных"),
+        ("Мама не разрешает краситься тушью, а хочется яркий взгляд", "подростку хочется яркий взгляд"),
+        ("Клиентский день в салоне только 12 июля", "клиентский день в салоне"),
+        ("Как прошла акция от АПЕЛЬСИН на Кушелевской дороге", "акция на Кушелевской дороге"),
+    ),
+)
+def test_telegram_observations_keep_a_concrete_recipient_detail(post, expected):
+    candidate = {
+        "evidence_kind": "telegram_post",
+        "observed_fact": (
+            'В публичном Telegram-источнике "Салон" '
+            f'опубликовано: "{post}".'
+        ),
+    }
+
+    assert expected.lower() in natural_observation(candidate).lower()
+
+
+def test_founder_led_beauty_quality_gate_accepts_paraphrased_sourced_observation():
+    candidate = _private_beauty_founder_candidate()
+    story = {
+        "story": candidate["founder_story"],
+        "proof": candidate["founder_proof"],
+        "forbidden_claims": [],
+    }
+    message = _message_for_angle("signal", candidate, story, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        story,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+
+    assert gate["checks"]["removal"] is True
+    assert gate["checks"]["bridge"] is True
+    assert gate["checks"]["specificity"] is True
+    assert gate["passed"] is True
+
+
+@pytest.mark.parametrize(
+    ("segment", "recipient", "category"),
+    (
+        ("beauty_team", "The Garden", "Салон красоты"),
+        ("beauty_network", "Beauty Today", "Салон красоты"),
+    ),
+)
+def test_founder_led_signal_bridge_matches_team_and_network_owner_context(
+    segment,
+    recipient,
+    category,
+):
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "recipient": recipient,
+        "recipient_category": category,
+        "recipient_segment": segment,
+    })
+    message = _message_for_angle("signal", candidate, None, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+
+    assert gate["checks"]["bridge"] is True
+    assert gate["passed"] is True
 
 
 def test_contact_intelligence_job_serialization_is_independent_from_message_gating():

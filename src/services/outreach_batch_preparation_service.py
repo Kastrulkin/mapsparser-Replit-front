@@ -17,7 +17,11 @@ from psycopg2.extras import Json, RealDictCursor
 
 from pg_db_utils import get_db_connection
 from services.contact_intelligence_service import enqueue_enrichment_job
-from services.lead_partner_type_service import PARTNER_TYPE_IDS, partner_type_for_category
+from services.lead_partner_type_service import (
+    PARTNER_TYPE_IDS,
+    partner_type_for_category,
+    partner_types_for_category,
+)
 from services.outreach_campaign_service import (
     SENDER_MODE_LOCALOS,
     SENDER_MODE_LOCALOS_FOR_PARTNER,
@@ -517,10 +521,15 @@ def _load_candidates(
     cursor.execute(query, params)
     rows = [dict(row) for row in cursor.fetchall()]
     for row in rows:
+        row["partner_types"] = list(partner_types_for_category(row.get("lead_category")))
         row["partner_type"] = partner_type_for_category(row.get("lead_category"))
     if normalized_partner_types:
         allowed_partner_types = set(normalized_partner_types)
-        rows = [row for row in rows if row.get("partner_type") in allowed_partner_types]
+        rows = [
+            row
+            for row in rows
+            if allowed_partner_types.intersection(row.get("partner_types") or [])
+        ]
         if limit is not None:
             rows = rows[:max(1, limit)]
     return rows
@@ -831,6 +840,7 @@ def inventory(
                 "lead_id": _text(row.get("lead_id")),
                 "lead_name": _text(row.get("lead_name")),
                 "partner_type": _text(row.get("partner_type")) or "other",
+                "partner_types": row.get("partner_types") or ["other"],
                 "state": state,
                 "enrichment_status": row.get("enrichment_status"),
                 "contact_count": int(row.get("contact_count") or 0),

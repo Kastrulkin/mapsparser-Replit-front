@@ -275,6 +275,19 @@ def test_manual_contact_normalization_accepts_social_shorthand_and_checks_channe
         raise AssertionError("Telegram must reject a VK URL")
 
 
+def test_manual_vk_contact_accepts_vk_ru_and_vk_com_domains():
+    assert normalize_manual_contact_value("vk", "vk.ru/bnckidsru") == "https://vk.ru/bnckidsru"
+    assert normalize_manual_contact_value("vk", "https://vk.ru/bnckidsru") == "https://vk.ru/bnckidsru"
+    assert normalize_manual_contact_value("vk", "https://vk.com/bnckidsru") == "https://vk.com/bnckidsru"
+
+    try:
+        normalize_manual_contact_value("vk", "https://t.me/bnckidsru")
+    except ValueError as error:
+        assert str(error) == "Ссылка не соответствует выбранному каналу"
+    else:
+        raise AssertionError("VK must reject a Telegram URL")
+
+
 def test_malformed_bracketed_url_is_ignored_in_contact_payload():
     assert contact_type_from_url("https://[broken") is None
     assert normalize_contact_value("website", "https://[broken") == ""

@@ -108,8 +108,9 @@ def test_batch_filter_uses_canonical_partner_type_before_limit() -> None:
         partner_types=["beauty"],
         limit=1,
     )
-    assert [row["id"] for row in rows] == ["ws-2"]
-    assert rows[0]["partner_type"] == "beauty"
+    assert [row["id"] for row in rows] == ["ws-1"]
+    assert rows[0]["partner_type"] == "medicine"
+    assert rows[0]["partner_types"] == ["medicine", "beauty"]
     assert cursor.executed[-1][1] == ["localos_sales"]
 
 

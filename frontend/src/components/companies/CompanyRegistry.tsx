@@ -10,6 +10,8 @@ import {
   LayoutList,
   Map,
   MapPin,
+  Maximize2,
+  Minimize2,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -296,7 +298,22 @@ export const CompanyRegistry = () => {
   const [mapLoading, setMapLoading] = useState(true);
   const [mapError, setMapError] = useState('');
   const [mapTruncated, setMapTruncated] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
   const reducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!mapExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMapExpanded(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [mapExpanded]);
 
   const load = useCallback(async (nextCursor = '', append = false) => {
     if (append) setLoadingMore(true);
@@ -427,21 +444,28 @@ export const CompanyRegistry = () => {
         ))}
       </div>
 
-      <div className="space-y-3">
+      <div
+        className={mapExpanded ? 'fixed inset-0 z-[70] flex min-h-0 flex-col gap-3 overflow-y-auto bg-slate-50 p-3 sm:p-5 xl:overflow-hidden' : 'space-y-5'}
+        role={mapExpanded ? 'dialog' : undefined}
+        aria-modal={mapExpanded || undefined}
+        aria-label={mapExpanded ? 'Развёрнутая карта компаний с фильтрами' : undefined}
+      >
+      <div className="shrink-0 space-y-3">
         <div className="flex flex-col gap-3 xl:flex-row">
           <label className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, адрес, телефон, сайт или ссылка на карты" className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-300 focus:ring-4 focus:ring-orange-100" /></label>
           <label className="flex h-12 min-w-0 items-center rounded-2xl border border-slate-200 bg-white pl-4 transition-[border-color,box-shadow] focus-within:border-orange-300 focus-within:ring-4 focus-within:ring-orange-100 xl:w-72"><Building2 className="h-4 w-4 shrink-0 text-slate-400" /><span className="ml-2 shrink-0 text-xs font-semibold text-slate-500">Тип:</span><select aria-label={view === 'map' ? 'Тип бизнеса на карте' : 'Тип бизнеса'} value={category} onChange={(event) => setCategory(event.target.value)} className="h-full min-w-0 flex-1 bg-transparent pl-2 pr-3 text-sm font-medium text-slate-700 outline-none"><option value="">Все бизнесы</option>{mapCategories.map((item) => <option key={item.value} value={item.value}>{item.label} · {item.count}</option>)}</select></label>
           <div className="grid h-12 grid-cols-2 rounded-2xl bg-slate-100 p-1 shadow-inner xl:w-56" aria-label="Представление реестра">
-            <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'list' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><LayoutList className="h-4 w-4" />Список</button>
+            <button type="button" aria-pressed={view === 'list'} onClick={() => { setMapExpanded(false); setView('list'); }} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'list' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><LayoutList className="h-4 w-4" />Список</button>
             <button type="button" aria-pressed={view === 'map'} onClick={() => { setMapLoading(true); setView('map'); }} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'map' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><Map className="h-4 w-4" />Карта</button>
           </div>
+          {view === 'map' ? <button type="button" aria-pressed={mapExpanded} aria-label={mapExpanded ? 'Свернуть карту' : 'Развернуть карту'} onClick={() => setMapExpanded((current) => !current)} className="flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-xs font-semibold text-slate-700 shadow-[0_0_0_1px_rgba(15,23,42,0.07),0_2px_8px_rgba(15,23,42,0.05)] transition-[box-shadow,scale] hover:shadow-[0_0_0_1px_rgba(15,23,42,0.10),0_4px_12px_rgba(15,23,42,0.08)] active:scale-[0.96]"><span className="relative grid h-4 w-4 place-items-center" aria-hidden="true"><Minimize2 className={`absolute h-4 w-4 transition-[opacity,filter,transform] duration-300 motion-reduce:transition-none ${mapExpanded ? 'scale-100 opacity-100 blur-0' : 'scale-[0.25] opacity-0 blur-[4px]'}`} /><Maximize2 className={`absolute h-4 w-4 transition-[opacity,filter,transform] duration-300 motion-reduce:transition-none ${mapExpanded ? 'scale-[0.25] opacity-0 blur-[4px]' : 'scale-100 opacity-100 blur-0'}`} /></span>{mapExpanded ? 'Свернуть' : 'Развернуть'}</button> : null}
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {roleOptions.map(([key, label]) => <button type="button" key={key || 'all'} aria-pressed={role === key} onClick={() => setRole(key)} className={`min-h-11 shrink-0 rounded-2xl px-4 text-xs font-semibold transition-[background-color,color,scale] active:scale-[0.96] ${role === key ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>)}
         </div>
       </div>
 
-      <section className="rounded-3xl bg-amber-50/70 ring-1 ring-inset ring-amber-200/70">
+      {!mapExpanded ? <section className="rounded-3xl bg-amber-50/70 ring-1 ring-inset ring-amber-200/70">
         <button type="button" onClick={() => showDuplicates ? setShowDuplicates(false) : void loadDuplicates()} className="flex min-h-16 w-full items-center gap-3 px-4 text-left transition-transform active:scale-[0.99] sm:px-5">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-amber-600 shadow-sm"><CopyCheck className="h-5 w-5" /></span>
           <span className="min-w-0 flex-1"><b className="block text-sm text-slate-950">Возможные дубли</b><span className="text-pretty text-xs text-slate-600">LocalOS показывает только совпадения с подтверждающими признаками. Решение всегда остаётся за вами.</span></span>
@@ -467,9 +491,9 @@ export const CompanyRegistry = () => {
             </motion.div>
           ) : null}
         </AnimatePresence>
-      </section>
+      </section> : null}
 
-      {view === 'map' ? <CompanyRegistryMap items={mapItems} loading={mapLoading} error={mapError} truncated={mapTruncated} withoutCoordinates={summary.withoutCoordinates} categoryLabel={selectedCategoryLabel} onSelect={setSelectedId} onRetry={() => void loadMap()} /> : loading ? <RegistrySkeleton /> : error ? (
+      {view === 'map' ? <CompanyRegistryMap items={mapItems} expanded={mapExpanded} loading={mapLoading} error={mapError} truncated={mapTruncated} withoutCoordinates={summary.withoutCoordinates} categoryLabel={selectedCategoryLabel} onSelect={setSelectedId} onRetry={() => void loadMap()} /> : loading ? <RegistrySkeleton /> : error ? (
         <div className="rounded-3xl bg-rose-50 p-6 text-rose-700 ring-1 ring-inset ring-rose-100"><CircleAlert className="h-5 w-5" /><b className="mt-3 block">Реестр временно недоступен</b><p className="mt-1 text-sm">{error}</p><button type="button" onClick={() => void load()} className="mt-4 min-h-11 rounded-2xl bg-white px-4 text-sm font-semibold shadow-sm transition-transform active:scale-[0.96]">Повторить</button></div>
       ) : items.length ? (
         <motion.div layout className="divide-y divide-slate-100 overflow-hidden rounded-3xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_12px_36px_rgba(15,23,42,0.05)]">
@@ -486,6 +510,7 @@ export const CompanyRegistry = () => {
       )}
 
       {view === 'list' && cursor ? <button type="button" disabled={loadingMore} onClick={() => void load(cursor, true)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-semibold text-slate-700 shadow-[0_0_0_1px_rgba(15,23,42,0.07)] transition-transform active:scale-[0.96] disabled:opacity-50">{loadingMore ? <RefreshCw className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button> : null}
+      </div>
 
       <AnimatePresence initial={false}>{selectedId ? <CompanyDrawer key={selectedId} companyId={selectedId} close={() => setSelectedId('')} /> : null}</AnimatePresence>
       <AnimatePresence initial={false}>{mergePreview ? (

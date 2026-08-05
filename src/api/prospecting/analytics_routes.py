@@ -1347,6 +1347,8 @@ def _build_admin_lead_offer_payload(
         or str(lead_address.split(",", 1)[0] if lead_address else "").strip()
     )
     primary_language, selected_languages = _normalize_public_audit_languages(preferred_language, enabled_languages)
+    raw_source_url = str(lead.get("source_url") or "").strip()
+    public_source_url = raw_source_url if _is_direct_partnership_map_card_url(raw_source_url) else None
     return {
         "lead_id": str(lead.get("id") or ""),
         "name": lead_name,
@@ -1357,7 +1359,7 @@ def _build_admin_lead_offer_payload(
         "category": lead.get("category"),
         "city": resolved_city or None,
         "address": lead.get("address"),
-        "source_url": lead.get("source_url"),
+        "source_url": public_source_url,
         "logo_url": preview_meta.get("logo_url"),
         "photo_urls": preview_meta.get("photo_urls") if isinstance(preview_meta.get("photo_urls"), list) else [],
         "rating": current_state.get("rating"),

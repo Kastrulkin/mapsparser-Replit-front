@@ -83,3 +83,26 @@ def test_contacted_context_does_not_change_other_context_action():
 
     assert build_next_action(lead, localos)["code"] == "wait_or_follow_up"
     assert build_next_action(lead, partner)["code"] == "prepare_room"
+
+
+def test_saved_campaign_becomes_an_explicit_operator_action():
+    lead = {"email": "owner@example.com"}
+    draft = {
+        "status": "in_progress",
+        "selected_channel": "email",
+        "campaign_state": {"status": "draft", "version": 3},
+    }
+    active = {
+        "status": "in_progress",
+        "selected_channel": "email",
+        "campaign_state": {"status": "approved", "version": 4},
+    }
+
+    assert build_next_action(lead, draft) == {
+        "code": "review_draft",
+        "label": "Проверить черновик",
+    }
+    assert build_next_action(lead, active) == {
+        "code": "check_campaign",
+        "label": "Проверить кампанию",
+    }

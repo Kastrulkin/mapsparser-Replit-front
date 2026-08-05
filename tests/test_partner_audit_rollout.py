@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from flask import Flask
+
 from src.api import admin_prospecting
 from src.api.prospecting.search_routes import _geo_distance_km
 from src.api.prospecting.partner_discovery import _ensure_imported_partnership_workstream
@@ -487,6 +489,67 @@ def test_backend_resolves_non_card_sources_before_starting_parse() -> None:
     assert _partnership_source_requires_map_match("localos-doc://partnership/lead") is True
 
 
+def test_admin_parse_never_enqueues_internal_document_url(monkeypatch) -> None:
+    app = Flask(__name__)
+    enqueued_urls: list[str] = []
+
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_require_superadmin",
+        lambda: ({"user_id": "00000000-0000-0000-0000-000000000001"}, None),
+    )
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_load_prospecting_lead",
+        lambda _lead_id: {
+            "id": "lead-1",
+            "name": "Волшебная миля",
+            "category": "Семейный интерактивный центр",
+            "city": "Санкт-Петербург",
+            "address": "проспект Энгельса, 154",
+            "source_url": "localos-doc://partnership/source/row",
+        },
+    )
+    monkeypatch.setattr(admin_prospecting, "_normalize_lead_for_display", lambda lead: dict(lead))
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_find_yandex_candidates_for_partnership_lead",
+        lambda _lead: ([], "provider unavailable"),
+    )
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_ensure_parse_business_for_lead",
+        lambda _lead, _user_id: (
+            {
+                "id": "00000000-0000-0000-0000-000000000002",
+                "name": "Волшебная миля",
+                "yandex_url": "localos-doc://partnership/source/row",
+            },
+            True,
+        ),
+    )
+    monkeypatch.setattr(admin_prospecting, "_update_lead_business_link", lambda *_args: None)
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_enqueue_parse_task_for_business",
+        lambda _business_id, _user_id, source_url: enqueued_urls.append(source_url) or {
+            "id": "task-1",
+            "status": "pending",
+            "task_type": "parse_card",
+            "source": "apify_yandex",
+        },
+    )
+
+    with app.test_request_context(
+        "/api/admin/prospecting/lead/lead-1/parse",
+        method="POST",
+        json={},
+    ):
+        admin_prospecting.parse_lead_card("lead-1")
+
+    assert enqueued_urls == []
+
+
 def test_next_partner_action_explains_map_resolution_before_parse() -> None:
     resolve_action = _partnership_next_best_action({
         "partnership_stage": "imported",
@@ -649,6 +712,25 @@ def test_audit_quality_blocks_technical_and_foreign_industry_copy() -> None:
     codes = {flag["code"] for flag in quality["flags"]}
     assert "technical_copy" in codes
     assert "industry_drift" in codes
+
+
+def test_audit_quality_blocks_failed_parse_snapshot() -> None:
+    quality = evaluate_audit_quality(
+        {
+            "audit_profile": "family_entertainment",
+            "business": {"name": "Волшебная миля"},
+            "summary_text": "Карточку нужно усилить.",
+            "issue_blocks": [{"title": "Нужно добавить услуги"}],
+            "parse_context": {
+                "last_parse_status": "error",
+                "last_parse_error": "apify_parser_subprocess_exception",
+            },
+        },
+        expected_name="Волшебная миля",
+    )
+
+    assert quality["passed"] is False
+    assert "parse_failed" in {flag["code"] for flag in quality["flags"]}
 
 
 def test_uncertain_photo_copy_uses_the_business_profile() -> None:

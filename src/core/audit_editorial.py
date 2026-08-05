@@ -79,12 +79,44 @@ PROFILE_ACTOR_DATIVE = {
 }
 
 
+def _business_name_after_u(business_name: str) -> str:
+    """Return a grammatical Russian subject after «у» without guessing complex brands."""
+    words = re.split(r"\s+", str(business_name or "").strip())
+    if len(words) == 2 and all(re.fullmatch(r"[А-Яа-яЁё-]+", word) for word in words):
+        adjective, noun = words
+        if adjective.lower().endswith("ая"):
+            adjective = adjective[:-2] + "ой"
+        elif adjective.lower().endswith("яя"):
+            adjective = adjective[:-2] + "ей"
+        else:
+            adjective = ""
+
+        noun_lower = noun.lower()
+        if noun_lower.endswith("ия"):
+            noun = noun[:-2] + "ии"
+        elif noun_lower.endswith("я"):
+            noun = noun[:-1] + "и"
+        elif noun_lower.endswith("а"):
+            ending = "и" if noun_lower[-2:-1] in "гкхжчшщц" else "ы"
+            noun = noun[:-1] + ending
+        else:
+            noun = ""
+
+        if adjective and noun:
+            return f"«{adjective} {noun}»"
+    return f"карточки «{business_name}»"
+
+
 def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
     text = str(value or "").strip()
     if not text:
         return text
 
     replacements = (
+        (
+            "Новый трафик, если в карточке нет свежих фактов и понятного сценария обращения",
+            "Новые клиенты могут открыть карточку и уйти, если не увидят актуальную информацию и не поймут, как с вами связаться.",
+        ),
         ("за чем сюда идти", "с каким запросом обращаться"),
         ("Зачем сюда идти", "С каким запросом обращаться"),
         (
@@ -653,9 +685,9 @@ def _medical_summary(audit: dict[str, Any], *, business_name: str, focus: str, m
     if services_count > 0:
         trust_parts.append("список услуг")
     if trust_parts:
-        first = f"У «{business_name}» есть база доверия: {', '.join(trust_parts)}."
+        first = f"У {_business_name_after_u(business_name)} есть база доверия: {', '.join(trust_parts)}."
     elif business_name:
-        first = f"У «{business_name}» уже есть основа для доверия пациентов."
+        first = f"У {_business_name_after_u(business_name)} уже есть основа для доверия пациентов."
     else:
         first = "У карточки уже есть основа для доверия пациентов."
 
@@ -771,7 +803,7 @@ def build_editorial_summary(audit: dict[str, Any], *, max_length: int = SUMMARY_
 
     if issue_title:
         if business_name:
-            first = f"У «{business_name}»: {issue_title[:1].lower() + issue_title[1:]}."
+            first = f"У {_business_name_after_u(business_name)} {issue_title[:1].lower() + issue_title[1:]}."
         else:
             first = issue_title + "."
     elif state_fact:

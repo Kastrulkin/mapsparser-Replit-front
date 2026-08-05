@@ -27,6 +27,12 @@ from services.outreach_decision_service import (
     select_trust,
     trust_candidates,
 )
+from services.outreach_founder_led_copy import (
+    founder_led_localos_subject,
+    founder_led_localos_text,
+    localos_beauty_segment,
+    observation_is_grounded,
+)
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
     mark_room_ready_after_positive_reply,
@@ -1474,6 +1480,22 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "relevance": _text(match.get("relevance_bridge"))
             or "Есть фактическое основание проверить один безопасный партнёрский тест.",
         })
+    deduplicated: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in ledger:
+        key = (
+            _text(item.get("id")),
+            _text(item.get("source_url")),
+            _text(item.get("fact")),
+        )
+        existing = deduplicated.get(key)
+        if not existing or _text(item.get("observed_at")) > _text(existing.get("observed_at")):
+            deduplicated[key] = item
+    ledger = list(deduplicated.values())
+    beauty_sales = bool(
+        context.get("workstream_type") == "localos_sales"
+        and localos_beauty_segment(context.get("category"), context.get("lead_name"))
+    )
+
     def evidence_priority(item: dict[str, Any]) -> tuple[int, float]:
         fact = _text(item.get("fact")).lower()
         kind = _text(item.get("kind"))
@@ -1483,14 +1505,16 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = -1
         elif kind == "service_compatibility":
             rank = 0
+        elif beauty_sales and kind in {"telegram_post", "social_post"}:
+            rank = 1
         elif (
             "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact
             or "описание бизнеса не найдено" in fact
         ):
-            rank = 1
-        elif "рейтинг -" in fact and "отзывов -" in fact:
             rank = 2
+        elif "рейтинг -" in fact and "отзывов -" in fact:
+            rank = 3
         elif kind == "review":
             rank = 9
         else:
@@ -1516,6 +1540,7 @@ def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str
         else ""
     )
     proofs = []
+    proof_statuses: dict[str, str] = {}
     for item in _list(profile.get("proof_points_json")) + _list(profile.get("verified_cases_json")):
         if isinstance(item, dict):
             if _text(item.get("status") or "approved").lower() not in {"approved", "observed"}:
@@ -1525,6 +1550,9 @@ def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str
             value = _text(item)
         if value:
             proofs.append(value)
+            proof_statuses[value] = _text(
+                item.get("status") if isinstance(item, dict) else "approved"
+            ).lower() or "approved"
     offers = []
     for item in _list(profile.get("allowed_offers_json")):
         if isinstance(item, dict):
@@ -1560,6 +1588,7 @@ def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str
     ranked_proofs = sorted(
         enumerate(proofs),
         key=lambda indexed: (
+            0 if proof_statuses.get(indexed[1]) == "approved" else 1,
             -len(evidence_tokens.intersection(relevance_tokens(indexed[1]))),
             indexed[0],
         ),
@@ -1619,6 +1648,11 @@ def build_personalization_candidates(
         else "business"
     )
     for index, evidence in enumerate(ledger[:3]):
+        recipient_segment = localos_beauty_segment(
+            context.get("category"),
+            context.get("lead_name"),
+            evidence.get("fact"),
+        )
         relevant_story = None
         if story:
             relevant_story = _founder_story(
@@ -1631,6 +1665,8 @@ def build_personalization_candidates(
             "id": f"personalization-{index + 1}",
             "recipient": lead_name,
             "recipient_type": recipient_type,
+            "recipient_category": _text(context.get("category")),
+            "recipient_segment": recipient_segment,
             "evidence_id": evidence["id"],
             "evidence_ids": [evidence["id"]],
             "observed_fact": evidence["fact"],
@@ -1878,6 +1914,14 @@ def _quality_gate(
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
     normalized_text = text.lower()
+    grounded_observation = observation_is_grounded(
+        text,
+        candidate.get("observed_fact"),
+    )
+    founder_led_beauty = bool(
+        _text(candidate.get("sender_mode")) in {"", SENDER_MODE_LOCALOS}
+        and _text(candidate.get("recipient_segment"))
+    )
     operator_approved_idea = (
         _text(candidate.get("evidence_kind"))
         == "operator_approved_partnership_reason"
@@ -1943,12 +1987,43 @@ def _quality_gate(
     checks = {
         "removal": contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
+            or grounded_observation
             or operator_idea_present
             or respectful_close
             or residential_relevance
+        ) or bool(
+            founder_led_beauty
+            and (
+                (_text(angle) == "signal" and grounded_observation)
+                or _text(angle) in {"founder_story", "proof", "respectful_close"}
+            )
+            and (
+                contains(candidate.get("founder_story"))
+                or contains(candidate.get("founder_proof"))
+                or respectful_close
+                or grounded_observation
+            )
         ),
         "bridge": (
             any(contains(anchor) for anchor in personalization_anchors[1:])
+            or bool(
+                founder_led_beauty
+                and _text(angle) == "signal"
+                and grounded_observation
+                and any(
+                    marker in normalized_text
+                    for marker in (
+                        "остаются на потом",
+                        "остаются на владельце",
+                        "возвращаются к руководителю",
+                    )
+                )
+            )
+            or bool(
+                founder_led_beauty
+                and _text(angle) in {"founder_story", "proof", "respectful_close"}
+                and "localos" in normalized_text
+            )
             or operator_idea_present
             or residential_relevance
             or (respectful_close and contains(candidate.get("recipient")))
@@ -1966,10 +2041,19 @@ def _quality_gate(
             "unknown_dated_source",
         },
         "specificity": bool(
-            contains(candidate.get("recipient"))
+            (contains(candidate.get("recipient")) or founder_led_beauty)
             and (
                 respectful_close
                 or operator_idea_present
+                or grounded_observation
+                or bool(
+                    founder_led_beauty
+                    and _text(angle) in {"founder_story", "proof"}
+                    and any(
+                        marker in normalized_text
+                        for marker in ("частного специалиста", "салона", "сети салонов", "карточк", "отзыв", "контент")
+                    )
+                )
                 or len(_text(candidate.get("observed_fact"))) >= 20
             )
         ),
@@ -2071,6 +2155,9 @@ def _message_for_angle(
     story: dict[str, Any] | None,
     previous_angles: list[str],
 ) -> str:
+    founder_led_message = founder_led_localos_text(angle, candidate, story)
+    if founder_led_message:
+        return founder_led_message
     name = candidate["recipient"]
     sender = _text(candidate.get("sender"))
     sender_role = _text(candidate.get("sender_role"))
@@ -2242,6 +2329,9 @@ def _message_for_angle(
 
 
 def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
+    founder_led_subject = founder_led_localos_subject(angle, candidate)
+    if founder_led_subject:
+        return founder_led_subject[:200]
     if _text(candidate.get("evidence_kind")) == "operator_approved_partnership_reason":
         recipient = _text(candidate.get("recipient"))[:100]
         represented_business = _text(candidate.get("represented_business"))[:90]

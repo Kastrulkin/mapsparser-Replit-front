@@ -52,7 +52,7 @@ CONTACT_TYPES = {
 MANUAL_CONTACT_HOSTS = {
     "telegram": {"t.me", "telegram.me"},
     "whatsapp": {"wa.me", "api.whatsapp.com"},
-    "vk": {"vk.com"},
+    "vk": {"vk.com", "vk.ru"},
     "instagram": {"instagram.com"},
     "max": {"max.ru"},
 }

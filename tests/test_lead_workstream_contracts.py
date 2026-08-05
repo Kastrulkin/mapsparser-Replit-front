@@ -33,10 +33,26 @@ def test_admin_compact_api_returns_workstream_registry_fields():
     assert 'filters.get("action_state")' in runtime
     assert '"client_options": client_options' in runtime
     assert 'display_lead["partner_type"] = canonical_partner_type' in runtime
-    assert '"partner_type_options": lead_partner_type_service.partner_type_options(' in runtime
+    assert 'display_lead["canonical_categories"] = canonical_categories' in runtime
+    assert '"business_category_options": category_options' in runtime
+    assert '"partner_type_options": category_options' in runtime
     assert "duplicate_client_names" in runtime
     assert "source_provider" in database
     assert "intent" in database
+
+
+def test_registry_exposes_latest_campaign_for_processing_filters():
+    service = read("src/services/lead_workstream_service.py")
+    frontend = read("frontend/src/components/prospecting/AdminLeadRegistry.tsx")
+
+    assert "campaign.id AS campaign_id" in service
+    assert "payload[\"campaign_state\"]" in service
+    assert "Любая категория бизнеса" in frontend
+    assert "Любое состояние цепочки" in frontend
+    assert "Цепочка создана" in frontend
+    assert "Цепочки нет" in frontend
+    assert "Проверить черновик" in frontend
+    assert '"code": "review_draft"' in service
 
 
 def test_followup_migration_restores_partner_client_from_room_or_card():

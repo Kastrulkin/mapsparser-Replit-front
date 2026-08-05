@@ -1605,18 +1605,118 @@ def parse_lead_card(lead_id):
         if not display_lead:
             return jsonify({"error": "Lead is not available for parsing"}), 400
 
-        business, business_created = _ensure_parse_business_for_lead(display_lead, str(user_data["user_id"]))
+        map_match: dict[str, Any] | None = None
+        if _partnership_source_requires_map_match(display_lead.get("source_url")):
+            if _is_synthetic_partnership_lead(display_lead):
+                return jsonify(
+                    {
+                        "error": "Запись обозначает группу или тип бизнеса, а не одну компанию.",
+                        "code": "PARTNER_MAP_MATCH_SYNTHETIC",
+                    }
+                ), 422
+            candidates, provider_error = _find_yandex_candidates_for_partnership_lead(display_lead)
+            if provider_error:
+                return jsonify(
+                    {
+                        "error": "Не удалось выполнить поиск на Яндекс Картах.",
+                        "code": "PARTNER_MAP_MATCH_PROVIDER_ERROR",
+                        "detail": provider_error,
+                    }
+                ), 503
+            candidate, match_status = _select_partnership_map_candidate(candidates)
+            if not candidate:
+                status_code = 404 if match_status == "closed_or_not_found" else 409
+                return jsonify(
+                    {
+                        "error": "Нельзя однозначно подтвердить карточку компании.",
+                        "code": "PARTNER_MAP_MATCH_AMBIGUOUS",
+                        "reason": match_status,
+                        "candidates": candidates,
+                    }
+                ), status_code
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                current_lead = _load_prospecting_lead(lead_id) or display_lead
+                _store_partnership_map_match(
+                    cur,
+                    lead=current_lead,
+                    candidate=candidate,
+                    candidates=candidates,
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            refreshed = _load_prospecting_lead(lead_id)
+            display_lead = _normalize_lead_for_display(dict(refreshed or {}))
+            if not display_lead:
+                return jsonify({"error": "Matched lead is not available for parsing"}), 500
+            map_match = {
+                "status": "confirmed",
+                "candidate": candidate,
+                "confidence": candidate.get("confidence"),
+            }
+
+        is_partnership_lead = str(display_lead.get("intent") or "").strip().lower() == "partnership_outreach"
+        if is_partnership_lead:
+            business, business_created = _ensure_parse_business_for_partnership_lead(
+                display_lead,
+                str(user_data["user_id"]),
+            )
+        else:
+            business, business_created = _ensure_parse_business_for_lead(display_lead, str(user_data["user_id"]))
         business_id = str(business.get("id") or "").strip()
         if not business_id:
             return jsonify({"error": "Failed to resolve business for lead"}), 500
 
-        _update_lead_business_link(lead_id, business_id)
+        if is_partnership_lead:
+            confirmed_source_url = str(display_lead.get("source_url") or "").strip()
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE prospectingleads AS lead
+                    SET business_id = COALESCE(
+                            (
+                                SELECT workstream.client_business_id
+                                FROM lead_workstreams AS workstream
+                                WHERE workstream.lead_id = lead.id
+                                  AND workstream.workstream_type = 'client_partnership'
+                                ORDER BY workstream.updated_at DESC NULLS LAST
+                                LIMIT 1
+                            ),
+                            lead.business_id
+                        ),
+                        parse_business_id = %s,
+                        updated_at = NOW()
+                    WHERE lead.id = %s
+                    """,
+                    (business_id, lead_id),
+                )
+                if confirmed_source_url:
+                    cur.execute(
+                        """
+                        UPDATE businesses
+                        SET yandex_url = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                          AND owner_id = %s
+                          AND description LIKE 'Lead shadow business for outreach lead %%'
+                        """,
+                        (confirmed_source_url, business_id, str(user_data["user_id"])),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+        else:
+            _update_lead_business_link(lead_id, business_id)
         source_url = str(
-            business.get("yandex_url")
-            or display_lead.get("source_url")
+            display_lead.get("source_url")
+            or business.get("yandex_url")
             or ""
         ).strip()
-        if not source_url:
+        if not source_url or _partnership_source_requires_map_match(source_url):
             return jsonify({"error": "У лида нет ссылки на Яндекс Карты для запуска парсинга"}), 400
 
         task = _enqueue_parse_task_for_business(business_id, user_data["user_id"], source_url)
@@ -1663,6 +1763,7 @@ def parse_lead_card(lead_id):
                     "retry_after": task.get("retry_after"),
                     "existing": bool(task.get("existing")),
                 },
+                "map_match": map_match,
             }
         )
     except Exception as e:

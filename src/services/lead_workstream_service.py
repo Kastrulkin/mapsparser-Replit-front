@@ -50,6 +50,7 @@ def legacy_workstream(lead: dict[str, Any]) -> dict[str, Any]:
         "last_contact_comment": lead.get("last_contact_comment"),
         "room": None,
         "drafts_count": 0,
+        "campaign_state": None,
         "legacy": True,
     }
 
@@ -118,6 +119,8 @@ def build_room_state(workstream: dict[str, Any]) -> dict[str, Any]:
 
 def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[str, Any]:
     status = str(workstream.get("status") or "unprocessed").strip().lower()
+    campaign_state = workstream.get("campaign_state") if isinstance(workstream.get("campaign_state"), dict) else None
+    campaign_status = str((campaign_state or {}).get("status") or "").strip().lower()
     enrichment = workstream.get("enrichment_state")
     enrichment_status = ""
     if isinstance(enrichment, dict):
@@ -132,6 +135,10 @@ def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[
         return {"code": "record_result", "label": "Зафиксировать результат"}
     if status in {"contacted", "waiting_reply", "second_message_sent", "sent", "delivered"}:
         return {"code": "wait_or_follow_up", "label": "Проверить ответ"}
+    if campaign_status == "draft":
+        return {"code": "review_draft", "label": "Проверить черновик"}
+    if campaign_status in {"approved", "active", "paused"}:
+        return {"code": "check_campaign", "label": "Проверить кампанию"}
     if enrichment_status in {"queued", "collecting", "verifying", "researching", "drafting"}:
         return {"code": "prepare_message", "label": "Проверяем контакты"}
     if readiness_code in {"needs_facts", "needs_evidence"}:
@@ -185,6 +192,14 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     room.id AS room_id, room.status AS room_status, room.slug AS room_slug,
                     room.mode AS room_mode, room.updated_at AS room_updated_at,
                     COALESCE(draft_stats.drafts_count, 0)::INT AS drafts_count,
+                    campaign.id AS campaign_id,
+                    campaign.status AS campaign_status,
+                    campaign.version AS campaign_version,
+                    campaign.created_at AS campaign_created_at,
+                    campaign.updated_at AS campaign_updated_at,
+                    campaign.approved_at AS campaign_approved_at,
+                    campaign.stop_reason AS campaign_stop_reason,
+                    COALESCE(campaign.touches_count, 0)::INT AS campaign_touches_count,
                     research.id AS research_id, research.score AS research_score,
                     research.qualification_stage AS research_stage,
                     research.signal_label AS research_signal_label,
@@ -233,6 +248,25 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     WHERE d.workstream_id = ws.id
                        OR (d.workstream_id IS NULL AND d.lead_id = ws.lead_id)
                 ) draft_stats ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT
+                        outreach_campaign.id,
+                        outreach_campaign.status,
+                        outreach_campaign.version,
+                        outreach_campaign.created_at,
+                        outreach_campaign.updated_at,
+                        outreach_campaign.approved_at,
+                        outreach_campaign.stop_reason,
+                        (
+                            SELECT COUNT(*)
+                            FROM outreach_campaign_touches touch
+                            WHERE touch.campaign_id = outreach_campaign.id
+                        ) AS touches_count
+                    FROM outreach_campaigns outreach_campaign
+                    WHERE outreach_campaign.workstream_id = ws.id
+                    ORDER BY outreach_campaign.version DESC, outreach_campaign.created_at DESC
+                    LIMIT 1
+                ) campaign ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT r.*
                     FROM lead_workstream_research r
@@ -325,6 +359,25 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     for key in ("room_id", "room_status", "room_mode", "room_updated_at", "room_slug"):
                         payload.pop(key, None)
                     payload["room"] = None
+                if payload.get("campaign_id"):
+                    payload["campaign_state"] = {
+                        "id": str(payload.pop("campaign_id")),
+                        "status": payload.pop("campaign_status"),
+                        "version": int(payload.pop("campaign_version") or 1),
+                        "touches_count": int(payload.pop("campaign_touches_count") or 0),
+                        "created_at": payload.pop("campaign_created_at"),
+                        "updated_at": payload.pop("campaign_updated_at"),
+                        "approved_at": payload.pop("campaign_approved_at"),
+                        "stop_reason": payload.pop("campaign_stop_reason"),
+                    }
+                else:
+                    for key in (
+                        "campaign_id", "campaign_status", "campaign_version",
+                        "campaign_touches_count", "campaign_created_at",
+                        "campaign_updated_at", "campaign_approved_at", "campaign_stop_reason",
+                    ):
+                        payload.pop(key, None)
+                    payload["campaign_state"] = None
                 payload["legacy"] = False
                 if payload.get("research_id"):
                     researched_at = payload.pop("research_researched_at")

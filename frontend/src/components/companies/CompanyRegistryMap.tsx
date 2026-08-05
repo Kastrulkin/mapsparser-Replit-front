@@ -12,6 +12,7 @@ import {
 
 type CompanyRegistryMapProps = {
   items: CompanyMapPoint[];
+  expanded?: boolean;
   loading?: boolean;
   error?: string;
   truncated?: boolean;
@@ -26,7 +27,7 @@ type YandexMapInstance = {
   setCenter?: (center: [number, number], zoom?: number, options?: Record<string, unknown>) => void;
   getBounds?: () => [[number, number], [number, number]];
   getZoom?: () => number;
-  container?: { getSize?: () => [number, number] };
+  container?: { getSize?: () => [number, number]; fitToViewport?: () => void };
   events?: YandexMapEventManager;
 };
 
@@ -43,8 +44,8 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (symbol) => ({
   "'": '&#039;',
 }[symbol] || symbol));
 
-const MapSkeleton = () => (
-  <div className="h-[560px] animate-pulse rounded-[28px] bg-slate-100 motion-reduce:animate-none" aria-label="Загрузка карты" />
+const MapSkeleton = ({ expanded = false }: { expanded?: boolean }) => (
+  <div className={`${expanded ? 'min-h-[320px] flex-1 rounded-[24px]' : 'h-[560px] rounded-[28px]'} animate-pulse bg-slate-100 motion-reduce:animate-none`} aria-label="Загрузка карты" />
 );
 
 const COMPANY_HEATMAP_PALETTE = Array.from({ length: 256 }, (_, index) => getCompanyHeatmapColor(index / 255));
@@ -69,7 +70,7 @@ const projectMercatorLatitude = (latitude: number) => {
   return Math.log(Math.tan(Math.PI / 4 + radians / 2));
 };
 
-export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCoordinates = 0, categoryLabel, onSelect, onRetry }: CompanyRegistryMapProps) => {
+export const CompanyRegistryMap = ({ items, expanded = false, loading, error, truncated, withoutCoordinates = 0, categoryLabel, onSelect, onRetry }: CompanyRegistryMapProps) => {
   const [displayMode, setDisplayMode] = useState<'points' | 'density'>('points');
   const validItems = useMemo(
     () => items.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)),
@@ -83,6 +84,7 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
   const mapRef = useRef<YandexMapInstance | null>(null);
   const heatmapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const heatmapRedrawTimerRef = useRef<number | null>(null);
+  const viewportFrameRef = useRef<number | null>(null);
   const pointsKey = useMemo(
     () => validItems.map((item) => `${item.id}:${item.latitude}:${item.longitude}`).join('|'),
     [validItems],
@@ -164,6 +166,22 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
   }, []);
 
   useEffect(() => {
+    if (!mapReady) return;
+    const firstFrame = window.requestAnimationFrame(() => {
+      const secondFrame = window.requestAnimationFrame(() => {
+        mapRef.current?.container?.fitToViewport?.();
+        setHeatmapRevision((revision) => revision + 1);
+        viewportFrameRef.current = null;
+      });
+      viewportFrameRef.current = secondFrame;
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (viewportFrameRef.current !== null) window.cancelAnimationFrame(viewportFrameRef.current);
+    };
+  }, [expanded, mapReady]);
+
+  useEffect(() => {
     const map = mapRef.current;
     const eventManager = map?.events;
     if (!mapReady || !eventManager?.add || !eventManager.remove) return;
@@ -181,24 +199,24 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
     return () => eventManager.remove?.('boundschange', handleBoundsChange);
   }, [displayMode, mapReady]);
 
-  if (loading) return <MapSkeleton />;
+  if (loading) return <MapSkeleton expanded={expanded} />;
   if (error) {
     return (
-      <div className="grid min-h-[420px] place-items-center rounded-[28px] bg-rose-50 p-8 text-center shadow-[0_0_0_1px_rgba(244,63,94,0.12)]">
+      <div className={`grid min-h-[420px] place-items-center bg-rose-50 p-8 text-center shadow-[0_0_0_1px_rgba(244,63,94,0.12)] ${expanded ? 'flex-1 rounded-[24px]' : 'rounded-[28px]'}`}>
         <div><MapPin className="mx-auto h-7 w-7 text-rose-400" /><b className="mt-4 block text-balance text-slate-950">Карта временно недоступна</b><p className="mt-2 text-pretty text-sm text-slate-600">{error}</p><button type="button" onClick={onRetry} className="mt-5 min-h-11 rounded-2xl bg-white px-4 text-sm font-semibold text-slate-800 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_4px_16px_rgba(15,23,42,0.06)] transition-transform active:scale-[0.96]">Повторить</button></div>
       </div>
     );
   }
   if (!validItems.length) {
     return (
-      <div className="grid min-h-[420px] place-items-center rounded-[28px] bg-slate-50 p-8 text-center shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
+      <div className={`grid min-h-[420px] place-items-center bg-slate-50 p-8 text-center shadow-[0_0_0_1px_rgba(15,23,42,0.06)] ${expanded ? 'flex-1 rounded-[24px]' : 'rounded-[28px]'}`}>
         <div><Building2 className="mx-auto h-7 w-7 text-slate-300" /><b className="mt-4 block text-balance text-slate-950">Нет компаний с координатами</b><p className="mt-2 max-w-md text-pretty text-sm leading-6 text-slate-500">Измените фильтры или обновите данные карт. Компания появится здесь, когда LocalOS получит её координаты.</p></div>
       </div>
     );
   }
 
   return (
-    <section className="overflow-hidden rounded-[28px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_18px_50px_rgba(15,23,42,0.08)]">
+    <section className={`overflow-hidden bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_18px_50px_rgba(15,23,42,0.08)] ${expanded ? 'flex min-h-0 flex-1 flex-col rounded-[24px]' : 'rounded-[28px]'}`}>
       <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div><b className="text-balance text-sm text-slate-950">{displayMode === 'density' ? `Плотность: ${categoryLabel || 'все типы бизнеса'}` : 'Компании на карте'}</b><p className="mt-1 text-pretty text-xs text-slate-500">{displayMode === 'density' ? 'Чем насыщеннее зона, тем больше выбранных компаний находится рядом.' : 'Нажмите на точку, чтобы открыть карточку компании.'}</p></div>
         <div className="grid h-11 shrink-0 grid-cols-2 rounded-2xl bg-slate-100 p-1 shadow-inner" aria-label="Вид карты">
@@ -209,7 +227,7 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
       <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-3 text-[11px] font-semibold text-slate-600 sm:px-5">
         {displayMode === 'points' ? COMPANY_MAP_ROLE_PRIORITY.map((key) => <span key={key} className="inline-flex items-center gap-1.5"><i className={`h-2.5 w-2.5 rounded-full ${COMPANY_MAP_ROLE_STYLES[key].legend}`} />{COMPANY_MAP_ROLE_STYLES[key].label}</span>) : <><span>Меньше {densityEntityLabel}</span><span className="h-2.5 w-32 rounded-full bg-gradient-to-r from-sky-100 via-blue-400 to-blue-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]" aria-hidden="true" /><span>Больше {densityEntityLabel}</span><span className="ml-auto tabular-nums text-slate-500">{validItems.length} компаний</span></>}
       </div>
-      <div className={`company-registry-map relative h-[560px] min-h-[420px] w-full outline outline-1 -outline-offset-1 outline-black/10 ${displayMode === 'density' ? 'company-registry-map--density bg-slate-100' : ''}`}>
+      <div className={`company-registry-map relative min-h-[420px] w-full outline outline-1 -outline-offset-1 outline-black/10 ${expanded ? 'h-auto flex-1' : 'h-[560px]'} ${displayMode === 'density' ? 'company-registry-map--density bg-slate-100' : ''}`}>
         <YMaps query={{ lang: 'ru_RU', load: 'package.full' }}>
           <Map
             width="100%"

@@ -778,22 +778,30 @@ def ensure_company_for_lead(
     phone = normalize_phone(lead.get("phone"))
     website = normalize_url(lead.get("website"))
     source_url = normalize_identity_url(lead.get("source_url"))
-    external_id = str(lead.get("source_external_id") or lead.get("google_id") or "").strip().lower()
+    external_id = str(
+        lead.get("external_source_id")
+        or lead.get("source_external_id")
+        or lead.get("google_id")
+        or ""
+    ).strip().lower()
     provider = normalize_text(lead.get("source") or "unknown").replace(" ", "_")
-    identity_candidates: list[tuple[str, str, float]] = []
+    authoritative_identity_candidates: list[tuple[str, str, float]] = []
     if external_id:
-        identity_candidates.append((f"provider_id:{provider}", external_id, 1.0))
+        authoritative_identity_candidates.append((f"provider_id:{provider}", external_id, 1.0))
     if source_url:
-        identity_candidates.append(("map_url", source_url, 1.0))
+        authoritative_identity_candidates.append(("map_url", source_url, 1.0))
+    weak_identity_candidates: list[tuple[str, str, float]] = []
     if phone and address:
-        identity_candidates.append(("phone_address", f"{phone}|{address}", 0.99))
+        weak_identity_candidates.append(("phone_address", f"{phone}|{address}", 0.99))
     if website and city:
-        identity_candidates.append(("domain_geo", f"{urlsplit(website).hostname or ''}|{city}", 0.98))
+        weak_identity_candidates.append(("domain_geo", f"{urlsplit(website).hostname or ''}|{city}", 0.98))
+    identity_candidates = authoritative_identity_candidates + weak_identity_candidates
+    resolution_candidates = authoritative_identity_candidates or weak_identity_candidates
 
     company_id = ""
     location_id = ""
     latitude, longitude = resolve_company_coordinates(lead)
-    for key_type, value, _confidence in identity_candidates:
+    for key_type, value, _confidence in resolution_candidates:
         cursor.execute(
             """
             SELECT key.company_id, COALESCE(key.company_location_id, location.id) AS company_location_id

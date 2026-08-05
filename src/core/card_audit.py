@@ -1740,7 +1740,7 @@ def _build_reasoning_fields(
         ]
         weak_fit = [
             f"Посетители, которым по карточке неясны: {focus}",
-            "Новый трафик, если в карточке нет свежих фактов и понятного сценария обращения",
+            "Новые клиенты могут открыть карточку и уйти, если не увидят актуальную информацию и не поймут, как с вами связаться.",
         ]
         intents = [f"{item} {location}" for item in profile_copy["intents"]]
         photo_shots = list(profile_copy["photos"])

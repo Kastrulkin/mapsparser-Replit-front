@@ -1,0 +1,66 @@
+export type PublicAuditLanguage = 'ru' | 'en' | 'fr' | 'es' | 'el' | 'de' | 'th' | 'ar' | 'ha' | 'tr';
+
+export const supportedPublicAuditLanguages: PublicAuditLanguage[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
+
+const publicAuditCopy = {
+  ru: {
+    auditScore: 'Оценка',
+    auditFixYourself: 'Исправить самостоятельно',
+    auditPrepareWithLocalOS: 'Подготовить исправления с LocalOS',
+    auditFixToday: 'Что исправить сегодня',
+    auditFixTodayHint: 'Начните с этих точек: они сильнее всего влияют на понятность и доверие.',
+    auditWhyImportant: 'Почему важно',
+    auditActions: 'Что сделать',
+    auditDetails: 'Подробнее',
+    auditHideDetails: 'Скрыть детали',
+    auditStrengths: 'Что уже хорошо',
+    auditNoStrengths: 'Пока нет достаточно данных, чтобы подтвердить сильные стороны.',
+    auditCustomerUnderstanding: 'Как клиент понимает карточку',
+    auditStrongAnswers: 'Хорошо отвечает',
+    auditWeakAnswers: 'Не хватает информации',
+    auditMissingPhotos: 'Какие фото добавить',
+    auditNeedPhoto: 'Нужно добавить',
+    auditCardData: 'Что видно в карточке',
+    auditShowMore: 'Показать ещё',
+    auditShowLess: 'Скрыть',
+    auditNoReply: 'Ответа нет',
+    auditHasReply: 'Есть ответ',
+    auditShowFull: 'Показать полностью',
+    auditHideFull: 'Свернуть',
+    auditFullPlan: 'Полный план и методика',
+    auditFullPlanHint: 'Дополнительные проблемы, план на 7 дней, сравнение карт и источники.',
+    auditHidePlan: 'Скрыть полный план',
+  },
+  en: {
+    auditScore: 'Score',
+    auditFixYourself: 'Fix it yourself',
+    auditPrepareWithLocalOS: 'Prepare improvements with LocalOS',
+    auditFixToday: 'What to fix today',
+    auditFixTodayHint: 'Start with these priorities: they have the strongest effect on clarity and trust.',
+    auditWhyImportant: 'Why it matters',
+    auditActions: 'What to do',
+    auditDetails: 'Details',
+    auditHideDetails: 'Hide details',
+    auditStrengths: 'What is already working well',
+    auditNoStrengths: 'There is not enough verified data yet to confirm strong points.',
+    auditCustomerUnderstanding: 'How customers understand the listing',
+    auditStrongAnswers: 'Answers well',
+    auditWeakAnswers: 'Missing information',
+    auditMissingPhotos: 'Photos to add',
+    auditNeedPhoto: 'Needs a photo',
+    auditCardData: 'What customers can see',
+    auditShowMore: 'Show more',
+    auditShowLess: 'Show less',
+    auditNoReply: 'No reply',
+    auditHasReply: 'Reply present',
+    auditShowFull: 'Show full text',
+    auditHideFull: 'Collapse',
+    auditFullPlan: 'Full plan and methodology',
+    auditFullPlanHint: 'Additional issues, the 7-day plan, listing comparison, and sources.',
+    auditHidePlan: 'Hide full plan',
+  },
+};
+
+export const publicAuditUiTextForLanguage = (lang: PublicAuditLanguage) => (
+  lang === 'ru' ? publicAuditCopy.ru : publicAuditCopy.en
+);

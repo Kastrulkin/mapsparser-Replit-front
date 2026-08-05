@@ -351,14 +351,14 @@ def _build_children_education_network_summary(page_json: dict[str, Any], audit: 
         review_hint = ""
     if slug == "shansik-set-detskikh-tantsevalnykh-studiy":
         return (
-            f"У «{business_name}» хорошая база, но {locations_label} ведутся неравномерно. "
+            f"У карточки «{business_name}» хорошая база, но {locations_label} ведутся неравномерно. "
             f"{rating_range or 'Филиалы выглядят по-разному по доверию и наполнению'}{weak_hint}. "
             f"{review_hint} Сначала стоит выровнять отзывы, описания занятий и регулярные публикации по всем филиалам, "
             f"чтобы родителю было проще найти студию, выбрать филиал и записаться."
         ).strip()
 
     return (
-        f"У «{business_name}» хорошая база, но {locations_label} ведутся неравномерно. "
+        f"У карточки «{business_name}» хорошая база, но {locations_label} ведутся неравномерно. "
         f"{rating_range or 'Филиалы отличаются по доверию и наполнению'}{weak_hint}.{review_hint} "
         f"Сначала стоит выровнять отзывы, описания и регулярные обновления по всем филиалам."
     ).strip()

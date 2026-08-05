@@ -1,0 +1,286 @@
+"""Founder-led copy recipes for LocalOS sales outreach.
+
+The public signal opens the conversation but never becomes the whole offer.
+Every recipe is assembled only from approved sender facts and recipient evidence.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+
+BEAUTY_CATEGORY_MARKERS = (
+    "барбер",
+    "бров",
+    "визаж",
+    "космет",
+    "макияж",
+    "массаж",
+    "ногт",
+    "парикмах",
+    "перманент",
+    "ресниц",
+    "салон красоты",
+    "спа",
+    "стилист",
+    "эпиляц",
+)
+
+PRIVATE_SPECIALIST_MARKERS = (
+    "врач-косметолог",
+    "доктор-косметолог",
+    "кабинет",
+    "частн",
+    "услуги частных специалистов",
+)
+
+NETWORK_MARKERS = ("сеть ", "сеть-", "филиал", "студии ", "салоны ")
+
+
+def clean_copy(value: Any) -> str:
+    return " ".join(str(value or "").replace("—", "-").replace("«", '"').replace("»", '"').split())
+
+
+def localos_beauty_segment(
+    category: Any,
+    recipient: Any,
+    public_context: Any = "",
+) -> str | None:
+    public_identity = clean_copy(public_context).split("опубликовано:", 1)[0]
+    haystack = (
+        f"{clean_copy(category)} {clean_copy(recipient)} {public_identity}"
+    ).lower()
+    if not any(marker in haystack for marker in BEAUTY_CATEGORY_MARKERS):
+        return None
+    if any(marker in haystack for marker in NETWORK_MARKERS):
+        return "beauty_network"
+    if any(marker in haystack for marker in PRIVATE_SPECIALIST_MARKERS):
+        return "private_beauty_specialist"
+    return "beauty_team"
+
+
+def natural_observation(candidate: dict[str, Any]) -> str:
+    observation = clean_copy(candidate.get("observed_fact")).rstrip(" .!?;")
+    rating_match = re.search(
+        r"рейтинг\s*-\s*([0-9]+(?:[.,][0-9]+)?);\s*публичных отзывов\s*-\s*(\d+)",
+        observation,
+        flags=re.IGNORECASE,
+    )
+    if rating_match:
+        return (
+            f"В публичной карточке сейчас {rating_match.group(2)} отзыва "
+            f"и рейтинг {rating_match.group(1)}"
+        )
+    services_match = re.search(
+        r"всего услуг\s*-\s*(\d+);\s*с ценой\s*-\s*(\d+)",
+        observation,
+        flags=re.IGNORECASE,
+    )
+    if services_match:
+        return (
+            f"В карточке указано {services_match.group(1)} услуг, "
+            f"но цена видна только у {services_match.group(2)}"
+        )
+    if clean_copy(candidate.get("evidence_kind")) == "telegram_post":
+        lowered = observation.lower()
+        if "двойным подбородком" in lowered:
+            return (
+                "В Telegram вы разбираете тему двойного подбородка и объясняете, "
+                "от чего зависит выбор метода"
+            )
+        if "массаж лица" in lowered:
+            return "В Telegram вы подробно объясняете клиентам пользу массажа лица"
+        if "менопауз" in lowered:
+            return (
+                "В Telegram вы разбираете, есть ли смысл в "
+                "косметологических процедурах после менопаузы"
+            )
+        if "лазер летом" in lowered:
+            return (
+                "В Telegram вы объясняете, при каких условиях можно "
+                "делать лазерную эпиляцию летом"
+            )
+        if "коррекцией губ" in lowered or "коррекции губ" in lowered:
+            return "В Telegram вы разбираете вопросы перед коррекцией губ"
+        if "коллаген" in lowered:
+            return "В Telegram вы разбираете, зачем коже коллаген"
+        if "лотере" in lowered:
+            return "В Telegram вы напоминаете клиентам о лотерее"
+        if "знакомьтесь" in lowered or "поздравляем" in lowered:
+            return "В Telegram вы знакомите подписчиков с командой"
+        if "сеть студий" in lowered and "spa" in lowered:
+            return "В Telegram вы объясняете, зачем волосам нужен SPA-уход"
+        if any(marker in lowered for marker in ("свободн", "горящ")) and any(
+            marker in lowered for marker in ("окн", "окош")
+        ):
+            return "В Telegram вы публикуете свободные окна для записи"
+        if "фотостарен" in lowered or "солнцезащит" in lowered:
+            return "В Telegram вы пишете о фотостарении и солнцезащитных средствах"
+        if "мама не разрешает краситься тушью" in lowered:
+            return (
+                "В Telegram вы разбираете ситуацию, когда подростку "
+                "хочется яркий взгляд, а родители не разрешают тушь"
+            )
+        if "клиентский день" in lowered:
+            return "В Telegram вы анонсируете клиентский день в салоне"
+        if "акция от апельсин" in lowered:
+            return "В Telegram вы показываете, как прошла акция на Кушелевской дороге"
+        post_text = observation.split("опубликовано:", 1)[-1].strip(' "')
+        post_text = re.sub(r"[_*#]+", " ", post_text)
+        post_text = re.sub(r"^[^a-zа-яё0-9]+", "", post_text, flags=re.IGNORECASE)
+        snippet = " ".join(post_text.split()[:12]).rstrip(" .,!?:;")
+        if snippet:
+            return f'В Telegram вы пишете: "{snippet}"'
+        return "Увидел вашу публикацию для клиентов в Telegram"
+    return observation
+
+
+def _owner_context(segment: str | None) -> str:
+    if segment == "private_beauty_specialist":
+        return (
+            "У частного специалиста контент, карточки и отзывы часто остаются на потом: "
+            "сначала нужно работать с клиентами"
+        )
+    if segment == "beauty_network":
+        return (
+            "В сети такие задачи легко расходятся по разным точкам и снова "
+            "возвращаются к руководителю"
+        )
+    return (
+        "В салоне такие задачи часто остаются на владельце и проигрывают "
+        "тому, что нужно решить сегодня"
+    )
+
+
+def _scenario_label(segment: str | None) -> str:
+    if segment == "private_beauty_specialist":
+        return "частного специалиста"
+    if segment == "beauty_network":
+        return "сети салонов"
+    return "салона"
+
+
+def founder_led_localos_text(
+    angle: str,
+    candidate: dict[str, Any],
+    story: dict[str, Any] | None,
+) -> str | None:
+    if clean_copy(candidate.get("sender_mode")) not in {"", "localos"}:
+        return None
+    segment = clean_copy(candidate.get("recipient_segment")) or localos_beauty_segment(
+        candidate.get("recipient_category"),
+        candidate.get("recipient"),
+        candidate.get("observed_fact"),
+    )
+    if not segment:
+        return None
+
+    sender = clean_copy(candidate.get("sender"))
+    role = clean_copy(candidate.get("sender_role"))
+    introduction = ", ".join(part for part in (sender, role) if part)
+    approved_story = clean_copy(candidate.get("founder_story"))
+    approved_proof = clean_copy(candidate.get("founder_proof"))
+    if not approved_proof and story:
+        approved_proof = clean_copy(story.get("proof"))
+
+    if angle == "signal":
+        observation = natural_observation(candidate)
+        return (
+            f"Здравствуйте! Я {introduction}.\n\n"
+            f"Посмотрел ваши открытые площадки. {observation}.\n\n"
+            f"{_owner_context(segment)}.\n\n"
+            "Могу прислать короткий разбор: что можно сделать самостоятельно, "
+            "а что при желании поручить LocalOS?"
+        )
+
+    if angle == "founder_story":
+        return (
+            "Здравствуйте! Коротко объясню, почему написал.\n\n"
+            f"{approved_story}\n\n"
+            "LocalOS не просто выдаёт список рекомендаций. Он превращает "
+            "повторяющуюся работу с карточками, отзывами и контентом в понятный процесс.\n\n"
+            "Показать, как это выглядит на одном конкретном примере?"
+        )
+
+    if angle == "proof":
+        proof_block = f"{approved_proof}\n\n" if approved_proof else ""
+        return (
+            "Здравствуйте! Ещё одна важная вещь.\n\n"
+            "Предпринимателю обычно не нужен ещё один список советов. Нужен "
+            "способ, чтобы полезные действия выполнялись регулярно.\n\n"
+            f"{proof_block}"
+            "Мы собираем повторяющиеся действия в готовые сценарии, чтобы "
+            "владельцу не приходилось каждый раз начинать эту работу заново.\n\n"
+            f"Прислать один готовый сценарий для {_scenario_label(segment)}?"
+        )
+
+    if angle == "respectful_close":
+        return (
+            "Здравствуйте! Закрою тему.\n\n"
+            "За десять лет предпринимательства я не раз видел, как важные "
+            "регулярные задачи откладываются из-за срочных. LocalOS создан, "
+            "чтобы снять с владельца часть этой работы и не оставлять ему "
+            "ещё один список рекомендаций для самостоятельного внедрения.\n\n"
+            "Если сейчас не до этого, больше напоминать не буду. Вернуться к теме позже?"
+        )
+    return None
+
+
+def founder_led_localos_subject(angle: str, candidate: dict[str, Any]) -> str | None:
+    segment = clean_copy(candidate.get("recipient_segment")) or localos_beauty_segment(
+        candidate.get("recipient_category"),
+        candidate.get("recipient"),
+        candidate.get("observed_fact"),
+    )
+    if not segment:
+        return None
+    recipient = clean_copy(candidate.get("recipient"))
+    labels = {
+        "signal": f"{recipient} | короткий вопрос",
+        "founder_story": "Почему я создал LocalOS",
+        "proof": "Как LocalOS снимает регулярные задачи",
+        "respectful_close": "Закрою тему",
+    }
+    return labels.get(angle)
+
+
+def observation_is_grounded(text: str, observation: Any) -> bool:
+    normalized_text = clean_copy(text).lower()
+    normalized_observation = clean_copy(observation).lower()
+    if not normalized_observation:
+        return False
+    if "telegram" in normalized_observation:
+        if "telegram" not in normalized_text:
+            return False
+        if any(
+            marker in normalized_text
+            for marker in ("процедур", "клиент", "объясня")
+        ):
+            return True
+        if (
+            "горящ" in normalized_observation
+            and "окош" in normalized_observation
+            and "свободн" in normalized_text
+            and "окн" in normalized_text
+        ):
+            return True
+        post_text = normalized_observation.split("опубликовано:", 1)[-1]
+        post_terms = [
+            token
+            for token in re.findall(r"[a-zа-яё]+", post_text)
+            if len(token) >= 6
+        ]
+        return any(term[:6] in normalized_text for term in post_terms)
+    numbers = re.findall(r"\d+(?:[.,]\d+)?", normalized_observation)
+    if numbers and not all(number in normalized_text for number in numbers):
+        return False
+    important_terms = [
+        token
+        for token in re.findall(r"[a-zа-яё]+", normalized_observation)
+        if len(token) >= 6 and token not in {"публичной", "карточке", "указано", "данным"}
+    ]
+    return bool(
+        important_terms
+        and sum(term[:6] in normalized_text for term in important_terms) >= min(2, len(important_terms))
+    )

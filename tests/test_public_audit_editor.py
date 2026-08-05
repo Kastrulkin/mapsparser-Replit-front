@@ -343,7 +343,7 @@ def test_normalize_public_audit_builds_medical_summary_from_trust_and_patient_qu
     normalized = normalize_public_audit_page_json(page_json)
     summary = normalized["audit"]["summary_text"]
 
-    assert summary.startswith("У «Евромедсервис» есть база доверия")
+    assert summary.startswith("У карточки «Евромедсервис» есть база доверия")
     assert "рейтинг 4,5" in summary
     assert "95 отзывов" in summary
     assert "запросы пациентов" in summary
@@ -352,6 +352,46 @@ def test_normalize_public_audit_builds_medical_summary_from_trust_and_patient_qu
     assert "Сначала лучше:" not in summary
     assert "отличие, ориентир" not in summary
     assert len(summary) <= 300
+
+
+def test_normalize_public_audit_keeps_business_name_in_grammatical_summary() -> None:
+    page_json = _sample_page_json()
+    page_json["name"] = "Волшебная миля"
+    page_json["audit"]["business_name"] = "Волшебная миля"
+    page_json["audit"]["issue_blocks"] = [
+        {
+            "id": "freshness",
+            "section": "news",
+            "title": "Не видно свежих обновлений",
+            "problem": "Публикации давно не обновлялись.",
+            "evidence": "Свежих публикаций нет.",
+            "impact": "Афиша выглядит неактуальной.",
+            "fix": "Добавить свежую публикацию.",
+        }
+    ]
+    page_json["audit"]["top_3_issues"] = page_json["audit"]["issue_blocks"]
+    page_json["audit"]["current_state"] = {"has_recent_activity": False}
+
+    normalized = normalize_public_audit_page_json(page_json)
+    summary = normalized["audit"]["summary_text"]
+
+    assert summary.startswith("У «Волшебной мили» не видно свежих обновлений.")
+    assert "У «Волшебная миля»" not in summary
+
+
+def test_normalize_public_audit_rewrites_abstract_new_traffic_copy() -> None:
+    page_json = _sample_page_json()
+    page_json["category"] = "Семейный парк"
+    page_json["audit"]["audit_profile"] = "family_entertainment"
+    page_json["audit"]["weak_fit_customer_profile"] = [
+        "Новый трафик, если в карточке нет свежих фактов и понятного сценария обращения"
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+
+    assert normalized["audit"]["weak_fit_customer_profile"] == [
+        "Новые клиенты могут открыть карточку и уйти, если не увидят актуальную информацию и не поймут, как с вами связаться."
+    ]
 
 
 def test_normalize_public_audit_strengthens_medical_review_issue() -> None:
