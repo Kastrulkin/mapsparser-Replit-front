@@ -32,6 +32,13 @@ STAGES = (
     {"key": "treatment_100", "variant": "treatment", "size": 100},
 )
 
+SAFE_CORPUS_MESSAGE_RULES = (
+    "Назвать конкретную подтверждённую активность официальной соцсети.",
+    "Описать состояние карточки на картах только проверяемыми числами или полями аудита.",
+    "Отделить предположение о возможности усилить карты от наблюдаемого факта.",
+    "Дать ссылку на готовый разбор и оставить один вопрос о просмотре.",
+)
+
 
 def experiments_enabled() -> bool:
     return str(os.getenv("OUTREACH_EXPERIMENTS_ENABLED") or "false").lower() in {"1", "true", "yes", "on"}
@@ -278,10 +285,13 @@ def compile_pattern_draft(
         "cta_count": 1,
     }
     if compiler_result:
-        extracted = compiler_result.get("extracted") if isinstance(compiler_result.get("extracted"), dict) else {}
         review = compiler_result.get("review") if isinstance(compiler_result.get("review"), dict) else {}
-        rules["corpus_message_rules"] = extracted.get("message_rules") or []
+        # Model extraction remains available in compiler_result_json for audit,
+        # but it never becomes executable copy policy. Corpus authors and model
+        # reviewers may suggest unsupported statistics or causal claims.
+        rules["corpus_message_rules"] = list(SAFE_CORPUS_MESSAGE_RULES)
         rules["reviewed_safe_rules"] = review.get("safe_message_rules") or []
+        rules["compiler_extracted_rules_status"] = "reference_only"
     cursor.execute(
         """
         INSERT INTO outreach_knowledge_patterns (

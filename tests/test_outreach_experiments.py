@@ -5,6 +5,7 @@ from pathlib import Path
 
 from services.outreach_experiment_service import (
     ACTIVE_SOCIAL_MAP_GAP,
+    SAFE_CORPUS_MESSAGE_RULES,
     STAGES,
     build_active_social_map_gap_signal,
     derive_composite_signal,
@@ -194,3 +195,12 @@ def test_corpus_compiler_prompts_pin_exact_json_shapes():
     assert '"observation_rule":"..."' in source
     assert '"approved":true,"issues":[]' in source
     assert "Не добавляй другие ключи, markdown" in source
+
+
+def test_model_extraction_cannot_define_executable_message_rules():
+    rules = " ".join(SAFE_CORPUS_MESSAGE_RULES).lower()
+    assert "до 30%" not in rules
+    assert "кратно" not in rules
+    assert "без дополнительных затрат" not in rules
+    assert "проверяемыми числами" in rules
+    assert "один вопрос" in rules
