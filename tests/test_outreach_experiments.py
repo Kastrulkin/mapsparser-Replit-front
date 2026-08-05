@@ -118,7 +118,7 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
 
 
 def test_corpus_copy_change_invalidates_old_drafts():
-    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v5"
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v6"
 
 
 def test_migration_has_three_versioned_experiment_tables():
@@ -187,3 +187,10 @@ def test_corpus_compiler_uses_deepseek_then_gigachat_max_review():
     assert extract.model_profile == "deepseek_reasoning"
     assert review is not None and review.primary_provider == "gigachat"
     assert review.model_profile == "gigachat_max"
+
+
+def test_corpus_compiler_prompts_pin_exact_json_shapes():
+    source = (ROOT / "src/services/outreach_experiment_service.py").read_text(encoding="utf-8")
+    assert '"observation_rule":"..."' in source
+    assert '"approved":true,"issues":[]' in source
+    assert "Не добавляй другие ключи, markdown" in source

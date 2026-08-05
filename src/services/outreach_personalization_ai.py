@@ -16,7 +16,7 @@ from services.outreach_founder_led_copy import (
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v5"
+PROMPT_VERSION = "outreach_personalization_v6"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",
@@ -242,6 +242,8 @@ def _request_record(
         "personalization": {
             "observation": _clean(candidate.get("observed_fact")),
             "evidence_ids": list(candidate.get("evidence_ids") or [candidate.get("evidence_id")]),
+            "signal_combo": _clean(candidate.get("signal_combo")),
+            "public_audit_url": _clean(candidate.get("public_audit_url")),
             "problem_hypothesis": hypothesis,
             "problem_hypothesis_status": "hypothesis" if hypothesis else "missing",
             "relevance_to_offer": _clean(
@@ -571,6 +573,9 @@ def _assemble_policy_bound_text(
         "sender_company": request_record.get("sender", {}).get("business"),
         "sender_mode": sender_mode,
         "observed_fact": request_record.get("personalization", {}).get("observation"),
+        "signal_combo": request_record.get("personalization", {}).get("signal_combo"),
+        "public_audit_url": request_record.get("personalization", {}).get("public_audit_url"),
+        "next_step": request_record.get("sender", {}).get("offer"),
         "evidence_kind": (
             request_record.get("evidence", [{}])[0].get("kind")
             if request_record.get("evidence")

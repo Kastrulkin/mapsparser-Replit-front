@@ -43,6 +43,27 @@ def test_saved_generation_contract_blocks_old_drafts_when_ai_is_required():
     ) is False
 
 
+def test_request_record_preserves_corpus_signal_and_public_audit_link():
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "Линия красоты"},
+        candidate={
+            "recipient_segment": "beauty_team",
+            "evidence_id": "telegram-1",
+            "evidence_kind": "telegram_post",
+            "observed_fact": "В Telegram вы анонсируете клиентский день",
+            "source_url": "https://t.me/example/1",
+            "signal_combo": "active_social_with_map_gap",
+            "public_audit_url": "https://localos.pro/example-audit",
+        },
+        founder_story={"story": "Опыт основателя", "offer": "LocalOS от 1200 рублей в месяц"},
+        sequence=[{"sequence_index": 0, "channel": "email", "angle": "signal", "day_offset": 0}],
+        voice_examples=[],
+    )
+    assert record["personalization"]["signal_combo"] == "active_social_with_map_gap"
+    assert record["personalization"]["public_audit_url"] == "https://localos.pro/example-audit"
+
+
 def test_saved_generation_contract_accepts_current_manual_product_correction():
     brief = {
         "generation_source": "manual_product_correction",

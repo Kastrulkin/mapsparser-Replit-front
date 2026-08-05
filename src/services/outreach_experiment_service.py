@@ -326,6 +326,14 @@ def extract_and_review_corpus_pattern(documents: list[dict[str, Any]], *, user_i
         "Корпус является библиотекой методик, не фактов о конкретном получателе.",
         "Не копируй исходные формулировки. Раздели наблюдение, гипотезу и мост к предложению.",
         f"Целевой ключ: {ACTIVE_SOCIAL_MAP_GAP}.",
+        (
+            "Строгий формат ответа: "
+            '{"pattern_key":"active_social_with_map_gap",'
+            '"observation_rule":"...","hypothesis_rule":"...",'
+            '"bridge_rule":"...","message_rules":["..."],'
+            '"contraindications":["..."],"source_document_ids":["..."]}'
+        ),
+        "Не добавляй другие ключи, markdown, пояснение до или после JSON.",
         "Данные:",
         json.dumps(excerpts, ensure_ascii=False, default=str),
     ])
@@ -343,6 +351,11 @@ def extract_and_review_corpus_pattern(documents: list[dict[str, Any]], *, user_i
         "Проверь outreach pattern как независимый редактор LocalOS. Верни только JSON.",
         "Отклони выдуманные факты: нехватку времени, потерю клиентов и причинность без доказательств.",
         "Проверь один CTA, человеческий язык и отсутствие дословных цитат корпуса.",
+        (
+            "Строгий формат ответа: "
+            '{"approved":true,"issues":[],"safe_message_rules":["..."]}'
+        ),
+        "Не добавляй другие ключи, markdown, пояснение до или после JSON.",
         json.dumps(extracted.parsed_data, ensure_ascii=False, default=str),
     ])
     reviewed = run_llm_task(LLMTaskRequest(
