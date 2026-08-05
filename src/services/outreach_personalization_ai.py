@@ -16,7 +16,7 @@ from services.outreach_founder_led_copy import (
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v9"
+PROMPT_VERSION = "outreach_personalization_v10"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",

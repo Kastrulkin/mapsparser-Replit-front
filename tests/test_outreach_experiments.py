@@ -119,7 +119,7 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
 
 
 def test_corpus_copy_change_invalidates_old_drafts():
-    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v9"
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v10"
 
 
 def test_migration_has_three_versioned_experiment_tables():
@@ -173,8 +173,9 @@ def test_active_social_copy_uses_audit_without_inventing_owner_pain():
     }
     text = founder_led_localos_text("signal", candidate, None)
     assert text is not None
-    assert "в Telegram вы публикуете свободные окна для записи" in text
-    assert "При этом в карточке рейтинг 4,3 и всего 5 отзывов" in text
+    assert "в Telegram вы публикуете свободные окна для записи и активно ведёте канал" in text
+    assert "Карты тоже могли бы помогать вам привлекать клиентов" in text
+    assert "Сейчас в карточке на картах рейтинг 4,3 и всего 5 отзывов" in text
     assert "регулярно работаете" not in text
     assert "https://localos.pro/freedom-beauty-studio" in text
     assert "от 1200 рублей в месяц" in text

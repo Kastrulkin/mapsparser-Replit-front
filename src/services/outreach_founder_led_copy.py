@@ -203,9 +203,9 @@ def founder_led_localos_text(
             )
             return (
                 f"Здравствуйте! Я {introduction}.\n\n"
-                "Увидел вашу компанию на картах. Вы активно ведёте соцсети, "
-                "но в карточке на картах есть над чем поработать.\n\n"
-                f"Сейчас в карточке рейтинг {rating} и только {reviews} отзыва. "
+                "Увидел, что вы активно ведёте соцсети. Карты тоже могли бы "
+                "помогать вам привлекать клиентов.\n\n"
+                f"Сейчас в карточке на картах рейтинг {rating} и только {reviews} отзыва. "
                 "Часто при таком количестве отзывов карточке сложнее подняться выше в выдаче. "
                 "Тогда её видит меньше людей, и может приходить меньше обращений.\n\n"
                 "Сам больше десяти лет в бизнесе и понимаю, почему регулярные задачи "
@@ -224,7 +224,8 @@ def founder_led_localos_text(
             flags=re.IGNORECASE,
         )
         map_block = (
-            f"При этом в карточке рейтинг {map_match.group(1)} "
+            "Карты тоже могли бы помогать вам привлекать клиентов. "
+            f"Сейчас в карточке на картах рейтинг {map_match.group(1)} "
             f"и всего {map_match.group(2)} отзывов."
             if map_match
             else ""
@@ -242,9 +243,15 @@ def founder_led_localos_text(
             and audit_url
         ):
             observation_for_sentence = observation[:1].lower() + observation[1:]
+            telegram_activity = re.sub(
+                r"^в Telegram вы\s+",
+                "",
+                observation_for_sentence,
+                flags=re.IGNORECASE,
+            )
             return (
                 f"Здравствуйте! Я {introduction}.\n\n"
-                f"Увидел, что {observation_for_sentence}.\n\n"
+                f"Увидел, что в Telegram вы {telegram_activity} и активно ведёте канал.\n\n"
                 f"{map_block}\n\n"
                 "Мы посмотрели, как компания представлена в Яндекс Картах, "
                 "и собрали короткий разбор с конкретными шагами:\n"
