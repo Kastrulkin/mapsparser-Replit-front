@@ -117,6 +117,10 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
     assert "ORDER BY has_existing_draft DESC" in service_source
 
 
+def test_corpus_copy_change_invalidates_old_drafts():
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v5"
+
+
 def test_migration_has_three_versioned_experiment_tables():
     migration = (ROOT / "alembic_migrations/versions/20260805_add_outreach_experiments.py").read_text(encoding="utf-8")
     assert "outreach_knowledge_patterns" in migration
