@@ -42,6 +42,16 @@ describe('guided tour localization', () => {
     expect(localizedSteps.every((step, index) => (
       step.title !== russianSteps[index].title && step.body !== russianSteps[index].body
     ))).toBe(true);
+    expect(JSON.stringify(guidedTourCopyForLanguage(language))).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it.each(supportedGuidedTourLanguages)('keeps customer-facing tour copy concise for %s', (language) => {
+    const copy = guidedTourCopyForLanguage(language);
+    const steps = guidedTourStepsForLanguage(language);
+    const internalJargon = /\b(?:LLM|prompt|workflow|blueprint|capability|orchestrator|trigger)\b/i;
+
+    expect(steps.every((step) => step.title.length <= 48 && step.body.length <= 280)).toBe(true);
+    expect(JSON.stringify(copy)).not.toMatch(internalJargon);
   });
 
   it('uses the demo link language before saved and browser preferences', () => {
