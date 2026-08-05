@@ -441,6 +441,11 @@ def select_stage_candidates(cursor: Any, experiment_id: str) -> dict[str, Any]:
                research.evidence_json, research.researched_at,
                social.last_post_at, social.posts_30d, social.posts_90d,
                EXISTS (
+                   SELECT 1 FROM outreach_campaigns existing_draft
+                   WHERE existing_draft.workstream_id = workstream.id
+                     AND existing_draft.status = 'draft'
+               ) AS has_existing_draft,
+               EXISTS (
                    SELECT 1 FROM lead_contact_points contact
                    WHERE contact.lead_id = lead.id
                      AND contact.verification_status NOT IN ('invalid', 'stale')
@@ -483,7 +488,10 @@ def select_stage_candidates(cursor: Any, experiment_id: str) -> dict[str, Any]:
               WHERE campaign.workstream_id = workstream.id
                 AND campaign.status IN ('approved', 'active', 'paused')
           )
-        ORDER BY lead.rating ASC NULLS LAST, lead.reviews_count ASC NULLS LAST, lead.name
+        ORDER BY has_existing_draft DESC,
+                 lead.rating ASC NULLS LAST,
+                 lead.reviews_count ASC NULLS LAST,
+                 lead.name
         LIMIT 500
         """,
         (experiment_id,),

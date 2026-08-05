@@ -114,6 +114,7 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
     assert "external_dispatch_performed\": False" in api_source
     assert "automatic_dispatch\": False" in service_source
     assert "outreachsendqueue" not in service_source
+    assert "ORDER BY has_existing_draft DESC" in service_source
 
 
 def test_migration_has_three_versioned_experiment_tables():
