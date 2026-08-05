@@ -23,7 +23,7 @@ PAIN_LIBRARY_TITLE = "Язык болей владельцев салонов и
 MIN_DOCUMENTS = 3
 MIN_SOURCES = 2
 MAX_SOURCE_PHRASES_PER_PAIN = 8
-COMPILER_VERSION = "owner_language_v3"
+COMPILER_VERSION = "owner_language_v4"
 
 PAIN_PATTERNS: dict[str, tuple[str, ...]] = {
     "marketing_and_clients": (
@@ -33,7 +33,7 @@ PAIN_PATTERNS: dict[str, tuple[str, ...]] = {
         r"не знаю,?\s+что публиков",
     ),
     "staff_and_processes": (
-        r"мастер\w*.*(?:уход|увод|сабот|не хотят)", r"не могу.*(?:мастер|сотрудник|администратор)",
+        r"мастер\w*\s+(?:уход|увод|сабот|не хотят)", r"не могу.*(?:найти|удержать).*(?:мастер|сотрудник|администратор)",
         r"(?:нет|мало)\s+отклик", r"отклик\w*\s+(?:нет|мало)\b", r"сотрудник\w*.*(?:уход|не работают)",
     ),
     "reviews_and_service": (
