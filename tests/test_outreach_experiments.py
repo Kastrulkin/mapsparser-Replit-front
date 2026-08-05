@@ -119,7 +119,7 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
 
 
 def test_corpus_copy_change_invalidates_old_drafts():
-    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v7"
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v8"
 
 
 def test_migration_has_three_versioned_experiment_tables():

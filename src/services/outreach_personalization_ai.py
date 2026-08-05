@@ -16,7 +16,7 @@ from services.outreach_founder_led_copy import (
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v7"
+PROMPT_VERSION = "outreach_personalization_v8"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",
@@ -256,7 +256,7 @@ def _request_record(
             "business": "" if represented_business_voice else _clean(candidate.get("sender_company")),
             "founder_story": "" if represented_business_voice else _clean(founder_story.get("story")),
             "proof": "" if represented_business_voice else _clean(founder_story.get("proof")),
-            "offer": _clean(founder_story.get("offer") or candidate.get("next_step")),
+            "offer": _clean(candidate.get("next_step") or founder_story.get("offer")),
             "forbidden_claims": [
                 _clean(item) for item in founder_story.get("forbidden_claims") or [] if _clean(item)
             ],

@@ -64,6 +64,31 @@ def test_request_record_preserves_corpus_signal_and_public_audit_link():
     assert record["personalization"]["public_audit_url"] == "https://localos.pro/example-audit"
 
 
+def test_request_record_prefers_campaign_offer_over_legacy_profile_offer():
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "Линия красоты"},
+        candidate={
+            "evidence_id": "telegram-1",
+            "observed_fact": "В Telegram анонсируется клиентский день",
+            "source_url": "https://t.me/example/1",
+            "next_step": (
+                "Короткий разбор карточки. "
+                "Начать работу с LocalOS можно от 1200 рублей в месяц."
+            ),
+        },
+        founder_story={
+            "story": "Опыт основателя",
+            "offer": "Могу прислать короткий разбор.",
+        },
+        sequence=[{"sequence_index": 0, "channel": "email", "angle": "signal", "day_offset": 0}],
+        voice_examples=[],
+    )
+
+    assert "1200" in record["sender"]["offer"]
+    assert record["sender"]["offer"].startswith("Короткий разбор карточки.")
+
+
 def test_saved_generation_contract_accepts_current_manual_product_correction():
     brief = {
         "generation_source": "manual_product_correction",
