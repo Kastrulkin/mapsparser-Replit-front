@@ -21,6 +21,7 @@ from services.outreach_campaign_service import (
     channel_availability,
     _localos_representative_profile,
     _normalize_touch_overrides,
+    _resolve_next_sequence_channel,
     resolve_sender_mode,
 )
 from services.outreach_decision_service import (
@@ -37,6 +38,13 @@ from scripts.backfill_partnership_match_artifacts import _skip_reason
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_next_sequence_channel_reuses_ready_channel_after_unique_channels_end():
+    assert _resolve_next_sequence_channel(
+        ["telegram", "sms"],
+        [{"channel": "telegram"}, {"channel": "email"}, {"channel": "sms"}],
+    ) == "telegram"
 
 
 def _private_beauty_founder_candidate():

@@ -2441,6 +2441,20 @@ def _normalize_touch_overrides(
     return normalized
 
 
+def _resolve_next_sequence_channel(
+    usable_channels: list[str],
+    touches: list[dict[str, Any]],
+) -> str:
+    selected_channels = [_text(touch.get("channel")) for touch in touches]
+    unused_channel = next(
+        (channel for channel in usable_channels if channel not in selected_channels),
+        "",
+    )
+    if unused_channel:
+        return unused_channel
+    return usable_channels[0] if usable_channels else ""
+
+
 def build_preview(
     cursor: Any,
     workstream_id: str,
@@ -2590,7 +2604,7 @@ def build_preview(
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()
         if requested_channel == "next":
-            requested_channel = next((channel for channel in usable if channel not in [touch["channel"] for touch in touches]), "")
+            requested_channel = _resolve_next_sequence_channel(usable, touches)
         if not requested_channel or requested_channel not in SUPPORTED_CHANNELS:
             continue
         angle = _text(item.get("angle") or "proof")
