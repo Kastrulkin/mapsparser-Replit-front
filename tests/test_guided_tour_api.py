@@ -256,6 +256,42 @@ def test_progress_accepts_current_frontend_tour_version_for_restart(monkeypatch)
     assert connection.committed is True
 
 
+def test_progress_upgrades_previous_frontend_tour_version(monkeypatch):
+    monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
+    row = {
+        "id": "progress-id",
+        "tour_key": "roga-i-kopyta-v1",
+        "tour_version": 3,
+        "status": "active",
+        "chapter_key": "network-pulse",
+        "step_key": "operator-nav",
+        "completed_steps_json": ["welcome"],
+        "started_at": "2026-08-05T12:00:00+00:00",
+        "paused_at": None,
+        "completed_at": None,
+        "updated_at": "2026-08-05T12:00:00+00:00",
+    }
+    connection = FakeConnection(FakeCursor(rows=[row]))
+    monkeypatch.setattr(guided_tour_api, "get_db_connection", lambda: connection)
+
+    response = build_app().test_client().put(
+        "/api/guided-tours/roga-i-kopyta-v1/progress",
+        headers={"Authorization": "Bearer visitor-a"},
+        json={
+            "tour_version": 2,
+            "status": "active",
+            "chapter_key": "network-pulse",
+            "step_key": "operator-nav",
+            "completed_steps": ["welcome"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["progress"]["tour_version"] == 3
+    assert connection.cursor_value.queries[0][1][4] == 3
+    assert connection.committed is True
+
+
 def test_progress_rejects_old_or_invalid_tour_versions(monkeypatch):
     monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
     client = build_app().test_client()
