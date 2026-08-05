@@ -436,6 +436,28 @@ const outreachSenderStatusLabel = (account: OutreachSenderAccountSummary) => {
   return 'готов';
 };
 
+const internalSenderIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const providerSenderIdentityPattern = /^(community|group|account):[a-z0-9_-]+$/i;
+
+const outreachSenderDisplayLabel = (account: OutreachSenderAccountSummary) => {
+  const rawName = String(account.display_name || '').trim();
+  const rawIdentity = String(account.sender_identity || '').trim();
+  const name = internalSenderIdPattern.test(rawName) ? '' : rawName;
+  const identity = internalSenderIdPattern.test(rawIdentity) || providerSenderIdentityPattern.test(rawIdentity)
+    ? ''
+    : rawIdentity;
+  const genericNames = new Set(['Telegram-аккаунт', 'Email-аккаунт', 'VK-аккаунт', 'LocalOS']);
+  const meaningfulName = genericNames.has(name) ? '' : name;
+
+  if (meaningfulName && identity && meaningfulName !== identity) return `${meaningfulName} · ${identity}`;
+  if (identity) return name && name !== identity ? `${name} · ${identity}` : identity;
+  if (meaningfulName) return meaningfulName;
+  if (account.channel === 'telegram') return 'Подключённый Telegram-аккаунт';
+  if (account.channel === 'email') return 'Подключённая почта';
+  if (account.channel === 'vk') return 'Подключённое VK-сообщество';
+  return 'Подключённый аккаунт';
+};
+
 interface ChannelSetupBlocker {
   key: string;
   label: string;
@@ -1171,7 +1193,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         });
         continue;
       }
-      if (!touch.sender_account_id || channelStatus === 'sender_selection_required') {
+      if (!selectedSenderId) {
         savedCampaignChannelBlockers.push({
           key: `${touchNumber}-${channel}`,
           label: `Касание ${touchNumber} · ${channelLabel}: выберите отправителя`,
@@ -3532,7 +3554,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             <option value="">{senderAccountsLoading ? 'Проверяем аккаунты…' : 'Выберите отправителя'}</option>
                             {accounts.map((account) => (
                               <option key={account.id} value={account.id} disabled={!outreachSenderReady(account)}>
-                                {account.display_name || account.sender_identity || account.id} · {outreachSenderStatusLabel(account)}
+                                {outreachSenderDisplayLabel(account)} · {outreachSenderStatusLabel(account)}
                               </option>
                             ))}
                           </select>

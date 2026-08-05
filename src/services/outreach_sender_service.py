@@ -114,15 +114,26 @@ def list_sender_accounts(
 ) -> list[dict[str, Any]]:
     cursor.execute(
         """
-        SELECT id, scope_type, business_id, owner_user_id, channel,
-               sender_identity, display_name, status, outreach_enabled,
-               capabilities_json, health_status, health_score, health_reason,
-               permission_changed_at, last_reply_sync_at, reply_sync_error,
-               created_at, updated_at
-        FROM outreach_sender_accounts
-        WHERE scope_type = %s
-          AND COALESCE(business_id, '') = COALESCE(%s, '')
-        ORDER BY status = 'connected' DESC, channel, updated_at DESC
+        SELECT sender.id, sender.scope_type, sender.business_id, sender.owner_user_id,
+               sender.channel,
+               COALESCE(
+                   NULLIF(sender.sender_identity, ''),
+                   NULLIF(external_account.external_id, '')
+               ) AS sender_identity,
+               COALESCE(
+                   NULLIF(sender.display_name, ''),
+                   NULLIF(external_account.display_name, '')
+               ) AS display_name,
+               sender.status, sender.outreach_enabled, sender.capabilities_json,
+               sender.health_status, sender.health_score, sender.health_reason,
+               sender.permission_changed_at, sender.last_reply_sync_at,
+               sender.reply_sync_error, sender.created_at, sender.updated_at
+        FROM outreach_sender_accounts sender
+        LEFT JOIN externalbusinessaccounts external_account
+          ON external_account.id = sender.external_account_id
+        WHERE sender.scope_type = %s
+          AND COALESCE(sender.business_id, '') = COALESCE(%s, '')
+        ORDER BY sender.status = 'connected' DESC, sender.channel, sender.updated_at DESC
         """,
         (scope_type, business_id),
     )
