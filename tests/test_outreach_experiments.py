@@ -15,6 +15,7 @@ from services.outreach_experiment_service import (
 )
 from services.outreach_safety_service import strategy_fingerprint
 from services.outreach_founder_led_copy import founder_led_localos_text
+from services.outreach_playbook import beauty_outreach_guidance, beauty_touch_learning_dimensions
 from services.llm.registry import get_task_definition
 
 
@@ -119,7 +120,26 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
 
 
 def test_corpus_copy_change_invalidates_old_drafts():
-    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v11"
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v12"
+
+
+def test_beauty_playbook_keeps_corpus_method_separate_from_recipient_facts():
+    playbook = beauty_outreach_guidance()
+    assert playbook["method_source"] == "telegram_b2b"
+    assert playbook["pain_language_status"] == "segment_hypothesis_only"
+    assert len(playbook["method_rules"]) >= 6
+    assert len(playbook["pain_library"]) == 7
+    assert any(item["support"] == "partial" for item in playbook["pain_library"])
+    constraints = " ".join(playbook["constraints"])
+    assert "без отдельного evidence" in constraints
+
+
+def test_beauty_playbook_labels_each_touch_for_outcome_learning():
+    founder = beauty_touch_learning_dimensions("founder_story")
+    proof = beauty_touch_learning_dimensions("proof")
+    assert founder["playbook_version"] == "localos_outreach_playbook_v1"
+    assert founder["pain_key"] == "operations_and_burnout"
+    assert proof["pain_key"] == "marketing_and_clients"
 
 
 def test_migration_has_three_versioned_experiment_tables():
@@ -198,6 +218,7 @@ def test_founder_follow_up_uses_operator_empathy_instead_of_product_abstraction(
 
     assert "клиенты и ежедневная операционка всегда срочнее" in text
     assert "Сам больше десяти лет в бизнесе" in text
+    assert '"Если не я, то никто"' in text
     assert "LocalOS не просто выдаёт" not in text
 
 

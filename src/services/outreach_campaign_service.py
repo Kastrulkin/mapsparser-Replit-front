@@ -19,6 +19,7 @@ from services.outreach_personalization_ai import (
     generation_contract_current,
     generate_personalized_sequence,
 )
+from services.outreach_playbook import beauty_touch_learning_dimensions
 from services.outreach_decision_service import (
     _is_residential_recipient,
     build_outreach_decision,
@@ -1821,7 +1822,7 @@ def _strategy_dimensions(
     otherwise identical map-rating strategies from being split merely because
     their evidence rows have different identifiers.
     """
-    return {
+    dimensions = {
         "workstream_type": context.get("workstream_type"),
         "sender_mode": context.get("sender_mode"),
         "represented_business_id": context.get("represented_business_id"),
@@ -1852,6 +1853,9 @@ def _strategy_dimensions(
         "day_offset": day_offset,
         "angle": angle,
     }
+    if context.get("workstream_type") == "localos_sales" and candidate.get("recipient_segment"):
+        dimensions.update(beauty_touch_learning_dimensions(angle))
+    return dimensions
 
 
 def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict[str, Any]]:

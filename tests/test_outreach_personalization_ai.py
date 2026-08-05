@@ -115,6 +115,22 @@ def test_saved_generation_contract_accepts_current_manual_product_correction():
     }
 
     assert generation_contract_current(brief, gate, require_ai=True) is True
+
+
+def test_saved_generation_contract_keeps_reviewed_v11_manual_edits_current():
+    brief = {
+        "generation_source": "manual_product_correction",
+        "generation_prompt_version": "outreach_personalization_v11",
+        "semantic_review_prompt_version": REVIEW_PROMPT_VERSION,
+    }
+    gate = {
+        "passed": True,
+        "manual_review": {
+            "passed": True,
+            "review_version": REVIEW_PROMPT_VERSION,
+        },
+    }
+    assert generation_contract_current(brief, gate, require_ai=True) is True
     assert generation_contract_current(brief, {"passed": True}, require_ai=True) is False
 
 

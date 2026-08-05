@@ -91,6 +91,8 @@ def strategy_fingerprint(strategy: dict[str, Any]) -> str:
         "sequence_index": strategy.get("sequence_index"),
         "day_offset": strategy.get("day_offset"),
         "angle": strategy.get("angle"),
+        "playbook_version": strategy.get("playbook_version"),
+        "pain_key": strategy.get("pain_key"),
     }
     return stable_hash(dimensions, "strategy:")
 

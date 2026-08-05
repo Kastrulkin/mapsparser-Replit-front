@@ -13,11 +13,13 @@ from services.outreach_founder_led_copy import (
     founder_led_localos_text,
     observation_is_grounded,
 )
+from services.outreach_playbook import beauty_outreach_guidance
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v11"
+PROMPT_VERSION = "outreach_personalization_v12"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
+MANUAL_COMPATIBLE_PROMPT_VERSIONS = {"outreach_personalization_v11", PROMPT_VERSION}
 QUALITY_CRITERIA = (
     "source_validity",
     "observation_accuracy",
@@ -95,7 +97,7 @@ def generation_contract_current(
     manual_review = gate.get("manual_review") if isinstance(gate.get("manual_review"), dict) else {}
     if source == "manual_product_correction":
         return bool(
-            prompt_version == PROMPT_VERSION
+            prompt_version in MANUAL_COMPATIBLE_PROMPT_VERSIONS
             and review_prompt_version == REVIEW_PROMPT_VERSION
             and manual_review.get("passed")
             and manual_review.get("review_version") == REVIEW_PROMPT_VERSION
@@ -247,7 +249,7 @@ def _request_record(
             "freshness": _clean(item.get("freshness")),
             "usable_for_outreach": True,
         })
-    return {
+    record = {
         "schema_version": SCHEMA_VERSION,
         "motion": _clean(motion),
         "identity": {
@@ -315,6 +317,9 @@ def _request_record(
             "residential_terms_require_explicit_evidence": True,
         },
     }
+    if _clean(motion) == "localos_sales" and _clean(candidate.get("recipient_segment")):
+        record["outreach_playbook"] = beauty_outreach_guidance()
+    return record
 
 
 def _generation_prompt(record: dict[str, Any]) -> str:
@@ -322,6 +327,8 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Ты готовишь мультиканальную outreach-цепочку LocalOS. "
         "Используй только INPUT_JSON и верни только JSON без markdown. "
         "Не добавляй факты, боли, результаты, коммерческие условия или знакомство, которых нет во входе. "
+        "OUTREACH_PLAYBOOK содержит методику и язык гипотез сегмента, а не факты о получателе. "
+        "Боль из playbook нельзя утверждать как состояние конкретного получателя без отдельного evidence. "
         "Observation - факт. problem_hypothesis - только гипотеза: не утверждай её как факт. "
         "LocalOS сам соберёт текст из observation, founder story и proof по правилам выбранного угла. "
         "Ты выбираешь только opening_style и cta_intent для каждого касания. "

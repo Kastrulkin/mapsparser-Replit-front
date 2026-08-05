@@ -93,7 +93,7 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     assert "3 отзыва" not in messages["respectful_close"]
     assert "клиенты и ежедневная операционка всегда срочнее" in messages["founder_story"]
     assert "не просто выдаёт список рекомендаций" not in messages["founder_story"]
-    assert "240 точках" in messages["proof"]
+    assert "с 0 до 10 клиентов в день" in messages["proof"]
     assert "больше напоминать не буду" in messages["respectful_close"]
     assert all(message.count("?") == 1 for message in messages.values())
     assert all(
@@ -114,10 +114,11 @@ def test_founder_led_beauty_extended_sequence_has_distinct_audit_and_phone_touch
     audit_text = _message_for_angle("audit_step", candidate, None, [])
     phone_text = _message_for_angle("phone_handoff", candidate, None, [])
 
-    assert "https://localos.pro/example-audit" in audit_text
-    assert "Подсказать, с какого шага я бы начал?" in audit_text
+    assert "автопостингом" in audit_text
+    assert "ищем локальных партнёров" in audit_text
+    assert "накапливает опыт" in audit_text
     assert "Это Александр Демьянов, LocalOS" in phone_text
-    assert "Удобно коротко поговорить об этом?" in phone_text
+    assert "самая болезненная?" in phone_text
 
 
 def test_founder_led_beauty_segmentation_is_deterministic_and_conservative():
