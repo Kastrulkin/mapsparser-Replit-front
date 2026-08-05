@@ -20,6 +20,7 @@ from services.outreach_personalization_ai import (
     generate_personalized_sequence,
 )
 from services.outreach_playbook import beauty_touch_learning_dimensions
+from services.outreach_pain_library_service import load_approved_pain_library
 from services.outreach_decision_service import (
     _is_residential_recipient,
     build_outreach_decision,
@@ -1855,6 +1856,10 @@ def _strategy_dimensions(
     }
     if context.get("workstream_type") == "localos_sales" and candidate.get("recipient_segment"):
         dimensions.update(beauty_touch_learning_dimensions(angle))
+        playbook = candidate.get("outreach_playbook") if isinstance(candidate.get("outreach_playbook"), dict) else {}
+        dimensions["pain_library_version"] = playbook.get("version")
+        dimensions["pain_library_pattern_id"] = playbook.get("pattern_id")
+        dimensions["pain_library_pattern_version"] = playbook.get("pattern_version")
     return dimensions
 
 
@@ -2651,6 +2656,8 @@ def build_preview(
         (candidate for candidate in candidates if candidate.get("id") == selected_candidate_id),
         candidates[0],
     )
+    if context.get("workstream_type") == "localos_sales" and primary_candidate.get("recipient_segment"):
+        primary_candidate["outreach_playbook"] = load_approved_pain_library(cursor)
     override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()

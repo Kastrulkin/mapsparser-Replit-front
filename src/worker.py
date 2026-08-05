@@ -13,7 +13,7 @@ import random
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
-from psycopg2.extras import Json
+from psycopg2.extras import Json, RealDictCursor
 
 from browser_session import BrowserSession, BrowserSessionManager
 from parser_config_cookies import get_yandex_cookies
@@ -46,6 +46,7 @@ from core.review_response_utils import extract_review_response_text
 from yookassa_integration import run_due_renewals
 from services.outreach_dispatch_service import dispatch_due_outreach_queue
 from services.outreach_campaign_service import expire_manual_touches, finalize_no_reply_campaigns
+from services.outreach_pain_library_service import refresh_pain_library_draft
 from core.card_automation import (
     collect_due_telegram_digest_messages,
     ensure_card_automation_tables,
@@ -135,6 +136,7 @@ _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
 _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT = 0.0
+_LAST_OUTREACH_PAIN_LIBRARY_AT = 0.0
 _LAST_CONTACT_INTELLIGENCE_AT = 0.0
 _CONTACT_INTELLIGENCE_RECOVERY_DONE = False
 
@@ -2121,6 +2123,43 @@ def _run_knowledge_telegram_monitor_if_due() -> None:
                 db.close()
         except Exception:
             pass
+
+
+def _refresh_outreach_pain_library_if_due() -> None:
+    global _LAST_OUTREACH_PAIN_LIBRARY_AT
+    if not _env_bool("OUTREACH_PAIN_LIBRARY_REFRESH_ENABLED", True):
+        return
+    now = time.time()
+    interval = max(3600, int(os.getenv("OUTREACH_PAIN_LIBRARY_REFRESH_INTERVAL_SEC", "86400")))
+    if now - _LAST_OUTREACH_PAIN_LIBRARY_AT < interval:
+        return
+    _LAST_OUTREACH_PAIN_LIBRARY_AT = now
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        result = refresh_pain_library_draft(cursor, user_id="system-worker", limit=500)
+        conn.commit()
+        if not result.get("unchanged"):
+            print(
+                "[OUTREACH_PAIN_LIBRARY] "
+                f"draft_version={result.get('version')} approval_required=true",
+                flush=True,
+            )
+    except ValueError as exc:
+        if conn:
+            conn.rollback()
+        if str(exc) != "pain_library_support_insufficient":
+            print(f"[OUTREACH_PAIN_LIBRARY] skipped={exc}", flush=True)
+    except Exception:
+        if conn:
+            conn.rollback()
+        print("[OUTREACH_PAIN_LIBRARY] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        if conn:
+            conn.close()
 
 
 def _run_knowledge_embeddings_if_due() -> None:
@@ -6843,6 +6882,7 @@ if __name__ == "__main__":
             _collect_social_post_metrics_if_due()
             _run_telegram_opportunity_monitor_if_due()
             _run_knowledge_telegram_monitor_if_due()
+            _refresh_outreach_pain_library_if_due()
             _run_knowledge_embeddings_if_due()
             _dispatch_outreach_queue_if_due()
             _notify_superadmin_outreach_replies_if_due()

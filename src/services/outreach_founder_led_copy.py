@@ -166,6 +166,26 @@ def _scenario_label(segment: str | None) -> str:
     return "салона"
 
 
+def _approved_pain_phrase(candidate: dict[str, Any], pain_key: str, fallback: str) -> str:
+    playbook = candidate.get("outreach_playbook")
+    if not isinstance(playbook, dict):
+        return fallback
+    for pain in playbook.get("pain_library") or []:
+        if not isinstance(pain, dict) or clean_copy(pain.get("key")) != pain_key:
+            continue
+        source_phrases = pain.get("candidate_source_phrases") or []
+        for source_phrase in source_phrases:
+            value = source_phrase.get("text") if isinstance(source_phrase, dict) else source_phrase
+            phrase = clean_copy(value)
+            if 12 <= len(phrase) <= 160:
+                return phrase.rstrip(".!?")
+        for value in pain.get("approved_seed_phrases") or pain.get("phrases") or []:
+            phrase = clean_copy(value)
+            if phrase:
+                return phrase.rstrip(".!?")
+    return fallback
+
+
 def founder_led_localos_text(
     angle: str,
     candidate: dict[str, Any],
@@ -274,11 +294,16 @@ def founder_led_localos_text(
         )
 
     if angle == "founder_story":
+        owner_phrase = _approved_pain_phrase(
+            candidate,
+            "operations_and_burnout",
+            "Если не я, то никто",
+        )
         return (
             "Здравствуйте! Коротко дополню.\n\n"
             "Понимаю, почему до таких задач часто не доходят руки: клиенты и "
             "ежедневная операционка всегда срочнее. Владельцы часто описывают это так: "
-            '"Если не я, то никто".\n\n'
+            f'"{owner_phrase}".\n\n'
             "Сам больше десяти лет в бизнесе и хорошо это понимаю.\n\n"
             f"{APPROVED_FOUNDER_ORIGIN}\n\n"
             "Вам может быть интересно, какие повторяющиеся задачи можно снять с владельца?"

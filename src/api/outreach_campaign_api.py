@@ -61,6 +61,7 @@ from services.outreach_experiment_service import (
     next_stage,
     select_stage_candidates,
 )
+from services.outreach_pain_library_service import refresh_pain_library_draft
 from services.outreach_sender_service import (
     change_sender_permission,
     connect_email_sender,
@@ -2404,6 +2405,41 @@ def get_outreach_knowledge_patterns():
         conn.close()
 
 
+@outreach_campaign_bp.post("/api/outreach/knowledge-patterns/pain-library/refresh")
+def refresh_outreach_pain_library():
+    """Compile a source-backed draft without changing the active library."""
+
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        result = refresh_pain_library_draft(
+            cursor,
+            user_id=str(user_data.get("user_id") or ""),
+            limit=int((request.get_json(silent=True) or {}).get("limit") or 500),
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "pain_library": result,
+            "approval_required": not bool(result.get("unchanged")),
+            "active_library_changed": False,
+            "external_dispatch_performed": False,
+        }), 200 if result.get("unchanged") else 201
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @outreach_campaign_bp.post("/api/outreach/knowledge-patterns/compile")
 def compile_outreach_knowledge_pattern():
     user_data, error = _require_auth()
@@ -2463,6 +2499,22 @@ def approve_outreach_knowledge_pattern(pattern_id: str):
     conn = get_db_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "SELECT pattern_key FROM outreach_knowledge_patterns WHERE id = %s AND status = 'draft'",
+            (pattern_id,),
+        )
+        target = cursor.fetchone()
+        if not target:
+            conn.rollback()
+            return jsonify({"success": False, "error": "Pattern is not ready for approval"}), 409
+        cursor.execute(
+            """
+            UPDATE outreach_knowledge_patterns
+            SET status = 'deprecated', updated_at = NOW()
+            WHERE pattern_key = %s AND status = 'approved' AND id <> %s
+            """,
+            (target["pattern_key"], pattern_id),
+        )
         cursor.execute(
             """
             UPDATE outreach_knowledge_patterns

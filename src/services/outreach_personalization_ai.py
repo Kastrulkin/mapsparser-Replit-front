@@ -318,7 +318,11 @@ def _request_record(
         },
     }
     if _clean(motion) == "localos_sales" and _clean(candidate.get("recipient_segment")):
-        record["outreach_playbook"] = beauty_outreach_guidance()
+        playbook = candidate.get("outreach_playbook")
+        record["outreach_playbook"] = (
+            playbook if isinstance(playbook, dict) and playbook.get("pain_library")
+            else beauty_outreach_guidance()
+        )
     return record
 
 
