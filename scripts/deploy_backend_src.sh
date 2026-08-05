@@ -7,6 +7,7 @@ migrations_dir="${repo_root}/alembic_migrations"
 entrypoint_file="${repo_root}/entrypoint.sh"
 telegram_bot_launcher="${repo_root}/scripts/run_localos_telegram_bot.sh"
 runtime_script_files=(
+  "scripts/compile_b2b_outreach_patterns.py"
   "scripts/social_posting_acceptance_probe.py"
   "scripts/smoke_social_production_readiness.py"
   "scripts/smoke_social_posting_runtime.sh"
