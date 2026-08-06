@@ -1171,12 +1171,12 @@ export default function PublicSalesRoomPage() {
         <form onSubmit={sendMessage} className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
             <MessageSquare className="h-4 w-4 text-orange-500" />
-            Обсудить следующий шаг
+            {copy.discussNext}
           </div>
           <Textarea
             value={messageText}
             onChange={(event) => setMessageText(event.currentTarget.value)}
-            placeholder="Напишите, что уточнить, изменить или обсудить..."
+            placeholder={copy.messagePlaceholder}
             className="mt-4 min-h-28 resize-none"
           />
 
@@ -1202,7 +1202,7 @@ export default function PublicSalesRoomPage() {
             {fileUploadsVisible ? (
               <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
                 <Paperclip className="h-4 w-4" />
-                {uploading ? 'Загружаем файл...' : 'Приложить файл'}
+                {uploading ? copy.uploading : copy.attach}
                 <input
                   type="file"
                   className="hidden"
@@ -1216,7 +1216,7 @@ export default function PublicSalesRoomPage() {
               <span />
             )}
             <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={sending || (fileUploadsVisible && uploading)}>
-              {sending ? 'Отправляем...' : 'Отправить'}
+              {sending ? copy.sending : copy.send}
               <Send className="h-4 w-4" />
             </Button>
           </div>
