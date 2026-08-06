@@ -1,5 +1,6 @@
 from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
+from core.auth_helpers import verify_business_access
 
 globals().update(_shared.runtime_namespace)
 
@@ -443,11 +444,11 @@ def get_user_token_usage_stats():
         cursor = db.conn.cursor()
 
         if business_id:
-            owner_id = get_business_owner_id(cursor, business_id)
+            has_access, owner_id = verify_business_access(cursor, business_id, user_data)
             if not owner_id:
                 db.close()
                 return jsonify({"error": "Бизнес не найден"}), 404
-            if owner_id != user_id and not db.is_superadmin(user_id):
+            if not has_access:
                 db.close()
                 return jsonify({"error": "Нет доступа"}), 403
 

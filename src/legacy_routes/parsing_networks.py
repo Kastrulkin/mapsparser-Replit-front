@@ -1,4 +1,5 @@
 from legacy_routes import shared as _shared
+from core.auth_helpers import verify_business_access
 
 globals().update(_shared.runtime_namespace)
 
@@ -279,7 +280,8 @@ def client_info():
                     if not city and address:
                         city_suggestion = suggest_city_from_address(address)
                     print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, name={business_name!r}, is_active={is_active_val}")
-                    if owner_id == user_id or user_data.get("is_superadmin"):
+                    has_access, _ = verify_business_access(cursor, current_business_id, user_data)
+                    if has_access:
                         print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из businesses")
                         links = []
                         cursor.execute("""

@@ -2,30 +2,30 @@
 
 ## ✅ FIX_PROVEN — Bug reproduced and fix proven
 
-> The same reproducer changed from failing to passing and broader checks passed.
+> Three employee read paths returned HTTP 403 before the change and passed after using the shared business access check.
 
 **Project:** LocalOS<br>
-**Bug:** Outreach campaign loses selected channels and rejects selected email<br>
-**Environment:** macOS arm64, Python 3.11, React/Vite frontend<br>
-**Generated:** 2026-08-05
+**Bug:** Network employees receive owner-only 403 responses<br>
+**Environment:** Python 3.11.7 local tests; Docker Compose production at localos.pro<br>
+**Generated:** 2026-08-06
 
 ## Original report
 
-In the Tatyana Prokura lead, Email remained not ready, selected channels disappeared after reload, and message editing appeared in two sections.
+After sign-in was repaired, an active employee of the Vesyolaya Raschyoska network received payment and access errors while using the Engels location.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | The explicitly selected safe email is usable, unsaved channel/sender/schedule choices survive reload, and messages have one editing location. | A valid_format email was discarded, setup lived only in React memory, and the editor was rendered in both Messages and the campaign sequence section. |
+| Observed behavior | An active network member can read the profile, token usage, and content context of an active network location. | All three paths rejected the employee because they compared only owner_id. |
 
 ## Minimal reproduction
 
-Three focused regression tests exercise selected-email eligibility and inspect the lead drawer source contract for a single editor and workstream-scoped persisted setup.
+Three focused tests use a non-owner with active network membership against the real Flask routes and content context service.
 
-**Confirming signal:** All three focused tests failed before the fix for the predicted reasons.
+**Confirming signal:** Two HTTP 403 responses and one PermissionError instead of successful reads.
 
 ### Reproduction files approved at Gate 1
 
-- [test_founder_outreach_campaigns.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_founder_outreach_campaigns.py:2458>) — Three regression tests approved at Gate 1.
+- [test_employee_business_access.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_employee_business_access.py:1>) — Three employee access regressions approved at Gate 1.
 
 ## Red to green evidence
 
@@ -33,73 +33,69 @@ Three focused regression tests exercise selected-email eligibility and inspect t
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | 470 ms | 693.216 ms |
+| Duration | 2,330 ms | 1,480 ms |
 | Same command | — | True |
-| Broader suite | — | passed |
+| Broader suite | — | 25 focused authentication, membership, and content policy tests passed |
 
 ### Before — failing evidence
 
 ```text
 FFF [100%]
-FAILED test_explicitly_selected_valid_format_email_is_available_for_campaign: expected selected-email, received None
-FAILED test_lead_drawer_renders_message_editor_only_in_messages_section: OutreachTouchMessageEditor remained in sequence section
-FAILED test_unsaved_campaign_setup_is_restored_for_same_workstream_after_reload: outreachCampaignSetupStorageKey was absent
-3 failed, 104 deselected in 0.47s
+3 failed: business profile 403, token usage 403, content context PermissionError
 ```
 
 ### After — fixed evidence
 
 ```text
-...                                                                      [100%]
-3 passed, 104 deselected in 0.34s
+... [100%]
+3 passed in 1.48s
 ```
 
 ## Root cause
 
-Backend eligibility applied automatic-selection verification rules to an explicit human selection. Frontend campaign setup had no reload-safe draft, and a previously removed message editor remained duplicated in the sequence section.
+The affected read paths implemented owner-only checks instead of the canonical verify_business_access helper that includes active network and direct business memberships.
 
 ## Approved fix
 
-Added a narrow eligibility path for explicitly selected structurally safe valid_format email, persisted unsaved campaign setup per workstream and base campaign version, and kept editing plus quality details only in Messages and channels.
+Replaced the three owner-only read checks with verify_business_access while preserving not-found and unauthorized responses.
 
-**Why this is causal:** Each fix changes the exact decision or state boundary exercised by its failing test while preserving strict automatic contact selection and explicit campaign approval.
+**Why this is causal:** The canonical helper resolves the same membership record that grants the employee access through auth/me, removing the inconsistent authorization decision.
 
 ### Production files approved at Gate 2
 
-- [outreach_campaign_service.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/outreach_campaign_service.py:1133>) — Explicit selected-recipient eligibility without weakening automatic selection.
-- [AdminLeadRegistry.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/prospecting/AdminLeadRegistry.tsx:1221>) — Reload-safe campaign setup and one message editor.
+- [parsing_networks.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/legacy_routes/parsing_networks.py:283>) — Business profile read now accepts canonical employee access.
+- [core_public.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/legacy_routes/core_public.py:447>) — Token usage read now accepts canonical employee access.
+- [content_plan_service.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/content_plan_service.py:1429>) — Content context read now accepts canonical employee access.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Focused regression tests | ✅ passed | Same command changed from 3 failures to 3 passes. |
-| Founder outreach campaign suite | ✅ passed | 107 passed. |
-| Frontend production build | ✅ passed | Vite build completed successfully. |
+| Regression test | ✅ passed | The same three scenarios changed from red to green. |
+| Focused suite | ✅ passed | 25 authentication, membership, and content policy tests passed. |
+| Production smoke | ✅ passed | App is healthy, HTTP returns 200, and Irina resolves allowed=true for the Engels location. |
 
 ## Reproduce
 
 ```bash
-arch -arm64 venv/bin/python -m pytest -q tests/test_founder_outreach_campaigns.py -k 'explicitly_selected_valid_format_email or renders_message_editor_only or unsaved_campaign_setup_is_restored'
+python3 -m pytest -q tests/test_employee_business_access.py
 ```
 ```bash
-arch -arm64 venv/bin/python -m pytest -q tests/test_founder_outreach_campaigns.py
-```
-```bash
-cd frontend && npm run build
+python3 -m pytest -q tests/test_employee_business_access.py tests/test_network_member_access.py tests/test_login_business_access.py tests/test_auth_email_case_insensitive.py tests/test_content_plan_policy.py
 ```
 
 ## Limitations
 
-- The browser draft preserves choices made after this fix; it cannot reconstruct choices already lost by the previous deployed build.
+- No user session token or password was accessed, so production endpoints were not impersonated.
 
 ## Residual risks
 
-- The existing version 4 production campaign still contains null sender/contact fields until the operator reselects and saves or explicitly authorizes a production data repair.
+- Other legacy owner-only endpoints outside the three observed read paths may require separate review.
 
 ## Notes
 
-- No production database rows, approvals, queues, or sends were changed.
+- Payment and subscription records were not changed.
+- An existing unrelated production change in content_plan_service.py was preserved.
 
 ---
 

@@ -1524,7 +1524,7 @@ def login():
 
             if not is_superadmin:
                 # Проверяем активные бизнесы для обычных пользователей
-                businesses = db.get_businesses_by_owner(result['id'])
+                businesses = db.get_businesses_for_user_access(result['id'])
                 if len(businesses) == 0:
                     if db:
                         db.close()

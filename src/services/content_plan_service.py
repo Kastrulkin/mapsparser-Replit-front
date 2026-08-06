@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 from database_manager import DatabaseManager
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.auth_helpers import verify_business_access
 from core.card_audit import build_card_audit_snapshot
 from core.helpers import get_business_owner_id
 from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
@@ -1425,7 +1426,15 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         if str(owner_id or "").strip() != str(user_id or "").strip():
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
             superadmin_row = cursor.fetchone()
-            if not bool(_row_get(superadmin_row, "coalesce", 0, False)):
+            has_access, _ = verify_business_access(
+                cursor,
+                business_id,
+                {
+                    "user_id": user_id,
+                    "is_superadmin": bool(_row_get(superadmin_row, "coalesce", 0, False)),
+                },
+            )
+            if not has_access:
                 raise PermissionError("Нет доступа к бизнесу")
 
         subscription = get_subscription_access(business_id)
