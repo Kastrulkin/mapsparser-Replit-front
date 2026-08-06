@@ -404,6 +404,10 @@ export const CardOverviewPage = () => {
 
   const loadManualCompetitors = async () => {
     if (!currentBusinessId) return;
+    if (isDemoMode) {
+      setManualCompetitors(demoShowcase.manualCompetitors);
+      return;
+    }
     try {
       const { data } = await fetchManualCompetitors(currentBusinessId);
       if (data.success) {
@@ -1183,7 +1187,7 @@ export const CardOverviewPage = () => {
                     : "text-slate-500 hover:bg-white hover:text-slate-900"
                 )}
               >
-                {source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source)}
+                {source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
               </button>
             ))}
           </div>

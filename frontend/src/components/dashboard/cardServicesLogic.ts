@@ -583,10 +583,10 @@ export const formatServiceSource = (service: ServiceLike) => {
   return source.replace(/_/g, ' ');
 };
 
-export const formatMapSourceTab = (source: string) => {
+export const formatMapSourceTab = (source: string, language = 'en') => {
   const normalized = String(source || '').trim().toLowerCase();
-  if (normalized === 'yandex') return 'Яндекс';
-  if (normalized === '2gis') return '2ГИС';
+  if (normalized === 'yandex') return language === 'ru' ? 'Яндекс' : 'Yandex';
+  if (normalized === '2gis') return language === 'ru' ? '2ГИС' : '2GIS';
   if (normalized === 'google') return 'Google';
   if (normalized === 'apple') return 'Apple';
   return source;

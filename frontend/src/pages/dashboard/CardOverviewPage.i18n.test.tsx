@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LanguageProvider } from '@/i18n/LanguageContext';
 import { CardOverviewPage } from './CardOverviewPage';
+import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
 const response = (data: Record<string, unknown>) => Promise.resolve(new Response(JSON.stringify(data), {
   status: 200,
@@ -38,8 +39,22 @@ describe('CardOverviewPage localization', () => {
         posts: [{ id: 'demo-post', title: 'Летний уход за питомцем', text: 'Как подготовить шерсть к жаркой погоде.', source: 'yandex' }],
       });
       if (url.includes('/parse-status')) return response({ success: true, status: 'idle', refresh_policy: { can_refresh: true } });
-      if (url.includes('/competitors/manual')) return response({ success: true, competitors: [] });
-      if (url.includes('/client-info')) return response({ success: true, businessName: 'Roga i Kopyta', mapLinks: [{ url: 'https://yandex.example/demo' }] });
+      if (url.includes('/competitors/manual')) return response({
+        success: true,
+        competitors: window.localStorage.getItem('language') === 'tr'
+          ? [
+            { id: 'competitor-1', name: 'Пушистый Стиль', url: 'https://yandex.example/competitor-1' },
+            { id: 'competitor-2', name: 'Барбос & Мурка', url: 'https://yandex.example/competitor-2' },
+          ]
+          : [],
+      });
+      if (url.includes('/client-info')) return response({
+        success: true,
+        businessName: 'Roga i Kopyta',
+        mapLinks: window.localStorage.getItem('language') === 'tr'
+          ? [{ url: 'https://yandex.example/demo' }, { url: 'https://2gis.example/demo' }]
+          : [{ url: 'https://yandex.example/demo' }],
+      });
       if (url.includes('/network-locations')) return response({ success: true, locations: [] });
       return response({ success: true });
     }));
@@ -72,5 +87,30 @@ describe('CardOverviewPage localization', () => {
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
     expect(container.textContent).not.toContain('LAST UPDATED');
     expect(container.textContent).not.toContain('Could not update card data');
+  });
+
+  it('renders Turkish map sources and demo competitors without Russian or English fallback copy', async () => {
+    window.localStorage.setItem('language', 'tr');
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/?tab=competitors']}>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<CardOverviewPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('tab', { name: 'Rakipler' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Pofuduk Stil').length).toBeGreaterThan(0));
+    expect(screen.getByRole('button', { name: '2GIS' })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
+
+    const copy = getCardOverviewPageCopy('tr');
+    expect(copy.refreshAllHint).toBe('Eklenen tüm harita kayıtlarını yeniler. Kayıt verilerinin miktarına bağlı olarak yaklaşık 10 kredi tutar.');
+    expect(copy.refreshAllHint).not.toContain('Refreshes all added map listings');
   });
 });

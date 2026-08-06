@@ -51,6 +51,7 @@ import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 type OutletContext = {
   currentBusinessId?: string | null;
+  user?: { demo_mode?: boolean } | null;
 };
 
 type ServiceItem = {
@@ -255,7 +256,8 @@ const emptyLinkDraft: AverageTicketAddon = {
 };
 
 export const AverageTicketPage = () => {
-  const { currentBusinessId } = useOutletContext<OutletContext>();
+  const { currentBusinessId, user } = useOutletContext<OutletContext>();
+  const isDemoMode = Boolean(user?.demo_mode);
   const { toast } = useToast();
   const { language } = useLanguage();
   const copy = getDemoWorkspaceCopy(language).averageTicket;
@@ -299,6 +301,10 @@ export const AverageTicketPage = () => {
 
   const loadOverview = useCallback(async () => {
     if (!currentBusinessId) return;
+    if (isDemoMode) {
+      setOverview({ services: [], latest_matrix: null, stats: {}, kpis: {}, daily_plan: [], packages: [] });
+      return;
+    }
     setLoading(true);
     try {
       const data = await newAuth.makeRequest(`/average-ticket/overview?business_id=${encodeURIComponent(currentBusinessId)}`);
@@ -312,7 +318,7 @@ export const AverageTicketPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [copy.loadError, copy.retry, currentBusinessId, toast]);
+  }, [copy.loadError, copy.retry, currentBusinessId, isDemoMode, toast]);
 
   useEffect(() => {
     void loadOverview();

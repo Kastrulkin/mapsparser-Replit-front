@@ -27,11 +27,18 @@ const textByLanguage: Record<Language, DemoShowcaseText> = {
 export const getDemoShowcaseData = (language: Language) => {
   const text = textByLanguage[language];
   const date = '2026-06-20T12:00:00Z';
+  const competitorNames = [text.competitor, `${text.competitor} 2`, `${text.competitor} 3`, `${text.competitor} 4`];
   return {
     services: [{ id: `demo-service-${language}`, name: text.service, description: text.serviceDescription, keywords: [text.keyword], seo_keywords: [text.keyword], price: 1500, currency: 'RUB', source: 'yandex', updated_at: date, is_active: true }],
     reviews: [{ id: `demo-review-${language}`, source: 'yandex', rating: 5, author_name: language === 'ru' ? 'Сергей Новиков' : 'Demo customer', text: text.review, response_text: text.reply, published_at: date, has_response: true, reply_draft_id: null, reply_draft_text: text.reply, reply_draft_status: 'draft', location_name: 'Roga i Kopyta' }],
     news: [{ id: `demo-news-${language}`, title: text.newsTitle, text: text.newsText, content: text.newsText, status: 'draft', created_at: date, published_at: null, source: 'LocalOS' }],
     keywords: [{ keyword: text.keyword, views: 420, category: text.service, updated_at: date }],
     competitors: [{ id: `demo-competitor-${language}`, name: text.competitor, title: text.competitor, rating: 4.4, reviews_count: 72 }],
+    manualCompetitors: competitorNames.map((name, index) => ({
+      id: `demo-manual-competitor-${language}-${index + 1}`,
+      name,
+      url: `https://yandex.example/demo-competitor-${language}-${index + 1}`,
+      audit_status: 'not_requested',
+    })),
   };
 };

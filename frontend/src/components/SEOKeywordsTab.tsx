@@ -74,6 +74,18 @@ const negativeBulkCopy: Record<string, { placeholder: string; button: string }> 
     },
 };
 
+const seoOperationalCopy: Record<string, Record<string, string>> = {
+    ru: {
+        negativeTitle: 'Минус-слова SEO', negativePlaceholder: 'Добавить минус-слово', globalScope: 'Глобально', categoryScope: 'По категории', categoryPlaceholder: 'Категория (если выбрано)', showBlocked: 'Показать исключённые минус-словами', loading: 'Загрузка…', negativeEmpty: 'Минус-слов пока нет', searchPlaceholder: 'Поиск запросов Wordstat, например: EMS массаж', searching: 'Поиск...', findQueries: 'Найти запросы', add: 'Добавить', reject: 'Отклонить', noSuggestions: 'По запросу ничего не найдено. Проверьте опечатки или попробуйте более широкую формулировку.', currentSearch: 'Поиск по текущим SEO-запросам', allFrequency: 'Все запросы по частотности', highFrequency: 'Высокочастотные (от 10 000)', midFrequency: 'Среднечастотные (1 000 - 9 999)', lowFrequency: 'Низкочастотные (до 999)', actions: 'Действия', remove: 'Удалить', categoryRequired: 'Укажите категорию', loadNegativeError: 'Ошибка загрузки минус-слов', addNegativeError: 'Ошибка добавления минус-слова', negativeAdded: 'Минус-слово добавлено', bulkError: 'Ошибка массового добавления', bulkAdded: 'Минус-слова добавлены', removeNegativeError: 'Ошибка удаления минус-слова', updateError: 'Не удалось обновить SEO-ключи', chooseBusiness: 'Выберите бизнес', keywordRemoveError: 'Ошибка удаления запроса', keywordRemoved: 'Запрос удалён', searchError: 'Ошибка поиска Wordstat', keywordAddError: 'Ошибка добавления запроса', keywordAdded: 'Запрос добавлен',
+    },
+    en: {
+        negativeTitle: 'SEO negative keywords', negativePlaceholder: 'Add a negative keyword', globalScope: 'Global', categoryScope: 'By category', categoryPlaceholder: 'Category (when selected)', showBlocked: 'Show queries excluded by negative keywords', loading: 'Loading…', negativeEmpty: 'No negative keywords yet', searchPlaceholder: 'Search Wordstat queries, for example: EMS massage', searching: 'Searching...', findQueries: 'Find queries', add: 'Add', reject: 'Reject', noSuggestions: 'Nothing was found. Check the spelling or try a broader phrase.', currentSearch: 'Search current SEO queries', allFrequency: 'All query frequencies', highFrequency: 'High frequency (10,000+)', midFrequency: 'Medium frequency (1,000 - 9,999)', lowFrequency: 'Low frequency (up to 999)', actions: 'Actions', remove: 'Remove', categoryRequired: 'Enter a category', loadNegativeError: 'Could not load negative keywords', addNegativeError: 'Could not add the negative keyword', negativeAdded: 'Negative keyword added', bulkError: 'Could not add negative keywords in bulk', bulkAdded: 'Negative keywords added', removeNegativeError: 'Could not remove the negative keyword', updateError: 'Could not update SEO keywords', chooseBusiness: 'Select a business', keywordRemoveError: 'Could not remove the query', keywordRemoved: 'Query removed', searchError: 'Wordstat search failed', keywordAddError: 'Could not add the query', keywordAdded: 'Query added',
+    },
+    tr: {
+        negativeTitle: 'SEO negatif anahtar kelimeleri', negativePlaceholder: 'Negatif anahtar kelime ekle', globalScope: 'Genel', categoryScope: 'Kategoriye göre', categoryPlaceholder: 'Kategori (seçildiyse)', showBlocked: 'Negatif anahtar kelimelerle hariç tutulanları göster', loading: 'Yükleniyor…', negativeEmpty: 'Henüz negatif anahtar kelime yok', searchPlaceholder: 'Wordstat sorgularında ara, örneğin: EMS masajı', searching: 'Aranıyor...', findQueries: 'Sorgu bul', add: 'Ekle', reject: 'Reddet', noSuggestions: 'Sonuç bulunamadı. Yazımı kontrol edin veya daha geniş bir ifade deneyin.', currentSearch: 'Mevcut SEO sorgularında ara', allFrequency: 'Tüm sorgu sıklıkları', highFrequency: 'Yüksek sıklık (10.000+)', midFrequency: 'Orta sıklık (1.000 - 9.999)', lowFrequency: 'Düşük sıklık (999’a kadar)', actions: 'İşlemler', remove: 'Sil', categoryRequired: 'Kategori belirtin', loadNegativeError: 'Negatif anahtar kelimeler yüklenemedi', addNegativeError: 'Negatif anahtar kelime eklenemedi', negativeAdded: 'Negatif anahtar kelime eklendi', bulkError: 'Negatif anahtar kelimeler toplu olarak eklenemedi', bulkAdded: 'Negatif anahtar kelimeler eklendi', removeNegativeError: 'Negatif anahtar kelime silinemedi', updateError: 'SEO anahtar kelimeleri güncellenemedi', chooseBusiness: 'İşletme seçin', keywordRemoveError: 'Sorgu silinemedi', keywordRemoved: 'Sorgu silindi', searchError: 'Wordstat araması başarısız oldu', keywordAddError: 'Sorgu eklenemedi', keywordAdded: 'Sorgu eklendi',
+    },
+};
+
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { language, t } = useLanguage();
     const { user } = useOutletContext<any>();
@@ -98,6 +110,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [negativeCategory, setNegativeCategory] = useState('');
     const [negativeBulkText, setNegativeBulkText] = useState('');
     const [negativeLoading, setNegativeLoading] = useState(false);
+    const operationalCopy = seoOperationalCopy[language] || seoOperationalCopy.en;
 
     const loadKeywords = async () => {
         setLoading(true);
@@ -146,7 +159,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             if (data.success) {
                 setNegativeKeywords(data.items || []);
             } else {
-                setError(data.error || 'Ошибка загрузки минус-слов');
+                setError(data.error || operationalCopy.loadNegativeError);
             }
         } catch (e: any) {
             setError(e.message);
@@ -160,7 +173,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         const phrase = negativePhrase.trim();
         if (!phrase) return;
         if (negativeScope === 'category' && !negativeCategory.trim()) {
-            setError('Для категории укажите category');
+            setError(operationalCopy.categoryRequired);
             return;
         }
         try {
@@ -181,11 +194,11 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             });
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка добавления минус-слова');
+                setError(data.error || operationalCopy.addNegativeError);
                 return;
             }
             setNegativePhrase('');
-            setSuccess('Минус-слово добавлено');
+            setSuccess(operationalCopy.negativeAdded);
             await Promise.all([loadNegativeKeywords(), loadKeywords()]);
         } catch (e: any) {
             setError(e.message);
@@ -196,7 +209,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         if (!businessId) return;
         if (!negativeBulkText.trim()) return;
         if (negativeScope === 'category' && !negativeCategory.trim()) {
-            setError('Для категории укажите category');
+            setError(operationalCopy.categoryRequired);
             return;
         }
         try {
@@ -217,11 +230,11 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             });
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка массового добавления минус-слов');
+                setError(data.error || operationalCopy.bulkError);
                 return;
             }
             setNegativeBulkText('');
-            setSuccess(data.message || 'Минус-слова добавлены');
+            setSuccess(data.message || operationalCopy.bulkAdded);
             await Promise.all([loadNegativeKeywords(), loadKeywords()]);
         } catch (e: any) {
             setError(e.message);
@@ -243,7 +256,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             });
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка удаления минус-слова');
+                setError(data.error || operationalCopy.removeNegativeError);
                 return;
             }
             await Promise.all([loadNegativeKeywords(), loadKeywords()]);
@@ -276,7 +289,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 const superadminDetails = typeof data.superadmin === 'string' && data.superadmin.trim()
                     ? `\n\nsuperadmin: ${data.superadmin.trim()}`
                     : '';
-                setError(`${data.error || 'Не удалось обновить SEO-ключи'}${superadminDetails}`);
+                setError(`${data.error || operationalCopy.updateError}${superadminDetails}`);
             }
         } catch (e: any) {
             setError(e.message);
@@ -287,7 +300,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
 
     const removeKeyword = async (keyword: string) => {
         if (!businessId) {
-            setError('Выберите бизнес, чтобы удалить ключевой запрос');
+            setError(operationalCopy.chooseBusiness);
             return;
         }
 
@@ -304,11 +317,11 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             });
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка удаления ключевого запроса');
+                setError(data.error || operationalCopy.keywordRemoveError);
                 return;
             }
 
-            setSuccess('Запрос удалён и не будет использоваться при оптимизации');
+            setSuccess(operationalCopy.keywordRemoved);
             setKeywords(prev => prev.filter(k => k.keyword !== keyword));
             setGrouped(prev => {
                 const next: GroupedKeywords = {};
@@ -324,7 +337,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
 
     const searchWordstat = async () => {
         if (!businessId) {
-            setError('Выберите бизнес для поиска ключевых запросов');
+            setError(operationalCopy.chooseBusiness);
             return;
         }
         const q = searchQuery.trim();
@@ -344,7 +357,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             );
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка поиска по Wordstat');
+                setError(data.error || operationalCopy.searchError);
                 return;
             }
             setSuggestions((data.items || []).filter((item: Keyword) => !rejectedSuggestions.has(item.keyword)));
@@ -374,10 +387,10 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             });
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка добавления ключевого запроса');
+                setError(data.error || operationalCopy.keywordAddError);
                 return;
             }
-            setSuccess('Ключевой запрос добавлен в ваш список');
+            setSuccess(operationalCopy.keywordAdded);
             setSuggestions(prev => prev.filter(s => s.keyword !== item.keyword));
             await loadKeywords();
         } catch (e: any) {
@@ -432,6 +445,27 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 grooming: 'Груминг',
                 other: 'Другое',
                 custom: 'Свои',
+            },
+        }
+        : language === 'tr'
+        ? {
+            title: 'SEO sorguları',
+            subtitle: 'Yapay zekâ optimizasyonunda kullanılan popüler Yandex.Wordstat arama sorguları.',
+            update: 'Verileri yenile',
+            updating: 'Yenileniyor...',
+            all: 'Tüm sorgular',
+            loading: 'Sorgular yükleniyor...',
+            empty: 'Sorgu bulunamadı. Wordstat verilerini almak için “Verileri yenile” düğmesine basın.',
+            columns: {
+                keyword: 'Anahtar kelime',
+                category: 'Kategori',
+                views: 'Aylık görüntüleme',
+                updated: 'Son güncelleme',
+            },
+            categories: {
+                grooming: 'Bakım',
+                other: 'Diğer',
+                custom: 'Özel',
             },
         }
         : {
@@ -518,12 +552,12 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             </div>
 
             <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-                <h3 className="text-sm font-semibold text-amber-900 mb-3">Минус-слова SEO</h3>
+                <h3 className="text-sm font-semibold text-amber-900 mb-3">{operationalCopy.negativeTitle}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
                     <input
                         value={negativePhrase}
                         onChange={(e) => setNegativePhrase(e.target.value)}
-                        placeholder="Добавить минус-слово"
+                        placeholder={operationalCopy.negativePlaceholder}
                         className="rounded-lg border border-amber-200 px-3 py-2 text-sm md:col-span-2"
                     />
                     <select
@@ -531,20 +565,20 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                         onChange={(e) => setNegativeScope(e.target.value as 'global' | 'category')}
                         className="rounded-lg border border-amber-200 px-3 py-2 text-sm bg-white"
                     >
-                        <option value="global">Глобально</option>
-                        <option value="category">По категории</option>
+                        <option value="global">{operationalCopy.globalScope}</option>
+                        <option value="category">{operationalCopy.categoryScope}</option>
                     </select>
                     <input
                         value={negativeCategory}
                         onChange={(e) => setNegativeCategory(e.target.value)}
-                        placeholder="Категория (если выбрано)"
+                        placeholder={operationalCopy.categoryPlaceholder}
                         disabled={negativeScope !== 'category'}
                         className="rounded-lg border border-amber-200 px-3 py-2 text-sm disabled:bg-gray-100"
                     />
                 </div>
                 <div className="flex flex-col md:flex-row gap-2 mb-3">
                     <Button variant="outline" onClick={addNegativeKeyword} disabled={!businessId || !negativePhrase.trim()}>
-                        Добавить минус-слово
+                        {operationalCopy.negativePlaceholder}
                     </Button>
                     <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                         <input
@@ -552,7 +586,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                             checked={showBlocked}
                             onChange={(e) => setShowBlocked(e.target.checked)}
                         />
-                        Показать исключённые минус-словами
+                        {operationalCopy.showBlocked}
                     </label>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
@@ -564,9 +598,9 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                     />
                     <div className="rounded-lg border border-amber-200 bg-white p-2 max-h-[140px] overflow-y-auto">
                         {negativeLoading ? (
-                            <div className="text-xs text-gray-500">Загрузка…</div>
+                            <div className="text-xs text-gray-500">{operationalCopy.loading}</div>
                         ) : negativeKeywords.length === 0 ? (
-                            <div className="text-xs text-gray-500">Минус-слов пока нет</div>
+                            <div className="text-xs text-gray-500">{operationalCopy.negativeEmpty}</div>
                         ) : (
                             <div className="space-y-1">
                                 {negativeKeywords.map((item) => (
@@ -606,12 +640,12 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                 void searchWordstat();
                             }
                         }}
-                        placeholder="Поиск запросов Wordstat, например: EMS массаж"
+                        placeholder={operationalCopy.searchPlaceholder}
                         className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
                     />
                     <Button onClick={searchWordstat} disabled={searching || !businessId || searchQuery.trim().length < 2} variant="outline">
                         <Search className="w-4 h-4 mr-2" />
-                        {searching ? 'Поиск...' : 'Найти запросы'}
+                        {searching ? operationalCopy.searching : operationalCopy.findQueries}
                     </Button>
                 </div>
                 {suggestions.length > 0 && (
@@ -625,11 +659,11 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                 <div className="flex gap-2">
                                     <Button size="sm" variant="outline" onClick={() => addKeyword(s)}>
                                         <Check className="w-4 h-4 mr-1" />
-                                        Добавить
+                                        {operationalCopy.add}
                                     </Button>
                                     <Button size="sm" variant="ghost" onClick={() => rejectKeyword(s.keyword)}>
                                         <X className="w-4 h-4 mr-1" />
-                                        Отклонить
+                                        {operationalCopy.reject}
                                     </Button>
                                 </div>
                             </div>
@@ -638,7 +672,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 )}
                 {hasSearchedSuggestions && !searching && suggestions.length === 0 && searchQuery.trim().length >= 2 && (
                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
-                        По запросу ничего не найдено. Проверьте опечатки или попробуйте более широкую формулировку.
+                        {operationalCopy.noSuggestions}
                     </div>
                 )}
             </div>
@@ -649,7 +683,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                         <input
                             value={tableQuery}
                             onChange={(e) => setTableQuery(e.target.value)}
-                            placeholder="Поиск по текущим SEO-запросам"
+                            placeholder={operationalCopy.currentSearch}
                             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                         />
                     </div>
@@ -658,10 +692,10 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                         onChange={(e) => setViewsFilter(e.target.value as 'all' | 'high' | 'mid' | 'low')}
                         className="rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white min-w-[240px]"
                     >
-                        <option value="all">Все запросы по частотности</option>
-                        <option value="high">Высокочастотные (от 10 000)</option>
-                        <option value="mid">Среднечастотные (1 000 - 9 999)</option>
-                        <option value="low">Низкочастотные (до 999)</option>
+                        <option value="all">{operationalCopy.allFrequency}</option>
+                        <option value="high">{operationalCopy.highFrequency}</option>
+                        <option value="mid">{operationalCopy.midFrequency}</option>
+                        <option value="low">{operationalCopy.lowFrequency}</option>
                     </select>
                 </div>
             </div>
@@ -675,7 +709,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('category')}</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('views')}</th>
                             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('updated')}</th>
-                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{operationalCopy.actions}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -726,7 +760,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                             disabled={!businessId}
                                         >
                                             <Trash2 className="w-4 h-4 mr-1" />
-                                            Удалить
+                                            {operationalCopy.remove}
                                         </Button>
                                     </td>
                                 </tr>
