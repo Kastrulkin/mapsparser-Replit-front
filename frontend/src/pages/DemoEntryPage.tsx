@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import logo from '@/assets/images/logo.png';
 import { Button } from '@/components/ui/button';
 import { API_URL } from '@/config/api';
+import { guidedTourCopyForLanguage } from '@/components/guided-tour/guidedTourCopy';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 
 
@@ -29,6 +31,8 @@ const ensureRobotsMeta = () => {
 
 export default function DemoEntryPage() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
+  const copy = guidedTourCopyForLanguage(language);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -54,19 +58,19 @@ export default function DemoEntryPage() {
       });
       const data: DemoSessionResponse = await response.json();
       if (!response.ok || !data.token || !data.business_id) {
-        throw new Error(data.message || data.error || 'Демо сейчас недоступно');
+        throw new Error(copy.entry.unavailable);
       }
       newAuth.activateDemoSession(data.token);
       window.localStorage.setItem('demo_selectedBusinessId', data.business_id);
       navigate(data.start_path || '/dashboard/operator', { replace: true });
     } catch (requestError) {
       newAuth.deactivateDemoSession(true);
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть демо');
+      setError(requestError instanceof Error ? requestError.message : copy.entry.openFailed);
     }
-  }, [navigate]);
+  }, [copy.entry.openFailed, copy.entry.unavailable, navigate]);
 
   useEffect(() => {
-    document.title = 'Интерактивное демо LocalOS';
+    document.title = copy.entry.pageTitle;
     const robots = ensureRobotsMeta();
     const previousContent = robots.content;
     robots.content = 'noindex,nofollow';
@@ -74,7 +78,7 @@ export default function DemoEntryPage() {
     return () => {
       robots.content = previousContent;
     };
-  }, [attempt, enterDemo]);
+  }, [attempt, copy.entry.pageTitle, enterDemo]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
@@ -82,26 +86,26 @@ export default function DemoEntryPage() {
         <div className="mx-auto h-28 w-28 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
           <img
             src={logo}
-            alt="Робот LocalOS"
+            alt={copy.entry.robotAlt}
             className="h-40 w-40 -translate-x-6 -translate-y-2 scale-125 object-cover object-top"
           />
         </div>
-        <h1 className="mt-6 text-2xl font-semibold text-slate-950">Открываем «Рога и копыта»</h1>
+        <h1 className="mt-6 text-balance text-2xl font-semibold text-slate-950">{copy.entry.openingTitle}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Готовим личную демо-сессию. Данные аккаунта не изменятся.
+          {copy.entry.preparing}
         </p>
         {error ? (
           <div className="mt-6 rounded-lg border border-rose-200 bg-white p-4 text-left">
             <p className="text-sm text-rose-700">{error}</p>
             <Button type="button" className="mt-4 w-full gap-2" onClick={() => setAttempt((value) => value + 1)}>
               <RefreshCw className="h-4 w-4" />
-              Повторить
+              {copy.entry.retry}
             </Button>
           </div>
         ) : (
           <div className="mt-6 inline-flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700" aria-live="polite">
             <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500 motion-reduce:animate-none" />
-            Загружаем витрину
+            {copy.entry.loading}
             <ArrowRight className="h-4 w-4" />
           </div>
         )}

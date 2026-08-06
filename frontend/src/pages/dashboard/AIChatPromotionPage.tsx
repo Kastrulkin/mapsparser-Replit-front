@@ -4,12 +4,15 @@ import { Button } from '../../components/ui/button';
 import { CheckCircle2, Circle, ExternalLink, Copy, Check, Sparkles, AlertCircle } from 'lucide-react';
 import { useToast } from '../../hooks/use-toast';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { normalizeGeoPromotionSteps } from '@/i18n/demoWorkspaceCopy';
+import { getAIChatPromotionCopy } from '@/i18n/aiChatPromotionCopy';
 
 export const AIChatPromotionPage = () => {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [copiedCode, setCopiedCode] = useState<number | null>(null);
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const copy = getAIChatPromotionCopy(language);
 
   const toggleStep = (stepId: number) => {
     const newCompleted = new Set(completedSteps);
@@ -25,13 +28,13 @@ export const AIChatPromotionPage = () => {
     navigator.clipboard.writeText(code);
     setCopiedCode(stepId);
     toast({
-      title: t.dashboard.aiChatPromotion.actions.copied,
-      description: t.dashboard.aiChatPromotion.actions.copied,
+      title: copy.copied,
+      description: copy.copied,
     });
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const steps = t.dashboard.aiChatPromotion.steps;
+  const steps = normalizeGeoPromotionSteps(language, t.dashboard.aiChatPromotion.steps);
 
   return (
     <div className="space-y-6">
@@ -42,9 +45,9 @@ export const AIChatPromotionPage = () => {
             <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{t.dashboard.aiChatPromotion.title}</h1>
+            <h1 className="text-3xl font-bold text-foreground">{copy.title}</h1>
             <p className="text-muted-foreground">
-              {t.dashboard.aiChatPromotion.subtitle}
+              {copy.subtitle}
             </p>
           </div>
         </div>
@@ -55,12 +58,12 @@ export const AIChatPromotionPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-primary" />
-            {t.dashboard.aiChatPromotion.whyImportant.title}
+            {copy.whyTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            {t.dashboard.aiChatPromotion.whyImportant.description}
+            {copy.whyDescription}
           </p>
         </CardContent>
       </Card>
@@ -84,7 +87,7 @@ export const AIChatPromotionPage = () => {
                           ? 'text-green-600 hover:text-green-700'
                           : 'text-muted-foreground hover:text-foreground'
                         }`}
-                      title={isCompleted ? 'Отметить как невыполненное' : 'Отметить как выполненное'}
+                      aria-label={isCompleted ? copy.completed : copy.todo}
                     >
                       {isCompleted ? (
                         <CheckCircle2 className="w-6 h-6" />
@@ -95,11 +98,11 @@ export const AIChatPromotionPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
-                          {t.dashboard.aiChatPromotion.card.step} {step.id}
+                          {copy.step} {step.id}
                         </span>
                         {isCompleted && (
                           <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">
-                            {t.dashboard.aiChatPromotion.card.completed}
+                            {copy.completed}
                           </span>
                         )}
                       </div>
@@ -112,7 +115,7 @@ export const AIChatPromotionPage = () => {
               <CardContent className="space-y-4">
                 {/* Details */}
                 <div>
-                  <h4 className="font-semibold text-sm mb-2 text-foreground">{t.dashboard.aiChatPromotion.actions.todo}</h4>
+                  <h4 className="font-semibold text-sm mb-2 text-foreground">{copy.todo}</h4>
                   <ul className="space-y-2">
                     {step.details.map((detail: string, idx: number) => (
                       <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -126,7 +129,7 @@ export const AIChatPromotionPage = () => {
                 {/* Links */}
                 {step.links && step.links.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-sm mb-2 text-foreground">{t.dashboard.aiChatPromotion.actions.links}</h4>
+                    <h4 className="font-semibold text-sm mb-2 text-foreground">{copy.links}</h4>
                     <div className="flex flex-wrap gap-2">
                       {step.links.map((link: any, idx: number) => (
                         <Button
@@ -155,7 +158,7 @@ export const AIChatPromotionPage = () => {
                 {step.codeExample && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-foreground">{t.dashboard.aiChatPromotion.actions.code}</h4>
+                      <h4 className="font-semibold text-sm text-foreground">{copy.code}</h4>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -165,12 +168,12 @@ export const AIChatPromotionPage = () => {
                         {copiedCode === step.id ? (
                           <>
                             <Check className="w-3 h-3 mr-1" />
-                            {t.dashboard.aiChatPromotion.actions.copied}
+                            {copy.copied}
                           </>
                         ) : (
                           <>
                             <Copy className="w-3 h-3 mr-1" />
-                            {t.dashboard.aiChatPromotion.actions.copy}
+                            {copy.copy}
                           </>
                         )}
                       </Button>
@@ -189,13 +192,13 @@ export const AIChatPromotionPage = () => {
       {/* Progress Summary */}
       <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
         <CardHeader>
-          <CardTitle>{t.dashboard.aiChatPromotion.progress.title}</CardTitle>
+          <CardTitle>{copy.progressTitle}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">
-                {t.dashboard.aiChatPromotion.progress.completed} {completedSteps.size} {t.dashboard.aiChatPromotion.progress.from} {steps.length}
+                {copy.progressCompleted} {completedSteps.size} {copy.progressFrom} {steps.length}
               </span>
               <span className="text-sm text-muted-foreground">
                 {Math.round((completedSteps.size / steps.length) * 100)}%
@@ -211,7 +214,7 @@ export const AIChatPromotionPage = () => {
               <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
                 <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
                 <p className="text-sm text-green-800">
-                  <strong>{t.dashboard.aiChatPromotion.progress.success}</strong>
+                  <strong>{copy.success}</strong>
                 </p>
               </div>
             )}

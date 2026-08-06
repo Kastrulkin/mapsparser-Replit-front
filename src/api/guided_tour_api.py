@@ -18,7 +18,8 @@ from pg_db_utils import get_db_connection
 
 guided_tour_bp = Blueprint("guided_tour_api", __name__)
 
-TOUR_VERSION = 1
+TOUR_VERSION = 3
+SUPPORTED_PROGRESS_TOUR_VERSIONS = {TOUR_VERSION - 1, TOUR_VERSION}
 TOUR_KEYS = {"roga-i-kopyta-v1"}
 PROGRESS_STATUSES = {"not_started", "active", "paused", "skipped", "completed"}
 EVENT_TYPES = {
@@ -336,7 +337,7 @@ def save_guided_tour_progress(tour_key: str):
         tour_version = int(TOUR_VERSION if raw_tour_version in (None, "") else raw_tour_version)
     except (TypeError, ValueError):
         return jsonify({"success": False, "error": "invalid_tour_version"}), 400
-    if tour_version != TOUR_VERSION:
+    if tour_version not in SUPPORTED_PROGRESS_TOUR_VERSIONS:
         return jsonify({"success": False, "error": "tour_version_mismatch", "current_version": TOUR_VERSION}), 409
     chapter_key = str(payload.get("chapter_key") or "").strip()[:100] or None
     step_key = str(payload.get("step_key") or "").strip()[:100] or None

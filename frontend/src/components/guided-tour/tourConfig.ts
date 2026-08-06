@@ -1,4 +1,8 @@
-export type GuidedTourChapter = 'network-pulse' | 'card-content' | 'partnership';
+import type { Language } from '@/i18n/LanguageContext';
+
+import { guidedTourCopyForLanguage } from './guidedTourCopy';
+
+export type GuidedTourChapter = 'network-pulse' | 'card-content' | 'automation' | 'partnership';
 
 export type GuidedTourStep = {
   key: string;
@@ -11,178 +15,53 @@ export type GuidedTourStep = {
   final?: boolean;
 };
 
-export const GUIDED_TOUR_KEY = 'roga-i-kopyta-v1';
-export const GUIDED_TOUR_VERSION = 1;
+type GuidedTourStepLayout = Omit<GuidedTourStep, 'chapterTitle' | 'title' | 'body'>;
 
-export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
-  {
-    key: 'welcome',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Я помогу освоиться',
-    body: 'За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.',
-    route: '/dashboard/operator',
-  },
-  {
-    key: 'operator-nav',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Оператор — управление через чат',
-    body: 'Здесь можно управлять LocalOS обычными сообщениями. Например: создать пост, найти отзывы без ответа, изменить услугу или подготовить финансовый отчёт. Такой же интерфейс доступен в Telegram.',
-    route: '/dashboard/operator',
-    target: 'nav-operator',
-  },
-  {
-    key: 'operator-overview',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Сводка по текущему бизнесу',
-    body: 'Оператор знает состояние выбранного бизнеса и использует эти данные при выполнении ваших задач. Здесь отображаются показатели, которые требуют внимания прямо сейчас.',
-    route: '/dashboard/operator',
-    target: 'operator-overview',
-  },
-  {
-    key: 'network-switcher',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Выбор бизнеса',
-    body: 'Если у вас несколько филиалов, здесь можно быстро переключаться между ними. После выбора точки все данные, рекомендации и действия LocalOS будут относиться именно к этому бизнесу.',
-    route: '/dashboard/operator',
-    target: 'network-switcher',
-  },
-  {
-    key: 'progress-nav',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Прогресс бизнеса',
-    body: 'Здесь LocalOS собирает картину развития бизнеса: состояние карт и репутации, контента, партнёрств, автоматизации и допродаж. По каждому направлению видно, какие ступени уже пройдены, где есть проблема и какой следующий шаг даст практический результат.',
-    route: '/dashboard/progress',
-    target: 'nav-progress',
-  },
-  {
-    key: 'progress-overview',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Подтверждённый путь',
-    body: 'Цифры собираются из реальных данных разделов LocalOS: подключённых карт, готовых материалов, партнёров, запусков агентов и внедрённых допродаж. Здесь можно быстро понять, сколько ступеней уже пройдено и где требуется внимание.',
-    route: '/dashboard/progress',
-    target: 'progress-summary',
-  },
-  {
-    key: 'progress-focus-action',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Сейчас важнее всего',
-    body: 'LocalOS сравнивает проблемы и незавершённые задачи всех направлений и выбирает один приоритет. В блоке указаны причина, ожидаемый результат и кнопка, которая открывает нужное место для работы.',
-    route: '/dashboard/progress',
-    target: 'progress-focus-action',
-  },
-  {
-    key: 'progress-areas',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Направления и ступени роста',
-    body: 'Ниже представлены направления роста. Карты, контент, партнёрства, автоматизация и допродажи отслеживаются отдельно. Откройте строку: вы увидите подтверждённые ступени, текущую проблему, следующий результат и переход к действию.',
-    route: '/dashboard/progress',
-    target: 'progress-areas',
-  },
-  {
-    key: 'progress-maps',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Карты и репутация',
-    body: 'Данные приходят из последних сборов карточек, аудита, услуг и отзывов. Раскройте направление, чтобы увидеть пройденные ступени и показатели, а затем открыть полный аудит с конкретными рекомендациями.',
-    route: '/dashboard/progress',
-    target: 'progress-area-maps',
-  },
-  {
-    key: 'progress-recent-results',
-    chapter: 'network-pulse',
-    chapterTitle: 'Скрепка LocalOS',
-    title: 'Недавние результаты',
-    body: 'Здесь сохраняются подтверждённые события с датами: готовый аудит, контент-план, предложение партнёру, выполненная задача агента или внедрённая допродажа. Это история фактически сделанного, а не список советов.',
-    route: '/dashboard/progress',
-    target: 'progress-recent-results',
-  },
-  {
-    key: 'card-nav',
-    chapter: 'card-content',
-    chapterTitle: 'Карточка и контент',
-    title: 'Карточка на картах',
-    body: 'В этом разделе собраны рейтинг, отзывы, услуги, фото и видимость на картах.',
-    route: '/dashboard/progress',
-    target: 'nav-card',
-  },
-  {
-    key: 'card-overview',
-    chapter: 'card-content',
-    chapterTitle: 'Карточка и контент',
-    title: 'Данные из нескольких источников',
-    body: 'Сводка показывает состояние выбранной точки. Обновление данных в демо заблокировано.',
-    route: '/dashboard/card',
-    target: 'card-overview',
-  },
-  {
-    key: 'card-services',
-    chapter: 'card-content',
-    chapterTitle: 'Карточка и контент',
-    title: 'Услуги как источник спроса',
-    body: 'В «Рогах и копытах» загружена 101 услуга. LocalOS находит дубли, слабые названия и незаполненные описания.',
-    route: '/dashboard/card',
-    target: 'card-services',
-  },
-  {
-    key: 'content-nav',
-    chapter: 'card-content',
-    chapterTitle: 'Карточка и контент',
-    title: 'Контент проходит через проверку',
-    body: 'Календарь хранит темы, черновики и статусы. Публикация всегда остаётся ручным решением.',
-    route: '/dashboard/card',
-    target: 'nav-content',
-  },
-  {
-    key: 'content-calendar',
-    chapter: 'card-content',
-    chapterTitle: 'Карточка и контент',
-    title: 'Подготовленный контент-план',
-    body: 'Откройте ближайший материал и посмотрите, как идея превращается в черновик. Кнопки утверждения в демо не изменяют данные.',
-    route: '/dashboard/content',
-    target: 'content-calendar',
-  },
-  {
-    key: 'partnership-nav',
-    chapter: 'partnership',
-    chapterTitle: 'Партнёрство',
-    title: 'Партнёрства ведутся по этапам',
-    body: 'Кандидаты, отбор, письма, отправка и ответы не смешиваются в один список.',
-    route: '/dashboard/content',
-    target: 'nav-partnerships',
-  },
-  {
-    key: 'partnership-workspace',
-    chapter: 'partnership',
-    chapterTitle: 'Партнёрство',
-    title: 'От кандидата до диалога',
-    body: 'Для демо уже подготовлены партнёры и история кампании. Все исходящие действия заблокированы.',
-    route: '/dashboard/partnerships?demo=romashka',
-    target: 'partnership-workspace',
-  },
-  {
-    key: 'partnership-candidates',
-    chapter: 'partnership',
-    chapterTitle: 'Партнёрство',
-    title: 'История с «Ромашкой»',
-    body: 'Карточка партнёра хранит контекст, предложение, канал связи и следующее действие.',
-    route: '/dashboard/partnerships?demo=romashka',
-    target: 'partnership-candidates',
-  },
-  {
-    key: 'finish',
-    chapter: 'partnership',
-    chapterTitle: 'Партнёрство',
-    title: 'Маршрут пройден',
-    body: 'Теперь можно открыть цифровую комнату «Ромашки» и посмотреть на предложение глазами лида. Или создайте свой аккаунт и загрузите реальный бизнес.',
-    route: '/dashboard/partnerships?demo=romashka',
-    final: true,
-  },
+export const GUIDED_TOUR_KEY = 'roga-i-kopyta-v1';
+export const GUIDED_TOUR_VERSION = 3;
+
+export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
+  { key: 'welcome', chapter: 'network-pulse', route: '/dashboard/operator' },
+  { key: 'operator-nav', chapter: 'network-pulse', route: '/dashboard/operator', target: 'nav-operator' },
+  { key: 'operator-overview', chapter: 'network-pulse', route: '/dashboard/operator', target: 'operator-overview' },
+  { key: 'network-switcher', chapter: 'network-pulse', route: '/dashboard/operator', target: 'network-switcher' },
+  { key: 'progress-nav', chapter: 'network-pulse', route: '/dashboard/progress', target: 'nav-progress' },
+  { key: 'progress-overview', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-summary' },
+  { key: 'progress-focus-action', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-focus-action' },
+  { key: 'progress-areas', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-areas' },
+  { key: 'progress-maps', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-area-maps' },
+  { key: 'progress-recent-results', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-recent-results' },
+  { key: 'card-nav', chapter: 'card-content', route: '/dashboard/progress', target: 'nav-card' },
+  { key: 'card-overview', chapter: 'card-content', route: '/dashboard/card', target: 'card-overview' },
+  { key: 'card-services', chapter: 'card-content', route: '/dashboard/card?tab=services', target: 'card-tab-services' },
+  { key: 'card-reviews', chapter: 'card-content', route: '/dashboard/card?tab=reviews&review_filter=all', target: 'card-tab-reviews' },
+  { key: 'card-news', chapter: 'card-content', route: '/dashboard/card?tab=news', target: 'card-tab-news' },
+  { key: 'card-seo', chapter: 'card-content', route: '/dashboard/card?tab=keywords', target: 'card-tab-keywords' },
+  { key: 'card-competitors', chapter: 'card-content', route: '/dashboard/card?tab=competitors', target: 'card-tab-competitors' },
+  { key: 'telegram-radar', chapter: 'card-content', route: '/dashboard/telegram-radar', target: 'nav-telegram-radar' },
+  { key: 'average-ticket', chapter: 'card-content', route: '/dashboard/average-ticket', target: 'nav-average-ticket' },
+  { key: 'geo-promotion', chapter: 'card-content', route: '/dashboard/ai-chat-promotion', target: 'nav-ai-chat-promotion' },
+  { key: 'content-nav', chapter: 'card-content', route: '/dashboard/card', target: 'nav-content' },
+  { key: 'content-calendar', chapter: 'card-content', route: '/dashboard/content?section=calendar', target: 'content-calendar' },
+  { key: 'agents-nav', chapter: 'automation', route: '/dashboard/content?section=calendar', target: 'nav-agents' },
+  { key: 'agents-signals', chapter: 'automation', route: '/dashboard/agents', target: 'agents-workspace' },
+  { key: 'agents-today', chapter: 'automation', route: '/dashboard/agents', target: 'agents-today' },
+  { key: 'agents-employees', chapter: 'automation', route: '/dashboard/agents', target: 'agents-employees' },
+  { key: 'agents-control', chapter: 'automation', route: '/dashboard/agents', target: 'agents-control' },
+  { key: 'partnership-nav', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'nav-partnerships' },
+  { key: 'partnership-workspace', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-workspace' },
+  { key: 'partnership-candidates', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-candidates' },
+  { key: 'finish', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', final: true },
 ];
+
+export const guidedTourStepsForLanguage = (language: Language): GuidedTourStep[] => {
+  const copy = guidedTourCopyForLanguage(language);
+  return GUIDED_TOUR_STEP_LAYOUTS.map((layout) => ({
+    ...layout,
+    chapterTitle: copy.chapters[layout.chapter],
+    title: copy.steps[layout.key].title,
+    body: copy.steps[layout.key].body,
+  }));
+};
+
+export const GUIDED_TOUR_STEPS = guidedTourStepsForLanguage('ru');

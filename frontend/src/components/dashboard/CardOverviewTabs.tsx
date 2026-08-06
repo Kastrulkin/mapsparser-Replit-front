@@ -4,6 +4,8 @@ import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
 import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
 import NewsGenerator from '@/components/NewsGenerator';
 import SEOKeywordsTab from '@/components/SEOKeywordsTab';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 type ManualCompetitor = {
   id: string;
@@ -49,61 +51,64 @@ export const CompetitorsTab = ({
   deletingManualCompetitorId,
   onRequestAudit,
   onDeleteManualCompetitor,
-}: CompetitorsTabProps) => (
-  <DashboardSection
-    title="Конкуренты"
-    description="Добавляйте важные карточки рядом, чтобы видеть их действия и запускать точечный аудит."
+}: CompetitorsTabProps) => {
+  const { language } = useLanguage();
+  const copy = getDemoWorkspaceCopy(language).competitors;
+
+  return <DashboardSection
+    title={copy.title}
+    description={copy.description}
   >
     <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-      <p className="mb-3 text-sm text-blue-900">Добавьте конкурента, чтобы отслеживать его действия.</p>
+      <p className="mb-3 text-sm text-blue-900">{copy.addHint}</p>
       <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
         <input
           type="text"
           value={manualCompetitorUrl}
           onChange={(event) => onManualCompetitorUrlChange(event.target.value)}
-          placeholder="Ссылка на конкурента (https://...)"
+          placeholder={copy.urlPlaceholder}
           className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm"
         />
         <input
           type="text"
           value={manualCompetitorName}
           onChange={(event) => onManualCompetitorNameChange(event.target.value)}
-          placeholder="Название (необязательно)"
+          placeholder={copy.namePlaceholder}
           className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm"
         />
         <Button onClick={onAddManualCompetitor} disabled={addingManualCompetitor} className="bg-blue-600 text-white hover:bg-blue-700">
-          {addingManualCompetitor ? 'Добавляем...' : 'Добавить конкурента'}
+          {addingManualCompetitor ? copy.adding : copy.add}
         </Button>
       </div>
     </div>
 
     {manualCompetitors.length > 0 ? (
       <div className="mb-8">
-        <h3 className="mb-3 text-lg font-semibold text-gray-900">Вручную добавленные конкуренты</h3>
+        <h3 className="mb-3 text-lg font-semibold text-gray-900">{copy.manualTitle}</h3>
         <div className="grid gap-4 md:grid-cols-2">
           {manualCompetitors.map((competitor) => (
             <div key={competitor.id} className="rounded-xl border border-gray-200 bg-white p-4">
-              <div className="mb-1 font-semibold text-gray-900">{competitor.name || 'Конкурент'}</div>
+              <div className="mb-1 font-semibold text-gray-900">{competitor.name || copy.competitor}</div>
               <a href={competitor.url} target="_blank" rel="noreferrer" className="break-all text-sm text-blue-600 hover:underline">
                 {competitor.url}
               </a>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">
-                  Аудит: {competitor.audit_status === 'requested' ? 'запрошен' : competitor.audit_status === 'ready' ? 'готов' : 'не запрошен'}
+                  {copy.audit}: {competitor.audit_status === 'requested' ? copy.requested : competitor.audit_status === 'ready' ? copy.ready : copy.notRequested}
                 </span>
                 {competitor.report_path ? (
                   <a href={competitor.report_path} target="_blank" rel="noreferrer" className="rounded bg-emerald-100 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-200">
-                    Открыть отчёт
+                    {copy.openReport}
                   </a>
                 ) : null}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button onClick={() => onRequestAudit(competitor.id)} disabled={requestingAuditId === competitor.id} variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50">
-                  {requestingAuditId === competitor.id ? 'Отправляем...' : 'Аудит'}
+                  {requestingAuditId === competitor.id ? copy.sending : copy.audit}
                 </Button>
                 <Button onClick={() => onDeleteManualCompetitor(competitor.id)} disabled={deletingManualCompetitorId === competitor.id} variant="outline" className="inline-flex items-center gap-2 border-red-300 text-red-700 hover:bg-red-50">
                   <Trash2 className="h-4 w-4" />
-                  {deletingManualCompetitorId === competitor.id ? 'Удаляем...' : 'Удалить'}
+                  {deletingManualCompetitorId === competitor.id ? copy.deleting : copy.delete}
                 </Button>
               </div>
             </div>
@@ -116,7 +121,7 @@ export const CompetitorsTab = ({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {competitors.map((competitor, index) => (
           <div key={`${competitor.name || 'competitor'}-${index}`} className="rounded-xl border border-gray-100 bg-white/50 p-4 transition-all hover:shadow-md">
-            <div className="mb-1 text-lg font-semibold text-gray-900">{competitor.name || 'Без названия'}</div>
+            <div className="mb-1 text-lg font-semibold text-gray-900">{competitor.name || copy.unnamed}</div>
             <div className="mb-3 text-sm text-gray-500">{competitor.category}</div>
             <div className="flex items-center gap-4 text-sm">
               {competitor.rating ? (
@@ -129,7 +134,7 @@ export const CompetitorsTab = ({
             </div>
             {competitor.url ? (
               <a href={competitor.url} target="_blank" rel="noreferrer" className="mt-4 block w-full rounded-lg bg-blue-50 py-2 text-center text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100">
-                Посмотреть на карте
+                {copy.viewOnMap}
               </a>
             ) : null}
           </div>
@@ -138,11 +143,11 @@ export const CompetitorsTab = ({
     ) : (
       <div className="py-12 text-center text-gray-500">
         <Trophy className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-        <p>Конкуренты не найдены. Попробуйте обновить данные парсинга.</p>
+        <p>{copy.empty}</p>
       </div>
     )}
-  </DashboardSection>
-);
+  </DashboardSection>;
+};
 
 export const AutomationLockedNotice = ({ message }: { message: string }) => (
   <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

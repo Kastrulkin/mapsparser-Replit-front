@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
 import {
   ArrowRight,
   Network,
@@ -74,6 +75,7 @@ import {
   removeManualCompetitor,
   requestManualCompetitorAudit,
 } from '@/components/dashboard/cardOverviewApi';
+import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
 const CARD_FIRST_RUN_COPY: Record<string, {
   title: string;
@@ -187,12 +189,15 @@ export const CardOverviewPage = () => {
   const { user, currentBusinessId, currentBusiness, businesses, onBusinessChange } = context || {};
   const { t, language } = useLanguage();
   const isRu = language === 'ru';
+  const isDemoMode = Boolean(user?.demo_mode);
+  const demoShowcase = getDemoShowcaseData(language);
+  const pageCopy = getCardOverviewPageCopy(language);
   const aiLearningTooltip = isRu
     ? 'Система учитывает, как вы редактируете предложения по услугам, отзывам и новостям, и постепенно подстраивает следующие рекомендации под ваш стиль.'
     : 'The system learns from how you edit service, review, and news suggestions and gradually adapts future recommendations to your style.';
   const firstRunCopy = CARD_FIRST_RUN_COPY[language] ?? CARD_FIRST_RUN_COPY.en;
   const automationAccess = getAutomationAccessForBusiness(currentBusiness);
-  const automationLockedMessage = automationAccess.message || 'Автоматизация доступна только после оплаты тарифа.';
+  const automationLockedMessage = automationAccess.message || pageCopy.automationLocked;
   const initialTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
   const initialModeParam = String(searchParams.get('mode') || '').trim().toLowerCase();
   const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
@@ -307,7 +312,9 @@ export const CardOverviewPage = () => {
         setReviewsTotal(data.reviews_total || 0);
         setLastParseDate(data.last_parse_date || null);
         try {
-          if (data.competitors) {
+          if (isDemoMode) {
+            setCompetitors(demoShowcase.competitors);
+          } else if (data.competitors) {
             setCompetitors(typeof data.competitors === 'string' ? JSON.parse(data.competitors) : data.competitors);
           } else {
             setCompetitors([]);
@@ -352,7 +359,7 @@ export const CardOverviewPage = () => {
             source: service.source || 'external',
           })));
         }
-        setUserServices(services);
+        setUserServices(isDemoMode ? demoShowcase.services : services);
       }
     } catch (e) {
       console.error('Ошибка загрузки услуг:', e);
@@ -366,7 +373,7 @@ export const CardOverviewPage = () => {
     try {
       const { data } = await loadCardExternalPosts(currentBusinessId, isNetworkRepresentative);
       if (data.success) {
-        setExternalPosts(data.posts || []);
+        setExternalPosts(isDemoMode ? demoShowcase.news : (data.posts || []));
       }
     } catch (e) {
       console.error('Ошибка загрузки постов:', e);
@@ -523,7 +530,7 @@ export const CardOverviewPage = () => {
       loadOperationsLearning();
       loadParseStatus();
     }
-  }, [currentBusinessId, selectedSource, isNetworkRepresentative]);
+  }, [currentBusinessId, selectedSource, isNetworkRepresentative, language, isDemoMode]);
 
   useEffect(() => {
     if (parseStatus !== 'processing' && parseStatus !== 'queued') {
@@ -679,16 +686,8 @@ export const CardOverviewPage = () => {
   }, [mapSources]);
 
   const refreshAllMapsSelected = selectedSource === 'all';
-  const refreshCardDataLabel = isRu
-    ? (refreshAllMapsSelected ? 'Обновить данные карточек' : 'Обновить данные карточки')
-    : (refreshAllMapsSelected ? 'Refresh card data' : 'Refresh listing data');
-  const refreshCardDataHint = isRu
-    ? (refreshAllMapsSelected
-      ? 'Обновятся все добавленные карты. Стоит примерно 10 кредитов, зависит от объёма данных в карточках.'
-      : 'Обновится только выбранная карта. Стоит примерно 10 кредитов, зависит от объёма данных в карточке.')
-    : (refreshAllMapsSelected
-      ? 'Refreshes all added map listings. Costs about 10 credits, depending on the amount of listing data.'
-      : 'Refreshes only the selected map listing. Costs about 10 credits, depending on the amount of listing data.');
+  const refreshCardDataLabel = refreshAllMapsSelected ? pageCopy.refreshAll : pageCopy.refresh;
+  const refreshCardDataHint = refreshAllMapsSelected ? pageCopy.refreshAllHint : pageCopy.refreshHint;
   const canRefreshCardData = refreshSyncSources.length > 0;
   const refreshBlockedByPolicy = !parseRefreshPolicy.can_refresh;
   const refreshBlockedByActiveParse = parseStatus === 'processing' || parseStatus === 'queued';
@@ -716,28 +715,28 @@ export const CardOverviewPage = () => {
       return firstRunCopy.statusMissingMap;
     }
     if (parseRefreshPolicy.reason === 'active_parse') {
-      return isRu ? 'Сбор данных уже выполняется' : 'Data collection is already running';
+      return pageCopy.parseAlreadyRunning;
     }
     if (parseRefreshPolicy.reason === 'weekly_cooldown' && parseRefreshPolicy.cooldown_until) {
       const formattedDate = formatRefreshDate(parseRefreshPolicy.cooldown_until);
       if (formattedDate) {
-        return isRu ? `Следующее обновление доступно ${formattedDate}` : `Next refresh will be available on ${formattedDate}`;
+        return pageCopy.nextRefresh.replace('{date}', formattedDate);
       }
     }
     switch (parseStatus) {
       case 'processing':
-        return isRu ? 'Сбор данных выполняется' : 'Data collection in progress';
+        return pageCopy.parseInProgress;
       case 'queued':
-        return isRu ? 'Сбор данных в очереди' : 'Data collection is queued';
+        return pageCopy.parseQueued;
       case 'completed':
       case 'done':
-        return isRu ? 'Данные карточки обновлены' : 'Card data updated';
+        return pageCopy.parseDone;
       case 'error':
-        return isRu ? 'Не удалось обновить данные' : 'Could not update card data';
+        return pageCopy.parseError;
       default:
-        return isRu ? 'Данные карточки ещё не обновлялись' : 'Card data has not been collected yet';
+        return pageCopy.parseIdle;
     }
-  }, [firstRunCopy.statusMissingMap, hasConfiguredMapLink, isRu, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.reason, parseStatus]);
+  }, [firstRunCopy.statusMissingMap, hasConfiguredMapLink, pageCopy, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.reason, parseStatus]);
 
   const parseStatusHelpText = useMemo(() => {
     if (!hasConfiguredMapLink) {
@@ -966,14 +965,14 @@ export const CardOverviewPage = () => {
 
       <div className={cn("transition-all duration-300", isNetworkMaster ? "pointer-events-none select-none blur-sm opacity-50" : "")}>
         <DashboardPageHeader
-          eyebrow={isContentPlanMode ? (isRu ? 'Посты и контент-план' : 'Posts and content plan') : (isRu ? 'Карточка бизнеса' : 'Business listing')}
+          eyebrow={isContentPlanMode ? (isRu ? 'Посты и контент-план' : 'Posts and content plan') : pageCopy.eyebrow}
           icon={LayoutGrid}
-          title={isContentPlanMode ? (isRu ? 'Контент-план и посты' : 'Content plan and posts') : t.dashboard.card.title}
+          title={isContentPlanMode ? (isRu ? 'Контент-план и посты' : 'Content plan and posts') : pageCopy.title}
           description={isContentPlanMode
             ? (isRu
               ? 'Готовьте посты для карт и соцсетей, проверяйте каналы, утверждайте тексты и ставьте публикации в расписание.'
               : 'Prepare posts for maps and social channels, check readiness, approve copy, and queue publications.')
-            : t.dashboard.card.subtitle}
+            : pageCopy.subtitle}
           actions={(
             isContentPlanMode ? (
               <>
@@ -1002,10 +1001,10 @@ export const CardOverviewPage = () => {
                       onClick={handleRefreshCardData}
                       disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
                       className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-                      title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
+                      title={pageCopy.refreshTitle}
                     >
                       <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
-                      {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : refreshCardDataLabel}
+                      {refreshingCardData ? pageCopy.refreshing : refreshCardDataLabel}
                     </Button>
                     <span className="max-w-72 text-xs leading-4 text-slate-500">
                       {refreshCardDataHint}
@@ -1013,7 +1012,7 @@ export const CardOverviewPage = () => {
                   </div>
                   <a
                     href="/dashboard/progress?section=maps&audit=open"
-                    title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
+                    title={pageCopy.auditTitle}
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
                   >
                     <FileSearch className="w-4 h-4" />
@@ -1048,26 +1047,26 @@ export const CardOverviewPage = () => {
               className="mt-6"
               items={[
                 {
-                  label: isRu ? 'Рейтинг' : 'Rating',
+                  label: pageCopy.rating,
                   value: rating != null ? Number(rating).toFixed(1) : '—',
-                  hint: isRu ? 'Средняя оценка карточки на карте.' : 'Average map listing rating.',
+                  hint: pageCopy.ratingHint,
                 },
                 {
-                  label: isRu ? 'Отзывы' : 'Reviews',
+                  label: pageCopy.reviews,
                   value: reviewsTotal,
-                  hint: isRu ? 'Текущий объём отзывов в карточке.' : 'Current review volume in the listing.',
+                  hint: pageCopy.reviewsHint,
                 },
                 {
-                  label: isRu ? 'Последнее обновление' : 'Last refresh',
+                  label: pageCopy.lastRefresh,
                   value: lastParseDate
                     ? new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')
                     : '—',
-                  hint: isRu ? 'Когда данные в разделе обновлялись в последний раз.' : 'When the section data was last refreshed.',
+                  hint: pageCopy.lastRefreshHint,
                 },
                 {
-                  label: isRu ? 'Источники карт' : 'Map sources',
+                  label: pageCopy.mapSources,
                   value: mapSources.length || 0,
-                  hint: isRu ? 'Подключённые карточки для этой точки.' : 'Connected map profiles for this location.',
+                  hint: pageCopy.mapSourcesHint,
                 },
               ]}
             />
@@ -1082,15 +1081,15 @@ export const CardOverviewPage = () => {
                 <span className="min-w-0">
                   <span className="block text-lg font-semibold text-slate-950">{firstRunCopy.title}</span>
                   <span className="mt-1 block text-sm text-slate-700">
-                    {isRu ? 'Сейчас: ' : 'Now: '}
+                    {pageCopy.now}{' '}
                     <span className="font-semibold">{parseStatusLabel}</span>
                     {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
-                      ? (isRu ? ' · Обновление сейчас поддержано для Яндекс, 2ГИС и Google.' : ' · Refresh is currently supported for Yandex, 2GIS, and Google.')
+                      ? ` · ${pageCopy.supportedSources}`
                       : ''}
                   </span>
                 </span>
                 <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800">
-                  {isCardDataGuideExpanded ? (isRu ? 'Свернуть' : 'Collapse') : (isRu ? 'Развернуть' : 'Expand')}
+                  {isCardDataGuideExpanded ? pageCopy.collapse : pageCopy.expand}
                   {isCardDataGuideExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </span>
               </button>
@@ -1171,7 +1170,7 @@ export const CardOverviewPage = () => {
                   : "text-slate-500 hover:bg-white hover:text-slate-900"
               )}
             >
-              Все карты
+              {pageCopy.allMaps}
             </button>
             {orderedMapSources.map(source => (
               <button
@@ -1184,7 +1183,7 @@ export const CardOverviewPage = () => {
                     : "text-slate-500 hover:bg-white hover:text-slate-900"
                 )}
               >
-                {formatMapSourceTab(source)}
+                {source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source)}
               </button>
             ))}
           </div>
@@ -1216,23 +1215,23 @@ export const CardOverviewPage = () => {
           <TabsList className="flex w-full justify-start overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <List className="w-4 h-4" />
-              {t.dashboard.card.tabServices || "Services"}
+              {pageCopy.servicesTab}
             </TabsTrigger>
             <TabsTrigger value="reviews" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <MessageSquare className="w-4 h-4" />
-              {t.dashboard.card.tabReviews || "Reviews"}
+              {pageCopy.reviewsTab}
             </TabsTrigger>
             <TabsTrigger value="news" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <Newspaper className="w-4 h-4" />
-              {t.dashboard.card.tabNews || "News"}
+              {pageCopy.newsTab}
             </TabsTrigger>
             <TabsTrigger value="keywords" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <TrendingUp className="w-4 h-4" />
-              SEO (Wordstat)
+              {pageCopy.keywordsTab}
             </TabsTrigger>
             <TabsTrigger value="competitors" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <Trophy className="w-4 h-4" />
-              Конкуренты
+              {pageCopy.competitorsTab}
             </TabsTrigger>
           </TabsList>
 
@@ -1255,11 +1254,11 @@ export const CardOverviewPage = () => {
 
           <TabsContent value="services" className="space-y-6">
             {/* Rating Summary Card */}
-            <DashboardSection title={t.dashboard.card.rating || "Rating Overview"} description="Короткая сводка по рейтингу и отзывам карточки.">
+            <DashboardSection title={pageCopy.rating} description={pageCopy.ratingDescription}>
                 <div className="flex justify-between items-start mb-5">
                   {lastParseDate && (
                     <div className="text-right">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{t.dashboard.card.lastUpdate}</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{pageCopy.lastRefresh}</p>
                       <p className="text-sm font-medium text-gray-900">
                         {new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
                           day: 'numeric',
@@ -1319,8 +1318,8 @@ export const CardOverviewPage = () => {
             {/* Services Section */}
             <DashboardSection contentClassName="space-y-5" dataTourTarget="card-services">
               <DashboardActionPanel
-                title="Услуги"
-                description="Проверьте, как услуги будут выглядеть в карточках и поиске. Главный сценарий: закрыть слабые описания и принять готовые SEO-варианты."
+                title={pageCopy.servicesTitle}
+                description={pageCopy.servicesDescription}
                 tone="default"
                 actions={!showAddService ? (
                   <TooltipProvider delayDuration={180}>
@@ -1333,12 +1332,12 @@ export const CardOverviewPage = () => {
                             className="bg-slate-950 text-white hover:bg-slate-800"
                           >
                             <Sparkles className="mr-2 h-4 w-4" />
-                            {regeneratingProblematic ? 'Обрабатываем...' : 'Обработать проблемные'}
+                            {regeneratingProblematic ? pageCopy.processingProblematic : pageCopy.processProblematic}
                           </Button>
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
-                        Найдёт услуги со слабыми или пустыми описаниями и улучшит до 10 самых проблемных за один запуск.
+                        {pageCopy.processProblematicHint}
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1351,12 +1350,12 @@ export const CardOverviewPage = () => {
                             className="border-slate-200 bg-white text-slate-700"
                           >
                             <Search className="mr-2 h-4 w-4" />
-                            {enrichingProblematic ? 'Ищем...' : 'Найти запросы'}
+                            {enrichingProblematic ? pageCopy.findingQueries : pageCopy.findQueries}
                           </Button>
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
-                        Подберёт SEO-запросы для услуг, где их нет, через безопасный Wordstat-поиск.
+                        {pageCopy.findQueriesHint}
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1369,12 +1368,12 @@ export const CardOverviewPage = () => {
                             className="border-slate-200 bg-white text-slate-700"
                           >
                             <Wand2 className="mr-2 h-4 w-4" />
-                            {optimizingAll ? 'Оптимизируем...' : serviceControlsCopy.optimizeAll}
+                            {optimizingAll ? pageCopy.optimizing : serviceControlsCopy.optimizeAll}
                           </Button>
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
-                        Сгенерирует SEO-названия и описания для всех услуг. Используйте осторожно, если список большой.
+                        {pageCopy.optimizeAllHint}
                       </TooltipContent>
                     </Tooltip>
                     {shouldShowServiceCompressionOffer ? (
@@ -1388,12 +1387,12 @@ export const CardOverviewPage = () => {
                               className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950"
                             >
                               <LayoutGrid className="mr-2 h-4 w-4" />
-                              Сократить меню услуг
+                              {pageCopy.compressMenu}
                             </Button>
                           </span>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
-                          Покажет, какие услуги лучше объединить в категории и варианты. Ничего не меняет автоматически.
+                          {pageCopy.compressMenuHint}
                         </TooltipContent>
                       </Tooltip>
                     ) : null}
@@ -1407,7 +1406,7 @@ export const CardOverviewPage = () => {
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
-                        Добавить услугу вручную, если её нет в данных карточки или нужно проверить отдельную формулировку.
+                        {pageCopy.addServiceHint}
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1419,12 +1418,12 @@ export const CardOverviewPage = () => {
                             onClick={() => setShowServiceSettings(true)}
                             className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           >
-                            Настройки
+                            {pageCopy.settings}
                           </Button>
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
-                        Открывает тон, язык, регион, импорт файла и дополнительные параметры генерации.
+                        {pageCopy.settingsHint}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1432,7 +1431,7 @@ export const CardOverviewPage = () => {
                 status={problemRegenerationStatus ? (
                   <span>{problemRegenerationStatus}</span>
                 ) : serviceLastParseDate ? (
-                  <span>Последнее обновление карточки: {new Date(serviceLastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                  <span>{pageCopy.listingUpdated} {new Date(serviceLastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : language === 'el' ? 'el-GR' : 'en-US', {
                     day: '2-digit',
                     month: '2-digit',
                     hour: '2-digit',
@@ -1453,45 +1452,48 @@ export const CardOverviewPage = () => {
 
               <DashboardCompactMetricsRow
                 items={[
-                  { label: 'Всего', value: servicesQualityAudit.summary.total },
-                  { label: 'Готово', value: servicesQualityAudit.summary.good, tone: 'positive' },
-                  { label: 'Требуют доработки', value: servicesQualityAudit.summary.needsReview, tone: 'warning' },
-                  { label: 'Ручная проверка', value: servicesQualityAudit.summary.manualReview, tone: 'warning' },
-                  { label: 'Без запросов', value: servicesQualityAudit.summary.noKeywords },
+                  { label: pageCopy.total, value: servicesQualityAudit.summary.total },
+                  { label: pageCopy.ready, value: servicesQualityAudit.summary.good, tone: 'positive' },
+                  { label: pageCopy.needsReview, value: servicesQualityAudit.summary.needsReview, tone: 'warning' },
+                  { label: pageCopy.manualReview, value: servicesQualityAudit.summary.manualReview, tone: 'warning' },
+                  { label: pageCopy.noQueries, value: servicesQualityAudit.summary.noKeywords },
                 ]}
               />
 
-              <CardServicesFilterBar
-                copy={serviceControlsCopy}
-                search={servicesSearch}
-                onSearchChange={setServicesSearch}
-                categoryFilter={servicesCategoryFilter}
-                onCategoryFilterChange={setServicesCategoryFilter}
-                qualityFilter={servicesQualityFilter}
-                onQualityFilterChange={setServicesQualityFilter}
-                categories={serviceCategories}
-                sort={servicesSort}
-                onSortChange={(value) => setServicesSort(toServicesSort(value))}
-              />
+              {userServices.length > 0 && !isDemoMode ? (
+                <CardServicesFilterBar
+                  copy={serviceControlsCopy}
+                  search={servicesSearch}
+                  onSearchChange={setServicesSearch}
+                  categoryFilter={servicesCategoryFilter}
+                  onCategoryFilterChange={setServicesCategoryFilter}
+                  qualityFilter={servicesQualityFilter}
+                  onQualityFilterChange={setServicesQualityFilter}
+                  categories={serviceCategories}
+                  sort={servicesSort}
+                  onSortChange={(value) => setServicesSort(toServicesSort(value))}
+                />
+              ) : null}
 
               <CardServicesTable
+                demoMode={isDemoMode}
                 tableScrollRef={servicesTableScrollRef}
                 copy={{
                   category: t.dashboard.card.table.category,
-                  source: 'Источник',
+                  source: pageCopy.source,
                   name: t.dashboard.card.table.name,
                   description: t.dashboard.card.table.description,
                   price: t.dashboard.card.table.price,
                   updated: t.common?.updated || 'Updated',
                   actions: t.dashboard.card.table.actions,
                   processing: t.dashboard.subscription.processing,
-                  emptyFiltered: 'Ничего не найдено по выбранным фильтрам',
+                  emptyFiltered: pageCopy.emptyFiltered,
                   emptyDefault: t.dashboard.network.noData,
                   proposal: t.dashboard.card.seo.proposal,
                   accept: t.dashboard.card.seo.accept,
                   reject: t.dashboard.card.seo.reject,
                   optimize: t.dashboard.card.optimize,
-                  edit: t.dashboard.card.edit || 'Редактировать',
+                  edit: t.dashboard.card.edit || pageCopy.edit,
                 }}
                 services={pagedServices}
                 filteredCount={filteredServices.length}

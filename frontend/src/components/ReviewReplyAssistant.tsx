@@ -5,6 +5,7 @@ import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
 import {
   MessageSquare,
   Sparkles,
@@ -62,6 +63,19 @@ interface ReviewReplyAssistantProps {
 const isReviewFilterPreset = (value: string): value is ReviewFilterPreset =>
   value === 'all' || value === 'negative' || value === 'needs_reply';
 
+const reviewListCopy: Record<string, { all: string; negative: string; unanswered: string; order: string; lowFirst: string; newFirst: string; filteredEmpty: string; networkHint: string }> = {
+  ru: { all: 'Все отзывы', negative: 'Негатив', unanswered: 'Без ответа', order: 'Порядок', lowFirst: 'Сначала низкая оценка', newFirst: 'Сначала новые', filteredEmpty: 'По этому фильтру отзывов пока нет', networkHint: 'Материнская точка показывает общую ленту отзывов всей сети. У каждого отзыва указана конкретная точка.' },
+  en: { all: 'All reviews', negative: 'Negative', unanswered: 'Unanswered', order: 'Order', lowFirst: 'Lowest rating first', newFirst: 'Newest first', filteredEmpty: 'No reviews match this filter', networkHint: 'The parent location shows reviews from the whole network. Each review includes its specific location.' },
+  fr: { all: 'Tous les avis', negative: 'Négatifs', unanswered: 'Sans réponse', order: 'Ordre', lowFirst: 'Note la plus basse', newFirst: 'Plus récents', filteredEmpty: 'Aucun avis pour ce filtre', networkHint: 'L’établissement parent affiche les avis de tout le réseau. Chaque avis indique son établissement.' },
+  es: { all: 'Todas las reseñas', negative: 'Negativas', unanswered: 'Sin respuesta', order: 'Orden', lowFirst: 'Menor valoración primero', newFirst: 'Más recientes', filteredEmpty: 'No hay reseñas con este filtro', networkHint: 'La ubicación principal muestra las reseñas de toda la red. Cada reseña indica su ubicación.' },
+  el: { all: 'Όλες οι κριτικές', negative: 'Αρνητικές', unanswered: 'Χωρίς απάντηση', order: 'Σειρά', lowFirst: 'Χαμηλότερη βαθμολογία πρώτα', newFirst: 'Νεότερες πρώτα', filteredEmpty: 'Δεν υπάρχουν κριτικές για αυτό το φίλτρο', networkHint: 'Η κύρια τοποθεσία εμφανίζει τις κριτικές όλου του δικτύου. Κάθε κριτική αναφέρει τη συγκεκριμένη τοποθεσία.' },
+  de: { all: 'Alle Bewertungen', negative: 'Negativ', unanswered: 'Unbeantwortet', order: 'Reihenfolge', lowFirst: 'Niedrigste Bewertung zuerst', newFirst: 'Neueste zuerst', filteredEmpty: 'Keine Bewertungen für diesen Filter', networkHint: 'Der Hauptstandort zeigt Bewertungen des gesamten Netzwerks. Jede Bewertung nennt den Standort.' },
+  th: { all: 'รีวิวทั้งหมด', negative: 'เชิงลบ', unanswered: 'ยังไม่ตอบ', order: 'ลำดับ', lowFirst: 'คะแนนต่ำก่อน', newFirst: 'ใหม่ล่าสุดก่อน', filteredEmpty: 'ไม่มีรีวิวตามตัวกรองนี้', networkHint: 'สาขาหลักแสดงรีวิวจากทั้งเครือข่าย และแต่ละรีวิวระบุสาขา' },
+  ar: { all: 'كل المراجعات', negative: 'سلبية', unanswered: 'بلا رد', order: 'الترتيب', lowFirst: 'الأقل تقييمًا أولًا', newFirst: 'الأحدث أولًا', filteredEmpty: 'لا توجد مراجعات لهذا المرشح', networkHint: 'يعرض الموقع الرئيسي مراجعات الشبكة كلها، وتوضح كل مراجعة موقعها.' },
+  ha: { all: 'Duk sharhi', negative: 'Mara kyau', unanswered: 'Ba a amsa ba', order: 'Tsari', lowFirst: 'Mafi ƙarancin maki da farko', newFirst: 'Sabbi da farko', filteredEmpty: 'Babu sharhi a wannan tacewa', networkHint: 'Babban wuri yana nuna sharhin dukkan cibiyar, kuma kowane sharhi yana nuna wurinsa.' },
+  tr: { all: 'Tüm yorumlar', negative: 'Olumsuz', unanswered: 'Yanıtsız', order: 'Sıralama', lowFirst: 'En düşük puan önce', newFirst: 'En yeni önce', filteredEmpty: 'Bu filtrede yorum yok', networkHint: 'Ana konum tüm ağın yorumlarını gösterir. Her yorumda ilgili konum belirtilir.' },
+};
+
 export default function ReviewReplyAssistant({
   businessName,
   selectedSource = 'all',
@@ -69,8 +83,9 @@ export default function ReviewReplyAssistant({
   onOpenLocation,
   initialFilter = 'all',
 }: ReviewReplyAssistantProps) {
-  const { currentBusinessId, onBusinessChange } = useOutletContext<any>();
+  const { currentBusinessId, onBusinessChange, user } = useOutletContext<any>();
   const { language: interfaceLanguage, t } = useLanguage();
+  const listCopy = reviewListCopy[interfaceLanguage] || reviewListCopy.en;
   const [tone, setTone] = useState<Tone>('professional');
   const [review, setReview] = useState('');
   const [loading, setLoading] = useState(false);
@@ -123,7 +138,9 @@ export default function ReviewReplyAssistant({
       const query = params.toString() ? `?${params.toString()}` : '';
       const data = await newAuth.makeRequest(`/business/${currentBusinessId}/external/reviews${query}`);
       if (data.success) {
-        const nextReviews = data.reviews || [];
+        const nextReviews: ExternalReview[] = user?.demo_mode
+          ? getDemoShowcaseData(interfaceLanguage).reviews
+          : (data.reviews || []);
         setExternalReviews(nextReviews);
         setGeneratedReplies(prev => {
           const next = { ...prev };
@@ -145,7 +162,7 @@ export default function ReviewReplyAssistant({
   useEffect(() => {
     loadExamples();
     loadExternalReviews();
-  }, [currentBusinessId, aggregateScope, selectedSource]);
+  }, [currentBusinessId, aggregateScope, selectedSource, interfaceLanguage, user?.demo_mode]);
 
   useEffect(() => {
     setReviewFilter(initialFilter);
@@ -551,9 +568,9 @@ export default function ReviewReplyAssistant({
           </h4>
           <div className="flex flex-wrap items-center gap-2">
             {[
-              { key: 'all', label: `Все отзывы · ${sourceMatchedReviews.length}` },
-              { key: 'negative', label: `Негатив · ${negativeReviewsCount}` },
-              { key: 'needs_reply', label: `Без ответа · ${needsReplyReviewsCount}` },
+              { key: 'all', label: `${listCopy.all} · ${sourceMatchedReviews.length}` },
+              { key: 'negative', label: `${listCopy.negative} · ${negativeReviewsCount}` },
+              { key: 'needs_reply', label: `${listCopy.unanswered} · ${needsReplyReviewsCount}` },
             ].map((item) => (
               <button
                 key={item.key}
@@ -584,11 +601,11 @@ export default function ReviewReplyAssistant({
               }}
             >
               <SelectTrigger className="h-9 w-[210px] rounded-full border-slate-200 bg-white text-sm">
-                <SelectValue placeholder="Порядок" />
+                <SelectValue placeholder={listCopy.order} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="rating_asc">Сначала низкая оценка</SelectItem>
-                <SelectItem value="newest">Сначала новые</SelectItem>
+                <SelectItem value="rating_asc">{listCopy.lowFirst}</SelectItem>
+                <SelectItem value="newest">{listCopy.newFirst}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -596,7 +613,7 @@ export default function ReviewReplyAssistant({
 
         {aggregateScope === 'network' && (
           <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-900">
-            Материнская точка показывает общую ленту отзывов по всей сети. У каждого отзыва указана конкретная точка, и её можно открыть одним кликом.
+            {listCopy.networkHint}
           </div>
         )}
 
@@ -608,7 +625,7 @@ export default function ReviewReplyAssistant({
           <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
             <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 font-medium">
-              {reviewFilter === 'all' ? t.dashboard.card.reviewReply.noReviews : 'По этому фильтру отзывов пока нет'}
+              {reviewFilter === 'all' ? t.dashboard.card.reviewReply.noReviews : listCopy.filteredEmpty}
             </p>
           </div>
         ) : (

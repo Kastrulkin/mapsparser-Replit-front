@@ -26,6 +26,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { useLanguage, type Language } from '@/i18n/LanguageContext';
+import {
+  localizedGrowthArea,
+  localizedGrowthMetric,
+  localizedGrowthMilestone,
+  localizedGrowthStatus,
+  localizedGrowthText,
+  localizedProgressBusinessName,
+  progressPageCopyForLanguage,
+  type ProgressPageCopy,
+} from './progressPageCopy';
 
 type GrowthAreaKey = 'maps' | 'content' | 'partnerships' | 'automation' | 'upsells';
 type GrowthAreaStatus = 'not_started' | 'in_progress' | 'healthy' | 'needs_attention' | 'unavailable';
@@ -117,15 +128,15 @@ const STATUS_COPY: Record<GrowthAreaStatus, { label: string; className: string }
   unavailable: { label: 'Нет данных', className: 'border-rose-200 bg-rose-50 text-rose-700' },
 };
 
-const formatDate = (value?: string | null) => {
+const formatDate = (value: string | null | undefined, language: Language) => {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(date).replace(/\.$/, '');
+  return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short', year: 'numeric' }).format(date).replace(/\.$/, '');
 };
 
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
+const formatMoney = (value: number, language: Language) =>
+  new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value);
 
 const achievementStorageKey = (businessId: string) => `localos:growth-achievements:${businessId}`;
 
@@ -155,12 +166,16 @@ const AreaRow = ({
   onToggle,
   onOpen,
   details,
+  language,
+  copy,
 }: {
   area: GrowthArea;
   expanded: boolean;
   onToggle: () => void;
   onOpen: (url: string) => void;
   details?: ReactNode;
+  language: Language;
+  copy: ProgressPageCopy;
 }) => {
   const Icon = AREA_ICONS[area.key];
   const status = STATUS_COPY[area.status];
@@ -182,22 +197,22 @@ const AreaRow = ({
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-slate-950">{area.label}</div>
+            <div className="font-semibold text-slate-950">{localizedGrowthArea(language, area.key, area.label)}</div>
             <div className={cn('mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', status.className)}>
-              {status.label}
+              {localizedGrowthStatus(language, area.status, status.label)}
             </div>
           </div>
         </div>
 
         <div className="min-w-0">
-          <div className="text-sm leading-6 text-slate-700">{area.summary}</div>
-          {area.problem ? <div className="mt-1 text-xs leading-5 text-amber-800">{area.problem}</div> : null}
+          <div className="text-sm leading-6 text-slate-700">{localizedGrowthText(language, area.summary)}</div>
+          {area.problem ? <div className="mt-1 text-xs leading-5 text-amber-800">{localizedGrowthText(language, area.problem)}</div> : null}
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-3 text-xs font-medium text-slate-500">
-            <span>Сделано</span>
-            <span className="tabular-nums">{area.progress.completed} из {area.progress.total}</span>
+            <span>{copy.completed}</span>
+            <span className="tabular-nums">{area.progress.completed} {copy.of} {area.progress.total}</span>
           </div>
           <Progress value={progressValue} className="mt-2 h-2" />
         </div>
@@ -211,7 +226,7 @@ const AreaRow = ({
         <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-5 md:px-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Путь</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{copy.path}</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {area.milestones.map((milestone) => (
                   <div key={milestone.key} className="flex min-w-0 gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3">
@@ -221,12 +236,12 @@ const AreaRow = ({
                       <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
                     )}
                     <div className="min-w-0">
-                      <div className="text-sm font-medium leading-5 text-slate-800">{milestone.label}</div>
+                      <div className="text-sm font-medium leading-5 text-slate-800">{localizedGrowthMilestone(language, milestone.key, milestone.label)}</div>
                       {milestone.status === 'done' && milestone.evidence ? (
-                        <div className="mt-1 text-xs leading-5 text-slate-500">{milestone.evidence}</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">{localizedGrowthText(language, milestone.evidence)}</div>
                       ) : null}
                       {milestone.status === 'done' && milestone.achieved_at ? (
-                        <div className="mt-1 text-xs tabular-nums text-slate-400">{formatDate(milestone.achieved_at)}</div>
+                        <div className="mt-1 text-xs tabular-nums text-slate-400">{formatDate(milestone.achieved_at, language)}</div>
                       ) : null}
                     </div>
                   </div>
@@ -235,15 +250,15 @@ const AreaRow = ({
             </div>
 
             <div className="border-l-0 border-slate-200 lg:border-l lg:pl-6">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Что даст следующий шаг</div>
-              <p className="mt-2 text-sm leading-6 text-slate-700">{area.expected_outcome}</p>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{copy.nextStepOutcome}</div>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{localizedGrowthText(language, area.expected_outcome)}</p>
               {area.action.estimated_effect?.amount ? (
                 <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
-                  {area.action.estimated_effect.label}: {formatMoney(area.action.estimated_effect.amount)} ₽
+                  {localizedGrowthText(language, area.action.estimated_effect.label)}: {formatMoney(area.action.estimated_effect.amount, language)} ₽
                 </div>
               ) : null}
               <Button type="button" variant="outline" className="mt-4 w-full sm:w-auto" onClick={() => onOpen(area.action.cta_url)}>
-                {area.action.cta_label}
+                {localizedGrowthText(language, area.action.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -259,6 +274,8 @@ export const ProgressPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentBusinessId } = useOutletContext<DashboardContext>();
+  const { language } = useLanguage();
+  const copy = progressPageCopyForLanguage(language);
   const [overviewData, setOverviewData] = useState<GrowthOverview | null>(null);
   const [overviewBusinessId, setOverviewBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -315,14 +332,14 @@ export const ProgressPage = () => {
       }
     }).catch((requestError) => {
       if (controller.signal.aborted) return;
-      const message = requestError instanceof Error ? requestError.message : 'Не удалось загрузить прогресс бизнеса';
+      const message = requestError instanceof Error ? requestError.message : copy.loadErrorTitle;
       setError(message);
     }).finally(() => {
       if (!controller.signal.aborted) setLoading(false);
     });
 
     return () => controller.abort();
-  }, [currentBusinessId, overviewRefreshKey]);
+  }, [copy.loadErrorTitle, currentBusinessId, overviewRefreshKey]);
 
   useEffect(() => {
     setCelebration(null);
@@ -437,7 +454,7 @@ export const ProgressPage = () => {
   if (!currentBusinessId) {
     return (
       <div className="space-y-6">
-        <DashboardPageHeader title="Прогресс бизнеса" description="Выберите бизнес, чтобы увидеть сделанное и следующий шаг." />
+        <DashboardPageHeader title={copy.title} description={copy.selectBusinessDescription} />
       </div>
     );
   }
@@ -445,7 +462,7 @@ export const ProgressPage = () => {
   if (loading && !overview) {
     return (
       <div className="space-y-6" aria-busy="true">
-        <DashboardPageHeader title="Прогресс бизнеса" description="Собираем подтверждённые результаты из рабочих разделов LocalOS." />
+        <DashboardPageHeader title={copy.title} description={copy.loadingDescription} />
         <div className="h-36 animate-pulse rounded-xl bg-slate-100" />
         <div className="h-80 animate-pulse rounded-xl bg-slate-100" />
       </div>
@@ -455,16 +472,16 @@ export const ProgressPage = () => {
   if (!overview) {
     return (
       <div className="space-y-6">
-        <DashboardPageHeader title="Прогресс бизнеса" description="Общая картина выполненной работы и следующих действий." />
+        <DashboardPageHeader title={copy.title} description={copy.fallbackDescription} />
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
             <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-amber-950">Не удалось собрать общую картину</h2>
-              <p className="mt-1 text-sm leading-6 text-amber-900">{error || 'Попробуйте обновить данные.'}</p>
+              <h2 className="font-semibold text-amber-950">{copy.loadErrorTitle}</h2>
+              <p className="mt-1 text-sm leading-6 text-amber-900">{localizedGrowthText(language, error) || copy.loadErrorDescription}</p>
               <Button type="button" variant="outline" className="mt-4 active:scale-[0.96] transition-transform" onClick={refreshAll}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Повторить
+                {copy.retry}
               </Button>
             </div>
           </div>
@@ -476,21 +493,21 @@ export const ProgressPage = () => {
   return (
     <div className="space-y-6" data-tour-target="progress-overview">
       <DashboardPageHeader
-        eyebrow="Картина бизнеса"
-        title="Прогресс бизнеса"
-        description="Что уже сделано, где нужна помощь и какой шаг даст следующий практический результат."
+        eyebrow={copy.eyebrow}
+        title={copy.title}
+        description={copy.description}
         actions={(
           <Button type="button" variant="outline" onClick={refreshAll} disabled={loading} className="active:scale-[0.96] transition-transform">
             <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
-            Обновить
+            {copy.refresh}
           </Button>
         )}
       />
 
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
-          <span>Новая сводка пока не загрузилась. Показываем предыдущие подтверждённые данные.</span>
-          <button type="button" onClick={refreshAll} className="min-h-10 font-semibold underline underline-offset-2">Повторить</button>
+          <span>{copy.staleData}</span>
+          <button type="button" onClick={refreshAll} className="min-h-10 font-semibold underline underline-offset-2">{copy.retry}</button>
         </div>
       ) : null}
 
@@ -501,8 +518,8 @@ export const ProgressPage = () => {
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-emerald-950">Новый результат: {celebration.title}</div>
-              <div className="mt-1 text-sm leading-6 text-emerald-800">{celebration.description}</div>
+              <div className="font-semibold text-emerald-950">{copy.newResult}: {localizedGrowthMilestone(language, celebration.key.split(':').pop() || '', celebration.title)}</div>
+              <div className="mt-1 text-sm leading-6 text-emerald-800">{localizedGrowthText(language, celebration.description)}</div>
             </div>
           </div>
         </div>
@@ -510,39 +527,39 @@ export const ProgressPage = () => {
 
       <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
         <div data-tour-target="progress-summary">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Подтверждённый путь</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.confirmedPath}</div>
           <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
             <div className="text-3xl font-semibold tabular-nums text-slate-950">
-              {overview.summary.completed_milestones} из {overview.summary.total_milestones}
+              {overview.summary.completed_milestones} {copy.of} {overview.summary.total_milestones}
             </div>
-            <div className="pb-1 text-sm text-slate-600">шагов подтверждены реальными данными</div>
+            <div className="pb-1 text-sm text-slate-600">{copy.confirmedSteps}</div>
           </div>
           <Progress value={overallProgress} className="mt-4 h-3" />
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-            <span><strong className="tabular-nums text-slate-950">{overview.summary.completed_last_30_days}</strong> результатов за 30 дней</span>
-            <span><strong className="tabular-nums text-slate-950">{overview.summary.active_areas}</strong> направлений начаты</span>
+            <span><strong className="tabular-nums text-slate-950">{overview.summary.completed_last_30_days}</strong> {copy.resultsIn30Days}</span>
+            <span><strong className="tabular-nums text-slate-950">{overview.summary.active_areas}</strong> {copy.activeAreas}</span>
             {overview.summary.needs_attention > 0 ? (
-              <span className="text-amber-800"><strong className="tabular-nums">{overview.summary.needs_attention}</strong> требуют внимания</span>
+              <span className="text-amber-800"><strong className="tabular-nums">{overview.summary.needs_attention}</strong> {copy.needAttention}</span>
             ) : null}
           </div>
         </div>
 
         <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" data-tour-target="progress-focus-action">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Сейчас важнее всего</div>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">{overview.focus_action?.title || 'Продолжайте работу'}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{overview.focus_action?.reason}</p>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.currentPriority}</div>
+          <h2 className="mt-2 text-xl font-semibold text-slate-950">{localizedGrowthText(language, overview.focus_action?.title) || copy.continueWorking}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{localizedGrowthText(language, overview.focus_action?.reason)}</p>
           {overview.focus_action ? (
             <>
               <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                <strong>Результат:</strong> {overview.focus_action.expected_outcome}
+                <strong>{copy.result}:</strong> {localizedGrowthText(language, overview.focus_action.expected_outcome)}
               </div>
               {overview.focus_action.estimated_effect?.amount ? (
                 <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
-                  {overview.focus_action.estimated_effect.label}: {formatMoney(overview.focus_action.estimated_effect.amount)} ₽
+                  {localizedGrowthText(language, overview.focus_action.estimated_effect.label)}: {formatMoney(overview.focus_action.estimated_effect.amount, language)} ₽
                 </div>
               ) : null}
               <Button type="button" className="mt-4 w-full bg-orange-500 text-white hover:bg-orange-600" onClick={() => navigate(overview.focus_action?.cta_url || '/dashboard/progress')}>
-                {overview.focus_action.cta_label}
+                {localizedGrowthText(language, overview.focus_action.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </>
@@ -552,8 +569,8 @@ export const ProgressPage = () => {
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-4 md:px-6" data-tour-target="progress-areas">
-          <h2 className="text-lg font-semibold text-slate-950">Направления роста</h2>
-          <p className="mt-1 text-sm text-slate-600">Откройте направление, чтобы увидеть сделанное и следующий шаг.</p>
+          <h2 className="text-lg font-semibold text-slate-950">{copy.growthAreas}</h2>
+          <p className="mt-1 text-sm text-slate-600">{copy.growthAreasDescription}</p>
         </div>
         {overview.areas.map((area) => (
           <AreaRow
@@ -562,22 +579,24 @@ export const ProgressPage = () => {
             expanded={expandedArea === area.key}
             onToggle={() => setExpandedArea((current) => current === area.key ? null : area.key)}
             onOpen={navigate}
+            language={language}
+            copy={copy}
             details={area.key === 'maps' ? (
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Текущий аудит</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{copy.currentAudit}</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {area.metrics.map((metric) => (
                       <div key={metric.label} className="rounded-lg bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200">
-                        <div className="text-xs text-slate-500">{metric.label}</div>
-                        <div className="mt-0.5 font-semibold tabular-nums text-slate-900">{metric.value}</div>
+                        <div className="text-xs text-slate-500">{localizedGrowthMetric(language, metric.label)}</div>
+                        <div className="mt-0.5 font-semibold tabular-nums text-slate-900">{localizedGrowthText(language, String(metric.value))}</div>
                       </div>
                     ))}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">
                     {mapAuditMilestone?.status === 'done'
-                      ? `Аудит готов${mapAuditMilestone.achieved_at ? ` и обновлён ${formatDate(mapAuditMilestone.achieved_at)}` : ''}. Откройте его, чтобы увидеть факты и приоритеты карточки.`
-                      : 'Полный аудит появится здесь после первого успешного сбора данных.'}
+                      ? `${copy.auditReady}${mapAuditMilestone.achieved_at ? ` ${copy.auditReadyUpdated} ${formatDate(mapAuditMilestone.achieved_at, language)}` : ''}. ${copy.auditReadySuffix}`
+                      : copy.auditPending}
                   </p>
                 </div>
                 <Button
@@ -586,7 +605,7 @@ export const ProgressPage = () => {
                   onClick={openFullAudit}
                   className="w-full active:scale-[0.96] transition-transform md:w-auto"
                 >
-                  Посмотреть полный аудит
+                  {copy.viewFullAudit}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -604,21 +623,21 @@ export const ProgressPage = () => {
         >
           <div className="flex flex-col gap-4 rounded-xl bg-slate-950 px-5 py-5 text-white shadow-sm md:flex-row md:items-center md:justify-between md:px-6">
             <div className="min-w-0">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Карты и репутация</div>
-              <h2 id="full-audit-title" className="mt-1 text-xl font-semibold text-balance">Полный аудит карточки</h2>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{copy.mapsAndReputation}</div>
+              <h2 id="full-audit-title" className="mt-1 text-xl font-semibold text-balance">{copy.fullAudit}</h2>
               <p className="mt-1 text-sm leading-6 text-pretty text-slate-300">
-                {selectedAuditLocation ? `Точка: ${selectedAuditLocation.name}. ` : ''}Данные, причины проблем и конкретные действия.
+                {selectedAuditLocation ? `${copy.location}: ${localizedProgressBusinessName(language, selectedAuditLocation.name)}. ` : ''}{copy.auditDescription}
               </p>
             </div>
             <div className="flex items-center gap-2">
               {networkLocations.length > 1 ? (
                 <Select value={selectedAuditBusinessId || networkLocations[0]?.id} onValueChange={setSelectedAuditBusinessId}>
-                  <SelectTrigger className="min-h-10 w-full border-white/20 bg-white text-slate-950 md:w-[260px]" aria-label="Выбрать точку для аудита">
-                    <SelectValue placeholder="Выберите точку" />
+                  <SelectTrigger className="min-h-10 w-full border-white/20 bg-white text-slate-950 md:w-[260px]" aria-label={copy.selectAuditLocation}>
+                    <SelectValue placeholder={copy.selectLocation} />
                   </SelectTrigger>
                   <SelectContent>
                     {networkLocations.map((location) => (
-                      <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>
+                      <SelectItem key={location.id} value={location.id}>{localizedProgressBusinessName(language, location.name)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -627,7 +646,7 @@ export const ProgressPage = () => {
                 type="button"
                 onClick={closeFullAudit}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-300 transition-[background-color,color,transform] hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 active:scale-[0.96]"
-                aria-label="Скрыть полный аудит"
+                aria-label={copy.hideFullAudit}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -637,7 +656,7 @@ export const ProgressPage = () => {
           {parseStatus === 'queued' || parseStatus === 'processing' ? (
             <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-800" role="status">
               <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
-              {parseStatus === 'queued' ? 'Сбор данных ждёт запуска. Текущий аудит остаётся доступен.' : 'Собираем свежие данные. Текущий аудит остаётся на экране.'}
+              {parseStatus === 'queued' ? copy.parseQueued : copy.parseProcessing}
             </div>
           ) : null}
 
@@ -654,7 +673,7 @@ export const ProgressPage = () => {
               aria-expanded={historyOpen}
               className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left font-semibold text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 md:px-6"
             >
-              <span>История обновлений карточки</span>
+              <span>{copy.cardHistory}</span>
               <ChevronDown className={cn('h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200', historyOpen && 'rotate-180')} />
             </button>
             {historyOpen ? (
@@ -674,7 +693,7 @@ export const ProgressPage = () => {
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" data-tour-target="progress-recent-results">
         <div className="flex items-center gap-2">
           <Clock3 className="h-5 w-5 text-slate-500" />
-          <h2 className="text-lg font-semibold text-slate-950">Недавние результаты</h2>
+          <h2 className="text-lg font-semibold text-slate-950">{copy.recentResults}</h2>
         </div>
         {overview.recent_achievements.length > 0 ? (
           <div className="mt-4 divide-y divide-slate-100">
@@ -686,17 +705,17 @@ export const ProgressPage = () => {
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-slate-900">{item.title}</div>
-                    <div className="mt-0.5 text-sm leading-5 text-slate-600">{item.description}</div>
+                    <div className="font-medium text-slate-900">{localizedGrowthMilestone(language, item.key.split(':').pop() || '', item.title)}</div>
+                    <div className="mt-0.5 text-sm leading-5 text-slate-600">{localizedGrowthText(language, item.description)}</div>
                   </div>
-                  <div className="shrink-0 text-xs tabular-nums text-slate-400">{formatDate(item.occurred_at)}</div>
+                  <div className="shrink-0 text-xs tabular-nums text-slate-400">{formatDate(item.occurred_at, language)}</div>
                 </div>
               );
             })}
           </div>
         ) : (
           <div className="mt-4 rounded-lg bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600">
-            Здесь появятся подтверждённые результаты: готовый аудит, контент-план, найденные партнёры, выполненные задачи и внедрённые допродажи.
+            {copy.recentResultsEmpty}
           </div>
         )}
       </section>

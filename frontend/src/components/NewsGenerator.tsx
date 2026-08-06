@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -24,6 +24,7 @@ import {
   Search
 } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
@@ -31,6 +32,7 @@ type NewsWorkspaceMode = 'news' | 'plan';
 
 export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
   const navigate = useNavigate();
+  const { user } = useOutletContext<any>();
   const [workspaceMode, setWorkspaceMode] = useState<NewsWorkspaceMode>(initialWorkspaceMode);
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
@@ -92,11 +94,11 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.success) setNews(data.news || []);
+      if (data.success) setNews(user?.demo_mode ? getDemoShowcaseData(interfaceLanguage).news : (data.news || []));
     } catch { }
   };
 
-  useEffect(() => { loadNews(); }, []);
+  useEffect(() => { loadNews(); }, [interfaceLanguage, user?.demo_mode]);
   useEffect(() => {
     (async () => {
       try {
