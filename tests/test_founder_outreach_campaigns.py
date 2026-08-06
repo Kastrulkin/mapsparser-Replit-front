@@ -2238,6 +2238,124 @@ def test_selected_campaign_recipient_wins_over_generic_email_ranking():
     assert availability["email"]["recipient"] == "pr@yesapart.com"
 
 
+def test_single_ready_email_sender_is_selected_when_other_account_needs_permission():
+    class SenderCursor:
+        def execute(self, _query, _params):
+            return None
+
+        def fetchall(self):
+            return [
+                {
+                    "id": "localosgo-account",
+                    "channel": "email",
+                    "status": "connected",
+                    "sender_identity": "localosgo@gmail.com",
+                    "display_name": "LocalOS",
+                    "health_status": "healthy",
+                    "capabilities_json": {"direct_send": True, "reply_sync": True},
+                    "sender_outreach_enabled": True,
+                    "telegram_outreach_enabled": None,
+                },
+                {
+                    "id": "info-account",
+                    "channel": "email",
+                    "status": "connected",
+                    "sender_identity": "info@localos.pro",
+                    "display_name": "Александр, LocalOS",
+                    "health_status": "healthy",
+                    "capabilities_json": {"direct_send": True, "reply_sync": True},
+                    "sender_outreach_enabled": False,
+                    "telegram_outreach_enabled": None,
+                },
+            ]
+
+    availability = channel_availability(
+        SenderCursor(),
+        {
+            "sender_mode": "localos",
+            "contacts": [
+                {
+                    "id": "recipient-email",
+                    "contact_type": "email",
+                    "value": "recipient@example.com",
+                    "verification_status": "confirmed_source",
+                    "confidence": 0.95,
+                },
+            ],
+        },
+    )
+
+    assert availability["email"]["status"] == "ready"
+    assert availability["email"]["sender_account_id"] == "localosgo-account"
+    assert availability["email"]["sender_accounts"] == [
+        {
+            "id": "localosgo-account",
+            "sender_identity": "localosgo@gmail.com",
+            "display_name": "LocalOS",
+            "health_status": "healthy",
+            "status": "ready",
+        },
+        {
+            "id": "info-account",
+            "sender_identity": "info@localos.pro",
+            "display_name": "Александр, LocalOS",
+            "health_status": "healthy",
+            "status": "permission_required",
+        },
+    ]
+
+
+def test_localosgo_is_default_platform_email_when_multiple_senders_are_ready():
+    class SenderCursor:
+        def execute(self, _query, _params):
+            return None
+
+        def fetchall(self):
+            return [
+                {
+                    "id": "info-account",
+                    "channel": "email",
+                    "status": "connected",
+                    "sender_identity": "info@localos.pro",
+                    "display_name": "Александр, LocalOS",
+                    "health_status": "healthy",
+                    "capabilities_json": {"direct_send": True, "reply_sync": True},
+                    "sender_outreach_enabled": True,
+                    "telegram_outreach_enabled": None,
+                },
+                {
+                    "id": "localosgo-account",
+                    "channel": "email",
+                    "status": "connected",
+                    "sender_identity": "localosgo@gmail.com",
+                    "display_name": "LocalOS",
+                    "health_status": "healthy",
+                    "capabilities_json": {"direct_send": True, "reply_sync": True},
+                    "sender_outreach_enabled": True,
+                    "telegram_outreach_enabled": None,
+                },
+            ]
+
+    availability = channel_availability(
+        SenderCursor(),
+        {
+            "sender_mode": "localos",
+            "contacts": [
+                {
+                    "id": "recipient-email",
+                    "contact_type": "email",
+                    "value": "recipient@example.com",
+                    "verification_status": "confirmed_source",
+                    "confidence": 0.95,
+                },
+            ],
+        },
+    )
+
+    assert availability["email"]["status"] == "ready"
+    assert availability["email"]["sender_account_id"] == "localosgo-account"
+
+
 def test_manual_vk_uses_vk_recipient_without_requiring_sender_account():
     class SenderCursor:
         def execute(self, _query, _params):

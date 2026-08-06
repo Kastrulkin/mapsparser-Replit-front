@@ -79,6 +79,7 @@ DEFAULT_SEQUENCE = (
     ("phone", 18, "phone_handoff"),
     ("email", 25, "respectful_close"),
 )
+PLATFORM_DEFAULT_EMAIL_SENDER = "localosgo@gmail.com"
 NON_RECIPIENT_EMAIL_DOMAINS = {
     "company24.com",
     "dikidi.net",
@@ -1943,7 +1944,6 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
         if channel == "sms" and not contact:
             contact = contacts_by_type.get("phone")
         senders = senders_by_channel.get(channel) or []
-        sender = senders[0] if len(senders) == 1 else None
 
         def sender_status(sender_item: dict[str, Any] | None) -> str:
             capabilities = sender_item.get("capabilities_json") if sender_item else {}
@@ -1972,14 +1972,41 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
             "health_status": item.get("health_status"),
             "status": sender_status(item),
         } for item in senders]
+        ready_senders = [item for item in senders if sender_status(item) == "ready"]
+        sender = None
+        if channel == "email" and scope_type == "platform":
+            sender = next(
+                (
+                    item for item in ready_senders
+                    if _text(item.get("sender_identity")).lower()
+                    == PLATFORM_DEFAULT_EMAIL_SENDER
+                ),
+                None,
+            )
+        if not sender and len(ready_senders) == 1:
+            sender = ready_senders[0]
+        if not sender and len(senders) == 1:
+            sender = senders[0]
         if not contact:
             status = "recipient_missing"
         elif channel in MANUAL_CHANNELS:
             status = "manual"
-        elif len(senders) > 1:
+        elif sender:
+            status = sender_status(sender)
+        elif len(ready_senders) > 1:
             status = "sender_selection_required"
         else:
-            status = sender_status(sender)
+            blocked_statuses = [sender_status(item) for item in senders]
+            status = next(
+                (
+                    item for item in (
+                        "permission_required", "sender_paused", "sender_degraded",
+                        "adapter_unavailable", "connect_required",
+                    )
+                    if item in blocked_statuses
+                ),
+                "connect_required",
+            )
         result[channel] = {
             "status": status,
             "contact_point_id": str(contact.get("id")) if contact and contact.get("id") else None,
