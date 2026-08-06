@@ -272,6 +272,42 @@ def test_founder_led_beauty_quality_gate_accepts_paraphrased_sourced_observation
     assert gate["passed"] is True
 
 
+def test_composite_social_map_signal_does_not_require_internal_activity_counters_in_copy():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "signal_combo": "active_social_with_map_gap",
+        "observed_fact": (
+            "В карточке на картах рейтинг 4.2 и 3 отзывов. "
+            "Официальная соцсеть обновлялась 2 дней назад; "
+            "опубликовано 8 сообщений за 30 дней."
+        ),
+        "public_audit_url": "https://localos.pro/example-audit",
+        "next_step": "Работа LocalOS от 1200 рублей в месяц",
+    })
+    story = {
+        "story": candidate["founder_story"],
+        "proof": candidate["founder_proof"],
+        "forbidden_claims": [],
+    }
+    message = _message_for_angle("signal", candidate, story, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        story,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+
+    assert "рейтинг 4.2 и только 3 отзыва" in message
+    assert "активно ведёте соцсети" in message
+    assert "8 сообщений за 30 дней" not in message
+    assert gate["checks"]["removal"] is True
+    assert gate["total_score"] == 18
+    assert gate["passed"] is True
+
+
 @pytest.mark.parametrize(
     ("segment", "recipient", "category"),
     (

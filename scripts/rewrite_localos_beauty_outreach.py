@@ -26,7 +26,11 @@ for path in (str(REPO_ROOT), str(SRC_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from services.outreach_campaign_service import build_preview, persist_preview  # noqa: E402
+from services.outreach_campaign_service import (  # noqa: E402
+    DEFAULT_SEQUENCE,
+    build_preview,
+    persist_preview,
+)
 
 
 RULES_VERSION = "localos_beauty_outreach_v2"
@@ -125,6 +129,34 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _available_sequence(channel_availability: dict[str, Any]) -> list[dict[str, Any]]:
+    available_steps = [
+        (channel, day)
+        for channel, day, _angle in DEFAULT_SEQUENCE
+        if (channel_availability.get(channel) or {}).get("status") in {"ready", "manual"}
+    ]
+    angles_by_count = {
+        1: ("signal",),
+        2: ("signal", "respectful_close"),
+        3: ("signal", "proof", "respectful_close"),
+        4: ("signal", "founder_story", "proof", "respectful_close"),
+        5: ("signal", "founder_story", "proof", "audit_step", "respectful_close"),
+    }
+    angles = angles_by_count.get(
+        len(available_steps),
+        tuple(angle for _channel, _day, angle in DEFAULT_SEQUENCE),
+    )
+    return [
+        {
+            "channel": channel,
+            "day_offset": day,
+            "angle": angles[index],
+            "skip_if_unavailable": True,
+        }
+        for index, (channel, day) in enumerate(available_steps)
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")
@@ -144,9 +176,21 @@ def main() -> None:
             try:
                 result["lead"] = _lead_name(cursor, workstream_id)
                 previous_draft_id = _latest_draft_id(cursor, workstream_id)
+                availability_preview = build_preview(
+                    cursor,
+                    workstream_id,
+                    start_at=_start_at(),
+                    sender_mode="localos",
+                    generate_ai=False,
+                    manual_reviewer_role="superadmin",
+                )
+                sequence = _available_sequence(
+                    availability_preview.get("channel_availability") or {}
+                )
                 preview = build_preview(
                     cursor,
                     workstream_id,
+                    sequence=sequence,
                     start_at=_start_at(),
                     sender_mode="localos",
                     generate_ai=False,

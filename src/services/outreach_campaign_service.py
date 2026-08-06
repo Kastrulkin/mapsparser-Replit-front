@@ -2059,9 +2059,35 @@ def _quality_gate(
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
     normalized_text = text.lower()
-    grounded_observation = observation_is_grounded(
+    source_observation = _text(candidate.get("observed_fact"))
+    composite_map_match = re.search(
+        r"рейтинг\s+([0-9]+(?:[.,][0-9]+)?)\s+и\s+(\d+)\s+отзыв",
+        source_observation,
+        flags=re.IGNORECASE,
+    )
+    composite_signal_grounded = bool(
+        _text(candidate.get("signal_combo")) == "active_social_with_map_gap"
+        and composite_map_match
+        and composite_map_match.group(1).replace(",", ".")
+        in normalized_text.replace(",", ".")
+        and re.search(
+            rf"\b{re.escape(composite_map_match.group(2))}\s+отзыв",
+            normalized_text,
+            flags=re.IGNORECASE,
+        )
+        and any(
+            marker in normalized_text
+            for marker in (
+                "активно ведёте соцсети",
+                "активно ведете соцсети",
+                "активно ведёте канал",
+                "активно ведете канал",
+            )
+        )
+    )
+    grounded_observation = composite_signal_grounded or observation_is_grounded(
         text,
-        candidate.get("observed_fact"),
+        source_observation,
     )
     founder_led_beauty = bool(
         _text(candidate.get("sender_mode")) in {"", SENDER_MODE_LOCALOS}
@@ -2164,6 +2190,7 @@ def _quality_gate(
                         "остаются на владельце",
                         "возвращаются к руководителю",
                         "регулярно работаете с привлечением клиентов онлайн",
+                        "карты тоже могли бы помогать",
                         "собрали короткий разбор",
                     )
                 )
