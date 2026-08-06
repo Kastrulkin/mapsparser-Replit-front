@@ -1288,13 +1288,36 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     : ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'];
   const latestCampaignFirstTouch = (savedOutreachCampaign?.touches || [])
     .find((touch) => Number(touch.sequence_index || 0) === 0);
+  const projectedCampaignTouches = buildProjectedOutreachTouches(
+    sequenceChannels,
+    sequenceDays,
+    sequenceStartAt,
+  ).map((touch) => {
+    const contactType = recipientContactTypeForChannel(String(touch.channel || ''));
+    const selectedContact = drawerRecipient?.type === contactType
+      ? drawerRecipient
+      : drawerContacts.find((contact) => String(contact.type || '') === contactType);
+    const channel = String(touch.channel || '');
+    const channelStatus = automaticOutreachChannels.has(channel) ? '' : 'manual';
+    return {
+      ...touch,
+      contact_point_id: selectedContact?.id || null,
+      sender_account_id: sequenceSenders[Number(touch.sequence_index || 0)] || null,
+      channel_status: channelStatus,
+      message_brief_json: { channel_status: channelStatus },
+    };
+  });
   const savedCampaignChannelBlockers: ChannelSetupBlocker[] = [];
-  for (const touch of savedOutreachCampaign?.touches || []) {
+  const campaignTouchesForChannelValidation = campaignSetupDirty ? projectedCampaignTouches : savedOutreachCampaign?.touches || [];
+  for (const touch of campaignTouchesForChannelValidation) {
     const channel = String(touch.channel || '');
     const channelStatus = String(touch.channel_status || touch.message_brief_json?.channel_status || '');
     const touchNumber = Number(touch.sequence_index || 0) + 1;
-    const selectedSenderId = sequenceSenders[touchNumber - 1] || touch.sender_account_id || '';
-    const selectedSender = senderAccounts.find((account) => account.id === selectedSenderId);
+    const selectedSenderId = campaignSetupDirty
+      ? sequenceSenders[touchNumber - 1] || ''
+      : touch.sender_account_id || '';
+    const selectedSender = senderAccounts.find((account) => account.id === selectedSenderId)
+      || (channel === 'email' ? connectedEmailSender : undefined);
     const channelLabel = contactTypeLabels[channel] || channel.toUpperCase();
     if (['telegram', 'email', 'vk'].includes(channel)) {
       if (touch.contact_point_id && outreachSenderReady(selectedSender)) continue;

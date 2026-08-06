@@ -33,3 +33,21 @@ def test_current_sender_selection_clears_saved_campaign_sender_blocker():
 
     assert "if (!selectedSenderId)" in blocker_block
     assert "if (!touch.sender_account_id || channelStatus === 'sender_selection_required')" not in blocker_block
+
+
+def test_unsaved_channel_setup_does_not_show_blockers_from_obsolete_saved_touches():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    blocker_start = source.index("const savedCampaignChannelBlockers")
+    blocker_end = source.index("\n  const savedCampaignNeedsChannelSetup", blocker_start)
+    blocker_block = source[blocker_start:blocker_end]
+
+    assert "campaignSetupDirty ? projectedCampaignTouches" in blocker_block
+
+
+def test_ready_connected_email_is_used_consistently_for_campaign_blockers():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    blocker_start = source.index("const savedCampaignChannelBlockers")
+    blocker_end = source.index("\n  const savedCampaignNeedsChannelSetup", blocker_start)
+    blocker_block = source[blocker_start:blocker_end]
+
+    assert "channel === 'email' ? connectedEmailSender" in blocker_block
