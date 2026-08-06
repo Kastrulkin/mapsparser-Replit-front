@@ -280,6 +280,14 @@ def test_reviewed_beauty_sequence_rotates_pains_and_approved_cases():
     assert "последн" not in founder_text.lower()
 
 
+def test_reviewed_beauty_rewrite_keeps_strong_sales_lead_excluded():
+    source = (ROOT / "scripts/rewrite_localos_beauty_outreach.py").read_text(encoding="utf-8")
+
+    assert '"28dc573a-7882-4d2e-8a03-58ccba1c2278"' in source
+    assert "strong_sales_signal_offer_strategy_pending" in source
+    assert '"skipped": True' in source
+
+
 def test_corpus_compiler_uses_deepseek_then_gigachat_max_review():
     extract = get_task_definition("outreach_corpus_pattern_extract")
     review = get_task_definition("outreach_corpus_pattern_review")

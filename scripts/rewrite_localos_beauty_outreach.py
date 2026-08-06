@@ -47,6 +47,9 @@ TARGET_WORKSTREAMS = (
     "f4e9cb5e-e8da-4c0f-aac0-d58bc930cf45",
     "e4ef90f7-20a1-420e-ac4f-66640cc7c40c",
 )
+EXCLUDED_WORKSTREAMS = {
+    "28dc573a-7882-4d2e-8a03-58ccba1c2278": "strong_sales_signal_offer_strategy_pending",
+}
 
 
 def _connect():
@@ -168,6 +171,14 @@ def main() -> None:
         cursor = conn.cursor()
         user_id = _superadmin_id(cursor)
         for index, workstream_id in enumerate(workstreams):
+            if workstream_id in EXCLUDED_WORKSTREAMS:
+                results.append({
+                    "workstream_id": workstream_id,
+                    "lead": _lead_name(cursor, workstream_id),
+                    "skipped": True,
+                    "reason": EXCLUDED_WORKSTREAMS[workstream_id],
+                })
+                continue
             savepoint = f"beauty_outreach_{index}"
             cursor.execute(f"SAVEPOINT {savepoint}")
             result: dict[str, Any] = {"workstream_id": workstream_id}
@@ -226,7 +237,8 @@ def main() -> None:
         "dry_run": not args.apply,
         "rules_version": RULES_VERSION,
         "requested": len(workstreams),
-        "ready": sum(not item.get("error") for item in results),
+        "ready": sum(bool(item.get("preview")) and not item.get("error") for item in results),
+        "skipped": sum(bool(item.get("skipped")) for item in results),
         "errors": sum(bool(item.get("error")) for item in results),
         "results": results,
         "approved": 0,
