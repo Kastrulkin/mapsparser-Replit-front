@@ -32,6 +32,7 @@ from services.outreach_decision_service import (
 from services.outreach_founder_led_copy import (
     founder_led_localos_subject,
     founder_led_localos_text,
+    localos_case_for_angle,
     localos_beauty_segment,
     observation_is_grounded,
     select_approved_localos_case,
@@ -1864,7 +1865,11 @@ def _strategy_dimensions(
         "angle": angle,
     }
     if context.get("workstream_type") == "localos_sales" and candidate.get("recipient_segment"):
-        approved_case = select_approved_localos_case(candidate) if angle == "proof" else {}
+        approved_case = (
+            localos_case_for_angle(angle, candidate)
+            if angle in {"proof", "content_operations", "average_ticket", "reviews_service"}
+            else {}
+        )
         dimensions.update(
             beauty_touch_learning_dimensions(
                 angle,
@@ -2056,6 +2061,7 @@ def _quality_gate(
     angle: str | None = None,
 ) -> dict[str, Any]:
     question_count = text.count("?")
+    allowed_question_count = 2 if _text(angle) == "reviews_service" else 1
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
     normalized_text = text.lower()
@@ -2094,8 +2100,9 @@ def _quality_gate(
         and _text(candidate.get("recipient_segment"))
     )
     approved_case = (
-        select_approved_localos_case(candidate)
-        if founder_led_beauty and _text(angle) == "proof"
+        localos_case_for_angle(_text(angle), candidate)
+        if founder_led_beauty
+        and _text(angle) in {"proof", "content_operations", "average_ticket", "reviews_service"}
         else {}
     )
     approved_case_text = _text(approved_case.get("safe_formulation"))
@@ -2178,7 +2185,10 @@ def _quality_gate(
             founder_led_beauty
             and (
                 (_text(angle) == "signal" and grounded_observation)
-                or _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff", "respectful_close"}
+                or _text(angle) in {
+                    "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
+                    "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
+                }
             )
             and (
                 contains(candidate.get("founder_story"))
@@ -2211,7 +2221,10 @@ def _quality_gate(
             )
             or bool(
                 founder_led_beauty
-                and _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff", "respectful_close"}
+                and _text(angle) in {
+                    "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
+                    "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
+                }
                 and ("localos" in normalized_text or "разбор" in normalized_text)
             )
             or operator_idea_present
@@ -2239,7 +2252,10 @@ def _quality_gate(
                 or approved_case_present
                 or bool(
                     founder_led_beauty
-                    and _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff"}
+                    and _text(angle) in {
+                        "founder_story", "proof", "audit_step", "phone_handoff",
+                        "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
+                    }
                     and any(
                         marker in normalized_text
                         for marker in ("частного специалиста", "салона", "сети салонов", "карточк", "отзыв", "контент")
@@ -2253,7 +2269,7 @@ def _quality_gate(
         ),
         "channel_fit": channel in SUPPORTED_CHANNELS and word_count <= channel_word_limit,
         "single_cta": (
-            question_count == 1
+            question_count == allowed_question_count
             or (respectful_close and question_count == 0)
         ) and bool(_text(candidate.get("next_step"))),
         "suppression_safety": not suppressed,

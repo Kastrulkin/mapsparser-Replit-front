@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 
-PLAYBOOK_VERSION = "localos_outreach_playbook_v1"
+PLAYBOOK_VERSION = "localos_outreach_playbook_v2"
 CORPUS_TAG = "telegram_b2b"
 PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v1"
 
@@ -21,6 +21,9 @@ B2B_METHOD_RULES = (
     "Каждым следующим касанием добавлять новый аргумент, а не повторять первое письмо.",
     "Не предлагать звонок слишком рано: сначала дать полезный материал, кейс или понятную идею.",
     "Автоматизировать подготовку и очередь, но оставлять человеку approval и остановку по ответу.",
+    "Писать кратко: узнаваемая ситуация, что делает LocalOS, один подтверждённый результат и один короткий вопрос.",
+    "Не повторять одну боль во всей цепочке: каждое касание должно показывать новую сторону системы.",
+    "Не называть касание последним: получатель мог не видеть предыдущие.",
 )
 
 BEAUTY_OWNER_PAINS = (
@@ -46,6 +49,7 @@ BEAUTY_OWNER_PAINS = (
     {
         "key": "reviews_and_service",
         "phrases": (
+            "День забит, а тут прилетает плохой отзыв. Как на него правильно ответить?",
             "Как реагировать на жалобы и не потерять репутацию?",
             "Мастер не понял клиента, а разбираться теперь владельцу",
         ),
@@ -237,6 +241,19 @@ APPROVED_LOCALOS_CASES = (
         "source": "founder_confirmed_case",
     },
     {
+        "key": "beauty_service_catalog_revenue_plus_twenty",
+        "pain_keys": ("pricing_and_average_ticket", "revenue_without_profit"),
+        "signal_keys": ("service_catalog_gap",),
+        "recipient_segments": ("private_beauty_specialist", "beauty_team", "beauty_network"),
+        "safe_formulation": (
+            "Для салона мы сократили список услуг и сделали названия понятнее. "
+            "Выручка выросла на 20%."
+        ),
+        "result": "revenue_plus_20_percent",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
+    {
         "key": "reviews_save_seven_hours",
         "pain_keys": ("reviews_and_service", "operations_and_burnout"),
         "signal_keys": ("unanswered_reviews",),
@@ -286,6 +303,23 @@ APPROVED_FOUNDER_ORIGIN = (
     "Теперь с его помощью мы освобождаем от повторяющихся задач других предпринимателей."
 )
 
+APPROVED_LOCALOS_MESSAGE_EXAMPLES = (
+    {
+        "key": "reviews_owner_day_interruption",
+        "pain_key": "reviews_and_service",
+        "case_key": "reviews_save_seven_hours",
+        "status": "approved",
+        "source": "founder_editorial_correction",
+        "text": (
+            "День забит, а тут прилетает плохой отзыв. Как на него правильно ответить? "
+            "Мастер не понял клиента, а разбираться теперь владельцу.\n\n"
+            "LocalOS отслеживает новые отзывы и готовит ответы - вам остаётся только подтвердить. "
+            "Для сети кафе это освободило 7 часов в неделю.\n\n"
+            "Вам может быть это интересно?"
+        ),
+    },
+)
+
 
 def beauty_outreach_guidance() -> dict[str, Any]:
     """Return prompt-safe guidance without asserting pains about a recipient."""
@@ -327,6 +361,7 @@ def beauty_outreach_guidance() -> dict[str, Any]:
             }
             for item in APPROVED_LOCALOS_CASES
         ],
+        "approved_message_examples": [dict(item) for item in APPROVED_LOCALOS_MESSAGE_EXAMPLES],
         "approved_proofs": list(APPROVED_LOCALOS_PROOFS),
         "constraints": [
             "Не приписывать боль получателю без отдельного evidence.",
@@ -351,6 +386,11 @@ def beauty_touch_learning_dimensions(
         "audit_step": "integrated_operating_system",
         "phone_handoff": "diagnostic_open_question",
         "respectful_close": "operations_and_burnout",
+        "content_operations": "operations_and_burnout",
+        "average_ticket": "pricing_and_average_ticket",
+        "reviews_service": "reviews_and_service",
+        "integrated_system": "integrated_operating_system",
+        "founder_origin": "operations_and_burnout",
     }
     return {
         "playbook_version": PLAYBOOK_VERSION,

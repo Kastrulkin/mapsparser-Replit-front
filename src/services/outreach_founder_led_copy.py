@@ -12,6 +12,7 @@ from typing import Any
 from services.outreach_playbook import (
     APPROVED_FOUNDER_ORIGIN,
     APPROVED_LOCALOS_CASES,
+    APPROVED_LOCALOS_MESSAGE_EXAMPLES,
     APPROVED_LOCALOS_PROOFS,
 )
 
@@ -234,6 +235,29 @@ def select_approved_localos_case(candidate: dict[str, Any]) -> dict[str, Any]:
     return dict(selected)
 
 
+def localos_case_for_angle(angle: str, candidate: dict[str, Any]) -> dict[str, Any]:
+    """Select the approved proof assigned to a reviewed sequence angle."""
+
+    key_by_angle = {
+        "content_operations": "beauty_social_autopublishing",
+        "average_ticket": "beauty_service_catalog_revenue_plus_twenty",
+        "reviews_service": "reviews_save_seven_hours",
+    }
+    requested_key = key_by_angle.get(clean_copy(angle))
+    if requested_key:
+        selected = next(
+            (
+                item
+                for item in APPROVED_LOCALOS_CASES
+                if item.get("key") == requested_key and item.get("status") == "approved"
+            ),
+            None,
+        )
+        if selected:
+            return dict(selected)
+    return select_approved_localos_case(candidate)
+
+
 def founder_led_localos_text(
     angle: str,
     candidate: dict[str, Any],
@@ -370,6 +394,46 @@ def founder_led_localos_text(
             "Вам может быть интересно, что именно мы изменили?"
         )
 
+    if angle == "content_operations":
+        approved_case = localos_case_for_angle(angle, candidate)
+        return (
+            "Здравствуйте! Клиенты и операционка всегда срочнее, а контент остаётся на потом.\n\n"
+            "LocalOS готовит и публикует материалы по одному плану. "
+            f"{approved_case['safe_formulation']}\n\n"
+            "Вам может быть интересно освободить время?"
+        )
+
+    if angle == "average_ticket":
+        approved_case = localos_case_for_angle(angle, candidate)
+        return (
+            "Здравствуйте! Вам знакома проблема, когда работы много, а средний чек всё равно маленький?\n\n"
+            "LocalOS анализирует список услуг и цены, помогает найти допродажи, кросс-продажи и пакетные предложения. "
+            f"{approved_case['safe_formulation']}\n\n"
+            "Если знакома, давайте проверим, что можно сделать."
+        )
+
+    if angle == "reviews_service":
+        example = next(
+            item
+            for item in APPROVED_LOCALOS_MESSAGE_EXAMPLES
+            if item.get("key") == "reviews_owner_day_interruption"
+        )
+        return str(example["text"])
+
+    if angle == "integrated_system":
+        return (
+            "Здравствуйте! LocalOS помогает не только с картами.\n\n"
+            "Система готовит контент и ответы на отзывы, помогает с услугами, КПИ, рабочими схемами и поиском партнёров. Удачные решения не теряются, а становятся повторяемыми сценариями.\n\n"
+            "Какая из этих задач сейчас отнимает у вас больше всего времени?"
+        )
+
+    if angle == "founder_origin":
+        return (
+            "Здравствуйте! Сначала я создавал LocalOS для себя - чтобы меньше тонуть в операционке.\n\n"
+            "Теперь с его помощью мы освобождаем от повторяющихся задач других предпринимателей. LocalOS уже применяется более чем в 240 точках малого бизнеса.\n\n"
+            "Вам может быть это интересно?"
+        )
+
     if angle == "audit_step":
         return (
             "Здравствуйте! Коротко о том, что ещё делает LocalOS.\n\n"
@@ -389,10 +453,10 @@ def founder_led_localos_text(
 
     if angle == "respectful_close":
         return (
-            "Здравствуйте! Закрою тему.\n\n"
+            "Здравствуйте! Коротко о том, зачем я создал LocalOS.\n\n"
             f"{APPROVED_FOUNDER_ORIGIN}\n\n"
             "LocalOS также накапливает опыт других компаний: рабочие связки можно проверять, улучшать и переносить в понятные сценарии.\n\n"
-            "Если сейчас не до этого, больше напоминать не буду. Вернуться к теме позже?"
+            "Вам может быть это интересно?"
         )
     return None
 
@@ -410,7 +474,12 @@ def founder_led_localos_subject(angle: str, candidate: dict[str, Any]) -> str | 
         "signal": f"{recipient} | короткий вопрос",
         "founder_story": "Почему я создал LocalOS",
         "proof": "Как LocalOS снимает регулярные задачи",
-        "respectful_close": "Закрою тему",
+        "content_operations": "Контент без лишней операционки",
+        "average_ticket": "Короткий вопрос про средний чек",
+        "reviews_service": "Короткий вопрос про отзывы",
+        "integrated_system": "Что ещё снимает LocalOS",
+        "founder_origin": "Почему я создал LocalOS",
+        "respectful_close": "Почему я создал LocalOS",
     }
     return labels.get(angle)
 

@@ -141,7 +141,7 @@ def test_beauty_playbook_keeps_corpus_method_separate_from_recipient_facts():
 def test_beauty_playbook_labels_each_touch_for_outcome_learning():
     founder = beauty_touch_learning_dimensions("founder_story")
     proof = beauty_touch_learning_dimensions("proof")
-    assert founder["playbook_version"] == "localos_outreach_playbook_v1"
+    assert founder["playbook_version"] == "localos_outreach_playbook_v2"
     assert founder["pain_key"] == "operations_and_burnout"
     assert proof["pain_key"] == "marketing_and_clients"
 
@@ -236,6 +236,48 @@ def test_founder_follow_up_uses_operator_empathy_instead_of_product_abstraction(
     assert "Сам больше десяти лет в бизнесе" in text
     assert '"Если не я, то никто"' in text
     assert "LocalOS не просто выдаёт" not in text
+
+
+def test_review_touch_keeps_founder_approved_owner_language_and_proof():
+    candidate = {
+        "sender_mode": "localos",
+        "recipient": "Линия красоты",
+        "recipient_segment": "beauty_team",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+    }
+
+    text = founder_led_localos_text("reviews_service", candidate, None)
+
+    assert text is not None
+    assert text.startswith("День забит, а тут прилетает плохой отзыв")
+    assert "вам остаётся только подтвердить" in text
+    assert "7 часов в неделю" in text
+    assert text.count("?") == 2
+    assert text.endswith("Вам может быть это интересно?")
+
+
+def test_reviewed_beauty_sequence_rotates_pains_and_approved_cases():
+    candidate = {
+        "sender_mode": "localos",
+        "recipient": "Линия красоты",
+        "recipient_segment": "beauty_team",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+    }
+
+    content_text = founder_led_localos_text("content_operations", candidate, None)
+    average_ticket_text = founder_led_localos_text("average_ticket", candidate, None)
+    integrated_text = founder_led_localos_text("integrated_system", candidate, None)
+    founder_text = founder_led_localos_text("founder_origin", candidate, None)
+
+    assert "контент остаётся на потом" in content_text
+    assert "автоматизировали публикации в VK и Telegram" in content_text
+    assert "средний чек всё равно маленький" in average_ticket_text
+    assert "Выручка выросла на 20%" in average_ticket_text
+    assert "ответы на отзывы" in integrated_text
+    assert "Сначала я создавал LocalOS для себя" in founder_text
+    assert "последн" not in founder_text.lower()
 
 
 def test_corpus_compiler_uses_deepseek_then_gigachat_max_review():

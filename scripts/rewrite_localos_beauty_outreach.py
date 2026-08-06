@@ -33,7 +33,7 @@ from services.outreach_campaign_service import (  # noqa: E402
 )
 
 
-RULES_VERSION = "localos_beauty_outreach_v2"
+RULES_VERSION = "localos_beauty_outreach_v3"
 TARGET_WORKSTREAMS = (
     "7e3e0f39-3e00-41c6-9343-b5ff054b3103",
     "2fc0e399-42c9-4cff-935e-1b31180116f1",
@@ -135,17 +135,15 @@ def _available_sequence(channel_availability: dict[str, Any]) -> list[dict[str, 
         for channel, day, _angle in DEFAULT_SEQUENCE
         if (channel_availability.get(channel) or {}).get("status") in {"ready", "manual"}
     ]
-    angles_by_count = {
-        1: ("signal",),
-        2: ("signal", "respectful_close"),
-        3: ("signal", "proof", "respectful_close"),
-        4: ("signal", "founder_story", "proof", "respectful_close"),
-        5: ("signal", "founder_story", "proof", "audit_step", "respectful_close"),
-    }
-    angles = angles_by_count.get(
-        len(available_steps),
-        tuple(angle for _channel, _day, angle in DEFAULT_SEQUENCE),
+    reviewed_angles = (
+        "signal",
+        "content_operations",
+        "average_ticket",
+        "reviews_service",
+        "integrated_system",
+        "founder_origin",
     )
+    angles = reviewed_angles[:len(available_steps)]
     return [
         {
             "channel": channel,
