@@ -96,6 +96,12 @@ type GenerationAlternative = { id?: string; angle?: string; text?: string; score
 type GenerationDetails = {
   status?: 'generated' | 'needs_context' | 'failed';
   message?: string;
+  source?: string;
+  action?: {
+    type?: string;
+    label?: string;
+    target?: string;
+  };
   missing_fields?: string[];
   questions?: string[];
   brief?: ContentBrief;
@@ -678,6 +684,7 @@ export function ContentPage() {
   const [mediaAssets, setMediaAssets] = useState<PhotoAsset[]>([]);
   const [mediaCoverage, setMediaCoverage] = useState<MediaCoverage | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const publicationDetailsRef = useRef<HTMLDivElement | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaUploadProgress, setMediaUploadProgress] = useState('');
   const [mediaAnalyzingId, setMediaAnalyzingId] = useState('');
@@ -1157,7 +1164,7 @@ export function ContentPage() {
             ...(previous[selectedItem.id] || {}),
           },
         }));
-        setActionMessage(String(generation.message || 'Добавьте несколько деталей для конкретного текста.'));
+        setActionMessage('');
         return;
       }
       const remaining = Math.max(0, 1200 - (Date.now() - startedAt));
@@ -2215,7 +2222,9 @@ export function ContentPage() {
       sources: storedBrief?.sources,
       alternatives: storedAlternatives,
     } : {};
-    const needsContext = generation.status === 'needs_context';
+    const needsContext = generation.status === 'needs_context'
+      || generation.source === 'needs_context'
+      || itemGenerationSource(item) === 'needs_context';
     const generationBrief = generation.brief || storedBrief;
     const generationSources = generation.sources || generationBrief?.sources || [];
     const generationAlternatives = (generation.alternatives || storedAlternatives).filter((variant) => variant.quality_passed !== false);
@@ -2319,7 +2328,12 @@ export function ContentPage() {
                   </div>
                   {busyAction === 'generate-draft' ? <DraftGenerationFeedback ready={draftGenerationReady} /> : null}
                   {needsContext ? (
-                    <div className="rounded-[24px] bg-amber-50 p-4 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.16)]">
+                    <div
+                      ref={publicationDetailsRef}
+                      id="publication-details"
+                      tabIndex={-1}
+                      className="scroll-mt-6 rounded-[24px] bg-amber-50 p-4 outline-none shadow-[inset_0_0_0_1px_rgba(245,158,11,0.16)] focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
                       <div className="flex items-start gap-3">
                         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-800"><Lightbulb className="h-5 w-5" /></span>
                         <div>
@@ -2332,8 +2346,15 @@ export function ContentPage() {
                           <label key={field} className="block">
                             <span className="text-sm font-medium text-amber-950">{(generation.questions || [])[index] || 'Добавьте подтверждённую деталь'}</span>
                             <Input
-                              value={briefAnswers[item.id]?.[field] || ''}
-                              onChange={(event) => setBriefAnswers((previous) => ({ ...previous, [item.id]: { ...(previous[item.id] || {}), [field]: event.target.value } }))}
+                              value={briefAnswers[item.id]?.[field] ?? item.metadata_json?.brief_answers?.[field] ?? ''}
+                              onChange={(event) => setBriefAnswers((previous) => ({
+                                ...previous,
+                                [item.id]: {
+                                  ...(item.metadata_json?.brief_answers || {}),
+                                  ...(previous[item.id] || {}),
+                                  [field]: event.target.value,
+                                },
+                              }))}
                               className="mt-2 min-h-11 rounded-xl border-amber-200 bg-white"
                             />
                           </label>
@@ -2712,7 +2733,27 @@ export function ContentPage() {
                     <div className="mt-1">{queueHelpText}</div>
                   </div>
                 ) : null}
-                {error ? (
+                {needsContext ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-950">
+                    <div className="font-semibold">Нужно добавить детали</div>
+                    <div className="mt-1">
+                      {generation.message || 'Ответьте на несколько вопросов, чтобы LocalOS подготовил конкретный текст.'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        publicationDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        window.setTimeout(() => {
+                          const firstInput = publicationDetailsRef.current?.querySelector<HTMLInputElement>('input');
+                          firstInput?.focus();
+                        }, 350);
+                      }}
+                      className="mt-2 inline-flex min-h-9 items-center font-semibold text-amber-950 underline decoration-amber-400 underline-offset-4 hover:decoration-amber-700 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
+                      {generation.action?.label || 'Добавить детали'}
+                    </button>
+                  </div>
+                ) : error ? (
                   <div className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
                     <div className="font-semibold">Что нужно сделать</div>
                     <div className="mt-1">{error}</div>

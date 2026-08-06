@@ -4419,6 +4419,11 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                     "status": "needs_context",
                     "source": "needs_context",
                     "message": "Добавьте несколько деталей — LocalOS не будет заполнять пробелы общими фразами.",
+                    "action": {
+                        "type": "complete_brief",
+                        "label": "Добавить детали",
+                        "target": "publication-details",
+                    },
                     "missing_fields": content_brief.get("missing_fields") or [],
                     "questions": content_brief.get("questions") or [],
                     "brief": content_brief,

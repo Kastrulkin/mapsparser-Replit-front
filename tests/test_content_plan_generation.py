@@ -795,6 +795,35 @@ def test_generate_draft_does_not_save_fallback_as_ready_text(monkeypatch):
     assert fake_db.conn.committed is True
 
 
+def test_generate_draft_needs_context_points_to_details_editor(monkeypatch):
+    fake_db = _FakeDraftDatabase()
+
+    monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: fake_db)
+    monkeypatch.setattr(content_plan_service, "get_business_owner_id", lambda _cursor, _business_id: "user-1")
+    monkeypatch.setattr(content_plan_service, "_load_content_plan_service_facts", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(content_plan_service, "load_active_industry_patterns", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(content_plan_service, "_resolve_scope_target_meta", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(content_plan_service, "_record_content_plan_event", lambda **_kwargs: None)
+    monkeypatch.setattr(content_plan_service, "_content_generation_v2_enabled", lambda: True)
+    monkeypatch.setattr(content_plan_service, "load_content_voice_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {"id": "plan-1", "items": []},
+    )
+
+    result = content_plan_service.generate_draft_for_plan_item("user-1", "item-1", "ru")
+
+    assert result["generation"]["status"] == "needs_context"
+    assert result["generation"]["action"] == {
+        "type": "complete_brief",
+        "label": "Добавить детали",
+        "target": "publication-details",
+    }
+    assert result["generation"]["missing_fields"]
+    assert fake_db.conn.committed is True
+
+
 def test_generate_draft_rejects_archived_plan(monkeypatch):
     fake_db = _FakeDraftDatabase()
     fake_db.conn.cursor_instance.plan_status = "archived"
