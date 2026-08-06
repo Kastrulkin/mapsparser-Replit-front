@@ -7,6 +7,15 @@ type AgentsWorkspaceCopy = {
   filters: [string, string, string, string]; selectBusiness: string; selectBusinessHint: string; emptyTitle: string; emptyHint: string;
 };
 
+type AgentsWorkspaceSupplementalCopy = {
+  errorTitle: string;
+  loadError: string;
+  employees: string;
+  employeeDescription: string;
+  loadingEmployees: string;
+  emptyEmployees: string;
+};
+
 const copy: Record<Language, AgentsWorkspaceCopy> = {
   ru: { title: 'Агенты', description: 'Задачи, которые LocalOS выполняет один раз, по кнопке или по расписанию.', refresh: 'Обновить', create: 'Создать агента', signalTitle: 'Сигналы превращаются в выполненную работу', signalDescription: 'Владелец видит, что происходит в картах, соцсетях и новостях. Агенты берут повторяющиеся действия на себя, а важные внешние шаги ждут подтверждения.', maps: 'Карты и отзывы', mapsHint: 'Изменения карточки, рейтинг и вопросы клиентов', social: 'Соцсети', socialHint: 'Упоминания, вопросы и темы аудитории', news: 'Новости и контент', newsHint: 'Поводы, черновики и очередь публикаций', automate: 'Агенты', automateHint: 'Выполнение, результат и ручное подтверждение', today: 'Сегодня', completed: 'выполнено', results: 'результатов', decisions: 'ждут решения', errors: 'ошибок', search: 'Найти агента', filters: ['Все', 'Работают', 'Нужны действия', 'Выполненные'], selectBusiness: 'Сначала выберите бизнес', selectBusinessHint: 'Агенты всегда привязаны к конкретному бизнесу и его правам доступа.', emptyTitle: 'Создайте первого агента', emptyHint: 'После создания LocalOS откроет карточку и покажет один следующий шаг.' },
   en: { title: 'Agents', description: 'Tasks LocalOS runs once, on demand, or on schedule.', refresh: 'Refresh', create: 'Create agent', signalTitle: 'Signals become completed work', signalDescription: 'The owner sees what is happening across maps, social channels, and news. Agents handle repeatable actions, while important external steps wait for approval.', maps: 'Maps and reviews', mapsHint: 'Listing changes, ratings, and customer questions', social: 'Social channels', socialHint: 'Mentions, questions, and audience topics', news: 'News and content', newsHint: 'Opportunities, drafts, and the publishing queue', automate: 'Agents', automateHint: 'Execution, result, and manual approval', today: 'Today', completed: 'completed', results: 'results', decisions: 'awaiting decisions', errors: 'errors', search: 'Find an agent', filters: ['All', 'Working', 'Needs action', 'Completed'], selectBusiness: 'Select a business first', selectBusinessHint: 'Agents are always tied to a business and its access rights.', emptyTitle: 'Create your first agent', emptyHint: 'LocalOS will open its card and show one clear next step.' },
@@ -20,4 +29,20 @@ const copy: Record<Language, AgentsWorkspaceCopy> = {
   tr: { title: 'Ajanlar', description: 'LocalOS’un bir kez, talep üzerine veya zamanlamayla yürüttüğü görevler.', refresh: 'Yenile', create: 'Ajan oluştur', signalTitle: 'Sinyaller tamamlanan işe dönüşür', signalDescription: 'İşletme sahibi haritalar, sosyal medya ve haberlerde olanları görür. Ajanlar tekrarlanan eylemleri üstlenir; önemli dış adımlar onay bekler.', maps: 'Haritalar ve yorumlar', mapsHint: 'Kayıt değişiklikleri, puan ve müşteri soruları', social: 'Sosyal medya', socialHint: 'Bahsetmeler, sorular ve kitle konuları', news: 'Haberler ve içerik', newsHint: 'Fırsatlar, taslaklar ve yayın sırası', automate: 'Ajanlar', automateHint: 'Çalışma, sonuç ve manuel onay', today: 'Bugün', completed: 'tamamlandı', results: 'sonuç', decisions: 'karar bekliyor', errors: 'hata', search: 'Ajan bul', filters: ['Tümü', 'Çalışıyor', 'Eylem gerekli', 'Tamamlanan'], selectBusiness: 'Önce bir işletme seçin', selectBusinessHint: 'Ajanlar belirli bir işletmeye ve izinlerine bağlıdır.', emptyTitle: 'İlk ajanınızı oluşturun', emptyHint: 'LocalOS kartını açar ve net bir sonraki adım gösterir.' },
 };
 
-export const getAgentsWorkspaceCopy = (language: Language) => copy[language];
+const supplementalCopy: Record<Language, AgentsWorkspaceSupplementalCopy> = {
+  ru: { errorTitle: 'Ошибка', loadError: 'Не удалось загрузить агентов.', employees: 'Сотрудники', employeeDescription: 'Тип, состояние и следующий шаг', loadingEmployees: 'Загружаем сотрудников...', emptyEmployees: 'Создайте первого сотрудника.' },
+  en: { errorTitle: 'Error', loadError: 'Could not load agents.', employees: 'Team members', employeeDescription: 'Type, status, and next step', loadingEmployees: 'Loading team members...', emptyEmployees: 'Create your first team member.' },
+  fr: { errorTitle: 'Erreur', loadError: 'Impossible de charger les agents.', employees: 'Collaborateurs', employeeDescription: 'État et prochaine étape', loadingEmployees: 'Chargement des collaborateurs...', emptyEmployees: 'Créez votre premier collaborateur.' },
+  es: { errorTitle: 'Error', loadError: 'No se pudieron cargar los agentes.', employees: 'Colaboradores', employeeDescription: 'Tipo, estado y siguiente paso', loadingEmployees: 'Cargando colaboradores...', emptyEmployees: 'Crea tu primer colaborador.' },
+  el: { errorTitle: 'Σφάλμα', loadError: 'Δεν ήταν δυνατή η φόρτωση των πρακτόρων.', employees: 'Συνεργάτες', employeeDescription: 'Τύπος, κατάσταση και επόμενο βήμα', loadingEmployees: 'Φόρτωση συνεργατών...', emptyEmployees: 'Δημιουργήστε τον πρώτο συνεργάτη.' },
+  de: { errorTitle: 'Fehler', loadError: 'Agenten konnten nicht geladen werden.', employees: 'Mitarbeitende', employeeDescription: 'Typ, Status und nächster Schritt', loadingEmployees: 'Mitarbeitende werden geladen...', emptyEmployees: 'Erstellen Sie den ersten Mitarbeitenden.' },
+  th: { errorTitle: 'ข้อผิดพลาด', loadError: 'โหลดเอเจนต์ไม่สำเร็จ', employees: 'ผู้ช่วย', employeeDescription: 'ประเภท สถานะ และขั้นตอนถัดไป', loadingEmployees: 'กำลังโหลดผู้ช่วย...', emptyEmployees: 'สร้างผู้ช่วยคนแรก' },
+  ar: { errorTitle: 'خطأ', loadError: 'تعذر تحميل الوكلاء.', employees: 'المساعدون', employeeDescription: 'النوع والحالة والخطوة التالية', loadingEmployees: 'جاري تحميل المساعدين...', emptyEmployees: 'أنشئ أول مساعد.' },
+  ha: { errorTitle: 'Kuskure', loadError: 'Ba a iya loda wakilai ba.', employees: 'Ma’aikata', employeeDescription: 'Nau’i, matsayi da mataki na gaba', loadingEmployees: 'Ana loda ma’aikata...', emptyEmployees: 'Ƙirƙiri ma’aikaci na farko.' },
+  tr: { errorTitle: 'Hata', loadError: 'Ajanlar yüklenemedi.', employees: 'Çalışanlar', employeeDescription: 'Tür, durum ve sonraki adım', loadingEmployees: 'Çalışanlar yükleniyor...', emptyEmployees: 'İlk çalışanınızı oluşturun.' },
+};
+
+export const getAgentsWorkspaceCopy = (language: Language): AgentsWorkspaceCopy & AgentsWorkspaceSupplementalCopy => ({
+  ...copy[language],
+  ...supplementalCopy[language],
+});

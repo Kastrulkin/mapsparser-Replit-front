@@ -1004,6 +1004,7 @@ export const EmployeeAgentsList = ({
   selectedPendingApproval,
   loading,
   onOpen,
+  copy,
 }: {
   blueprints: AgentBlueprint[];
   detailsById: Record<string, AgentBlueprintDetails>;
@@ -1012,12 +1013,13 @@ export const EmployeeAgentsList = ({
   selectedPendingApproval?: AgentApproval | null;
   loading: boolean;
   onOpen: (blueprint: AgentBlueprint) => void;
+  copy: { title: string; description: string; loading: string; empty: string };
 }) => (
   <aside className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)] lg:sticky lg:top-4">
     <div className="flex items-center justify-between gap-3 px-1">
       <div>
-        <h2 className="text-sm font-semibold leading-6 text-slate-950">Сотрудники</h2>
-        <p className="text-xs leading-5 text-slate-500">Тип, состояние и следующий шаг</p>
+        <h2 className="text-sm font-semibold leading-6 text-slate-950">{copy.title}</h2>
+        <p className="text-xs leading-5 text-slate-500">{copy.description}</p>
       </div>
       <span className="inline-flex min-h-7 items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-600 ring-1 ring-slate-200">
         {blueprints.length}
@@ -1028,11 +1030,11 @@ export const EmployeeAgentsList = ({
       {loading ? (
         <div className="flex min-h-20 items-center gap-2 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500 ring-1 ring-slate-100">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Загружаем сотрудников...
+          {copy.loading}
         </div>
       ) : blueprints.length === 0 ? (
         <div className="rounded-xl bg-slate-50 px-3 py-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-100">
-          Создайте первого сотрудника.
+          {copy.empty}
         </div>
       ) : (
         blueprints.map((blueprint) => {

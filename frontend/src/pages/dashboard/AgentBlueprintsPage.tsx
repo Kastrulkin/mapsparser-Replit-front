@@ -88,7 +88,7 @@ const clearAgentRunResume = (businessId: string, expectedRunId = '') => {
 
 export const AgentBlueprintsPage = () => {
   const location = useLocation();
-  const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
+  const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [blueprintDetails, setBlueprintDetails] = useState<AgentBlueprintDetails | null>(null);
@@ -358,6 +358,13 @@ export const AgentBlueprintsPage = () => {
     if (!currentBusinessId) {
       return;
     }
+    if (demoMode) {
+      setBlueprints([]);
+      setServerTodaySummary(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -376,7 +383,7 @@ export const AgentBlueprintsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentBusinessId, selectedBlueprintId]);
+  }, [currentBusinessId, demoMode, selectedBlueprintId]);
 
   useEffect(() => {
     void loadBlueprints();

@@ -379,7 +379,7 @@ export default function ReviewReplyAssistant({
           <p className="text-gray-600 mt-1">{t.dashboard.card.reviewReply.subtitle}</p>
           {aggregateScope === 'network' && (
             <p className="text-sm text-indigo-600 mt-2">
-              Показываем отзывы по всем точкам сети подряд. У каждого отзыва видно, к какой точке он относится.
+              {listCopy.networkHint}
             </p>
           )}
         </div>
@@ -500,7 +500,7 @@ export default function ReviewReplyAssistant({
           <div className="mt-6 bg-indigo-50/50 border border-indigo-100 p-5 rounded-2xl animate-in fade-in slide-in-from-top-2">
             <div className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3 flex items-center gap-1">
               <Sparkles className="w-3 h-3" />
-              Generated Reply
+              {t.dashboard.card.reviewReply.proposalLabel}
             </div>
             {isEditing ? (
               <div className="space-y-3">

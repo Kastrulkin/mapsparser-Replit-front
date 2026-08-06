@@ -1,6 +1,7 @@
 export type DashboardContext = {
   currentBusinessId: string | null;
   currentBusiness?: ({ id?: string; name?: string } & Record<string, unknown>) | null;
+  demoMode?: boolean;
 };
 
 export type AgentBlueprint = {

@@ -23,6 +23,17 @@ export type PartnershipWorkspaceCopy = {
   report: string;
 };
 
+type PartnershipDemoCopy = {
+  demoPartnerName: string;
+  demoPartnerBadge: string;
+  demoApproved: string;
+  demoOfferTitle: string;
+  demoOfferBody: string;
+  demoOpenRoom: string;
+  demoExplanationTitle: string;
+  demoExplanation: string;
+};
+
 const copy: Record<Language, PartnershipWorkspaceCopy> = {
   ru: { title: 'Поиск партнёров', description: 'Один экран для поиска партнёров: кандидаты, отбор, письма, ручная отправка, ответы и отчётность разделены по вкладкам.', candidates: 'Кандидаты', candidatesHint: 'Найденные компании, которые ещё не взяли в работу.', pipeline: 'В отборе', pipelineHint: 'Партнёры, с которыми уже работаем.', drafts: 'Письма', draftsHint: 'Первые письма и КП, которые ждут проверки.', queue: 'Очередь', queueHint: 'Письма, подготовленные к ручной отправке.', replies: 'Ответы', repliesHint: 'Зафиксированные реакции партнёров.', nextStep: 'Следующий шаг', nextStepDescription: 'Двигайтесь слева направо: поиск → отбор → письма → ручная отправка → результат. Каждый экран показывает только действия текущего шага.', selectBusiness: 'Сначала выберите бизнес в переключателе сверху.', currentLayer: 'Сейчас открыт слой', workspace: 'рабочий экран', overview: 'Обзор', sending: 'Отправка', report: 'Отчёт' },
   en: { title: 'Partner Search', description: 'One workspace for finding partners: candidates, selection, messages, manual sending, replies, and reporting are separated into tabs.', candidates: 'Candidates', candidatesHint: 'Companies found but not yet taken into work.', pipeline: 'Selected', pipelineHint: 'Partners already being worked with.', drafts: 'Messages', draftsHint: 'First messages and proposals awaiting review.', queue: 'Queue', queueHint: 'Messages prepared for manual sending.', replies: 'Replies', repliesHint: 'Recorded partner responses.', nextStep: 'Next step', nextStepDescription: 'Move from left to right: search → selection → messages → manual sending → result. Each screen shows only the actions for the current stage.', selectBusiness: 'Select a business using the switcher above first.', currentLayer: 'Current stage', workspace: 'workspace', overview: 'Overview', sending: 'Sending', report: 'Report' },
@@ -36,4 +47,20 @@ const copy: Record<Language, PartnershipWorkspaceCopy> = {
   tr: { title: 'İş ortağı arama', description: 'İş ortakları bulmak için tek çalışma alanı: adaylar, seçim, mesajlar, manuel gönderim, yanıtlar ve raporlama ayrı sekmelerdedir.', candidates: 'Adaylar', candidatesHint: 'Bulunan ancak henüz çalışmaya alınmayan işletmeler.', pipeline: 'Seçimde', pipelineHint: 'Çalışmaya başlanan iş ortakları.', drafts: 'Mesajlar', draftsHint: 'Kontrol bekleyen ilk mesajlar ve teklifler.', queue: 'Kuyruk', queueHint: 'Manuel gönderim için hazırlanmış mesajlar.', replies: 'Yanıtlar', repliesHint: 'Kaydedilen iş ortağı tepkileri.', nextStep: 'Sonraki adım', nextStepDescription: 'Soldan sağa ilerleyin: arama → seçim → mesajlar → manuel gönderim → sonuç. Her ekran yalnızca mevcut aşamanın işlemlerini gösterir.', selectBusiness: 'Önce üstteki seçiciden bir işletme seçin.', currentLayer: 'Mevcut aşama', workspace: 'çalışma alanı', overview: 'Genel bakış', sending: 'Gönderim', report: 'Rapor' },
 };
 
-export const getPartnershipWorkspaceCopy = (language: Language) => copy[language];
+const demoCopy: Record<Language, PartnershipDemoCopy> = {
+  ru: { demoPartnerName: 'Ромашка', demoPartnerBadge: 'Партнёр', demoApproved: 'Предложение утверждено', demoOfferTitle: 'Совместный клиентский день', demoOfferBody: 'Предложение о совместном клиентском дне подготовлено и утверждено.', demoOpenRoom: 'Открыть цифровую комнату', demoExplanationTitle: 'Партнёрства ведутся по этапам', demoExplanation: 'Кандидаты, отбор, письма, отправка и ответы не смешиваются в один список.' },
+  en: { demoPartnerName: 'Chamomile', demoPartnerBadge: 'Partner', demoApproved: 'Proposal approved', demoOfferTitle: 'Joint customer day', demoOfferBody: 'The joint customer-day proposal has been prepared and approved.', demoOpenRoom: 'Open digital room', demoExplanationTitle: 'Partnerships move through clear stages', demoExplanation: 'Candidates, selection, messages, manual sending, and replies stay in separate stages.' },
+  fr: { demoPartnerName: 'Camomille', demoPartnerBadge: 'Partenaire', demoApproved: 'Proposition approuvée', demoOfferTitle: 'Journée clients commune', demoOfferBody: 'La proposition de journée clients commune a été préparée et approuvée.', demoOpenRoom: 'Ouvrir la salle numérique', demoExplanationTitle: 'Les partenariats avancent par étapes', demoExplanation: 'Les candidats, la sélection, les messages, les envois manuels et les réponses restent séparés.' },
+  es: { demoPartnerName: 'Manzanilla', demoPartnerBadge: 'Socio', demoApproved: 'Propuesta aprobada', demoOfferTitle: 'Jornada conjunta para clientes', demoOfferBody: 'La propuesta de jornada conjunta para clientes está preparada y aprobada.', demoOpenRoom: 'Abrir sala digital', demoExplanationTitle: 'Las alianzas avanzan por etapas', demoExplanation: 'Los candidatos, la selección, los mensajes, el envío manual y las respuestas permanecen separados.' },
+  el: { demoPartnerName: 'Χαμομήλι', demoPartnerBadge: 'Συνεργάτης', demoApproved: 'Η πρόταση εγκρίθηκε', demoOfferTitle: 'Κοινή ημέρα πελατών', demoOfferBody: 'Η πρόταση για κοινή ημέρα πελατών ετοιμάστηκε και εγκρίθηκε.', demoOpenRoom: 'Άνοιγμα ψηφιακού δωματίου', demoExplanationTitle: 'Οι συνεργασίες προχωρούν σε στάδια', demoExplanation: 'Οι υποψήφιοι, η επιλογή, τα μηνύματα, η χειροκίνητη αποστολή και οι απαντήσεις παραμένουν ξεχωριστά.' },
+  de: { demoPartnerName: 'Kamille', demoPartnerBadge: 'Partner', demoApproved: 'Angebot freigegeben', demoOfferTitle: 'Gemeinsamer Kundentag', demoOfferBody: 'Das Angebot für einen gemeinsamen Kundentag wurde vorbereitet und freigegeben.', demoOpenRoom: 'Digitalen Raum öffnen', demoExplanationTitle: 'Partnerschaften laufen in klaren Phasen', demoExplanation: 'Kandidaten, Auswahl, Nachrichten, manueller Versand und Antworten bleiben getrennt.' },
+  th: { demoPartnerName: 'คาโมมายล์', demoPartnerBadge: 'พาร์ทเนอร์', demoApproved: 'อนุมัติข้อเสนอแล้ว', demoOfferTitle: 'วันลูกค้าร่วมกัน', demoOfferBody: 'ข้อเสนอวันลูกค้าร่วมกันถูกเตรียมและอนุมัติแล้ว', demoOpenRoom: 'เปิดห้องดิจิทัล', demoExplanationTitle: 'พาร์ทเนอร์ชิปดำเนินเป็นขั้นตอน', demoExplanation: 'ผู้สมัคร การคัดเลือก ข้อความ การส่งด้วยตนเอง และการตอบกลับจะแยกกัน' },
+  ar: { demoPartnerName: 'البابونج', demoPartnerBadge: 'شريك', demoApproved: 'تمت الموافقة على العرض', demoOfferTitle: 'يوم مشترك للعملاء', demoOfferBody: 'تم إعداد واعتماد عرض يوم العملاء المشترك.', demoOpenRoom: 'فتح الغرفة الرقمية', demoExplanationTitle: 'تتقدم الشراكات عبر مراحل واضحة', demoExplanation: 'يبقى المرشحون والاختيار والرسائل والإرسال اليدوي والردود في مراحل منفصلة.' },
+  ha: { demoPartnerName: 'Chamomile', demoPartnerBadge: 'Abokin hulɗa', demoApproved: 'An amince da tayin', demoOfferTitle: 'Ranar kwastomomi ta haɗin gwiwa', demoOfferBody: 'An shirya kuma an amince da tayin ranar kwastomomi ta haɗin gwiwa.', demoOpenRoom: 'Buɗe ɗakin dijital', demoExplanationTitle: 'Haɗin gwiwa yana tafiya mataki-mataki', demoExplanation: 'Candidates, zaɓe, saƙonni, turawa da hannu da amsoshi suna zama a matakai dabam.' },
+  tr: { demoPartnerName: 'Papatya', demoPartnerBadge: 'İş ortağı', demoApproved: 'Teklif onaylandı', demoOfferTitle: 'Ortak müşteri günü', demoOfferBody: 'Ortak müşteri günü teklifi hazırlandı ve onaylandı.', demoOpenRoom: 'Dijital odayı aç', demoExplanationTitle: 'İş ortaklıkları aşama aşama ilerler', demoExplanation: 'Adaylar, seçim, mesajlar, manuel gönderim ve yanıtlar ayrı aşamalarda tutulur.' },
+};
+
+export const getPartnershipWorkspaceCopy = (language: Language): PartnershipWorkspaceCopy & PartnershipDemoCopy => ({
+  ...copy[language],
+  ...demoCopy[language],
+});

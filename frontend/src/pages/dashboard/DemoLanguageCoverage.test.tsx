@@ -8,6 +8,8 @@ import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
 import { getContentCalendarCopy } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
+import { getNewsWorkspaceCopy } from '@/i18n/newsWorkspaceCopy';
+import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
@@ -42,6 +44,8 @@ describe('demo language coverage', () => {
     expect(JSON.stringify(getContentCalendarCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getContentWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getAgentsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getNewsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getPartnershipWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getPublicSalesRoomCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getPublicSalesRoomAuditCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     if (language !== 'en') {

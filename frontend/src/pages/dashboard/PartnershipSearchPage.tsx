@@ -16,6 +16,8 @@ import {
   downloadTextFile,
 } from '@/components/prospecting/partnershipExport';
 import { PartnershipWorkspaceOverview } from '@/components/prospecting/PartnershipWorkspaceOverview';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { PartnershipRawIntakeControls } from '@/components/prospecting/PartnershipRawIntakeControls';
 import {
   PartnershipDraftsSection,
@@ -764,6 +766,8 @@ const toPilotCohort = (value: string): PilotCohort => {
 
 export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId, user } = useOutletContext<any>();
+  const { language } = useLanguage();
+  const partnershipCopy = getPartnershipWorkspaceCopy(language);
   const [searchParams] = useSearchParams();
   const showDemoPartner = searchParams.get('demo') === 'romashka';
   const requestedLeadId = searchParams.get('lead');
@@ -2333,6 +2337,47 @@ export const PartnershipSearchPage: React.FC = () => {
   const deferLeadFromCard = (lead: PartnershipLead, deferred: { deferredReason: string; deferredUntil: string }) => {
     void updateLeadStageOptimistic(lead.id, PIPELINE_POSTPONED, deferred);
   };
+
+  if (showDemoPartner && currentBusinessId) {
+    return (
+      <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
+        <PartnershipWorkspaceOverview
+          workspaceView={workspaceView}
+          currentBusinessId={currentBusinessId}
+          rawLeadCount={rawLeadCount}
+          pipelineLeadCount={pipelineLeadCount}
+          visibleDraftsCount={visibleDrafts.length}
+          visibleBatchesCount={visibleBatches.length}
+          visibleReactionsCount={visibleReactions.length}
+          onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
+        />
+        <section
+          className="grid gap-5 rounded-lg border border-emerald-200 bg-white p-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+          data-tour-target="partnership-candidates"
+          aria-labelledby="demo-partner-title"
+        >
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="demo-partner-title" className="text-xl font-semibold text-slate-950">{partnershipCopy.demoPartnerName}</h2>
+              <Badge variant="secondary">{partnershipCopy.demoPartnerBadge}</Badge>
+              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">{partnershipCopy.demoApproved}</Badge>
+            </div>
+            <p className="mt-2 text-sm font-medium text-slate-700">{partnershipCopy.demoOfferTitle}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{partnershipCopy.demoOfferBody}</p>
+          </div>
+          {demoRoomSlug ? (
+            <Button asChild className="min-h-10 active:scale-[0.96]">
+              <a href={`/room/${demoRoomSlug}`} target="_blank" rel="noreferrer">{partnershipCopy.demoOpenRoom}</a>
+            </Button>
+          ) : null}
+        </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-950">{partnershipCopy.demoExplanationTitle}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{partnershipCopy.demoExplanation}</p>
+        </section>
+      </div>
+    );
+  }
 
 
   return (

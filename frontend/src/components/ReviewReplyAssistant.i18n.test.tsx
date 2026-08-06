@@ -41,7 +41,7 @@ describe('ReviewReplyAssistant localization', () => {
         <LanguageProvider>
           <Routes>
             <Route element={<ContextRoute />}>
-              <Route index element={<ReviewReplyAssistant businessName="Roga i Kopyta" />} />
+              <Route index element={<ReviewReplyAssistant businessName="Roga i Kopyta" aggregateScope="network" />} />
             </Route>
           </Routes>
         </LanguageProvider>
@@ -51,5 +51,6 @@ describe('ReviewReplyAssistant localization', () => {
     expect(await screen.findByRole('heading', { name: 'Απαντήσεις σε κριτικές' })).toBeInTheDocument();
     expect(await screen.findByText('Κριτική επίδειξης για την περιποίηση, την προσοχή του ειδικού και την εύκολη κράτηση.')).toBeInTheDocument();
     expect(screen.queryByText(/DEMO Яндекс Карты/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

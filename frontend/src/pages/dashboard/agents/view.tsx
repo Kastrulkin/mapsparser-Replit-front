@@ -738,7 +738,7 @@ export const AgentBlueprintsView = ({ scope }) => {
       {error ? (
         <div className="space-y-2">
           <DashboardActionPanel
-            title="Ошибка"
+            title={pageCopy.errorTitle}
             description={error}
             tone="amber"
           />
@@ -884,6 +884,12 @@ export const AgentBlueprintsView = ({ scope }) => {
               selectedActiveRun={activeRun}
               selectedPendingApproval={selectedPendingApproval}
               loading={loading}
+              copy={{
+                title: pageCopy.employees,
+                description: pageCopy.employeeDescription,
+                loading: pageCopy.loadingEmployees,
+                empty: pageCopy.emptyEmployees,
+              }}
               onOpen={(blueprint) => {
                 setSelectedBlueprintId(blueprint.id);
                 setActiveRun(null);

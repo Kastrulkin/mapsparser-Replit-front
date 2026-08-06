@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
+import { getNewsWorkspaceCopy } from '@/i18n/newsWorkspaceCopy';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
@@ -52,6 +53,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const [exampleInput, setExampleInput] = useState('');
   const [examples, setExamples] = useState<{ id: string, text: string }[]>([]);
   const { language: interfaceLanguage, t } = useLanguage();
+  const newsCopy = getNewsWorkspaceCopy(interfaceLanguage);
   const [language, setLanguage] = useState<string>(interfaceLanguage);
   const [contentMode, setContentMode] = useState<'news' | 'social'>('news');
   const [socialFormat, setSocialFormat] = useState<'announce' | 'case' | 'promo'>('announce');
@@ -60,12 +62,10 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const headerTitle = workspaceMode === 'plan'
-    ? (interfaceLanguage === 'ru' ? 'Контент-план и посты' : 'Content plan and posts')
+    ? newsCopy.planTitle
     : t.dashboard.card.newsGenerator.title;
   const headerSubtitle = workspaceMode === 'plan'
-    ? (interfaceLanguage === 'ru'
-      ? 'Готовьте посты для карт и соцсетей, проверяйте тексты, ставьте публикации в расписание и собирайте результат.'
-      : 'Prepare map and social posts, review copy, queue publishing, and collect results.')
+    ? newsCopy.planSubtitle
     : t.dashboard.card.newsGenerator.subtitle;
 
   const LANGUAGE_OPTIONS = [
@@ -311,7 +311,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
             workspaceMode === 'plan' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
           )}
         >
-          Контент-план
+          {newsCopy.planTab}
         </button>
       </div>
 
@@ -330,7 +330,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           {/* Left Column: Sources */}
           <div className="space-y-6">
-            <div className="text-sm font-bold uppercase tracking-wider text-gray-400">Source Material</div>
+            <div className="text-sm font-bold uppercase tracking-wider text-gray-400">{newsCopy.sourceMaterial}</div>
 
             <div className="space-y-4">
               {/* Service Selection */}
@@ -395,21 +395,21 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                     }}
                   />
                   <Search className="w-4 h-4 text-blue-500" />
-                  Генерировать на основе популярных SEO ключей
+                  {newsCopy.generateFromSeo}
                 </label>
                 {useSeoKeywords && (
                   <div className="pl-7 animate-in fade-in slide-in-from-top-1 space-y-2">
                     {loadingSeoKeywords ? (
-                      <div className="text-xs text-gray-500">Загружаем SEO-ключи...</div>
+                      <div className="text-xs text-gray-500">{newsCopy.loadingSeo}</div>
                     ) : seoKeywords.length === 0 ? (
-                      <div className="text-xs text-gray-500">SEO-ключи не найдены</div>
+                      <div className="text-xs text-gray-500">{newsCopy.noSeo}</div>
                     ) : (
                       <select
                         className="w-full rounded-lg border-gray-200 text-sm focus:ring-blue-500/20"
                         value={selectedSeoKeyword}
                         onChange={(e) => setSelectedSeoKeyword(e.target.value)}
                       >
-                        <option value="">— Выберите SEO-ключ —</option>
+                        <option value="">— {newsCopy.selectSeo} —</option>
                         {seoKeywords.map((k) => (
                           <option key={k.keyword} value={k.keyword}>
                             {k.keyword}{typeof k.views === 'number' ? ` (${k.views})` : ''}
@@ -418,7 +418,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                       </select>
                     )}
                     <div className="text-xs text-gray-500">
-                      Будут использованы популярные запросы и привязка к вашим услугам.
+                      {newsCopy.seoHint}
                     </div>
                   </div>
                 )}
@@ -511,7 +511,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                     <div>
                       <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                         <Sparkles className="w-4 h-4 text-violet-500" />
-                        AB-режим (тест)
+                        {newsCopy.abMode}
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
@@ -600,7 +600,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
-                Generating Magic...
+                {newsCopy.generating}
               </>
             ) : (
               <>
@@ -631,14 +631,14 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                 className="text-red-500 hover:text-red-700 hover:bg-red-50"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Discard
+                {newsCopy.discard}
               </Button>
             </div>
             <div className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap font-medium p-4 bg-gray-50 rounded-xl border border-gray-100">
               {generated}
             </div>
             <div className="mt-2 text-center text-xs text-gray-400">
-              The news post has been added to the list below automatically
+              {newsCopy.addedAutomatically}
             </div>
           </div>
         )}
@@ -680,7 +680,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                       <div key={`external-${item.id}`} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all">
                         <div className="flex items-center gap-2 mb-3">
                           <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider border border-blue-100">
-                            {item.source === 'yandex_business' ? t.dashboard.card.newsGenerator.yandexBusiness : item.source || 'External'}
+                            {item.source === 'yandex_business' ? t.dashboard.card.newsGenerator.yandexBusiness : item.source || newsCopy.external}
                           </span>
                           {item.published_at && (
                             <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -695,13 +695,13 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                         )}
 
                         <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-                          {item.text || <span className="text-gray-400 italic">No text content</span>}
+                          {item.text || <span className="text-gray-400 italic">{newsCopy.noText}</span>}
                         </div>
 
                         {item.url && (
                           <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
                             <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
-                              View Original <ExternalLink className="w-3 h-3" />
+                              {newsCopy.viewOriginal} <ExternalLink className="w-3 h-3" />
                             </a>
                           </div>
                         )}
@@ -713,7 +713,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                       <div key={item.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
                         <div className="flex items-center justify-between mb-3">
                           <span className="px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-bold uppercase tracking-wider border border-purple-100 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" /> Generated
+                            <Sparkles className="w-3 h-3" /> {newsCopy.generated}
                           </span>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button
