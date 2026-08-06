@@ -1213,23 +1213,23 @@ export const CardOverviewPage = () => {
           className="space-y-8"
         >
           <TabsList className="flex w-full justify-start overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 [&::-webkit-scrollbar]:hidden">
-            <TabsTrigger value="services" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
+            <TabsTrigger value="services" data-tour-target="card-tab-services" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <List className="w-4 h-4" />
               {pageCopy.servicesTab}
             </TabsTrigger>
-            <TabsTrigger value="reviews" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
+            <TabsTrigger value="reviews" data-tour-target="card-tab-reviews" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <MessageSquare className="w-4 h-4" />
               {pageCopy.reviewsTab}
             </TabsTrigger>
-            <TabsTrigger value="news" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
+            <TabsTrigger value="news" data-tour-target="card-tab-news" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <Newspaper className="w-4 h-4" />
               {pageCopy.newsTab}
             </TabsTrigger>
-            <TabsTrigger value="keywords" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
+            <TabsTrigger value="keywords" data-tour-target="card-tab-keywords" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <TrendingUp className="w-4 h-4" />
               {pageCopy.keywordsTab}
             </TabsTrigger>
-            <TabsTrigger value="competitors" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
+            <TabsTrigger value="competitors" data-tour-target="card-tab-competitors" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <Trophy className="w-4 h-4" />
               {pageCopy.competitorsTab}
             </TabsTrigger>

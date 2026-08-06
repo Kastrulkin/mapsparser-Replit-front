@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import { GUIDED_TOUR_STEPS } from './tourConfig';
 
@@ -31,6 +34,20 @@ describe('guided tour growth tools', () => {
       { key: 'average-ticket', route: '/dashboard/average-ticket', target: 'nav-average-ticket' },
       { key: 'geo-promotion', route: '/dashboard/ai-chat-promotion', target: 'nav-ai-chat-promotion' },
     ]);
+  });
+
+  it('keeps every maps workspace tour target attached to its real tab', () => {
+    const cardOverviewSource = readFileSync(
+      resolve(process.cwd(), 'src/pages/dashboard/CardOverviewPage.tsx'),
+      'utf8',
+    );
+    const tabTargets = GUIDED_TOUR_STEPS
+      .filter((step) => step.target?.startsWith('card-tab-'))
+      .map((step) => step.target);
+
+    tabTargets.forEach((target) => {
+      expect(cardOverviewSource).toContain(`data-tour-target="${target}"`);
+    });
   });
 
   it('opens content deterministically, visits agents, and only then moves to partnerships', () => {
