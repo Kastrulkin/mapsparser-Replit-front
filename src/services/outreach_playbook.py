@@ -209,10 +209,77 @@ BEAUTY_PAIN_SIGNAL_HYPOTHESES = (
     },
 )
 
-APPROVED_LOCALOS_PROOFS = (
-    "Для салона красоты LocalOS помог поднять запись с 0 до 10 клиентов в день только за счёт карт.",
-    "LocalOS применяется более чем в 240 точках малого бизнеса.",
+APPROVED_LOCALOS_CASES = (
+    {
+        "key": "beauty_maps_zero_to_ten",
+        "pain_keys": ("marketing_and_clients",),
+        "signal_keys": ("active_social_with_map_gap", "map_gap"),
+        "recipient_segments": ("private_beauty_specialist", "beauty_team", "beauty_network"),
+        "safe_formulation": (
+            "Для салона красоты мы настроили работу с картами и подняли запись "
+            "с 0 до 10 клиентов в день только за счёт этого канала."
+        ),
+        "result": "0_to_10_clients_per_day_from_maps",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
+    {
+        "key": "beauty_service_catalog_orders_plus_ten",
+        "pain_keys": ("pricing_and_average_ticket", "marketing_and_clients"),
+        "signal_keys": ("service_catalog_gap",),
+        "recipient_segments": ("private_beauty_specialist", "beauty_team", "beauty_network"),
+        "safe_formulation": (
+            "Для салона мы сократили список услуг и сделали названия понятнее. "
+            "Заказы выросли на 10%."
+        ),
+        "result": "orders_plus_10_percent",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
+    {
+        "key": "reviews_save_seven_hours",
+        "pain_keys": ("reviews_and_service", "operations_and_burnout"),
+        "signal_keys": ("unanswered_reviews",),
+        "recipient_segments": (),
+        "safe_formulation": (
+            "Для сети кафе мы настроили подготовку ответов на отзывы с проверкой человеком. "
+            "Это освободило 7 часов в неделю."
+        ),
+        "result": "seven_hours_saved_per_week",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
+    {
+        "key": "beauty_social_autopublishing",
+        "pain_keys": ("operations_and_burnout", "marketing_and_clients"),
+        "signal_keys": ("regular_manual_content",),
+        "recipient_segments": ("private_beauty_specialist", "beauty_team", "beauty_network"),
+        "safe_formulation": (
+            "Для салона красоты мы автоматизировали публикации в VK и Telegram, "
+            "а публикации на картах оставили под ручным контролем."
+        ),
+        "result": "vk_telegram_autopublishing_maps_manual",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
+    {
+        "key": "culture_map_visits_plus_seven_hundred",
+        "pain_keys": ("marketing_and_clients",),
+        "signal_keys": ("active_social_with_map_gap", "map_gap"),
+        "recipient_segments": (),
+        "safe_formulation": (
+            "Для культурного пространства работа с картами увеличила посещаемость "
+            "карточки на 700%."
+        ),
+        "result": "map_card_visits_plus_700_percent",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
 )
+
+APPROVED_LOCALOS_PROOFS = tuple(
+    item["safe_formulation"] for item in APPROVED_LOCALOS_CASES
+) + ("LocalOS применяется более чем в 240 точках малого бизнеса.",)
 
 APPROVED_FOUNDER_ORIGIN = (
     "Сначала я создавал LocalOS для себя - чтобы меньше тонуть в операционке. "
@@ -251,6 +318,15 @@ def beauty_outreach_guidance() -> dict[str, Any]:
             for item in BEAUTY_PAIN_SIGNAL_HYPOTHESES
         ],
         "approved_founder_origin": APPROVED_FOUNDER_ORIGIN,
+        "approved_cases": [
+            {
+                **item,
+                "pain_keys": list(item["pain_keys"]),
+                "signal_keys": list(item["signal_keys"]),
+                "recipient_segments": list(item["recipient_segments"]),
+            }
+            for item in APPROVED_LOCALOS_CASES
+        ],
         "approved_proofs": list(APPROVED_LOCALOS_PROOFS),
         "constraints": [
             "Не приписывать боль получателю без отдельного evidence.",
@@ -261,7 +337,11 @@ def beauty_outreach_guidance() -> dict[str, Any]:
     }
 
 
-def beauty_touch_learning_dimensions(angle: str) -> dict[str, Any]:
+def beauty_touch_learning_dimensions(
+    angle: str,
+    *,
+    case_key: str | None = None,
+) -> dict[str, Any]:
     """Return explicit dimensions used to compare outcomes of playbook touches."""
 
     pain_by_angle = {
@@ -275,4 +355,5 @@ def beauty_touch_learning_dimensions(angle: str) -> dict[str, Any]:
     return {
         "playbook_version": PLAYBOOK_VERSION,
         "pain_key": pain_by_angle.get(str(angle or "").strip()),
+        "case_key": case_key,
     }

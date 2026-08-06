@@ -11,6 +11,7 @@ from typing import Any
 
 from services.outreach_playbook import (
     APPROVED_FOUNDER_ORIGIN,
+    APPROVED_LOCALOS_CASES,
     APPROVED_LOCALOS_PROOFS,
 )
 
@@ -186,6 +187,43 @@ def _approved_pain_phrase(candidate: dict[str, Any], pain_key: str, fallback: st
     return fallback
 
 
+def select_approved_localos_case(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Choose a real approved case without turning a hypothesis into a claim."""
+
+    requested_key = clean_copy(candidate.get("approved_case_key"))
+    approved = [
+        item for item in APPROVED_LOCALOS_CASES
+        if item.get("status") == "approved"
+    ]
+    if requested_key:
+        selected = next((item for item in approved if item.get("key") == requested_key), None)
+        if selected:
+            return dict(selected)
+
+    evidence = " ".join(
+        clean_copy(candidate.get(key)).lower()
+        for key in (
+            "observed_fact", "map_observation", "problem_hypothesis",
+            "signal_combo", "signal_hypothesis_key",
+        )
+    )
+    segment = clean_copy(candidate.get("recipient_segment"))
+    preferred_key = "beauty_maps_zero_to_ten"
+    if "услуг" in evidence and any(marker in evidence for marker in ("цен", "назван", "каталог")):
+        preferred_key = "beauty_service_catalog_orders_plus_ten"
+    elif "отзыв" in evidence and any(marker in evidence for marker in ("без ответ", "неотвеч")):
+        preferred_key = "reviews_save_seven_hours"
+    elif any(marker in evidence for marker in ("контент", "публикац")) and not any(
+        marker in evidence for marker in ("рейтинг", "картах", "map_gap")
+    ):
+        preferred_key = "beauty_social_autopublishing"
+    selected = next((item for item in approved if item.get("key") == preferred_key), approved[0])
+    allowed_segments = selected.get("recipient_segments") or ()
+    if allowed_segments and segment and segment not in allowed_segments:
+        selected = approved[0]
+    return dict(selected)
+
+
 def founder_led_localos_text(
     angle: str,
     candidate: dict[str, Any],
@@ -310,9 +348,10 @@ def founder_led_localos_text(
         )
 
     if angle == "proof":
+        approved_case = select_approved_localos_case(candidate)
         return (
             "Здравствуйте! Писал вам на почту и в Telegram.\n\n"
-            f"{APPROVED_LOCALOS_PROOFS[0]}\n\n"
+            f"{approved_case['safe_formulation']}\n\n"
             "Мы не просто дали советы, а настроили регулярную работу с карточкой.\n\n"
             "Вам может быть интересно, что именно мы изменили?"
         )

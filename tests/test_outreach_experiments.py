@@ -15,7 +15,11 @@ from services.outreach_experiment_service import (
 )
 from services.outreach_safety_service import strategy_fingerprint
 from services.outreach_founder_led_copy import founder_led_localos_text
-from services.outreach_playbook import beauty_outreach_guidance, beauty_touch_learning_dimensions
+from services.outreach_playbook import (
+    APPROVED_LOCALOS_CASES,
+    beauty_outreach_guidance,
+    beauty_touch_learning_dimensions,
+)
 from services.llm.registry import get_task_definition
 
 
@@ -202,6 +206,18 @@ def test_active_social_copy_uses_audit_without_inventing_owner_pain():
     assert "остаются на владельце" not in text
     assert "не хватает времени" not in text
     assert text.endswith("Вам может быть это интересно?")
+
+
+def test_approved_case_library_contains_only_confirmed_results():
+    cases = {item["key"]: item for item in APPROVED_LOCALOS_CASES}
+
+    assert cases["beauty_maps_zero_to_ten"]["status"] == "approved"
+    assert "0 до 10 клиентов" in cases["beauty_maps_zero_to_ten"]["safe_formulation"]
+    assert "7 часов" in cases["reviews_save_seven_hours"]["safe_formulation"]
+    assert "700%" in cases["culture_map_visits_plus_seven_hundred"]["safe_formulation"]
+    assert "18 новых клиентов" not in " ".join(
+        item["safe_formulation"] for item in APPROVED_LOCALOS_CASES
+    )
 
 
 def test_founder_follow_up_uses_operator_empathy_instead_of_product_abstraction():

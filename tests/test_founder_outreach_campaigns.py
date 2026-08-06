@@ -7,6 +7,7 @@ import pytest
 from flask import Flask
 
 from services.outreach_campaign_service import (
+    DEFAULT_SEQUENCE,
     _aggregate_quality_gate,
     _contact_outreach_rank,
     _email_subject,
@@ -33,6 +34,7 @@ from services.outreach_founder_led_copy import (
     localos_beauty_segment,
     natural_observation,
     observation_is_grounded,
+    select_approved_localos_case,
 )
 from scripts.backfill_partnership_match_artifacts import _skip_reason
 
@@ -45,6 +47,17 @@ def test_next_sequence_channel_reuses_ready_channel_after_unique_channels_end():
         ["telegram", "sms"],
         [{"channel": "telegram"}, {"channel": "email"}, {"channel": "sms"}],
     ) == "telegram"
+
+
+def test_localos_default_sequence_uses_reviewed_six_touch_order():
+    assert DEFAULT_SEQUENCE == (
+        ("email", 0, "signal"),
+        ("telegram", 3, "founder_story"),
+        ("max", 7, "proof"),
+        ("vk_manual", 12, "audit_step"),
+        ("phone", 18, "phone_handoff"),
+        ("email", 25, "respectful_close"),
+    )
 
 
 def _private_beauty_founder_candidate():
@@ -119,6 +132,27 @@ def test_founder_led_beauty_extended_sequence_has_distinct_audit_and_phone_touch
     assert "накапливает опыт" in audit_text
     assert "Это Александр Демьянов, LocalOS" in phone_text
     assert "самая болезненная?" in phone_text
+
+
+def test_proof_case_follows_services_and_price_signal():
+    candidate = _private_beauty_founder_candidate()
+    candidate["observed_fact"] = "В карточке всего услуг - 60; с ценой - 15."
+
+    approved_case = select_approved_localos_case(candidate)
+    message = _message_for_angle("proof", candidate, None, [])
+
+    assert approved_case["key"] == "beauty_service_catalog_orders_plus_ten"
+    assert "Заказы выросли на 10%" in message
+    assert message.count("?") == 1
+
+
+def test_proof_case_uses_map_result_for_social_and_map_gap():
+    candidate = _private_beauty_founder_candidate()
+    candidate["signal_combo"] = "active_social_with_map_gap"
+
+    approved_case = select_approved_localos_case(candidate)
+
+    assert approved_case["key"] == "beauty_maps_zero_to_ten"
 
 
 def test_founder_led_beauty_segmentation_is_deterministic_and_conservative():

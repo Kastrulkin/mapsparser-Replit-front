@@ -34,6 +34,7 @@ from services.outreach_founder_led_copy import (
     founder_led_localos_text,
     localos_beauty_segment,
     observation_is_grounded,
+    select_approved_localos_case,
 )
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_relationship_service import (
@@ -1862,7 +1863,13 @@ def _strategy_dimensions(
         "angle": angle,
     }
     if context.get("workstream_type") == "localos_sales" and candidate.get("recipient_segment"):
-        dimensions.update(beauty_touch_learning_dimensions(angle))
+        approved_case = select_approved_localos_case(candidate) if angle == "proof" else {}
+        dimensions.update(
+            beauty_touch_learning_dimensions(
+                angle,
+                case_key=_text(approved_case.get("key")) or None,
+            )
+        )
         playbook = candidate.get("outreach_playbook") if isinstance(candidate.get("outreach_playbook"), dict) else {}
         dimensions["pain_library_version"] = playbook.get("version")
         dimensions["pain_library_pattern_id"] = playbook.get("pattern_id")
