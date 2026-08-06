@@ -757,15 +757,22 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
             JOIN knowledge_documents d ON d.id = e.document_id
             LEFT JOIN business_audience_insight_decisions bd
               ON bd.concept_id = c.id AND bd.business_id = %s
-            WHERE c.industry = %s
-              AND (c.business_id IS NULL OR c.business_id = %s)
+            WHERE (c.business_id IS NULL OR c.business_id = %s)
               AND (s.business_id IS NULL OR s.business_id = %s OR s.visibility = 'public')
+              AND EXISTS (
+                  SELECT 1
+                  FROM knowledge_source_subscriptions subscription
+                  WHERE subscription.business_id = %s
+                    AND subscription.source_id = s.id
+                    AND subscription.is_active = TRUE
+                    AND subscription.purposes_json @> '["community_pulse"]'::jsonb
+              )
               AND c.concept_type IN ('pain', 'question', 'objection', 'practice', 'market_signal')
             GROUP BY c.id, bd.decision
             ORDER BY priority_score DESC, messages_count DESC, last_seen_at DESC NULLS LAST
             LIMIT %s
             """,
-            (business_id, industry, business_id, business_id, max(1, min(int(limit or 50), 100))),
+            (business_id, business_id, business_id, business_id, max(1, min(int(limit or 50), 100))),
         )
         return [dict(row) for row in cursor.fetchall()]
     finally:

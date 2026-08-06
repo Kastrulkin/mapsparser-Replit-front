@@ -8,6 +8,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Search,
   ShieldCheck,
 } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
@@ -83,6 +84,35 @@ interface PrivacyCandidate {
   limitations_json?: string[];
 }
 
+interface KnowledgeBusinessOption {
+  id: string;
+  name: string;
+  owner?: string;
+}
+
+interface SemanticSearchHit {
+  document_id: string;
+  chunk_id: string;
+  excerpt?: string;
+  permalink?: string;
+  published_at?: string;
+  similarity?: number;
+  provenance?: {
+    source_title?: string;
+    modes?: string[];
+  };
+}
+
+interface SemanticSearchResult {
+  hits: SemanticSearchHit[];
+  mode?: string;
+  latency_ms?: number;
+}
+
+interface KnowledgeMarketOverviewProps {
+  businessOptions?: KnowledgeBusinessOption[];
+}
+
 const viewOptions: Array<{ id: ViewId; label: string }> = [
   { id: 'signals', label: 'Сигналы' },
   { id: 'sources', label: 'Источники' },
@@ -140,6 +170,13 @@ const statusLabels: Record<string, string> = {
   queued: 'В очереди',
 };
 
+const retrievalModeLabels: Record<string, string> = {
+  hybrid: 'По смыслу и словам',
+  vector: 'По смыслу',
+  lexical: 'Только по словам',
+  none: 'Без совпадений',
+};
+
 const formatNumber = (value?: number) => new Intl.NumberFormat('ru-RU').format(value || 0);
 
 const formatDate = (value?: string) => {
@@ -151,7 +188,7 @@ const formatDate = (value?: string) => {
 
 const authGet = async (endpoint: string) => newAuth.makeRequest(endpoint);
 
-export const KnowledgeMarketOverview: React.FC = () => {
+export const KnowledgeMarketOverview: React.FC<KnowledgeMarketOverviewProps> = ({ businessOptions = [] }) => {
   const [activeView, setActiveView] = useState<ViewId>('signals');
   const [overview, setOverview] = useState<KnowledgeOverview | null>(null);
   const [signals, setSignals] = useState<KnowledgeSignal[]>([]);
@@ -163,6 +200,12 @@ export const KnowledgeMarketOverview: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState('');
+  const [semanticBusinessId, setSemanticBusinessId] = useState('');
+  const [semanticQuery, setSemanticQuery] = useState('');
+  const [semanticResult, setSemanticResult] = useState<SemanticSearchResult | null>(null);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticError, setSemanticError] = useState('');
+  const [semanticSearched, setSemanticSearched] = useState(false);
 
   const loadOverview = useCallback(async () => {
     const response = await authGet('/admin/knowledge/overview');
@@ -207,6 +250,46 @@ export const KnowledgeMarketOverview: React.FC = () => {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (semanticBusinessId && businessOptions.some((business) => business.id === semanticBusinessId)) return;
+    const savedBusinessId = localStorage.getItem('selectedBusinessId') || localStorage.getItem('admin_selected_business_id') || '';
+    setSemanticBusinessId(
+      businessOptions.find((business) => business.id === savedBusinessId)?.id || businessOptions[0]?.id || '',
+    );
+  }, [businessOptions, semanticBusinessId]);
+
+  const runSemanticSearch = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = semanticQuery.trim();
+    if (!query || !semanticBusinessId) return;
+    setSemanticLoading(true);
+    setSemanticError('');
+    setSemanticSearched(true);
+    try {
+      const response = await newAuth.makeRequest('/admin/knowledge/embeddings/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: semanticBusinessId,
+          query,
+          purpose: 'market',
+          limit: 12,
+          consumer: 'admin_market_knowledge_search',
+        }),
+      });
+      const data = response.data || {};
+      setSemanticResult({
+        hits: Array.isArray(data.hits) ? data.hits : [],
+        mode: data.mode,
+        latency_ms: data.latency_ms,
+      });
+    } catch (requestError) {
+      setSemanticResult(null);
+      setSemanticError(requestError instanceof Error ? requestError.message : 'Не удалось выполнить смысловой поиск');
+    } finally {
+      setSemanticLoading(false);
+    }
+  };
 
   const decideSource = async (source: KnowledgeSource, status: 'active' | 'paused') => {
     setSavingId(source.id);
@@ -275,6 +358,80 @@ export const KnowledgeMarketOverview: React.FC = () => {
             </div>
           ))}
         </div>
+
+        <section aria-labelledby="knowledge-semantic-search-title" className="rounded-lg bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_0_0_1px_rgba(148,163,184,0.18)] sm:p-5">
+          <div>
+            <h3 id="knowledge-semantic-search-title" className="text-lg font-semibold text-slate-950">Спросить базу знаний</h3>
+            <p className="mt-1 text-sm text-slate-600">Опишите вопрос своими словами. Поиск учитывает смысл и показывает исходные сообщения.</p>
+          </div>
+          <form onSubmit={(event) => void runSemanticSearch(event)} className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,0.36fr)_minmax(320px,1fr)_auto] lg:items-end">
+            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+              Компания
+              <select
+                value={semanticBusinessId}
+                onChange={(event) => setSemanticBusinessId(event.target.value)}
+                className="h-11 min-w-0 rounded-md bg-white px-3 text-sm font-medium text-slate-800 shadow-[0_0_0_1px_rgba(148,163,184,0.35)] outline-none focus:shadow-[0_0_0_3px_rgba(14,165,233,0.16)]"
+                aria-label="Компания для смыслового поиска"
+              >
+                {businessOptions.length === 0 ? <option value="">Нет доступных компаний</option> : businessOptions.map((business) => (
+                  <option key={business.id} value={business.id}>{business.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+              Вопрос
+              <input
+                value={semanticQuery}
+                onChange={(event) => setSemanticQuery(event.target.value)}
+                placeholder="Например: какие проблемы с трансферами обсуждают турагенты?"
+                className="h-11 min-w-0 rounded-md bg-white px-3 text-sm font-normal text-slate-900 shadow-[0_0_0_1px_rgba(148,163,184,0.35)] outline-none placeholder:text-slate-400 focus:shadow-[0_0_0_3px_rgba(14,165,233,0.16)]"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={semanticLoading || !semanticQuery.trim() || !semanticBusinessId}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+            >
+              <Search className={`h-4 w-4 ${semanticLoading ? 'animate-pulse' : ''}`} />
+              {semanticLoading ? 'Ищем по смыслу' : 'Найти'}
+            </button>
+          </form>
+
+          {semanticError ? (
+            <div className="mt-4 rounded-md bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{semanticError}</div>
+          ) : null}
+
+          {semanticSearched && !semanticLoading && !semanticError && semanticResult?.hits.length === 0 ? (
+            <div className="mt-4 rounded-md bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">По этому вопросу ничего не найдено. Попробуйте описать ситуацию шире.</div>
+          ) : null}
+
+          {semanticResult?.hits.length ? (
+            <div className="mt-5" aria-live="polite">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800">Найдено: {semanticResult.hits.length}</p>
+                <p className="text-xs text-slate-500">{retrievalModeLabels[semanticResult.mode || 'none'] || semanticResult.mode} · {formatNumber(semanticResult.latency_ms)} мс</p>
+              </div>
+              <div className="divide-y divide-slate-200 rounded-lg bg-slate-50/70 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)]">
+                {semanticResult.hits.map((hit) => (
+                  <article key={hit.chunk_id} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
+                    <p className="text-sm leading-6 text-slate-700 [text-wrap:pretty]">{hit.excerpt || 'Фрагмент сообщения недоступен.'}</p>
+                    <div className="flex items-center justify-between gap-3 lg:block lg:text-right">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{hit.provenance?.source_title || 'Источник'}</p>
+                        <p className="mt-1 text-xs text-slate-500">{formatDate(hit.published_at)}</p>
+                      </div>
+                      {hit.permalink ? (
+                        <a href={hit.permalink} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-sky-700 hover:bg-sky-50 lg:mt-2">
+                          Открыть <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
 
         <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">

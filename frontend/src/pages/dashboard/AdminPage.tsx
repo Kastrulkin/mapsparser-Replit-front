@@ -1919,7 +1919,7 @@ export const AdminPage: React.FC = () => {
             description="Проверенные рыночные сигналы, источники и ограничения их использования."
             contentClassName="p-0"
           >
-            <KnowledgeMarketOverview />
+            <KnowledgeMarketOverview businessOptions={radarBusinessOptions} />
           </DashboardSection>
         ) : activeTab === 'telegramRadar' ? (
           <div className="space-y-6">
