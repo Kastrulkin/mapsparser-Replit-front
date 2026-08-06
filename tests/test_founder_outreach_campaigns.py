@@ -2316,6 +2316,17 @@ def test_lead_drawer_has_one_sticky_next_action_summary():
     assert "Состояние" in source
 
 
+def test_sticky_next_action_does_not_override_message_review_with_setup_save():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    sticky_start = source.index('<section className="sticky top-0 z-20')
+    sticky_end = source.index("</section>", sticky_start)
+    sticky_block = source[sticky_start:sticky_end]
+
+    assert "campaignSetupDirty && summaryNextAction.target === 'outreach-sequence'" in sticky_block
+    assert "scrollToLeadSection(summaryNextAction.target, summaryNextAction.focusTarget)" in sticky_block
+
+
 def test_admin_lead_registry_has_one_operational_surface_without_legacy_duplicate():
     source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
 

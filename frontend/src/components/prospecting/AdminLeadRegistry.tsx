@@ -2928,7 +2928,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     <Button
                       type="button"
                       onClick={() => {
-                        if (campaignSetupDirty) {
+                        if (campaignSetupDirty && summaryNextAction.target === 'outreach-sequence') {
                           void prepareOutreachCampaign(true);
                           return;
                         }

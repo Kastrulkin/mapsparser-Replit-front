@@ -1366,6 +1366,9 @@ def test_admin_lead_drawer_exposes_manual_reason_and_data_preparation_actions():
     assert "Создать аудит" in frontend_source
     assert "Проверить совместимость" in frontend_source
     assert "обновите аудит и matching" not in frontend_source
+    assert frontend_source.index('id="lead-research"') < frontend_source.index(
+        'id="lead-conversation"'
+    )
 
     route_start = backend_source.index(
         '"/api/admin/prospecting/leads/<string:lead_id>/outreach-reason"'
