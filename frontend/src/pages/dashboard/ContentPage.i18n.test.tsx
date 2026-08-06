@@ -34,6 +34,26 @@ describe('Content audience workspace localization', () => {
 
   it('localizes the Russian demo business name on the Turkish content page', async () => {
     window.localStorage.setItem('language', 'tr');
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [{ id: 'demo-plan', period_days: 14 }] };
+      if (path === '/content-plans/demo-plan') {
+        return {
+          plan: {
+            id: 'demo-plan',
+            period_days: 14,
+            items: [{ id: 'demo-item', theme: 'Evcil hayvan bakımı', draft_text: 'Yaz bakımı için kısa bir öneri.', scheduled_for: '2026-08-08' }],
+          },
+        };
+      }
+      if (path === '/content-plans/demo-plan/social-posts') {
+        return {
+          posts: [{ id: 'demo-post', content_plan_item_id: 'demo-item', platform: 'telegram', status: 'needs_review' }],
+          summary: { needs_review: 1 },
+        };
+      }
+      return {};
+    });
 
     const ContextRoute = () => (
       <Outlet context={{
@@ -57,6 +77,7 @@ describe('Content audience workspace localization', () => {
 
     expect(await screen.findByRole('heading', { name: 'İçerik' })).toBeInTheDocument();
     expect(screen.getByText('Roga i Kopyta')).toBeInTheDocument();
-    expect(container.textContent).not.toContain('Рога и копыта');
+    expect(await screen.findByRole('heading', { name: 'İçerik hazır' })).toBeInTheDocument();
+    await waitFor(() => expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/));
   });
 });

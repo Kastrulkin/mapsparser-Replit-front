@@ -34,6 +34,7 @@ import { API_URL } from '@/config/api';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { fillContentCalendarTemplate, getContentCalendarCopy, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { localizeDemoBusinessName } from './operatorPageCopy';
 
@@ -334,12 +335,14 @@ const normalizeIsoDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
 };
 
-const formatDate = (value?: string) => {
-  if (!value) return 'Дата не выбрана';
+const DATE_LOCALES = { ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE', th: 'th-TH', ar: 'ar', ha: 'ha-NG', tr: 'tr-TR' };
+
+const formatDate = (value: string | undefined, language: keyof typeof DATE_LOCALES = 'ru') => {
+  if (!value) return '';
   const normalized = normalizeIsoDate(value);
   const date = normalized ? new Date(`${normalized}T00:00:00`) : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(date);
+  return new Intl.DateTimeFormat(DATE_LOCALES[language], { day: 'numeric', month: 'short' }).format(date);
 };
 
 const toIsoDate = (date: Date) => {
@@ -646,6 +649,7 @@ export function ContentPage() {
   const location = useLocation();
   const { language } = useLanguage();
   const contentCopy = getContentWorkspaceCopy(language);
+  const calendarCopy = getContentCalendarCopy(language);
   const contentControls = getContentWorkspaceControlsCopy(language);
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardOutletContext>();
   const [context, setContext] = useState<ContentPlanContext | null>(null);
@@ -1829,10 +1833,10 @@ export function ContentPage() {
         className="w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 hover:shadow-md"
       >
         <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
-          {item.theme || item.goal || 'Публикация'}
+          {item.theme || item.goal || calendarCopy.publication}
         </div>
         <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-          {(channels.length ? channels : ['Контент']).map((channel) => (
+          {(channels.length ? channels : [calendarCopy.content]).map((channel) => (
             <span key={channel} className="inline-flex max-w-full min-w-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-slate-600 [overflow-wrap:anywhere]">
               {channel}
             </span>
@@ -1840,10 +1844,10 @@ export function ContentPage() {
         </div>
         <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
           <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
-            {calendarState.status}
+            {localizeContentCalendarStatus(calendarState.status, calendarCopy)}
           </span>
           <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
-            {calendarState.action}
+            {localizeContentCalendarStatus(calendarState.action, calendarCopy)}
           </span>
         </div>
       </button>
@@ -1853,7 +1857,7 @@ export function ContentPage() {
   const renderCalendar = () => (
     <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200">
-        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
+        {calendarCopy.weekdays.map((day) => (
           <div key={day} className="min-w-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             {day}
           </div>
@@ -1877,7 +1881,7 @@ export function ContentPage() {
                 {dayItems.slice(0, 3).map(renderCalendarCard)}
                 {dayItems.length > 3 ? (
                   <div className="rounded-xl bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                    ещё {dayItems.length - 3}
+                    {calendarCopy.more} {dayItems.length - 3}
                   </div>
                 ) : null}
               </div>
@@ -1902,15 +1906,15 @@ export function ContentPage() {
               className="flex w-full min-w-0 flex-col gap-3 overflow-hidden px-3 py-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <div className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{item.theme || item.goal || 'Публикация'}</div>
-                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for)} · {(posts.length || getSelectedCount(createDraft.channels))} каналов</div>
+                <div className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{item.theme || item.goal || calendarCopy.publication}</div>
+                <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for, language)} · {(posts.length || getSelectedCount(createDraft.channels))} {calendarCopy.channels}</div>
               </div>
               <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:justify-end">
                 <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
-                  {calendarState.status}
+                  {localizeContentCalendarStatus(calendarState.status, calendarCopy)}
                 </span>
                 <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
-                  {calendarState.action}
+                  {localizeContentCalendarStatus(calendarState.action, calendarCopy)}
                 </span>
               </div>
             </button>
@@ -2006,26 +2010,26 @@ export function ContentPage() {
   const renderAiSidebar = () => (
     <aside className="space-y-4">
       <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Сегодня</div>
+        <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{calendarCopy.today}</div>
         <div className="mt-4 space-y-3">
-          <Insight icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} text={`Создано ${items.filter(itemHasUsableText).length} публикаций`} />
-          <Insight icon={<AlertCircle className="h-4 w-4 text-amber-600" />} text={`Требует проверки ${needsReviewCount}`} />
-          <Insight icon={<Lightbulb className="h-4 w-4 text-blue-600" />} text="Предлагаю публикацию к ближайшему событию" detail="Потому что сезонные темы обычно дают больше поводов написать." />
-          <Insight icon={<Star className="h-4 w-4 text-violet-600" />} text="Проверьте акции конкурентов" detail="Если рядом появилась акция, стоит ответить своим предложением." />
-          <Insight icon={<Eye className="h-4 w-4 text-slate-600" />} text="Стоит обновить фотографии" detail="Визуальные посты лучше работают в картах." />
+          <Insight icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} text={`${calendarCopy.createdPosts}: ${items.filter(itemHasUsableText).length}`} />
+          <Insight icon={<AlertCircle className="h-4 w-4 text-amber-600" />} text={`${calendarCopy.requiresReview}: ${needsReviewCount}`} />
+          <Insight icon={<Lightbulb className="h-4 w-4 text-blue-600" />} text={calendarCopy.eventSuggestion} detail={calendarCopy.eventReason} />
+          <Insight icon={<Star className="h-4 w-4 text-violet-600" />} text={calendarCopy.competitorSuggestion} detail={calendarCopy.competitorReason} />
+          <Insight icon={<Eye className="h-4 w-4 text-slate-600" />} text={calendarCopy.photoSuggestion} detail={calendarCopy.photoReason} />
         </div>
       </div>
       <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
-        <div className="text-sm font-semibold text-slate-300">Следующее действие</div>
+        <div className="text-sm font-semibold text-slate-300">{calendarCopy.nextAction}</div>
         <div className="mt-2 text-xl font-semibold">
-          {needsReviewCount > 0 ? 'Проверить публикации' : nextItem ? 'Ближайшая публикация готова' : 'Создать план'}
+          {needsReviewCount > 0 ? calendarCopy.reviewPosts : nextItem ? calendarCopy.nearestReady : calendarCopy.createPlan}
         </div>
         <p className="mt-2 text-sm leading-6 text-slate-300">
           {needsReviewCount > 0
-            ? 'Осталось быстро посмотреть тексты и подтвердить готовые публикации.'
+            ? calendarCopy.reviewHint
             : nextItem
-              ? `${formatDate(nextItem.scheduled_for)} выйдет следующая публикация.`
-              : 'LocalOS подготовит календарь за вас.'}
+              ? fillContentCalendarTemplate(calendarCopy.nextHint, { date: formatDate(nextItem.scheduled_for, language) })
+              : calendarCopy.prepareHint}
         </p>
       </div>
     </aside>
@@ -2969,18 +2973,18 @@ export function ContentPage() {
             <div className="rounded-[32px] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                 <div className="max-w-2xl">
-                  <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Результат работы ИИ</div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{calendarCopy.aiResult}</div>
                   <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-                    {filledDays > 0 ? 'Контент готов' : 'Готовим календарь'}
+                    {filledDays > 0 ? calendarCopy.contentReady : calendarCopy.preparingCalendar}
                   </h2>
                   <div className="mt-4 max-w-xl text-lg text-slate-300">
-                    {filledDays} из {totalDays} дней заполнены
+                    {fillContentCalendarTemplate(calendarCopy.filledDays, { filled: filledDays, total: totalDays })}
                   </div>
                   <Progress value={Math.min(100, Math.round((filledDays / Math.max(totalDays, 1)) * 100))} className="mt-5 h-3 bg-white/10" />
                 </div>
                 <div className="rounded-3xl bg-white/10 px-5 py-4">
-                  <div className="text-sm text-slate-400">Следующая публикация</div>
-                  <div className="mt-1 text-2xl font-semibold">{nextItem ? formatDate(nextItem.scheduled_for) : 'нет даты'}</div>
+                  <div className="text-sm text-slate-400">{calendarCopy.nextPublication}</div>
+                  <div className="mt-1 text-2xl font-semibold">{nextItem ? formatDate(nextItem.scheduled_for, language) : calendarCopy.noDate}</div>
                 </div>
               </div>
             </div>
@@ -2988,9 +2992,9 @@ export function ContentPage() {
             <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
               <div className="space-y-4">
                 <div>
-                  <div className="text-sm font-semibold text-slate-950">Что сделать сейчас</div>
+                  <div className="text-sm font-semibold text-slate-950">{calendarCopy.whatNow}</div>
                   <div className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                    Быстро проверьте ближайшее, подтвердите готовое и закройте раздел.
+                    {calendarCopy.whatNowHint}
                   </div>
                 </div>
                 <div className="grid w-full min-w-0 gap-2 md:grid-cols-4">
@@ -3002,7 +3006,7 @@ export function ContentPage() {
                     className="h-12 min-w-0 justify-center gap-2 rounded-2xl border-slate-200 bg-white px-4 text-slate-800 transition-transform hover:bg-slate-50 active:scale-[0.96]"
                   >
                     <Eye className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Проверить ближайшие</span>
+                    <span className="truncate">{calendarCopy.reviewNearest}</span>
                   </Button>
                   <Button
                     type="button"
@@ -3013,7 +3017,7 @@ export function ContentPage() {
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">
-                      {busyAction === 'bulk-approve' ? 'Утверждаем...' : `Утвердить готовое · ${reviewReadyPosts.length}`}
+                      {busyAction === 'bulk-approve' ? calendarCopy.approving : `${calendarCopy.approveReady} · ${reviewReadyPosts.length}`}
                     </span>
                   </Button>
                   <Button
@@ -3024,7 +3028,7 @@ export function ContentPage() {
                   >
                     <CalendarDays className="h-4 w-4 shrink-0" />
                     <span className="truncate">
-                      {busyAction === 'bulk-queue' ? 'Планируем...' : `Запланировать · ${approvedPosts.length}`}
+                      {busyAction === 'bulk-queue' ? calendarCopy.scheduling : `${calendarCopy.schedule} · ${approvedPosts.length}`}
                     </span>
                   </Button>
                   <Button
@@ -3035,7 +3039,7 @@ export function ContentPage() {
                     className="h-12 min-w-0 justify-center gap-2 rounded-2xl border-red-100 bg-white px-4 text-red-700 transition-transform hover:bg-red-50 hover:text-red-800 active:scale-[0.96] disabled:opacity-45"
                   >
                     <Trash2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Удалить план</span>
+                    <span className="truncate">{calendarCopy.deletePlan}</span>
                   </Button>
                 </div>
               </div>
@@ -3044,9 +3048,9 @@ export function ContentPage() {
             <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="inline-flex rounded-2xl bg-slate-100 p-1">
                 {[
-                  ['month', 'Месяц', CalendarDays],
-                  ['week', 'Неделя', Clock3],
-                  ['list', 'Список', FileText],
+                  ['month', calendarCopy.month, CalendarDays],
+                  ['week', calendarCopy.week, Clock3],
+                  ['list', calendarCopy.list, FileText],
                 ].map(([key, label, Icon]) => (
                   <button
                     key={String(key)}
@@ -3063,7 +3067,7 @@ export function ContentPage() {
                 ))}
               </div>
               <div className="text-sm font-medium text-slate-500">
-                {needsReviewCount > 0 ? `Нужно проверить: ${needsReviewCount}` : 'Ближайшие публикации под контролем'}
+                {needsReviewCount > 0 ? `${calendarCopy.needsReview}: ${needsReviewCount}` : calendarCopy.underControl}
               </div>
             </div>
 
