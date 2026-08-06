@@ -50,6 +50,7 @@ describe('SEOKeywordsTab localization', () => {
     expect(await screen.findByText('köpek bakımı')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'SEO negatif anahtar kelimeleri' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Negatif anahtar kelime ekle')).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
     await waitFor(() => expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/));
   });
 });

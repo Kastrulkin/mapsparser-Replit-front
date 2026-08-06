@@ -89,6 +89,7 @@ const seoOperationalCopy: Record<string, Record<string, string>> = {
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { language, t } = useLanguage();
     const { user } = useOutletContext<any>();
+    const demoMode = Boolean(user?.demo_mode);
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [keywords, setKeywords] = useState<Keyword[]>([]);
@@ -114,6 +115,14 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
 
     const loadKeywords = async () => {
         setLoading(true);
+        if (demoMode) {
+            const demoKeywords = getDemoShowcaseData(language).keywords;
+            setKeywords(demoKeywords);
+            setGrouped({ [demoKeywords[0].category]: demoKeywords });
+            setError(null);
+            setLoading(false);
+            return;
+        }
         try {
             const token = localStorage.getItem('auth_token');
             const qs = businessId
@@ -125,14 +134,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             const data = await response.json();
 
             if (data.success) {
-                if (user?.demo_mode) {
-                    const demoKeywords = getDemoShowcaseData(language).keywords;
-                    setKeywords(demoKeywords);
-                    setGrouped({ [demoKeywords[0].category]: demoKeywords });
-                } else {
-                    setKeywords(data.items);
-                    setGrouped(data.grouped);
-                }
+                setKeywords(data.items);
+                setGrouped(data.grouped);
             } else {
                 setError(data.error);
             }
@@ -144,6 +147,10 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     };
 
     const loadNegativeKeywords = async () => {
+        if (demoMode) {
+            setNegativeKeywords([]);
+            return;
+        }
         if (!businessId) {
             setNegativeKeywords([]);
             return;
@@ -406,7 +413,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     useEffect(() => {
         loadKeywords();
         loadNegativeKeywords();
-    }, [businessId, showBlocked, language, user?.demo_mode]);
+    }, [businessId, showBlocked, language, demoMode]);
 
     const categories = ['all', ...Object.keys(grouped)];
     const displayedKeywords = (activeCategory === 'all'
