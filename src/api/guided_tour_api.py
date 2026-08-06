@@ -19,7 +19,7 @@ from pg_db_utils import get_db_connection
 guided_tour_bp = Blueprint("guided_tour_api", __name__)
 
 TOUR_VERSION = 3
-SUPPORTED_PROGRESS_TOUR_VERSIONS = {TOUR_VERSION - 1, TOUR_VERSION}
+SUPPORTED_PROGRESS_TOUR_VERSIONS = set(range(1, TOUR_VERSION + 1))
 TOUR_KEYS = {"roga-i-kopyta-v1"}
 PROGRESS_STATUSES = {"not_started", "active", "paused", "skipped", "completed"}
 EVENT_TYPES = {
