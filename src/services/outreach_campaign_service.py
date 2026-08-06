@@ -2093,6 +2093,17 @@ def _quality_gate(
         _text(candidate.get("sender_mode")) in {"", SENDER_MODE_LOCALOS}
         and _text(candidate.get("recipient_segment"))
     )
+    approved_case = (
+        select_approved_localos_case(candidate)
+        if founder_led_beauty and _text(angle) == "proof"
+        else {}
+    )
+    approved_case_text = _text(approved_case.get("safe_formulation"))
+    approved_case_present = bool(
+        approved_case.get("status") == "approved"
+        and approved_case_text
+        and approved_case_text.lower() in normalized_text
+    )
     operator_approved_idea = (
         _text(candidate.get("evidence_kind"))
         == "operator_approved_partnership_reason"
@@ -2159,6 +2170,7 @@ def _quality_gate(
         "removal": contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
             or grounded_observation
+            or approved_case_present
             or operator_idea_present
             or respectful_close
             or residential_relevance
@@ -2173,12 +2185,14 @@ def _quality_gate(
                 or contains(candidate.get("founder_proof"))
                 or respectful_close
                 or grounded_observation
+                or approved_case_present
                 or "разбор" in normalized_text
                 or "localos" in normalized_text
             )
         ),
         "bridge": (
             any(contains(anchor) for anchor in personalization_anchors[1:])
+            or approved_case_present
             or bool(
                 founder_led_beauty
                 and _text(angle) == "signal"
@@ -2222,6 +2236,7 @@ def _quality_gate(
                 respectful_close
                 or operator_idea_present
                 or grounded_observation
+                or approved_case_present
                 or bool(
                     founder_led_beauty
                     and _text(angle) in {"founder_story", "proof", "audit_step", "phone_handoff"}

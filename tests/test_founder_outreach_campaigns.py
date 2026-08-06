@@ -155,6 +155,34 @@ def test_proof_case_uses_map_result_for_social_and_map_gap():
     assert approved_case["key"] == "beauty_maps_zero_to_ten"
 
 
+def test_quality_gate_accepts_selected_approved_case_as_specific_proof():
+    candidate = _private_beauty_founder_candidate()
+    candidate["signal_combo"] = "active_social_with_map_gap"
+    story = {
+        "story": candidate["founder_story"],
+        "proof": candidate["founder_proof"],
+        "forbidden_claims": [],
+    }
+
+    message = _message_for_angle("proof", candidate, story, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        story,
+        channel="vk_manual",
+        channel_status="manual",
+        suppressed=False,
+        angle="proof",
+    )
+
+    assert "с 0 до 10 клиентов в день" in message
+    assert gate["criterion_scores"]["observation_accuracy"] == 2
+    assert gate["criterion_scores"]["offer_bridge"] == 2
+    assert gate["criterion_scores"]["recipient_specificity"] == 2
+    assert gate["score"] == 18
+    assert gate["passed"] is True
+
+
 def test_founder_led_beauty_segmentation_is_deterministic_and_conservative():
     assert localos_beauty_segment(
         "Косметология / услуги частных специалистов",
