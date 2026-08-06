@@ -35,6 +35,7 @@ import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
+import { localizeDemoBusinessName } from './operatorPageCopy';
 
 type DashboardBusiness = {
   id: string;
@@ -2904,7 +2905,9 @@ export function ContentPage() {
         <div>
           <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{contentCopy.eyebrow}</div>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{contentCopy.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{currentBusiness?.name || contentCopy.fallbackSubtitle}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {localizeDemoBusinessName(currentBusiness?.name || contentCopy.fallbackSubtitle, language)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
