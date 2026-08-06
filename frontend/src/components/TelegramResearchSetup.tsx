@@ -61,9 +61,10 @@ type TelegramResearchSetupProps = {
   businessId?: string | null;
   mode?: 'full' | 'connection' | 'sources';
   scopeType?: 'business' | 'platform';
+  demoMode?: boolean;
 };
 
-export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = 'business' }: TelegramResearchSetupProps) => {
+export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = 'business', demoMode = false }: TelegramResearchSetupProps) => {
   const { language } = useLanguage();
   const demoCopy = getDemoWorkspaceCopy(language).telegram;
   const [status, setStatus] = useState<ResearchStatus | null>(null);
@@ -84,12 +85,18 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
 
   const loadStatus = useCallback(async () => {
     if (!businessId) return;
+    if (demoMode) {
+      setStatus(null);
+      setError('');
+      return;
+    }
     const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-research/status?scope_type=${encodeURIComponent(scopeType)}`);
     setStatus(response || null);
-  }, [businessId, scopeType]);
+  }, [businessId, demoMode, scopeType]);
 
   const loadDialogs = useCallback(async () => {
     if (!businessId) return;
+    if (demoMode) return;
     setBusy('dialogs');
     setError('');
     try {
@@ -102,7 +109,7 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
     } finally {
       setBusy('');
     }
-  }, [businessId]);
+  }, [businessId, demoMode]);
 
   useEffect(() => {
     if (!businessId) return;

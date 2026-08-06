@@ -9,7 +9,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 export const TelegramRadarPage = () => {
-  const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
+  const { currentBusinessId, demoMode } = useOutletContext<{ currentBusinessId?: string | null; demoMode?: boolean }>();
   const { language } = useLanguage();
   const copy = getDemoWorkspaceCopy(language).telegram;
 
@@ -33,8 +33,8 @@ export const TelegramRadarPage = () => {
         tone="sky"
       />
 
-      <TelegramResearchSetup businessId={currentBusinessId || null} mode="sources" />
-      <TelegramOpportunityRadar businessId={currentBusinessId || null} mode="work" />
+      <TelegramResearchSetup businessId={currentBusinessId || null} mode="sources" demoMode={demoMode} />
+      <TelegramOpportunityRadar businessId={currentBusinessId || null} mode="work" demoMode={demoMode} />
     </div>
   );
 };

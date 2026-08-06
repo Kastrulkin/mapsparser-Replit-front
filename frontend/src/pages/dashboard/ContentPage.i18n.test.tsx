@@ -42,7 +42,7 @@ describe('Content audience workspace localization', () => {
           plan: {
             id: 'demo-plan',
             period_days: 14,
-            items: [{ id: 'demo-item', theme: 'Evcil hayvan bakımı', draft_text: 'Yaz bakımı için kısa bir öneri.', scheduled_for: '2026-08-08' }],
+            items: [{ id: 'demo-item', theme: 'Ответить на запрос клиента', draft_text: 'Yaz bakımı için kısa bir öneri.', scheduled_for: '2026-08-08' }],
           },
         };
       }
@@ -58,6 +58,7 @@ describe('Content audience workspace localization', () => {
     const ContextRoute = () => (
       <Outlet context={{
         user: { id: 'demo-user', demo_mode: true },
+        demoMode: true,
         currentBusinessId: 'demo-business',
         currentBusiness: { id: 'demo-business', name: 'Рога и копыта' },
       }} />
@@ -78,6 +79,7 @@ describe('Content audience workspace localization', () => {
     expect(await screen.findByRole('heading', { name: 'İçerik' })).toBeInTheDocument();
     expect(screen.getByText('Roga i Kopyta')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'İçerik hazır' })).toBeInTheDocument();
+    expect(await screen.findByText('Müşteri aramasını yanıtla: Saint Petersburg güzellik salonu')).toBeInTheDocument();
     await waitFor(() => expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/));
   });
 });

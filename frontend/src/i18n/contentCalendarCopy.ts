@@ -91,6 +91,21 @@ const statusKeyByRussian: Record<string, string> = {
 
 export const getContentCalendarCopy = (language: Language) => copy[language];
 
+const demoCalendarThemes: Record<Language, string[]> = {
+  ru: ['Ответить на запрос клиента: салон красоты Санкт-Петербург', 'Ответить на спрос: подстричь собаку в Санкт-Петербург', 'Подсветить услугу: Уход за лапами и подушечками', 'Сезонная подборка для Рога и копыта'],
+  en: ['Answer a customer search: beauty salon in Saint Petersburg', 'Answer demand: dog grooming in Saint Petersburg', 'Highlight a service: paw and pad care', 'Seasonal selection for Roga i Kopyta'],
+  fr: ['Répondre à une recherche client : salon de beauté à Saint-Pétersbourg', 'Répondre à la demande : toilettage canin à Saint-Pétersbourg', 'Mettre en avant un service : soin des pattes et coussinets', 'Sélection saisonnière pour Roga i Kopyta'],
+  es: ['Responder a una búsqueda: salón de belleza en San Petersburgo', 'Responder a la demanda: peluquería canina en San Petersburgo', 'Destacar un servicio: cuidado de patas y almohadillas', 'Selección de temporada para Roga i Kopyta'],
+  el: ['Απάντηση σε αναζήτηση: ινστιτούτο ομορφιάς στην Αγία Πετρούπολη', 'Απάντηση στη ζήτηση: περιποίηση σκύλων στην Αγία Πετρούπολη', 'Προβολή υπηρεσίας: φροντίδα πατών και μαξιλαριών', 'Εποχιακή συλλογή για το Roga i Kopyta'],
+  de: ['Kundensuche beantworten: Schönheitssalon in Sankt Petersburg', 'Nachfrage beantworten: Hundepflege in Sankt Petersburg', 'Leistung hervorheben: Pfoten- und Ballenpflege', 'Saisonale Auswahl für Roga i Kopyta'],
+  th: ['ตอบคำค้นของลูกค้า: ร้านเสริมสวยในเซนต์ปีเตอร์สเบิร์ก', 'ตอบความต้องการ: กรูมมิ่งสุนัขในเซนต์ปีเตอร์สเบิร์ก', 'เน้นบริการ: ดูแลอุ้งเท้าและแผ่นอุ้งเท้า', 'ชุดคอนเทนต์ตามฤดูกาลสำหรับ Roga i Kopyta'],
+  ar: ['الرد على بحث عميل: صالون تجميل في سانت بطرسبرغ', 'الرد على الطلب: عناية الكلاب في سانت بطرسبرغ', 'إبراز خدمة: العناية بالكفوف والوسائد', 'تشكيلة موسمية لـ Roga i Kopyta'],
+  ha: ['Amsa binciken kwastoma: salon kyau a Saint Petersburg', 'Amsa buƙata: gyaran kare a Saint Petersburg', 'Haskaka sabis: kula da tafin ƙafa', 'Zaɓin yanayi na Roga i Kopyta'],
+  tr: ['Müşteri aramasını yanıtla: Saint Petersburg güzellik salonu', "Talebi yanıtla: Saint Petersburg'da köpek bakımı", 'Hizmeti öne çıkar: pati ve yastık bakımı', 'Roga i Kopyta için mevsimsel seçki'],
+};
+
+export const getDemoContentCalendarThemes = (language: Language): string[] => demoCalendarThemes[language];
+
 export const localizeContentCalendarStatus = (label: string, localized: ContentCalendarCopy) => {
   const key = statusKeyByRussian[label];
   return key ? localized.status[key] || label : label;

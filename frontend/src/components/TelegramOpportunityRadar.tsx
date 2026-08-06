@@ -39,9 +39,10 @@ type Props = {
   businessId?: string | null;
   mode?: 'settings' | 'work';
   sourceSetup?: 'visible' | 'hidden';
+  demoMode?: boolean;
 };
 
-export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', sourceSetup = 'visible' }: Props) => {
+export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', sourceSetup = 'visible', demoMode = false }: Props) => {
   const { language } = useLanguage();
   const copy = getDemoWorkspaceCopy(language).telegram;
   const [sources, setSources] = useState<RadarSource[]>([]);
@@ -80,6 +81,13 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
 
   const loadRadar = async () => {
     if (!businessId) return;
+    if (demoMode) {
+      setSources([]);
+      setOpportunities([]);
+      setError('');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -103,7 +111,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
 
   useEffect(() => {
     loadRadar();
-  }, [businessId]);
+  }, [businessId, demoMode]);
 
   useEffect(() => {
     if (sources.length === 0) setKeywords(copy.keywordsPlaceholder);

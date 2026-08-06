@@ -5,7 +5,7 @@ import { GUIDED_TOUR_STEP_LAYOUTS } from '@/components/guided-tour/tourConfig';
 import { guidedTourStepsForLanguage } from '@/components/guided-tour/tourConfig';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
-import { getContentCalendarCopy } from '@/i18n/contentCalendarCopy';
+import { getContentCalendarCopy, getDemoContentCalendarThemes } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
 import { getNewsWorkspaceCopy } from '@/i18n/newsWorkspaceCopy';
@@ -42,6 +42,7 @@ describe('demo language coverage', () => {
     expect(renderedCopy).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getDashboardNavigationCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getContentCalendarCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getDemoContentCalendarThemes(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getContentWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getAgentsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getNewsWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);

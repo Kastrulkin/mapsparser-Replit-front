@@ -34,7 +34,7 @@ import { API_URL } from '@/config/api';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
-import { fillContentCalendarTemplate, getContentCalendarCopy, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
+import { fillContentCalendarTemplate, getContentCalendarCopy, getDemoContentCalendarThemes, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { localizeDemoBusinessName } from './operatorPageCopy';
 
@@ -46,6 +46,7 @@ type DashboardBusiness = {
 type DashboardOutletContext = {
   currentBusinessId?: string | null;
   currentBusiness?: DashboardBusiness | null;
+  demoMode?: boolean;
 };
 
 type ScopeOption = {
@@ -651,7 +652,7 @@ export function ContentPage() {
   const contentCopy = getContentWorkspaceCopy(language);
   const calendarCopy = getContentCalendarCopy(language);
   const contentControls = getContentWorkspaceControlsCopy(language);
-  const { currentBusinessId, currentBusiness } = useOutletContext<DashboardOutletContext>();
+  const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<DashboardOutletContext>();
   const [context, setContext] = useState<ContentPlanContext | null>(null);
   const [plans, setPlans] = useState<PlanPayload[]>([]);
   const [currentPlan, setCurrentPlan] = useState<PlanPayload | null>(null);
@@ -713,7 +714,15 @@ export function ContentPage() {
   const [generationCards, setGenerationCards] = useState(0);
   const mediaUploadInputRef = useRef<HTMLInputElement | null>(null);
 
-  const items = useMemo(() => currentPlan?.items || [], [currentPlan]);
+  const demoCalendarThemes = getDemoContentCalendarThemes(language);
+  const items = useMemo(() => {
+    const planItems = currentPlan?.items || [];
+    if (!demoMode || language === 'ru') return planItems;
+    return planItems.map((item, index) => ({
+      ...item,
+      theme: demoCalendarThemes[index % demoCalendarThemes.length] || calendarCopy.publication,
+    }));
+  }, [calendarCopy.publication, currentPlan, demoCalendarThemes, demoMode, language]);
   const postsByItem = useMemo(() => groupPostsByItem(socialPosts), [socialPosts]);
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedItemId) || null,
