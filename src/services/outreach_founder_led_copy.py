@@ -296,13 +296,17 @@ def founder_led_localos_text(
             map_observation,
             flags=re.IGNORECASE,
         )
-        map_block = (
-            "Карты тоже могли бы помогать вам привлекать клиентов. "
-            f"Сейчас в карточке на картах рейтинг {map_match.group(1)} "
-            f"и всего {map_match.group(2)} отзывов."
-            if map_match
-            else ""
-        )
+        map_block = "Карты тоже могли бы помогать вам привлекать клиентов."
+        if map_match:
+            rating_value = float(map_match.group(1).replace(",", "."))
+            review_count = int(map_match.group(2))
+            if rating_value == 0 and review_count == 0:
+                map_block += " В карточке пока нет рейтинга и отзывов."
+            else:
+                map_block += (
+                    f" Сейчас в карточке на картах рейтинг {map_match.group(1)} "
+                    f"и всего {map_match.group(2)} отзывов."
+                )
         audit_url = clean_copy(candidate.get("public_audit_url"))
         approved_offer = clean_copy(candidate.get("next_step"))
         price_line = (

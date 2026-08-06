@@ -224,6 +224,44 @@ def test_telegram_observation_does_not_turn_promotion_into_procedure_explanation
     assert "объясняете клиентам процедуры" not in message
 
 
+def test_telegram_signal_connects_active_channel_to_maps_without_empty_paragraph():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "evidence_kind": "telegram_post",
+        "observed_fact": (
+            'В публичном Telegram-источнике "Салон" '
+            'опубликовано: "Свободные окна на завтра".'
+        ),
+        "map_observation": "",
+        "public_audit_url": "https://localos.pro/example-audit",
+        "next_step": "Работа LocalOS от 1200 рублей в месяц",
+    })
+
+    message = _message_for_angle("signal", candidate, None, [])
+
+    assert "Карты тоже могли бы помогать вам привлекать клиентов." in message
+    assert "\n\n\n\n" not in message
+
+
+def test_zero_map_rating_is_described_as_missing_not_numeric_zero():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "evidence_kind": "telegram_post",
+        "observed_fact": (
+            'В публичном Telegram-источнике "Салон" '
+            'опубликовано: "Свободные окна на завтра".'
+        ),
+        "map_observation": "Рейтинг - 0,0; публичных отзывов - 0.",
+        "public_audit_url": "https://localos.pro/example-audit",
+        "next_step": "Работа LocalOS от 1200 рублей в месяц",
+    })
+
+    message = _message_for_angle("signal", candidate, None, [])
+
+    assert "в карточке пока нет рейтинга и отзывов" in message.lower()
+    assert "рейтинг 0,0" not in message
+
+
 def test_collagen_telegram_observation_preserves_the_sourced_topic():
     source = (
         'В публичном Telegram-источнике "BeautyPLAN" опубликовано: '
