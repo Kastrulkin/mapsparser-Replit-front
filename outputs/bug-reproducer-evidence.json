@@ -1,20 +1,20 @@
 {
   "status": "FIX_PROVEN",
-  "reason": "Three employee read paths returned HTTP 403 before the change and passed after using the shared business access check.",
+  "reason": "Six remaining employee read paths rejected active network members before the change and passed after using the canonical business access check.",
   "same_command": true,
-  "full_suite": "25 focused authentication, membership, and content policy tests passed",
+  "full_suite": "45 focused authentication, membership, billing, content-plan, and external-account tests passed; five changed modules compiled",
   "before": {
-    "command": "python3 -m pytest -q tests/test_employee_business_access.py",
+    "command": "python3 -m pytest -q tests/test_employee_remaining_read_access.py",
     "exit_code": 1,
     "timed_out": false,
-    "duration_ms": 2330,
-    "stdout": "FFF [100%]\n3 failed: business profile 403, token usage 403, content context PermissionError"
+    "duration_ms": 1800,
+    "stdout": "FFFFFF [100%]\n6 failed: content plans, billing status, parse status, manual competitors, external summary, and external posts rejected an active network member"
   },
   "after": {
-    "command": "python3 -m pytest -q tests/test_employee_business_access.py",
+    "command": "python3 -m pytest -q tests/test_employee_remaining_read_access.py",
     "exit_code": 0,
     "timed_out": false,
-    "duration_ms": 1480,
-    "stdout": "... [100%]\n3 passed in 1.48s"
+    "duration_ms": 1290,
+    "stdout": "...... [100%]\n6 passed in 1.29s"
   }
 }

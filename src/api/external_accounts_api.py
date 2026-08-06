@@ -23,6 +23,7 @@ from flask import Blueprint, current_app, jsonify, redirect, request
 
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from auth_system import verify_session
+from core.auth_helpers import verify_business_access
 from core.helpers import get_business_owner_id
 from core.map_url_normalizer import is_google_map_url
 from core.parsing_runtime_config import resolve_map_source_for_queue
@@ -2071,12 +2072,12 @@ def get_external_summary(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем доступ
-        owner_id = get_business_owner_id(cursor, business_id)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -2368,12 +2369,12 @@ def get_external_posts(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем доступ
-        owner_id = get_business_owner_id(cursor, business_id)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 

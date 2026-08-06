@@ -1,64 +1,75 @@
 {
-  "title": "Network employees receive owner-only 403 responses",
+  "title": "Remaining owner-only reads reject network employees",
   "project": "LocalOS",
   "generated_at": "2026-08-06",
-  "mode": "reproduce-only",
-  "original_report": "After sign-in was repaired, an active employee of the Vesyolaya Raschyoska network received payment and access errors while using the Engels location.",
+  "mode": "prove-fix",
+  "original_report": "After sign-in was repaired, Irina from the Vesyolaya Raschyoska network still received payment and access errors while using the Grand Canyon location on Engels Avenue.",
   "discovery_scope": [
-    "Production requests for the employee and Engels business",
-    "Business profile, token usage, and content context authorization paths",
-    "Shared business access helper and focused access tests"
+    "Production 403 logs for the employee and the Engels business",
+    "Content-plan, billing, parse-status, competitor, and external-data read authorization paths",
+    "Canonical direct-business and network membership access helper"
   ],
   "candidates": [],
-  "expected": "An active network member can read the profile, token usage, and content context of an active network location.",
-  "actual": "All three paths rejected the employee because they compared only owner_id.",
-  "environment": "Python 3.11.7 local tests; Docker Compose production at localos.pro",
-  "reproduction": "Three focused tests use a non-owner with active network membership against the real Flask routes and content context service.",
-  "failure_signal": "Two HTTP 403 responses and one PermissionError instead of successful reads.",
-  "root_cause": "The affected read paths implemented owner-only checks instead of the canonical verify_business_access helper that includes active network and direct business memberships.",
-  "fix_summary": "Replaced the three owner-only read checks with verify_business_access while preserving not-found and unauthorized responses.",
-  "why_causal": "The canonical helper resolves the same membership record that grants the employee access through auth/me, removing the inconsistent authorization decision.",
+  "expected": "An active network member can read operational data for an active location in that network without becoming its owner or superadmin.",
+  "actual": "Six read paths rejected the employee because they compared only the subscription user or business owner.",
+  "environment": "Python 3.11 local tests; Docker Compose production at localos.pro",
+  "reproduction": "Six focused tests use a non-owner with active network membership against the real Flask routes and service helpers.",
+  "failure_signal": "HTTP 403 responses, PermissionError, and a false billing-access result instead of successful reads.",
+  "root_cause": "The affected legacy reads implemented owner-only authorization instead of verify_business_access, which already includes active network and direct business memberships.",
+  "fix_summary": "Replaced only the six observed owner-only read decisions with verify_business_access while preserving 404 and unauthorized behavior.",
+  "why_causal": "The helper queries the same active network membership that grants Irina access to the Engels location, so the read decisions now match login and business selection.",
   "reproduction_files": [
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_employee_business_access.py",
-      "line": 1,
-      "summary": "Three employee access regressions approved at Gate 1."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_employee_remaining_read_access.py",
+      "line": 65,
+      "summary": "Six active-network-member regressions approved at Gate 1."
     }
   ],
   "fix_files": [
     {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/content_plan_service.py",
+      "line": 1542,
+      "summary": "Content-plan listing accepts canonical employee access."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/yookassa_integration.py",
+      "line": 571,
+      "summary": "Billing-status reads accept canonical access to the subscription business."
+    },
+    {
       "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/legacy_routes/parsing_networks.py",
-      "line": 283,
-      "summary": "Business profile read now accepts canonical employee access."
+      "line": 946,
+      "summary": "Parse status accepts active business or network membership."
     },
     {
       "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/legacy_routes/core_public.py",
-      "line": 447,
-      "summary": "Token usage read now accepts canonical employee access."
+      "line": 1044,
+      "summary": "Manual competitor reads accept canonical employee access."
     },
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/content_plan_service.py",
-      "line": 1429,
-      "summary": "Content context read now accepts canonical employee access."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/external_accounts_api.py",
+      "line": 2056,
+      "summary": "External summary and posts reads accept canonical employee access."
     }
   ],
   "checks": [
-    {"name": "Regression test", "status": "passed", "detail": "The same three scenarios changed from red to green."},
-    {"name": "Focused suite", "status": "passed", "detail": "25 authentication, membership, and content policy tests passed."},
-    {"name": "Production smoke", "status": "passed", "detail": "App is healthy, HTTP returns 200, and Irina resolves allowed=true for the Engels location."}
+    {"name": "Regression test", "status": "passed", "detail": "The same six scenarios changed from red to green."},
+    {"name": "Focused suite", "status": "passed", "detail": "45 relevant tests passed and all five changed modules compiled."},
+    {"name": "Production smoke", "status": "passed", "detail": "The app container is healthy, localhost returns HTTP 200, and the live membership check grants Irina access to the Engels location."}
   ],
   "reproduce": [
-    "python3 -m pytest -q tests/test_employee_business_access.py",
-    "python3 -m pytest -q tests/test_employee_business_access.py tests/test_network_member_access.py tests/test_login_business_access.py tests/test_auth_email_case_insensitive.py tests/test_content_plan_policy.py"
+    "python3 -m pytest -q tests/test_employee_remaining_read_access.py",
+    "python3 -m pytest -q tests/test_employee_remaining_read_access.py tests/test_employee_business_access.py tests/test_network_member_access.py tests/test_login_business_access.py tests/test_auth_email_case_insensitive.py tests/test_content_plan_policy.py tests/test_checkout_payment_providers.py tests/test_external_accounts_routes_contract.py"
   ],
   "limitations": [
-    "No user session token or password was accessed, so production endpoints were not impersonated."
+    "No user session token or password was accessed, so production endpoints were not called by impersonating Irina."
   ],
   "residual_risks": [
-    "Other legacy owner-only endpoints outside the three observed read paths may require separate review."
+    "Legacy owner-only endpoints not present in the observed production request set remain outside this patch."
   ],
   "notes": [
     "Payment and subscription records were not changed.",
-    "An existing unrelated production change in content_plan_service.py was preserved."
+    "Irina remains a network member, not a business owner or superadmin.",
+    "An existing unrelated production change in content_plan_service.py was preserved by applying a minimal patch."
   ]
 }

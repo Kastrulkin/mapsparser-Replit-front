@@ -14,6 +14,7 @@ from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
 from billing_constants import TARIFFS, TARIFF_ALIASES
+from core.auth_helpers import verify_business_access
 from database_manager import DatabaseManager
 from services.checkout_session_service import (
     complete_checkout,
@@ -571,9 +572,11 @@ def _subscription_access_allowed(cursor, *, user_id: str, user_data: Dict[str, A
     sub_user_id = str(row.get("user_id") or "")
     access_allowed = (sub_user_id == user_id) or bool(user_data.get("is_superadmin"))
     if not access_allowed and row.get("business_id"):
-        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (str(row.get("business_id")),))
-        biz_row = _row_to_dict(cursor, cursor.fetchone())
-        access_allowed = str((biz_row or {}).get("owner_id") or "") == user_id
+        access_allowed, _ = verify_business_access(
+            cursor,
+            str(row.get("business_id")),
+            user_data,
+        )
     return access_allowed
 
 

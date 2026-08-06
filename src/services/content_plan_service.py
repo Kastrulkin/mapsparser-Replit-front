@@ -1547,7 +1547,15 @@ def list_content_plans(user_id: str, business_id: str) -> list[dict[str, Any]]:
         owner_id = get_business_owner_id(cursor, business_id)
         if str(owner_id or "").strip() != str(user_id or "").strip():
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
+            has_access, _ = verify_business_access(
+                cursor,
+                business_id,
+                {
+                    "user_id": user_id,
+                    "is_superadmin": bool(_row_get(cursor.fetchone(), "coalesce", 0, False)),
+                },
+            )
+            if not has_access:
                 raise PermissionError("Нет доступа к бизнесу")
         cursor.execute(
             """
