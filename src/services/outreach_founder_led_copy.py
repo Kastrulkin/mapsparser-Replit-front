@@ -178,7 +178,17 @@ def _approved_pain_phrase(candidate: dict[str, Any], pain_key: str, fallback: st
         for source_phrase in source_phrases:
             value = source_phrase.get("text") if isinstance(source_phrase, dict) else source_phrase
             phrase = clean_copy(value)
-            if 12 <= len(phrase) <= 160:
+            lowered = phrase.lower()
+            audience_description = lowered.startswith((
+                "предпринимателю",
+                "предпринимателям",
+                "для предпринимател",
+                "владельцу",
+                "владельцам",
+                "для владельц",
+                "для салон",
+            ))
+            if 12 <= len(phrase) <= 160 and not audience_description:
                 return phrase.rstrip(".!?")
         for value in pain.get("approved_seed_phrases") or pain.get("phrases") or []:
             phrase = clean_copy(value)

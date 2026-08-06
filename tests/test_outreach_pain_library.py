@@ -130,3 +130,24 @@ def test_approved_owner_language_is_used_as_segment_language_not_recipient_fact(
     assert text is not None
     assert 'Владельцы часто описывают это так: "Работаю за администратора и бухгалтера"' in text
     assert "вы работаете за администратора" not in text.lower()
+
+
+def test_audience_description_does_not_replace_owner_voice():
+    text = founder_led_localos_text("founder_story", {
+        "sender_mode": "localos",
+        "recipient": "Салон",
+        "recipient_segment": "beauty_team",
+        "outreach_playbook": {
+            "pain_library": [{
+                "key": "operations_and_burnout",
+                "candidate_source_phrases": [{
+                    "text": "Предпринимателю, который устал тащить всё сам и хочет построить систему",
+                }],
+                "approved_seed_phrases": ["Если не я, то никто"],
+            }],
+        },
+    }, None)
+
+    assert text is not None
+    assert 'Владельцы часто описывают это так: "Если не я, то никто"' in text
+    assert "Предпринимателю, который" not in text
