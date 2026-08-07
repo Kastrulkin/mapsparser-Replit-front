@@ -1599,10 +1599,25 @@ def list_content_plans(user_id: str, business_id: str) -> list[dict[str, Any]]:
                 GROUP BY plan_id
             ) stats ON stats.plan_id = p.id
             WHERE p.business_id = %s
+               OR (
+                    p.network_id IS NOT NULL
+                    AND p.network_id = (
+                        SELECT network_id
+                        FROM businesses
+                        WHERE id = %s
+                        LIMIT 1
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM contentplanitems visible_item
+                        WHERE visible_item.plan_id = p.id
+                          AND visible_item.business_id = %s
+                    )
+               )
             ORDER BY p.created_at DESC
             LIMIT 50
             """,
-            (business_id,),
+            (business_id, business_id, business_id),
         )
         rows = cursor.fetchall() or []
         plans = []
