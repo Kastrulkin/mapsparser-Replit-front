@@ -41,6 +41,62 @@ def test_composite_signal_requires_map_gap_and_active_official_social():
     assert "теряет клиентов" not in result["observed_fact"].lower()
 
 
+def test_low_rating_and_active_social_qualify_even_with_many_reviews():
+    now = datetime(2026, 8, 6, tzinfo=timezone.utc)
+    result = build_active_social_map_gap_signal(
+        {"rating": 4.3, "reviews_count": 242},
+        {
+            "official": True,
+            "last_post_at": now - timedelta(days=2),
+            "posts_30d": 6,
+            "posts_90d": 18,
+        },
+        now=now,
+    )
+    strong_rating = build_active_social_map_gap_signal(
+        {"rating": 5.0, "reviews_count": 242},
+        {
+            "official": True,
+            "last_post_at": now - timedelta(days=2),
+            "posts_30d": 6,
+            "posts_90d": 18,
+        },
+        now=now,
+    )
+
+    assert result["eligible"] is True
+    assert result["map_gap"]["checks"]["rating_at_or_below_4_4"] is True
+    assert strong_rating["eligible"] is False
+
+
+def test_composite_signal_uses_founder_led_copy_outside_beauty_segment():
+    text = founder_led_localos_text(
+        "signal",
+        {
+            "sender_mode": "localos",
+            "recipient": "Camera Obscura",
+            "recipient_category": "Кофейня",
+            "recipient_segment": "",
+            "signal_combo": "active_social_with_map_gap",
+            "observed_fact": (
+                "Компания активно ведёт соцсети; в карточке на картах "
+                "рейтинг 4.3 и 8 отзывов."
+            ),
+            "sender": "Александр Демьянов",
+            "sender_role": "основатель LocalOS",
+            "public_audit_url": "https://localos.pro/camera-obscura",
+            "next_step": "Начальный тариф 1200 рублей в месяц",
+        },
+        None,
+    )
+
+    assert text is not None
+    assert "активно ведёте соцсети" in text
+    assert "рейтинг 4.3" in text
+    assert "8 отзыв" in text
+    assert "https://localos.pro/camera-obscura" in text
+
+
 def test_composite_signal_rejects_unconfirmed_or_stale_social_activity():
     now = datetime(2026, 8, 5, tzinfo=timezone.utc)
     stale = build_active_social_map_gap_signal(
@@ -177,6 +233,102 @@ def test_treatment_copy_uses_social_map_contrast_audit_and_only_approved_price()
     assert "от 1200 рублей в месяц" in text
     assert "не успеваете" not in text
     assert "теряете клиентов" not in text
+
+
+def test_treatment_copy_uses_reputation_gap_when_reviews_are_numerous():
+    candidate = {
+        "sender_mode": "localos",
+        "recipient": "Абриелль",
+        "recipient_segment": "beauty_team",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "signal_combo": ACTIVE_SOCIAL_MAP_GAP,
+        "observed_fact": (
+            "В карточке на картах рейтинг 4.3 и 96 отзывов. "
+            "Официальная соцсеть обновлялась 2 дня назад."
+        ),
+        "public_audit_url": "https://localos.pro/example-audit",
+        "next_step": "Работа LocalOS от 1200 рублей в месяц",
+    }
+
+    text = founder_led_localos_text("signal", candidate, None)
+
+    assert text is not None
+    assert "рейтинг 4.3 при 96 отзывах" in text
+    assert "влияет на доверие" in text
+    assert "только 96 отзыва" not in text
+
+
+def test_service_price_gap_copy_uses_exact_catalog_counts_and_approved_case():
+    text = founder_led_localos_text("signal", {
+        "sender_mode": "localos",
+        "recipient": "Персона Lab",
+        "recipient_segment": "beauty_team",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "signal_combo": "active_social_with_service_price_gap",
+        "observed_fact": (
+            "Официальный канал обновляется регулярно. "
+            "В карточке найдено 45 услуг; цена указана у 2."
+        ),
+        "public_audit_url": "https://localos.pro/persona-lab",
+    }, None)
+
+    assert text is not None
+    assert "45 услуг" in text
+    assert "цена видна только у 2" in text
+    assert "рост выручки на 20%" in text
+    assert "https://localos.pro/persona-lab" in text
+    assert text.endswith("Вам может быть интересно?")
+
+
+def test_unanswered_negative_review_copy_uses_count_but_not_review_content():
+    text = founder_led_localos_text("signal", {
+        "sender_mode": "localos",
+        "recipient": "Hemeda Clinic",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "signal_combo": "active_social_with_unanswered_negative_review",
+        "observed_fact": (
+            "Официальный канал обновляется регулярно. "
+            "В публичной карточке найдено 1 свежих отзывов с оценкой до 3 без ответа компании."
+        ),
+    }, None)
+
+    assert text is not None
+    assert "есть свежий отзыв с оценкой до 3 без ответа" in text
+    assert "Мастер не понял клиента" in text
+    assert "7 часов в неделю" in text
+    assert text.endswith("Вам может быть это интересно?")
+
+
+def test_timing_copy_extracts_event_or_service_instead_of_pasting_truncated_post():
+    base = {
+        "sender_mode": "localos",
+        "recipient": "Культура",
+        "sender": "Александр Демьянов",
+        "sender_role": "основатель LocalOS",
+        "public_audit_url": "https://localos.pro/audit",
+    }
+    service_text = founder_led_localos_text("signal", {
+        **base,
+        "signal_combo": "recent_new_service_announcement",
+        "observed_fact": (
+            'В Telegram опубликовано: "В нашей студии появилась новая услуга - '
+            'электроэпиляция Метод подходит для удаления волос".'
+        ),
+    }, None)
+    event_text = founder_led_localos_text("signal", {
+        **base,
+        "signal_combo": "recent_event_announcement",
+        "observed_fact": (
+            'В Telegram опубликовано: "21 августа - клиентский день в нашей клинике!".'
+        ),
+    }, None)
+
+    assert 'анонс новой услуги: "электроэпиляция"' in service_text
+    assert "Метод подходит" not in service_text
+    assert "анонс клиентского дня 21 августа" in event_text
 
 
 def test_active_social_copy_uses_audit_without_inventing_owner_pain():

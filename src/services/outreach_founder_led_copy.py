@@ -44,6 +44,14 @@ PRIVATE_SPECIALIST_MARKERS = (
 
 NETWORK_MARKERS = ("сеть ", "сеть-", "филиал", "студии ", "салоны ")
 
+FOUNDER_LED_SIGNAL_COMBOS = {
+    "active_social_with_map_gap",
+    "active_social_with_service_price_gap",
+    "active_social_with_unanswered_negative_review",
+    "recent_new_service_announcement",
+    "recent_event_announcement",
+}
+
 
 def clean_copy(value: Any) -> str:
     return " ".join(str(value or "").replace("—", "-").replace("«", '"').replace("»", '"').split())
@@ -141,6 +149,34 @@ def natural_observation(candidate: dict[str, Any]) -> str:
             return f'В Telegram вы пишете: "{snippet}"'
         return "Увидел вашу публикацию для клиентов в Telegram"
     return observation
+
+
+def _timing_observation(signal_combo: str, observed_fact: Any) -> str:
+    observation = clean_copy(observed_fact)
+    if signal_combo == "recent_new_service_announcement":
+        match = re.search(
+            r"нов\w*\s+услуг\w*\s*[-:]\s*([^.!?]{3,80})",
+            observation,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            service = re.split(
+                r"\s+(?:метод|подходит|позволяет|теперь|для)\b",
+                match.group(1),
+                maxsplit=1,
+                flags=re.IGNORECASE,
+            )[0].strip(' "-,:;')
+            if service:
+                return f'анонс новой услуги: "{service}"'
+        return "анонс новой услуги"
+    event_match = re.search(
+        r"(\d{1,2}\s+[а-яё]+)\s*[-:]?\s*клиентск\w*\s+день",
+        observation,
+        flags=re.IGNORECASE,
+    )
+    if event_match:
+        return f"анонс клиентского дня {event_match.group(1)}"
+    return "анонс события для клиентов"
 
 
 def _owner_context(segment: str | None) -> str:
@@ -270,7 +306,9 @@ def founder_led_localos_text(
         candidate.get("recipient"),
         candidate.get("observed_fact"),
     )
-    if not segment:
+    signal_combo = clean_copy(candidate.get("signal_combo"))
+    composite_localos_signal = signal_combo in FOUNDER_LED_SIGNAL_COMBOS
+    if not segment and not composite_localos_signal:
         return None
 
     sender = clean_copy(candidate.get("sender"))
@@ -282,7 +320,78 @@ def founder_led_localos_text(
         approved_proof = clean_copy(story.get("proof"))
 
     if angle == "signal":
-        if clean_copy(candidate.get("signal_combo")) == "active_social_with_map_gap":
+        if signal_combo == "active_social_with_service_price_gap":
+            services_match = re.search(
+                r"найдено\s+(\d+)\s+услуг;\s+цена указана у\s+(\d+)",
+                clean_copy(candidate.get("observed_fact")),
+                flags=re.IGNORECASE,
+            )
+            total = services_match.group(1) if services_match else "несколько"
+            priced = services_match.group(2) if services_match else "части"
+            audit_url = clean_copy(candidate.get("public_audit_url"))
+            audit_block = f"\n{audit_url}" if audit_url else ""
+            return (
+                f"Здравствуйте! Я {introduction}.\n\n"
+                "Увидел, что вы регулярно ведёте свой канал. При этом в карточке "
+                f"на картах указано {total} услуг, а цена видна только у {priced}.\n\n"
+                "Клиенту из-за этого сложнее быстро выбрать услугу и записаться. "
+                "LocalOS помогает привести список услуг и цены в понятный вид. "
+                "Для одного салона такая работа дала рост выручки на 20%.\n\n"
+                f"Вот короткий разбор карточки:{audit_block}\n\n"
+                "Вам может быть интересно?"
+            )
+        if signal_combo == "active_social_with_unanswered_negative_review":
+            review_match = re.search(
+                r"найдено\s+(\d+)\s+свежих отзыв",
+                clean_copy(candidate.get("observed_fact")),
+                flags=re.IGNORECASE,
+            )
+            review_count = review_match.group(1) if review_match else ""
+            if review_count == "1":
+                review_phrase = "свежий отзыв"
+            elif review_count:
+                review_number = int(review_count)
+                review_word = (
+                    "отзыва"
+                    if review_number % 10 in {2, 3, 4}
+                    and review_number % 100 not in {12, 13, 14}
+                    else "отзывов"
+                )
+                review_phrase = f"{review_count} свежих {review_word}"
+            else:
+                review_phrase = "несколько свежих отзывов"
+            return (
+                f"Здравствуйте! Я {introduction}.\n\n"
+                "Увидел, что вы регулярно ведёте свой канал. При этом в карточке "
+                f"на картах есть {review_phrase} с оценкой до 3 без ответа.\n\n"
+                "День забит, а тут прилетает плохой отзыв. Мастер не понял клиента, "
+                "а разбираться теперь владельцу. LocalOS отслеживает новые отзывы и "
+                "готовит ответы - вам остаётся только подтвердить. Для сети кафе это "
+                "освободило 7 часов в неделю.\n\n"
+                "Вам может быть это интересно?"
+            )
+        if signal_combo in {"recent_new_service_announcement", "recent_event_announcement"}:
+            observation = _timing_observation(signal_combo, candidate.get("observed_fact"))
+            if signal_combo == "recent_new_service_announcement":
+                bridge = (
+                    "В момент запуска карты и контент могут вместе помочь рассказать "
+                    "об услуге тем, кто уже ищет её рядом."
+                )
+            else:
+                bridge = (
+                    "Такой повод можно синхронно использовать в картах, контенте и "
+                    "локальном продвижении."
+                )
+            audit_url = clean_copy(candidate.get("public_audit_url"))
+            audit_block = f"\n{audit_url}" if audit_url else ""
+            return (
+                f"Здравствуйте! Я {introduction}.\n\n"
+                f"Увидел ваш свежий {observation}.\n\n"
+                f"{bridge}\n\n"
+                f"Мы собрали короткий разбор публичной карточки:{audit_block}\n\n"
+                "Вам может быть это интересно?"
+            )
+        if signal_combo == "active_social_with_map_gap":
             rating_match = re.search(
                 r"рейтинг\s+([0-9]+(?:[.,][0-9]+)?)\s+и\s+(\d+)\s+отзыв",
                 clean_copy(candidate.get("observed_fact")),
@@ -290,6 +399,12 @@ def founder_led_localos_text(
             )
             rating = rating_match.group(1) if rating_match else "ниже сильных конкурентов"
             reviews = rating_match.group(2) if rating_match else "немного"
+            review_count = int(reviews) if reviews.isdigit() else 0
+            review_word = "отзывов"
+            if review_count % 10 == 1 and review_count % 100 != 11:
+                review_word = "отзыв"
+            elif review_count % 10 in {2, 3, 4} and review_count % 100 not in {12, 13, 14}:
+                review_word = "отзыва"
             audit_url = clean_copy(candidate.get("public_audit_url"))
             audit_block = f"\n{audit_url}" if audit_url else ""
             approved_offer = clean_copy(candidate.get("next_step"))
@@ -298,13 +413,22 @@ def founder_led_localos_text(
                 if re.search(r"(?:1\s*200|1200)", approved_offer)
                 else ""
             )
+            map_gap_copy = (
+                f"Сейчас в карточке на картах рейтинг {rating} и только {reviews} {review_word}. "
+                "Часто при таком количестве отзывов карточке сложнее подняться выше в выдаче. "
+                "Тогда её видит меньше людей, и может приходить меньше обращений."
+                if 0 < review_count <= 10
+                else (
+                    f"Сейчас в карточке на картах рейтинг {rating} "
+                    f"при {reviews} {'отзыве' if review_count == 1 else 'отзывах'}. "
+                    "Когда отзывов много, такой рейтинг уже заметно влияет на доверие."
+                )
+            )
             return (
                 f"Здравствуйте! Я {introduction}.\n\n"
                 "Увидел, что вы активно ведёте соцсети. Карты тоже могли бы "
                 "помогать вам привлекать клиентов.\n\n"
-                f"Сейчас в карточке на картах рейтинг {rating} и только {reviews} отзыва. "
-                "Часто при таком количестве отзывов карточке сложнее подняться выше в выдаче. "
-                "Тогда её видит меньше людей, и может приходить меньше обращений.\n\n"
+                f"{map_gap_copy}\n\n"
                 "Сам больше десяти лет в бизнесе и понимаю, почему регулярные задачи "
                 "проигрывают клиентам и операционке.\n\n"
                 f"Вот короткий разбор с конкретными шагами:{audit_block}\n\n"
@@ -467,7 +591,7 @@ def founder_led_localos_subject(angle: str, candidate: dict[str, Any]) -> str | 
         candidate.get("recipient"),
         candidate.get("observed_fact"),
     )
-    if not segment:
+    if not segment and clean_copy(candidate.get("signal_combo")) not in FOUNDER_LED_SIGNAL_COMBOS:
         return None
     recipient = clean_copy(candidate.get("recipient"))
     labels = {

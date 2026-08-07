@@ -118,7 +118,19 @@ def build_active_social_map_gap_signal(
         "reviews_below_peers": bool(peer_reviews and reviews < peer_reviews),
         "profile_incomplete": incomplete,
     }
-    map_gap = sum(1 for passed in gap_checks.values() if passed) >= 2
+    # The reviewed hypothesis has two independent observable sides: the
+    # company regularly invests in public content and its map rating is low.
+    # A rating at or below 4.4 is therefore already a material map gap. Other
+    # map checks still require at least two observations when the rating itself
+    # is not low.
+    map_gap = bool(
+        gap_checks["rating_at_or_below_4_4"]
+        or sum(
+            1
+            for key, passed in gap_checks.items()
+            if key != "rating_at_or_below_4_4" and passed
+        ) >= 2
+    )
     last_post_at = _parse_time(social_activity.get("last_post_at"))
     age_days = (current_time - last_post_at).days if last_post_at else None
     posts_30d = int(social_activity.get("posts_30d") or 0)
@@ -274,7 +286,13 @@ def compile_pattern_draft(
         for item in unique
     ]
     trigger = {
-        "map_gap": {"minimum_checks": 2, "rating_lte": 4.4, "reviews_lte": 10, "rating_peer_delta": -0.2},
+        "map_gap": {
+            "minimum_checks": 2,
+            "rating_lte": 4.4,
+            "rating_alone_qualifies": True,
+            "reviews_lte": 10,
+            "rating_peer_delta": -0.2,
+        },
         "social_active": {"official_required": True, "freshness_days": 30, "posts_30d_gte": 4, "posts_90d_gte": 8},
         "observation_and_hypothesis_separate": True,
     }

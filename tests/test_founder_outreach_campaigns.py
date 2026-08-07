@@ -107,7 +107,8 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     assert "клиенты и ежедневная операционка всегда срочнее" in messages["founder_story"]
     assert "не просто выдаёт список рекомендаций" not in messages["founder_story"]
     assert "с 0 до 10 клиентов в день" in messages["proof"]
-    assert "больше напоминать не буду" in messages["respectful_close"]
+    assert "больше напоминать не буду" not in messages["respectful_close"]
+    assert "зачем я создал LocalOS" in messages["respectful_close"]
     assert all(message.count("?") == 1 for message in messages.values())
     assert all(
         phrase not in " ".join(messages.values()).lower()
@@ -181,6 +182,74 @@ def test_quality_gate_accepts_selected_approved_case_as_specific_proof():
     assert gate["criterion_scores"]["recipient_specificity"] == 2
     assert gate["score"] == 18
     assert gate["passed"] is True
+
+
+def test_quality_gate_accepts_singular_unanswered_review_without_printing_number_one():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "signal_combo": "active_social_with_unanswered_negative_review",
+        "observed_fact": (
+            "Официальный канал обновляется регулярно. "
+            "В публичной карточке найдено 1 свежих отзывов с оценкой до 3 без ответа компании."
+        ),
+    })
+    story = {
+        "story": candidate["founder_story"],
+        "proof": candidate["founder_proof"],
+        "forbidden_claims": [],
+    }
+
+    message = _message_for_angle("signal", candidate, story, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        story,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+
+    assert "есть свежий отзыв" in message
+    assert gate["score"] == 18
+    assert gate["passed"] is True
+
+
+def test_quality_gate_accepts_exact_new_service_and_event_timing_observations():
+    story = {
+        "story": "Подтверждённый опыт основателя LocalOS",
+        "proof": "LocalOS применяется более чем в 240 точках малого бизнеса.",
+        "forbidden_claims": [],
+    }
+    cases = (
+        (
+            "recent_new_service_announcement",
+            'В Telegram опубликовано: "Новая услуга - электроэпиляция".',
+        ),
+        (
+            "recent_event_announcement",
+            'В Telegram опубликовано: "21 августа - клиентский день".',
+        ),
+    )
+    for signal_combo, observed_fact in cases:
+        candidate = _private_beauty_founder_candidate()
+        candidate.update({
+            "signal_combo": signal_combo,
+            "observed_fact": observed_fact,
+            "public_audit_url": "https://localos.pro/example-audit",
+        })
+        message = _message_for_angle("signal", candidate, story, [])
+        gate = _quality_gate(
+            message,
+            candidate,
+            story,
+            channel="email",
+            channel_status="ready",
+            suppressed=False,
+            angle="signal",
+        )
+        assert gate["score"] == 18
+        assert gate["passed"] is True
 
 
 def test_founder_led_beauty_segmentation_is_deterministic_and_conservative():

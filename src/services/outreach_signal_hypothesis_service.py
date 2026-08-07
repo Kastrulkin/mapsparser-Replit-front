@@ -23,6 +23,16 @@ HIRING_RE = re.compile(
     re.IGNORECASE,
 )
 UNANSWERED_REVIEW_RE = re.compile(r"\b(?:отзыв\w*\s+без\s+ответ|неотвеченн\w*\s+отзыв)\b", re.IGNORECASE)
+NEW_SERVICE_RE = re.compile(
+    r"\b(?:нов\w+\s+услуг\w*|новинк\w*|запустил\w*\s+\w*\s*услуг\w*|"
+    r"нов\w+\s+(?:аппарат\w*|оборудован\w*|процедур\w*))\b",
+    re.IGNORECASE,
+)
+EVENT_RE = re.compile(
+    r"\b(?:клиентск\w+\s+день|мастер[- ]класс\w*|день\s+открытых\s+дверей|"
+    r"приглашаем\s+на\s+(?:встреч\w*|мероприят\w*|праздник\w*))\b",
+    re.IGNORECASE,
+)
 
 
 def _text(value: Any) -> str:
@@ -45,6 +55,7 @@ def _recent_matches(
     *,
     days: int,
     now: datetime,
+    official_source_confirmed: bool = False,
 ) -> list[dict[str, Any]]:
     matches = []
     for item in ledger:
@@ -61,7 +72,7 @@ def _recent_matches(
             "vk", "vk_post", "instagram", "instagram_post", "review", "map_review",
         }:
             continue
-        if source_type not in {"review", "map_review"} and not (
+        if source_type not in {"review", "map_review"} and not official_source_confirmed and not (
             item.get("author_or_organization") or item.get("official") is True
         ):
             continue
@@ -76,6 +87,85 @@ def _library(playbook: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
         for item in guidance.get("pain_signal_hypotheses") or []
         if isinstance(item, dict) and _text(item.get("key"))
     }
+
+
+def _items(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        for key in ("items", "services", "reviews", "data"):
+            nested = value.get(key)
+            if isinstance(nested, list):
+                return [item for item in nested if isinstance(item, dict)]
+    return []
+
+
+def _official_social_is_current(context: dict[str, Any], now: datetime) -> bool:
+    social = context.get("official_social_activity")
+    if not isinstance(social, dict) or not social.get("official"):
+        return False
+    last_post_at = _time(social.get("last_post_at"))
+    return bool(
+        last_post_at
+        and 0 <= (now - last_post_at.astimezone(timezone.utc)).days <= 30
+    )
+
+
+def _social_evidence(context: dict[str, Any]) -> dict[str, Any]:
+    social = context.get("official_social_activity")
+    social = social if isinstance(social, dict) else {}
+    return {
+        "id": "official-social-activity",
+        "source_url": _text(social.get("source_url")),
+        "source_type": "official_social_activity",
+        "observed_at": social.get("last_post_at"),
+    }
+
+
+def _service_price_gap(context: dict[str, Any]) -> tuple[int, int] | None:
+    services = _items(context.get("services_json"))
+    if len(services) < 5:
+        return None
+    priced = 0
+    for service in services:
+        price = service.get("price")
+        if price is None:
+            price = service.get("price_from")
+        if price is None:
+            price = service.get("cost")
+        if _text(price) and _text(price).lower() not in {"0", "0.0", "по запросу", "уточняйте"}:
+            priced += 1
+    missing = len(services) - priced
+    if missing / len(services) < 0.3:
+        return None
+    return len(services), priced
+
+
+def _unanswered_negative_reviews(
+    context: dict[str, Any],
+    *,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    matches = []
+    for index, review in enumerate(_items(context.get("reviews_json"))):
+        try:
+            rating = float(str(review.get("rating") or "").replace(",", "."))
+        except ValueError:
+            continue
+        if rating > 3:
+            continue
+        if _text(review.get("business_comment") or review.get("owner_response") or review.get("response")):
+            continue
+        observed_at = _time(review.get("date") or review.get("published_at") or review.get("created_at"))
+        if not observed_at or not 0 <= (now - observed_at.astimezone(timezone.utc)).days <= 180:
+            continue
+        matches.append({
+            "id": _text(review.get("id")) or f"negative-review-{index}",
+            "source_url": _text(review.get("source_url")) or _text(context.get("source_url")),
+            "source_type": "map_review",
+            "observed_at": observed_at.isoformat(),
+        })
+    return matches
 
 
 def _result(
@@ -146,6 +236,44 @@ def derive_pain_signal_hypotheses(
         result["social_activity"] = social_map.get("social_activity")
         results.append(result)
 
+    social_current = _official_social_is_current(context, current)
+    price_rule = rules.get("active_social_with_service_price_gap")
+    price_gap = _service_price_gap(context)
+    if price_rule and social_current and price_gap:
+        total, priced = price_gap
+        results.append(_result(
+            price_rule,
+            [
+                _social_evidence(context),
+                {
+                    "id": "map-service-catalog",
+                    "source_url": _text(context.get("source_url")),
+                    "source_type": "map_service_catalog",
+                },
+            ],
+            observed_fact=(
+                "Официальный канал обновляется регулярно. "
+                f"В карточке найдено {total} услуг; цена указана у {priced}."
+            ),
+            confidence=0.92,
+            now=current,
+        ))
+
+    review_rule = rules.get("active_social_with_unanswered_negative_review")
+    negative_reviews = _unanswered_negative_reviews(context, now=current)
+    if review_rule and social_current and negative_reviews:
+        results.append(_result(
+            review_rule,
+            [_social_evidence(context), *negative_reviews],
+            observed_fact=(
+                "Официальный канал обновляется регулярно. "
+                f"В публичной карточке найдено {len(negative_reviews)} свежих отзывов "
+                "с оценкой до 3 без ответа компании."
+            ),
+            confidence=0.94,
+            now=current,
+        ))
+
     repeated_specs = (
         ("repeated_open_slots", OPEN_SLOT_RE, 30, 2),
         ("repeated_discount_promotions", DISCOUNT_RE, 60, 3),
@@ -155,7 +283,13 @@ def derive_pain_signal_hypotheses(
         rule = rules.get(key)
         if not rule:
             continue
-        matches = _recent_matches(ledger, pattern, days=days, now=current)
+        matches = _recent_matches(
+            ledger,
+            pattern,
+            days=days,
+            now=current,
+            official_source_confirmed=social_current,
+        )
         if len(matches) < minimum:
             continue
         results.append(_result(
@@ -166,6 +300,32 @@ def derive_pain_signal_hypotheses(
                 f"за последние {days} дней."
             ),
             confidence=0.75,
+            now=current,
+        ))
+
+    timing_specs = (
+        ("recent_new_service_announcement", NEW_SERVICE_RE, 0.86),
+        ("recent_event_announcement", EVENT_RE, 0.84),
+    )
+    for key, pattern, confidence in timing_specs:
+        rule = rules.get(key)
+        if not rule:
+            continue
+        matches = _recent_matches(
+            ledger,
+            pattern,
+            days=30,
+            now=current,
+            official_source_confirmed=social_current,
+        )
+        if not matches:
+            continue
+        evidence = matches[:1]
+        results.append(_result(
+            rule,
+            evidence,
+            observed_fact=_text(evidence[0].get("fact") or evidence[0].get("observed_fact")),
+            confidence=confidence,
             now=current,
         ))
 

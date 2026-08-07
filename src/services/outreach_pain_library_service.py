@@ -247,7 +247,11 @@ def refresh_pain_library_draft(cursor: Any, *, user_id: str, limit: int = 500) -
 
 
 def load_approved_pain_library(cursor: Any) -> dict[str, Any]:
-    """Return the active approved version, falling back to curated v1."""
+    """Return approved owner language with canonical executable signal rules.
+
+    Approved monitored language may evolve independently, but an older database
+    snapshot must not remove newer safety contracts shipped in code.
+    """
 
     cursor.execute(
         """
@@ -269,14 +273,19 @@ def load_approved_pain_library(cursor: Any) -> dict[str, Any]:
     guidance["pattern_id"] = str(pattern.get("id") or "")
     guidance["pattern_version"] = int(pattern.get("version") or 0)
     guidance["pain_library"] = list(rules.get("pains") or guidance["pain_library"])
-    guidance["pain_signal_library_version"] = str(
-        rules.get("pain_signal_library_version")
-        or guidance["pain_signal_library_version"]
-    )
-    guidance["pain_signal_hypotheses"] = list(
-        rules.get("pain_signal_hypotheses")
-        or guidance["pain_signal_hypotheses"]
-    )
+    canonical_signal_rules = list(guidance["pain_signal_hypotheses"])
+    canonical_keys = {
+        str(item.get("key") or "")
+        for item in canonical_signal_rules
+        if isinstance(item, dict)
+    }
+    approved_signal_rules = [
+        item
+        for item in rules.get("pain_signal_hypotheses") or []
+        if isinstance(item, dict)
+        and str(item.get("key") or "") not in canonical_keys
+    ]
+    guidance["pain_signal_hypotheses"] = canonical_signal_rules + approved_signal_rules
     guidance["source_refs"] = list(pattern.get("source_refs_json") or [])
     guidance["pain_language_status"] = "segment_hypothesis_only"
     return guidance

@@ -12,7 +12,7 @@ from typing import Any
 
 PLAYBOOK_VERSION = "localos_outreach_playbook_v2"
 CORPUS_TAG = "telegram_b2b"
-PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v1"
+PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v2"
 
 B2B_METHOD_RULES = (
     "Начинать с проверяемого действия или артефакта получателя, а не с общего комплимента.",
@@ -114,6 +114,82 @@ BEAUTY_PAIN_SIGNAL_HYPOTHESES = (
             "Соцсеть не подтверждена как официальная.",
             "Нет свежей регулярной активности.",
             "Нет отдельного подтверждения слабой карточки на картах.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "active_social_with_service_price_gap",
+        "pain_key": "pricing_and_average_ticket",
+        "required_signals": ["active_official_social", "verified_service_price_gap"],
+        "hypothesis": (
+            "Компания уже привлекает внимание контентом, но неполные цены в карточке "
+            "могут усложнять выбор услуги и запись."
+        ),
+        "safe_formulation": (
+            "Вы активно ведёте канал. В карточке у части услуг не указана цена; "
+            "можно проверить, насколько легко клиенту выбрать и записаться."
+        ),
+        "contraindications": [
+            "Источник не подтверждён как официальный канал компании.",
+            "Каталог услуг неполный или не относится к этой компании.",
+            "Цены отсутствуют менее чем у 30% из как минимум пяти услуг.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "active_social_with_unanswered_negative_review",
+        "pain_key": "reviews_and_service",
+        "required_signals": ["active_official_social", "fresh_negative_review_without_response"],
+        "hypothesis": (
+            "Компания развивает публичный канал, а работа с отзывами может оставаться "
+            "ручной задачей владельца."
+        ),
+        "safe_formulation": (
+            "Вы активно ведёте канал, при этом в карточке есть свежий отзыв с оценкой "
+            "до 3 без ответа компании."
+        ),
+        "contraindications": [
+            "У отзыва уже есть ответ компании.",
+            "Отзыв старше 180 дней или относится к другой компании.",
+            "Нельзя пересказывать обвинения из отзыва или делать вывод о качестве услуг.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "recent_new_service_announcement",
+        "pain_key": "marketing_and_clients",
+        "required_signals": ["recent_official_new_service_post"],
+        "hypothesis": (
+            "Запуск новой услуги создаёт конкретный момент, когда карты, контент и "
+            "повторные касания могут поддержать спрос."
+        ),
+        "safe_formulation": (
+            "Вы недавно анонсировали новую услугу. Можно проверить, как поддержать "
+            "запуск в картах и других публичных каналах."
+        ),
+        "contraindications": [
+            "Публикация не относится к официальному каналу компании.",
+            "Анонс старше 30 дней.",
+            "Нельзя утверждать, что новая услуга продаётся плохо.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "recent_event_announcement",
+        "pain_key": "marketing_and_clients",
+        "required_signals": ["recent_official_event_post"],
+        "hypothesis": (
+            "Событие даёт конкретный повод синхронизировать контент, карты и "
+            "локальное продвижение."
+        ),
+        "safe_formulation": (
+            "Вы анонсировали событие для клиентов. Можно проверить, как использовать "
+            "этот повод в картах и других каналах."
+        ),
+        "contraindications": [
+            "Публикация не относится к официальному каналу компании.",
+            "Событие уже прошло и публикация старше 30 дней.",
+            "Нельзя обещать посещаемость или продажи без отдельного расчёта.",
         ],
         "status": "testable",
     },

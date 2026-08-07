@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from psycopg2.extras import Json
 
+from services.outreach_experiment_service import derive_composite_signal
 from services.outreach_personalization_ai import (
     PROMPT_VERSION,
     QUALITY_CRITERIA,
@@ -1291,6 +1292,7 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         """
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
                l.rating, l.reviews_count, l.website, l.source_url,
+               l.services_json, l.reviews_json,
                l.phone, l.email, l.telegram_url, l.whatsapp_url,
                (
                    SELECT 'https://localos.pro/' || public_offer.slug
@@ -1864,7 +1866,10 @@ def _strategy_dimensions(
         "day_offset": day_offset,
         "angle": angle,
     }
-    if context.get("workstream_type") == "localos_sales" and candidate.get("recipient_segment"):
+    if context.get("workstream_type") == "localos_sales" and (
+        candidate.get("recipient_segment")
+        or _text(candidate.get("signal_combo")).startswith("active_social_with_")
+    ):
         approved_case = (
             localos_case_for_angle(angle, candidate)
             if angle in {"proof", "content_operations", "average_ticket", "reviews_service"}
@@ -2071,8 +2076,9 @@ def _quality_gate(
         source_observation,
         flags=re.IGNORECASE,
     )
+    signal_combo = _text(candidate.get("signal_combo"))
     composite_signal_grounded = bool(
-        _text(candidate.get("signal_combo")) == "active_social_with_map_gap"
+        signal_combo == "active_social_with_map_gap"
         and composite_map_match
         and composite_map_match.group(1).replace(",", ".")
         in normalized_text.replace(",", ".")
@@ -2091,13 +2097,70 @@ def _quality_gate(
             )
         )
     )
+    if signal_combo == "active_social_with_service_price_gap":
+        service_match = re.search(
+            r"найдено\s+(\d+)\s+услуг;\s+цена указана у\s+(\d+)",
+            source_observation,
+            flags=re.IGNORECASE,
+        )
+        composite_signal_grounded = bool(
+            service_match
+            and all(number in normalized_text for number in service_match.groups())
+            and "услуг" in normalized_text
+            and "цен" in normalized_text
+        )
+    if signal_combo == "active_social_with_unanswered_negative_review":
+        review_match = re.search(
+            r"найдено\s+(\d+)\s+свежих отзыв",
+            source_observation,
+            flags=re.IGNORECASE,
+        )
+        composite_signal_grounded = bool(
+            review_match
+            and (
+                review_match.group(1) in normalized_text
+                or (
+                    review_match.group(1) == "1"
+                    and "свежий отзыв" in normalized_text
+                )
+            )
+            and "оценк" in normalized_text
+            and "без ответ" in normalized_text
+        )
+    if signal_combo == "recent_new_service_announcement":
+        service_match = re.search(
+            r"нов\w*\s+услуг\w*\s*[-:]\s*([a-zа-яё0-9-]+)",
+            source_observation,
+            flags=re.IGNORECASE,
+        )
+        composite_signal_grounded = bool(
+            service_match
+            and service_match.group(1).lower() in normalized_text
+            and "нов" in normalized_text
+            and "услуг" in normalized_text
+        )
+    if signal_combo == "recent_event_announcement":
+        event_match = re.search(
+            r"(\d{1,2}\s+[а-яё]+)\s*[-:]?\s*клиентск\w*\s+день",
+            source_observation,
+            flags=re.IGNORECASE,
+        )
+        composite_signal_grounded = bool(
+            event_match
+            and event_match.group(1).lower() in normalized_text
+            and "клиентск" in normalized_text
+            and "дн" in normalized_text
+        )
     grounded_observation = composite_signal_grounded or observation_is_grounded(
         text,
         source_observation,
     )
     founder_led_beauty = bool(
         _text(candidate.get("sender_mode")) in {"", SENDER_MODE_LOCALOS}
-        and _text(candidate.get("recipient_segment"))
+        and (
+            _text(candidate.get("recipient_segment"))
+            or _text(candidate.get("signal_combo")).startswith("active_social_with_")
+        )
     )
     approved_case = (
         localos_case_for_angle(_text(angle), candidate)
@@ -2216,6 +2279,11 @@ def _quality_gate(
                         "регулярно работаете с привлечением клиентов онлайн",
                         "карты тоже могли бы помогать",
                         "собрали короткий разбор",
+                        "клиенту из-за этого сложнее",
+                        "привести список услуг и цены",
+                        "отслеживает новые отзывы и готовит ответы",
+                        "в момент запуска карты и контент",
+                        "повод можно синхронно использовать",
                     )
                 )
             )
@@ -2621,10 +2689,24 @@ def build_preview(
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
     pain_playbook = None
-    if (
-        context.get("workstream_type") == "localos_sales"
+    localos_sales = context.get("workstream_type") == "localos_sales"
+    beauty_sales = bool(
+        localos_sales
         and localos_beauty_segment(context.get("category"), context.get("lead_name"))
-    ):
+    )
+    if localos_sales and not beauty_sales:
+        composite_signal = derive_composite_signal(context, ledger)
+        known_signal_combos = {
+            _text(item.get("signal_combo"))
+            for item in ledger
+            if _text(item.get("signal_combo"))
+        }
+        if (
+            composite_signal
+            and _text(composite_signal.get("signal_combo")) not in known_signal_combos
+        ):
+            ledger.insert(0, composite_signal)
+    if localos_sales:
         pain_playbook = load_approved_pain_library(cursor)
         pain_hypotheses = derive_pain_signal_hypotheses(
             context,
@@ -2767,7 +2849,10 @@ def build_preview(
         (candidate for candidate in candidates if candidate.get("id") == selected_candidate_id),
         candidates[0],
     )
-    if context.get("workstream_type") == "localos_sales" and primary_candidate.get("recipient_segment"):
+    if context.get("workstream_type") == "localos_sales" and (
+        primary_candidate.get("recipient_segment")
+        or _text(primary_candidate.get("signal_combo"))
+    ):
         primary_candidate["outreach_playbook"] = pain_playbook or load_approved_pain_library(cursor)
     override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):

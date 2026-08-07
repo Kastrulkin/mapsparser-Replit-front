@@ -50,6 +50,21 @@ TARGET_WORKSTREAMS = (
 EXCLUDED_WORKSTREAMS = {
     "28dc573a-7882-4d2e-8a03-58ccba1c2278": "strong_sales_signal_offer_strategy_pending",
 }
+ANGLE_OVERRIDES = {
+    # Active social + map-rating gap, adapted to the recipient's business model.
+    "40892b88-10a9-4190-8496-208aad8385d9": (
+        "signal", "founder_origin", "reviews_service", "integrated_system",
+    ),
+    "bab95257-4a1a-4ec4-af3a-184979696fe5": (
+        "signal", "founder_origin", "content_operations", "reviews_service", "integrated_system",
+    ),
+    "b340487b-94aa-4918-8a02-71240cac7986": (
+        "signal", "content_operations", "average_ticket", "reviews_service", "integrated_system",
+    ),
+    "13347e2b-d215-4e14-9aea-a39f7172b1b5": (
+        "signal", "founder_origin", "content_operations", "reviews_service", "integrated_system",
+    ),
+}
 
 
 def _connect():
@@ -132,7 +147,12 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _available_sequence(channel_availability: dict[str, Any]) -> list[dict[str, Any]]:
+def _available_sequence(
+    channel_availability: dict[str, Any],
+    *,
+    workstream_id: str,
+    lead_name: str,
+) -> list[dict[str, Any]]:
     available_steps = [
         (channel, day)
         for channel, day, _angle in DEFAULT_SEQUENCE
@@ -146,12 +166,19 @@ def _available_sequence(channel_availability: dict[str, Any]) -> list[dict[str, 
         "integrated_system",
         "founder_origin",
     )
-    angles = reviewed_angles[:len(available_steps)]
+    angles = ANGLE_OVERRIDES.get(workstream_id, reviewed_angles)[:len(available_steps)]
     return [
         {
             "channel": channel,
             "day_offset": day,
             "angle": angles[index],
+            "subject": (
+                f"{lead_name} | короткий вопрос"
+                if channel == "email" and index == 0
+                else "Что ещё снимает LocalOS"
+                if channel == "email" and angles[index] == "integrated_system"
+                else None
+            ),
             "skip_if_unavailable": True,
         }
         for index, (channel, day) in enumerate(available_steps)
@@ -194,7 +221,9 @@ def main() -> None:
                     manual_reviewer_role="superadmin",
                 )
                 sequence = _available_sequence(
-                    availability_preview.get("channel_availability") or {}
+                    availability_preview.get("channel_availability") or {},
+                    workstream_id=workstream_id,
+                    lead_name=result["lead"],
                 )
                 preview = build_preview(
                     cursor,

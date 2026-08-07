@@ -119,8 +119,8 @@ def test_repeated_hiring_does_not_claim_staff_turnover():
 
 def test_signal_library_is_versioned_and_contains_counterexamples():
     playbook = beauty_outreach_guidance()
-    assert playbook["pain_signal_library_version"] == "beauty_pain_signals_v1"
-    assert len(playbook["pain_signal_hypotheses"]) == 6
+    assert playbook["pain_signal_library_version"] == "beauty_pain_signals_v2"
+    assert len(playbook["pain_signal_hypotheses"]) == 10
     assert all(item["contraindications"] for item in playbook["pain_signal_hypotheses"])
     assert all(item["status"] == "testable" for item in playbook["pain_signal_hypotheses"])
 
@@ -145,3 +145,77 @@ def test_learning_fingerprint_separates_signal_to_pain_hypotheses():
         "signal_hypothesis_status": "segment_hypothesis_only",
     })
     assert marketing != pricing
+
+
+def test_active_social_and_missing_service_prices_create_pricing_hypothesis():
+    hypotheses = derive_pain_signal_hypotheses(
+        {
+            "source_url": "https://yandex.ru/maps/org/1",
+            "services_json": [
+                {"name": "Услуга 1", "price": 1000},
+                {"name": "Услуга 2", "price": ""},
+                {"name": "Услуга 3"},
+                {"name": "Услуга 4"},
+                {"name": "Услуга 5", "price": 2000},
+            ],
+            "official_social_activity": {
+                "official": True,
+                "last_post_at": NOW - timedelta(days=3),
+                "source_url": "https://t.me/company",
+            },
+        },
+        [],
+        now=NOW,
+    )
+    result = next(
+        item for item in hypotheses
+        if item["signal_combo"] == "active_social_with_service_price_gap"
+    )
+    assert result["pain_key"] == "pricing_and_average_ticket"
+    assert "5 услуг" in result["observed_fact"]
+    assert "цена указана у 2" in result["observed_fact"]
+
+
+def test_active_social_and_unanswered_negative_review_never_copy_review_text():
+    review_text = "Очень неприятное неподтверждённое обвинение"
+    hypotheses = derive_pain_signal_hypotheses(
+        {
+            "source_url": "https://yandex.ru/maps/org/1",
+            "reviews_json": [{
+                "id": "review-1",
+                "rating": 2,
+                "date": (NOW - timedelta(days=20)).isoformat(),
+                "text": review_text,
+                "business_comment": "",
+            }],
+            "official_social_activity": {
+                "official": True,
+                "last_post_at": NOW - timedelta(days=2),
+                "source_url": "https://t.me/company",
+            },
+        },
+        [],
+        now=NOW,
+    )
+    result = next(
+        item for item in hypotheses
+        if item["signal_combo"] == "active_social_with_unanswered_negative_review"
+    )
+    assert result["pain_key"] == "reviews_and_service"
+    assert review_text not in result["observed_fact"]
+    assert "оценкой до 3" in result["observed_fact"]
+
+
+def test_recent_new_service_and_event_are_separate_timing_hypotheses():
+    hypotheses = derive_pain_signal_hypotheses(
+        {},
+        [
+            social_post("service", "Новая услуга - электроэпиляция", 3),
+            social_post("event", "Приглашаем на клиентский день", 5),
+        ],
+        now=NOW,
+    )
+
+    combos = {item["signal_combo"] for item in hypotheses}
+    assert "recent_new_service_announcement" in combos
+    assert "recent_event_announcement" in combos

@@ -99,8 +99,8 @@ def test_runtime_uses_only_approved_version_and_keeps_hypothesis_boundary():
     assert guidance["pattern_id"] == "pattern-7"
     assert guidance["pain_language_status"] == "segment_hypothesis_only"
     assert guidance["source_refs"] == [{"document_id": "doc-1"}]
-    assert guidance["pain_signal_library_version"] == "beauty_pain_signals_v1"
-    assert len(guidance["pain_signal_hypotheses"]) == 6
+    assert guidance["pain_signal_library_version"] == "beauty_pain_signals_v2"
+    assert len(guidance["pain_signal_hypotheses"]) == 10
 
 
 def test_pain_library_uses_existing_pattern_and_outreach_surfaces():
