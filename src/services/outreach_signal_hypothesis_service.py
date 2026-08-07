@@ -177,6 +177,16 @@ def _result(
     now: datetime,
 ) -> dict[str, Any]:
     key = _text(rule.get("key"))
+    supporting_evidence = [
+        {
+            "evidence_id": _text(item.get("id") or item.get("evidence_id")),
+            "source_url": _text(item.get("source_url")),
+            "source_type": _text(item.get("source_type")),
+            "observed_at": item.get("observed_at"),
+        }
+        for item in evidence
+        if _text(item.get("id") or item.get("evidence_id"))
+    ]
     return {
         "id": f"pain-signal-{key}",
         "kind": "pain_signal_hypothesis",
@@ -190,7 +200,8 @@ def _result(
         "hypothesis_status": "segment_hypothesis_only",
         "safe_formulation": _text(rule.get("safe_formulation")),
         "relevance": _text(rule.get("safe_formulation")),
-        "evidence_ids": [_text(item.get("id") or item.get("evidence_id")) for item in evidence],
+        "evidence_ids": [item["evidence_id"] for item in supporting_evidence],
+        "supporting_evidence": supporting_evidence,
         "source_url": next((_text(item.get("source_url")) for item in evidence if _text(item.get("source_url"))), ""),
         "source_type": "composite_public_evidence",
         "observed_at": now.isoformat(),

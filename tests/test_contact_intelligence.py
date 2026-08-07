@@ -751,6 +751,108 @@ def test_native_research_refresh_replaces_stale_high_score_signal(monkeypatch):
     assert persisted_signals == [fresh_signal]
 
 
+def test_native_research_refresh_clears_stale_downstream_generation_state(monkeypatch):
+    existing = {
+        "id": "research-stale-downstream",
+        "score": 91,
+        "qualification_stage": "qualified",
+        "signal_label": "reason_to_check",
+        "why_now": "Старый сигнал.",
+        "score_breakdown": {},
+        "signals_json": [],
+        "sources_json": [],
+        "contact_evidence_json": [],
+        "limitations_json": [],
+        "message_brief_json": {"signal": "Старый сигнал."},
+        "message_readiness_json": {"code": "ready"},
+        "evidence_json": [],
+        "personalization_candidates_json": [{"id": "stale-1"}],
+        "selected_personalization_id": "stale-1",
+        "outreach_decision_json": {
+            "version": "outreach-v2.1",
+            "action": "write_now",
+        },
+        "report_hash": "stale-report",
+    }
+    fresh_payload = {
+        "score": 75,
+        "qualification_stage": "reason_to_check",
+        "signal_label": "reason_to_check",
+        "score_breakdown": {"timing": 15},
+        "why_now": "Свежий подтверждённый сигнал.",
+        "signals_json": [],
+        "sources_json": [],
+        "contact_evidence_json": [],
+        "limitations_json": [],
+        "message_brief_json": {"signal": "Свежий подтверждённый сигнал."},
+        "message_readiness_json": {},
+        "evidence_json": [],
+        "personalization_candidates_json": [],
+        "report_hash": "fresh-report",
+        "researched_at": datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc),
+    }
+
+    class Cursor:
+        def __init__(self):
+            self.query = ""
+            self.updated = None
+
+        def execute(self, query, params=None):
+            self.query = query
+            if "UPDATE lead_workstream_research" not in query:
+                return
+            self.updated = {**existing}
+            self.updated.update({
+                "score": fresh_payload["score"],
+                "qualification_stage": fresh_payload["qualification_stage"],
+                "signal_label": fresh_payload["signal_label"],
+                "why_now": fresh_payload["why_now"],
+                "report_hash": fresh_payload["report_hash"],
+            })
+            if "message_readiness_json" in query:
+                self.updated["message_readiness_json"] = fresh_payload["message_readiness_json"]
+            if "personalization_candidates_json" in query:
+                self.updated["personalization_candidates_json"] = fresh_payload["personalization_candidates_json"]
+            if "selected_personalization_id" in query:
+                self.updated["selected_personalization_id"] = None
+            if "outreach_decision_json" in query:
+                self.updated["outreach_decision_json"] = {}
+
+        def fetchone(self):
+            if "COUNT(*) FILTER" in self.query:
+                return {"found": 0, "verified": 0}
+            if "SELECT * FROM lead_workstream_research" in self.query:
+                return existing
+            if "UPDATE lead_workstream_research" in self.query:
+                return self.updated
+            return None
+
+        def fetchall(self):
+            return []
+
+    cursor = Cursor()
+    monkeypatch.setattr(contact_intelligence_service, "discovered_telegram_signals", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(contact_intelligence_service, "build_native_research_payload", lambda *_args, **_kwargs: fresh_payload)
+
+    refreshed = contact_intelligence_service.upsert_native_research(
+        cursor,
+        {"id": "lead-1"},
+        {"id": "workstream-1", "workstream_type": "test"},
+    )
+
+    assert {
+        "message_readiness_json": refreshed["message_readiness_json"],
+        "personalization_candidates_json": refreshed["personalization_candidates_json"],
+        "selected_personalization_id": refreshed["selected_personalization_id"],
+        "outreach_decision_json": refreshed["outreach_decision_json"],
+    } == {
+        "message_readiness_json": {},
+        "personalization_candidates_json": [],
+        "selected_personalization_id": None,
+        "outreach_decision_json": {},
+    }
+
+
 def test_localos_sales_stops_when_role_signal_and_proof_are_missing():
     brief, readiness = build_message_brief(
         {"name": "Example", "category": "стоматология"},

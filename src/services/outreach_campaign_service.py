@@ -1825,8 +1825,21 @@ def build_personalization_candidates(
             ) or story
         problem_hypothesis = _text(evidence.get("hypothesis")) or None
         relevance_to_offer = _outreach_bridge(evidence)
-        evidence_ids = [_text(evidence.get("id"))]
-        supporting_evidence = []
+        composite_evidence_ids = [
+            _text(item)
+            for item in _list(evidence.get("evidence_ids"))
+            if _text(item)
+        ]
+        evidence_ids = (
+            composite_evidence_ids
+            if _text(evidence.get("kind")) == "pain_signal_hypothesis" and composite_evidence_ids
+            else [_text(evidence.get("id"))]
+        )
+        supporting_evidence = [
+            dict(item)
+            for item in _list(evidence.get("supporting_evidence"))
+            if isinstance(item, dict)
+        ]
         map_observation = ""
         if (
             supporting_map_evidence
@@ -2168,6 +2181,25 @@ def _quality_gate(
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
     normalized_text = text.lower()
     source_observation = _text(candidate.get("observed_fact"))
+    evidence_ids = {
+        _text(item)
+        for item in _list(candidate.get("evidence_ids"))
+        if _text(item)
+    }
+    sourced_evidence_ids = {
+        _text(item.get("evidence_id") or item.get("id"))
+        for item in _list(candidate.get("supporting_evidence"))
+        if isinstance(item, dict)
+        and _text(item.get("evidence_id") or item.get("id"))
+        and _public_http_url(item.get("source_url"))
+    }
+    primary_evidence_id = _text(candidate.get("evidence_id"))
+    if primary_evidence_id and _public_http_url(candidate.get("source_url")):
+        sourced_evidence_ids.add(primary_evidence_id)
+    source_alignment = bool(
+        len(evidence_ids) <= 1
+        or (evidence_ids and evidence_ids.issubset(sourced_evidence_ids))
+    )
     composite_map_match = re.search(
         r"рейтинг\s+([0-9]+(?:[.,][0-9]+)?)\s+и\s+(\d+)\s+отзыв",
         source_observation,
@@ -2403,6 +2435,7 @@ def _quality_gate(
                 or candidate.get("evidence_kind") == "operator_approved_partnership_reason"
             )
         ),
+        "source_alignment": source_alignment,
         "freshness": _text(candidate.get("freshness")).lower() not in {
             "",
             "stale",
@@ -2448,6 +2481,8 @@ def _quality_gate(
     blocking_reasons = []
     if not checks["fact"]:
         blocking_reasons.append("unverified_or_unsourced_fact")
+    if not checks["source_alignment"]:
+        blocking_reasons.append("source_mismatch")
     if not checks["proof_integrity"]:
         blocking_reasons.append("proof_integrity_failed")
     if not checks["suppression_safety"]:
@@ -2464,6 +2499,7 @@ def _quality_gate(
         blocking_reasons.append("style_contract_violation")
     canonical_reason_map = {
         "unverified_or_unsourced_fact": "SOURCE_MISSING",
+        "source_mismatch": "SOURCE_MISMATCH",
         "proof_integrity_failed": "UNSUPPORTED_PROOF",
         "recipient_suppressed": "SUPPRESSED_CONTACT",
         "decorative_personalization": "DECORATIVE_PERSONALIZATION",
@@ -2474,6 +2510,7 @@ def _quality_gate(
     }
     diagnostic_reason_map = {
         "fact": "SOURCE_MISSING",
+        "source_alignment": "SOURCE_MISMATCH",
         "freshness": "STALE_AS_CURRENT",
         "bridge": "WEAK_OFFER_BRIDGE",
         "removal": "DECORATIVE_PERSONALIZATION",

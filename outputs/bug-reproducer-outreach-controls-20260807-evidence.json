@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "Both approved outreach-control defects changed from deterministic contract failures to passes; all 193 directly related broader tests pass. One adjacent history-payload fake-cursor test remains independently stale against an unchanged API query.",
+  "reproduction": "confirmed",
+  "full_suite": "193 related tests passed; adjacent four-file run had 200 passed and 1 pre-existing out-of-scope fake-cursor failure",
+  "same_command": true,
+  "clean_head_control": {
+    "revision": "4c5c250ebf38981b3a86d421f53fe07045f449c0",
+    "command": "python -m pytest -q tests/test_outreach_campaign_history_payload.py::test_campaign_payload_links_delivery_and_human_reply_to_exact_touch",
+    "exit_code": 1,
+    "result": "Identical pre-existing AssertionError: fake cursor rejects the lead_workstream_research evidence/signals/report_hash query at test line 59."
+  },
+  "before": {
+    "command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_founder_outreach_campaigns.py::test_multisource_composite_claim_requires_source_for_each_material_clause",
+      "tests/test_contact_intelligence.py::test_native_research_refresh_clears_stale_downstream_generation_state"
+    ],
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 520,
+    "stdout": "FF [100%]\nComposite claim: expected quality gate rejection, received passed=True.\nResearch refresh: stale message_readiness_json, personalization_candidates_json, selected_personalization_id, and outreach_decision_json all survived.\n2 failed in 0.52s",
+    "stderr": ""
+  },
+  "after": {
+    "command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_founder_outreach_campaigns.py::test_multisource_composite_claim_requires_source_for_each_material_clause",
+      "tests/test_contact_intelligence.py::test_native_research_refresh_clears_stale_downstream_generation_state"
+    ],
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 510,
+    "stdout": ".. [100%]\n2 passed in 0.51s",
+    "stderr": ""
+  }
+}

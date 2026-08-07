@@ -36,6 +36,7 @@ from services.outreach_founder_led_copy import (
     observation_is_grounded,
     select_approved_localos_case,
 )
+from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from scripts.backfill_partnership_match_artifacts import _skip_reason
 
 
@@ -182,6 +183,57 @@ def test_quality_gate_accepts_selected_approved_case_as_specific_proof():
     assert gate["criterion_scores"]["recipient_specificity"] == 2
     assert gate["score"] == 18
     assert gate["passed"] is True
+
+
+def test_multisource_composite_claim_requires_source_for_each_material_clause():
+    now = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
+    hypotheses = derive_pain_signal_hypotheses(
+        {
+            "source_url": "https://yandex.ru/maps/org/clinic",
+            "website": "https://clinic.test",
+            "is_verified_owner": False,
+            "map_posts_count": 0,
+            "map_services_count": 0,
+            "official_social_activity": {
+                "official": True,
+                "source_url": "https://t.me/clinic",
+                "last_post_at": "2026-08-06T10:00:00Z",
+            },
+        },
+        [],
+        now=now,
+    )
+    hypothesis = next(
+        item
+        for item in hypotheses
+        if item["signal_combo"] == "active_external_channels_with_incomplete_map_profile"
+    )
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "signal_combo": hypothesis["signal_combo"],
+        "observed_fact": hypothesis["observed_fact"],
+        "evidence_kind": hypothesis["kind"],
+        "evidence_status": hypothesis["status"],
+        "evidence_ids": hypothesis["evidence_ids"],
+        "source_url": hypothesis["source_url"],
+        "freshness": hypothesis["freshness"],
+    })
+
+    message = _message_for_angle("signal", candidate, None, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+
+    assert len(hypothesis["evidence_ids"]) == 3
+    assert hypothesis["source_url"] == "https://t.me/clinic"
+    assert gate["passed"] is False
+    assert "SOURCE_MISMATCH" in gate["reason_codes"]
 
 
 def test_quality_gate_accepts_singular_unanswered_review_without_printing_number_one():

@@ -1391,7 +1391,24 @@ def upsert_native_research(
                 signals_json = %s, sources_json = %s,
                 contact_evidence_json = %s,
                 limitations_json = %s, message_brief_json = %s,
-                evidence_json = %s, report_hash = %s, researched_at = NOW()
+                evidence_json = %s,
+                message_readiness_json = CASE
+                    WHEN report_hash IS DISTINCT FROM %s THEN %s
+                    ELSE message_readiness_json
+                END,
+                personalization_candidates_json = CASE
+                    WHEN report_hash IS DISTINCT FROM %s THEN %s
+                    ELSE personalization_candidates_json
+                END,
+                selected_personalization_id = CASE
+                    WHEN report_hash IS DISTINCT FROM %s THEN NULL
+                    ELSE selected_personalization_id
+                END,
+                outreach_decision_json = CASE
+                    WHEN report_hash IS DISTINCT FROM %s THEN '{}'::jsonb
+                    ELSE outreach_decision_json
+                END,
+                report_hash = %s, researched_at = NOW()
             WHERE id = %s
             RETURNING *
             """,
@@ -1400,7 +1417,11 @@ def upsert_native_research(
                 payload["score"], payload["signal_label"], True, payload["why_now"], payload["why_now"],
                 True, Json(payload["score_breakdown"]), Json(payload["signals_json"]), Json(merged_sources),
                 Json(payload["contact_evidence_json"]), Json(merged_limitations),
-                Json(merged_brief), Json(payload["evidence_json"]), payload["report_hash"], existing.get("id"),
+                Json(merged_brief), Json(payload["evidence_json"]),
+                payload["report_hash"], Json(payload["message_readiness_json"]),
+                payload["report_hash"], Json(payload["personalization_candidates_json"]),
+                payload["report_hash"], payload["report_hash"],
+                payload["report_hash"], existing.get("id"),
             ),
         )
         return dict(cursor.fetchone())
