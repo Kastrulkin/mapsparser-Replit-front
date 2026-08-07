@@ -1293,6 +1293,26 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
                l.rating, l.reviews_count, l.website, l.source_url,
                l.services_json, l.reviews_json, l.search_payload_json,
+               CASE
+                   WHEN LOWER(COALESCE(
+                       l.raw_payload_json->>'isVerifiedOwner',
+                       l.search_payload_json->>'is_verified',
+                       'false'
+                   )) = 'true' THEN TRUE
+                   ELSE FALSE
+               END AS is_verified_owner,
+               CASE
+                   WHEN jsonb_typeof(l.raw_payload_json->'posts') = 'array'
+                   THEN jsonb_array_length(l.raw_payload_json->'posts')
+                   ELSE 0
+               END AS map_posts_count,
+               CASE
+                   WHEN jsonb_typeof(l.raw_payload_json->'menu') = 'array'
+                   THEN jsonb_array_length(l.raw_payload_json->'menu')
+                   WHEN jsonb_typeof(l.raw_payload_json->'menu'->'items') = 'array'
+                   THEN jsonb_array_length(l.raw_payload_json->'menu'->'items')
+                   ELSE 0
+               END AS map_services_count,
                l.phone, l.email, l.telegram_url, l.whatsapp_url,
                (
                    SELECT 'https://localos.pro/' || public_offer.slug

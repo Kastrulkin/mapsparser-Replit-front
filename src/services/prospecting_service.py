@@ -369,7 +369,13 @@ class ProspectingService:
         return deduped
 
     @classmethod
-    def _extract_services_list(cls, item: Dict[str, Any], limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def _extract_services_list(
+        cls,
+        item: Dict[str, Any],
+        limit: Optional[int] = None,
+        *,
+        allow_feature_fallback: bool = False,
+    ) -> List[Dict[str, Any]]:
         services: List[Dict[str, Any]] = []
         menu_payload = item.get("menu")
         menu_items: List[Dict[str, Any]] = []
@@ -407,7 +413,13 @@ class ProspectingService:
             if limit is not None and len(services) >= max(1, limit):
                 return services
 
-        # Fallback: when menu is missing, derive pseudo-services from features blocks.
+        # Google hotel payloads sometimes have no menu and expose amenities only in
+        # feature blocks.  Yandex features describe profile attributes, not services:
+        # treating them as a menu creates false "services without prices" signals.
+        if menu_items or not allow_feature_fallback:
+            return services
+
+        # Provider-specific fallback: derive pseudo-services from amenity blocks.
         features = item.get("features")
         if isinstance(features, dict):
             for feature_name, feature_values in features.items():
@@ -626,7 +638,10 @@ class ProspectingService:
 
         logo_url = self._coerce_scalar_text(item.get("logoUrl") or item.get("logo_url"))
         photos = self._extract_photos(item)
-        services_full = self._extract_services_list(item)
+        services_full = self._extract_services_list(
+            item,
+            allow_feature_fallback=self.source == "apify_google",
+        )
         services_preview = services_full[:30]
         reviews_preview = self._extract_reviews_preview(item)
         social_links = self._collect_nested_strings(item.get("socialLinks"))

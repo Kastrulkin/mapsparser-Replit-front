@@ -67,6 +67,40 @@ def test_active_social_alone_does_not_diagnose_marketing_pain():
     assert hypotheses == []
 
 
+def test_active_external_channels_and_empty_map_profile_becomes_map_profile_hypothesis():
+    hypotheses = derive_pain_signal_hypotheses(
+        {
+            "rating": 4.7,
+            "reviews_count": 36,
+            "source_url": "https://yandex.ru/maps/org/107657223262",
+            "website": "https://fsculptura.ru/",
+            "is_verified_owner": False,
+            "map_posts_count": 0,
+            "map_services_count": 0,
+            "official_social_activity": {
+                "official": True,
+                "source_url": "https://t.me/drgracheva",
+                "last_post_at": NOW - timedelta(days=2),
+                "posts_30d": 5,
+                "posts_90d": 12,
+            },
+        },
+        [],
+        now=NOW,
+    )
+
+    result = next(
+        item
+        for item in hypotheses
+        if item["signal_combo"] == "active_external_channels_with_incomplete_map_profile"
+    )
+    assert result["pain_key"] == "marketing_and_clients"
+    assert "услуг" in result["observed_fact"].lower()
+    assert "новост" in result["observed_fact"].lower()
+    assert "не идут" not in result["observed_fact"].lower()
+    assert result["hypothesis_status"] == "segment_hypothesis_only"
+
+
 def test_two_recent_open_slot_posts_create_testable_demand_hypothesis():
     ledger = [
         social_post("1", "Есть свободное окошко на завтра", 2),
@@ -119,8 +153,8 @@ def test_repeated_hiring_does_not_claim_staff_turnover():
 
 def test_signal_library_is_versioned_and_contains_counterexamples():
     playbook = beauty_outreach_guidance()
-    assert playbook["pain_signal_library_version"] == "beauty_pain_signals_v2"
-    assert len(playbook["pain_signal_hypotheses"]) == 10
+    assert playbook["pain_signal_library_version"] == "beauty_pain_signals_v3"
+    assert len(playbook["pain_signal_hypotheses"]) == 11
     assert all(item["contraindications"] for item in playbook["pain_signal_hypotheses"])
     assert all(item["status"] == "testable" for item in playbook["pain_signal_hypotheses"])
 

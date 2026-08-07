@@ -19,6 +19,9 @@ import {
   Users,
 } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
+import { leadMapLink } from '../../lib/leadMapLink';
+import { researchSourcePresentation } from '../../lib/researchSourcePresentation';
+import { matchesSelectedSignalKeys } from '../../lib/leadSignalFilters';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -108,6 +111,12 @@ interface WorkstreamResearch {
   qualification_stage?: string;
   signal_label?: 'strong_signal' | 'reason_to_check' | 'fit_only';
   why_now?: string;
+  signals?: Array<{
+    signal_combo?: string;
+    pattern_key?: string;
+    key?: string;
+    label?: string;
+  }>;
   sources?: ResearchSource[];
   suggested_opener?: string;
   opener_source_url?: string;
@@ -127,6 +136,27 @@ interface WorkstreamResearch {
   researched_at?: string;
   stale?: boolean;
 }
+
+const outreachSignalLabels: Record<string, string> = {
+  active_social_with_map_gap: 'Соцсети ведутся, карты можно усилить',
+  active_external_channels_with_incomplete_map_profile: 'Внешние каналы ведутся, карточка не заполнена',
+  active_social_with_service_price_gap: 'Соцсети ведутся, цены заполнены не полностью',
+  active_social_with_unanswered_negative_review: 'Активные соцсети и отзыв без ответа',
+  paid_map_promotion: 'Платное продвижение на картах',
+  repeated_open_slots: 'Регулярно появляются свободные окна',
+  repeated_discount_promotions: 'Регулярные скидки и акции',
+  repeated_hiring_signals: 'Повторяющийся поиск сотрудников',
+  recent_new_service_announcement: 'Запуск новой услуги',
+  recent_event_announcement: 'Новое мероприятие',
+  unanswered_reviews_with_active_presence: 'Отзывы без ответа при активном присутствии',
+  network_profile_inconsistency: 'Различия между карточками сети',
+};
+
+const workstreamSignalKeys = (workstreams: LeadWorkstream[]) => Array.from(new Set(
+  workstreams.flatMap((workstream) => (workstream.research?.signals || [])
+    .map((signal) => String(signal.signal_combo || signal.pattern_key || signal.key || '').trim())
+    .filter(Boolean)),
+));
 
 interface PreparationStep {
   status?: 'started' | 'completed';
@@ -527,6 +557,7 @@ interface LeadItem {
   source?: string;
   source_kind?: string;
   source_provider?: string;
+  source_url?: string;
   rating?: number;
   reviews_count?: number;
   status?: string;
@@ -537,7 +568,6 @@ interface LeadItem {
 }
 
 interface SearchResult extends LeadItem {
-  source_url?: string;
   google_id?: string;
 }
 
@@ -920,6 +950,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [clientBusinessId, setClientBusinessId] = useState('');
   const [actionState, setActionState] = useState('');
   const [signalStrength, setSignalStrength] = useState('');
+  const [selectedSignalKeys, setSelectedSignalKeys] = useState<string[]>([]);
   const [partnerType, setPartnerType] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
   const [query, setQuery] = useState('');
@@ -1044,12 +1075,29 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         if (!canonicalCategories.includes(partnerType)) return false;
       }
       if (signalStrength && !workstreams.some((item) => item.research?.signal_label === signalStrength)) return false;
+      if (!matchesSelectedSignalKeys(workstreamSignalKeys(workstreams), selectedSignalKeys)) return false;
       if (view === 'results') {
         return workstreams.some((item) => ['replied', 'responded', 'converted', 'qualified'].includes(String(item.status || '')));
       }
       return true;
     });
-  }, [leads, partnerType, query, signalStrength, view]);
+  }, [leads, partnerType, query, selectedSignalKeys, signalStrength, view]);
+
+  const signalFilterOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    leads.forEach((lead) => {
+      workstreamSignalKeys(lead.workstreams || []).forEach((key) => {
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+    });
+    return Array.from(counts.entries())
+      .map(([key, count]) => ({
+        key,
+        count,
+        label: outreachSignalLabels[key] || key.replaceAll('_', ' '),
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label, 'ru'));
+  }, [leads]);
 
   const campaignFilterCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -1091,6 +1139,17 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const selectedWorkstream = selectedLead?.workstreams?.find((item) => item.id === selectedWorkstreamId)
     || selectedLead?.workstreams?.[0]
     || null;
+  const selectedLeadMapLink = leadMapLink([
+    {
+      url: selectedLead?.source_url,
+      source_type: selectedLead?.source_kind,
+      provider: selectedLead?.source_provider,
+    },
+    ...(selectedWorkstream?.research?.sources || []).map((source) => ({
+      url: source.url,
+      source_type: source.source_type,
+    })),
+  ]);
   const selectedSenderScope = selectedWorkstream?.workstream_type === 'localos_sales'
     || senderMode === 'localos_for_partner'
     ? 'platform'
@@ -2552,6 +2611,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   if (item.id === 'messages') {
                     setActionState('');
                     setSignalStrength('');
+                    setSelectedSignalKeys([]);
                   }
                 }}
                 className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-semibold transition-colors active:scale-[0.96] ${
@@ -2657,7 +2717,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <details className="md:col-span-2 xl:col-span-3 2xl:col-span-5">
                 <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-950">
                   Дополнительные фильтры
-                  {signalStrength ? <Badge variant="outline" className="tabular-nums">Выбрано</Badge> : null}
+                  {signalStrength || selectedSignalKeys.length ? (
+                    <Badge variant="outline" className="tabular-nums">
+                      Выбрано: {(signalStrength ? 1 : 0) + selectedSignalKeys.length}
+                    </Badge>
+                  ) : null}
                 </summary>
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
                   <select
@@ -2671,6 +2735,49 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     <option value="reason_to_check">Есть повод</option>
                     <option value="fit_only">Только соответствие</option>
                   </select>
+                  <fieldset className="rounded-md border border-slate-200 bg-white p-3">
+                    <legend className="px-1 text-xs font-semibold text-slate-700">Типы сигналов</legend>
+                    {signalFilterOptions.length ? (
+                      <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                        {signalFilterOptions.map((option) => {
+                          const checked = selectedSignalKeys.includes(option.key);
+                          return (
+                            <label
+                              key={option.key}
+                              className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                checked
+                                  ? 'border-orange-300 bg-orange-50 text-slate-950'
+                                  : 'border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(value) => {
+                                  setSelectedSignalKeys((current) => value
+                                    ? [...current, option.key]
+                                    : current.filter((key) => key !== option.key));
+                                }}
+                                aria-label={option.label}
+                              />
+                              <span className="flex-1 leading-5">{option.label}</span>
+                              <span className="tabular-nums text-xs text-slate-500">{option.count}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-500">Сигналы появятся после проверки данных лидов.</p>
+                    )}
+                    {selectedSignalKeys.length ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSignalKeys([])}
+                        className="mt-3 text-xs font-semibold text-orange-700 hover:text-orange-800"
+                      >
+                        Сбросить выбранные сигналы
+                      </button>
+                    ) : null}
+                  </fieldset>
                 </div>
               </details>
             </>
@@ -2828,6 +2935,18 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           <SheetHeader className="pr-8">
             <SheetTitle className="text-wrap-balance text-xl">{selectedLead?.name || 'Карточка лида'}</SheetTitle>
             <SheetDescription>{[selectedLead?.category, selectedLead?.city || selectedLead?.address].filter(Boolean).join(' · ')}</SheetDescription>
+            {selectedLeadMapLink ? (
+              <a
+                href={selectedLeadMapLink.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex min-h-10 w-fit items-center gap-2 rounded-md bg-slate-50 px-3 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/5 transition-[box-shadow,color,transform] hover:text-orange-700 hover:shadow-md active:scale-[0.96]"
+              >
+                <MapPin className="h-4 w-4 text-orange-600" />
+                {selectedLeadMapLink.label}
+                <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+              </a>
+            ) : null}
           </SheetHeader>
 
           {selectedLead && selectedWorkstream && (
@@ -2997,18 +3116,25 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                   {(selectedWorkstream.research?.sources || []).length > 0 && (
                     <div className="mt-3 space-y-2">
-                      {(selectedWorkstream.research?.sources || []).slice(0, 3).map((source) => (
-                        <a
-                          key={`${source.url}-${source.title}`}
-                          href={source.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex min-h-10 items-center justify-between gap-3 rounded-md bg-white px-3 text-sm font-medium text-slate-800 hover:text-orange-700"
-                        >
-                          <span className="min-w-0 truncate">{source.title || 'Открыть источник'}</span>
-                          <ExternalLink className="h-4 w-4 shrink-0" />
-                        </a>
-                      ))}
+                      {(selectedWorkstream.research?.sources || []).slice(0, 3).map((source) => {
+                        const presentation = researchSourcePresentation(source);
+                        return (
+                          <a
+                            key={`${source.url}-${source.title}`}
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`${presentation.destination}: ${presentation.context}`}
+                            className="flex min-h-12 items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-slate-800 shadow-sm shadow-slate-900/5 transition-[box-shadow,color] hover:text-orange-700 hover:shadow-md"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-semibold">{presentation.destination}</span>
+                              <span className="mt-0.5 block truncate text-xs font-normal text-slate-500">{presentation.context}</span>
+                            </span>
+                            <ExternalLink className="h-4 w-4 shrink-0 text-slate-400" />
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                   {selectedWorkstream.research?.suggested_opener && (

@@ -197,7 +197,7 @@ def test_beauty_playbook_keeps_corpus_method_separate_from_recipient_facts():
 def test_beauty_playbook_labels_each_touch_for_outcome_learning():
     founder = beauty_touch_learning_dimensions("founder_story")
     proof = beauty_touch_learning_dimensions("proof")
-    assert founder["playbook_version"] == "localos_outreach_playbook_v2"
+    assert founder["playbook_version"] == "localos_outreach_playbook_v3"
     assert founder["pain_key"] == "operations_and_burnout"
     assert proof["pain_key"] == "marketing_and_clients"
 

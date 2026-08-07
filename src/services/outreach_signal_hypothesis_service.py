@@ -237,6 +237,38 @@ def derive_pain_signal_hypotheses(
         results.append(result)
 
     social_current = _official_social_is_current(context, current)
+    incomplete_map_rule = rules.get("active_external_channels_with_incomplete_map_profile")
+    if (
+        incomplete_map_rule
+        and social_current
+        and bool(_text(context.get("website")))
+        and context.get("is_verified_owner") is False
+        and int(context.get("map_posts_count") or 0) == 0
+        and int(context.get("map_services_count") or 0) == 0
+    ):
+        results.append(_result(
+            incomplete_map_rule,
+            [
+                _social_evidence(context),
+                {
+                    "id": "official-website",
+                    "source_url": _text(context.get("website")),
+                    "source_type": "official_website",
+                },
+                {
+                    "id": "map-profile-snapshot",
+                    "source_url": _text(context.get("source_url")),
+                    "source_type": "map_profile",
+                },
+            ],
+            observed_fact=(
+                "У компании есть официальный сайт и регулярно обновляемый официальный канал. "
+                "В карточке на картах не найдены услуги и новости; данные карточки не подтверждены владельцем."
+            ),
+            confidence=0.94,
+            now=current,
+        ))
+
     price_rule = rules.get("active_social_with_service_price_gap")
     price_gap = _service_price_gap(context)
     if price_rule and social_current and price_gap:

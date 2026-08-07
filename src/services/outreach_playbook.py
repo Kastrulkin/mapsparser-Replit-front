@@ -10,9 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 
-PLAYBOOK_VERSION = "localos_outreach_playbook_v2"
+PLAYBOOK_VERSION = "localos_outreach_playbook_v3"
 CORPUS_TAG = "telegram_b2b"
-PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v2"
+PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v3"
 
 B2B_METHOD_RULES = (
     "Начинать с проверяемого действия или артефакта получателя, а не с общего комплимента.",
@@ -114,6 +114,32 @@ BEAUTY_PAIN_SIGNAL_HYPOTHESES = (
             "Соцсеть не подтверждена как официальная.",
             "Нет свежей регулярной активности.",
             "Нет отдельного подтверждения слабой карточки на картах.",
+        ],
+        "status": "testable",
+    },
+    {
+        "key": "active_external_channels_with_incomplete_map_profile",
+        "pain_key": "marketing_and_clients",
+        "required_signals": [
+            "active_official_social",
+            "official_website",
+            "map_owner_not_verified",
+            "empty_map_service_catalog",
+            "no_map_news",
+        ],
+        "hypothesis": (
+            "Компания поддерживает сайт и официальный канал, а карточка на картах "
+            "может оставаться недоиспользованным каналом привлечения."
+        ),
+        "safe_formulation": (
+            "Вы ведёте сайт и Telegram, но в карточке на картах пока нет услуг и новостей. "
+            "Карты тоже могли бы помогать привлекать новых клиентов."
+        ),
+        "contraindications": [
+            "Соцсеть не подтверждена как официальная или давно не обновлялась.",
+            "Официальный сайт не найден.",
+            "В карточке есть услуги или новости.",
+            "Данные карточки подтверждены владельцем.",
         ],
         "status": "testable",
     },
