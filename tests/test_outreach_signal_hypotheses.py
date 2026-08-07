@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from services.outreach_playbook import beauty_outreach_guidance
+from services.outreach_campaign_service import build_evidence_ledger
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_safety_service import strategy_fingerprint
 
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def social_post(identifier: str, text: str, age_days: int) -> dict:
@@ -99,6 +102,37 @@ def test_active_external_channels_and_empty_map_profile_becomes_map_profile_hypo
     assert "новост" in result["observed_fact"].lower()
     assert "не идут" not in result["observed_fact"].lower()
     assert result["hypothesis_status"] == "segment_hypothesis_only"
+
+
+def test_research_evidence_merges_with_signals_and_unknown_owner_stays_unknown():
+    evidence = {
+        "id": "verified-rating",
+        "kind": "map_rating",
+        "fact": "Рейтинг - 4,4; публичных отзывов - 8.",
+        "source_url": "https://yandex.ru/maps/org/lead",
+        "freshness": "current_snapshot",
+    }
+    signal = {
+        "id": "fresh-social-signal",
+        "kind": "telegram_activity",
+        "observed_fact": "В официальном Telegram-канале есть свежие публикации.",
+        "source_url": "https://t.me/company",
+        "freshness": "fresh",
+    }
+    ledger = build_evidence_ledger({
+        "research": {
+            "evidence_json": [evidence],
+            "signals_json": [signal],
+        },
+    })
+    ids = {item["id"] for item in ledger}
+
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+    owner_state_preserves_unknown = "l.search_payload_json->>'is_verified',\n                       'false'" not in campaign_source
+
+    assert ids == {"verified-rating", "fresh-social-signal"} and owner_state_preserves_unknown, (
+        f"merged evidence ids={ids}; owner_unknown_preserved={owner_state_preserves_unknown}"
+    )
 
 
 def test_two_recent_open_slot_posts_create_testable_demand_hypothesis():

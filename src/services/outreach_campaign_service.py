@@ -52,6 +52,7 @@ from services.outreach_safety_service import (
     classify_inbound_event,
     recipient_key,
     record_learning_event,
+    research_source_fact_fingerprint,
     sender_scope_preflight_reason,
     strategy_fingerprint,
 )
@@ -1296,10 +1297,13 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
                CASE
                    WHEN LOWER(COALESCE(
                        l.raw_payload_json->>'isVerifiedOwner',
-                       l.search_payload_json->>'is_verified',
-                       'false'
+                       l.search_payload_json->>'is_verified'
                    )) = 'true' THEN TRUE
-                   ELSE FALSE
+                   WHEN LOWER(COALESCE(
+                       l.raw_payload_json->>'isVerifiedOwner',
+                       l.search_payload_json->>'is_verified'
+                   )) = 'false' THEN FALSE
+                   ELSE NULL
                END AS is_verified_owner,
                CASE
                    WHEN jsonb_typeof(l.raw_payload_json->'posts') = 'array'
@@ -1507,7 +1511,8 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "source_type": "operator_input",
         })
     research_evidence = _list(research.get("evidence_json"))
-    source_items = research_evidence or _list(research.get("signals_json"))
+    source_items = research_evidence + _list(research.get("signals_json"))
+    seen_research_items: set[str] = set()
     for index, signal in enumerate(source_items):
         if not isinstance(signal, dict):
             continue
@@ -1521,6 +1526,11 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
         source_url = _text(signal.get("source_url") or signal.get("url") or research.get("opener_source_url"))
         if not fact or not source_url:
             continue
+        identity = _text(signal.get("evidence_id") or signal.get("id")) or f"{source_url}|{fact}"
+        fallback_identity = f"{source_url}|{fact}"
+        if identity in seen_research_items or fallback_identity in seen_research_items:
+            continue
+        seen_research_items.update({identity, fallback_identity})
         ledger.append({
             "id": _text(signal.get("evidence_id") or signal.get("id")) or f"research-{index + 1}",
             "kind": _text(signal.get("kind") or "public_signal"),
@@ -2774,6 +2784,7 @@ def build_preview(
     manual_reviewer_role: str | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
+    source_fact_fingerprint = research_source_fact_fingerprint(context.get("research"))
     ledger = build_evidence_ledger(context)
     pain_playbook = None
     localos_sales = context.get("workstream_type") == "localos_sales"
@@ -3022,6 +3033,7 @@ def build_preview(
             "observation": candidate.get("observed_fact"),
             "problem_hypothesis": candidate.get("problem_hypothesis"),
             "relevance_bridge": candidate.get("relevance_to_offer") or candidate.get("bridge"),
+            "source_fact_fingerprint": source_fact_fingerprint,
             "strategy": strategy,
             "strategy_fingerprint": strategy_fingerprint(strategy),
         })
@@ -3317,6 +3329,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "human_edited": bool(touch.get("human_edited")),
                     "original_generated_text": touch.get("original_generated_text"),
                     "original_generated_subject": touch.get("original_generated_subject"),
+                    "source_fact_fingerprint": touch.get("source_fact_fingerprint"),
                 }),
                 Json(touch["quality_gate"]),
                 touch.get("strategy_fingerprint"), Json(touch.get("strategy") or {}),
@@ -3438,6 +3451,26 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         for touch in approval_touches
     ):
         raise ValueError("Campaign generation is outdated; create a new preview")
+    cursor.execute(
+        """
+        SELECT evidence_json, signals_json, report_hash
+        FROM lead_workstream_research
+        WHERE workstream_id = %s
+        ORDER BY researched_at DESC, created_at DESC
+        LIMIT 1
+        """,
+        (campaign.get("workstream_id"),),
+    )
+    current_source_fingerprint = research_source_fact_fingerprint(_dict(cursor.fetchone()))
+    if (
+        not current_source_fingerprint
+        or any(
+            _text((touch.get("message_brief_json") or {}).get("source_fact_fingerprint"))
+            != current_source_fingerprint
+            for touch in approval_touches
+        )
+    ):
+        raise ValueError("Campaign source facts changed; create a new preview")
     if any(
         sender_scope_preflight_reason({**campaign, **touch}) is not None
         for touch in approval_touches

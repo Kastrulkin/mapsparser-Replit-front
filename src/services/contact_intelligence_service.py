@@ -1365,16 +1365,14 @@ def upsert_native_research(
             return result
 
         existing_brief = existing.get("message_brief_json") if isinstance(existing.get("message_brief_json"), dict) else {}
-        merged_brief, native_wins = merge_research_briefs(
-            existing_brief,
-            payload["message_brief_json"],
-            existing_score=int(existing.get("score") or 0),
-            native_score=int(payload["score"] or 0),
-        )
-        merged_signals = merged_list(existing.get("signals_json"), payload["signals_json"], ("source_url", "observed_fact", "fact"))
+        merged_brief = {
+            **existing_brief,
+            **payload["message_brief_json"],
+        }
+        if existing_brief.get("proof") and not payload["message_brief_json"].get("proof"):
+            merged_brief["proof"] = existing_brief["proof"]
         merged_sources = merged_list(existing.get("sources_json"), payload["sources_json"], ("url", "source_url"))
-        merged_evidence = merged_list(existing.get("evidence_json"), payload["evidence_json"], ("source_url", "fact"))
-        merged_limitations = merged_list(existing.get("limitations_json"), payload["limitations_json"], tuple())
+        merged_limitations = list(payload["limitations_json"] or [])
         if payload["why_now"]:
             merged_limitations = [
                 item for item in merged_limitations
@@ -1383,24 +1381,24 @@ def upsert_native_research(
         cursor.execute(
             """
             UPDATE lead_workstream_research
-            SET score = GREATEST(score, %s),
-                qualification_stage = CASE WHEN %s > score THEN %s ELSE qualification_stage END,
-                signal_label = CASE WHEN %s > score THEN %s ELSE signal_label END,
+            SET score = %s,
+                qualification_stage = CASE WHEN %s IS NOT NULL THEN %s ELSE qualification_stage END,
+                signal_label = CASE WHEN %s IS NOT NULL THEN %s ELSE signal_label END,
                 why_now = CASE WHEN %s THEN NULLIF(%s, '') ELSE COALESCE(NULLIF(why_now, ''), NULLIF(%s, '')) END,
-                score_breakdown = CASE WHEN %s THEN score_breakdown || %s ELSE score_breakdown END,
+                score_breakdown = CASE WHEN %s THEN %s ELSE score_breakdown END,
                 signals_json = %s, sources_json = %s,
                 contact_evidence_json = %s,
                 limitations_json = %s, message_brief_json = %s,
-                evidence_json = %s, researched_at = NOW()
+                evidence_json = %s, report_hash = %s, researched_at = NOW()
             WHERE id = %s
             RETURNING *
             """,
             (
                 payload["score"], payload["score"], payload["qualification_stage"],
-                payload["score"], payload["signal_label"], native_wins, payload["why_now"], payload["why_now"],
-                native_wins, Json(payload["score_breakdown"]), Json(merged_signals), Json(merged_sources),
+                payload["score"], payload["signal_label"], True, payload["why_now"], payload["why_now"],
+                True, Json(payload["score_breakdown"]), Json(payload["signals_json"]), Json(merged_sources),
                 Json(payload["contact_evidence_json"]), Json(merged_limitations),
-                Json(merged_brief), Json(merged_evidence), existing.get("id"),
+                Json(merged_brief), Json(payload["evidence_json"]), payload["report_hash"], existing.get("id"),
             ),
         )
         return dict(cursor.fetchone())

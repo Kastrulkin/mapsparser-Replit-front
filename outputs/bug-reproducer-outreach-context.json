@@ -1,0 +1,54 @@
+{
+  "title": "Stale map-service facts survive research refresh and remain sendable",
+  "project": "LocalOS",
+  "generated_at": "2026-08-07",
+  "mode": "reproduce-only",
+  "original_report": "Four manually checked beauty leads had incorrect service-price signals: current priced services were reported as incomplete, and one clinic previously received invented services. Existing outreach chains could retain those stale facts.",
+  "discovery_scope": [
+    "Native research upsert and current-state evidence replacement",
+    "Campaign preview persistence, read, approval, and dispatch freshness",
+    "Evidence ledger merge and owner-verification null handling"
+  ],
+  "candidates": [],
+  "expected": "Fresh map and social facts replace stale observations, changed facts invalidate saved chains, all current evidence is considered, and missing owner verification remains unknown.",
+  "actual": "A higher historical score pinned fit_only and stale 27/3 facts; campaigns checked prompt versions but not source facts; evidence_json shadowed signals_json; missing owner verification became false.",
+  "environment": "Python 3.11 in disposable Docker Compose app container; production database not used",
+  "reproduction": "Three focused tests exercise the real native research upsert path, saved-campaign payload freshness, evidence merging, and owner-state SQL contract.",
+  "failure_signal": "Three deterministic assertions failed for the predicted stale-state, missing-fingerprint, evidence-shadowing, and unknown-owner causes.",
+  "root_cause": "Current-state research was merged append-only and gated by the historical maximum score; campaign generation validity had no current-fact fingerprint; evidence selection used boolean OR; SQL defaulted an absent owner flag to false.",
+  "fix_summary": "Replace current-state research fields with the fresh payload while preserving approved proof and sources; fingerprint current research facts through preview, persistence, read, approval, and dispatch; merge and deduplicate evidence plus signals; preserve a NULL owner state.",
+  "why_causal": "Each changed condition is the direct branch proven by its focused failing assertion, and the unchanged tests pass after those branches are corrected.",
+  "reproduction_files": [
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_contact_intelligence.py", "line": 647, "summary": "Fresh lower-score research replaces stale high-score map facts."},
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_founder_outreach_campaigns.py", "line": 510, "summary": "Changed source facts invalidate a saved campaign."},
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_outreach_signal_hypotheses.py", "line": 107, "summary": "Evidence and signals merge while unknown owner remains unknown."}
+  ],
+  "fix_files": [
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/contact_intelligence_service.py", "line": 1353, "summary": "Refreshes current research without retaining contradictory observations."},
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/outreach_campaign_service.py", "line": 1290, "summary": "Preserves unknown owner, merges evidence, stores fingerprints, and blocks stale approval."},
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/outreach_campaign_api.py", "line": 234, "summary": "Marks saved campaigns stale when current facts differ."},
+    {"path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/outreach_safety_service.py", "line": 69, "summary": "Defines stable fact fingerprints and blocks stale dispatch."}
+  ],
+  "checks": [
+    {"name": "Exact three-test reproducer", "status": "passed", "detail": "3 failed before the fix; 3 passed in 0.51s after it."},
+    {"name": "Relevant broader suite", "status": "passed", "detail": "194 passed in 1.22s after mounting frontend read-only."},
+    {"name": "Syntax and diff validation", "status": "passed", "detail": "py_compile and git diff --check succeeded."}
+  ],
+  "reproduce": [
+    "python -m pytest -q -p no:cacheprovider tests/test_contact_intelligence.py::test_native_research_refresh_replaces_stale_high_score_signal tests/test_founder_outreach_campaigns.py::test_changed_research_fact_fingerprint_invalidates_saved_campaign tests/test_outreach_signal_hypotheses.py::test_research_evidence_merges_with_signals_and_unknown_owner_stays_unknown",
+    "python -m pytest -q -p no:cacheprovider tests/test_contact_intelligence.py tests/test_founder_outreach_campaigns.py tests/test_outreach_signal_hypotheses.py tests/test_full_services_payload.py"
+  ],
+  "limitations": [
+    "No production data was reprocessed and no existing campaign was modified.",
+    "The focused campaign test covers read-time invalidation; approval and dispatch use the same fingerprint contract and are covered by the broader source-contract suite."
+  ],
+  "residual_risks": [
+    "Legacy campaigns without a fingerprint will require regeneration after deployment.",
+    "A new public observation date intentionally changes the fingerprint and may require review even when wording is similar.",
+    "Fresh production chains still require a separately authorized reparse and regeneration step."
+  ],
+  "notes": [
+    "No production database, deployment, commit, push, or existing campaign was touched.",
+    "The first broad Docker run omitted the frontend mount and produced 49 FileNotFoundError harness failures; rerunning with frontend mounted read-only produced 194 passes."
+  ]
+}

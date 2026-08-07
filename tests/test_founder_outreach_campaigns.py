@@ -507,6 +507,49 @@ def test_outdated_generation_is_blocked_at_approval_and_dispatch():
     assert 'campaign["requires_regeneration"]' in api_source
 
 
+def test_changed_research_fact_fingerprint_invalidates_saved_campaign():
+    from api.outreach_campaign_api import _campaign_payload
+
+    class Cursor:
+        def __init__(self):
+            self.query = ""
+            self.queries = []
+
+        def execute(self, query, _params=None):
+            self.query = query
+            self.queries.append(query)
+
+        def fetchone(self):
+            if "FROM outreach_campaigns WHERE id" in self.query:
+                return {
+                    "id": "campaign-1",
+                    "workstream_id": "workstream-1",
+                    "room_id": None,
+                    "status": "draft",
+                }
+            if "FROM lead_workstream_research" in self.query:
+                return {"report_hash": "fresh-facts-3-of-3"}
+            return None
+
+        def fetchall(self):
+            if "FROM outreach_campaign_touches touch" in self.query:
+                return [{
+                    "id": "touch-1",
+                    "campaign_id": "campaign-1",
+                    "channel": "whatsapp",
+                    "status": "draft",
+                    "message_brief_json": {"source_fact_fingerprint": "stale-facts-27-of-3"},
+                    "quality_gate_json": {"passed": True},
+                }]
+            return []
+
+    cursor = Cursor()
+    payload = _campaign_payload(cursor, "campaign-1")
+
+    assert any("FROM lead_workstream_research" in query for query in cursor.queries)
+    assert payload["requires_regeneration"] is True
+
+
 def test_channel_setup_gap_can_be_saved_as_draft_but_not_approved():
     api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
     frontend_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()

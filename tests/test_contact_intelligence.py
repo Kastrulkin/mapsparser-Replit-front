@@ -31,6 +31,7 @@ from services.contact_intelligence_service import (
     fail_enrichment_job,
     upsert_contact_points,
 )
+from services import contact_intelligence_service
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_personalization_ai import QUALITY_CRITERIA
 from scripts.backfill_partnership_match_artifacts import _skip_reason
@@ -641,6 +642,101 @@ def test_stronger_native_research_replaces_stale_angle_but_keeps_approved_proof(
     assert merged["signal"].startswith("В аудите")
     assert merged["pain"].startswith("Цены указаны")
     assert merged["proof"] == "Подтверждённый кейс LocalOS"
+
+
+def test_native_research_refresh_replaces_stale_high_score_signal(monkeypatch):
+    stale_signal = {
+        "kind": "map_issue",
+        "observed_fact": "В карточке 27 услуг, цена указана у 3.",
+        "source_url": "https://yandex.ru/maps/org/lead",
+    }
+    fresh_signal = {
+        "kind": "map_catalog_complete",
+        "observed_fact": "В карточке 3 услуги, цена указана у 3.",
+        "source_url": "https://yandex.ru/maps/org/lead",
+    }
+    existing = {
+        "id": "research-1",
+        "score": 99,
+        "qualification_stage": "qualified",
+        "signal_label": "fit_only",
+        "why_now": "Цены указаны не для всех услуг.",
+        "score_breakdown": {},
+        "signals_json": [stale_signal],
+        "sources_json": [],
+        "evidence_json": [{"fact": stale_signal["observed_fact"], "source_url": stale_signal["source_url"]}],
+        "limitations_json": [],
+        "message_brief_json": {"signal": stale_signal["observed_fact"]},
+    }
+    fresh_payload = {
+        "score": 72,
+        "qualification_stage": "reason_to_check",
+        "signal_label": "reason_to_check",
+        "score_breakdown": {"timing": 12},
+        "why_now": "Есть свежая активность в Telegram.",
+        "signals_json": [fresh_signal],
+        "sources_json": [],
+        "contact_evidence_json": [],
+        "limitations_json": [],
+        "message_brief_json": {"signal": fresh_signal["observed_fact"]},
+        "message_readiness_json": {},
+        "evidence_json": [{"fact": fresh_signal["observed_fact"], "source_url": fresh_signal["source_url"]}],
+        "personalization_candidates_json": [],
+        "report_hash": "fresh-report",
+        "researched_at": datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc),
+    }
+
+    class Cursor:
+        def __init__(self):
+            self.query = ""
+            self.update_params = None
+            self.updated = None
+
+        def execute(self, query, params=None):
+            self.query = query
+            if "UPDATE lead_workstream_research" in query:
+                self.update_params = params
+                self.updated = {
+                    **existing,
+                    "signals_json": params[10].adapted,
+                    "signal_label": (
+                        existing["signal_label"]
+                        if "GREATEST(score" in query
+                        else fresh_payload["signal_label"]
+                    ),
+                    "why_now": (
+                        existing["why_now"]
+                        if "GREATEST(score" in query
+                        else fresh_payload["why_now"]
+                    ),
+                }
+
+        def fetchone(self):
+            if "COUNT(*) FILTER" in self.query:
+                return {"found": 0, "verified": 0}
+            if "SELECT * FROM lead_workstream_research" in self.query:
+                return existing
+            if "UPDATE lead_workstream_research" in self.query:
+                return self.updated
+            return None
+
+        def fetchall(self):
+            return []
+
+    cursor = Cursor()
+    monkeypatch.setattr(contact_intelligence_service, "discovered_telegram_signals", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(contact_intelligence_service, "build_native_research_payload", lambda *_args, **_kwargs: fresh_payload)
+
+    refreshed = contact_intelligence_service.upsert_native_research(
+        cursor,
+        {"id": "lead-1"},
+        {"id": "workstream-1", "workstream_type": "test"},
+    )
+
+    persisted_signals = cursor.update_params[10].adapted
+    assert refreshed["signal_label"] == "reason_to_check"
+    assert refreshed["why_now"] == fresh_payload["why_now"]
+    assert persisted_signals == [fresh_signal]
 
 
 def test_localos_sales_stops_when_role_signal_and_proof_are_missing():

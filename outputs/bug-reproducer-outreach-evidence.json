@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "All three approved outreach regressions changed from deterministic failures to passes, and the relevant 194-test suite passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "command": "python -m pytest -q -p no:cacheprovider tests/test_contact_intelligence.py::test_native_research_refresh_replaces_stale_high_score_signal tests/test_founder_outreach_campaigns.py::test_changed_research_fact_fingerprint_invalidates_saved_campaign tests/test_outreach_signal_hypotheses.py::test_research_evidence_merges_with_signals_and_unknown_owner_stays_unknown",
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 560,
+    "stdout": "FFF [100%]\n1) expected reason_to_check, received fit_only; 2) campaign payload did not query current lead_workstream_research; 3) ledger omitted fresh-social-signal and unknown owner was coerced to false.\n3 failed in 0.56s",
+    "stderr": ""
+  },
+  "after": {
+    "command": "python -m pytest -q -p no:cacheprovider tests/test_contact_intelligence.py::test_native_research_refresh_replaces_stale_high_score_signal tests/test_founder_outreach_campaigns.py::test_changed_research_fact_fingerprint_invalidates_saved_campaign tests/test_outreach_signal_hypotheses.py::test_research_evidence_merges_with_signals_and_unknown_owner_stays_unknown",
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 510,
+    "stdout": "... [100%]\n3 passed in 0.51s",
+    "stderr": ""
+  }
+}

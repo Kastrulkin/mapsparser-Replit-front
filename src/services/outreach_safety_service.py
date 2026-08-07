@@ -100,6 +100,45 @@ def strategy_fingerprint(strategy: dict[str, Any]) -> str:
     return stable_hash(dimensions, "strategy:")
 
 
+def research_source_fact_fingerprint(research: dict[str, Any] | None) -> str:
+    """Fingerprint the current public facts used to personalize a campaign."""
+
+    payload = research if isinstance(research, dict) else {}
+    facts: list[dict[str, str]] = []
+    seen: set[str] = set()
+    signals = list(payload.get("signals_json") or [])
+    report_hash = str(payload.get("report_hash") or "").strip()
+    source_items = signals or ([] if report_hash else list(payload.get("evidence_json") or []))
+    for item in source_items:
+        if not isinstance(item, dict) or item.get("usable_for_outreach") is False:
+            continue
+        freshness = str(item.get("freshness") or "").strip().lower()
+        if freshness in {"stale", "unknown_dated_source"}:
+            continue
+        fact = re.sub(
+            r"\s+",
+            " ",
+            str(item.get("observed_fact") or item.get("fact") or item.get("text") or "").strip(),
+        )
+        source_url = str(item.get("source_url") or item.get("url") or "").strip()
+        if not fact or not source_url:
+            continue
+        identity = f"{source_url}|{fact}"
+        if identity in seen:
+            continue
+        seen.add(identity)
+        facts.append({
+            "kind": str(item.get("kind") or "public_signal").strip(),
+            "fact": fact,
+            "source_url": source_url,
+            "observed_at": str(item.get("observed_at") or item.get("published_at") or ""),
+        })
+    if facts:
+        facts.sort(key=_canonical_payload)
+        return stable_hash(facts, "facts:")
+    return f"report:{report_hash}" if report_hash else ""
+
+
 def sender_scope_preflight_reason(item: dict[str, Any]) -> str | None:
     """Validate campaign identity against the concrete sender account scope."""
     policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
@@ -381,6 +420,26 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
         for touch in current_touches
     ):
         return {"allowed": False, "reason_code": "generation_contract_outdated", "item": item}
+    cursor.execute(
+        """
+        SELECT evidence_json, signals_json, report_hash
+        FROM lead_workstream_research
+        WHERE workstream_id = %s
+        ORDER BY researched_at DESC, created_at DESC
+        LIMIT 1
+        """,
+        (item.get("campaign_workstream_id"),),
+    )
+    current_source_fingerprint = research_source_fact_fingerprint(_dict(cursor.fetchone()))
+    if (
+        not current_source_fingerprint
+        or any(
+            str((touch.get("message_brief_json") or {}).get("source_fact_fingerprint") or "").strip()
+            != current_source_fingerprint
+            for touch in current_touches
+        )
+    ):
+        return {"allowed": False, "reason_code": "source_facts_changed", "item": item}
     current_snapshot = approval_snapshot_hash(
         {
             "id": item.get("campaign_id"),

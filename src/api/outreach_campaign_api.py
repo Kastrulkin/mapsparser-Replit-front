@@ -34,6 +34,7 @@ from services.outreach_safety_service import (
     learning_stat_metrics,
     normalized_contact_hash,
     recipient_key,
+    research_source_fact_fingerprint,
     run_dispatch_preflight,
     strategy_fingerprint,
 )
@@ -258,7 +259,23 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
         touch = dict(item)
         touch["channel_status"] = runtime_touch_channel_status(touch)
         campaign["touches"].append(touch)
-    campaign["generation_current"] = bool(campaign["touches"]) and all(
+    cursor.execute(
+        """
+        SELECT evidence_json, signals_json, report_hash
+        FROM lead_workstream_research
+        WHERE workstream_id = %s
+        ORDER BY researched_at DESC, created_at DESC
+        LIMIT 1
+        """,
+        (campaign.get("workstream_id"),),
+    )
+    current_source_fingerprint = research_source_fact_fingerprint(dict(cursor.fetchone() or {}))
+    source_facts_current = bool(current_source_fingerprint) and all(
+        str((touch.get("message_brief_json") or {}).get("source_fact_fingerprint") or "").strip()
+        == current_source_fingerprint
+        for touch in campaign["touches"]
+    )
+    campaign["generation_current"] = bool(campaign["touches"]) and source_facts_current and all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
