@@ -72,6 +72,38 @@ def _is_residential_recipient(context: dict[str, Any]) -> bool:
     )
 
 
+def _has_secondary_signal_after_paid_promotion(ledger: list[dict[str, Any]]) -> bool:
+    """Require a concrete second reason before contacting promoted map cards.
+
+    Paid placement already shows that the company invests in acquisition.  A
+    low rating or active social presence repeats that same marketing context;
+    neither is a sufficiently different reason to contact the company.
+    """
+
+    excluded_kinds = {
+        "paid_map_promotion",
+        "network_paid_promotion_hypothesis",
+        "map_rating",
+        "official_social_activity",
+        "telegram_post",
+        "social_post",
+        "public_social_post",
+    }
+    excluded_combos = {"active_social_with_map_gap", "paid_map_promotion"}
+    for item in ledger:
+        if not isinstance(item, dict):
+            continue
+        if _text(item.get("status") or "observed").lower() not in {"approved", "observed"}:
+            continue
+        kind = _text(item.get("kind")).lower()
+        combo = _text(item.get("signal_combo") or item.get("pattern_key")).lower()
+        if kind in excluded_kinds or combo in excluded_combos:
+            continue
+        if _text(item.get("fact") or item.get("observed_fact")) and _text(item.get("source_url")):
+            return True
+    return False
+
+
 def _clamp(value: Any, minimum: float = 0, maximum: float = 100) -> float:
     try:
         number = float(value)
@@ -290,6 +322,16 @@ def build_outreach_decision(
     ):
         action = "needs_sender_setup"
         reason_codes.append("sender_or_channel_unavailable")
+    elif (
+        sender_mode == "localos"
+        and (
+            context.get("paid_promotion_detected") is True
+            or context.get("paid_promotion_requires_secondary_signal") is True
+        )
+        and not _has_secondary_signal_after_paid_promotion(ledger)
+    ):
+        action = "observe"
+        reason_codes.append("paid_promotion_requires_secondary_signal")
     elif sender_mode == "localos" and not ledger:
         action = "needs_evidence"
         reason_codes.append("recipient_evidence_missing")

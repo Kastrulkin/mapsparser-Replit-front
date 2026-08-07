@@ -1292,7 +1292,7 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         """
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
                l.rating, l.reviews_count, l.website, l.source_url,
-               l.services_json, l.reviews_json,
+               l.services_json, l.reviews_json, l.search_payload_json,
                l.phone, l.email, l.telegram_url, l.whatsapp_url,
                (
                    SELECT 'https://localos.pro/' || public_offer.slug
@@ -1316,6 +1316,15 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     workstream = _dict(cursor.fetchone())
     if not workstream:
         raise LookupError("Lead workstream not found")
+    search_payload = (
+        workstream.get("search_payload_json")
+        if isinstance(workstream.get("search_payload_json"), dict)
+        else {}
+    )
+    workstream["paid_promotion_detected"] = search_payload.get("paid_promotion_detected") is True
+    workstream["paid_promotion_requires_secondary_signal"] = (
+        search_payload.get("paid_promotion_requires_secondary_signal") is True
+    )
     cursor.execute(
         """
         SELECT * FROM lead_workstream_research
@@ -1424,6 +1433,42 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
         else {}
     )
     operator_approved_reason = _text(research_brief.get("operator_approved_reason"))
+    if context.get("paid_promotion_detected") is True and context.get("source_url"):
+        ledger.append({
+            "id": "paid-map-promotion",
+            "kind": "paid_map_promotion",
+            "fact": "В карточке на картах активно платное продвижение.",
+            "status": "observed",
+            "source_url": context.get("source_url"),
+            "observed_at": context.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 1.0,
+            "hypothesis": None,
+            "relevance": "До аутрича нужен второй независимый сигнал.",
+            "source_type": "map_paid_promotion",
+            "signal_combo": "paid_map_promotion",
+        })
+    elif (
+        context.get("paid_promotion_requires_secondary_signal") is True
+        and context.get("source_url")
+    ):
+        ledger.append({
+            "id": "network-paid-promotion-hypothesis",
+            "kind": "network_paid_promotion_hypothesis",
+            "fact": (
+                "Сеть использует платное продвижение на картах; "
+                "для этой точки признак ещё нужно подтвердить."
+            ),
+            "status": "observed",
+            "source_url": context.get("source_url"),
+            "observed_at": context.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.7,
+            "hypothesis": "До аутрича нужен второй независимый сигнал.",
+            "relevance": "Наблюдать карточку и публичные каналы до нового повода.",
+            "source_type": "network_signal_hypothesis",
+            "signal_combo": "paid_map_promotion",
+        })
     if (
         context.get("workstream_type") == "client_partnership"
         and operator_approved_reason

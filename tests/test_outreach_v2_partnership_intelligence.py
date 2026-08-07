@@ -113,6 +113,124 @@ def test_strong_partnership_matching_can_write_without_social_post():
     assert "partnership_compatibility_confirmed" in decision["reason_codes"]
 
 
+def test_paid_map_promotion_requires_a_second_independent_signal_for_localos_sales():
+    decision = build_outreach_decision(
+        {
+            "workstream_type": "localos_sales",
+            "lifecycle_status": "postponed",
+            "paid_promotion_detected": True,
+            "contacts": [{"verification_status": "verified"}],
+            "research": {"score": 80},
+        },
+        [
+            {
+                "id": "paid-map-promotion",
+                "kind": "paid_map_promotion",
+                "fact": "В карточке на картах активно платное продвижение.",
+                "status": "observed",
+                "source_url": "https://yandex.ru/maps/org/1",
+                "freshness": "current_snapshot",
+                "confidence": 1,
+            },
+            {
+                "id": "map-rating",
+                "kind": "map_rating",
+                "fact": "Рейтинг - 4,3; публичных отзывов - 3.",
+                "status": "observed",
+                "source_url": "https://yandex.ru/maps/org/1",
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+            },
+            {
+                "id": "composite-active-social",
+                "kind": "pain_signal_hypothesis",
+                "signal_combo": "active_social_with_map_gap",
+                "fact": "Официальный канал обновляется, а в карточке рейтинг 4,3.",
+                "status": "observed",
+                "source_url": "https://yandex.ru/maps/org/1",
+                "freshness": "current_snapshot",
+                "confidence": 0.9,
+            },
+        ],
+        _availability(),
+        {"suppressed": False},
+        sender_mode="localos",
+        profile_ready=True,
+    )
+
+    assert decision["action"] == "observe"
+    assert "paid_promotion_requires_secondary_signal" in decision["reason_codes"]
+
+
+def test_paid_map_promotion_allows_review_after_a_second_independent_signal():
+    decision = build_outreach_decision(
+        {
+            "workstream_type": "localos_sales",
+            "lifecycle_status": "postponed",
+            "paid_promotion_detected": True,
+            "contacts": [{"verification_status": "verified"}],
+            "research": {"score": 80},
+        },
+        [
+            {
+                "id": "paid-map-promotion",
+                "kind": "paid_map_promotion",
+                "fact": "В карточке на картах активно платное продвижение.",
+                "status": "observed",
+                "source_url": "https://yandex.ru/maps/org/1",
+                "freshness": "current_snapshot",
+                "confidence": 1,
+            },
+            {
+                "id": "service-price-gap",
+                "kind": "pain_signal_hypothesis",
+                "signal_combo": "active_social_with_service_price_gap",
+                "fact": "В карточке найдено 45 услуг; цена указана у 2.",
+                "status": "observed",
+                "source_url": "https://yandex.ru/maps/org/1",
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+            },
+        ],
+        _availability(),
+        {"suppressed": False},
+        sender_mode="localos",
+        profile_ready=True,
+    )
+
+    assert decision["action"] == "write_now"
+    assert "evidence_and_readiness_sufficient" in decision["reason_codes"]
+
+
+def test_network_paid_promotion_hypothesis_also_waits_for_a_second_signal():
+    decision = build_outreach_decision(
+        {
+            "workstream_type": "localos_sales",
+            "lifecycle_status": "postponed",
+            "paid_promotion_requires_secondary_signal": True,
+            "contacts": [{"verification_status": "verified"}],
+            "research": {"score": 80},
+        },
+        [{
+            "id": "network-paid-promotion-hypothesis",
+            "kind": "network_paid_promotion_hypothesis",
+            "signal_combo": "paid_map_promotion",
+            "fact": "Сеть использует платное продвижение; точку нужно проверить.",
+            "status": "observed",
+            "source_url": "https://yandex.ru/maps/org/2",
+            "freshness": "current_snapshot",
+            "confidence": 0.7,
+        }],
+        _availability(),
+        {"suppressed": False},
+        sender_mode="localos",
+        profile_ready=True,
+    )
+
+    assert decision["action"] == "observe"
+    assert "paid_promotion_requires_secondary_signal" in decision["reason_codes"]
+
+
 def test_residential_offer_starts_with_invitation_and_keeps_terms_uncommitted():
     offers = offer_candidates(
         {

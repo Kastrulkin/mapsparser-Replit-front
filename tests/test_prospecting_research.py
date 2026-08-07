@@ -1,5 +1,8 @@
 import json
+from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
+from uuid import UUID
 
 from flask import Flask
 
@@ -310,3 +313,21 @@ def test_reused_import_does_not_prepare_a_second_room_or_draft():
     assert 'prepared = result.get("prepared")' in api
     assert "UPDATE agent_prospecting_imports" in api
     assert "SET result_json = %s" in api
+
+
+def test_agent_import_result_is_json_safe_after_room_preparation():
+    payload = agent_prospecting_api._json_safe({
+        "prepared": [{
+            "created_at": datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc),
+            "score": Decimal("0.75"),
+            "room_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        }],
+    })
+
+    assert payload == {
+        "prepared": [{
+            "created_at": "2026-08-07T12:00:00+00:00",
+            "score": 0.75,
+            "room_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        }],
+    }

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+
 from flask import Blueprint, jsonify, request
 from psycopg2.extras import Json, RealDictCursor
 
@@ -45,6 +49,20 @@ def _request_meta():
 
 def _error(message, status, code):
     return jsonify({"success": False, "error": message, "code": code}), status
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, UUID):
+        return str(value)
+    return value
 
 
 def _authorized_context(required_scope, risk_level, action_type, workstream_type, business_id=None):
@@ -220,6 +238,7 @@ def prospecting_import():
                 prepared.append({"status": "not_prepared", "reason": str(draft_access.get("code") or "SCOPE_REQUIRED")})
         result["prepared"] = prepared
         result["external_send_performed"] = False
+        result = _json_safe(result)
         if not result.get("reused"):
             cursor.execute(
                 """

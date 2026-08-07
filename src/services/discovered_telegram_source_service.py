@@ -89,6 +89,41 @@ def source_attribution_for_lead(lead: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def public_source_profile_for_lead(lead: dict[str, Any]) -> dict[str, Any]:
+    """Describe an official recipient channel without making it a DM contact."""
+    combined = " ".join(
+        str(value or "").strip().lower()
+        for value in (lead.get("name"), lead.get("category"), lead.get("partner_kind"))
+        if str(value or "").strip()
+    )
+    beauty = any(token in combined for token in (
+        "beauty",
+        "wellness",
+        "барбершоп",
+        "косметолог",
+        "маникюр",
+        "ногт",
+        "парикмах",
+        "салон красоты",
+        "спа",
+    ))
+    if beauty:
+        return {
+            "source_role": "salon",
+            "metadata": {
+                "source_owner_type": "owned_business_channel",
+                "source_owner_role": "outreach_recipient",
+                "audience": "b2c",
+                "industry": "beauty_salon",
+                "recipient_eligible": False,
+                "signal_source_eligible": True,
+                "learning_eligible": True,
+                "corpus_tag": "telegram_b2c_beauty",
+            },
+        }
+    return {"source_role": "community", "metadata": {}}
+
+
 def _row_dict(row: Any, cursor: Any | None = None) -> dict[str, Any]:
     if isinstance(row, dict):
         return dict(row)
@@ -174,12 +209,17 @@ def _register_global_public_source(
         "SELECT pg_advisory_xact_lock(hashtextextended(LOWER(RTRIM(%s, '/')), 0))",
         (reference["canonical_url"],),
     )
+    profile = public_source_profile_for_lead(lead)
     existing = _existing_public_source(cursor, reference["canonical_url"])
     if existing:
         cursor.execute(
             """
             UPDATE knowledge_sources
-            SET business_id = NULL,
+            SET source_role = CASE
+                    WHEN %s = 'salon' THEN 'salon'
+                    ELSE source_role
+                END,
+                business_id = NULL,
                 account_id = NULL,
                 visibility = 'public',
                 sensitivity_class = 'public',
@@ -194,11 +234,13 @@ def _register_global_public_source(
             WHERE id = %s
             """,
             (
+                profile["source_role"],
                 Json({
                     "auto_discovered": True,
                     "discovery_origin": discovery_origin,
                     "telegram_username": reference["username"],
                     "permission_reason": "public_preview_ready",
+                    **profile["metadata"],
                 }),
                 existing["id"],
             ),
@@ -229,7 +271,7 @@ def _register_global_public_source(
             else f"Telegram · @{reference['username']}"
         ),
         canonical_url=reference["canonical_url"],
-        source_role="service" if shared_service else "community",
+        source_role="service" if shared_service else profile["source_role"],
         visibility="public",
         sensitivity_class="public",
         allowed_uses=[
@@ -248,6 +290,7 @@ def _register_global_public_source(
             "telegram_reference_type": "public_reference_unverified",
             "permission_reason": "public_preview_ready",
             **attribution,
+            **profile["metadata"],
         },
         business_id=None,
         account_id=None,

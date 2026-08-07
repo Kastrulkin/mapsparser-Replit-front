@@ -4,6 +4,7 @@ from pathlib import Path
 from services.discovered_telegram_source_service import (
     discovered_telegram_signals,
     parse_telegram_reference,
+    public_source_profile_for_lead,
     source_attribution_for_lead,
     sync_discovered_telegram_sources,
 )
@@ -103,6 +104,19 @@ def test_residential_telegram_source_belongs_to_complex_not_sender_business():
         "sender_business_is_owner": False,
         "lead_attribution": "recipient_signal_source",
     }
+
+
+def test_beauty_business_channel_is_tagged_for_b2c_learning_not_delivery():
+    profile = public_source_profile_for_lead({
+        "name": "Персона Lab",
+        "category": "Парикмахерская / ногтевая студия / косметология",
+    })
+
+    assert profile["source_role"] == "salon"
+    assert profile["metadata"]["audience"] == "b2c"
+    assert profile["metadata"]["corpus_tag"] == "telegram_b2c_beauty"
+    assert profile["metadata"]["recipient_eligible"] is False
+    assert profile["metadata"]["learning_eligible"] is True
 
 
 def test_residential_source_is_saved_as_recipient_radar_source(monkeypatch):
