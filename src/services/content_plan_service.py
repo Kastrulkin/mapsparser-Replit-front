@@ -1991,11 +1991,17 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         if not plan_row:
             raise ValueError("Контент-план не найден")
         plan = _row_to_dict(cursor, plan_row)
-        owner_id = get_business_owner_id(cursor, str(plan.get("business_id") or ""))
-        if str(owner_id or "").strip() != str(user_id or "").strip():
-            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
-                raise PermissionError("Нет доступа к плану")
+        cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+        has_access, _ = verify_business_access(
+            cursor,
+            str(plan.get("business_id") or ""),
+            {
+                "user_id": user_id,
+                "is_superadmin": bool(_row_get(cursor.fetchone(), "coalesce", 0, False)),
+            },
+        )
+        if not has_access:
+            raise PermissionError("Нет доступа к плану")
 
         cursor.execute(
             """
@@ -2201,11 +2207,17 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             raise ValueError("Элемент плана не найден")
         data = _row_to_dict(cursor, row)
         previous_status = str(data.get("status") or "").strip()
-        owner_id = get_business_owner_id(cursor, str(data.get("root_business_id") or ""))
-        if str(owner_id or "").strip() != str(user_id or "").strip():
-            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
-                raise PermissionError("Нет доступа к элементу плана")
+        cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+        has_access, _ = verify_business_access(
+            cursor,
+            str(data.get("root_business_id") or data.get("business_id") or ""),
+            {
+                "user_id": user_id,
+                "is_superadmin": bool(_row_get(cursor.fetchone(), "coalesce", 0, False)),
+            },
+        )
+        if not has_access:
+            raise PermissionError("Нет доступа к элементу плана")
 
         updates = []
         params: list[Any] = []
