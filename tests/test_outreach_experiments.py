@@ -69,6 +69,27 @@ def test_low_rating_and_active_social_qualify_even_with_many_reviews():
     assert strong_rating["eligible"] is False
 
 
+def test_float_storage_noise_does_not_exclude_rating_4_4_signal():
+    now = datetime(2026, 8, 7, tzinfo=timezone.utc)
+    result = build_active_social_map_gap_signal(
+        {
+            "rating": 4.400000095367432,
+            "reviews_count": 8,
+            "source_url": "https://yandex.ru/maps/org/153559548150",
+        },
+        {
+            "official": True,
+            "last_post_at": now - timedelta(days=2),
+            "posts_30d": 4,
+            "posts_90d": 7,
+        },
+        now=now,
+    )
+
+    assert result["eligible"] is True
+    assert result["map_gap"]["checks"]["rating_at_or_below_4_4"] is True
+
+
 def test_composite_signal_uses_founder_led_copy_outside_beauty_segment():
     text = founder_led_localos_text(
         "signal",

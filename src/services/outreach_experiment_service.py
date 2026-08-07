@@ -112,7 +112,9 @@ def build_active_social_map_gap_signal(
     peer_reviews = int(peers.get("median_reviews_count") or 0)
     incomplete = bool(map_snapshot.get("profile_incomplete"))
     gap_checks = {
-        "rating_at_or_below_4_4": bool(rating and rating <= 4.4),
+        # PostgreSQL REAL values can surface as 4.400000095367432. Compare the
+        # same one-decimal value the user and recipient see in the map card.
+        "rating_at_or_below_4_4": bool(rating and round(rating, 1) <= 4.4),
         "reviews_at_or_below_10": reviews <= 10,
         "rating_below_peers": bool(rating and peer_rating and rating <= peer_rating - 0.2),
         "reviews_below_peers": bool(peer_reviews and reviews < peer_reviews),
