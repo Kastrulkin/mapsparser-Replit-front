@@ -619,6 +619,50 @@ def test_personalization_requires_confirmed_founder_profile_and_sourced_evidence
     assert build_personalization_candidates(context, evidence) == []
 
 
+def test_personalization_uses_operator_confirmed_recipient_identity_without_claiming_personal_email():
+    context = {
+        "lead_name": "Клиника скульптуры лица",
+        "rating": 4.2,
+        "reviews_count": 12,
+        "source_url": "https://example.test/maps/card",
+        "updated_at": "2026-08-07T10:00:00Z",
+        "research": {},
+        "contacts": [{
+            "contact_type": "email",
+            "value": "hello@example.test",
+            "owner_type": "company",
+            "person_name": "Сусанна",
+            "role_title": "Основатель",
+            "verification_status": "confirmed_source",
+            "metadata_json": {
+                "recipient_identity_status": "operator_confirmed",
+            },
+        }],
+        "sender_profile": {
+            "display_name": "Александр",
+            "role_title": "Основатель",
+            "company_name": "LocalOS",
+            "competence_story": "Мы сами управляли локальным бизнесом и знаем работу с картами изнутри.",
+            "confirmed_at": "2026-08-07T10:00:00Z",
+            "proof_points_json": [{"fact": "Проводили публичные аудиты карточек", "status": "approved"}],
+            "allowed_offers_json": [{"fact": "Могу прислать короткий аудит карточки.", "status": "approved"}],
+            "forbidden_claims_json": ["Не обещать рост обращений"],
+            "voice_examples_json": ["Здравствуйте! Могу прислать короткий разбор?"],
+            "outreach_context_json": {
+                "competence_story_status": "approved",
+                "audience": "Владельцы локального бизнеса",
+            },
+        },
+    }
+
+    evidence = build_evidence_ledger(context)
+    candidate = build_personalization_candidates(context, evidence)[0]
+
+    assert candidate["contact_name"] == "Сусанна"
+    assert candidate["contact_role"] == "Основатель"
+    assert context["contacts"][0]["owner_type"] == "company"
+
+
 def test_sender_modes_are_explicit_and_never_fall_back_across_motions():
     assert resolve_sender_mode("localos_sales") == "localos"
     assert resolve_sender_mode("client_partnership") == "partner_business"

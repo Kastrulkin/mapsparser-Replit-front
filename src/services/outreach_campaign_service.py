@@ -1762,6 +1762,26 @@ def build_personalization_candidates(
         return []
     candidates = []
     lead_name = _text(context.get("lead_name"))
+    contact_name = ""
+    contact_role = ""
+    for contact in _list(context.get("contacts")):
+        if not isinstance(contact, dict):
+            continue
+        person_name = _text(contact.get("person_name"))
+        if not person_name:
+            continue
+        metadata = contact.get("metadata_json")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        identity_status = _text(metadata.get("recipient_identity_status"))
+        is_confirmed_person = (
+            _text(contact.get("owner_type")) == "person"
+            and _text(contact.get("verification_status")) in {"confirmed_source", "verified"}
+        )
+        if identity_status not in {"operator_confirmed", "official_source"} and not is_confirmed_person:
+            continue
+        contact_name = person_name
+        contact_role = _text(contact.get("role_title"))
+        break
     supporting_map_evidence = next(
         (
             item
@@ -1818,6 +1838,8 @@ def build_personalization_candidates(
         candidates.append({
             "id": f"personalization-{index + 1}",
             "recipient": lead_name,
+            "contact_name": contact_name,
+            "contact_role": contact_role,
             "recipient_type": recipient_type,
             "recipient_category": _text(context.get("category")),
             "recipient_segment": recipient_segment,
