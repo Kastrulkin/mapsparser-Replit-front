@@ -730,7 +730,9 @@ def public_audit_artifact_from_row(row: dict[str, Any] | None) -> dict[str, Any]
     if not source or not bool(source.get("is_active", True)):
         return {}
     page_json: dict[str, Any] = {}
-    for key in ("published_json", "page_json", "generated_json"):
+    # ``page_json`` is the effective public snapshot. Regeneration can refresh
+    # it while retaining an older ``published_json`` for editor history.
+    for key in ("page_json", "published_json", "generated_json"):
         candidate = source.get(key)
         if isinstance(candidate, dict) and candidate:
             page_json = candidate

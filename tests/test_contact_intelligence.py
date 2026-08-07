@@ -417,6 +417,18 @@ def test_legacy_candidates_recovers_all_supported_channels_from_nested_map_paylo
     assert all(item["source_type"] == "map_payload" for item in contacts)
 
 
+def test_localos_public_audit_prefers_effective_page_over_stale_published_history():
+    artifact = public_audit_artifact_from_row({
+        "slug": "fresh-audit",
+        "is_active": True,
+        "edit_status": "generated",
+        "page_json": {"audit": {"current_state": {"services_count": 37}}},
+        "published_json": {"audit": {"current_state": {"services_count": 22}}},
+    })
+
+    assert artifact["audit_json"]["current_state"]["services_count"] == 37
+
+
 def test_localos_public_audit_becomes_sourced_research_without_promoting_hypothesis():
     artifact = public_audit_artifact_from_row({
         "slug": "clinic-audit",
