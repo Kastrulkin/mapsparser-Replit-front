@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "label": "relevant",
+  "captured_at": "2026-08-08T13:12:51.670301+00:00",
+  "command": [
+    "docker",
+    "compose",
+    "run",
+    "--rm",
+    "--no-deps",
+    "-v",
+    "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/tests:/app/tests:ro",
+    "-v",
+    "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/scripts:/app/scripts:ro",
+    "--entrypoint",
+    "sh",
+    "app",
+    "-lc",
+    "pip install -q pytest && python -m pytest -q tests/test_outreach_v2_partnership_intelligence.py tests/test_outreach_signal_hypotheses.py tests/test_outreach_experiments.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 17846.423,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": ".........................................................                [100%]\n57 passed in 1.09s\n",
+  "stderr": " Container seo-app-run-81017be3a44c Creating \n Container seo-app-run-81017be3a44c Created \nWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv\n\n[notice] A new release of pip is available: 24.0 -> 26.2.1\n[notice] To update, run: pip install --upgrade pip\n",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

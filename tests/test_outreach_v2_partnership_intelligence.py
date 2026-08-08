@@ -202,6 +202,46 @@ def test_paid_map_promotion_allows_review_after_a_second_independent_signal():
     assert "evidence_and_readiness_sufficient" in decision["reason_codes"]
 
 
+def test_paid_promotion_does_not_treat_single_routine_availability_public_signal_as_secondary_signal():
+    decision = build_outreach_decision(
+        {
+            "workstream_type": "localos_sales",
+            "lifecycle_status": "postponed",
+            "paid_promotion_detected": True,
+            "contacts": [{"verification_status": "verified"}],
+            "research": {"score": 80},
+        },
+        [
+            {
+                "id": "paid-map-promotion",
+                "kind": "paid_map_promotion",
+                "fact": "В карточке на картах активно платное продвижение.",
+                "status": "observed",
+                "source_url": "https://yandex.ru/maps/org/1",
+                "freshness": "current_snapshot",
+                "confidence": 1,
+            },
+            {
+                "id": "single-routine-open-slot",
+                "kind": "public_signal",
+                "fact": "Горящие окошки на этой неделе — записывайтесь.",
+                "status": "observed",
+                "source_url": "https://t.me/example_salon/101",
+                "observed_at": "2026-08-07T10:00:00+00:00",
+                "freshness": "fresh",
+                "confidence": 0.95,
+            },
+        ],
+        _availability(),
+        {"suppressed": False},
+        sender_mode="localos",
+        profile_ready=True,
+    )
+
+    assert decision["action"] == "observe"
+    assert "paid_promotion_requires_secondary_signal" in decision["reason_codes"]
+
+
 def test_network_paid_promotion_hypothesis_also_waits_for_a_second_signal():
     decision = build_outreach_decision(
         {

@@ -55,6 +55,10 @@ RESIDENTIAL_RECIPIENT_TOKENS = (
     "жилой комплекс / апартаменты",
     "жилкомплекс",
 )
+ROUTINE_AVAILABILITY_RE = re.compile(
+    r"\b(?:свободн\w*\s+(?:окн|мест)|горящ\w*\s+окн|окошк\w*\s+на|есть\s+окошк)\w*",
+    re.IGNORECASE,
+)
 
 
 def _text(value: Any) -> str:
@@ -99,7 +103,10 @@ def _has_secondary_signal_after_paid_promotion(ledger: list[dict[str, Any]]) -> 
         combo = _text(item.get("signal_combo") or item.get("pattern_key")).lower()
         if kind in excluded_kinds or combo in excluded_combos:
             continue
-        if _text(item.get("fact") or item.get("observed_fact")) and _text(item.get("source_url")):
+        fact = _text(item.get("fact") or item.get("observed_fact"))
+        if kind == "public_signal" and ROUTINE_AVAILABILITY_RE.search(fact):
+            continue
+        if fact and _text(item.get("source_url")):
             return True
     return False
 
