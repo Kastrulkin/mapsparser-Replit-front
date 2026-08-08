@@ -22,7 +22,9 @@ from services.outreach_campaign_service import (
     channel_availability,
     _localos_representative_profile,
     _normalize_touch_overrides,
+    _publication_capability_snapshot,
     _resolve_next_sequence_channel,
+    _strategy_dimensions,
     resolve_sender_mode,
 )
 from services.outreach_decision_service import (
@@ -85,6 +87,179 @@ def _private_beauty_founder_candidate():
         "source_url": "https://example.test/maps/tatyana",
         "freshness": "current_snapshot",
     }
+
+
+def _publication_capabilities(*channels):
+    return {
+        "schema": "localos_outreach_publication_capabilities_v1",
+        "approval_required": True,
+        "channels": list(channels),
+        "supported_after_connection": ["telegram", "vk"],
+        "manual_or_supervised_channels": ["yandex_maps", "two_gis"],
+    }
+
+
+def _publication_channel(
+    platform,
+    *,
+    connected=False,
+    provider_ready=False,
+    publish_mode="api",
+    status="missing_connection",
+):
+    return {
+        "platform": platform,
+        "connected": connected,
+        "provider_ready": provider_ready,
+        "publish_mode": publish_mode,
+        "status": status,
+    }
+
+
+def test_event_distribution_without_connected_channels_uses_conditional_autopublish_and_omits_maps_without_evidence():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "signal_combo": "recent_event_announcement",
+        "observed_fact": 'В Telegram опубликовано: "21 августа - клиентский день".',
+        "map_observation": "",
+        "supporting_evidence": [],
+        "evidence_kind": "telegram_post",
+        "source_url": "https://t.me/example/1",
+        "publication_capabilities": _publication_capabilities(),
+    })
+
+    message = _message_for_angle("signal", candidate, None, [])
+
+    assert (
+        "После подключения каналов и вашего подтверждения LocalOS автоматически "
+        "публикует материалы в поддерживаемые каналы."
+    ) in message
+    assert "карт" not in message.lower()
+    assert "\n\n\n" not in message
+
+
+def test_content_reuse_names_only_connected_provider_ready_channels():
+    candidate = _private_beauty_founder_candidate()
+    candidate["publication_capabilities"] = _publication_capabilities(
+        _publication_channel(
+            "telegram",
+            connected=True,
+            provider_ready=True,
+            status="ready",
+        ),
+        _publication_channel(
+            "vk",
+            connected=False,
+            provider_ready=False,
+        ),
+        _publication_channel(
+            "google_business",
+            connected=True,
+            provider_ready=False,
+            status="provider_not_ready",
+        ),
+    )
+
+    message = _message_for_angle("content_operations", candidate, None, [])
+
+    assert "После вашего подтверждения LocalOS автоматически публикует материалы в Telegram." in message
+    assert "VK и Telegram" not in message
+    assert "Google" not in message
+    assert "\n\n" in message
+    assert "\n\n\n" not in message
+
+
+def test_google_autopublish_requires_beta_connection_provider_ready_and_approval():
+    candidate = _private_beauty_founder_candidate()
+    candidate["publication_capabilities"] = _publication_capabilities(
+        _publication_channel(
+            "google_business",
+            connected=True,
+            provider_ready=True,
+            status="ready",
+        ),
+    )
+
+    message = _message_for_angle("content_operations", candidate, None, [])
+
+    assert "Google Business Profile в beta-режиме" in message
+    assert "После вашего подтверждения" in message
+
+
+def test_maps_are_mentioned_only_with_recipient_map_evidence_and_never_as_autopublish():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "signal_combo": "recent_event_announcement",
+        "observed_fact": 'В Telegram опубликовано: "21 августа - клиентский день".',
+        "map_observation": "Рейтинг - 4,1; публичных отзывов - 5.",
+        "publication_capabilities": _publication_capabilities(),
+    })
+
+    message = _message_for_angle("signal", candidate, None, [])
+
+    assert "картах" in message.lower()
+    assert "автоматически публикует" in message
+    assert "автоматически публикует на картах" not in message.lower()
+
+
+def test_publication_snapshot_is_kept_in_strategy_dimensions():
+    candidate = _private_beauty_founder_candidate()
+    candidate["publication_capabilities"] = _publication_capabilities(
+        _publication_channel(
+            "telegram",
+            connected=True,
+            provider_ready=True,
+            status="ready",
+        ),
+    )
+
+    strategy = _strategy_dimensions(
+        {"workstream_type": "localos_sales", "category": "Салон красоты"},
+        {},
+        candidate,
+        {},
+        channel="email",
+        sequence_index=0,
+        day_offset=0,
+        angle="signal",
+    )
+
+    assert strategy["publication_capabilities"] == candidate["publication_capabilities"]
+
+
+def test_publication_snapshot_fail_closes_google_and_never_marks_maps_api_ready(monkeypatch):
+    monkeypatch.delenv("GOOGLE_BUSINESS_PUBLICATION_BETA_PROVIDER_READY", raising=False)
+    monkeypatch.setattr(
+        "services.outreach_campaign_service.social_provider_adapters._build_channel_readiness",
+        lambda _cursor, _business_id: [
+            {"platform": "telegram", "publish_mode": "api", "ready": True, "status": "ready"},
+            {"platform": "google_business", "publish_mode": "api", "ready": True, "status": "ready"},
+            {
+                "platform": "yandex_maps",
+                "publish_mode": "openclaw_browser",
+                "ready": True,
+                "status": "supervised_ready",
+            },
+        ],
+    )
+
+    snapshot = _publication_capability_snapshot(object(), "business-1")
+    by_platform = {item["platform"]: item for item in snapshot["channels"]}
+
+    assert by_platform["telegram"]["provider_ready"] is True
+    assert by_platform["google_business"]["provider_ready"] is False
+    assert by_platform["google_business"]["status"] == "provider_not_ready"
+    assert by_platform["yandex_maps"]["provider_ready"] is False
+    assert snapshot["approval_required"] is True
+
+
+def test_touch_override_normalizes_paragraph_spacing_without_flattening():
+    normalized = _normalize_touch_overrides([{
+        "sequence_index": 0,
+        "text": "Первый абзац.\n\n\n\nВторой абзац.",
+    }])
+
+    assert normalized[0]["text"] == "Первый абзац.\n\nВторой абзац."
 
 
 def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
@@ -403,7 +578,7 @@ def test_telegram_observation_does_not_turn_promotion_into_procedure_explanation
     assert "объясняете клиентам процедуры" not in message
 
 
-def test_telegram_signal_connects_active_channel_to_maps_without_empty_paragraph():
+def test_telegram_signal_uses_conditional_autopublish_without_unsupported_maps():
     candidate = _private_beauty_founder_candidate()
     candidate.update({
         "evidence_kind": "telegram_post",
@@ -418,7 +593,10 @@ def test_telegram_signal_connects_active_channel_to_maps_without_empty_paragraph
 
     message = _message_for_angle("signal", candidate, None, [])
 
-    assert "Карты тоже могли бы помогать вам привлекать клиентов." in message
+    assert "карт" not in message.lower()
+    assert "Яндекс" not in message
+    assert "После подключения каналов и вашего подтверждения" in message
+    assert "автоматически публикует материалы" in message
     assert "\n\n\n\n" not in message
 
 

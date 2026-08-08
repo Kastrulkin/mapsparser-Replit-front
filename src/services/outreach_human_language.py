@@ -75,7 +75,7 @@ CONCRETE_OBJECT_RE = re.compile(
     r"\b(?:прайс(?:-лист)?\w*|цен\w*|карт\w*|сайт\w*|площадк\w*|карточк\w*|"
     r"услуг\w*|отзыв\w*|ответ\w*|пост\w*|публикац\w*|контент\w*|текст\w*|"
     r"новост\w*|описани\w*|фото\w*|данн\w*|верси\w*|исходн\w*|"
-    r"изменени\w*|список\w*|правк\w*|инструкц\w*|расхождени\w*|черновик\w*)\b",
+    r"изменени\w*|список\w*|правк\w*|инструкц\w*|расхождени\w*|черновик\w*|материал\w*)\b",
     re.IGNORECASE,
 )
 DIRECT_PAIN_RE = re.compile(
@@ -121,6 +121,57 @@ def _approved_generic_cta(text: str, proof_keys: list[str]) -> bool:
     )
 
 
+def _publication_claim_supported(
+    normalized: str,
+    publication_capabilities: dict[str, Any] | None,
+) -> bool:
+    claim_present = bool(re.search(
+        r"(?:автоматически\s+публику|\bавтопублик|localos\s+готовит\s+и\s+публику)",
+        normalized,
+        flags=re.IGNORECASE,
+    ))
+    if not claim_present:
+        return True
+    if re.search(r"яндекс(?:\s+карт\w*)?|2гис", normalized, flags=re.IGNORECASE):
+        return False
+    approval_present = bool(re.search(
+        r"после[^.!?]{0,80}подтвержден",
+        normalized,
+        flags=re.IGNORECASE,
+    ))
+    if not approval_present:
+        return False
+    capabilities = publication_capabilities if isinstance(publication_capabilities, dict) else {}
+    ready_platforms = {
+        _clean(item.get("platform")).lower()
+        for item in capabilities.get("channels") or []
+        if isinstance(item, dict)
+        and item.get("connected") is True
+        and item.get("provider_ready") is True
+        and _clean(item.get("publish_mode")).lower() == "api"
+        and _clean(item.get("status")).lower() == "ready"
+    }
+    named_platforms = set()
+    if re.search(r"\btelegram\b", normalized, flags=re.IGNORECASE):
+        named_platforms.add("telegram")
+    if re.search(r"(?:^|[^a-zа-яё0-9])vk(?:[^a-zа-яё0-9]|$)", normalized, flags=re.IGNORECASE):
+        named_platforms.add("vk")
+    if re.search(r"google\s+business(?:\s+profile)?", normalized, flags=re.IGNORECASE):
+        named_platforms.add("google_business")
+    if named_platforms:
+        if not named_platforms.issubset(ready_platforms):
+            return False
+        if "google_business" in named_platforms and "beta-режим" not in normalized:
+            return False
+        return True
+    conditional_connection = bool(re.search(
+        r"после\s+подключения\s+канал",
+        normalized,
+        flags=re.IGNORECASE,
+    ))
+    return conditional_connection and "поддерживаем" in normalized
+
+
 def review_human_language(
     text: str,
     *,
@@ -129,6 +180,7 @@ def review_human_language(
     approved_proof_keys: list[str] | None = None,
     language_support: dict[str, Any] | None = None,
     require_signal_flow: bool = False,
+    publication_capabilities: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return explainable checks; corpus similarity is never the sole verdict."""
 
@@ -192,6 +244,10 @@ def review_human_language(
         and approved_generic_cta
         and "если" in normalized
     )
+    publication_claim_supported = _publication_claim_supported(
+        normalized,
+        publication_capabilities,
+    )
 
     checks = {
         "cliche_free": not matched_phrases,
@@ -201,6 +257,7 @@ def review_human_language(
         "signal_pain_solution_cta": signal_pain_solution_cta,
         "language_support": support_status in {"supported", "not_checked", "unavailable"}
         or conditional_operator_support,
+        "publication_claim_supported": publication_claim_supported,
     }
     reason_codes: list[str] = []
     if matched_phrases:
@@ -222,6 +279,8 @@ def review_human_language(
         reason_codes.append("PAIN_SUPPORT_INSUFFICIENT")
     if proof_wording_changed:
         reason_codes.append("PROOF_WORDING_CHANGED")
+    if not publication_claim_supported:
+        reason_codes.append("UNSUPPORTED_PUBLICATION_CLAIM")
 
     return {
         "passed": not reason_codes,

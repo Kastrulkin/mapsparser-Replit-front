@@ -17,9 +17,11 @@ from services.outreach_personalization_ai import (
     QUALITY_CRITERIA,
     REVIEW_PROMPT_VERSION,
     ai_personalization_enabled,
+    format_outreach_message,
     generation_contract_current,
     generate_personalized_sequence,
 )
+from services.social_posts import provider_adapters as social_provider_adapters
 from services.outreach_playbook import beauty_touch_learning_dimensions
 from services.outreach_pain_library_service import load_approved_pain_library
 from services.outreach_pain_library_service import language_support_for_candidate
@@ -88,6 +90,68 @@ DEFAULT_SEQUENCE = (
     ("email", 25, "respectful_close"),
 )
 PLATFORM_DEFAULT_EMAIL_SENDER = "localosgo@gmail.com"
+
+
+def _publication_capability_snapshot(
+    cursor: Any,
+    business_id: Any,
+) -> dict[str, Any]:
+    """Build a fail-closed, read-only publishing snapshot for outreach copy."""
+
+    provider_readiness = []
+    source = "no_recipient_business"
+    if _text(business_id):
+        try:
+            provider_readiness = social_provider_adapters._build_channel_readiness(
+                cursor,
+                _text(business_id),
+            )
+            source = "social_channel_readiness"
+        except Exception:
+            source = "social_channel_readiness_unavailable"
+    google_provider_ready = str(
+        os.getenv("GOOGLE_BUSINESS_PUBLICATION_BETA_PROVIDER_READY") or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    channels = []
+    for item in provider_readiness:
+        if not isinstance(item, dict):
+            continue
+        platform = _text(item.get("platform")).lower()
+        if platform not in {"telegram", "vk", "google_business", "yandex_maps", "two_gis"}:
+            continue
+        readiness_status = _text(item.get("status")).lower()
+        publish_mode = _text(item.get("publish_mode")).lower()
+        connected = bool(item.get("ready")) or readiness_status in {
+            "missing_binding",
+            "missing_permissions",
+            "adapter_pending",
+            "provider_not_ready",
+        }
+        provider_ready = bool(item.get("ready")) and publish_mode == "api"
+        status = readiness_status
+        if platform == "google_business" and provider_ready and not google_provider_ready:
+            provider_ready = False
+            status = "provider_not_ready"
+        if platform in {"yandex_maps", "two_gis"}:
+            provider_ready = False
+        channels.append({
+            "platform": platform,
+            "connected": connected,
+            "provider_ready": provider_ready,
+            "publish_mode": publish_mode,
+            "status": status,
+        })
+    supported_after_connection = ["telegram", "vk"]
+    if google_provider_ready:
+        supported_after_connection.append("google_business")
+    return {
+        "schema": "localos_outreach_publication_capabilities_v1",
+        "source": source,
+        "approval_required": True,
+        "channels": channels,
+        "supported_after_connection": supported_after_connection,
+        "manual_or_supervised_channels": ["yandex_maps", "two_gis"],
+    }
 NON_RECIPIENT_EMAIL_DOMAINS = {
     "company24.com",
     "dikidi.net",
@@ -215,7 +279,7 @@ def update_draft_campaign_touch(
     user_id: str,
 ) -> dict[str, Any]:
     """Persist one editable draft or paused unsent message without resuming delivery."""
-    normalized_text = generated_text.strip() if isinstance(generated_text, str) else ""
+    normalized_text = format_outreach_message(generated_text)
     normalized_subject = _text(subject)
     if not normalized_text:
         raise ValueError("Message text is required")
@@ -266,7 +330,9 @@ def update_draft_campaign_touch(
     raw_message_brief = existing.get("message_brief_json")
     message_brief = dict(raw_message_brief) if isinstance(raw_message_brief, dict) else {}
     if not message_brief.get("original_generated_text"):
-        message_brief["original_generated_text"] = _text(existing.get("generated_text"))
+        message_brief["original_generated_text"] = format_outreach_message(
+            existing.get("generated_text")
+        )
     if not message_brief.get("original_generated_subject"):
         message_brief["original_generated_subject"] = _text(existing.get("subject")) or None
     message_brief["human_edited"] = True
@@ -377,7 +443,7 @@ def update_draft_campaign_touch(
             "preference_status": "accepted_edit",
             "original_subject": _text(existing.get("subject")),
             "final_subject": normalized_subject,
-            "original_text": _text(existing.get("generated_text")),
+            "original_text": format_outreach_message(existing.get("generated_text")),
             "final_text": normalized_text,
             "reviewer_id": user_id,
         },
@@ -463,7 +529,11 @@ def apply_draft_campaign_review(
         reviewed = reviewed_by_index[sequence_index]
         reviewed_text = reviewed.get("text")
         reviewed_subject = reviewed.get("subject")
-        if reviewed_text is not None and _text(reviewed_text) != _text(touch.get("generated_text")):
+        if (
+            reviewed_text is not None
+            and format_outreach_message(reviewed_text)
+            != format_outreach_message(touch.get("generated_text"))
+        ):
             raise ValueError("Campaign message changed during review; run the review again")
         if reviewed_subject is not None and _text(reviewed_subject) != _text(touch.get("subject")):
             raise ValueError("Campaign subject changed during review; run the review again")
@@ -1354,6 +1424,10 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     workstream["paid_promotion_requires_secondary_signal"] = (
         search_payload.get("paid_promotion_requires_secondary_signal") is True
     )
+    workstream["publication_capabilities"] = _publication_capability_snapshot(
+        cursor,
+        workstream.get("lead_business_id"),
+    )
     cursor.execute(
         """
         SELECT * FROM lead_workstream_research
@@ -1912,6 +1986,7 @@ def build_personalization_candidates(
             "next_step": next_step,
             "source_url": evidence.get("source_url"),
             "public_audit_url": context.get("public_audit_url"),
+            "publication_capabilities": context.get("publication_capabilities") or {},
             "source_type": evidence.get("source_type"),
             "confidence": evidence.get("confidence"),
             "freshness": evidence.get("freshness"),
@@ -1985,6 +2060,7 @@ def _strategy_dimensions(
             else []
         ),
         "localos_action": candidate.get("localos_action"),
+        "publication_capabilities": candidate.get("publication_capabilities") or {},
         "channel": channel,
         "sequence_index": sequence_index,
         "day_offset": day_offset,
@@ -2532,6 +2608,11 @@ def _quality_gate(
         require_signal_flow=(
             _text(angle) == "signal" and bool(candidate.get("localos_action"))
         ),
+        publication_capabilities=(
+            candidate.get("publication_capabilities")
+            if isinstance(candidate.get("publication_capabilities"), dict)
+            else None
+        ),
     )
     enforced_language_codes = [
         code
@@ -2541,6 +2622,7 @@ def _quality_gate(
             "INFERENCE_AS_FACT",
             "PAIN_SUPPORT_INSUFFICIENT",
             "PROOF_WORDING_CHANGED",
+            "UNSUPPORTED_PUBLICATION_CLAIM",
         }
         or (
             _text(angle) == "signal"
@@ -2651,7 +2733,7 @@ def _message_for_angle(
 ) -> str:
     founder_led_message = founder_led_localos_text(angle, candidate, story)
     if founder_led_message:
-        return founder_led_message
+        return format_outreach_message(founder_led_message)
     name = candidate["recipient"]
     sender = _text(candidate.get("sender"))
     sender_role = _text(candidate.get("sender_role"))
@@ -2858,9 +2940,9 @@ def _normalize_touch_overrides(
             raise ValueError("touch override sequence_index must be an integer") from exc
         if override_index < 0 or override_index > 20 or override_index in normalized:
             raise ValueError("touch override sequence_index is invalid or duplicated")
-        override_text = str(item.get("text") or "").strip()
+        override_text = format_outreach_message(item.get("text"))
         override_subject = _text(item.get("subject"))
-        original_text = str(item.get("original_text") or "").strip()
+        original_text = format_outreach_message(item.get("original_text"))
         original_subject = _text(item.get("original_subject"))
         if not override_text:
             raise ValueError("touch override text is required")
@@ -3105,7 +3187,9 @@ def build_preview(
         # new signal in a follow-up (especially a negative review) requires a separate
         # explicit personalization selection and a new approval version.
         candidate = primary_candidate
-        message = _message_for_angle(angle, candidate, story, previous_angles)
+        message = format_outreach_message(
+            _message_for_angle(angle, candidate, story, previous_angles)
+        )
         requested_sender_id = _text(item.get("sender_account_id"))
         if requested_channel in AUTOMATIC_CHANNELS and requested_sender_id:
             sender_option = next(
@@ -3244,7 +3328,7 @@ def build_preview(
                 index = int(touch["sequence_index"])
                 generated_touch = generated_by_index[index]
                 semantic_review = review_by_index[index]
-                touch["text"] = generated_touch["text"]
+                touch["text"] = format_outreach_message(generated_touch["text"])
                 if touch["channel"] == "email":
                     touch["subject"] = generated_touch.get("subject") or touch.get("subject")
                 touch["problem_hypothesis"] = generated_touch.get("problem_hypothesis")

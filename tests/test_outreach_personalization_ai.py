@@ -74,6 +74,44 @@ def test_request_record_preserves_corpus_signal_and_public_audit_link():
     assert [item["evidence_id"] for item in record["evidence"]] == ["telegram-1", "map-rating"]
 
 
+def test_request_record_preserves_publication_snapshot_and_draft_paragraphs():
+    publication_capabilities = {
+        "schema": "localos_outreach_publication_capabilities_v1",
+        "approval_required": True,
+        "channels": [{
+            "platform": "telegram",
+            "connected": True,
+            "provider_ready": True,
+            "publish_mode": "api",
+            "status": "ready",
+        }],
+        "supported_after_connection": ["telegram", "vk"],
+        "manual_or_supervised_channels": ["yandex_maps", "two_gis"],
+    }
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "Линия красоты"},
+        candidate={
+            "evidence_id": "telegram-1",
+            "observed_fact": "В Telegram анонсируется клиентский день",
+            "source_url": "https://t.me/example/1",
+            "publication_capabilities": publication_capabilities,
+        },
+        founder_story={"story": "Опыт основателя", "offer": "Показать пример"},
+        sequence=[{
+            "sequence_index": 0,
+            "channel": "email",
+            "angle": "signal",
+            "day_offset": 0,
+            "text": "Первый абзац.\n\nВторой абзац.",
+        }],
+        voice_examples=[],
+    )
+
+    assert record["personalization"]["publication_capabilities"] == publication_capabilities
+    assert record["sequence"][0]["deterministic_draft"] == "Первый абзац.\n\nВторой абзац."
+
+
 def test_request_record_prefers_campaign_offer_over_legacy_profile_offer():
     record = _request_record(
         motion="localos_sales",
@@ -457,6 +495,8 @@ def test_constrained_fragments_keep_ai_voice_but_localos_inserts_all_facts():
     assert all(OBSERVATION in item["text"] for item in result["touches"])
     assert all("Можно проверить, как карточка формирует доверие" in item["text"] for item in result["touches"])
     assert _story()["story"] in result["touches"][1]["text"]
+    assert all("\n\n" in item["text"] for item in result["touches"])
+    assert all("\n\n\n" not in item["text"] for item in result["touches"])
 
 
 def test_policy_text_preserves_grounded_words_when_terminal_punctuation_changes():

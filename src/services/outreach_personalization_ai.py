@@ -17,11 +17,12 @@ from services.outreach_playbook import beauty_outreach_guidance
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v13"
-REVIEW_PROMPT_VERSION = "outreach_semantic_review_v5"
+PROMPT_VERSION = "outreach_personalization_v14"
+REVIEW_PROMPT_VERSION = "outreach_semantic_review_v6"
 MANUAL_COMPATIBLE_PROMPT_VERSIONS = {
     "outreach_personalization_v11",
     "outreach_personalization_v12",
+    "outreach_personalization_v13",
     PROMPT_VERSION,
 }
 QUALITY_CRITERIA = (
@@ -60,6 +61,7 @@ CANONICAL_REASON_CODES = {
     "PROOF_WORDING_CHANGED",
     "PROOF_SCOPE_MISMATCH",
     "GENERIC_CTA",
+    "UNSUPPORTED_PUBLICATION_CLAIM",
 }
 ALLOWED_TEMPLATE_FIELDS = {
     "RECIPIENT",
@@ -293,6 +295,11 @@ def _request_record(
                 else {"status": "not_checked"}
             ),
             "localos_action": _clean(candidate.get("localos_action")),
+            "publication_capabilities": (
+                candidate.get("publication_capabilities")
+                if isinstance(candidate.get("publication_capabilities"), dict)
+                else {}
+            ),
             "relevance_to_offer": _clean(
                 candidate.get("relevance_to_offer") or candidate.get("bridge")
             ),
@@ -320,7 +327,7 @@ def _request_record(
             "channel": _clean(item.get("channel")).lower(),
             "angle": _clean(item.get("angle")),
             "day_offset": max(0, int(item.get("day_offset") or 0)),
-            "deterministic_draft": _clean(item.get("text")),
+            "deterministic_draft": format_outreach_message(item.get("text")),
             "deterministic_subject": _clean(item.get("subject")) or None,
         } for item in sequence],
         "policy": {
@@ -329,6 +336,7 @@ def _request_record(
             "telegram_word_limit": 90,
             "email_word_limit": 120,
             "single_cta": True,
+            "one_blank_line_between_paragraphs": True,
             "different_angle_per_touch": True,
             "no_new_recipient_facts": True,
             "market_language_never_recipient_evidence": True,
@@ -361,6 +369,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "OUTREACH_PLAYBOOK содержит методику и язык гипотез сегмента, а не факты о получателе. "
         "Боль из playbook нельзя утверждать как состояние конкретного получателя без отдельного evidence. "
         "Language support используется только для гипотезы и выбора простых слов; не копируй фразы корпуса и не превращай language refs в recipient evidence. "
+        "Publication capabilities - единственный источник правды об автопубликации. Не обещай публикацию в неподключённые или неготовые каналы; Яндекс Карты и 2ГИС всегда ручные или контролируемые. "
         "Observation - факт. problem_hypothesis - только гипотеза: не утверждай её как факт. "
         "LocalOS сам соберёт текст из observation, founder story и proof по правилам выбранного угла. "
         "Ты выбираешь только opening_style и cta_intent для каждого касания. "
@@ -385,6 +394,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Не используй ритуальные комплименты, давление, ложную срочность, длинное тире и кавычки-ёлочки. "
         "Не используй точка роста, новый уровень, масштабировать бизнес, повысить эффективность, комплексное решение, раскрыть потенциал, усилить присутствие или другие рекламные штампы. "
         "Telegram - максимум 90 слов, email - максимум 120 слов. "
+        "Между абзацами оставляй ровно одну пустую строку. "
         "Для email дай спокойную фактическую тему; для других каналов subject=null. "
         "Верни объект schema_version=1.0 и touches. В каждом touch обязательны: "
         "sequence_index, channel, angle, subject, opening_style, cta_intent и evidence_ids. "
@@ -454,8 +464,8 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
             raise ValueError(f"Missing generated touch {index}")
         channel = _clean(item.get("channel")).lower()
         angle = _clean(item.get("angle"))
-        template = _clean(item.get("text_template"))
-        text = _clean(item.get("text"))
+        template = format_outreach_message(item.get("text_template"))
+        text = format_outreach_message(item.get("text"))
         # Evidence identity is server policy, not model output. The model may echo
         # a stale or translated identifier; always bind the touch to the verified
         # ledger entry from INPUT_JSON.
@@ -483,7 +493,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
                 template = template.replace(f"{{{{{field}}}}}", value)
             if re.search(r"\{\{[^{}]+\}\}", template):
                 raise ValueError(f"Touch {index} contains an unresolved placeholder")
-            text = _clean(template)
+            text = format_outreach_message(template)
         else:
             text = _assemble_constrained_text(
                 item=item,
@@ -612,7 +622,7 @@ def _assemble_constrained_text(
         _clean(request_record["personalization"]["relevance_to_offer"]).rstrip(" .!?;") + ".",
         cta,
     ]
-    return _clean(" ".join(block for block in blocks if block))
+    return format_outreach_message("\n\n".join(block for block in blocks if block))
 
 
 def _assemble_policy_bound_text(
@@ -638,6 +648,9 @@ def _assemble_policy_bound_text(
         "signal_combo": request_record.get("personalization", {}).get("signal_combo"),
         "map_observation": request_record.get("personalization", {}).get("map_observation"),
         "public_audit_url": request_record.get("personalization", {}).get("public_audit_url"),
+        "publication_capabilities": request_record.get("personalization", {}).get(
+            "publication_capabilities"
+        ),
         "next_step": request_record.get("sender", {}).get("offer"),
         "evidence_kind": (
             request_record.get("evidence", [{}])[0].get("kind")
@@ -946,6 +959,21 @@ def _failed(code: str, message: str) -> dict[str, Any]:
 
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def format_outreach_message(value: Any) -> str:
+    """Keep message paragraphs while normalizing all blank-line runs."""
+
+    raw = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not raw:
+        return ""
+    paragraphs = []
+    for block in re.split(r"\n\s*\n", raw):
+        normalized = re.sub(r"[\t ]+", " ", block)
+        normalized = re.sub(r"\s*\n\s*", " ", normalized).strip()
+        if normalized:
+            paragraphs.append(normalized)
+    return "\n\n".join(paragraphs)
 
 
 def _normalize_safe_typography(value: str) -> str:

@@ -446,7 +446,9 @@ def test_reviewed_beauty_sequence_rotates_pains_and_approved_cases():
     founder_text = founder_led_localos_text("founder_origin", candidate, None)
 
     assert "контент остаётся на потом" in content_text
-    assert "автоматизировали публикации в VK и Telegram" in content_text
+    assert "после подключения каналов" in content_text.lower()
+    assert "автоматически публикует" in content_text
+    assert "VK и Telegram" not in content_text
     assert "средний чек всё равно маленький" in average_ticket_text
     assert "Выручка выросла на 20%" in average_ticket_text
     assert "ответы на отзывы" in integrated_text

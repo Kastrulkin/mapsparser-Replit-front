@@ -40,6 +40,46 @@ def test_user_approved_price_update_example_passes_human_language_gate():
     assert result["checks"]["concrete_solution"] is True
 
 
+def test_unsupported_publication_claim_fails_human_language_gate():
+    result = review_human_language(
+        (
+            "Увидел ваш анонс клиентского дня.\n\n"
+            "LocalOS автоматически публикует материалы в VK и Telegram.\n\n"
+            "Показать на вашем анонсе?"
+        ),
+        publication_capabilities={
+            "schema": "localos_outreach_publication_capabilities_v1",
+            "approval_required": True,
+            "channels": [],
+            "supported_after_connection": ["telegram", "vk"],
+            "manual_or_supervised_channels": ["yandex_maps", "two_gis"],
+        },
+    )
+
+    assert result["passed"] is False
+    assert "UNSUPPORTED_PUBLICATION_CLAIM" in result["reason_codes"]
+
+
+def test_yandex_and_two_gis_are_never_allowed_as_autopublish_claims():
+    result = review_human_language(
+        (
+            "Увидел ваш анонс.\n\n"
+            "После подтверждения LocalOS автоматически публикует пост в Яндекс Картах и 2ГИС.\n\n"
+            "Показать пример?"
+        ),
+        publication_capabilities={
+            "schema": "localos_outreach_publication_capabilities_v1",
+            "approval_required": True,
+            "channels": [],
+            "supported_after_connection": ["telegram", "vk"],
+            "manual_or_supervised_channels": ["yandex_maps", "two_gis"],
+        },
+    )
+
+    assert result["passed"] is False
+    assert "UNSUPPORTED_PUBLICATION_CLAIM" in result["reason_codes"]
+
+
 def test_price_update_preview_passes_full_gate_with_supported_public_language_refs():
     candidate = {
         "recipient": "Линия красоты",

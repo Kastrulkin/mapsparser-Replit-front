@@ -52,9 +52,71 @@ FOUNDER_LED_SIGNAL_COMBOS = {
     "recent_event_announcement",
 }
 
+PUBLICATION_PLATFORM_LABELS = {
+    "telegram": "Telegram",
+    "vk": "VK",
+    "google_business": "Google Business Profile в beta-режиме",
+}
+
 
 def clean_copy(value: Any) -> str:
     return " ".join(str(value or "").replace("—", "-").replace("«", '"').replace("»", '"').split())
+
+
+def _ready_publication_labels(candidate: dict[str, Any]) -> list[str]:
+    capabilities = candidate.get("publication_capabilities")
+    if not isinstance(capabilities, dict):
+        return []
+    labels = []
+    for item in capabilities.get("channels") or []:
+        if not isinstance(item, dict):
+            continue
+        platform = clean_copy(item.get("platform")).lower()
+        if (
+            item.get("connected") is True
+            and item.get("provider_ready") is True
+            and clean_copy(item.get("publish_mode")).lower() == "api"
+            and clean_copy(item.get("status")).lower() == "ready"
+            and platform in PUBLICATION_PLATFORM_LABELS
+        ):
+            labels.append(PUBLICATION_PLATFORM_LABELS[platform])
+    return labels
+
+
+def publication_solution(candidate: dict[str, Any]) -> str:
+    labels = _ready_publication_labels(candidate)
+    if not labels:
+        return (
+            "После подключения каналов и вашего подтверждения LocalOS автоматически "
+            "публикует материалы в поддерживаемые каналы."
+        )
+    if len(labels) == 1:
+        destinations = labels[0]
+    else:
+        destinations = f"{', '.join(labels[:-1])} и {labels[-1]}"
+    return (
+        "После вашего подтверждения LocalOS автоматически публикует "
+        f"материалы в {destinations}."
+    )
+
+
+def _has_recipient_map_evidence(candidate: dict[str, Any]) -> bool:
+    if clean_copy(candidate.get("map_observation")):
+        return True
+    if "map_gap" in clean_copy(candidate.get("signal_combo")).lower():
+        return True
+    map_kinds = {"map_rating", "map_issue", "map_gap", "map_services", "map_reviews"}
+    if (
+        clean_copy(candidate.get("evidence_kind")).lower() in map_kinds
+        and bool(clean_copy(candidate.get("source_url")))
+    ):
+        return True
+    return any(
+        isinstance(item, dict)
+        and clean_copy(item.get("kind")).lower() in map_kinds
+        and bool(clean_copy(item.get("source_url")))
+        for item in candidate.get("supporting_evidence") or []
+    )
 
 
 def localos_beauty_segment(
@@ -363,23 +425,28 @@ def founder_led_localos_text(
             )
         if signal_combo in {"recent_new_service_announcement", "recent_event_announcement"}:
             observation = _timing_observation(signal_combo, candidate.get("observed_fact"))
-            if signal_combo == "recent_new_service_announcement":
-                bridge = (
-                    "В момент запуска карты и контент могут вместе помочь рассказать "
-                    "об услуге тем, кто уже ищет её рядом."
-                )
-            else:
-                bridge = (
-                    "Такой повод можно синхронно использовать в картах, контенте и "
-                    "локальном продвижении."
-                )
+            bridge = (
+                "Такой повод можно один раз подготовить и адаптировать для ваших "
+                "публичных каналов."
+            )
+            map_sentence = (
+                " По тем же данным можно отдельно обновить карточку на картах."
+                if _has_recipient_map_evidence(candidate)
+                else ""
+            )
             audit_url = clean_copy(candidate.get("public_audit_url"))
             audit_block = f"\n{audit_url}" if audit_url else ""
+            audit_subject = (
+                "публичной карточки"
+                if _has_recipient_map_evidence(candidate)
+                else "публичных каналов"
+            )
             return (
                 f"Здравствуйте! Я {introduction}.\n\n"
                 f"Увидел ваш свежий {observation}.\n\n"
-                f"{bridge}\n\n"
-                f"Мы собрали короткий разбор публичной карточки:{audit_block}\n\n"
+                f"{bridge}{map_sentence}\n\n"
+                f"{publication_solution(candidate)}\n\n"
+                f"Мы собрали короткий разбор {audit_subject}:{audit_block}\n\n"
                 "Вам может быть это интересно?"
             )
         if signal_combo == "active_social_with_map_gap":
@@ -465,16 +532,25 @@ def founder_led_localos_text(
                 observation_for_sentence,
                 flags=re.IGNORECASE,
             )
+            if _has_recipient_map_evidence(candidate):
+                return (
+                    f"Здравствуйте! Я {introduction}.\n\n"
+                    f"Увидел, что в Telegram вы {telegram_activity} и активно ведёте канал.\n\n"
+                    f"{map_block}\n\n"
+                    "Мы посмотрели, как компания представлена в Яндекс Картах, "
+                    "и собрали короткий разбор с конкретными шагами:\n"
+                    f"{audit_url}\n\n"
+                    "Шаги можно выполнить самостоятельно. Если захотите, часть работы "
+                    f"можно поручить LocalOS{price_line}.\n\n"
+                    "Вам может быть это интересно?"
+                )
             return (
                 f"Здравствуйте! Я {introduction}.\n\n"
                 f"Увидел, что в Telegram вы {telegram_activity} и активно ведёте канал.\n\n"
-                f"{map_block}\n\n"
-                "Мы посмотрели, как компания представлена в Яндекс Картах, "
-                "и собрали короткий разбор с конкретными шагами:\n"
-                f"{audit_url}\n\n"
-                "Шаги можно выполнить самостоятельно. Если захотите, часть работы "
-                f"можно поручить LocalOS{price_line}.\n\n"
-                "Вам может быть это интересно?"
+                "Один такой материал можно адаптировать для других публичных каналов.\n\n"
+                f"{publication_solution(candidate)}\n\n"
+                f"Мы собрали короткий разбор публичных каналов:\n{audit_url}\n\n"
+                "Показать на вашей публикации?"
             )
         return (
             f"Здравствуйте! Я {introduction}.\n\n"
@@ -505,11 +581,10 @@ def founder_led_localos_text(
         )
 
     if angle == "content_operations":
-        approved_case = localos_case_for_angle(angle, candidate)
         return (
             "Здравствуйте! Клиенты и операционка всегда срочнее, а контент остаётся на потом.\n\n"
-            "LocalOS готовит и публикует материалы по одному плану. "
-            f"{approved_case['safe_formulation']}\n\n"
+            "LocalOS готовит версии из одного исходника, а вы проверяете и решаете, что публиковать.\n\n"
+            f"{publication_solution(candidate)}\n\n"
             "Вам может быть интересно освободить время?"
         )
 
