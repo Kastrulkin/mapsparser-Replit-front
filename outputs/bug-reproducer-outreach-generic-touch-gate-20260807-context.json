@@ -1,0 +1,9 @@
+{
+  "date": "2026-08-07",
+  "candidate": "automatic outreach quality gate approves a generic founder-led audit touch",
+  "test_node": "tests/test_founder_outreach_campaigns.py::test_quality_gate_rejects_generic_founder_audit_touch_without_selected_signal_or_bridge",
+  "production_scope": "src/services/outreach_campaign_service.py::_quality_gate",
+  "database_changed": false,
+  "deployed": false,
+  "sent": false
+}

@@ -2365,6 +2365,17 @@ def _quality_gate(
         and residential_audience_present
         and residential_offer_present
     )
+    selected_candidate_link = bool(
+        grounded_observation
+        or contains(candidate.get("bridge"))
+        or approved_case_present
+        or operator_idea_present
+        or residential_relevance
+    )
+    founder_context_present = bool(
+        contains(candidate.get("founder_story"))
+        or contains(candidate.get("founder_proof"))
+    )
     checks = {
         "removal": contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
@@ -2383,13 +2394,9 @@ def _quality_gate(
                 }
             )
             and (
-                contains(candidate.get("founder_story"))
-                or contains(candidate.get("founder_proof"))
+                founder_context_present
                 or respectful_close
-                or grounded_observation
-                or approved_case_present
-                or "разбор" in normalized_text
-                or "localos" in normalized_text
+                or selected_candidate_link
             )
         ),
         "bridge": (
@@ -2422,7 +2429,7 @@ def _quality_gate(
                     "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
                 }
-                and ("localos" in normalized_text or "разбор" in normalized_text)
+                and (founder_context_present or selected_candidate_link)
             )
             or operator_idea_present
             or residential_relevance
@@ -2446,20 +2453,8 @@ def _quality_gate(
             and (
                 respectful_close
                 or operator_idea_present
-                or grounded_observation
-                or approved_case_present
-                or bool(
-                    founder_led_beauty
-                    and _text(angle) in {
-                        "founder_story", "proof", "audit_step", "phone_handoff",
-                        "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
-                    }
-                    and any(
-                        marker in normalized_text
-                        for marker in ("частного специалиста", "салона", "сети салонов", "карточк", "отзыв", "контент")
-                    )
-                )
-                or len(_text(candidate.get("observed_fact"))) >= 20
+                or selected_candidate_link
+                or founder_context_present
             )
         ),
         "proof_integrity": bool(story or candidate.get("trust_statement")) and not any(

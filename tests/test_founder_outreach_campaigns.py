@@ -185,6 +185,64 @@ def test_quality_gate_accepts_selected_approved_case_as_specific_proof():
     assert gate["passed"] is True
 
 
+def test_quality_gate_rejects_generic_founder_audit_touch_without_selected_signal_or_bridge():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "recipient": "Хочу Красиво",
+        "recipient_segment": "beauty_team",
+        "signal_combo": "active_social_with_unanswered_negative_review",
+        "observed_fact": (
+            "Официальный канал обновляется регулярно. "
+            "В публичной карточке найден 1 свежий отзыв с оценкой до 3 "
+            "без ответа компании."
+        ),
+        "bridge": (
+            "Свежий отзыв без ответа можно проверить и подготовить "
+            "корректный ответ"
+        ),
+        "evidence_kind": "composite_signal",
+        "evidence_status": "observed",
+        "source_url": "https://example.test/maps/hochukrasivo",
+        "freshness": "fresh",
+        "next_step": "Короткий разбор",
+    })
+    story = {"forbidden_claims": []}
+
+    message = _message_for_angle("audit_step", candidate, story, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        story,
+        channel="vk_manual",
+        channel_status="manual",
+        suppressed=False,
+        angle="audit_step",
+    )
+
+    assert "свежий отзыв" not in message.lower()
+    assert "без ответа" not in message.lower()
+    assert candidate["bridge"].lower() not in message.lower()
+    assert {
+        "passed": gate["passed"],
+        "removal": gate["checks"]["removal"],
+        "bridge": gate["checks"]["bridge"],
+        "specificity": gate["checks"]["specificity"],
+        "observation_accuracy": gate["criterion_scores"]["observation_accuracy"],
+        "offer_bridge": gate["criterion_scores"]["offer_bridge"],
+        "recipient_specificity": gate["criterion_scores"]["recipient_specificity"],
+        "reason_codes": set(gate["reason_codes"]),
+    } == {
+        "passed": False,
+        "removal": False,
+        "bridge": False,
+        "specificity": False,
+        "observation_accuracy": 0,
+        "offer_bridge": 0,
+        "recipient_specificity": 0,
+        "reason_codes": {"DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"},
+    }
+
+
 def test_multisource_composite_claim_requires_source_for_each_material_clause():
     now = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
     hypotheses = derive_pain_signal_hypotheses(
