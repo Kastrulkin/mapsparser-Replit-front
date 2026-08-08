@@ -17,9 +17,13 @@ from services.outreach_playbook import beauty_outreach_guidance
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v12"
-REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
-MANUAL_COMPATIBLE_PROMPT_VERSIONS = {"outreach_personalization_v11", PROMPT_VERSION}
+PROMPT_VERSION = "outreach_personalization_v13"
+REVIEW_PROMPT_VERSION = "outreach_semantic_review_v5"
+MANUAL_COMPATIBLE_PROMPT_VERSIONS = {
+    "outreach_personalization_v11",
+    "outreach_personalization_v12",
+    PROMPT_VERSION,
+}
 QUALITY_CRITERIA = (
     "source_validity",
     "observation_accuracy",
@@ -46,6 +50,16 @@ CANONICAL_REASON_CODES = {
     "SUPPRESSED_CONTACT",
     "APPROVAL_BYPASS",
     "SENSITIVE_TARGETING",
+    "PAIN_SUPPORT_INSUFFICIENT",
+    "PAIN_SOURCE_ROLE_INELIGIBLE",
+    "VOICE_SOURCE_INELIGIBLE",
+    "VOICE_COPYING_RISK",
+    "SLOP_CLICHE",
+    "ABSTRACT_SOLUTION",
+    "RECIPIENT_ACTION_MISSING",
+    "PROOF_WORDING_CHANGED",
+    "PROOF_SCOPE_MISMATCH",
+    "GENERIC_CTA",
 }
 ALLOWED_TEMPLATE_FIELDS = {
     "RECIPIENT",
@@ -272,6 +286,13 @@ def _request_record(
             "public_audit_url": _clean(candidate.get("public_audit_url")),
             "problem_hypothesis": hypothesis,
             "problem_hypothesis_status": "hypothesis" if hypothesis else "missing",
+            "pain_reference_ids": list(candidate.get("pain_reference_ids") or []),
+            "language_support": (
+                candidate.get("language_support")
+                if isinstance(candidate.get("language_support"), dict)
+                else {"status": "not_checked"}
+            ),
+            "localos_action": _clean(candidate.get("localos_action")),
             "relevance_to_offer": _clean(
                 candidate.get("relevance_to_offer") or candidate.get("bridge")
             ),
@@ -310,6 +331,9 @@ def _request_record(
             "single_cta": True,
             "different_angle_per_touch": True,
             "no_new_recipient_facts": True,
+            "market_language_never_recipient_evidence": True,
+            "paraphrase_language_support": True,
+            "max_corpus_micro_quote_words": 12,
             "representation_disclosure_required": False,
             "represented_business_voice_required": bool(
                 _clean(candidate.get("sender_mode")) == "localos_for_partner"
@@ -336,6 +360,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Не добавляй факты, боли, результаты, коммерческие условия или знакомство, которых нет во входе. "
         "OUTREACH_PLAYBOOK содержит методику и язык гипотез сегмента, а не факты о получателе. "
         "Боль из playbook нельзя утверждать как состояние конкретного получателя без отдельного evidence. "
+        "Language support используется только для гипотезы и выбора простых слов; не копируй фразы корпуса и не превращай language refs в recipient evidence. "
         "Observation - факт. problem_hypothesis - только гипотеза: не утверждай её как факт. "
         "LocalOS сам соберёт текст из observation, founder story и proof по правилам выбранного угла. "
         "Ты выбираешь только opening_style и cta_intent для каждого касания. "
@@ -358,6 +383,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Founder story объясняет личный опыт отправителя, proof показывает накопленную практику, "
         "а respectful_close снимает давление. "
         "Не используй ритуальные комплименты, давление, ложную срочность, длинное тире и кавычки-ёлочки. "
+        "Не используй точка роста, новый уровень, масштабировать бизнес, повысить эффективность, комплексное решение, раскрыть потенциал, усилить присутствие или другие рекламные штампы. "
         "Telegram - максимум 90 слов, email - максимум 120 слов. "
         "Для email дай спокойную фактическую тему; для других каналов subject=null. "
         "Верни объект schema_version=1.0 и touches. В каждом touch обязательны: "
@@ -379,10 +405,11 @@ def _review_prompt(record: dict[str, Any]) -> str:
         "Для founder-led localos_sales в beauty-сегментах recipient observation обязателен только в angle=signal. "
         "В angle=founder_story, proof, audit_step, phone_handoff и respectful_close его отсутствие правильно: ставь observation_accuracy=2, "
         "если сообщение не добавляет новых фактов о получателе и сохраняет заявленный угол. "
+        "Отдельно проверь: Pain/Voice refs не стали фактами о получателе; боль остаётся гипотезой; LocalOS называет конкретный глагол и объект; нет рекламных штампов; точный approved proof не переформулирован и соответствует scope. "
+        "Высокая semantic similarity сама по себе не разрешает approve. "
         "Иначе verdict=revise или reject. reason_codes могут быть только: "
         f"{', '.join(sorted(CANONICAL_REASON_CODES))}. "
         "Верни только JSON без markdown: schema_version=1.0, reviews. "
-        "В каждом review: sequence_index, scores(object), total_score, verdict, reason_codes(list), notes(list).\n\n"
         f"INPUT_JSON:\n{json.dumps(record, ensure_ascii=False, default=str)}"
     )
 

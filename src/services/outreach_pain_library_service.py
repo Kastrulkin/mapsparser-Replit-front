@@ -15,6 +15,8 @@ from typing import Any
 
 from psycopg2.extras import Json
 
+from services.knowledge_embeddings import GigaChatEmbeddingClient, _enabled, _vector_literal
+
 from services.outreach_playbook import (
     BEAUTY_OWNER_PAINS,
     BEAUTY_PAIN_SIGNAL_HYPOTHESES,
@@ -29,6 +31,27 @@ MIN_DOCUMENTS = 3
 MIN_SOURCES = 2
 MAX_SOURCE_PHRASES_PER_PAIN = 8
 COMPILER_VERSION = "owner_language_v7_review_editorial_examples"
+LANGUAGE_SUPPORT_MIN_DOCUMENTS = 3
+LANGUAGE_SUPPORT_MIN_SOURCES = 3
+LANGUAGE_SUPPORT_MIN_PROFESSIONAL_SOURCES = 2
+LANGUAGE_SUPPORT_MAX_VENDOR_SOURCES = 1
+
+LANGUAGE_THEME_BY_SIGNAL = {
+    "recent_price_update_announcement": "price_surface_sync",
+    "active_social_with_service_price_gap": "price_surface_sync",
+    "active_social_with_unanswered_negative_review": "review_workflow",
+    "unanswered_reviews_with_active_presence": "review_workflow",
+    "recent_new_service_announcement": "content_reuse",
+    "recent_event_announcement": "event_distribution",
+    "repeated_open_slots": "manual_time",
+}
+LANGUAGE_LEXICAL_QUERY_BY_THEME = {
+    "price_surface_sync": "прайс OR цены OR карты OR площадки",
+    "review_workflow": "отзыв OR ответ OR репутация OR карты",
+    "content_reuse": "контент OR пост OR текст OR публикация",
+    "event_distribution": "клиентский день OR мероприятие OR регистрация OR анонс",
+    "manual_time": "вручную OR время OR проверка OR операционка",
+}
 
 PAIN_PATTERNS: dict[str, tuple[str, ...]] = {
     "marketing_and_clients": (
@@ -118,22 +141,48 @@ def fetch_monitored_pain_documents(cursor: Any, *, limit: int = 500) -> list[dic
         """
         SELECT DISTINCT document.id, document.content_text AS content,
                document.permalink, document.published_at,
+               policy.eligibility->>'speaker_role' AS speaker_role,
+               policy.eligibility->>'audience' AS audience,
+               policy.eligibility->>'content_role' AS content_role,
                source.id AS source_id, source.title AS source_title
         FROM knowledge_documents document
         JOIN knowledge_sources source ON source.id = document.source_id
         JOIN knowledge_source_subscriptions subscription ON subscription.source_id = source.id
+        CROSS JOIN LATERAL (
+            SELECT COALESCE(
+                document.metadata_json->'pain_voice_eligibility',
+                source.metadata_json->'pain_voice_eligibility',
+                '{}'::jsonb
+            ) AS eligibility
+        ) policy
         WHERE document.invalidated_at IS NULL
           AND subscription.is_active = TRUE
+          AND source.status = 'active'
+          AND source.source_type = 'telegram'
           AND source.visibility = 'public'
+          AND source.sensitivity_class = 'public'
+          AND document.sensitivity_class = 'public'
+          AND source.allowed_uses ? 'outreach'
+          AND document.allowed_uses ? 'outreach'
+          AND document.permalink LIKE 'https://t.me/%'
           AND (
               subscription.purposes_json ? 'outreach_learning'
               OR subscription.purposes_json ? 'marketing_learning'
           )
-          AND (
-              document.metadata_json->>'audience_type' = 'business'
-              OR document.metadata_json->>'corpus_tag' = 'telegram_b2b'
-              OR source.metadata_json->>'audience_type' = 'business'
+          AND policy.eligibility->>'industry' = 'beauty_salon'
+          AND policy.eligibility->>'audience' IN (
+              'business_owner', 'beauty_professional'
           )
+          AND policy.eligibility->>'speaker_role' IN (
+              'owner', 'manager', 'master', 'expert', 'vendor'
+          )
+          AND policy.eligibility->>'content_role' IN (
+              'first_person_experience', 'professional_discussion', 'advice'
+          )
+          AND policy.eligibility->>'pain_support_eligible' = 'true'
+          AND policy.eligibility->>'voice_style_eligible' = 'true'
+          AND policy.eligibility->>'eligibility_confidence' IN ('high', 'medium')
+          AND COALESCE(document.published_at, document.created_at) >= NOW() - INTERVAL '1095 days'
         ORDER BY document.published_at DESC NULLS LAST
         LIMIT %s
         """,
@@ -196,7 +245,11 @@ def compile_pain_library_draft(cursor: Any, documents: list[dict[str, Any]], *, 
                 "pain_key": item["pain_key"],
                 "required_signals": list(item["required_signals"]),
                 "hypothesis": item["hypothesis"],
+                "hypothesis_status": item.get(
+                    "hypothesis_status", "segment_hypothesis_only"
+                ),
                 "safe_formulation": item["safe_formulation"],
+                "localos_action": item.get("localos_action"),
                 "contraindications": list(item["contraindications"]),
                 "status": item["status"],
             }
@@ -289,3 +342,336 @@ def load_approved_pain_library(cursor: Any) -> dict[str, Any]:
     guidance["source_refs"] = list(pattern.get("source_refs_json") or [])
     guidance["pain_language_status"] = "segment_hypothesis_only"
     return guidance
+
+
+def _approved_pain_document_ids(playbook: dict[str, Any], pain_key: str) -> list[str]:
+    identifiers = []
+    for pain in playbook.get("pain_library") or []:
+        if not isinstance(pain, dict) or _text(pain.get("key")) != _text(pain_key):
+            continue
+        for phrase in pain.get("candidate_source_phrases") or []:
+            if not isinstance(phrase, dict):
+                continue
+            identifier = _text(phrase.get("document_id"))
+            if identifier and identifier not in identifiers:
+                identifiers.append(identifier)
+    return identifiers
+
+
+def _query_vector(query: str) -> list[Any] | None:
+    if not _enabled() or not _text(query):
+        return None
+    try:
+        response = GigaChatEmbeddingClient().embed([query])
+        vectors = response.get("vectors") or []
+        return vectors[0] if vectors else None
+    except Exception:
+        return None
+
+
+def retrieve_language_support(
+    cursor: Any,
+    *,
+    query: str,
+    segment: str,
+    theme: str,
+    approved_document_ids: list[str] | None = None,
+    query_vector: list[Any] | None = None,
+    limit: int = 6,
+) -> dict[str, Any]:
+    """Retrieve public professional language; never return raw quotes to preview."""
+
+    curated_ids = [str(item) for item in approved_document_ids or [] if str(item)]
+    lexical_query = LANGUAGE_LEXICAL_QUERY_BY_THEME.get(theme, query)
+    vector = query_vector if query_vector is not None else _query_vector(query)
+    vector_select = (
+        ", 1 - (chunk.embedding <=> %s::halfvec) AS vector_similarity"
+        if vector
+        else ", 0.0::numeric AS vector_similarity"
+    )
+    vector_order = "chunk.embedding <=> %s::halfvec," if vector else ""
+    vector_value = _vector_literal(vector) if vector else None
+    params: list[Any] = [lexical_query]
+    if vector:
+        params.append(vector_value)
+    params.extend([
+        curated_ids,
+        segment, segment, segment, segment,
+        theme, theme, theme, theme,
+        lexical_query,
+        bool(vector),
+    ])
+    if vector:
+        params.append(vector_value)
+    fetch_limit = max(24, min(max(1, int(limit)) * 12, 72))
+    params.append(fetch_limit)
+    cursor.execute(
+        f"""
+        SELECT document.id AS document_id, chunk.id AS chunk_id,
+               source.id AS source_id, source.title AS source_title,
+               document.permalink, document.published_at,
+               policy.eligibility->>'speaker_role' AS speaker_role,
+               policy.eligibility->>'audience' AS audience,
+               policy.eligibility->>'content_role' AS content_role,
+               ts_rank_cd(
+                   to_tsvector('russian', chunk.content_text),
+                   websearch_to_tsquery('russian', %s)
+               ) AS lexical_rank
+               {vector_select}
+        FROM knowledge_embedding_chunks chunk
+        JOIN knowledge_document_chunk_links link ON link.chunk_id = chunk.id
+        JOIN knowledge_documents document ON document.id = link.document_id
+        JOIN knowledge_sources source ON source.id = document.source_id
+        JOIN knowledge_source_subscriptions subscription ON subscription.source_id = source.id
+        CROSS JOIN LATERAL (
+            SELECT COALESCE(
+                document.metadata_json->'pain_voice_eligibility',
+                source.metadata_json->'pain_voice_eligibility',
+                '{{}}'::jsonb
+            ) AS eligibility
+        ) policy
+        WHERE chunk.status = 'ready'
+          AND chunk.stale_at IS NULL
+          AND document.invalidated_at IS NULL
+          AND source.status = 'active'
+          AND source.source_type = 'telegram'
+          AND source.visibility = 'public'
+          AND source.sensitivity_class = 'public'
+          AND document.sensitivity_class = 'public'
+          AND source.allowed_uses ? 'outreach'
+          AND document.allowed_uses ? 'outreach'
+          AND document.permalink LIKE 'https://t.me/%'
+          AND subscription.is_active = TRUE
+          AND (
+              subscription.purposes_json ? 'outreach_learning'
+              OR subscription.purposes_json ? 'marketing_learning'
+          )
+          AND policy.eligibility->>'industry' = 'beauty_salon'
+          AND policy.eligibility->>'audience' IN ('business_owner', 'beauty_professional')
+          AND policy.eligibility->>'speaker_role' IN (
+              'owner', 'manager', 'master', 'expert', 'vendor'
+          )
+          AND policy.eligibility->>'content_role' IN (
+              'first_person_experience', 'professional_discussion', 'advice'
+          )
+          AND policy.eligibility->>'pain_support_eligible' = 'true'
+          AND policy.eligibility->>'voice_style_eligible' = 'true'
+          AND policy.eligibility->>'eligibility_confidence' IN ('high', 'medium')
+          AND COALESCE(document.published_at, document.created_at) >= NOW() - INTERVAL '1095 days'
+          AND (
+              document.id = ANY(%s::uuid[])
+              OR (
+                  (
+                      document.metadata_json->'segments' ? %s
+                      OR document.metadata_json->>'segment' = %s
+                      OR source.metadata_json->'segments' ? %s
+                      OR source.metadata_json->>'segment' = %s
+                  )
+                  AND (
+                      document.metadata_json->'themes' ? %s
+                      OR document.metadata_json->>'theme' = %s
+                      OR source.metadata_json->'themes' ? %s
+                      OR source.metadata_json->>'theme' = %s
+                  )
+              )
+          )
+          AND (
+              to_tsvector('russian', chunk.content_text) @@ websearch_to_tsquery('russian', %s)
+              OR %s::boolean
+          )
+        ORDER BY {vector_order} lexical_rank DESC,
+                 document.published_at DESC NULLS LAST
+        LIMIT %s
+        """,
+        tuple(params),
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    rows.sort(
+        key=lambda row: (
+            float(row.get("vector_similarity") or 0),
+            float(row.get("lexical_rank") or 0),
+        ),
+        reverse=True,
+    )
+    selected = []
+    selected_document_ids: set[str] = set()
+    selected_source_ids: set[str] = set()
+    vendor_source_ids: set[str] = set()
+    for row in rows:
+        document_id = _text(row.get("document_id"))
+        source_id = _text(row.get("source_id"))
+        speaker_role = _text(row.get("speaker_role"))
+        if not document_id or not source_id or document_id in selected_document_ids:
+            continue
+        if source_id in selected_source_ids:
+            continue
+        if speaker_role == "vendor" and len(vendor_source_ids) >= LANGUAGE_SUPPORT_MAX_VENDOR_SOURCES:
+            continue
+        selected.append(row)
+        selected_document_ids.add(document_id)
+        selected_source_ids.add(source_id)
+        if speaker_role == "vendor":
+            vendor_source_ids.add(source_id)
+        if len(selected) >= min(max(3, int(limit)), 6):
+            break
+    document_ids = list(dict.fromkeys(_text(row.get("document_id")) for row in selected if row.get("document_id")))
+    source_ids = list(dict.fromkeys(_text(row.get("source_id")) for row in selected if row.get("source_id")))
+    professional_source_ids = list(dict.fromkeys(
+        _text(row.get("source_id"))
+        for row in selected
+        if row.get("source_id") and _text(row.get("speaker_role")) != "vendor"
+    ))
+    recent_document_count = sum(
+        1
+        for row in selected
+        if row.get("published_at")
+        and (datetime.now(timezone.utc) - row["published_at"]).days <= 730
+    )
+    supported = (
+        len(document_ids) >= LANGUAGE_SUPPORT_MIN_DOCUMENTS
+        and len(source_ids) >= LANGUAGE_SUPPORT_MIN_SOURCES
+        and len(professional_source_ids) >= LANGUAGE_SUPPORT_MIN_PROFESSIONAL_SOURCES
+        and len(vendor_source_ids) <= LANGUAGE_SUPPORT_MAX_VENDOR_SOURCES
+        and recent_document_count >= 2
+    )
+    support_level = "supported" if supported else "weak" if len(source_ids) >= 2 else "unsupported"
+    return {
+        "status": support_level,
+        "support_level": support_level,
+        "segment": segment,
+        "theme": theme,
+        "retrieval_mode": "hybrid" if vector else "lexical",
+        "document_count": len(document_ids),
+        "source_count": len(source_ids),
+        "professional_source_count": len(professional_source_ids),
+        "vendor_source_count": len(vendor_source_ids),
+        "recent_document_count": recent_document_count,
+        "pain_reference_ids": document_ids,
+        "language_reference_ids": [
+            _text(row.get("chunk_id")) for row in selected if row.get("chunk_id")
+        ],
+        "sources": [
+            {
+                "document_id": _text(row.get("document_id")),
+                "source_id": _text(row.get("source_id")),
+                "source_title": _text(row.get("source_title")),
+                "permalink": row.get("permalink"),
+                "published_at": str(row.get("published_at") or ""),
+            }
+            for row in selected
+        ],
+        "paraphrase_only": True,
+        "raw_quotes_exposed": False,
+        "similarity_is_sole_approval_criterion": False,
+    }
+
+
+def language_support_for_candidate(
+    cursor: Any,
+    candidate: dict[str, Any],
+    playbook: dict[str, Any],
+) -> dict[str, Any]:
+    pain_key = _text(candidate.get("signal_pain_key") or candidate.get("pain_key"))
+    recipient_segment = _text(candidate.get("recipient_segment"))
+    segment = (
+        "beauty"
+        if recipient_segment in {
+            "private_beauty_specialist", "beauty_team", "beauty_network"
+        }
+        else recipient_segment
+    )
+    if not segment or not pain_key:
+        return {
+            "status": "not_checked",
+            "segment": segment,
+            "theme": pain_key,
+            "pain_reference_ids": [],
+            "language_reference_ids": [],
+            "sources": [],
+            "paraphrase_only": True,
+            "raw_quotes_exposed": False,
+            "similarity_is_sole_approval_criterion": False,
+        }
+    theme = LANGUAGE_THEME_BY_SIGNAL.get(
+        _text(candidate.get("signal_combo")),
+        pain_key,
+    )
+    query = " ".join(
+        item
+        for item in (
+            pain_key,
+            _text(candidate.get("problem_hypothesis")),
+            _text(candidate.get("localos_action")),
+        )
+        if item
+    )
+    try:
+        pain_support = retrieve_language_support(
+            cursor,
+            query=query,
+            segment=segment,
+            theme=theme,
+            approved_document_ids=_approved_pain_document_ids(playbook, pain_key),
+        )
+        if _text(candidate.get("signal_combo")) != "recent_price_update_announcement":
+            return pain_support
+        if _text(pain_support.get("status")) == "supported":
+            return pain_support
+        voice_support = retrieve_language_support(
+            cursor,
+            query="ручная проверка и перенос обновлений между площадками",
+            segment=segment,
+            theme="manual_time",
+            approved_document_ids=[],
+        )
+        return {
+            "status": "conditional_operator_approved",
+            "support_level": "unsupported",
+            "segment": segment,
+            "theme": "price_surface_sync",
+            "pain_support_status": pain_support.get("status") or "unsupported",
+            "language_support_status": voice_support.get("status") or "unsupported",
+            "document_count": voice_support.get("document_count") or 0,
+            "source_count": voice_support.get("source_count") or 0,
+            "professional_source_count": voice_support.get("professional_source_count") or 0,
+            "pain_reference_ids": [],
+            "language_reference_ids": list(
+                voice_support.get("language_reference_ids") or []
+            ),
+            "sources": list(voice_support.get("sources") or []),
+            "pain_support": {
+                "status": pain_support.get("status") or "unsupported",
+                "theme": "price_surface_sync",
+                "document_count": pain_support.get("document_count") or 0,
+                "source_count": pain_support.get("source_count") or 0,
+                "pain_reference_ids": [],
+                "frequency_claim_allowed": False,
+            },
+            "voice_support": {
+                "status": voice_support.get("status") or "unsupported",
+                "theme": "manual_time",
+                "document_count": voice_support.get("document_count") or 0,
+                "source_count": voice_support.get("source_count") or 0,
+                "language_reference_ids": list(
+                    voice_support.get("language_reference_ids") or []
+                ),
+            },
+            "operator_approval_id": "salon_price_300plus_clicks_v1",
+            "wording_policy": "conditional_only",
+            "frequency_claim_allowed": False,
+            "paraphrase_only": True,
+            "raw_quotes_exposed": False,
+            "similarity_is_sole_approval_criterion": False,
+        }
+    except Exception:
+        return {
+            "status": "unavailable",
+            "segment": segment,
+            "theme": pain_key,
+            "pain_reference_ids": [],
+            "language_reference_ids": [],
+            "sources": [],
+            "paraphrase_only": True,
+            "raw_quotes_exposed": False,
+            "similarity_is_sole_approval_criterion": False,
+        }

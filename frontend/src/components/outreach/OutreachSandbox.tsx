@@ -37,10 +37,28 @@ interface TouchPreview {
   angle: string;
   subject?: string | null;
   text: string;
+  observation?: string | null;
+  pain_hypothesis?: string | null;
+  problem_hypothesis?: string | null;
+  solution?: string | null;
+  language_support?: {
+    status?: string;
+    document_count?: number;
+    source_count?: number;
+    pain_support_status?: string;
+    language_support_status?: string;
+  };
   quality_gate?: {
     score?: number;
     max_score?: number;
     passed?: boolean;
+    human_language_review?: {
+      passed?: boolean;
+      detected_passed?: boolean;
+      gate_passed?: boolean;
+      reason_codes?: string[];
+      enforced_reason_codes?: string[];
+    };
   };
 }
 
@@ -428,6 +446,22 @@ export const OutreachSandbox: React.FC<{ businessId: string }> = ({ businessId }
                           </span>
                         </div>
                         {touch.subject ? <div className="mb-2 text-sm font-medium">Тема: {touch.subject}</div> : null}
+                        {touch.observation || touch.pain_hypothesis || touch.problem_hypothesis || touch.solution ? (
+                          <div className="mb-3 space-y-1 border-l-2 border-sky-300 pl-3 text-sm leading-6 text-muted-foreground">
+                            {touch.observation ? <p><span className="font-medium text-foreground">Сигнал:</span> {touch.observation}</p> : null}
+                            {touch.pain_hypothesis || touch.problem_hypothesis ? <p><span className="font-medium text-foreground">Гипотеза боли:</span> {touch.pain_hypothesis || touch.problem_hypothesis}</p> : null}
+                            {touch.solution ? <p><span className="font-medium text-foreground">Что делает LocalOS:</span> {touch.solution}</p> : null}
+                            {touch.language_support ? <p><span className="font-medium text-foreground">Живой язык:</span> {touch.language_support.status === 'supported' ? `${touch.language_support.document_count || 0} документов, ${touch.language_support.source_count || 0} источников` : touch.language_support.status === 'conditional_operator_approved' ? 'боль не подтверждена как типичная; разрешена только форма «если»' : 'поддержка не подтверждена'}</p> : null}
+                            {touch.quality_gate?.human_language_review ? (
+                              <div>
+                                <p><span className="font-medium text-foreground">Проверка языка:</span> {touch.quality_gate.human_language_review.passed ? 'пройдена' : 'нужна редактура'}</p>
+                                {(touch.quality_gate.human_language_review.reason_codes || []).length > 0 ? (
+                                  <p className="text-xs">Обнаружено: {(touch.quality_gate.human_language_review.reason_codes || []).join(', ')}</p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <p className="whitespace-pre-wrap text-pretty text-sm leading-6">{touch.text}</p>
                       </div>
                     ))}

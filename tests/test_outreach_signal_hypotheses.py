@@ -187,8 +187,8 @@ def test_repeated_hiring_does_not_claim_staff_turnover():
 
 def test_signal_library_is_versioned_and_contains_counterexamples():
     playbook = beauty_outreach_guidance()
-    assert playbook["pain_signal_library_version"] == "beauty_pain_signals_v3"
-    assert len(playbook["pain_signal_hypotheses"]) == 11
+    assert playbook["pain_signal_library_version"] == "beauty_pain_signals_v4"
+    assert len(playbook["pain_signal_hypotheses"]) == 12
     assert all(item["contraindications"] for item in playbook["pain_signal_hypotheses"])
     assert all(item["status"] == "testable" for item in playbook["pain_signal_hypotheses"])
 
@@ -287,3 +287,22 @@ def test_recent_new_service_and_event_are_separate_timing_hypotheses():
     combos = {item["signal_combo"] for item in hypotheses}
     assert "recent_new_service_announcement" in combos
     assert "recent_event_announcement" in combos
+
+
+def test_recent_price_update_is_signal_with_manual_multiplatform_pain_hypothesis():
+    hypotheses = derive_pain_signal_hypotheses(
+        {},
+        [social_post("price", "С 11 июля обновили цены и прайс-лист", 4)],
+        now=NOW,
+    )
+
+    result = next(
+        item for item in hypotheses
+        if item["signal_combo"] == "recent_price_update_announcement"
+    )
+    assert result["pain_key"] == "pricing_and_average_ticket"
+    assert result["hypothesis_status"] == "conditional_operator_approved"
+    assert result["hypothesis"].lower().startswith("если")
+    assert "обычно" not in result["hypothesis"].lower()
+    assert "сайт" in result["localos_action"].lower()
+    assert "карт" in result["localos_action"].lower()

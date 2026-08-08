@@ -317,6 +317,28 @@ interface OutreachQualityGate {
   max_score?: number;
   criterion_scores?: Record<string, number>;
   reason_codes?: string[];
+  human_language_review?: {
+    passed?: boolean;
+    detected_passed?: boolean;
+    gate_passed?: boolean;
+    verdict?: 'approve' | 'revise' | 'reject';
+    reason_codes?: string[];
+    enforced_reason_codes?: string[];
+  };
+}
+
+interface OutreachLanguageSupport {
+  status?: 'supported' | 'weak' | 'unsupported' | 'unavailable' | 'not_checked' | 'conditional_operator_approved';
+  document_count?: number;
+  source_count?: number;
+  professional_source_count?: number;
+  theme?: string;
+  pain_reference_ids?: string[];
+  language_reference_ids?: string[];
+  pain_support_status?: string;
+  language_support_status?: string;
+  wording_policy?: string;
+  frequency_claim_allowed?: boolean;
 }
 
 interface OutreachTouchPreview {
@@ -333,6 +355,11 @@ interface OutreachTouchPreview {
   source_url?: string | null;
   observation?: string | null;
   problem_hypothesis?: string | null;
+  pain_hypothesis?: string | null;
+  pain_reference_ids?: string[];
+  solution?: string | null;
+  language_support?: OutreachLanguageSupport;
+  pain_support?: OutreachLanguageSupport;
   relevance_bridge?: string | null;
   evidence_kind?: string | null;
   scheduled_at?: string | null;
@@ -422,6 +449,11 @@ interface SavedOutreachCampaign {
       source_url?: string | null;
       observation?: string | null;
       problem_hypothesis?: string | null;
+      pain_hypothesis?: string | null;
+      pain_reference_ids?: string[];
+      solution?: string | null;
+      language_support?: OutreachLanguageSupport;
+      pain_support?: OutreachLanguageSupport;
       relevance_bridge?: string | null;
       evidence_kind?: string | null;
       human_edited?: boolean;
@@ -615,6 +647,15 @@ const outreachQualityReasonLabels: Record<string, string> = {
   SUPPRESSED_CONTACT: 'Получатель исключён из контактов',
   APPROVAL_BYPASS: 'Требуется новое ручное подтверждение',
   SENSITIVE_TARGETING: 'Сигнал нельзя безопасно использовать в сообщении',
+  PAIN_SUPPORT_INSUFFICIENT: 'Для гипотезы недостаточно независимых профессиональных источников',
+  PAIN_SOURCE_ROLE_INELIGIBLE: 'Источники не подтверждены как язык владельцев или специалистов',
+  VOICE_SOURCE_INELIGIBLE: 'Источник нельзя использовать для проверки живого языка',
+  SLOP_CLICHE: 'В тексте есть рекламный штамп или инфобизнес-формулировка',
+  ABSTRACT_SOLUTION: 'Не названо конкретное действие LocalOS',
+  RECIPIENT_ACTION_MISSING: 'Не названа конкретная ручная задача получателя',
+  GENERIC_CTA: 'Финальный вопрос слишком общий',
+  PROOF_WORDING_CHANGED: 'Подтверждённый кейс переформулирован',
+  PROOF_SCOPE_MISMATCH: 'Кейс не подходит сегменту или сигналу',
 };
 
 const outreachQualityVerdictLabels: Record<string, string> = {
@@ -1233,6 +1274,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         source_url: touch.message_brief_json?.source_url,
         observation: touch.message_brief_json?.observation,
         problem_hypothesis: touch.message_brief_json?.problem_hypothesis,
+        pain_hypothesis: touch.message_brief_json?.pain_hypothesis,
+        pain_reference_ids: touch.message_brief_json?.pain_reference_ids,
+        solution: touch.message_brief_json?.solution,
+        language_support: touch.message_brief_json?.language_support,
+        pain_support: touch.message_brief_json?.pain_support,
         relevance_bridge: touch.message_brief_json?.relevance_bridge,
         scheduled_at: touch.scheduled_at,
         human_edited: Boolean(touch.message_brief_json?.human_edited),
@@ -3396,11 +3442,26 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
-                              {touch.message_brief_json?.observation || touch.message_brief_json?.problem_hypothesis || touch.message_brief_json?.relevance_bridge ? (
+                              {touch.message_brief_json?.observation || touch.message_brief_json?.pain_hypothesis || touch.message_brief_json?.problem_hypothesis || touch.message_brief_json?.solution || touch.message_brief_json?.relevance_bridge ? (
                                 <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                                   {touch.message_brief_json?.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.message_brief_json.observation}</p> : null}
-                                  {touch.message_brief_json?.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.message_brief_json.problem_hypothesis}</p> : null}
+                                  {touch.message_brief_json?.pain_hypothesis || touch.message_brief_json?.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза боли:</span> {touch.message_brief_json.pain_hypothesis || touch.message_brief_json.problem_hypothesis}</p> : null}
+                                  {touch.message_brief_json?.solution ? <p><span className="font-semibold text-slate-900">Что делает LocalOS:</span> {touch.message_brief_json.solution}</p> : null}
                                   {touch.message_brief_json?.relevance_bridge ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.message_brief_json.relevance_bridge}</p> : null}
+                                </div>
+                              ) : null}
+                              {touch.message_brief_json?.language_support ? (
+                                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-inset ring-slate-200">
+                                  <span className="font-semibold text-slate-900">Живой язык:</span>{' '}
+                                  {touch.message_brief_json.language_support.status === 'supported'
+                                    ? `подтверждён ${Number(touch.message_brief_json.language_support.document_count || 0)} документами из ${Number(touch.message_brief_json.language_support.source_count || 0)} независимых источников`
+                                    : touch.message_brief_json.language_support.status === 'conditional_operator_approved'
+                                      ? `боль про перенос цен не подтверждена как типичная; разрешена только условная форма «если». Язык ручной работы: ${Number(touch.message_brief_json.language_support.document_count || 0)} документа, ${Number(touch.message_brief_json.language_support.source_count || 0)} источников`
+                                    : touch.message_brief_json.language_support.status === 'weak'
+                                      ? 'поддержка слабая — боль можно оставить только нейтральным вопросом'
+                                      : touch.message_brief_json.language_support.status === 'not_checked'
+                                        ? 'для этого касания отдельная проверка корпуса не нужна'
+                                        : 'поддержка не подтверждена — гипотезу нельзя выдавать за типичную ситуацию'}.
                                 </div>
                               ) : null}
                               {editableTouch && touchCanBeEdited ? (
@@ -3469,6 +3530,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                   ) : (
                                     <p className="border-t border-slate-200 py-3 text-sm text-emerald-700">Критических замечаний нет.</p>
                                   )}
+                                  {touch.quality_gate_json.human_language_review ? (
+                                    <div className={`border-t border-slate-200 py-3 text-sm ${touch.quality_gate_json.human_language_review.passed ? 'text-emerald-700' : 'text-amber-800'}`}>
+                                      <p>Язык: {touch.quality_gate_json.human_language_review.passed ? 'человеческий и конкретный' : 'нужна редактура без штампов'}.</p>
+                                      {(touch.quality_gate_json.human_language_review.reason_codes || []).length > 0 ? (
+                                        <p className="mt-1 text-xs">
+                                          Обнаружено: {(touch.quality_gate_json.human_language_review.reason_codes || []).map((code) => outreachQualityReasonLabels[code] || code).join('; ')}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                 </details>
                               ) : null}
                               {sentMoment || scheduledMoment ? (

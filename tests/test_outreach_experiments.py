@@ -201,7 +201,7 @@ def test_implementation_keeps_corpus_filter_and_draft_only_boundary():
 
 
 def test_corpus_copy_change_invalidates_old_drafts():
-    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v12"
+    assert get_task_definition("outreach_personalization").prompt_version == "outreach_personalization_v13"
 
 
 def test_beauty_playbook_keeps_corpus_method_separate_from_recipient_facts():
@@ -218,7 +218,7 @@ def test_beauty_playbook_keeps_corpus_method_separate_from_recipient_facts():
 def test_beauty_playbook_labels_each_touch_for_outcome_learning():
     founder = beauty_touch_learning_dimensions("founder_story")
     proof = beauty_touch_learning_dimensions("proof")
-    assert founder["playbook_version"] == "localos_outreach_playbook_v3"
+    assert founder["playbook_version"] == "localos_outreach_playbook_v4"
     assert founder["pain_key"] == "operations_and_burnout"
     assert proof["pain_key"] == "marketing_and_clients"
 
@@ -407,7 +407,8 @@ def test_founder_follow_up_uses_operator_empathy_instead_of_product_abstraction(
 
     assert "клиенты и ежедневная операционка всегда срочнее" in text
     assert "Сам больше десяти лет в бизнесе" in text
-    assert '"Если не я, то никто"' in text
+    assert "обновления карточек, контента и отзывов легко остаются на потом" in text
+    assert '"Если не я, то никто"' not in text
     assert "LocalOS не просто выдаёт" not in text
 
 

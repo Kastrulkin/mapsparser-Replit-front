@@ -10,9 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 
-PLAYBOOK_VERSION = "localos_outreach_playbook_v3"
+PLAYBOOK_VERSION = "localos_outreach_playbook_v4"
 CORPUS_TAG = "telegram_b2b"
-PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v3"
+PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v4"
 
 B2B_METHOD_RULES = (
     "Начинать с проверяемого действия или артефакта получателя, а не с общего комплимента.",
@@ -182,6 +182,30 @@ BEAUTY_PAIN_SIGNAL_HYPOTHESES = (
         "status": "testable",
     },
     {
+        "key": "recent_price_update_announcement",
+        "pain_key": "pricing_and_average_ticket",
+        "required_signals": ["recent_official_price_update_post"],
+        "hypothesis": (
+            "Если после обновления прайса новые цены приходится отдельно переносить "
+            "на сайт, карты и другие площадки, LocalOS может подготовить эти обновления на проверку."
+        ),
+        "safe_formulation": (
+            "Вы обновили цены и прайс-лист. Если новые цены приходится переносить на несколько "
+            "площадок, LocalOS может подготовить обновления на проверку."
+        ),
+        "hypothesis_status": "conditional_operator_approved",
+        "localos_action": (
+            "LocalOS готовит обновления цен для сайта, карт и других площадок - "
+            "вам остаётся проверить и подтвердить."
+        ),
+        "contraindications": [
+            "Публикация не относится к официальному каналу компании.",
+            "Обновление старше 30 дней.",
+            "Нельзя утверждать, сколько времени получатель тратит на перенос цен.",
+        ],
+        "status": "testable",
+    },
+    {
         "key": "recent_new_service_announcement",
         "pain_key": "marketing_and_clients",
         "required_signals": ["recent_official_new_service_post"],
@@ -317,6 +341,19 @@ BEAUTY_PAIN_SIGNAL_HYPOTHESES = (
 
 APPROVED_LOCALOS_CASES = (
     {
+        "key": "salon_price_300plus_clicks_v1",
+        "pain_keys": ("pricing_and_average_ticket", "operations_and_burnout"),
+        "signal_keys": ("recent_price_update_announcement",),
+        "recipient_segments": ("private_beauty_specialist", "beauty_team", "beauty_network"),
+        "safe_formulation": (
+            "Салон красоты в пару кликов обновляет прайс-лист на 300+ позиций через LocalOS. "
+            "Вам может быть интересно также сэкономить время?"
+        ),
+        "result": "beauty_pricelist_300_positions_update",
+        "status": "approved",
+        "source": "founder_confirmed_case",
+    },
+    {
         "key": "beauty_maps_zero_to_ten",
         "pain_keys": ("marketing_and_clients",),
         "signal_keys": ("active_social_with_map_gap", "map_gap"),
@@ -447,7 +484,9 @@ def beauty_outreach_guidance() -> dict[str, Any]:
                 "pain_key": item["pain_key"],
                 "required_signals": list(item["required_signals"]),
                 "hypothesis": item["hypothesis"],
+                "hypothesis_status": item.get("hypothesis_status", "segment_hypothesis_only"),
                 "safe_formulation": item["safe_formulation"],
+                "localos_action": item.get("localos_action"),
                 "contraindications": list(item["contraindications"]),
                 "status": item["status"],
             }

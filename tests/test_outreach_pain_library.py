@@ -99,8 +99,8 @@ def test_runtime_uses_only_approved_version_and_keeps_hypothesis_boundary():
     assert guidance["pattern_id"] == "pattern-7"
     assert guidance["pain_language_status"] == "segment_hypothesis_only"
     assert guidance["source_refs"] == [{"document_id": "doc-1"}]
-    assert guidance["pain_signal_library_version"] == "beauty_pain_signals_v3"
-    assert len(guidance["pain_signal_hypotheses"]) == 11
+    assert guidance["pain_signal_library_version"] == "beauty_pain_signals_v4"
+    assert len(guidance["pain_signal_hypotheses"]) == 12
 
 
 def test_pain_library_uses_existing_pattern_and_outreach_surfaces():
@@ -128,7 +128,8 @@ def test_approved_owner_language_is_used_as_segment_language_not_recipient_fact(
         },
     }, None)
     assert text is not None
-    assert 'Владельцы часто описывают это так: "Работаю за администратора и бухгалтера"' in text
+    assert "Работаю за администратора и бухгалтера" not in text
+    assert "карточек, контента и отзывов" in text
     assert "вы работаете за администратора" not in text.lower()
 
 
@@ -149,5 +150,6 @@ def test_audience_description_does_not_replace_owner_voice():
     }, None)
 
     assert text is not None
-    assert 'Владельцы часто описывают это так: "Если не я, то никто"' in text
+    assert "Если не я, то никто" not in text
+    assert "карточек, контента и отзывов" in text
     assert "Предпринимателю, который" not in text

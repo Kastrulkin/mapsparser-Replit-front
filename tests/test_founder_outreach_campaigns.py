@@ -1791,7 +1791,7 @@ def test_campaign_builder_explains_facts_hypotheses_and_quality_scores():
         assert "Проверка всей цепочки" in source
         assert "Почему такая оценка" in source
         assert "Факт:" in source
-        assert "Гипотеза:" in source
+        assert "Гипотеза боли:" in source
         assert "Почему это связано:" in source
     assert "QUALITY_CRITERION_LABELS" in ui
     assert "QUALITY_REASON_LABELS" in ui

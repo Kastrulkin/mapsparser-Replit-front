@@ -22,6 +22,11 @@ from services.outreach_personalization_ai import (
 )
 from services.outreach_playbook import beauty_touch_learning_dimensions
 from services.outreach_pain_library_service import load_approved_pain_library
+from services.outreach_pain_library_service import language_support_for_candidate
+from services.outreach_human_language import (
+    SALON_PRICE_300PLUS_PROOF,
+    review_human_language,
+)
 from services.outreach_decision_service import (
     _is_residential_recipient,
     build_outreach_decision,
@@ -800,7 +805,7 @@ def _quality_criterion_scores(checks: dict[str, Any]) -> dict[str, int]:
         "offer_bridge": 2 if checks.get("bridge") else 0,
         "recipient_specificity": 2 if checks.get("specificity") and checks.get("removal") else 0,
         "proof_integrity": 2 if checks.get("proof_integrity") else 0,
-        "channel_fit": 2 if checks.get("channel_fit") and checks.get("human_tone") and checks.get("style_contract") else 0,
+        "channel_fit": 2 if checks.get("channel_fit") and checks.get("human_tone") and checks.get("style_contract") and checks.get("human_language", True) else 0,
         "single_cta_and_length": 2 if checks.get("single_cta") and checks.get("channel_fit") else 0,
         "state_and_suppression_safety": 2 if checks.get("suppression_safety") else 0,
     }
@@ -1880,6 +1885,7 @@ def build_personalization_candidates(
             "signal_pain_key": evidence.get("pain_key"),
             "signal_hypothesis_key": evidence.get("pattern_key"),
             "signal_hypothesis_status": evidence.get("hypothesis_status"),
+            "localos_action": evidence.get("localos_action"),
             "safe_signal_formulation": evidence.get("safe_formulation"),
             "pattern_id": evidence.get("pattern_id"),
             "pattern_version": evidence.get("pattern_version"),
@@ -1971,6 +1977,14 @@ def _strategy_dimensions(
             else story.get("offer") or candidate.get("next_step")
         ),
         "cta": candidate.get("next_step"),
+        "pain_hypothesis": candidate.get("pain_hypothesis") or candidate.get("problem_hypothesis"),
+        "pain_reference_ids": candidate.get("pain_reference_ids") or [],
+        "language_reference_ids": (
+            candidate.get("language_support", {}).get("language_reference_ids") or []
+            if isinstance(candidate.get("language_support"), dict)
+            else []
+        ),
+        "localos_action": candidate.get("localos_action"),
         "channel": channel,
         "sequence_index": sequence_index,
         "day_offset": day_offset,
@@ -2196,10 +2210,7 @@ def _quality_gate(
     primary_evidence_id = _text(candidate.get("evidence_id"))
     if primary_evidence_id and _public_http_url(candidate.get("source_url")):
         sourced_evidence_ids.add(primary_evidence_id)
-    source_alignment = bool(
-        len(evidence_ids) <= 1
-        or (evidence_ids and evidence_ids.issubset(sourced_evidence_ids))
-    )
+    source_alignment = not evidence_ids or evidence_ids.issubset(sourced_evidence_ids)
     composite_map_match = re.search(
         r"рейтинг\s+([0-9]+(?:[.,][0-9]+)?)\s+и\s+(\d+)\s+отзыв",
         source_observation,
@@ -2280,6 +2291,18 @@ def _quality_gate(
             and "клиентск" in normalized_text
             and "дн" in normalized_text
         )
+    if signal_combo == "recent_price_update_announcement":
+        composite_signal_grounded = bool(
+            re.search(
+                r"\b(?:цен\w*|прайс(?:-лист)?\w*)\b",
+                source_observation,
+                flags=re.IGNORECASE,
+            )
+            and "обнов" in source_observation.lower()
+            and "обнов" in normalized_text
+            and "цен" in normalized_text
+            and "прайс" in normalized_text
+        )
     grounded_observation = composite_signal_grounded or observation_is_grounded(
         text,
         source_observation,
@@ -2297,11 +2320,30 @@ def _quality_gate(
         and _text(angle) in {"proof", "content_operations", "average_ticket", "reviews_service"}
         else {}
     )
+    if (
+        founder_led_beauty
+        and _text(angle) == "signal"
+        and signal_combo == "recent_price_update_announcement"
+    ):
+        approved_case = next(
+            (
+                item
+                for item in (candidate.get("outreach_playbook") or {}).get("approved_cases") or []
+                if _text(item.get("key")) == "salon_price_300plus_clicks_v1"
+            ),
+            {},
+        )
     approved_case_text = _text(approved_case.get("safe_formulation"))
     approved_case_present = bool(
         approved_case.get("status") == "approved"
         and approved_case_text
         and approved_case_text.lower() in normalized_text
+    )
+    salon_price_proof_present = SALON_PRICE_300PLUS_PROOF.lower() in normalized_text
+    salon_price_proof_scope_valid = bool(
+        founder_led_beauty
+        and signal_combo == "recent_price_update_announcement"
+        and _text(candidate.get("recipient_segment")) in {"beauty_team", "beauty_network"}
     )
     operator_approved_idea = (
         _text(candidate.get("evidence_kind"))
@@ -2420,6 +2462,8 @@ def _quality_gate(
                         "отслеживает новые отзывы и готовит ответы",
                         "в момент запуска карты и контент",
                         "повод можно синхронно использовать",
+                        "если после такого обновления",
+                        "готовит обновления для каждой площадки",
                     )
                 )
             )
@@ -2471,6 +2515,39 @@ def _quality_gate(
         "signal_strength": _signal_is_material(candidate),
         "style_contract": not any(mark in text for mark in ("—", "«", "»")),
     }
+    language_review = review_human_language(
+        text,
+        pain_hypothesis=_text(
+            candidate.get("pain_hypothesis") or candidate.get("problem_hypothesis")
+        ) or None,
+        pain_is_recipient_fact=(
+            _text(candidate.get("problem_hypothesis_status")) == "recipient_fact"
+        ),
+        approved_proof_keys=[_text(approved_case.get("key"))] if approved_case else [],
+        language_support=(
+            candidate.get("language_support")
+            if isinstance(candidate.get("language_support"), dict)
+            else None
+        ),
+        require_signal_flow=(
+            _text(angle) == "signal" and bool(candidate.get("localos_action"))
+        ),
+    )
+    enforced_language_codes = [
+        code
+        for code in language_review.get("reason_codes") or []
+        if code in {
+            "SLOP_CLICHE",
+            "INFERENCE_AS_FACT",
+            "PAIN_SUPPORT_INSUFFICIENT",
+            "PROOF_WORDING_CHANGED",
+        }
+        or (
+            _text(angle) == "signal"
+            and bool(candidate.get("localos_action"))
+        )
+    ]
+    checks["human_language"] = not enforced_language_codes
     criterion_scores = _quality_criterion_scores(checks)
     score = sum(criterion_scores.values())
     blocking_reasons = []
@@ -2492,6 +2569,10 @@ def _quality_gate(
         blocking_reasons.append("signal_too_weak_for_cold_outreach")
     if not checks["style_contract"]:
         blocking_reasons.append("style_contract_violation")
+    if enforced_language_codes:
+        blocking_reasons.append("human_language_gate_failed")
+    if salon_price_proof_present and not salon_price_proof_scope_valid:
+        blocking_reasons.append("salon_price_proof_scope_mismatch")
     canonical_reason_map = {
         "unverified_or_unsourced_fact": "SOURCE_MISSING",
         "source_mismatch": "SOURCE_MISMATCH",
@@ -2502,6 +2583,8 @@ def _quality_gate(
         "sensitive_review_requires_manual_rewrite": "SENSITIVE_TARGETING",
         "signal_too_weak_for_cold_outreach": "DECORATIVE_PERSONALIZATION",
         "style_contract_violation": "STYLE_VIOLATION",
+        "human_language_gate_failed": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
+        "salon_price_proof_scope_mismatch": "PROOF_SCOPE_MISMATCH",
     }
     diagnostic_reason_map = {
         "fact": "SOURCE_MISSING",
@@ -2518,6 +2601,7 @@ def _quality_gate(
         "sensitive_review": "SENSITIVE_TARGETING",
         "signal_strength": "DECORATIVE_PERSONALIZATION",
         "style_contract": "STYLE_VIOLATION",
+        "human_language": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
     }
     diagnostic_codes = [key for key, passed in checks.items() if not passed]
     reason_codes = list(dict.fromkeys(
@@ -2550,6 +2634,12 @@ def _quality_gate(
         "canonical_reason_codes": reason_codes,
         "word_count": word_count,
         "word_limit": channel_word_limit,
+        "human_language_review": {
+            **language_review,
+            "detected_passed": bool(language_review.get("passed")),
+            "gate_passed": not enforced_language_codes,
+            "enforced_reason_codes": enforced_language_codes,
+        },
     }
 
 
@@ -2984,6 +3074,19 @@ def build_preview(
         or _text(primary_candidate.get("signal_combo"))
     ):
         primary_candidate["outreach_playbook"] = pain_playbook or load_approved_pain_library(cursor)
+        primary_candidate["language_support"] = language_support_for_candidate(
+            cursor,
+            primary_candidate,
+            primary_candidate["outreach_playbook"],
+        )
+        primary_candidate["pain_hypothesis"] = primary_candidate.get("problem_hypothesis")
+        primary_candidate["pain_support"] = (
+            primary_candidate["language_support"].get("pain_support")
+            or primary_candidate["language_support"]
+        )
+        primary_candidate["pain_reference_ids"] = list(
+            primary_candidate["language_support"].get("pain_reference_ids") or []
+        )
     override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()
@@ -3064,6 +3167,11 @@ def build_preview(
             "source_url": candidate["source_url"],
             "observation": candidate.get("observed_fact"),
             "problem_hypothesis": candidate.get("problem_hypothesis"),
+            "pain_hypothesis": candidate.get("pain_hypothesis"),
+            "pain_reference_ids": candidate.get("pain_reference_ids") or [],
+            "pain_support": candidate.get("pain_support") or {},
+            "solution": candidate.get("localos_action") or candidate.get("relevance_to_offer"),
+            "language_support": candidate.get("language_support") or {},
             "relevance_bridge": candidate.get("relevance_to_offer") or candidate.get("bridge"),
             "source_fact_fingerprint": source_fact_fingerprint,
             "strategy": strategy,
@@ -3354,6 +3462,11 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "channel_status": touch["channel_status"],
                     "observation": touch.get("observation"),
                     "problem_hypothesis": touch.get("problem_hypothesis"),
+                    "pain_hypothesis": touch.get("pain_hypothesis"),
+                    "pain_reference_ids": touch.get("pain_reference_ids") or [],
+                    "pain_support": touch.get("pain_support") or {},
+                    "solution": touch.get("solution"),
+                    "language_support": touch.get("language_support") or {},
                     "relevance_bridge": touch.get("relevance_bridge"),
                     "generation_source": touch.get("generation_source") or "deterministic",
                     "generation_prompt_version": touch.get("generation_prompt_version"),

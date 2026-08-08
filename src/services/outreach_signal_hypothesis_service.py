@@ -33,6 +33,11 @@ EVENT_RE = re.compile(
     r"приглашаем\s+на\s+(?:встреч\w*|мероприят\w*|праздник\w*))\b",
     re.IGNORECASE,
 )
+PRICE_UPDATE_RE = re.compile(
+    r"\b(?:обновил\w*|изменил\w*|нов\w*)\s+(?:цен\w*|прайс(?:-лист)?\w*)|"
+    r"\b(?:цен\w*|прайс(?:-лист)?\w*)\s+(?:обновл\w*|изменил\w*)\b",
+    re.IGNORECASE,
+)
 
 
 def _text(value: Any) -> str:
@@ -197,8 +202,11 @@ def _result(
         "observed_fact": observed_fact,
         "status": "observed",
         "hypothesis": _text(rule.get("hypothesis")),
-        "hypothesis_status": "segment_hypothesis_only",
+        "hypothesis_status": _text(
+            rule.get("hypothesis_status") or "segment_hypothesis_only"
+        ),
         "safe_formulation": _text(rule.get("safe_formulation")),
+        "localos_action": _text(rule.get("localos_action")),
         "relevance": _text(rule.get("safe_formulation")),
         "evidence_ids": [item["evidence_id"] for item in supporting_evidence],
         "supporting_evidence": supporting_evidence,
@@ -347,6 +355,7 @@ def derive_pain_signal_hypotheses(
         ))
 
     timing_specs = (
+        ("recent_price_update_announcement", PRICE_UPDATE_RE, 0.88),
         ("recent_new_service_announcement", NEW_SERVICE_RE, 0.86),
         ("recent_event_announcement", EVENT_RE, 0.84),
     )
