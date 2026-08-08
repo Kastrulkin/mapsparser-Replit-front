@@ -25,6 +25,7 @@ from services.media_intelligence import (
     upsert_photo_asset,
 )
 from services.media_file_storage import load_media_file
+from services.photo_analysis_quota import get_network_photo_analysis_quota
 
 
 media_intelligence_bp = Blueprint("media_intelligence", __name__, url_prefix="/api/media-intelligence")
@@ -94,6 +95,7 @@ def media_settings_get():
         if not ok:
             return error_response
         settings = list_capability_settings(cursor, business_id)
+        photo_quota = get_network_photo_analysis_quota(cursor, business_id)
         return jsonify(
             {
                 "success": True,
@@ -101,6 +103,7 @@ def media_settings_get():
                 "photo_intelligence": {
                     "enabled": bool(settings.get(VISION_CAPABILITY, {}).get("enabled")),
                     "estimated_credits_per_photo": 2,
+                    "quota": photo_quota,
                     "copy": "LocalOS сможет выбирать лучшие фото, подсказывать что снять и готовить визуал для каналов.",
                 },
             }
@@ -154,7 +157,14 @@ def media_photos_list():
         ok, error_response = _require_business(cursor, business_id, user_data)
         if not ok:
             return error_response
-        return jsonify({"success": True, "photos": list_photo_assets(cursor, business_id), "coverage": build_photo_coverage(cursor, business_id)})
+        return jsonify(
+            {
+                "success": True,
+                "photos": list_photo_assets(cursor, business_id),
+                "coverage": build_photo_coverage(cursor, business_id),
+                "photo_quota": get_network_photo_analysis_quota(cursor, business_id),
+            }
+        )
     except Exception:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
@@ -329,6 +339,8 @@ def media_photo_analyze(asset_id: str):
             status_code = 409
         if result.get("status") == "analysis_failed":
             status_code = 502
+        if result.get("status") == "analysis_in_progress":
+            status_code = 409
         return jsonify(result), status_code
     except Exception:
         db.conn.rollback()

@@ -223,6 +223,14 @@ type MediaCoverage = {
   missing?: { key?: string; label?: string }[];
 };
 
+type PhotoAnalysisQuota = {
+  network_id?: string;
+  granted_analyses?: number;
+  consumed_analyses?: number;
+  reserved_analyses?: number;
+  remaining_analyses?: number;
+};
+
 type MediaRecommendation = {
   status?: string;
   title?: string;
@@ -697,6 +705,7 @@ export function ContentPage() {
   const [mediaLoadingItemId, setMediaLoadingItemId] = useState('');
   const [mediaAssets, setMediaAssets] = useState<PhotoAsset[]>([]);
   const [mediaCoverage, setMediaCoverage] = useState<MediaCoverage | null>(null);
+  const [photoAnalysisQuota, setPhotoAnalysisQuota] = useState<PhotoAnalysisQuota | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const publicationDetailsRef = useRef<HTMLDivElement | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
@@ -1012,10 +1021,12 @@ export function ContentPage() {
     if (!currentBusinessId) return;
     setMediaLoading(true);
     setMediaError('');
+    setPhotoAnalysisQuota(null);
     try {
       const response = await newAuth.makeRequest(`/media-intelligence/photos?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
       setMediaAssets(Array.isArray(response.photos) ? response.photos : []);
       setMediaCoverage(response.coverage || null);
+      setPhotoAnalysisQuota(response.photo_quota || null);
     } catch (mediaLoadError) {
       setMediaError(mediaLoadError instanceof Error ? mediaLoadError.message : 'Не удалось загрузить медиатеку');
     } finally {
@@ -2055,6 +2066,11 @@ export function ContentPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
                 Загрузите фото бизнеса. LocalOS подскажет, что подходит для публикаций, а чего не хватает.
               </p>
+              {photoAnalysisQuota ? (
+                <p className="mt-2 text-sm font-medium text-emerald-700">
+                  Для сети доступно бесплатно: <span className="tabular-nums">{Number(photoAnalysisQuota.remaining_analyses || 0)}</span> из <span className="tabular-nums">{Number(photoAnalysisQuota.granted_analyses || 0)}</span> анализов фото.
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <input

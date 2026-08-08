@@ -15,6 +15,12 @@ from psycopg2.extras import Json
 from services.gigachat_client import get_gigachat_client
 from services.media_file_storage import load_media_file
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
+from services.photo_analysis_quota import (
+    PHOTO_ANALYSIS_QUOTA_SOURCE,
+    finalize_network_photo_analysis_quota,
+    get_network_photo_analysis_quota,
+    reserve_network_photo_analysis_quota,
+)
 
 
 PHOTO_ANALYSIS_ACTION_KEY = "photo_analysis"
@@ -389,6 +395,9 @@ def _release_photo_analysis_reservation(
     reservation_id = str(reservation.get("reservation_id") or "")
     if not reservation_id:
         return
+    if reservation.get("billing_source") == PHOTO_ANALYSIS_QUOTA_SOURCE:
+        finalize_network_photo_analysis_quota(cursor, reservation_id=reservation_id, mode="release")
+        return
     finalize_reserved_action_credits(
         cursor,
         reservation_id=reservation_id,
@@ -397,6 +406,10 @@ def _release_photo_analysis_reservation(
         finalization_mode="release",
         external_id=external_id,
     )
+
+
+def _photo_quota_state(cursor: Any, business_id: str) -> dict[str, Any] | None:
+    return get_network_photo_analysis_quota(cursor, business_id)
 
 
 def _record_usage_event(
@@ -501,23 +514,71 @@ def analyze_photo_runtime(
             cache_hit=True,
             metadata={"asset_id": asset_id, "source_usage_event_id": cached.get("usage_event_id")},
         )
-        return {"success": True, "status": "cached", "analysis": cached, "charged_credits": 0}
+        return {
+            "success": True,
+            "status": "cached",
+            "analysis": cached,
+            "charged_credits": 0,
+            "billing_source": "cache",
+            "photo_quota": _photo_quota_state(cursor, business_id),
+        }
 
-    reservation = reserve_paid_action_credits(
+    idempotency_key = _stable_hash(
+        ["photo_analysis", business_id, asset_id, asset_version, prompt_hash, context_hash]
+    )
+    quota_reservation = reserve_network_photo_analysis_quota(
         cursor,
         business_id=business_id,
         user_id=user_id,
-        action_key=PHOTO_ANALYSIS_ACTION_KEY,
-        estimated_credits=PHOTO_ANALYSIS_CREDITS,
-        idempotency_key=_stable_hash(["photo_analysis", business_id, user_id, asset_id, asset_version, prompt_hash, context_hash]),
-        metadata={"asset_id": asset_id, "provider": VISION_PROVIDER},
+        asset_id=asset_id,
+        asset_version=asset_version,
+        idempotency_key=idempotency_key,
     )
+    if quota_reservation.get("status") == "reserved":
+        reservation = {**quota_reservation, "billing_source": PHOTO_ANALYSIS_QUOTA_SOURCE}
+    elif quota_reservation.get("status") == "consumed":
+        cached_after_wait = _load_cache(
+            cursor,
+            provider=VISION_PROVIDER,
+            action_type=PHOTO_ANALYSIS_ACTION_KEY,
+            asset_id=asset_id,
+            asset_version=asset_version,
+            prompt_hash=prompt_hash,
+            context_hash=context_hash,
+        )
+        if cached_after_wait:
+            return {
+                "success": True,
+                "status": "cached",
+                "analysis": cached_after_wait,
+                "charged_credits": 0,
+                "billing_source": "cache",
+                "photo_quota": _photo_quota_state(cursor, business_id),
+            }
+        return {
+            "success": False,
+            "status": "analysis_in_progress",
+            "message": "Анализ этого фото уже выполняется. Обновите медиатеку через несколько секунд.",
+            "photo_quota": quota_reservation.get("quota"),
+        }
+    else:
+        reservation = reserve_paid_action_credits(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            action_key=PHOTO_ANALYSIS_ACTION_KEY,
+            estimated_credits=PHOTO_ANALYSIS_CREDITS,
+            idempotency_key=idempotency_key,
+            metadata={"asset_id": asset_id, "provider": VISION_PROVIDER},
+        )
+        reservation["billing_source"] = "general_credits"
     if reservation.get("status") != "reserved":
         return {
             "success": False,
             "status": "insufficient_credits",
             "message": "Недостаточно кредитов для анализа фото.",
             "details": reservation,
+            "photo_quota": quota_reservation.get("quota"),
         }
 
     clean_image_base64 = str(image_base64 or "").strip()
@@ -549,6 +610,7 @@ def analyze_photo_runtime(
             "retry_available": True,
             "charged_credits": 0,
             "details": message,
+            "photo_quota": _photo_quota_state(cursor, business_id),
         }
     if not clean_image_base64:
         _release_photo_analysis_reservation(
@@ -558,7 +620,12 @@ def analyze_photo_runtime(
             user_id=user_id,
             external_id=f"photo-analysis-empty:{asset_id}:{asset_version}",
         )
-        return {"success": False, "status": "image_required", "message": "Нужен файл или URL фото для анализа."}
+        return {
+            "success": False,
+            "status": "image_required",
+            "message": "Нужен файл или URL фото для анализа.",
+            "photo_quota": _photo_quota_state(cursor, business_id),
+        }
 
     client = get_gigachat_client()
     response_text = ""
@@ -601,8 +668,11 @@ def analyze_photo_runtime(
             "retry_available": True,
             "attempts": PHOTO_ANALYSIS_MAX_ATTEMPTS,
             "charged_credits": 0,
+            "photo_quota": _photo_quota_state(cursor, business_id),
         }
     analysis = _normalize_photo_analysis(_extract_json_object(response_text), clean_context)
+    billing_source = str(reservation.get("billing_source") or "general_credits")
+    charged_credits = 0 if billing_source == PHOTO_ANALYSIS_QUOTA_SOURCE else PHOTO_ANALYSIS_CREDITS
     usage_event_id = _record_usage_event(
         cursor,
         business_id=business_id,
@@ -612,20 +682,28 @@ def analyze_photo_runtime(
         raw_units=1,
         raw_unit_type="image",
         estimated_credits=PHOTO_ANALYSIS_CREDITS,
-        charged_credits=PHOTO_ANALYSIS_CREDITS,
+        charged_credits=charged_credits,
         reservation_id=str(reservation.get("reservation_id") or ""),
         cache_hit=False,
-        metadata={"asset_id": asset_id, "asset_version": asset_version},
+        metadata={"asset_id": asset_id, "asset_version": asset_version, "billing_source": billing_source},
     )
-    finalize_reserved_action_credits(
-        cursor,
-        reservation_id=str(reservation.get("reservation_id") or ""),
-        business_id=business_id,
-        user_id=user_id,
-        actual_credits=PHOTO_ANALYSIS_CREDITS,
-        finalization_mode="charge",
-        external_id=f"photo-analysis:{asset_id}:{asset_version}:{usage_event_id}",
-    )
+    photo_quota = None
+    if billing_source == PHOTO_ANALYSIS_QUOTA_SOURCE:
+        photo_quota = finalize_network_photo_analysis_quota(
+            cursor,
+            reservation_id=str(reservation.get("reservation_id") or ""),
+            mode="consume",
+        )
+    else:
+        finalize_reserved_action_credits(
+            cursor,
+            reservation_id=str(reservation.get("reservation_id") or ""),
+            business_id=business_id,
+            user_id=user_id,
+            actual_credits=PHOTO_ANALYSIS_CREDITS,
+            finalization_mode="charge",
+            external_id=f"photo-analysis:{asset_id}:{asset_version}:{usage_event_id}",
+        )
     cursor.execute(
         """
         UPDATE photo_assets
@@ -682,4 +760,11 @@ def analyze_photo_runtime(
             usage_event_id,
         ),
     )
-    return {"success": True, "status": "analyzed", "analysis": analysis, "charged_credits": PHOTO_ANALYSIS_CREDITS}
+    return {
+        "success": True,
+        "status": "analyzed",
+        "analysis": analysis,
+        "charged_credits": charged_credits,
+        "billing_source": billing_source,
+        "photo_quota": photo_quota or _photo_quota_state(cursor, business_id),
+    }

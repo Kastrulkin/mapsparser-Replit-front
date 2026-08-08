@@ -181,6 +181,87 @@ def test_provider_error_retries_releases_credits_and_marks_failed(monkeypatch):
     assert any(params[0] == "analysis_failed" for _query, params in cursor.photo_updates)
 
 
+def test_network_photo_quota_is_used_before_general_credits(monkeypatch):
+    cursor = FakeCursor(balance=0)
+    client = FakeVisionClient()
+    finalized = []
+    monkeypatch.setattr(ai_runtime, "get_gigachat_client", lambda: client)
+    monkeypatch.setattr(
+        ai_runtime,
+        "reserve_network_photo_analysis_quota",
+        lambda *_args, **_kwargs: {
+            "status": "reserved",
+            "reservation_id": "quota-reservation-1",
+            "quota": {"network_id": "network-1", "remaining_analyses": 99},
+        },
+    )
+    monkeypatch.setattr(
+        ai_runtime,
+        "finalize_network_photo_analysis_quota",
+        lambda *_args, **kwargs: finalized.append(kwargs) or {"network_id": "network-1", "remaining_analyses": 99},
+    )
+
+    result = ai_runtime.analyze_photo_runtime(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        asset_id="asset-1",
+        image_base64="ZmFrZQ==",
+        context={"business_type": "детская парикмахерская"},
+    )
+
+    assert result["success"] is True
+    assert result["charged_credits"] == 0
+    assert result["billing_source"] == "network_photo_quota"
+    assert result["photo_quota"]["remaining_analyses"] == 99
+    assert not cursor.reservation_inserts
+    assert not cursor.ledger_entries
+    assert finalized == [{"reservation_id": "quota-reservation-1", "mode": "consume"}]
+
+
+def test_provider_error_releases_network_photo_quota(monkeypatch):
+    cursor = FakeCursor(balance=0)
+    client = FakeVisionClient(should_fail=True)
+    finalized = []
+    monkeypatch.setattr(ai_runtime, "get_gigachat_client", lambda: client)
+    monkeypatch.setattr(ai_runtime.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        ai_runtime,
+        "reserve_network_photo_analysis_quota",
+        lambda *_args, **_kwargs: {
+            "status": "reserved",
+            "reservation_id": "quota-reservation-1",
+            "quota": {"network_id": "network-1", "remaining_analyses": 99},
+        },
+    )
+    monkeypatch.setattr(
+        ai_runtime,
+        "finalize_network_photo_analysis_quota",
+        lambda *_args, **kwargs: finalized.append(kwargs) or {"network_id": "network-1", "remaining_analyses": 100},
+    )
+    monkeypatch.setattr(
+        ai_runtime,
+        "get_network_photo_analysis_quota",
+        lambda *_args, **_kwargs: {"network_id": "network-1", "remaining_analyses": 100},
+    )
+
+    result = ai_runtime.analyze_photo_runtime(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        asset_id="asset-1",
+        image_base64="ZmFrZQ==",
+        context={"business_type": "детская парикмахерская"},
+    )
+
+    assert result["status"] == "analysis_failed"
+    assert result["charged_credits"] == 0
+    assert result["photo_quota"]["remaining_analyses"] == 100
+    assert finalized == [{"reservation_id": "quota-reservation-1", "mode": "release"}]
+    assert not cursor.reservation_inserts
+    assert not cursor.ledger_entries
+
+
 def test_photo_analysis_economics_flags_meter_adjustment_when_margin_is_low():
     result = ai_runtime.estimate_photo_analysis_economics(
         photo_count=100,
