@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { TodayMobileV2 } from './TodayMobileV2';
 
@@ -22,5 +23,35 @@ describe('TodayMobileV2', () => {
     expect(screen.getByRole('heading', { name: 'Поручить ЛокалОС' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Например: подготовь ответы')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Поручить ЛокалОС' })).not.toBeInTheDocument();
+  });
+
+  it('opens a network card problem directly in the card screen for that location', async () => {
+    const openTarget = vi.fn();
+    render(
+      <TodayMobileV2
+        data={{
+          scope: { kind: 'network', id: 'network-1', name: 'Сеть салонов' },
+          focus_action: { title: 'Обновить данные сети', reason: 'Одна точка отстаёт', screen: 'finance' },
+          data_health: { status: 'stale' },
+          network_summary: { locations_count: 2, healthy_locations_count: 1, problem_locations_count: 1, finance: { total: 2, fresh: 1, stale: 1, due: 0, missing: 0 } },
+          problem_locations: [{ business_id: 'business-2', business_name: 'Север', data_health_status: 'stale', problem_areas: ['maps'], focus_action: { cta_url: '/dashboard/card' }, target_scope: { kind: 'business', id: 'business-2' } }],
+          location_breakdown: [{ business_id: 'business-2', business_name: 'Север', data_health: { status: 'stale' }, rhythm: { label: 'Ритм формируется' }, analytics_level: { label: 'Нужны данные', next_unlock: 'Загрузите свежую сводку.' } }],
+          analytics_modules: [{ key: 'sales', label: 'Продажи и средний чек', status: 'locked', next_unlock: 'Добавьте данные: продажи и средний чек.' }],
+        }}
+        loading={false}
+        slowLoading={false}
+        command=""
+        setCommand={vi.fn()}
+        ask={vi.fn()}
+        openTarget={openTarget}
+        openProgress={vi.fn()}
+        track={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Главное по сети')).toBeInTheDocument();
+    expect(screen.getByText('Сводка сети')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: /Север/ }));
+    expect(openTarget).toHaveBeenCalledWith('cards', { kind: 'business', id: 'business-2' });
   });
 });

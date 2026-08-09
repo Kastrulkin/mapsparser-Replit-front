@@ -58,6 +58,7 @@ from core.telegram_network import telegram_urlopen
 from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
+from services.growth_rhythm_notifications import collect_due_growth_rhythm_reminders, mark_growth_rhythm_reminder_sent
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
 from services.operator_async_jobs import process_next_operator_async_job
@@ -1657,6 +1658,18 @@ def _run_card_automation_if_due() -> None:
                 pass
             else:
                 print(f"[CARD_AUTOMATION_DIGEST] failed to send telegram digest to {telegram_id}", flush=True)
+        rhythm_reminders = collect_due_growth_rhythm_reminders(db.conn)
+        for reminder in rhythm_reminders:
+            telegram_id = str(reminder.get("telegram_id") or "").strip()
+            dedupe_key = str(reminder.get("dedupe_key") or "").strip()
+            message = str(reminder.get("message") or "").strip()
+            if not telegram_id or not dedupe_key or not message:
+                continue
+            if _send_telegram_plain_message(telegram_id, message, reply_markup=reminder.get("reply_markup")):
+                mark_growth_rhythm_reminder_sent(db.conn, dedupe_key)
+            else:
+                db.conn.rollback()
+                print(f"[GROWTH_RHYTHM_REMINDER] failed to send telegram reminder to {telegram_id}", flush=True)
     except Exception as e:
         print(f"[CARD_AUTOMATION] error: {e}", flush=True)
     finally:

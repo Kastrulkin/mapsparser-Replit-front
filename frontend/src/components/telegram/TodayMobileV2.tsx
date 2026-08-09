@@ -10,7 +10,7 @@ import {
   Send,
   Sparkles,
 } from 'lucide-react';
-import { GrowthLoopPanel, type DataHealth, type GrowthLoop } from '@/components/telegram/GrowthLoopPanel';
+import { GrowthLoopPanel, type AnalyticsLevel, type AnalyticsModule, type DataHealth, type GrowthLoop, type GrowthRhythm, type LocationBreakdown, type NetworkSummary, type ProblemLocation } from '@/components/telegram/GrowthLoopPanel';
 
 export type TodayFocusAction = {
   id?: string;
@@ -46,7 +46,7 @@ export type CommunityPulseItem = TodayActivityItem & {
 };
 
 export type TodayPayload = {
-  scope?: { kind?: 'platform' | 'network' | 'business'; id?: string | null; name?: string };
+  scope?: { kind?: 'platform' | 'network' | 'business'; id?: string | null; name?: string; business_ids?: string[] };
   focus_action?: TodayFocusAction | null;
   active_work?: TodayActivityItem[];
   changes_24h?: TodayActivityItem[];
@@ -61,8 +61,12 @@ export type TodayPayload = {
   data_warnings?: string[];
   growth_loop?: GrowthLoop | null;
   data_health?: DataHealth | null;
-  analytics_level?: { level?: string; label?: string; next_unlock?: string | null } | null;
-  rhythm?: { active_weeks?: number; status?: string; label?: string } | null;
+  analytics_level?: AnalyticsLevel | null;
+  rhythm?: GrowthRhythm | null;
+  analytics_modules?: AnalyticsModule[];
+  network_summary?: NetworkSummary | null;
+  problem_locations?: ProblemLocation[];
+  location_breakdown?: LocationBreakdown[];
 };
 
 type TodayMobileV2Props = {
@@ -168,6 +172,7 @@ export const TodayMobileV2 = ({
   const results = data?.completed_results || [];
   const progress = data?.progress_summary;
   const isPlatform = data?.scope?.kind === 'platform';
+  const isNetwork = data?.scope?.kind === 'network';
 
   return (
     <div className="px-4">
@@ -179,7 +184,7 @@ export const TodayMobileV2 = ({
       >
         <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <Sparkles className="h-4 w-4" />
-          {focus ? 'Сейчас важнее всего' : 'Сегодня всё под контролем'}
+          {focus ? (isNetwork ? 'Главное по сети' : 'Сейчас важнее всего') : 'Сегодня всё под контролем'}
         </div>
         <div className="mt-4 flex items-start gap-4">
           <div className="min-w-0 flex-1">
@@ -187,7 +192,7 @@ export const TodayMobileV2 = ({
               {focus?.title || 'От вас ничего не требуется'}
             </h1>
             <p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">
-              {focus?.reason || 'ЛокалОС продолжает следить за данными и покажет здесь следующий важный шаг.'}
+              {focus?.reason || (isNetwork ? 'ЛокалОС сверяет точки сети и покажет, где нужен следующий шаг.' : 'ЛокалОС продолжает следить за данными и покажет здесь следующий важный шаг.')}
             </p>
           </div>
           {focus?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{focus.count}</b> : <Check className="h-8 w-8 shrink-0 text-emerald-400" />}
@@ -250,7 +255,7 @@ export const TodayMobileV2 = ({
         </motion.section>
       ) : null}
 
-      <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} />
+      <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} scopeKind={data?.scope?.kind} analyticsModules={data?.analytics_modules} networkSummary={data?.network_summary} problemLocations={data?.problem_locations} locationBreakdown={data?.location_breakdown} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
 
       <Section title="За последние 24 часа" subtitle="Только новые факты из подключённых источников.">
         {changes.length ? changes.slice(0, 3).map((item) => <ActivityRow key={item.id} item={item} icon={Clock3} onClick={() => openTarget(item.screen, item.business_id ? { kind: 'business', id: item.business_id } : undefined)} />) : (

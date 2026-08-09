@@ -47,11 +47,36 @@ def test_today_and_progress_use_the_same_focus(monkeypatch):
     progress = mobile_today.build_mobile_progress(object(), scope=scope, user_id="user-1", growth_loader=lambda _business_id: _growth())
 
     assert today["focus_action"] == progress["focus_action"]
-    assert today["focus_action"]["screen"] == "content"
+    assert today["focus_action"]["screen"] == "reviews"
+    assert today["focus_action"]["source"] == "operator"
     assert progress["areas"][0]["action"]["screen"] == "content"
     assert today["growth_loop"]["mission_id"] == "growth-content"
     assert today["analytics_level"] == progress["analytics_level"]
     assert today["rhythm"] == progress["rhythm"]
+
+
+def test_network_today_and_progress_expose_same_location_contract(monkeypatch):
+    growth = _growth()
+    growth.update({
+        "network_summary": {"locations_count": 2, "problem_locations_count": 1},
+        "problem_locations": [{"business_id": "b-2", "target_scope": {"kind": "business", "id": "b-2"}}],
+        "location_breakdown": [{"business_id": "b-1"}, {"business_id": "b-2"}],
+        "analytics_modules": [{"key": "sales", "status": "available"}],
+    })
+    monkeypatch.setattr(mobile_today, "build_operator_scope_summary", lambda *_args, **_kwargs: {"primary_action": None})
+    monkeypatch.setattr(mobile_today, "_load_active_work", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_changes", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    scope = {"kind": "network", "id": "n-1", "business_ids": ["b-1", "b-2"]}
+
+    today = mobile_today.build_mobile_today(object(), scope=scope, user_id="u-1", growth_loader=lambda _id: growth)
+    progress = mobile_today.build_mobile_progress(object(), scope=scope, user_id="u-1", growth_loader=lambda _id: growth)
+
+    assert today["network_summary"] == progress["network_summary"]
+    assert today["problem_locations"] == progress["problem_locations"]
+    assert today["location_breakdown"] == progress["location_breakdown"]
+    assert today["analytics_modules"] == progress["analytics_modules"]
 
 
 def test_today_uses_exact_rolling_24_hour_window(monkeypatch):
@@ -168,3 +193,26 @@ def test_growth_focus_wins_when_operator_item_has_lower_effect():
 
     assert focus["title"] == "Подготовить контент"
     assert focus["screen"] == "content"
+    assert focus["source"] == "growth"
+
+
+def test_blocking_operator_focus_wins_over_growth_recommendation():
+    focus = mobile_today.select_daily_focus(
+        {
+            "primary_action": {
+                "id": "cards_failed",
+                "title": "Восстановить обновление карточки",
+                "severity": "critical",
+                "count": 1,
+                "target_scope": {"kind": "business", "id": "b-2"},
+                "affected_business_ids": ["b-2"],
+            }
+        },
+        _growth(priority=75),
+        {"kind": "network", "id": "network-1"},
+    )
+
+    assert focus["title"] == "Восстановить обновление карточки"
+    assert focus["source"] == "operator"
+    assert focus["target_scope"] == {"kind": "business", "id": "b-2"}
+    assert focus["affected_business_ids"] == ["b-2"]

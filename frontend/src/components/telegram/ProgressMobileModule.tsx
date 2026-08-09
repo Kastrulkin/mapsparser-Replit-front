@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 import type { TodayFocusAction } from '@/components/telegram/TodayMobileV2';
-import { GrowthLoopPanel, type DataHealth, type GrowthLoop } from '@/components/telegram/GrowthLoopPanel';
+import { GrowthLoopPanel, type AnalyticsLevel, type AnalyticsModule, type DataHealth, type GrowthLoop, type GrowthRhythm, type LocationBreakdown, type LocationSummary, type NetworkSummary, type ProblemLocation } from '@/components/telegram/GrowthLoopPanel';
 
 type ProgressMilestone = {
   key?: string;
@@ -36,6 +36,7 @@ type ProgressArea = {
 };
 
 export type ProgressPayload = {
+  scope?: { kind?: 'platform' | 'network' | 'business'; id?: string | null; name?: string; business_ids?: string[] };
   status?: string;
   focus_action?: TodayFocusAction | null;
   summary?: {
@@ -45,20 +46,26 @@ export type ProgressPayload = {
     needs_attention?: number;
     completed_last_30_days?: number;
     percent?: number;
+    locations_count?: number;
+    finance_location_summary?: LocationSummary | null;
   } | null;
   areas?: ProgressArea[];
   recent_results?: Array<{ key?: string; title?: string; description?: string; occurred_at?: string }>;
   data_warnings?: string[];
   growth_loop?: GrowthLoop | null;
   data_health?: DataHealth | null;
-  analytics_level?: { level?: string; label?: string; next_unlock?: string | null } | null;
-  rhythm?: { active_weeks?: number; status?: string; label?: string } | null;
+  analytics_level?: AnalyticsLevel | null;
+  rhythm?: GrowthRhythm | null;
+  analytics_modules?: AnalyticsModule[];
+  network_summary?: NetworkSummary | null;
+  problem_locations?: ProblemLocation[];
+  location_breakdown?: LocationBreakdown[];
 };
 
 type ProgressMobileModuleProps = {
   data?: ProgressPayload | null;
   loading: boolean;
-  openTarget: (screen?: string) => void;
+  openTarget: (screen?: string, targetScope?: { kind?: string; id?: string }) => void;
   track: (eventName: string, target?: string) => void;
   trackProduct?: (eventName: 'mission_open' | 'statistics_flow_opened', objectId?: string) => void;
 };
@@ -98,12 +105,13 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
 
   const summary = data.summary;
   const focus = data.focus_action;
+  const isNetwork = data.scope?.kind === 'network' || Number(data.network_summary?.locations_count || summary.locations_count || 0) > 1;
   return (
     <div>
       <section className="rounded-[24px] bg-gradient-to-b from-primary/[0.11] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.15)]">
-        <div className="flex items-center gap-2 text-xs font-medium text-primary"><Sparkles className="h-4 w-4" />Понятный план роста</div>
-        <h2 className="mt-3 text-balance text-xl font-semibold">Десятки задач собраны в один путь</h2>
-        <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Карты, контент, партнёрства, автоматизация и допродажи — с подтверждёнными результатами и одним следующим шагом.</p>
+        <div className="flex items-center gap-2 text-xs font-medium text-primary"><Sparkles className="h-4 w-4" />{isNetwork ? 'Общий путь сети' : 'Понятный план роста'}</div>
+        <h2 className="mt-3 text-balance text-xl font-semibold">{isNetwork ? 'Все точки — в одной картине' : 'Десятки задач собраны в один путь'}</h2>
+        <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{isNetwork ? `${data.network_summary?.locations_count || summary.locations_count || 0} точек: видно общий прогресс и где данные требуют внимания.` : 'Карты, контент, партнёрства, автоматизация и допродажи — с подтверждёнными результатами и одним следующим шагом.'}</p>
         <div className="mt-5 flex items-end justify-between gap-4">
           <div><b className="text-3xl tabular-nums">{summary.completed_milestones || 0}</b><span className="text-lg tabular-nums text-zinc-600"> / {summary.total_milestones || 0}</span><small className="mt-1 block text-zinc-600">шагов подтверждено</small></div>
           <b className="text-2xl tabular-nums text-primary">{summary.percent || 0}%</b>
@@ -118,11 +126,11 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
           <h3 className="mt-2 text-balance text-lg font-semibold">{focus.title}</h3>
           <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{focus.reason}</p>
           {focus.expected_outcome ? <div className="mt-3 rounded-[15px] bg-black/20 px-3 py-2.5 text-pretty text-xs leading-5 text-zinc-400"><b className="text-zinc-200">Результат:</b> {focus.expected_outcome}</div> : null}
-          <button type="button" onClick={() => { track('progress_action_open', focus.screen); trackProduct?.('mission_open', data.growth_loop?.mission_id || focus.id || focus.screen); openTarget(focus.screen); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform active:scale-[0.96]">{focus.cta_label || 'Продолжить'}<ChevronRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { track('progress_action_open', focus.screen); trackProduct?.('mission_open', data.growth_loop?.mission_id || focus.id || focus.screen); openTarget(focus.screen, focus.target_scope); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform active:scale-[0.96]">{focus.cta_label || 'Продолжить'}<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : null}
 
-      <GrowthLoopPanel growthLoop={data.growth_loop} dataHealth={data.data_health} analyticsLevel={data.analytics_level} rhythm={data.rhythm} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openTarget('finance_import'); }} />
+      <GrowthLoopPanel growthLoop={data.growth_loop} dataHealth={data.data_health} analyticsLevel={data.analytics_level} rhythm={data.rhythm} scopeKind={data.scope?.kind} analyticsModules={data.analytics_modules} networkSummary={data.network_summary || (summary.finance_location_summary ? { locations_count: summary.locations_count, finance: summary.finance_location_summary } : null)} problemLocations={data.problem_locations} locationBreakdown={data.location_breakdown} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openTarget('finance_import'); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
 
       <section className="mt-7">
         <h2 className="text-balance text-lg font-semibold tracking-[-0.025em]">Направления роста</h2>
@@ -152,7 +160,7 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
                             <div key={milestone.key} className="flex gap-3"><span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg ${milestone.status === 'done' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.05] text-zinc-600'}`}>{milestone.status === 'done' ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</span><span className="min-w-0"><b className="block text-xs text-zinc-300">{milestone.label}</b>{milestone.evidence ? <small className="mt-1 block text-pretty leading-4 text-zinc-600">{milestone.evidence}</small> : null}</span></div>
                           ))}
                         </div>
-                        {area.action ? <button type="button" onClick={() => openTarget(area.action?.screen)} className="mt-4 min-h-11 w-full rounded-[14px] bg-white/[0.055] px-3 text-xs font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.075)] transition-transform active:scale-[0.96]">{area.action.cta_label || 'Открыть следующий шаг'}</button> : null}
+                        {area.action ? <button type="button" onClick={() => openTarget(area.action?.screen, area.action?.target_scope)} className="mt-4 min-h-11 w-full rounded-[14px] bg-white/[0.055] px-3 text-xs font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.075)] transition-transform active:scale-[0.96]">{area.action.cta_label || 'Открыть следующий шаг'}</button> : null}
                       </div>
                     </motion.div>
                   ) : null}

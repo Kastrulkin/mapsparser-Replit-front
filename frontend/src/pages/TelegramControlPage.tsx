@@ -133,7 +133,7 @@ type ReviewResult = {
 
 type OperatorMessage = { id?: string; role: 'user' | 'operator'; text: string; status?: string; capability?: string; created_at?: string; screen?: string };
 type ModuleItem = { id?: string; business_id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; source?: string; updated_at?: string; amount?: string | number; previous_amount?: string | number; unit?: string; metric_key?: string; period_label?: string; day?: string; orders_count?: number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string; provider_sources?: string[]; parse_status?: string; parse_source?: string; parse_updated_at?: string; refresh_cost_credits?: number; scheduled_refresh_cost_credits?: number; review_sync_enabled?: boolean; review_sync_interval_hours?: number; review_sync_schedule_mode?: string; review_sync_schedule_days?: number[]; review_sync_schedule_time?: string; review_sync_next_run_at?: string; review_sync_last_run_at?: string; review_sync_last_status?: string; plan_id?: string; plan_title?: string; plan_period_days?: number; scheduled_for?: string; content_type?: string; draft_text?: string };
-type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean };
+type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean; finance_rhythm?: boolean };
 type FinanceValue = string | number | boolean | null | undefined;
 type FinanceRecommendation = { code?: string; title?: string; text?: string; severity?: string; target_metric?: string | null; data_needed?: string[] };
 type FinanceDashboardMobile = {
@@ -680,13 +680,13 @@ export const TelegramControlPage = () => {
     navigate();
   };
 
-  const createCrmRequest = async ({ crmName, comment }: { crmName: string; comment: string }) => {
+  const createCrmRequest = async ({ crmName, crmUrl, contact, comment }: { crmName: string; crmUrl: string; contact: string; comment: string }) => {
     if (scope?.kind !== 'business' || !scope.id) throw new Error('Для запроса выберите одну точку.');
     if (preview) return;
     await fetch(`/api/business/${scope.id}/crm-integration-requests`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ crm_name: crmName, note: comment }),
+      body: JSON.stringify({ crm_name: crmName, crm_url: crmUrl, contact, note: comment, scope_type: scope.kind, scope_id: scope.id }),
     }).then(readJson<unknown>);
     trackProductEvent('crm_request_created', crmName);
   };
@@ -909,7 +909,7 @@ type ModuleScreenProps = {
   track: (eventName: string, target?: string) => void;
   trackProduct: (eventName: 'mission_open' | 'statistics_flow_opened' | 'statistics_preview_created' | 'statistics_preview_confirmed' | 'crm_request_created', objectId?: string) => void;
   openTasks: () => void;
-  requestCrm: (values: { crmName: string; comment: string }) => Promise<void>;
+  requestCrm: (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => Promise<void>;
   back: () => void;
 };
 
@@ -1235,7 +1235,7 @@ const financeMoney = (value: FinanceValue) => value === null || value === undefi
 const financePercent = (value: FinanceValue) => { if (value === null || value === undefined) return 'Нет данных'; const numeric = financeNumeric(value); const percent = Math.abs(numeric) <= 1 ? numeric * 100 : numeric; return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(percent)}%`; };
 const financeText = (row: Record<string, FinanceValue>, keys: string[], fallback = '—') => { for (const key of keys) { const value = row[key]; if (value !== null && value !== undefined && String(value).trim()) return String(value); } return fallback; };
 
-const FinanceModule = ({ scope, items, reload, openTasks, requestCrm, initialSection = 'overview', trackProduct }: { scope?: MobileScope; items: ModuleItem[]; reload: () => Promise<void>; openTasks: () => void; requestCrm: (values: { crmName: string; comment: string }) => Promise<void>; initialSection?: string; trackProduct: (eventName: 'mission_open' | 'statistics_flow_opened' | 'statistics_preview_created' | 'statistics_preview_confirmed' | 'crm_request_created', objectId?: string) => void }) => {
+const FinanceModule = ({ scope, items, reload, openTasks, requestCrm, initialSection = 'overview', trackProduct }: { scope?: MobileScope; items: ModuleItem[]; reload: () => Promise<void>; openTasks: () => void; requestCrm: (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => Promise<void>; initialSection?: string; trackProduct: (eventName: 'mission_open' | 'statistics_flow_opened' | 'statistics_preview_created' | 'statistics_preview_confirmed' | 'crm_request_created', objectId?: string) => void }) => {
   const preview = isPreview();
   const [section, setSection] = useState(initialSection);
   const [dashboard, setDashboard] = useState<FinanceDashboardMobile | null>(preview ? previewFinanceDashboard : null);
@@ -1374,13 +1374,16 @@ const FinanceImport = ({ businessId, dashboard, reload, preferredProfile, trackP
 type FinanceThreshold = { metric_key?: string; label?: string; unit?: string; source?: string; green_min?: FinanceValue; green_max?: FinanceValue; yellow_min?: FinanceValue; yellow_max?: FinanceValue; red_rule?: string };
 type FinanceTransaction = { id?: string; transaction_date?: string | null; amount?: number; services?: string[] | null; notes?: string | null; client_type?: string | null };
 
-const FinanceTools = ({ businessId, dashboard, reload, requestCrm, trackProduct }: { businessId: string; dashboard: FinanceDashboardMobile | null; reload: () => Promise<void>; requestCrm: (values: { crmName: string; comment: string }) => Promise<void>; trackProduct: (eventName: 'mission_open' | 'statistics_flow_opened' | 'statistics_preview_created' | 'statistics_preview_confirmed' | 'crm_request_created', objectId?: string) => void }) => {
+const FinanceTools = ({ businessId, dashboard, reload, requestCrm, trackProduct }: { businessId: string; dashboard: FinanceDashboardMobile | null; reload: () => Promise<void>; requestCrm: (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => Promise<void>; trackProduct: (eventName: 'mission_open' | 'statistics_flow_opened' | 'statistics_preview_created' | 'statistics_preview_confirmed' | 'crm_request_created', objectId?: string) => void }) => {
   const [preferredProfile, setPreferredProfile] = useState('');
+  const [crmRequest, setCrmRequest] = useState<{ crm_name?: string; status?: string } | null>(null);
+  useEffect(() => { void fetch(`/api/business/${businessId}/crm-integration-requests`, { headers: authOnlyHeaders() }).then(readJson<{ requests?: Array<{ crm_name?: string; status?: string }> }>).then((result) => setCrmRequest(result.requests?.[0] || null)).catch(() => setCrmRequest(null)); }, [businessId]);
   const openYclientsImport = () => {
     setPreferredProfile('yclients_stats');
     window.requestAnimationFrame(() => document.getElementById('finance-file-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
-  return <div className="space-y-4"><FinanceCrmMobilePanel onOpenFileImport={openYclientsImport} onRequestCrm={requestCrm} /><FinanceImport businessId={businessId} dashboard={dashboard} reload={reload} preferredProfile={preferredProfile} trackProduct={trackProduct} /><FinanceThresholds businessId={businessId} reload={reload} /><FinanceRoi /><FinanceTransactions businessId={businessId} reload={reload} /></div>;
+  const submitCrm = async (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => { await requestCrm(values); setCrmRequest({ crm_name: values.crmName, status: 'open' }); };
+  return <div className="space-y-4"><FinanceCrmMobilePanel onOpenFileImport={openYclientsImport} onRequestCrm={submitCrm} currentRequest={crmRequest} /><FinanceImport businessId={businessId} dashboard={dashboard} reload={reload} preferredProfile={preferredProfile} trackProduct={trackProduct} /><FinanceThresholds businessId={businessId} reload={reload} /><FinanceRoi /><FinanceTransactions businessId={businessId} reload={reload} /></div>;
 };
 
 const FinanceThresholds = ({ businessId, reload }: { businessId: string; reload: () => Promise<void> }) => {
@@ -1498,7 +1501,7 @@ const ModuleUnavailable = () => <Empty icon={CircleEllipsis} title="Раздел
 const NotificationSettings = ({ preferences, saving, save }: { preferences: NotificationPreferences; saving: boolean; save: (preferences: NotificationPreferences) => Promise<void> }) => {
   const [value, setValue] = useState<NotificationPreferences>(preferences);
   useEffect(() => setValue(preferences), [preferences]);
-  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утреннее саммари', 'Только реальные задачи'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или интеграция требует внимания'], ['agent_results', 'ИИ-сотрудники', 'Результат готов к review']];
+  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утреннее саммари', 'Только реальные задачи'], ['finance_rhythm', 'Ритм статистики', 'Один раз перед сроком и один — после'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или интеграция требует внимания'], ['agent_results', 'ИИ-сотрудники', 'Результат готов к review']];
   return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div><button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
 };
 

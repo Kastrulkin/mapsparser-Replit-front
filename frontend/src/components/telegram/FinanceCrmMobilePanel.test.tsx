@@ -33,7 +33,7 @@ describe('FinanceCrmMobilePanel', () => {
     await userEvent.type(screen.getByLabelText(/Что хотите загружать/), 'Продажи за месяц');
     await userEvent.click(screen.getByRole('button', { name: 'Отправить запрос' }));
 
-    expect(onRequestCrm).toHaveBeenCalledWith({ crmName: 'Bitrix24', comment: 'Продажи за месяц' });
+    expect(onRequestCrm).toHaveBeenCalledWith({ crmName: 'Bitrix24', crmUrl: '', contact: '', comment: 'Продажи за месяц' });
     expect(await screen.findByRole('status')).toHaveTextContent('Запрос отправлен');
   });
 

@@ -74,7 +74,7 @@ describe('ProgressPage localization', () => {
     window.localStorage.clear();
     window.localStorage.setItem('language', 'tr');
     vi.mocked(newAuth.makeRequest).mockImplementation((url: string) => {
-      if (url.endsWith('/growth-overview')) return Promise.resolve(overview);
+      if (url.startsWith('/operator/progress?')) return Promise.resolve(overview);
       return Promise.resolve({ success: true, status: 'idle' });
     });
   });
@@ -119,7 +119,7 @@ describe('ProgressPage localization', () => {
   it('shows the data freshness action when the overview reports missing analytics inputs', async () => {
     window.localStorage.setItem('language', 'ru');
     vi.mocked(newAuth.makeRequest).mockImplementation((url: string) => {
-      if (url.endsWith('/growth-overview')) {
+      if (url.startsWith('/operator/progress?')) {
         return Promise.resolve({
           ...overview,
           data_health: {

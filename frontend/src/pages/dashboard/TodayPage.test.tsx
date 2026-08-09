@@ -8,6 +8,7 @@ import { TodayPage } from './TodayPage';
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));
 
 const ContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1' }} />;
+const NetworkContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1', controlScope: { kind: 'network', id: 'network-1', name: 'Сеть' } }} />;
 const renderPage = () => render(<MemoryRouter><Routes><Route element={<ContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
 
 describe('TodayPage', () => {
@@ -26,7 +27,7 @@ describe('TodayPage', () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     renderPage();
     expect(await screen.findByText('За последние 24 часа новых отзывов, продаж и других подтверждённых событий не найдено.')).toBeInTheDocument();
-    expect(screen.getByText('Сейчас нет активной работы, которую LocalOS выполняет в этом бизнесе.')).toBeInTheDocument();
+    expect(screen.getByText('Сейчас нет активной работы, которую LocalOS выполняет в этом контуре.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Открыть прогресс' })).toBeInTheDocument();
   });
 
@@ -48,5 +49,12 @@ describe('TodayPage', () => {
     expect(await screen.findByText('Получен новый отзыв')).toBeInTheDocument();
     expect(screen.getByText('Результаты LocalOS')).toBeInTheDocument();
     expect(screen.getByText('Подготовлен черновик ответа')).toBeInTheDocument();
+  });
+
+  it('loads the neutral today endpoint for the selected network scope', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
+    render(<MemoryRouter><Routes><Route element={<NetworkContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
+    await screen.findByText('Что изменилось');
+    expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=network&scope_id=network-1', { method: 'GET' });
   });
 });

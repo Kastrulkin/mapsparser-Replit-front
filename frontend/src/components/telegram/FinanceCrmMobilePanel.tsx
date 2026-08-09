@@ -4,15 +4,27 @@ import { ChevronRight, FileSpreadsheet, MessageCircle, Upload } from 'lucide-rea
 
 type FinanceCrmMobilePanelProps = {
   onOpenFileImport: () => void;
-  onRequestCrm: (values: { crmName: string; comment: string }) => Promise<void>;
+  onRequestCrm: (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => Promise<void>;
+  currentRequest?: { crm_name?: string; status?: string } | null;
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
 
-const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm }: FinanceCrmMobilePanelProps) => {
+const requestStatusLabel = (status?: string) => {
+  if (status === 'reviewing') return 'Изучаем подключение';
+  if (status === 'planned') return 'Запланировано';
+  if (status === 'connected') return 'Подключено';
+  if (status === 'declined') return 'Пока не поддерживается';
+  if (status === 'closed') return 'Запрос закрыт';
+  return 'Запрос получен';
+};
+
+const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest }: FinanceCrmMobilePanelProps) => {
   const [instructionOpen, setInstructionOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [crmName, setCrmName] = useState('');
+  const [crmUrl, setCrmUrl] = useState('');
+  const [contact, setContact] = useState('');
   const [comment, setComment] = useState('');
   const [requestState, setRequestState] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [requestError, setRequestError] = useState('');
@@ -21,7 +33,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm }: FinanceCrmMob
     if (!crmName.trim() || requestState === 'pending') return;
     setRequestState('pending'); setRequestError('');
     try {
-      await onRequestCrm({ crmName: crmName.trim(), comment: comment.trim() });
+      await onRequestCrm({ crmName: crmName.trim(), crmUrl: crmUrl.trim(), contact: contact.trim(), comment: comment.trim() });
       setRequestState('success');
     } catch (error) {
       setRequestState('error');
@@ -109,9 +121,12 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm }: FinanceCrmMob
             <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Напишите её название. Мы учтём ваш запрос и подскажем доступный способ загрузки.</p>
           </div>
         </div>
+        {currentRequest && requestState !== 'success' ? <div className="mt-3 rounded-[15px] bg-sky-500/10 p-3 text-xs leading-5 text-sky-100 ring-1 ring-inset ring-sky-400/20"><b>{currentRequest.crm_name}</b> · {requestStatusLabel(currentRequest.status)}</div> : null}
         {requestState === 'success' ? <div role="status" className="mt-3 rounded-[15px] bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100 ring-1 ring-inset ring-emerald-400/20">Запрос отправлен. Мы учтём CRM и подскажем, когда появится подходящий способ загрузки.</div> : requestOpen ? (
           <form className="mt-3 space-y-2" onSubmit={(event) => void submitRequest(event)}>
             <label className="block text-[10px] font-medium text-zinc-500">Название CRM<input autoFocus value={crmName} onChange={(event) => { setCrmName(event.target.value); setRequestState('idle'); }} placeholder="Например, Bitrix24" className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
+            <label className="block text-[10px] font-medium text-zinc-500">Ссылка на CRM <span className="text-zinc-700">(необязательно)</span><input inputMode="url" value={crmUrl} onChange={(event) => setCrmUrl(event.target.value)} placeholder="https://..." className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
+            <label className="block text-[10px] font-medium text-zinc-500">Как связаться <span className="text-zinc-700">(необязательно)</span><input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Telegram, email или телефон" className="mt-1 min-h-11 w-full rounded-[13px] bg-black/20 px-3 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
             <label className="block text-[10px] font-medium text-zinc-500">Что хотите загружать? <span className="text-zinc-700">(необязательно)</span><textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={2} placeholder="Например, продажи за месяц" className="mt-1 w-full resize-none rounded-[13px] bg-black/20 px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
             {requestState === 'error' ? <p role="alert" className="text-xs leading-5 text-rose-200">{requestError}</p> : null}
             <button type="submit" disabled={!crmName.trim() || requestState === 'pending'} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-white/[0.08] px-4 text-sm font-semibold text-zinc-100 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96] disabled:opacity-45">{requestState === 'pending' ? 'Отправляем запрос…' : 'Отправить запрос'}</button>

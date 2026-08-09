@@ -23,6 +23,7 @@ from core.industry_pattern_recalibration import (
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.llm import analyze_text_with_gigachat
 from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
+from services.operator_mobile_today import build_mobile_today
 from services.superadmin_telegram_notifications import build_superadmin_morning_operations_block
 from services.telegram_control_scope import resolve_control_scope
 
@@ -1620,6 +1621,23 @@ def _format_event_line(event: dict[str, Any]) -> str:
     return f"• {action_label}: {event.get('message') or 'выполнено'}"
 
 
+def _format_daily_focus_for_telegram(today: dict[str, Any]) -> str:
+    scope = today.get("scope") if isinstance(today.get("scope"), dict) else {}
+    focus = today.get("focus_action") if isinstance(today.get("focus_action"), dict) else None
+    scope_name = str(scope.get("name") or scope.get("business_name") or scope.get("network_name") or "Бизнес")
+    if not focus:
+        return f"LocalOS · {scope_name}\nСегодня всё под контролем."
+    lines = [
+        f"LocalOS · {scope_name}",
+        "Сейчас важнее всего",
+        str(focus.get("title") or "Откройте главную задачу"),
+    ]
+    reason = str(focus.get("reason") or "").strip()
+    if reason:
+        lines.append(reason)
+    return "\n".join(lines)
+
+
 def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
     ensure_card_automation_tables(conn)
     cursor = conn.cursor()
@@ -1752,12 +1770,12 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
                     )
                 if not scope:
                     continue
-                summary = build_operator_scope_summary(
+                today = build_mobile_today(
                     cursor,
                     scope=scope,
                     user_id=str(bucket.get("owner_id") or ""),
                 )
-                business_sections.append(format_scope_summary_for_telegram(summary))
+                business_sections.append(_format_daily_focus_for_telegram(today))
         if not sent_date:
             continue
         if not bool(bucket.get("is_superadmin")) and not business_sections:

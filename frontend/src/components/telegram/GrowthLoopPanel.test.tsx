@@ -30,4 +30,35 @@ describe('GrowthLoopPanel', () => {
     expect(screen.getByText('Данных пока нет')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
   });
+
+  it('shows at most five problem locations with their rhythm and analytics unlock', async () => {
+    const onOpenLocation = vi.fn();
+    const locations = Array.from({ length: 6 }, (_, index) => ({
+      business_id: `business-${index + 1}`,
+      business_name: `Точка ${index + 1}`,
+      data_health: { status: index === 0 ? 'missing' : 'stale' },
+      rhythm: { label: index === 0 ? 'Ритм ещё не начат' : 'Ритм формируется' },
+      analytics_level: { label: 'Нужны данные', next_unlock: 'Загрузите свежую сводку.' },
+    }));
+    render(<GrowthLoopPanel scopeKind="network" dataHealth={{ status: 'missing' }} networkSummary={{ locations_count: 6, problem_locations_count: 6, healthy_locations_count: 0, finance: { total: 6, fresh: 0, due: 0, stale: 5, missing: 1 } }} problemLocations={locations.map((location) => ({ business_id: location.business_id, business_name: location.business_name, data_health_status: location.data_health.status, target_scope: { kind: 'business', id: location.business_id } }))} locationBreakdown={locations} analyticsModules={[{ key: 'sales', label: 'Продажи и средний чек', status: 'available' }, { key: 'services', label: 'Услуги и допродажи', status: 'locked', next_unlock: 'Добавьте данные: услуги и допродажи.' }]} onOpenImport={vi.fn()} onOpenLocation={onOpenLocation} />);
+
+    expect(screen.getByText('Сводка сети')).toBeVisible();
+    expect(screen.getByText('6 точек')).toBeVisible();
+    expect(screen.getByText('Ритм ещё не начат')).toBeVisible();
+    expect(screen.getByText('Продажи и средний чек')).toBeVisible();
+    expect(screen.getByText('Обновить')).toBeVisible();
+    expect(screen.queryByText('Точка 6')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Точка 1/ }));
+    expect(onOpenLocation).toHaveBeenCalledWith('business-1', 'finance_import');
+  });
+
+  it('opens a card problem in cards instead of the finance import', async () => {
+    const onOpenLocation = vi.fn();
+    render(<GrowthLoopPanel scopeKind="network" dataHealth={{ status: 'fresh' }} networkSummary={{ locations_count: 2 }} problemLocations={[{ business_id: 'business-2', business_name: 'Север', data_health_status: 'fresh', problem_areas: ['maps'], focus_action: { cta_url: '/dashboard/card' }, target_scope: { kind: 'business', id: 'business-2' } }]} locationBreakdown={[{ business_id: 'business-2', business_name: 'Север', data_health: { status: 'fresh' } }]} onOpenImport={vi.fn()} onOpenLocation={onOpenLocation} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Север/ }));
+    expect(onOpenLocation).toHaveBeenCalledWith('business-2', 'cards');
+  });
 });

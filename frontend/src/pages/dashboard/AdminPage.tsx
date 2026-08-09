@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -43,8 +43,11 @@ const CompanyRegistry = lazy(() =>
 const TelegramSourceCatalog = lazy(() =>
   import('../../components/admin/TelegramSourceCatalog').then((module) => ({ default: module.TelegramSourceCatalog })),
 );
+const CrmIntegrationRequestsAdmin = lazy(() =>
+  import('../../components/admin/CrmIntegrationRequestsAdmin').then((module) => ({ default: module.CrmIntegrationRequestsAdmin })),
+);
 
-type AdminTabId = 'businesses' | 'companies' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
+type AdminTabId = 'businesses' | 'companies' | 'subscriptions' | 'crmRequests' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
 interface Business {
   id: string;
   name: string;
@@ -361,6 +364,7 @@ const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
   { id: 'companies', label: 'Компании', icon: Building2 },
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
+  { id: 'crmRequests', label: 'CRM-запросы', icon: PlugZap },
   { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Лиды', icon: Search },
@@ -377,6 +381,7 @@ const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи', icon: User },
   { id: 'companies', label: 'Компании', icon: Building2 },
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
+  { id: 'crmRequests', label: 'CRM-запросы', icon: PlugZap },
   { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Лиды', icon: Search },
@@ -1539,6 +1544,14 @@ export const AdminPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          </DashboardSection>
+        ) : activeTab === 'crmRequests' ? (
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Запросы клиентов на подключение CRM: реальный спрос, контакт и прозрачный статус работы."
+            contentClassName="p-0"
+          >
+            <CrmIntegrationRequestsAdmin />
           </DashboardSection>
         ) : activeTab === 'agents' ? (
           <DashboardSection

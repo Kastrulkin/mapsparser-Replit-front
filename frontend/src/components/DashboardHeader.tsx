@@ -9,6 +9,7 @@ import { BusinessSwitcher } from './BusinessSwitcher';
 import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
 import { LogOut, LogIn, Settings, Bell, Search, UserCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import type { ControlScope } from './DashboardLayout';
 import { DESIGN_TOKENS } from '../lib/design-tokens';
 import {
   AlertDialog,
@@ -28,6 +29,8 @@ interface DashboardHeaderProps {
   isSuperadmin?: boolean;
   user?: any;
   currentBusiness?: any;
+  controlScope?: ControlScope | null;
+  onControlScopeChange?: (scope: ControlScope) => void;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -37,6 +40,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   isSuperadmin = false,
   user: userProp,
   currentBusiness,
+  controlScope,
+  onControlScopeChange,
 }) => {
   const { currency, setCurrency } = useCurrency();
   const navigate = useNavigate();
@@ -112,6 +117,22 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               />
             </div>
           )}
+
+          {currentBusiness?.network_id && onControlScopeChange ? (
+            <Select value={`${controlScope?.kind || 'business'}:${controlScope?.id || currentBusinessId || ''}`} onValueChange={(value) => {
+              if (value === `network:${currentBusiness.network_id}`) {
+                onControlScopeChange({ kind: 'network', id: currentBusiness.network_id, name: currentBusiness.network_name || 'Сеть' });
+                return;
+              }
+              onControlScopeChange({ kind: 'business', id: currentBusinessId || currentBusiness.id, name: currentBusiness.name || 'Бизнес' });
+            }}>
+              <SelectTrigger className="h-11 min-w-[144px] bg-white text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={`business:${currentBusinessId || currentBusiness.id}`}>Текущая точка</SelectItem>
+                <SelectItem value={`network:${currentBusiness.network_id}`}>{currentBusiness.network_name || 'Вся сеть'}</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null}
 
           {/* Fallback Title if no switchers active */}
           {!isSuperadmin && !currentBusiness?.network_id && currentBusiness && (

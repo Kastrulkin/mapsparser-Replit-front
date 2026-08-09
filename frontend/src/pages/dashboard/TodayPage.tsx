@@ -6,23 +6,35 @@ import { Button } from '@/components/ui/button';
 import { DashboardEmptyState, DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import type { ControlScope } from '@/components/DashboardLayout';
 
-type DashboardContext = { currentBusinessId?: string | null };
+type DashboardContext = { currentBusinessId?: string | null; controlScope?: ControlScope | null; onControlScopeChange?: (scope: ControlScope) => void; onBusinessChange?: (businessId: string) => void };
 
-type Mission = { id?: string; title: string; reason: string; expected_outcome: string; cta_label: string; screen?: string };
-type TodayItem = { id: string; title: string; description?: string; stage?: string; source?: string; occurred_at?: string; progress?: number | null; screen?: string; business_name?: string };
+type Mission = { id?: string; title: string; reason: string; expected_outcome: string; cta_label: string; screen?: string; cta_url?: string; target_scope?: { kind?: string; id?: string } };
+type TodayItem = { id: string; title: string; description?: string; stage?: string; source?: string; occurred_at?: string; progress?: number | null; screen?: string; business_id?: string; business_name?: string };
+type ProblemLocation = { business_id: string; business_name: string; problem?: string; data_health_status?: string; focus_action?: Mission | null };
 type TodayOverview = {
   focus_action?: Mission | null;
-  data_health?: { source?: string; source_label?: string; updated_at?: string | null; last_updated_at?: string | null; stale?: boolean; is_stale?: boolean; missing?: string[] } | null;
+  data_health?: { status?: string; source?: string; source_label?: string; source_updated_at?: string | null; updated_at?: string | null; last_updated_at?: string | null; stale?: boolean; is_stale?: boolean; missing?: string[] } | null;
   active_work?: TodayItem[];
   changes_24h?: TodayItem[];
   community_pulse?: TodayItem[];
   completed_results?: TodayItem[];
+  network_summary?: { locations_count?: number; problem_locations_count?: number; healthy_locations_count?: number; finance?: { missing?: number; stale?: number; due?: number; fresh?: number } } | null;
+  problem_locations?: ProblemLocation[];
+  data_rhythm?: { status?: string; coverage?: number; completed_periods_8w?: number; next_due_at?: string | null } | null;
+  analytics_modules?: Array<{ key?: string; label?: string; status?: string; next_unlock?: string | null }>;
 };
 
 const screenRoute = (screen?: string) => ({
   cards: '/dashboard/card', reviews: '/dashboard/card?tab=reviews', content: '/dashboard/content', services: '/dashboard/card?tab=services', finance: '/dashboard/finance', partnerships: '/dashboard/partnerships', agents: '/dashboard/agents', settings: '/dashboard/settings', progress: '/dashboard/progress', operator: '/dashboard/operator',
 }[screen || ''] || '/dashboard/progress');
+
+const missionRoute = (mission?: Mission | null) => {
+  if (mission?.screen) return screenRoute(mission.screen);
+  if (mission?.cta_url?.startsWith('/dashboard/')) return mission.cta_url;
+  return '/dashboard/progress';
+};
 
 const formatDate = (value?: string | null) => {
   if (!value) return null;
@@ -32,7 +44,7 @@ const formatDate = (value?: string | null) => {
 
 export const TodayPage = () => {
   const navigate = useNavigate();
-  const { currentBusinessId } = useOutletContext<DashboardContext>();
+  const { currentBusinessId, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardContext>();
   const [overview, setOverview] = useState<TodayOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -48,7 +60,7 @@ export const TodayPage = () => {
     }
     setLoading(true);
     setError(false);
-    const params = new URLSearchParams({ scope_type: 'business', scope_id: currentBusinessId });
+    const params = new URLSearchParams({ scope_type: controlScope?.kind || 'business', scope_id: controlScope?.id || currentBusinessId });
     let request: Promise<TodayOverview>;
     try {
       request = newAuth.makeRequest(`/operator/today?${params.toString()}`, { method: 'GET' });
@@ -71,15 +83,36 @@ export const TodayPage = () => {
       });
   };
 
-  useEffect(() => { load(); }, [currentBusinessId]);
+  useEffect(() => { load(); }, [currentBusinessId, controlScope?.id, controlScope?.kind]);
+
+  const openItem = (itemMission?: Mission | null, businessId?: string, businessName?: string) => {
+    if (businessId && controlScope?.kind === 'network') {
+      onBusinessChange?.(businessId);
+      onControlScopeChange?.({ kind: 'business', id: businessId, name: businessName || 'Точка сети' });
+    }
+    navigate(missionRoute(itemMission));
+  };
+
+  const openMission = () => {
+    const target = mission?.target_scope;
+    if (target?.kind === 'business' && target.id) {
+      onBusinessChange?.(target.id);
+      onControlScopeChange?.({ kind: 'business', id: target.id, name: 'Точка сети' });
+    }
+    navigate(missionRoute(mission));
+  };
 
   const mission = overview?.focus_action || null;
   const activeWork = useMemo(() => (overview?.active_work || []).slice(0, 3), [overview?.active_work]);
   const changes = overview?.changes_24h?.slice(0, 3) || [];
   const completedResults = overview?.completed_results?.slice(0, 3) || [];
   const communityPulse = overview?.community_pulse?.slice(0, 2) || [];
+  const networkSummary = overview?.network_summary;
+  const problemLocations = overview?.problem_locations?.slice(0, 5) || [];
+  const dataRhythm = overview?.data_rhythm;
+  const analyticsModules = overview?.analytics_modules || [];
   const dataHealth = overview?.data_health;
-  const dataNeedsAttention = Boolean(dataHealth?.stale || dataHealth?.is_stale || dataHealth?.missing?.length);
+  const dataNeedsAttention = Boolean(['missing', 'stale', 'due'].includes(dataHealth?.status || '') || dataHealth?.stale || dataHealth?.is_stale || dataHealth?.missing?.length);
 
   if (!currentBusinessId) return <DashboardEmptyState title="Выберите бизнес" description="После выбора здесь появятся изменения, текущая работа LocalOS и ближайший шаг." />;
 
@@ -93,7 +126,7 @@ export const TodayPage = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
-      <DashboardPageHeader eyebrow="LocalOS" title="Сегодня" description="Что изменилось, над чем идёт работа и один следующий шаг для выбранного бизнеса." icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />Обновить</Button>} />
+      <DashboardPageHeader eyebrow={controlScope?.kind === 'network' ? 'LocalOS · сеть' : 'LocalOS'} title="Сегодня" description="Что изменилось, над чем идёт работа и один следующий шаг для выбранного контура." icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />Обновить</Button>} />
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)] lg:items-center">
@@ -103,17 +136,40 @@ export const TodayPage = () => {
             <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{mission?.reason || 'LocalOS пока не нашёл подтверждённого следующего действия. Откройте прогресс, чтобы проверить доступные данные.'}</p>
             {mission ? <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700"><strong>Результат:</strong> {mission.expected_outcome}</div> : null}
           </div>
-          <Button type="button" onClick={() => navigate(screenRoute(mission?.screen))} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{mission?.cta_label || 'Открыть прогресс'}<ArrowRight className="h-4 w-4" /></Button>
+          <Button type="button" onClick={openMission} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{mission?.cta_label || 'Открыть прогресс'}<ArrowRight className="h-4 w-4" /></Button>
         </div>
       </section>
+
+      {controlScope?.kind === 'network' && networkSummary ? (
+        <DashboardSection title="Сеть под контролем" description="Сначала — общая картина, ниже — точки, где сейчас нужен человек.">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-slate-50 px-4 py-3"><strong className="block text-2xl tabular-nums text-slate-950">{networkSummary.locations_count || 0}</strong><span className="text-sm text-slate-600">точек в сети</span></div>
+            <div className="rounded-2xl bg-emerald-50 px-4 py-3"><strong className="block text-2xl tabular-nums text-emerald-800">{networkSummary.healthy_locations_count || 0}</strong><span className="text-sm text-emerald-900">в порядке</span></div>
+            <div className="rounded-2xl bg-amber-50 px-4 py-3"><strong className="block text-2xl tabular-nums text-amber-800">{networkSummary.problem_locations_count || 0}</strong><span className="text-sm text-amber-900">требуют внимания</span></div>
+          </div>
+          {problemLocations.length ? <div className="mt-4 divide-y divide-slate-100">{problemLocations.map((location) => (
+            <button key={location.business_id} type="button" onClick={() => openItem(location.focus_action, location.business_id, location.business_name)} className="flex min-h-16 w-full items-center gap-3 py-3 text-left transition-transform active:scale-[0.96]">
+              <span className="min-w-0 flex-1"><strong className="block text-sm text-slate-950">{location.business_name}</strong><span className="mt-1 block text-pretty text-sm text-slate-600">{location.problem || 'Точка требует внимания.'}</span></span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+          ))}</div> : <p className="mt-4 text-sm text-emerald-800">Все активные точки сети сейчас в порядке.</p>}
+        </DashboardSection>
+      ) : null}
+
+      {dataRhythm || analyticsModules.length ? (
+        <DashboardSection title="Ритм данных" description="Регулярная сводка открывает аналитику среднего чека, допродаж и загрузки — без ведения CRM в LocalOS.">
+          {dataRhythm ? <div className="rounded-2xl bg-slate-50 px-4 py-3"><div className="flex items-center justify-between gap-3 text-sm"><span className="text-slate-600">Актуальность выбранного контура</span><strong className="tabular-nums text-slate-950">{dataRhythm.coverage || 0}%</strong></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(100, Math.max(0, dataRhythm.coverage || 0))}%` }} /></div><p className="mt-2 text-sm text-slate-600">Подтверждено недель за последние восемь: <span className="tabular-nums">{dataRhythm.completed_periods_8w || 0}</span>{formatDate(dataRhythm.next_due_at) ? ` · следующее обновление ${formatDate(dataRhythm.next_due_at)}` : ''}</p></div> : null}
+          {analyticsModules.length ? <div className="mt-3 flex flex-wrap gap-2">{analyticsModules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{module.label}: {module.status === 'ready' ? 'готово' : module.status === 'available' ? 'обновить данные' : 'нужны данные'}</span>)}</div> : null}
+        </DashboardSection>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <DashboardSection title="Что изменилось" description="Новые события бизнеса за последние 24 часа — отдельно от работы LocalOS.">
           {changes.length ? <div className="divide-y divide-slate-100">{changes.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><div className="font-medium text-slate-950">{item.title}</div><p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.description}</p>{formatDate(item.occurred_at) ? <div className="mt-1 text-xs tabular-nums text-slate-400">{formatDate(item.occurred_at)}</div> : null}</div></div>)}</div> : <p className="text-sm leading-6 text-slate-600">За последние 24 часа новых отзывов, продаж и других подтверждённых событий не найдено.</p>}
         </DashboardSection>
 
-        <DashboardSection title="Что LocalOS делает" description="Текущие направления и состояния без предположений о внешних действиях.">
-          {activeWork.length ? <div className="space-y-3">{activeWork.map((item) => <button key={item.id} type="button" onClick={() => navigate(screenRoute(item.screen))} className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><div className="flex items-start gap-2"><Bot className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0 flex-1"><div className="font-medium text-slate-950">{item.title}</div><p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.stage || item.description}</p></div>{item.progress == null ? null : <span className="text-sm tabular-nums text-slate-500">{item.progress}%</span>}</div></button>)}</div> : <p className="text-sm leading-6 text-slate-600">Сейчас нет активной работы, которую LocalOS выполняет в этом бизнесе.</p>}
+        <DashboardSection title="Что LocalOS делает" description="Только реально выполняемые задачи. Для сети у каждой строки сохраняется точка.">
+          {activeWork.length ? <div className="space-y-3">{activeWork.map((item) => <button key={item.id} type="button" onClick={() => openItem({ title: item.title, reason: '', expected_outcome: '', cta_label: '', screen: item.screen }, item.business_id, item.business_name)} className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><div className="flex items-start gap-2"><Bot className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0 flex-1"><div className="font-medium text-slate-950">{item.title}</div><p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{[item.business_name, item.stage || item.description].filter(Boolean).join(' · ')}</p></div>{item.progress == null ? null : <span className="text-sm tabular-nums text-slate-500">{item.progress}%</span>}</div></button>)}</div> : <p className="text-sm leading-6 text-slate-600">Сейчас нет активной работы, которую LocalOS выполняет в этом контуре.</p>}
         </DashboardSection>
       </div>
 
@@ -121,7 +177,7 @@ export const TodayPage = () => {
 
       {communityPulse.length ? <DashboardSection title="Пульс сообщества" description="Наблюдения из подключённых источников; это не действие от имени бизнеса."><div className="space-y-3">{communityPulse.map((item) => <div key={item.id} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3"><Radio className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0"><div className="font-medium text-slate-950">{item.title}</div>{item.description ? <p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.description}</p> : null}{item.source ? <div className="mt-1 text-xs text-slate-500">Источник: {item.source}</div> : null}</div></div>)}</div></DashboardSection> : null}
 
-      {dataHealth ? <div className={cn('flex items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-[0_0_0_1px_rgba(15,23,42,0.08)]', dataNeedsAttention ? 'bg-amber-50 text-amber-950' : 'bg-slate-50 text-slate-700')}><TriangleAlert className={cn('mt-0.5 h-5 w-5 shrink-0', dataNeedsAttention ? 'text-amber-700' : 'text-slate-500')} /><div><span className="font-semibold">Источник данных:</span> {dataHealth.source_label || dataHealth.source || 'не указан'}{formatDate(dataHealth.updated_at || dataHealth.last_updated_at) ? <span className="tabular-nums"> · обновлено {formatDate(dataHealth.updated_at || dataHealth.last_updated_at)}</span> : null}{dataNeedsAttention && dataHealth.missing?.length ? <span> · не хватает: {dataHealth.missing.join(', ')}</span> : null}</div></div> : null}
+      {dataHealth ? <div className={cn('flex items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-[0_0_0_1px_rgba(15,23,42,0.08)]', dataNeedsAttention ? 'bg-amber-50 text-amber-950' : 'bg-slate-50 text-slate-700')}><TriangleAlert className={cn('mt-0.5 h-5 w-5 shrink-0', dataNeedsAttention ? 'text-amber-700' : 'text-slate-500')} /><div><span className="font-semibold">Источник данных:</span> {dataHealth.source_label || dataHealth.source || 'не указан'}{formatDate(dataHealth.source_updated_at || dataHealth.updated_at || dataHealth.last_updated_at) ? <span className="tabular-nums"> · обновлено {formatDate(dataHealth.source_updated_at || dataHealth.updated_at || dataHealth.last_updated_at)}</span> : null}{dataNeedsAttention && dataHealth.missing?.length ? <span> · не хватает: {dataHealth.missing.join(', ')}</span> : null}</div></div> : null}
 
       <DashboardSection title="Путь роста" description="Подтверждённые шаги, препятствия и следующий приоритет собраны в одном плане.">
         <Button type="button" variant="outline" onClick={() => navigate('/dashboard/progress')} className="min-h-11 gap-2 transition-transform active:scale-[0.96]">Продолжить путь роста<ArrowRight className="h-4 w-4" /></Button>

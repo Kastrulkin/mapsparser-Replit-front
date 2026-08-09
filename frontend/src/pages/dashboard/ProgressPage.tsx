@@ -27,6 +27,7 @@ import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growt
 import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
+import type { ControlScope } from '@/components/DashboardLayout';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import {
   localizedGrowthArea,
@@ -47,7 +48,10 @@ type GrowthAction = {
   reason: string;
   expected_outcome: string;
   cta_label: string;
-  cta_url: string;
+  cta_url?: string;
+  screen?: string;
+  target_scope?: { kind?: string; id?: string };
+  affected_business_ids?: string[];
   estimated_effect?: {
     kind: string;
     label: string;
@@ -105,6 +109,13 @@ type GrowthOverview = {
     mission?: GrowthAction;
   };
   data_health?: GrowthDataHealth | null;
+  analytics_level?: { label?: string; next_unlock?: string | null } | null;
+  analytics_modules?: Array<{ key?: string; label?: string; status?: string; next_unlock?: string | null }>;
+  data_rhythm?: { coverage?: number; completed_periods_8w?: number; next_due_at?: string | null } | null;
+  rhythm?: { label?: string; active_weeks?: number; status?: string } | null;
+  network_summary?: { locations_count?: number; problem_locations_count?: number; healthy_locations_count?: number } | null;
+  problem_locations?: Array<{ business_id: string; business_name: string; data_health_status?: string; problem_areas?: string[]; focus_action?: GrowthAction | null }>;
+  location_breakdown?: Array<{ business_id: string; business_name: string }>;
   scope?: {
     business_id: string;
     business_name: string;
@@ -118,7 +129,12 @@ type ParseStatus = 'idle' | 'queued' | 'processing' | 'completed' | 'done' | 'er
 
 type DashboardContext = {
   currentBusinessId?: string | null;
+  controlScope?: ControlScope | null;
+  onControlScopeChange?: (scope: ControlScope) => void;
+  onBusinessChange?: (businessId: string) => void;
 };
+
+const screenRoute = (screen?: string) => ({ cards: '/dashboard/card', reviews: '/dashboard/card?tab=reviews', content: '/dashboard/content', finance: '/dashboard/finance', partnerships: '/dashboard/partnerships', agents: '/dashboard/agents', progress: '/dashboard/progress', operator: '/dashboard/operator' }[screen || ''] || '/dashboard/progress');
 
 const AREA_ICONS: Record<GrowthAreaKey, LucideIcon> = {
   maps: MapPinned,
@@ -158,7 +174,7 @@ const AreaRow = ({
   area: GrowthArea;
   expanded: boolean;
   onToggle: () => void;
-  onOpen: (url: string) => void;
+  onOpen: (action: GrowthAction) => void;
   details?: ReactNode;
   language: Language;
   copy: ProgressPageCopy;
@@ -243,7 +259,7 @@ const AreaRow = ({
                   {localizedGrowthText(language, area.action.estimated_effect.label)}: {formatMoney(area.action.estimated_effect.amount, language)} ₽
                 </div>
               ) : null}
-              <Button type="button" variant="outline" className="mt-4 w-full sm:w-auto" onClick={() => onOpen(area.action.cta_url)}>
+              <Button type="button" variant="outline" className="mt-4 w-full sm:w-auto" onClick={() => onOpen(area.action)}>
                 {localizedGrowthText(language, area.action.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -259,7 +275,7 @@ const AreaRow = ({
 export const ProgressPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentBusinessId } = useOutletContext<DashboardContext>();
+  const { currentBusinessId, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = progressPageCopyForLanguage(language);
   const [overviewData, setOverviewData] = useState<GrowthOverview | null>(null);
@@ -277,10 +293,12 @@ export const ProgressPage = () => {
   const auditSectionRef = useRef<HTMLElement | null>(null);
   const requestedMapsSection = searchParams.get('section') === 'maps';
   const requestedAudit = requestedMapsSection && searchParams.get('audit') === 'open';
-  const overview = overviewBusinessId === currentBusinessId ? overviewData : null;
+  const scopeId = controlScope?.id || currentBusinessId;
+  const scopeKind = controlScope?.kind || 'business';
+  const overview = overviewBusinessId === scopeId ? overviewData : null;
 
   useEffect(() => {
-    if (!currentBusinessId) {
+    if (!scopeId) {
       setOverviewData(null);
       setOverviewBusinessId(null);
       setLoading(false);
@@ -291,13 +309,16 @@ export const ProgressPage = () => {
     setLoading(true);
     setError(null);
     void newAuth.makeRequest(
-      `/business/${currentBusinessId}/growth-overview`,
+      `/operator/progress?${new URLSearchParams({ scope_type: scopeKind, scope_id: scopeId }).toString()}`,
       { method: 'GET', signal: controller.signal },
     ).then((data: GrowthOverview) => {
       if (controller.signal.aborted) return;
+      if (!data?.summary || !Array.isArray(data.areas)) {
+        throw new Error(copy.loadErrorTitle);
+      }
       setOverviewData(data);
-      setOverviewBusinessId(currentBusinessId);
-      const focusArea = data.areas.find((area) => area.action.cta_url === data.focus_action?.cta_url);
+      setOverviewBusinessId(scopeId);
+      const focusArea = data.areas.find((area) => (area.action.cta_url || area.action.screen) === (data.focus_action?.cta_url || data.focus_action?.screen));
       setExpandedArea((current) => current ?? focusArea?.key ?? data.areas[0]?.key ?? null);
 
       const locations = data.scope?.locations || [];
@@ -315,7 +336,7 @@ export const ProgressPage = () => {
     });
 
     return () => controller.abort();
-  }, [copy.loadErrorTitle, currentBusinessId, overviewRefreshKey]);
+  }, [copy.loadErrorTitle, currentBusinessId, overviewRefreshKey, scopeId, scopeKind]);
 
   useEffect(() => {
     setExpandedArea(requestedMapsSection ? 'maps' : null);
@@ -324,7 +345,7 @@ export const ProgressPage = () => {
     setSelectedAuditBusinessId(null);
     setParseStatus('idle');
     parseStatusRef.current = 'idle';
-  }, [currentBusinessId]);
+  }, [currentBusinessId, scopeId]);
 
   useEffect(() => {
     if (requestedMapsSection) setExpandedArea('maps');
@@ -423,16 +444,34 @@ export const ProgressPage = () => {
   const mapAuditMilestone = mapsArea?.milestones.find((milestone) => milestone.key === 'map_audited');
   const networkLocations = overview?.scope?.locations || [];
   const selectedAuditLocation = networkLocations.find((location) => location.id === selectedAuditBusinessId);
-  const currentMission = overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || overview?.focus_action || null;
+  const currentMission = overview?.focus_action || overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || null;
+  const openProblemLocation = (location: NonNullable<GrowthOverview['problem_locations']>[number]) => {
+    onBusinessChange?.(location.business_id);
+    onControlScopeChange?.({ kind: 'business', id: location.business_id, name: location.business_name });
+    navigate(location.focus_action?.cta_url || screenRoute(location.focus_action?.screen));
+  };
   const openMission = () => {
     if (!currentMission) return;
     trackProductEvent({
       eventName: 'mission_open',
       businessId: currentBusinessId,
       objectType: 'growth_mission',
-      objectId: overview?.growth_loop?.mission_id || currentMission.cta_url,
+      objectId: overview?.growth_loop?.mission_id || currentMission.cta_url || currentMission.screen,
     });
-    navigate(currentMission.cta_url || '/dashboard/progress');
+    if (currentMission.target_scope?.kind === 'business' && currentMission.target_scope.id) {
+      const targetName = overview.location_breakdown?.find((location) => location.business_id === currentMission.target_scope?.id)?.business_name || 'Точка сети';
+      onBusinessChange?.(currentMission.target_scope.id);
+      onControlScopeChange?.({ kind: 'business', id: currentMission.target_scope.id, name: targetName });
+    }
+    navigate(currentMission.cta_url || screenRoute(currentMission.screen));
+  };
+  const openAreaAction = (action: GrowthAction) => {
+    if (action.target_scope?.kind === 'business' && action.target_scope.id) {
+      const targetName = overview.location_breakdown?.find((location) => location.business_id === action.target_scope?.id)?.business_name || 'Точка сети';
+      onBusinessChange?.(action.target_scope.id);
+      onControlScopeChange?.({ kind: 'business', id: action.target_scope.id, name: targetName });
+    }
+    navigate(action.cta_url || screenRoute(action.screen));
   };
 
   if (!currentBusinessId) {
@@ -497,6 +536,17 @@ export const ProgressPage = () => {
 
       <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
 
+      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">Аналитика: {overview.analytics_level?.label || 'в процессе'}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">Следующий уровень: {overview.analytics_level.next_unlock}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">Ритм: {overview.rhythm.label}</span> : null}</div> : null}
+
+      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{module.label}: {module.status === 'ready' ? 'готово' : module.status === 'available' ? 'обновить' : 'нужны данные'}</span>)}</div> : null}
+
+      {scopeKind === 'network' && overview.network_summary ? (
+        <section className="rounded-2xl bg-slate-50 px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> точек в сети</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> требуют внимания</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> без открытых проблем</span></div>
+          {overview.problem_locations?.length ? <div className="mt-3 flex flex-wrap gap-2">{overview.problem_locations.slice(0, 6).map((location) => <Button key={location.business_id} type="button" variant="outline" className="min-h-11" onClick={() => openProblemLocation(location)}>{location.business_name}<ArrowRight className="ml-2 h-4 w-4" /></Button>)}</div> : null}
+        </section>
+      ) : null}
+
       <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
         <div data-tour-target="progress-summary">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.confirmedPath}</div>
@@ -550,7 +600,7 @@ export const ProgressPage = () => {
             area={area}
             expanded={expandedArea === area.key}
             onToggle={() => setExpandedArea((current) => current === area.key ? null : area.key)}
-            onOpen={navigate}
+            onOpen={openAreaAction}
             language={language}
             copy={copy}
             details={area.key === 'maps' ? (

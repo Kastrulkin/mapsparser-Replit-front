@@ -537,20 +537,48 @@ def _load_scope(cursor: Any, business_id: str) -> dict[str, Any]:
     if not business:
         raise ValueError("Бизнес не найден")
     network_id = _row_value(business, "network_id")
-    owner_id = _row_value(business, "owner_id")
-    if network_id:
-        cursor.execute(
-            "SELECT id, name FROM businesses WHERE network_id = %s AND owner_id = %s ORDER BY name",
-            (network_id, owner_id),
-        )
-        locations = [dict(row) for row in (cursor.fetchall() or [])]
-    else:
-        locations = [{"id": business_id, "name": _row_value(business, "name") or "Бизнес"}]
+    locations = [{"id": business_id, "name": _row_value(business, "name") or "Бизнес"}]
     return {
+        "kind": "business",
+        "id": business_id,
         "business_id": business_id,
         "business_name": _row_value(business, "name") or "Бизнес",
         "network_id": network_id,
-        "is_network": len(locations) > 1,
+        "is_network": False,
+        "locations_count": 1,
+        "locations": locations,
+        "business_ids": [business_id],
+    }
+
+
+def _load_network_scope(cursor: Any, network_id: str, allowed_business_ids: list[str] | None = None) -> dict[str, Any]:
+    cursor.execute("SELECT id, name FROM networks WHERE id = %s", (network_id,))
+    network = cursor.fetchone()
+    if not network:
+        raise ValueError("Сеть не найдена")
+    params: list[Any] = [network_id, network_id]
+    allowed_clause = ""
+    if allowed_business_ids is not None:
+        allowed_clause = "AND id::text = ANY(%s)"
+        params.append([str(item) for item in allowed_business_ids if str(item)])
+    cursor.execute(
+        f"""
+        SELECT id, name
+        FROM businesses
+        WHERE network_id = %s AND id <> %s
+          AND COALESCE(is_active, TRUE) = TRUE
+          {allowed_clause}
+        ORDER BY name
+        """,
+        tuple(params),
+    )
+    locations = [dict(row) for row in (cursor.fetchall() or [])]
+    return {
+        "kind": "network",
+        "id": network_id,
+        "network_id": network_id,
+        "network_name": _row_value(network, "name") or "Сеть",
+        "is_network": True,
         "locations_count": len(locations),
         "locations": locations,
         "business_ids": [str(item["id"]) for item in locations],
@@ -790,79 +818,461 @@ def _load_upsells(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
     }
 
 
-def load_growth_overview(business_id: str) -> dict[str, Any]:
+def _build_scope_snapshot(cursor: Any, connection: Any, scope: dict[str, Any], business_ids: list[str]) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {"scope": {key: value for key, value in scope.items() if key != "business_ids"}}
+    loaders = {
+        "maps": _load_maps,
+        "content": _load_content,
+        "partnerships": _load_partnerships,
+        "automation": _load_automation,
+        "upsells": _load_upsells,
+    }
+    for key, loader in loaders.items():
+        try:
+            snapshot[key] = loader(cursor, business_ids)
+        except Exception:
+            connection.rollback()
+            logger.warning("Growth overview source is unavailable: %s", key, exc_info=True)
+            snapshot[key] = {"available": False}
+    try:
+        snapshot["finance_data"] = load_finance_data_health(cursor, business_ids)
+    except Exception:
+        connection.rollback()
+        logger.warning("Growth overview finance health is unavailable", exc_info=True)
+        snapshot["finance_data"] = {}
+    return snapshot
+
+
+def _affected_business_ids(location_breakdown: list[dict[str, Any]], area_key: str | None = None) -> list[str]:
+    affected = []
+    for location in location_breakdown:
+        if area_key:
+            area = next((item for item in location.get("areas") or [] if item.get("key") == area_key), None)
+            needs_work = isinstance(area, dict) and area.get("status") not in {"healthy", "unavailable"}
+        else:
+            needs_work = str((location.get("data_health") or {}).get("status") or "missing") in {"missing", "stale"}
+        if needs_work and location.get("business_id"):
+            affected.append(str(location["business_id"]))
+    return affected
+
+
+def _target_scope(scope: dict[str, Any], affected_ids: list[str]) -> dict[str, Any]:
+    if len(affected_ids) == 1:
+        return {"kind": "business", "id": affected_ids[0]}
+    return {"kind": str(scope.get("kind") or "business"), "id": scope.get("id") or scope.get("business_id")}
+
+
+def _attach_scope_targets(overview: dict[str, Any], scope: dict[str, Any], location_breakdown: list[dict[str, Any]]) -> None:
+    for area in overview.get("areas") or []:
+        area_key = str(area.get("key") or "")
+        affected = _affected_business_ids(location_breakdown, area_key)
+        action = area.get("action")
+        if isinstance(action, dict):
+            action["affected_business_ids"] = affected
+            action["target_scope"] = _target_scope(scope, affected)
+    focus = overview.get("focus_action")
+    if isinstance(focus, dict):
+        focus_url = str(focus.get("cta_url") or "")
+        if "finance" in focus_url:
+            affected = _affected_business_ids(location_breakdown)
+        else:
+            area_key = next((key for key in AREA_ORDER if any(item.get("key") == key and item.get("action", {}).get("cta_url") == focus_url for item in overview.get("areas") or [])), None)
+            affected = _affected_business_ids(location_breakdown, area_key) if area_key else []
+        focus["affected_business_ids"] = affected
+        focus["target_scope"] = _target_scope(scope, affected)
+        growth_loop = overview.get("growth_loop")
+        if isinstance(growth_loop, dict):
+            growth_loop["focus"] = focus
+            growth_loop["affected_business_ids"] = affected
+            growth_loop["target_scope"] = focus["target_scope"]
+
+
+def _analytics_modules(data_health: dict[str, Any], rhythm: dict[str, Any]) -> list[dict[str, Any]]:
+    coverage = {str(item) for item in data_health.get("coverage") or []}
+    health_status = str(data_health.get("status") or "missing")
+    is_current = health_status in {"fresh", "due"}
+    active_weeks = int(rhythm.get("active_weeks") or 0)
+    modules = (
+        ("sales", "Продажи и средний чек"),
+        ("services", "Услуги и допродажи"),
+        ("capacity", "Загрузка команды"),
+    )
+    result = []
+    for key, label in modules:
+        covered = key in coverage
+        result.append({
+            "key": key,
+            "label": label,
+            "status": "ready" if covered and is_current else "available" if covered else "locked",
+            "missing_inputs": [] if covered else [label.lower()],
+            "unlocked_at": data_health.get("source_updated_at") if covered else None,
+            "insight": "Аналитика готова к работе." if covered and is_current else None,
+            "cta": None if covered and is_current else {"screen": "finance_import", "label": "Обновить данные" if covered else "Добавить данные"},
+            "next_unlock": None if covered and is_current else ("Обновите сводку за текущий период." if covered else f"Добавьте данные: {label.lower()}."),
+        })
+    trend_ready = active_weeks >= 3
+    result.append({
+        "key": "trend",
+        "label": "Динамика и доказательные рекомендации",
+        "status": "ready" if trend_ready and is_current else "available" if trend_ready else "locked",
+        "missing_inputs": [] if trend_ready else ["данные минимум за три недели"],
+        "unlocked_at": data_health.get("source_updated_at") if trend_ready else None,
+        "insight": "Можно сравнивать периоды и проверять эффект действий." if trend_ready and is_current else None,
+        "cta": None if trend_ready and is_current else {"screen": "finance_import", "label": "Обновить данные" if trend_ready else "Продолжить ритм"},
+        "next_unlock": None if trend_ready and is_current else ("Обновите текущую неделю." if trend_ready else "Добавьте подтверждённые данные ещё за три недели."),
+    })
+    return result
+
+
+def _aggregate_analytics_modules(location_breakdown: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate unlocks strictly: a network module is ready only at every location."""
+    if not location_breakdown:
+        return []
+    module_keys = ["sales", "services", "capacity", "trend"]
+    result = []
+    total_locations = len(location_breakdown)
+    for key in module_keys:
+        location_modules = []
+        for location in location_breakdown:
+            module = next(
+                (item for item in location.get("analytics_modules") or [] if str(item.get("key") or "") == key),
+                None,
+            )
+            if isinstance(module, dict):
+                location_modules.append(module)
+        template = location_modules[0] if location_modules else {"key": key, "label": key}
+        ready_locations = len([item for item in location_modules if item.get("status") == "ready"])
+        available_locations = len([item for item in location_modules if item.get("status") in {"ready", "available"}])
+        if ready_locations == total_locations:
+            status = "ready"
+        elif available_locations:
+            status = "available"
+        else:
+            status = "locked"
+        missing_inputs = sorted({
+            str(value)
+            for item in location_modules
+            for value in item.get("missing_inputs") or []
+            if str(value)
+        })
+        result.append({
+            **template,
+            "status": status,
+            "ready_locations": ready_locations,
+            "available_locations": available_locations,
+            "total_locations": total_locations,
+            "missing_inputs": missing_inputs,
+            "insight": template.get("insight") if status == "ready" else None,
+            "next_unlock": (
+                None
+                if status == "ready"
+                else f"Готово в {ready_locations} из {total_locations} точек. Добавьте данные по остальным."
+            ),
+            "cta": None if status == "ready" else {"screen": "finance_import", "label": "Добавить данные"},
+        })
+    return result
+
+
+def _reset_growth_loop_focus(overview: dict[str, Any], scope: dict[str, Any], focus: dict[str, Any] | None) -> None:
+    overview["focus_action"] = focus
+    growth_loop = overview.get("growth_loop")
+    if not isinstance(growth_loop, dict):
+        return
+    focus_seed = "|".join((
+        str(scope.get("network_id") or scope.get("id") or scope.get("business_id") or "unknown"),
+        str((focus or {}).get("cta_url") or "none"),
+        str((focus or {}).get("title") or "none"),
+    ))
+    growth_loop["mission_id"] = "growth-" + hashlib.sha256(focus_seed.encode("utf-8")).hexdigest()[:16]
+    growth_loop["focus"] = focus
+
+
+def _select_network_focus_action(location_breakdown: list[dict[str, Any]]) -> dict[str, Any] | None:
+    candidates = [
+        (
+            -int((location.get("focus_action") or {}).get("priority") or 0),
+            str(location.get("business_id") or ""),
+            dict(location.get("focus_action") or {}),
+        )
+        for location in location_breakdown
+        if isinstance(location.get("focus_action"), dict)
+    ]
+    return sorted(candidates, key=lambda item: (item[0], item[1]))[0][2] if candidates else None
+
+
+def _select_network_area_action(
+    location_breakdown: list[dict[str, Any]], area_key: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    candidates = []
+    for location in location_breakdown:
+        area = next(
+            (item for item in location.get("areas") or [] if str(item.get("key") or "") == area_key),
+            None,
+        )
+        if not isinstance(area, dict) or not isinstance(area.get("action"), dict):
+            continue
+        candidates.append((
+            -int(area["action"].get("priority") or 0),
+            str(location.get("business_id") or ""),
+            dict(area["action"]),
+            area,
+        ))
+    if not candidates:
+        return None, None
+    _, _, action, area = sorted(candidates, key=lambda item: (item[0], item[1]))[0]
+    return action, area
+
+
+def _data_rhythm(overview: dict[str, Any], location_breakdown: list[dict[str, Any]]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    locations = []
+    completed_periods = []
+    for location in location_breakdown:
+        health = location.get("data_health") if isinstance(location.get("data_health"), dict) else {}
+        rhythm = location.get("rhythm") if isinstance(location.get("rhythm"), dict) else {}
+        completed_periods.append(int(rhythm.get("active_weeks") or 0))
+        locations.append({
+            "location_id": location.get("business_id"),
+            "name": location.get("business_name"),
+            "status": str(health.get("status") or "missing"),
+            "last_confirmed_at": health.get("source_updated_at"),
+            "next_due_at": health.get("next_due_at"),
+            "source": health.get("source"),
+        })
+    if not locations:
+        health = overview.get("data_health") if isinstance(overview.get("data_health"), dict) else {}
+        rhythm = overview.get("rhythm") if isinstance(overview.get("rhythm"), dict) else {}
+        locations.append({
+            "location_id": (overview.get("scope") or {}).get("business_id"),
+            "name": (overview.get("scope") or {}).get("business_name"),
+            "status": str(health.get("status") or "missing"),
+            "last_confirmed_at": health.get("source_updated_at"),
+            "next_due_at": health.get("next_due_at"),
+            "source": health.get("source"),
+        })
+        completed_periods.append(int(rhythm.get("active_weeks") or 0))
+    fresh_count = len([item for item in locations if item["status"] == "fresh"])
+    next_due_values = sorted(str(item["next_due_at"]) for item in locations if item.get("next_due_at"))
+    year, week, _ = now.date().isocalendar()
+    return {
+        "period": "weekly",
+        "current_period": f"{year}-W{week:02d}",
+        "status": str((overview.get("data_health") or {}).get("status") or "missing"),
+        "coverage": round(fresh_count / len(locations) * 100) if locations else 0,
+        "next_due_at": next_due_values[0] if next_due_values else None,
+        "completed_periods_8w": min(completed_periods) if completed_periods else 0,
+        "locations": locations,
+    }
+
+
+def _load_growth_overview_with_cursor(cursor: Any, connection: Any, scope: dict[str, Any]) -> dict[str, Any]:
+    business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
+    snapshot = _build_scope_snapshot(cursor, connection, scope, business_ids)
+    overview = build_growth_overview(snapshot)
+    location_breakdown: list[dict[str, Any]] = []
+    for location in scope.get("locations") or []:
+        location_id = str(location.get("id") or "")
+        if not location_id:
+            continue
+        location_scope = {
+            "kind": "business", "id": location_id, "business_id": location_id,
+            "business_name": str(location.get("name") or "Точка"),
+            "network_id": scope.get("network_id"), "is_network": False,
+            "locations_count": 1, "locations": [location], "business_ids": [location_id],
+        }
+        location_overview = (
+            overview
+            if scope.get("kind") == "business"
+            else build_growth_overview(_build_scope_snapshot(cursor, connection, location_scope, [location_id]))
+        )
+        _attach_scope_targets(
+            location_overview,
+            location_scope,
+            [{
+                "business_id": location_id,
+                "data_health": location_overview.get("data_health") or {},
+                "areas": location_overview.get("areas") or [],
+            }],
+        )
+        location_breakdown.append({
+            "business_id": location_id,
+            "business_name": str(location.get("name") or "Точка"),
+            "summary": location_overview.get("summary"),
+            "focus_action": location_overview.get("focus_action"),
+            "growth_loop": location_overview.get("growth_loop"),
+            "data_health": location_overview.get("data_health"),
+            "analytics_level": location_overview.get("analytics_level"),
+            "rhythm": location_overview.get("rhythm"),
+            "analytics_modules": _analytics_modules(
+                location_overview.get("data_health") or {},
+                location_overview.get("rhythm") or {},
+            ),
+            "areas": location_overview.get("areas") or [],
+        })
+    if scope.get("kind") == "network":
+        status_rank = {"unavailable": 0, "healthy": 1, "in_progress": 2, "not_started": 3, "needs_attention": 4}
+        for area in overview.get("areas") or []:
+            area_key = str(area.get("key") or "")
+            per_location = []
+            completed = 0
+            total = 0
+            aggregate_status = "healthy"
+            for location in location_breakdown:
+                location_area = next(
+                    (item for item in location.get("areas") or [] if str(item.get("key") or "") == area_key),
+                    None,
+                )
+                if not isinstance(location_area, dict):
+                    continue
+                progress = location_area.get("progress") if isinstance(location_area.get("progress"), dict) else {}
+                location_completed = int(progress.get("completed") or 0)
+                location_total = int(progress.get("total") or 0)
+                completed += location_completed
+                total += location_total
+                location_status = str(location_area.get("status") or "unavailable")
+                if status_rank.get(location_status, 0) > status_rank.get(aggregate_status, 0):
+                    aggregate_status = location_status
+                per_location.append({
+                    "business_id": location.get("business_id"),
+                    "business_name": location.get("business_name"),
+                    "status": location_status,
+                    "summary": location_area.get("summary"),
+                    "problem": location_area.get("problem"),
+                    "progress": {"completed": location_completed, "total": location_total},
+                    "target_scope": {"kind": "business", "id": location.get("business_id")},
+                })
+            area["progress"] = {"completed": completed, "total": total}
+            area["status"] = aggregate_status
+            area["location_breakdown"] = per_location
+            selected_action, selected_area = _select_network_area_action(location_breakdown, area_key)
+            if selected_action and selected_area:
+                area["action"] = selected_action
+                area["problem"] = selected_area.get("problem")
+                area["summary"] = selected_area.get("summary")
+        network_completed = sum(int((item.get("progress") or {}).get("completed") or 0) for item in overview.get("areas") or [])
+        network_total = sum(int((item.get("progress") or {}).get("total") or 0) for item in overview.get("areas") or [])
+        summary = overview.get("summary") if isinstance(overview.get("summary"), dict) else {}
+        summary["completed_milestones"] = network_completed
+        summary["total_milestones"] = network_total
+        summary["needs_attention"] = len([item for item in overview.get("areas") or [] if item.get("status") == "needs_attention"])
+        overview["summary"] = summary
+        _reset_growth_loop_focus(overview, scope, _select_network_focus_action(location_breakdown))
+    _attach_scope_targets(overview, scope, location_breakdown)
+    problem_locations = []
+    for location in location_breakdown:
+        problem_areas = [item.get("key") for item in location.get("areas") or [] if item.get("status") not in {"healthy", "unavailable"}]
+        health_status = str((location.get("data_health") or {}).get("status") or "missing")
+        if problem_areas or health_status in {"missing", "stale"}:
+            problem_locations.append({
+                "business_id": location["business_id"],
+                "business_name": location["business_name"],
+                "data_health_status": health_status,
+                "problem_areas": problem_areas,
+                "problem": str((location.get("focus_action") or {}).get("reason") or "Точка требует внимания."),
+                "focus_action": location.get("focus_action"),
+                "target_scope": {"kind": "business", "id": location["business_id"]},
+            })
+    health_priority = {"missing": 4, "stale": 3, "due": 2, "fresh": 1}
+    problem_locations.sort(
+        key=lambda item: (
+            -health_priority.get(str(item.get("data_health_status") or "missing"), 4),
+            -int((item.get("focus_action") or {}).get("priority") or 0),
+            str(item.get("business_name") or "").casefold(),
+            str(item.get("business_id") or ""),
+        )
+    )
+    overview["location_breakdown"] = location_breakdown
+    overview["problem_locations"] = problem_locations
+    location_summary = overview.get("location_summary") or {}
+    missing_locations = int(location_summary.get("missing") or 0)
+    attention_locations = len(problem_locations)
+    healthy_locations = max(0, len(location_breakdown) - attention_locations)
+    overview["network_summary"] = {
+        "locations_count": len(location_breakdown),
+        "problem_locations_count": attention_locations,
+        "healthy_locations_count": healthy_locations,
+        "total_locations": len(location_breakdown),
+        "attention_locations": attention_locations,
+        "healthy_locations": healthy_locations,
+        "missing_data_locations": missing_locations,
+        "status": "needs_attention" if problem_locations else "healthy",
+        "finance": location_summary,
+    } if scope.get("kind") == "network" else None
+    overview["analytics_modules"] = (
+        _aggregate_analytics_modules(location_breakdown)
+        if scope.get("kind") == "network"
+        else _analytics_modules(overview.get("data_health") or {}, overview.get("rhythm") or {})
+    )
+    overview["data_rhythm"] = _data_rhythm(overview, location_breakdown)
+    if _table_exists(cursor, "business_action_events"):
+        cursor.execute(
+            """
+            SELECT id, business_id, action_type, status, source_type, source_id,
+                   limitations_json, occurred_at
+            FROM business_action_events
+            WHERE business_id::text = ANY(%s)
+              AND status NOT IN ('reverted', 'superseded')
+            ORDER BY occurred_at DESC
+            LIMIT 12
+            """,
+            (business_ids,),
+        )
+        action_labels = {
+            "service_optimization_applied": "Оптимизация услуг применена",
+            "content_published": "Публикация подтверждена",
+            "map_change_confirmed": "Изменение карточки подтверждено",
+            "external_change_detected": "В карточке обнаружено внешнее изменение",
+        }
+        action_activity = []
+        for row in cursor.fetchall() or []:
+            action_type = str(_row_value(row, "action_type") or "")
+            status = str(_row_value(row, "status") or "")
+            action_activity.append(
+                {
+                    "key": f"knowledge-action:{_row_value(row, 'id')}",
+                    "area": (
+                        "content" if action_type == "content_published"
+                        else "maps" if "map" in action_type
+                        else "upsells" if "upsell" in action_type
+                        else "automation"
+                    ),
+                    "title": action_labels.get(action_type, "Подтверждённое действие"),
+                    "description": (
+                        "Изменение найдено по новому снимку; LocalOS не приписывает его себе."
+                        if status == "external_change_detected"
+                        else "Действие сохранено с источником и будет сопоставлено с последующими метриками."
+                    ),
+                    "occurred_at": _iso(_row_value(row, "occurred_at")),
+                    "evidence_level": "insufficient_evidence",
+                }
+            )
+        combined_activity = action_activity + list(overview.get("recent_activity") or [])
+        combined_activity.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
+        overview["recent_activity"] = combined_activity[:12]
+    return overview
+
+
+def load_growth_overview_for_scope(scope: dict[str, Any]) -> dict[str, Any]:
+    """Load one isolated business or an explicitly resolved network scope."""
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope = _load_scope(cursor, business_id)
-        business_ids = scope.pop("business_ids")
-        snapshot = {"scope": scope}
-        loaders = {
-            "maps": _load_maps,
-            "content": _load_content,
-            "partnerships": _load_partnerships,
-            "automation": _load_automation,
-            "upsells": _load_upsells,
-        }
-        for key, loader in loaders.items():
-            try:
-                snapshot[key] = loader(cursor, business_ids)
-            except Exception:
-                db.conn.rollback()
-                logger.warning("Growth overview source is unavailable: %s", key, exc_info=True)
-                snapshot[key] = {"available": False}
-        try:
-            snapshot["finance_data"] = load_finance_data_health(cursor, business_ids)
-        except Exception:
-            db.conn.rollback()
-            logger.warning("Growth overview finance health is unavailable", exc_info=True)
-            snapshot["finance_data"] = {}
-        overview = build_growth_overview(snapshot)
-        if _table_exists(cursor, "business_action_events"):
-            cursor.execute(
-                """
-                SELECT id, business_id, action_type, status, source_type, source_id,
-                       limitations_json, occurred_at
-                FROM business_action_events
-                WHERE business_id::text = ANY(%s)
-                  AND status NOT IN ('reverted', 'superseded')
-                ORDER BY occurred_at DESC
-                LIMIT 12
-                """,
-                (business_ids,),
+        kind = str(scope.get("kind") or "business")
+        if kind == "business":
+            resolved = _load_scope(cursor, str(scope.get("id") or scope.get("business_id") or ""))
+        elif kind == "network":
+            resolved = _load_network_scope(
+                cursor,
+                str(scope.get("id") or scope.get("network_id") or ""),
+                [str(item) for item in scope.get("business_ids") or []] if "business_ids" in scope else None,
             )
-            action_labels = {
-                "service_optimization_applied": "Оптимизация услуг применена",
-                "content_published": "Публикация подтверждена",
-                "map_change_confirmed": "Изменение карточки подтверждено",
-                "external_change_detected": "В карточке обнаружено внешнее изменение",
-            }
-            action_activity = []
-            for row in cursor.fetchall() or []:
-                action_type = str(_row_value(row, "action_type") or "")
-                status = str(_row_value(row, "status") or "")
-                action_activity.append(
-                    {
-                        "key": f"knowledge-action:{_row_value(row, 'id')}",
-                        "area": (
-                            "content" if action_type == "content_published"
-                            else "maps" if "map" in action_type
-                            else "upsells" if "upsell" in action_type
-                            else "automation"
-                        ),
-                        "title": action_labels.get(action_type, "Подтверждённое действие"),
-                        "description": (
-                            "Изменение найдено по новому снимку; LocalOS не приписывает его себе."
-                            if status == "external_change_detected"
-                            else "Действие сохранено с источником и будет сопоставлено с последующими метриками."
-                        ),
-                        "occurred_at": _iso(_row_value(row, "occurred_at")),
-                        "evidence_level": "insufficient_evidence",
-                    }
-                )
-            combined_activity = action_activity + list(overview.get("recent_activity") or [])
-            combined_activity.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
-            overview["recent_activity"] = combined_activity[:12]
-        return overview
+        else:
+            raise ValueError("Прогресс доступен для бизнеса или сети")
+        return _load_growth_overview_with_cursor(cursor, db.conn, resolved)
     finally:
         db.close()
+
+
+def load_growth_overview(business_id: str) -> dict[str, Any]:
+    """Legacy business endpoint; intentionally never expands to sibling locations."""
+    return load_growth_overview_for_scope({"kind": "business", "id": business_id})

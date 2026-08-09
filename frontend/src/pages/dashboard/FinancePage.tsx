@@ -19,29 +19,49 @@ import type { GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip
 import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
 
+const crmStatusLabel = (status?: string) => {
+  if (status === 'reviewing') return 'изучаем подключение';
+  if (status === 'planned') return 'запланировано';
+  if (status === 'connected') return 'подключено';
+  if (status === 'closed') return 'закрыто';
+  if (status === 'declined') return 'пока не поддерживается';
+  return 'запрос получен';
+};
+
 export const FinancePage = () => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
   const [searchParams] = useSearchParams();
   const [dataHealth, setDataHealth] = useState<GrowthDataHealth | null>(null);
   const [crmRequestOpen, setCrmRequestOpen] = useState(false);
   const [crmName, setCrmName] = useState('');
+  const [crmUrl, setCrmUrl] = useState('');
+  const [crmContact, setCrmContact] = useState('');
   const [crmNote, setCrmNote] = useState('');
   const [crmRequestState, setCrmRequestState] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [crmLatest, setCrmLatest] = useState<{ crm_name?: string; status?: string } | null>(null);
 
   const submitCrmRequest = async () => {
     if (!currentBusinessId || !crmName.trim() || crmRequestState === 'pending') return;
     setCrmRequestState('pending');
     try {
-      await newAuth.makeRequest(`/business/${currentBusinessId}/crm-integration-requests`, {
+      const result = await newAuth.makeRequest(`/business/${currentBusinessId}/crm-integration-requests`, {
         method: 'POST',
-        body: JSON.stringify({ crm_name: crmName.trim(), note: crmNote.trim() }),
+        body: JSON.stringify({ crm_name: crmName.trim(), crm_url: crmUrl.trim(), contact: crmContact.trim(), note: crmNote.trim(), scope_type: 'business', scope_id: currentBusinessId }),
       });
+      setCrmLatest(result?.request || null);
       setCrmRequestState('success');
       trackProductEvent({ eventName: 'crm_request_created', businessId: currentBusinessId, objectType: 'crm', objectId: crmName.trim() });
     } catch {
       setCrmRequestState('error');
     }
   };
+
+  useEffect(() => {
+    if (!currentBusinessId) { setCrmLatest(null); return; }
+    void newAuth.makeRequest(`/business/${currentBusinessId}/crm-integration-requests`, { method: 'GET' })
+      .then((result) => setCrmLatest(Array.isArray(result?.requests) ? result.requests[0] || null : null))
+      .catch(() => setCrmLatest(null));
+  }, [currentBusinessId]);
 
   useEffect(() => {
     if (!currentBusinessId) {
@@ -106,9 +126,13 @@ export const FinancePage = () => {
                 </div>
                 {crmRequestState === 'success' ? (
                   <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-700" role="status"><CheckCircle2 className="h-4 w-4" />Запрос сохранён. Мы сообщим о вариантах подключения.</div>
+                ) : crmLatest ? (
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status"><CheckCircle2 className="h-4 w-4 text-slate-500" /><span><strong>{crmLatest.crm_name}</strong> · {crmStatusLabel(crmLatest.status)}</span></div>
                 ) : crmRequestOpen ? (
                   <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4">
                     <Input value={crmName} onChange={(event) => setCrmName(event.target.value)} placeholder="Например, МойСклад или Altegio" aria-label="Название CRM" />
+                    <Input value={crmUrl} onChange={(event) => setCrmUrl(event.target.value)} placeholder="Ссылка на CRM — необязательно" aria-label="Ссылка на CRM" inputMode="url" />
+                    <Input value={crmContact} onChange={(event) => setCrmContact(event.target.value)} placeholder="Telegram, email или телефон — необязательно" aria-label="Контакт для связи" />
                     <Textarea value={crmNote} onChange={(event) => setCrmNote(event.target.value)} placeholder="Какие данные важно загружать: выручка, средний чек, загрузка…" aria-label="Комментарий к CRM" />
                     {crmRequestState === 'error' ? <p className="text-sm text-rose-700" role="alert">Не удалось сохранить запрос. Повторите ещё раз.</p> : null}
                     <Button type="button" className="min-h-11 justify-self-start gap-2 transition-transform active:scale-[0.96]" disabled={!crmName.trim() || crmRequestState === 'pending'} onClick={() => void submitCrmRequest()}>

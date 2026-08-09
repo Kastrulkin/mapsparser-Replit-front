@@ -3,7 +3,14 @@ from datetime import datetime, timezone
 from flask import Flask
 
 from api import growth_overview_api
-from services.growth_overview_service import build_growth_overview
+from services.growth_overview_service import (
+    _aggregate_analytics_modules,
+    _attach_scope_targets,
+    _load_scope,
+    _select_network_area_action,
+    _select_network_focus_action,
+    build_growth_overview,
+)
 
 
 NOW = datetime.now(timezone.utc).isoformat()
@@ -161,6 +168,81 @@ def test_network_overview_keeps_finance_freshness_by_named_location():
     assert payload["location_summary"]["fresh"] == 1
     assert payload["location_summary"]["stale"] == 1
     assert payload["location_health"][1]["location_name"] == "Север"
+
+
+def test_network_actions_target_the_only_affected_location():
+    overview = build_growth_overview(_snapshot())
+    breakdown = [
+        {"business_id": "b-1", "data_health": {"status": "fresh"}, "areas": [{"key": "maps", "status": "healthy"}]},
+        {"business_id": "b-2", "data_health": {"status": "stale"}, "areas": [{"key": "maps", "status": "needs_attention"}]},
+    ]
+
+    _attach_scope_targets(overview, {"kind": "network", "id": "n-1"}, breakdown)
+    maps = _area(overview, "maps")
+
+    assert maps["action"]["affected_business_ids"] == ["b-2"]
+    assert maps["action"]["target_scope"] == {"kind": "business", "id": "b-2"}
+
+
+def test_business_scope_never_expands_to_network_siblings():
+    class Cursor:
+        def __init__(self):
+            self.queries = []
+
+        def execute(self, query, params=()):
+            self.queries.append((query, params))
+
+        def fetchone(self):
+            return {"id": "b-1", "name": "Центр", "owner_id": "u-1", "network_id": "n-1"}
+
+    cursor = Cursor()
+    scope = _load_scope(cursor, "b-1")
+
+    assert scope["business_ids"] == ["b-1"]
+    assert scope["locations"] == [{"id": "b-1", "name": "Центр"}]
+    assert len(cursor.queries) == 1
+
+
+def test_network_priority_is_stable_and_uses_the_location_that_needs_attention():
+    healthy = {
+        "business_id": "b-1",
+        "focus_action": {"title": "Поддерживайте данные актуальными", "priority": 20},
+        "areas": [{"key": "maps", "status": "healthy", "action": {"title": "Поддерживайте данные актуальными", "priority": 20}}],
+    }
+    missing = {
+        "business_id": "b-2",
+        "focus_action": {"title": "Подключите карточку", "priority": 100},
+        "areas": [{"key": "maps", "status": "not_started", "action": {"title": "Подключите карточку", "priority": 100}}],
+    }
+
+    for locations in ([healthy, missing], [missing, healthy]):
+        assert _select_network_focus_action(locations)["title"] == "Подключите карточку"
+        action, area = _select_network_area_action(locations, "maps")
+        assert action["title"] == "Подключите карточку"
+        assert area["status"] == "not_started"
+
+
+def test_network_analytics_requires_each_location_to_unlock_the_same_module():
+    locations = [
+        {"analytics_modules": [
+            {"key": "sales", "label": "Продажи", "status": "ready", "missing_inputs": []},
+            {"key": "services", "label": "Услуги", "status": "locked", "missing_inputs": ["услуги"]},
+        ]},
+        {"analytics_modules": [
+            {"key": "sales", "label": "Продажи", "status": "locked", "missing_inputs": ["продажи"]},
+            {"key": "services", "label": "Услуги", "status": "ready", "missing_inputs": []},
+        ]},
+    ]
+
+    modules = _aggregate_analytics_modules(locations)
+    sales = next(item for item in modules if item["key"] == "sales")
+    services = next(item for item in modules if item["key"] == "services")
+
+    assert sales["status"] == "available"
+    assert sales["ready_locations"] == 1
+    assert sales["total_locations"] == 2
+    assert services["status"] == "available"
+    assert services["ready_locations"] == 1
 
 
 class _FakeConnection:

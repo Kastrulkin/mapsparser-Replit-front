@@ -1967,6 +1967,21 @@ def _resolve_mobile_scope(cursor, user_data: dict) -> dict | None:
     )
 
 
+def _resolve_operator_read_scope(cursor, user_data: dict) -> dict | None:
+    """Resolve neutral web scope while preserving the legacy business_id query."""
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    kind, scope_id = _scope_request_values()
+    legacy_business_id = str(request.args.get("business_id") or "").strip()
+    if not kind and legacy_business_id:
+        kind, scope_id = "business", legacy_business_id
+    if str(user_data.get("session_kind") or "standard") == "demo":
+        demo_business_id = str(user_data.get("scope_business_id") or "").strip()
+        if not demo_business_id or kind not in {"", "business"} or str(scope_id or demo_business_id) != demo_business_id:
+            return None
+        kind, scope_id = "business", demo_business_id
+    return resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
+
+
 @operator_bp.route("/mobile/workspace", methods=["GET"])
 def operator_mobile_workspace():
     user_data = require_auth_from_request()
@@ -2046,48 +2061,34 @@ def operator_today():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        requested_kind, requested_id = _scope_request_values()
-        business_id = str(request.args.get("business_id") or requested_id or "").strip()
-        if requested_kind not in {"", "business"} or not business_id:
-            return jsonify({"success": False, "error": "Выберите бизнес"}), 400
-        has_access, _ = verify_business_access(cursor, business_id, user_data)
-        if not has_access:
+        scope = _resolve_operator_read_scope(cursor, user_data)
+        if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        cursor.execute(
-            """
-            SELECT b.name, b.network_id, n.name AS network_name
-            FROM businesses b
-            LEFT JOIN networks n ON n.id = b.network_id
-            WHERE b.id = %s
-            LIMIT 1
-            """,
-            (business_id,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"success": False, "error": "Бизнес не найден"}), 404
-        if hasattr(row, "keys"):
-            business_name = str(row.get("name") or "Бизнес")
-            network_id = str(row.get("network_id") or "").strip() or None
-            network_name = str(row.get("network_name") or "").strip() or None
-        else:
-            business_name = str(row[0] or "Бизнес")
-            network_id = str(row[1] or "").strip() or None
-            network_name = str(row[2] or "").strip() or None
-        scope = {
-            "kind": "business",
-            "id": business_id,
-            "name": business_name,
-            "business_ids": [business_id],
-            "can_switch": False,
-            "parent_scope": (
-                {"kind": "network", "id": network_id, "name": network_name or "Сеть"}
-                if network_id
-                else None
-            ),
-        }
+        if scope.get("kind") == "platform":
+            return jsonify({"success": False, "error": "Выберите бизнес или сеть"}), 409
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/progress", methods=["GET"])
+def operator_progress():
+    """Return the canonical scope-aware progress payload for web clients."""
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_operator_read_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        if scope.get("kind") == "platform":
+            return jsonify({"success": False, "error": "Выберите бизнес или сеть"}), 409
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
         return jsonify({"success": True, **payload})
     finally:
         db.close()

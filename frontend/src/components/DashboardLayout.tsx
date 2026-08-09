@@ -16,6 +16,14 @@ type DashboardBusiness = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
   subscription_ends_at?: string | null;
+  network_id?: string | null;
+  network_name?: string | null;
+};
+
+export type ControlScope = {
+  kind: 'business' | 'network';
+  id: string;
+  name: string;
 };
 
 const paidDashboardSections = [
@@ -39,6 +47,7 @@ export const DashboardLayout = () => {
   const [businesses, setBusinesses] = useState<DashboardBusiness[]>([]);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusiness, setCurrentBusiness] = useState<DashboardBusiness | null>(null);
+  const [controlScope, setControlScope] = useState<ControlScope | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') {
@@ -100,6 +109,19 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
+          const savedScopeValue = localStorage.getItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope');
+          let restoredScope: ControlScope = { kind: 'business', id: businessToSelect.id, name: businessToSelect.name };
+          if (savedScopeValue) {
+            try {
+              const parsed = JSON.parse(savedScopeValue);
+              if (parsed?.kind === 'network' && parsed?.id && businessToSelect.network_id === parsed.id) {
+                restoredScope = { kind: 'network', id: parsed.id, name: parsed.name || businessToSelect.network_name || 'Сеть' };
+              }
+            } catch {
+              localStorage.removeItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope');
+            }
+          }
+          setControlScope(restoredScope);
           localStorage.setItem(currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessToSelect.id);
         } else {
           setBusinesses([]);
@@ -126,6 +148,9 @@ export const DashboardLayout = () => {
     if (business) {
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
+      const nextScope: ControlScope = { kind: 'business', id: business.id, name: business.name };
+      setControlScope(nextScope);
+      localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
       localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
     }
   };
@@ -143,6 +168,11 @@ export const DashboardLayout = () => {
         setCurrentBusiness(updatedBusiness);
       }
     }
+  };
+
+  const selectControlScope = (nextScope: ControlScope) => {
+    setControlScope(nextScope);
+    localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
   };
 
   const reloadBusinesses = async () => {
@@ -198,6 +228,8 @@ export const DashboardLayout = () => {
           currentBusinessId={currentBusinessId}
           currentBusiness={currentBusiness}
           onBusinessChange={handleBusinessChange}
+          controlScope={controlScope}
+          onControlScopeChange={selectControlScope}
           isSuperadmin={user.is_superadmin}
           user={user}
         />
@@ -206,7 +238,7 @@ export const DashboardLayout = () => {
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
               <div className={shouldBlurPaidSection ? 'pointer-events-none select-none blur-sm' : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
-                <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+                <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
               </div>
               {shouldBlurPaidSection && lockedPaidSection ? (
                 <div className="absolute inset-0 z-20 flex items-start justify-center rounded-2xl bg-slate-50/55 px-4 py-16 backdrop-blur-[2px]">

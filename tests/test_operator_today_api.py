@@ -41,7 +41,7 @@ def test_web_today_uses_verified_scope_and_canonical_builder(monkeypatch):
     monkeypatch.setenv("TELEGRAM_MINI_APP_TODAY_V2_ENABLED", "false")
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
     monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
-    monkeypatch.setattr(operator_api, "verify_business_access", lambda *_args: (True, "user-1"))
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: scope)
     monkeypatch.setattr(
         operator_api,
         "build_mobile_today",
@@ -70,7 +70,7 @@ def test_web_today_uses_verified_scope_and_canonical_builder(monkeypatch):
 def test_web_today_rejects_unresolved_scope(monkeypatch):
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
     monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
-    monkeypatch.setattr(operator_api, "verify_business_access", lambda *_args: (False, None))
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: None)
 
     response = _app().test_client().get(
         "/api/operator/today?scope_type=business&scope_id=foreign-business"
@@ -90,13 +90,63 @@ def test_web_today_requires_authentication(monkeypatch):
     assert response.status_code == 401
 
 
-def test_web_today_rejects_non_business_scope(monkeypatch):
+def test_web_today_accepts_verified_network_scope(monkeypatch):
+    scope = {"kind": "network", "id": "network-1", "name": "Сеть", "business_ids": ["b-1", "b-2"]}
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
     monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: scope)
+    monkeypatch.setattr(operator_api, "build_mobile_today", lambda _cursor, **kwargs: {"scope": kwargs["scope"], "network_summary": {"locations_count": 2}})
 
     response = _app().test_client().get(
         "/api/operator/today?scope_type=network&scope_id=network-1"
     )
 
-    assert response.status_code == 400
-    assert response.get_json()["error"] == "Выберите бизнес"
+    assert response.status_code == 200
+    assert response.get_json()["scope"]["business_ids"] == ["b-1", "b-2"]
+
+
+def test_web_today_keeps_demo_inside_its_business(monkeypatch):
+    scope = {"kind": "business", "id": "demo-business", "name": "Демо", "business_ids": ["demo-business"]}
+    captured = {}
+    monkeypatch.setattr(
+        operator_api,
+        "require_auth_from_request",
+        lambda: {"user_id": "demo-user", "session_kind": "demo", "scope_business_id": "demo-business"},
+    )
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **kwargs: captured.update(kwargs) or scope)
+    monkeypatch.setattr(operator_api, "build_mobile_today", lambda _cursor, **kwargs: {"scope": kwargs["scope"]})
+
+    response = _app().test_client().get("/api/operator/today?scope_type=business&scope_id=demo-business")
+
+    assert response.status_code == 200
+    assert captured["requested_kind"] == "business"
+    assert captured["requested_id"] == "demo-business"
+
+
+def test_web_today_rejects_demo_network_escape(monkeypatch):
+    monkeypatch.setattr(
+        operator_api,
+        "require_auth_from_request",
+        lambda: {"user_id": "demo-user", "session_kind": "demo", "scope_business_id": "demo-business"},
+    )
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+
+    response = _app().test_client().get("/api/operator/today?scope_type=network&scope_id=network-1")
+
+    assert response.status_code == 403
+
+
+def test_web_progress_uses_same_verified_network_scope(monkeypatch):
+    scope = {"kind": "network", "id": "network-1", "name": "Сеть", "business_ids": ["b-1", "b-2"]}
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: scope)
+    monkeypatch.setattr(operator_api, "build_mobile_progress", lambda _cursor, **kwargs: {"scope": kwargs["scope"], "network_summary": {"locations_count": 2}})
+
+    response = _app().test_client().get(
+        "/api/operator/progress?scope_type=network&scope_id=network-1"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["network_summary"]["locations_count"] == 2

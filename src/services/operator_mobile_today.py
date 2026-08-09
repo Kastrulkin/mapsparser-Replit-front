@@ -11,7 +11,7 @@ from services.community_pulse_sources import (
     load_business_industry_keys,
     load_default_industry_sources,
 )
-from services.growth_overview_service import load_growth_overview
+from services.growth_overview_service import load_growth_overview, load_growth_overview_for_scope
 from services.operator_scope_summary import build_operator_scope_summary
 
 
@@ -125,31 +125,45 @@ def select_daily_focus(
             attention_score = 0
     growth_score = int(growth.get("priority") or 0) if growth else 0
 
-    if kind == "platform" or not growth:
+    def attention_focus() -> dict[str, Any] | None:
         if not attention or attention_score <= 0:
             return None
+        affected_ids = [str(value) for value in attention.get("affected_business_ids") or [] if str(value)]
         return {
             "id": str(attention.get("id") or "attention"),
             "title": str(attention.get("title") or "Требуется внимание"),
             "reason": str(attention.get("description") or "Откройте задачу и проверьте детали."),
             "expected_outcome": "Проблема будет разобрана, а следующий шаг останется под контролем.",
+            "expected_result": "Проблема будет разобрана, а следующий шаг останется под контролем.",
             "cta_label": "Открыть задачу",
             "screen": _attention_screen(attention),
             "priority": attention_score,
             "count": int(attention.get("count") or 0),
             "target_scope": attention.get("target_scope"),
+            "affected_business_ids": affected_ids,
+            "source": "operator",
         }
+
+    if kind == "platform" or not growth or attention_score >= growth_score:
+        selected_attention = attention_focus()
+        if selected_attention:
+            return selected_attention
     if not growth:
         return None
+    expected_outcome = str(growth.get("expected_outcome") or "Появится следующий подтверждённый результат.")
     return {
         "id": f"growth:{_screen_from_url(growth.get('cta_url'))}",
         "title": str(growth.get("title") or "Продолжайте рост бизнеса"),
         "reason": str(growth.get("reason") or "LocalOS выбрал следующий практический шаг."),
-        "expected_outcome": str(growth.get("expected_outcome") or "Появится следующий подтверждённый результат."),
+        "expected_outcome": expected_outcome,
+        "expected_result": expected_outcome,
         "cta_label": str(growth.get("cta_label") or "Продолжить"),
         "screen": _screen_from_url(growth.get("cta_url")),
         "priority": growth_score,
         "estimated_effect": growth.get("estimated_effect"),
+        "target_scope": growth.get("target_scope"),
+        "affected_business_ids": growth.get("affected_business_ids") or [],
+        "source": "growth",
     }
 
 
@@ -161,6 +175,8 @@ def _load_progress(scope: dict[str, Any], loader: Callable[[str], dict[str, Any]
     if not business_id:
         return None
     try:
+        if loader is load_growth_overview:
+            return load_growth_overview_for_scope(scope)
         return loader(business_id)
     except Exception:
         return None
@@ -767,6 +783,11 @@ def build_mobile_today(
         "data_health": progress.get("data_health") if isinstance(progress, dict) else None,
         "analytics_level": progress.get("analytics_level") if isinstance(progress, dict) else None,
         "rhythm": progress.get("rhythm") if isinstance(progress, dict) else None,
+        "analytics_modules": progress.get("analytics_modules") if isinstance(progress, dict) else [],
+        "data_rhythm": progress.get("data_rhythm") if isinstance(progress, dict) else None,
+        "network_summary": progress.get("network_summary") if isinstance(progress, dict) else None,
+        "problem_locations": progress.get("problem_locations") if isinstance(progress, dict) else [],
+        "location_breakdown": progress.get("location_breakdown") if isinstance(progress, dict) else [],
         "active_work": _load_active_work(cursor, scope),
         "changes_24h": _load_changes(cursor, scope, cutoff),
         "community_pulse": _load_community_pulse(cursor, scope, cutoff),
@@ -795,6 +816,11 @@ def build_mobile_progress(
             "focus_action": focus,
             "growth_loop": None,
             "data_health": None,
+            "analytics_modules": [],
+            "data_rhythm": None,
+            "network_summary": None,
+            "problem_locations": [],
+            "location_breakdown": [],
             "summary": None,
             "areas": [],
             "recent_results": [],
@@ -809,6 +835,11 @@ def build_mobile_progress(
         "data_health": progress.get("data_health"),
         "analytics_level": progress.get("analytics_level"),
         "rhythm": progress.get("rhythm"),
+        "analytics_modules": progress.get("analytics_modules") or [],
+        "data_rhythm": progress.get("data_rhythm"),
+        "network_summary": progress.get("network_summary"),
+        "problem_locations": progress.get("problem_locations") or [],
+        "location_breakdown": progress.get("location_breakdown") or [],
         "summary": _progress_summary(progress),
         "areas": _mobile_progress_areas(progress),
         "recent_results": progress.get("recent_achievements") or [],

@@ -55,8 +55,9 @@ def _load_actor(cursor: Any, user_id: str) -> dict[str, Any]:
 
 
 def _load_networks(cursor: Any, user_id: str, is_superadmin: bool) -> list[dict[str, Any]]:
-    owner_filter = "" if is_superadmin else "WHERE n.owner_id = %s"
-    params: tuple[Any, ...] = () if is_superadmin else (user_id,)
+    membership_join = "" if is_superadmin else "LEFT JOIN network_members nm ON nm.network_id = n.id AND nm.user_id = %s AND nm.status = 'active'"
+    owner_filter = "" if is_superadmin else "WHERE n.owner_id = %s OR nm.user_id IS NOT NULL"
+    params: tuple[Any, ...] = () if is_superadmin else (user_id, user_id)
     cursor.execute(
         f"""
         SELECT
@@ -65,6 +66,7 @@ def _load_networks(cursor: Any, user_id: str, is_superadmin: bool) -> list[dict[
             n.owner_id,
             COUNT(b.id) FILTER (WHERE b.id <> n.id AND {_active_business_clause('b')}) AS locations_count
         FROM networks n
+        {membership_join}
         LEFT JOIN businesses b ON b.network_id = n.id
         {owner_filter}
         GROUP BY n.id, n.name, n.owner_id
@@ -87,8 +89,8 @@ def _load_businesses(
     params: list[Any] = []
     access_filter = "TRUE"
     if not is_superadmin:
-        access_filter = "(b.owner_id = %s OR n.owner_id = %s)"
-        params.extend([user_id, user_id])
+        access_filter = "(b.owner_id = %s OR n.owner_id = %s OR nm.user_id IS NOT NULL OR bm.user_id IS NOT NULL)"
+        params.extend([user_id, user_id, user_id, user_id])
     search_filter = ""
     cleaned_query = str(query or "").strip()
     if cleaned_query:
@@ -110,6 +112,7 @@ def _load_businesses(
             b.owner_id
         FROM businesses b
         LEFT JOIN networks n ON n.id = b.network_id
+        {"LEFT JOIN network_members nm ON nm.network_id = b.network_id AND nm.user_id = %s AND nm.status = 'active' LEFT JOIN business_members bm ON bm.business_id = b.id AND bm.user_id = %s AND bm.status = 'active'" if not is_superadmin else ""}
         WHERE {_active_business_clause('b')}
           AND {access_filter}
           AND NOT (b.network_id IS NOT NULL AND b.id = b.network_id)
@@ -365,22 +368,23 @@ def _resolve_requested_scope(
             actor = catalog.get("actor") if isinstance(catalog.get("actor"), dict) else {}
             user_id = str(actor.get("id") or "")
             is_superadmin = bool(actor.get("is_superadmin"))
-            access_filter = "TRUE" if is_superadmin else "(b.owner_id = %s OR n.owner_id = %s)"
+            access_filter = "TRUE" if is_superadmin else "(b.owner_id = %s OR n.owner_id = %s OR nm.user_id IS NOT NULL OR bm.user_id IS NOT NULL)"
             params: list[Any] = [scope_id]
             if not is_superadmin:
-                params.extend([user_id, user_id])
+                params.extend([user_id, user_id, user_id, user_id])
             cursor.execute(
                 f"""
                 SELECT b.id, b.name, COALESCE(b.address, '') AS address,
                        b.network_id, n.name AS network_name
                 FROM businesses b
                 LEFT JOIN networks n ON n.id = b.network_id
+                {"LEFT JOIN network_members nm ON nm.network_id = b.network_id AND nm.user_id = %s AND nm.status = 'active' LEFT JOIN business_members bm ON bm.business_id = b.id AND bm.user_id = %s AND bm.status = 'active'" if not is_superadmin else ""}
                 WHERE b.id = %s
                   AND {_active_business_clause('b')}
                   AND {access_filter}
                 LIMIT 1
                 """,
-                tuple(params),
+                tuple(params[1:3] + params[:1] + params[3:] if not is_superadmin else params),
             )
             loaded = _row_to_dict(cursor, cursor.fetchone())
             business = loaded or None
@@ -504,7 +508,7 @@ def save_scope_notification_preferences(
     scope_id = str(scope.get("id") or "").strip() or None
     if kind not in SCOPE_TYPES:
         raise ValueError("unsupported_control_scope")
-    allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results"}
+    allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results", "finance_rhythm"}
     clean = {key: bool(value) for key, value in notifications.items() if key in allowed_keys}
     current = _load_preference(cursor, user_id)
     all_preferences = dict(current.get("notification_preferences_json") or {})
