@@ -164,7 +164,7 @@ def fetch_monitored_pain_documents(cursor: Any, *, limit: int = 500) -> list[dic
           AND document.sensitivity_class = 'public'
           AND source.allowed_uses ? 'outreach'
           AND document.allowed_uses ? 'outreach'
-          AND document.permalink LIKE 'https://t.me/%'
+          AND document.permalink LIKE 'https://t.me/%%'
           AND (
               subscription.purposes_json ? 'outreach_learning'
               OR subscription.purposes_json ? 'marketing_learning'
@@ -440,7 +440,7 @@ def retrieve_language_support(
           AND document.sensitivity_class = 'public'
           AND source.allowed_uses ? 'outreach'
           AND document.allowed_uses ? 'outreach'
-          AND document.permalink LIKE 'https://t.me/%'
+          AND document.permalink LIKE 'https://t.me/%%'
           AND subscription.is_active = TRUE
           AND (
               subscription.purposes_json ? 'outreach_learning'

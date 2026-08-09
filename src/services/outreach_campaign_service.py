@@ -21,7 +21,7 @@ from services.outreach_personalization_ai import (
     generation_contract_current,
     generate_personalized_sequence,
 )
-from services.social_posts import provider_adapters as social_provider_adapters
+from services import social_post_service
 from services.outreach_playbook import beauty_touch_learning_dimensions
 from services.outreach_pain_library_service import load_approved_pain_library
 from services.outreach_pain_library_service import language_support_for_candidate
@@ -102,7 +102,7 @@ def _publication_capability_snapshot(
     source = "no_recipient_business"
     if _text(business_id):
         try:
-            provider_readiness = social_provider_adapters._build_channel_readiness(
+            provider_readiness = social_post_service._build_channel_readiness(
                 cursor,
                 _text(business_id),
             )

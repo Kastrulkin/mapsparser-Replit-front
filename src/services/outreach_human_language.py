@@ -126,7 +126,8 @@ def _publication_claim_supported(
     publication_capabilities: dict[str, Any] | None,
 ) -> bool:
     claim_present = bool(re.search(
-        r"(?:автоматически\s+публику|\bавтопублик|localos\s+готовит\s+и\s+публику)",
+        r"(?:автоматически\s+(?:о?публиков\w*|публику\w*)|"
+        r"\bавтопублик|localos\s+готовит\s+и\s+публику)",
         normalized,
         flags=re.IGNORECASE,
     ))

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pytest
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 from services import outreach_pain_library_service
 from services.outreach_campaign_service import _message_for_angle, _quality_gate
@@ -10,6 +12,7 @@ from services.outreach_pain_library_service import (
     retrieve_language_support,
 )
 from services.outreach_playbook import beauty_outreach_guidance
+from tests.conftest import PROJECT_ROOT, _run_flask_db_upgrade
 
 
 PRICE_UPDATE_MESSAGE = (
@@ -65,6 +68,27 @@ def test_yandex_and_two_gis_are_never_allowed_as_autopublish_claims():
         (
             "Увидел ваш анонс.\n\n"
             "После подтверждения LocalOS автоматически публикует пост в Яндекс Картах и 2ГИС.\n\n"
+            "Показать пример?"
+        ),
+        publication_capabilities={
+            "schema": "localos_outreach_publication_capabilities_v1",
+            "approval_required": True,
+            "channels": [],
+            "supported_after_connection": ["telegram", "vk"],
+            "manual_or_supervised_channels": ["yandex_maps", "two_gis"],
+        },
+    )
+
+    assert result["passed"] is False
+    assert "UNSUPPORTED_PUBLICATION_CLAIM" in result["reason_codes"]
+
+
+def test_infinitive_autopublish_claims_are_enforced():
+    result = review_human_language(
+        (
+            "Увидел ваш анонс.\n\n"
+            "После вашего подтверждения LocalOS может автоматически "
+            "публиковать посты в Яндекс Картах и 2ГИС.\n\n"
             "Показать пример?"
         ),
         publication_capabilities={
@@ -373,7 +397,7 @@ def test_pain_library_refresh_uses_same_fail_closed_public_professional_policy()
     assert "document.sensitivity_class = 'public'" in sql
     assert "source.allowed_uses ? 'outreach'" in sql
     assert "document.allowed_uses ? 'outreach'" in sql
-    assert "document.permalink like 'https://t.me/%'" in sql
+    assert "document.permalink like 'https://t.me/%%'" in sql
     assert "pain_support_eligible" in sql
     assert "voice_style_eligible" in sql
     assert "eligibility_confidence" in sql
@@ -399,7 +423,7 @@ def test_language_retrieval_fails_closed_to_curated_public_professional_beauty_c
     assert "source.sensitivity_class = 'public'" in sql
     assert "source.allowed_uses ? 'outreach'" in sql
     assert "document.allowed_uses ? 'outreach'" in sql
-    assert "document.permalink like 'https://t.me/%'" in sql
+    assert "document.permalink like 'https://t.me/%%'" in sql
     assert "pain_voice_eligibility" in sql
     assert "pain_support_eligible" in sql
     assert "voice_style_eligible" in sql
@@ -475,3 +499,76 @@ def test_price_theme_stays_unsupported_while_manual_time_can_support_voice(monke
         "manual-chunk-1", "manual-chunk-2", "manual-chunk-3"
     ]
     assert result["frequency_claim_allowed"] is False
+
+
+def _postgres_dsn(postgres_container):
+    raw_url = postgres_container.get_connection_url()
+    return raw_url.replace(
+        "postgresql+psycopg2://",
+        "postgresql://",
+        1,
+    )
+
+
+@pytest.fixture(scope="module")
+def pain_library_migrated_postgres(postgres_container):
+    dsn = _postgres_dsn(postgres_container)
+    connection = psycopg2.connect(dsn)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS userexamples (
+                    id TEXT PRIMARY KEY,
+                    example_type TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+    _run_flask_db_upgrade(PROJECT_ROOT, dsn)
+    return postgres_container
+
+
+def test_pain_library_refresh_executes_with_real_psycopg2(
+    pain_library_migrated_postgres,
+):
+    connection = psycopg2.connect(
+        _postgres_dsn(pain_library_migrated_postgres),
+        cursor_factory=RealDictCursor,
+    )
+    try:
+        with connection.cursor() as cursor:
+            assert fetch_monitored_pain_documents(cursor, limit=1) == []
+    finally:
+        connection.close()
+
+
+def test_language_retrieval_executes_with_real_psycopg2_without_vector(
+    pain_library_migrated_postgres,
+    monkeypatch,
+):
+    monkeypatch.setattr(outreach_pain_library_service, "_query_vector", lambda _query: None)
+    connection = psycopg2.connect(
+        _postgres_dsn(pain_library_migrated_postgres),
+        cursor_factory=RealDictCursor,
+    )
+    try:
+        with connection.cursor() as cursor:
+            result = retrieve_language_support(
+                cursor,
+                query="обновление прайса",
+                segment="beauty",
+                theme="manual_time",
+                approved_document_ids=[],
+                query_vector=None,
+                limit=1,
+            )
+    finally:
+        connection.close()
+
+    assert result["status"] == "unsupported"
+    assert result["raw_quotes_exposed"] is False

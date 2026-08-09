@@ -230,7 +230,7 @@ def test_publication_snapshot_is_kept_in_strategy_dimensions():
 def test_publication_snapshot_fail_closes_google_and_never_marks_maps_api_ready(monkeypatch):
     monkeypatch.delenv("GOOGLE_BUSINESS_PUBLICATION_BETA_PROVIDER_READY", raising=False)
     monkeypatch.setattr(
-        "services.outreach_campaign_service.social_provider_adapters._build_channel_readiness",
+        "services.outreach_campaign_service.social_post_service._build_channel_readiness",
         lambda _cursor, _business_id: [
             {"platform": "telegram", "publish_mode": "api", "ready": True, "status": "ready"},
             {"platform": "google_business", "publish_mode": "api", "ready": True, "status": "ready"},
@@ -251,6 +251,46 @@ def test_publication_snapshot_fail_closes_google_and_never_marks_maps_api_ready(
     assert by_platform["google_business"]["status"] == "provider_not_ready"
     assert by_platform["yandex_maps"]["provider_ready"] is False
     assert snapshot["approval_required"] is True
+
+
+def test_publication_snapshot_uses_bound_social_post_service_readiness(monkeypatch):
+    import services.social_post_service as social_post_service
+
+    calls = []
+
+    def _production_readiness(_cursor, business_id):
+        calls.append(business_id)
+        return [
+            {
+                "platform": "telegram",
+                "publish_mode": "api",
+                "ready": True,
+                "status": "ready",
+                "missing_fields": [],
+            },
+            {
+                "platform": "yandex_maps",
+                "publish_mode": "openclaw_browser",
+                "ready": True,
+                "status": "supervised_ready",
+                "missing_fields": [],
+            },
+        ]
+
+    monkeypatch.setattr(
+        social_post_service,
+        "_build_channel_readiness",
+        _production_readiness,
+    )
+
+    snapshot = _publication_capability_snapshot(object(), "business-1")
+    by_platform = {item["platform"]: item for item in snapshot["channels"]}
+
+    assert calls == ["business-1"]
+    assert snapshot["source"] == "social_channel_readiness"
+    assert by_platform["telegram"]["connected"] is True
+    assert by_platform["telegram"]["provider_ready"] is True
+    assert by_platform["yandex_maps"]["provider_ready"] is False
 
 
 def test_touch_override_normalizes_paragraph_spacing_without_flattening():
