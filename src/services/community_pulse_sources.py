@@ -6,7 +6,10 @@ from typing import Any
 from core.industry_patterns import detect_industry_key, normalize_pattern_text
 
 
-DEFAULT_SOURCE_ROLES = {"community", "expert", "vendor", "salon", "unknown"}
+# The default Pulse is an owner briefing, not a feed of customer-facing salon
+# promotions. A source with another role can still be included explicitly by an
+# administrator through ``community_default``.
+DEFAULT_SOURCE_ROLES = {"community", "expert", "vendor"}
 INDUSTRY_LABELS = {
     "beauty": "Бьюти-индустрия",
 }

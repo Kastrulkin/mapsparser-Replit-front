@@ -36,6 +36,38 @@ def test_map_discovered_business_channel_is_not_an_industry_default():
     assert is_default_industry_source(source, {"beauty"}) is False
 
 
+def test_customer_promotions_and_unclassified_sources_do_not_enter_default_pulse():
+    salon = {
+        "title": "Freedom Beauty Studio",
+        "source_role": "salon",
+        "metadata_json": {"industry_key": "beauty"},
+    }
+    unknown = {
+        "title": "Готовые посты для косметологов",
+        "source_role": "unknown",
+        "metadata_json": {"industry_key": "beauty"},
+    }
+    expert = {
+        "title": "Системный бьюти-бизнес",
+        "source_role": "expert",
+        "metadata_json": {"industry_key": "beauty"},
+    }
+
+    assert is_default_industry_source(salon, {"beauty"}) is False
+    assert is_default_industry_source(unknown, {"beauty"}) is False
+    assert is_default_industry_source(expert, {"beauty"}) is True
+
+
+def test_admin_can_explicitly_curate_a_nonstandard_source_for_the_pulse():
+    source = {
+        "title": "Ручная редакционная подборка",
+        "source_role": "unknown",
+        "metadata_json": {"industry_key": "beauty", "community_default": True},
+    }
+
+    assert is_default_industry_source(source, {"beauty"}) is True
+
+
 def test_admin_categories_define_industry_and_audience_safely():
     owner_chat = {
         "title": "Профессиональный разговор",
