@@ -39,6 +39,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { cn } from '@/lib/utils';
 
 type KpiValue = number | string | null | undefined;
@@ -117,6 +118,8 @@ type FinanceFirstStepProps = {
   currentBusinessId?: string | null;
   setupTools?: React.ReactNode;
   legacyTools?: React.ReactNode;
+  dataHealth?: GrowthDataHealth | null;
+  initialTab?: 'overview' | 'settings';
 };
 
 type FinancePeriod = {
@@ -248,7 +251,7 @@ const getMonthPeriod = (value: string): FinancePeriod => {
   return { start: dateToInputValue(start), end: dateToInputValue(end) };
 };
 
-export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusinessId, setupTools, legacyTools }) => {
+export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusinessId, setupTools, legacyTools, dataHealth, initialTab = 'overview' }) => {
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -258,7 +261,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const [impact, setImpact] = useState<FinanceImpact | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<FinanceMetricKey | null>(null);
   const [activeInputStep, setActiveInputStep] = useState('entry');
-  const [activeFinanceTab, setActiveFinanceTab] = useState('overview');
+  const [activeFinanceTab, setActiveFinanceTab] = useState(initialTab);
   const [periodPreset, setPeriodPreset] = useState('last_3_months');
   const [period, setPeriod] = useState<FinancePeriod>(getDefaultFinancePeriod);
   const [entry, setEntry] = useState({
@@ -339,6 +342,10 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
       setLoading(false);
     }
   }, [currentBusinessId, period.end, period.start, periodPreset]);
+
+  useEffect(() => {
+    setActiveFinanceTab(initialTab);
+  }, [initialTab]);
 
   const changePeriodPreset = (preset: string) => {
     setPeriodPreset(preset);
@@ -593,6 +600,14 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
           <FinanceRevenueChart history={history} months={historyMonths} onChangeMonths={loadHistory} />
         </div>
       </section>
+
+      <DataHealthRhythmStrip
+        dataHealth={dataHealth}
+        onImport={() => {
+          setActiveFinanceTab('settings');
+          window.requestAnimationFrame(() => document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        }}
+      />
 
       <section id="finance-tabs" className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <Tabs value={activeFinanceTab} onValueChange={setActiveFinanceTab}>

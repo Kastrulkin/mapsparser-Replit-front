@@ -51,6 +51,7 @@ from services.operator_mobile_modules import list_operator_mobile_module
 from services.operator_mobile_today import build_mobile_progress, build_mobile_today
 from services.operator_mobile_jobs import load_mobile_job
 from services.operator_mobile_deep_links import resolve_mobile_deep_link
+from services.product_telemetry_service import record_product_event, validate_product_event
 from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
 from services.operator_paid_executor import build_paid_action_execution_attempt
@@ -103,7 +104,7 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update", "refresh"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
         {"key": "content", "label": "Контент", "group": "more", "status": "available", "available_actions": ["plan_generate", "item_update", "draft_generate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["content_plan", "content_item", "post"], "version": 2},
         {"key": "services", "label": "Услуги", "group": "more", "status": "available", "available_actions": ["update", "archive", "restore", "optimize", "compress"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["service", "service_suggestion"], "version": 2},
-        {"key": "finance", "label": "Финансы", "group": "more", "status": "available", "available_actions": ["sales_import", "operation_update", "analytics_open", "crm_connect", "crm_sync"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["finance", "sale", "finance_warning", "finance_import", "finance_crm"], "version": 3},
+        {"key": "finance", "label": "Финансы", "group": "more", "status": "available", "available_actions": ["sales_import", "operation_update", "analytics_open", "crm_file_import", "crm_connection_request"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["finance", "sale", "finance_warning", "finance_import"], "version": 4},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available", "available_actions": ["search", "draft", "send_preview"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["partner", "partnership_reply", "outreach_touch"], "version": 2},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "available" if agent_runs_available else "read_only", "reason": "Запуски пока не включены для этого бизнеса" if not agent_runs_available else "", "available_actions": ["run", "open_result"] if agent_runs_available else [], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["agent", "agent_run", "agent_result"], "version": 2},
         {"key": "settings", "label": "Настройки", "group": "more", "status": "read_only", "reason": "Сейчас доступны настройки уведомлений; подключения и тариф ещё переносятся", "available_actions": ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
@@ -2058,16 +2059,9 @@ def operator_mobile_interaction():
         return jsonify({"success": False, "error": "Требуется авторизация"}), 401
     payload = request.get_json(silent=True) or {}
     event_name = str(payload.get("event_name") or "").strip()
-    allowed_events = {
-        "today_open",
-        "today_focus_open",
-        "today_delegate_open",
-        "today_pulse_open",
-        "today_progress_open",
-        "progress_action_open",
-    }
-    if event_name not in allowed_events:
-        return jsonify({"success": False, "error": "Событие не поддерживается"}), 400
+    _, _, validation_error = validate_product_event(event_name, "telegram_mini_app")
+    if validation_error:
+        return jsonify({"success": False, "error": validation_error}), 400
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -2091,6 +2085,17 @@ def operator_mobile_interaction():
                 "scope_type": scope.get("kind"),
                 "scope_id": scope.get("id"),
             },
+        )
+        record_product_event(
+            cursor,
+            event_name=event_name,
+            surface="telegram_mini_app",
+            business_id=business_id or None,
+            user_id=str(user_data.get("user_id") or user_data.get("id") or "") or None,
+            scope_type=str(scope.get("kind") or "") or None,
+            scope_id=str(scope.get("id") or "") or None,
+            screen=str(payload.get("screen") or ""),
+            target=str(payload.get("target") or ""),
         )
         db.conn.commit()
         return jsonify({"success": True})

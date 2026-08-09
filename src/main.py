@@ -101,6 +101,8 @@ from api.services_api import services_bp
 from api.business_types_api import business_types_bp
 from api.growth_api import growth_bp
 from api.growth_overview_api import growth_overview_bp
+from api.crm_integration_requests_api import crm_integration_requests_bp
+from api.product_events_api import product_events_bp
 from api.admin_growth_api import admin_growth_bp
 from api.growth_workflow_api import growth_workflow_bp
 from api.progress_api import progress_bp
@@ -287,6 +289,8 @@ app.register_blueprint(services_bp)
 app.register_blueprint(business_types_bp)
 app.register_blueprint(growth_bp)
 app.register_blueprint(growth_overview_bp)
+app.register_blueprint(crm_integration_requests_bp)
+app.register_blueprint(product_events_bp)
 app.register_blueprint(admin_growth_bp)
 app.register_blueprint(growth_workflow_bp)
 app.register_blueprint(progress_bp)

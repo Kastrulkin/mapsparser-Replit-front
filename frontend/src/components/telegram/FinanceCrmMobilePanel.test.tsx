@@ -1,51 +1,51 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import FinanceCrmMobilePanel from './FinanceCrmMobilePanel';
 
-const response = (data: Record<string, unknown>) => Promise.resolve(new Response(JSON.stringify(data), {
-  status: 200,
-  headers: { 'Content-Type': 'application/json' },
-}));
-
 describe('FinanceCrmMobilePanel', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  it('explains the current YCLIENTS file flow without offering API credentials', async () => {
+    render(<FinanceCrmMobilePanel onOpenFileImport={vi.fn()} onRequestCrm={vi.fn().mockResolvedValue(undefined)} />);
 
-  it('shows real CRM providers and keeps credentials inside the finance flow', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => response({
-      success: true,
-      providers: [
-        { provider: 'mock_demo', label: 'Demo CRM', status: 'available', requires_auth: false },
-        { provider: 'yclients', label: 'YCLIENTS', status: 'available', requires_auth: true, description: 'Записи и оплаты', connection: null },
-      ],
-    })));
+    expect(screen.getByText('Загрузить данные из YCLIENTS')).toBeVisible();
+    expect(screen.getByText('Через файл')).toBeVisible();
+    expect(screen.queryByText(/partner token/i)).not.toBeInTheDocument();
 
-    render(<FinanceCrmMobilePanel businessId="business-1" onSynced={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /Как выгрузить файл/ }));
 
-    expect(await screen.findByText('YCLIENTS')).toBeInTheDocument();
-    expect(screen.queryByText('Demo CRM')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /YCLIENTS/ }));
-    await waitFor(() => expect(screen.getByLabelText('ID филиала YCLIENTS')).toBeVisible());
-    expect(screen.getByRole('button', { name: 'Подключить YCLIENTS' })).toBeVisible();
+    expect(screen.getByText(/Финансы → Отчёты → Финансовый отчёт/)).toBeInTheDocument();
+    expect(screen.getByText(/Выгрузить в Excel/)).toBeInTheDocument();
+    expect(screen.getByText(/YCLIENTS \/ Altegio статистика/)).toBeInTheDocument();
   });
 
-  it('previews a CRM import before exposing the single confirmation', async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/providers')) return response({ success: true, providers: [{ provider: 'altegio', label: 'Altegio', status: 'available', requires_auth: true, connection: { status: 'connected', sync_status: 'never_synced' } }] });
-      if (url.includes('/preview')) return response({ success: true, provider: 'altegio', preview_token: 'preview-1', period: { start_date: '2026-08-09', end_date: '2026-08-09' }, rows_total: 8, valid_rows: 7, failed_rows: 1, preview_rows: [{ service: 'Стрижка', amount: 1000 }] });
-      return response({ success: true });
-    });
-    vi.stubGlobal('fetch', fetchMock);
+  it('opens file import and creates a structured CRM request', async () => {
+    const onOpenFileImport = vi.fn();
+    const onRequestCrm = vi.fn().mockResolvedValue(undefined);
+    render(<FinanceCrmMobilePanel onOpenFileImport={onOpenFileImport} onRequestCrm={onRequestCrm} />);
 
-    render(<FinanceCrmMobilePanel businessId="business-1" onSynced={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Загрузить файл YCLIENTS' }));
+    expect(onOpenFileImport).toHaveBeenCalledOnce();
 
-    await userEvent.click(await screen.findByRole('button', { name: /Altegio/ }));
-    expect(screen.queryByRole('button', { name: /Подтвердить/ })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Проверить данные' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Подтвердить 7' })).toBeVisible());
-    expect(screen.getByText('Стрижка · 1000')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Написать, какая у вас CRM' }));
+    await userEvent.type(screen.getByLabelText('Название CRM'), 'Bitrix24');
+    await userEvent.type(screen.getByLabelText(/Что хотите загружать/), 'Продажи за месяц');
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить запрос' }));
+
+    expect(onRequestCrm).toHaveBeenCalledWith({ crmName: 'Bitrix24', comment: 'Продажи за месяц' });
+    expect(await screen.findByRole('status')).toHaveTextContent('Запрос отправлен');
+  });
+
+  it('shows an honest error and keeps the form available', async () => {
+    const onRequestCrm = vi.fn().mockRejectedValue(new Error('Сервис временно недоступен'));
+    render(<FinanceCrmMobilePanel onOpenFileImport={vi.fn()} onRequestCrm={onRequestCrm} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Написать, какая у вас CRM' }));
+    await userEvent.type(screen.getByLabelText('Название CRM'), 'amoCRM');
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить запрос' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Сервис временно недоступен');
+    expect(screen.getByLabelText('Название CRM')).toHaveValue('amoCRM');
   });
 });

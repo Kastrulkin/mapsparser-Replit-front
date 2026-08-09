@@ -115,4 +115,36 @@ describe('ProgressPage localization', () => {
     await waitFor(() => expect(screen.getByText('Χάρτες και φήμη')).toBeInTheDocument());
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
+
+  it('shows the data freshness action when the overview reports missing analytics inputs', async () => {
+    window.localStorage.setItem('language', 'ru');
+    vi.mocked(newAuth.makeRequest).mockImplementation((url: string) => {
+      if (url.endsWith('/growth-overview')) {
+        return Promise.resolve({
+          ...overview,
+          data_health: {
+            status: 'stale',
+            source_label: 'Выгрузка YCLIENTS',
+            missing: ['оплаты за текущий период'],
+          },
+        });
+      }
+      return Promise.resolve({ success: true, status: 'idle' });
+    });
+
+    render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<ProgressPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Загрузить файл YCLIENTS' })).toBeInTheDocument();
+    expect(screen.getByText(/Источник: Выгрузка YCLIENTS/)).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,13 @@ import logging
 from typing import Any
 
 from database_manager import DatabaseManager
+from services.growth_data_health_service import (
+    build_analytics_level,
+    build_data_health,
+    build_rhythm,
+    load_finance_data_health,
+)
+import hashlib
 
 
 AREA_ORDER = ("maps", "content", "partnerships", "automation", "upsells")
@@ -428,8 +435,35 @@ def build_growth_overview(snapshot: dict[str, Any]) -> dict[str, Any]:
         else:
             areas.append(builder(source))
 
+    finance_snapshot = snapshot.get("finance_data") if isinstance(snapshot.get("finance_data"), dict) else {}
+    data_health = finance_snapshot.get("data_health") if isinstance(finance_snapshot.get("data_health"), dict) else build_data_health(None, None)
+    analytics_level = finance_snapshot.get("analytics_level") if isinstance(finance_snapshot.get("analytics_level"), dict) else build_analytics_level(data_health)
+    rhythm = finance_snapshot.get("rhythm") if isinstance(finance_snapshot.get("rhythm"), dict) else build_rhythm(data_health, 0)
     focus_candidates = [area["action"] for area in areas if area["status"] != "unavailable"]
     focus_action = max(focus_candidates, key=lambda item: int(item.get("priority") or 0)) if focus_candidates else None
+    if finance_snapshot and data_health.get("status") in {"missing", "stale"}:
+        finance_action = _action(
+            title="Обновите финансовые данные",
+            reason=("Нет финансовых данных для аналитики." if data_health.get("status") == "missing" else "Финансовые данные давно не обновлялись."),
+            expected_outcome="LocalOS сможет показать актуальную финансовую картину и точки роста.",
+            cta_label="Загрузить данные",
+            cta_url="/dashboard/finance",
+            priority=110,
+        )
+        if not focus_action or int(focus_action.get("priority") or 0) < int(finance_action["priority"]):
+            focus_action = finance_action
+    focus_seed = "|".join((
+        str(scope.get("network_id") or scope.get("business_id") or "unknown"),
+        str((focus_action or {}).get("cta_url") or "none"),
+        str(data_health.get("status") or "missing"),
+    ))
+    mission_id = "growth-" + hashlib.sha256(focus_seed.encode("utf-8")).hexdigest()[:16]
+    growth_loop = {
+        "mission_id": mission_id,
+        "status": "needs_attention" if data_health.get("status") in {"missing", "stale"} else "active",
+        "focus": focus_action,
+        "data_health_status": data_health.get("status"),
+    }
     completed_milestones = sum(area["progress"]["completed"] for area in areas)
     total_milestones = sum(area["progress"]["total"] for area in areas)
     achievements = []
@@ -469,6 +503,10 @@ def build_growth_overview(snapshot: dict[str, Any]) -> dict[str, Any]:
             "locations_count": locations_count,
         },
         "focus_action": focus_action,
+        "growth_loop": growth_loop,
+        "data_health": data_health,
+        "analytics_level": analytics_level,
+        "rhythm": rhythm,
         "areas": areas,
         "recent_achievements": recent_achievements,
         "recent_activity": recent_achievements,
@@ -757,6 +795,12 @@ def load_growth_overview(business_id: str) -> dict[str, Any]:
                 db.conn.rollback()
                 logger.warning("Growth overview source is unavailable: %s", key, exc_info=True)
                 snapshot[key] = {"available": False}
+        try:
+            snapshot["finance_data"] = load_finance_data_health(cursor, business_ids)
+        except Exception:
+            db.conn.rollback()
+            logger.warning("Growth overview finance health is unavailable", exc_info=True)
+            snapshot["finance_data"] = {}
         overview = build_growth_overview(snapshot)
         if _table_exists(cursor, "business_action_events"):
             cursor.execute(

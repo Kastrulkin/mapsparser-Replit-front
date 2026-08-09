@@ -17,6 +17,10 @@ def _growth(priority=80):
         },
         "areas": [{"key": "content", "action": {"cta_label": "Открыть", "cta_url": "/dashboard/content"}}],
         "recent_achievements": [],
+        "growth_loop": {"mission_id": "growth-content"},
+        "data_health": {"status": "fresh"},
+        "analytics_level": {"level": "baseline", "label": "Базовая аналитика"},
+        "rhythm": {"status": "forming", "active_weeks": 2},
     }
 
 
@@ -43,8 +47,11 @@ def test_today_and_progress_use_the_same_focus(monkeypatch):
     progress = mobile_today.build_mobile_progress(object(), scope=scope, user_id="user-1", growth_loader=lambda _business_id: _growth())
 
     assert today["focus_action"] == progress["focus_action"]
-    assert today["focus_action"]["screen"] == "reviews"
+    assert today["focus_action"]["screen"] == "content"
     assert progress["areas"][0]["action"]["screen"] == "content"
+    assert today["growth_loop"]["mission_id"] == "growth-content"
+    assert today["analytics_level"] == progress["analytics_level"]
+    assert today["rhythm"] == progress["rhythm"]
 
 
 def test_today_uses_exact_rolling_24_hour_window(monkeypatch):

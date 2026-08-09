@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import type { TodayFocusAction } from '@/components/telegram/TodayMobileV2';
+import { GrowthLoopPanel, type DataHealth, type GrowthLoop } from '@/components/telegram/GrowthLoopPanel';
 
 type ProgressMilestone = {
   key?: string;
@@ -48,6 +49,10 @@ export type ProgressPayload = {
   areas?: ProgressArea[];
   recent_results?: Array<{ key?: string; title?: string; description?: string; occurred_at?: string }>;
   data_warnings?: string[];
+  growth_loop?: GrowthLoop | null;
+  data_health?: DataHealth | null;
+  analytics_level?: { level?: string; label?: string; next_unlock?: string | null } | null;
+  rhythm?: { active_weeks?: number; status?: string; label?: string } | null;
 };
 
 type ProgressMobileModuleProps = {
@@ -55,6 +60,7 @@ type ProgressMobileModuleProps = {
   loading: boolean;
   openTarget: (screen?: string) => void;
   track: (eventName: string, target?: string) => void;
+  trackProduct?: (eventName: 'mission_open' | 'statistics_flow_opened', objectId?: string) => void;
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
@@ -81,7 +87,7 @@ const statusClass = (value?: string) => {
   return 'bg-white/[0.05] text-zinc-500';
 };
 
-export const ProgressMobileModule = ({ data, loading, openTarget, track }: ProgressMobileModuleProps) => {
+export const ProgressMobileModule = ({ data, loading, openTarget, track, trackProduct }: ProgressMobileModuleProps) => {
   const [expanded, setExpanded] = useState('');
   if (loading && !data) {
     return <div className="space-y-3" aria-busy="true"><div className="h-52 animate-pulse rounded-[24px] bg-white/[0.045] motion-reduce:animate-none" /><div className="h-24 animate-pulse rounded-[22px] bg-white/[0.035] motion-reduce:animate-none" /><div className="h-24 animate-pulse rounded-[22px] bg-white/[0.035] motion-reduce:animate-none" /></div>;
@@ -112,9 +118,11 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track }: Progr
           <h3 className="mt-2 text-balance text-lg font-semibold">{focus.title}</h3>
           <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{focus.reason}</p>
           {focus.expected_outcome ? <div className="mt-3 rounded-[15px] bg-black/20 px-3 py-2.5 text-pretty text-xs leading-5 text-zinc-400"><b className="text-zinc-200">Результат:</b> {focus.expected_outcome}</div> : null}
-          <button type="button" onClick={() => { track('progress_action_open', focus.screen); openTarget(focus.screen); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform active:scale-[0.96]">{focus.cta_label || 'Продолжить'}<ChevronRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { track('progress_action_open', focus.screen); trackProduct?.('mission_open', data.growth_loop?.mission_id || focus.id || focus.screen); openTarget(focus.screen); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform active:scale-[0.96]">{focus.cta_label || 'Продолжить'}<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : null}
+
+      <GrowthLoopPanel growthLoop={data.growth_loop} dataHealth={data.data_health} analyticsLevel={data.analytics_level} rhythm={data.rhythm} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openTarget('finance_import'); }} />
 
       <section className="mt-7">
         <h2 className="text-balance text-lg font-semibold tracking-[-0.025em]">Направления роста</h2>

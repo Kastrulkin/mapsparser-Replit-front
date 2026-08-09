@@ -13,7 +13,6 @@ import {
   Handshake,
   MapPinned,
   RefreshCw,
-  Sparkles,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -24,7 +23,9 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { newAuth } from '@/lib/auth_new';
+import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import {
@@ -97,6 +98,13 @@ type GrowthOverview = {
   focus_action: GrowthAction | null;
   areas: GrowthArea[];
   recent_achievements: GrowthAchievement[];
+  growth_loop?: {
+    mission_id?: string;
+    focus?: GrowthAction;
+    current_mission?: GrowthAction;
+    mission?: GrowthAction;
+  };
+  data_health?: GrowthDataHealth | null;
   scope?: {
     business_id: string;
     business_name: string;
@@ -137,28 +145,6 @@ const formatDate = (value: string | null | undefined, language: Language) => {
 
 const formatMoney = (value: number, language: Language) =>
   new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value);
-
-const achievementStorageKey = (businessId: string) => `localos:growth-achievements:${businessId}`;
-
-const readSeenAchievements = (businessId: string) => {
-  try {
-    const value = localStorage.getItem(achievementStorageKey(businessId));
-    if (!value) return null;
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return null;
-    return parsed.filter((item) => typeof item === 'string');
-  } catch {
-    return null;
-  }
-};
-
-const saveSeenAchievements = (businessId: string, keys: string[]) => {
-  try {
-    localStorage.setItem(achievementStorageKey(businessId), JSON.stringify(keys));
-  } catch {
-    // The progress screen remains usable when browser storage is unavailable.
-  }
-};
 
 const AreaRow = ({
   area,
@@ -281,7 +267,6 @@ export const ProgressPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedArea, setExpandedArea] = useState<GrowthAreaKey | null>(null);
-  const [celebration, setCelebration] = useState<GrowthAchievement | null>(null);
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [auditRefreshKey, setAuditRefreshKey] = useState(0);
   const [showFullAudit, setShowFullAudit] = useState(false);
@@ -321,15 +306,6 @@ export const ProgressPage = () => {
         return locations[0]?.id || currentBusinessId;
       });
 
-      const achievementKeys = data.recent_achievements.map((item) => item.key);
-      const seenKeys = readSeenAchievements(currentBusinessId);
-      if (seenKeys === null) {
-        saveSeenAchievements(currentBusinessId, achievementKeys);
-      } else {
-        const freshAchievement = data.recent_achievements.find((item) => !seenKeys.includes(item.key));
-        if (freshAchievement) setCelebration(freshAchievement);
-        saveSeenAchievements(currentBusinessId, Array.from(new Set([...seenKeys, ...achievementKeys])));
-      }
     }).catch((requestError) => {
       if (controller.signal.aborted) return;
       const message = requestError instanceof Error ? requestError.message : copy.loadErrorTitle;
@@ -342,7 +318,6 @@ export const ProgressPage = () => {
   }, [copy.loadErrorTitle, currentBusinessId, overviewRefreshKey]);
 
   useEffect(() => {
-    setCelebration(null);
     setExpandedArea(requestedMapsSection ? 'maps' : null);
     setShowFullAudit(requestedAudit);
     setHistoryOpen(false);
@@ -414,10 +389,8 @@ export const ProgressPage = () => {
   }, [showFullAudit, overview]);
 
   useEffect(() => {
-    if (!celebration) return;
-    const timeout = window.setTimeout(() => setCelebration(null), 7000);
-    return () => window.clearTimeout(timeout);
-  }, [celebration]);
+    trackProductEvent({ eventName: 'progress_open', businessId: currentBusinessId });
+  }, [currentBusinessId]);
 
   const refreshAll = () => {
     setOverviewRefreshKey((value) => value + 1);
@@ -450,6 +423,17 @@ export const ProgressPage = () => {
   const mapAuditMilestone = mapsArea?.milestones.find((milestone) => milestone.key === 'map_audited');
   const networkLocations = overview?.scope?.locations || [];
   const selectedAuditLocation = networkLocations.find((location) => location.id === selectedAuditBusinessId);
+  const currentMission = overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || overview?.focus_action || null;
+  const openMission = () => {
+    if (!currentMission) return;
+    trackProductEvent({
+      eventName: 'mission_open',
+      businessId: currentBusinessId,
+      objectType: 'growth_mission',
+      objectId: overview?.growth_loop?.mission_id || currentMission.cta_url,
+    });
+    navigate(currentMission.cta_url || '/dashboard/progress');
+  };
 
   if (!currentBusinessId) {
     return (
@@ -511,19 +495,7 @@ export const ProgressPage = () => {
         </div>
       ) : null}
 
-      {celebration ? (
-        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4" role="status">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-emerald-950">{copy.newResult}: {localizedGrowthMilestone(language, celebration.key.split(':').pop() || '', celebration.title)}</div>
-              <div className="mt-1 text-sm leading-6 text-emerald-800">{localizedGrowthText(language, celebration.description)}</div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
 
       <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
         <div data-tour-target="progress-summary">
@@ -546,20 +518,20 @@ export const ProgressPage = () => {
 
         <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" data-tour-target="progress-focus-action">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.currentPriority}</div>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">{localizedGrowthText(language, overview.focus_action?.title) || copy.continueWorking}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{localizedGrowthText(language, overview.focus_action?.reason)}</p>
-          {overview.focus_action ? (
+          <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{localizedGrowthText(language, currentMission?.title) || copy.continueWorking}</h2>
+          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{localizedGrowthText(language, currentMission?.reason)}</p>
+          {currentMission ? (
             <>
               <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                <strong>{copy.result}:</strong> {localizedGrowthText(language, overview.focus_action.expected_outcome)}
+                <strong>{copy.result}:</strong> {localizedGrowthText(language, currentMission.expected_outcome)}
               </div>
-              {overview.focus_action.estimated_effect?.amount ? (
+              {currentMission.estimated_effect?.amount ? (
                 <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
-                  {localizedGrowthText(language, overview.focus_action.estimated_effect.label)}: {formatMoney(overview.focus_action.estimated_effect.amount, language)} ₽
+                  {localizedGrowthText(language, currentMission.estimated_effect.label)}: {formatMoney(currentMission.estimated_effect.amount, language)} ₽
                 </div>
               ) : null}
-              <Button type="button" className="mt-4 w-full bg-orange-500 text-white hover:bg-orange-600" onClick={() => navigate(overview.focus_action?.cta_url || '/dashboard/progress')}>
-                {localizedGrowthText(language, overview.focus_action.cta_label)}
+              <Button type="button" className="mt-4 min-h-11 w-full bg-orange-500 text-white transition-transform hover:bg-orange-600 active:scale-[0.96]" onClick={openMission}>
+                {localizedGrowthText(language, currentMission.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </>

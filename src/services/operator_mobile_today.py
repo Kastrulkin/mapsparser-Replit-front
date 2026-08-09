@@ -125,7 +125,7 @@ def select_daily_focus(
             attention_score = 0
     growth_score = int(growth.get("priority") or 0) if growth else 0
 
-    if kind == "platform" or attention_score >= growth_score:
+    if kind == "platform" or not growth:
         if not attention or attention_score <= 0:
             return None
         return {
@@ -763,6 +763,10 @@ def build_mobile_today(
         "as_of": observed_at.astimezone(timezone.utc).isoformat(),
         "period": {"kind": "rolling_24h", "since": cutoff.isoformat()},
         "focus_action": focus,
+        "growth_loop": progress.get("growth_loop") if isinstance(progress, dict) else None,
+        "data_health": progress.get("data_health") if isinstance(progress, dict) else None,
+        "analytics_level": progress.get("analytics_level") if isinstance(progress, dict) else None,
+        "rhythm": progress.get("rhythm") if isinstance(progress, dict) else None,
         "active_work": _load_active_work(cursor, scope),
         "changes_24h": _load_changes(cursor, scope, cutoff),
         "community_pulse": _load_community_pulse(cursor, scope, cutoff),
@@ -789,6 +793,8 @@ def build_mobile_progress(
             "status": "hidden" if scope.get("kind") == "platform" else "unavailable",
             "as_of": datetime.now(timezone.utc).isoformat(),
             "focus_action": focus,
+            "growth_loop": None,
+            "data_health": None,
             "summary": None,
             "areas": [],
             "recent_results": [],
@@ -799,6 +805,10 @@ def build_mobile_progress(
         "status": "available",
         "as_of": str(progress.get("generated_at") or datetime.now(timezone.utc).isoformat()),
         "focus_action": focus,
+        "growth_loop": progress.get("growth_loop"),
+        "data_health": progress.get("data_health"),
+        "analytics_level": progress.get("analytics_level"),
+        "rhythm": progress.get("rhythm"),
         "summary": _progress_summary(progress),
         "areas": _mobile_progress_areas(progress),
         "recent_results": progress.get("recent_achievements") or [],

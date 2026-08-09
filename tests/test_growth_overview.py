@@ -113,6 +113,23 @@ def test_network_problem_names_the_location_that_needs_attention():
     assert maps["problem"] == "Точка «Органика на Невском»: без ответа осталось отзывов: 4."
 
 
+def test_stale_finance_data_becomes_focus_without_a_sixth_direction():
+    snapshot = _snapshot()
+    snapshot["finance_data"] = {
+        "data_health": {"status": "stale", "source": "crm"},
+        "analytics_level": {"level": "setup", "next_unlock": "Загрузите данные"},
+        "rhythm": {"active_weeks": 0, "status": "not_started", "label": "Ритм ещё не начат"},
+    }
+
+    payload = build_growth_overview(snapshot)
+
+    assert len(payload["areas"]) == 5
+    assert payload["focus_action"]["cta_url"] == "/dashboard/finance"
+    assert payload["growth_loop"]["data_health_status"] == "stale"
+    assert payload["growth_loop"]["mission_id"].startswith("growth-")
+    assert "quality_score" not in payload["data_health"]
+
+
 class _FakeConnection:
     def cursor(self):
         return object()

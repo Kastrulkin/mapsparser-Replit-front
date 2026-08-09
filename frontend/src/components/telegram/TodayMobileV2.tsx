@@ -10,6 +10,7 @@ import {
   Send,
   Sparkles,
 } from 'lucide-react';
+import { GrowthLoopPanel, type DataHealth, type GrowthLoop } from '@/components/telegram/GrowthLoopPanel';
 
 export type TodayFocusAction = {
   id?: string;
@@ -58,6 +59,10 @@ export type TodayPayload = {
   } | null;
   as_of?: string;
   data_warnings?: string[];
+  growth_loop?: GrowthLoop | null;
+  data_health?: DataHealth | null;
+  analytics_level?: { level?: string; label?: string; next_unlock?: string | null } | null;
+  rhythm?: { active_weeks?: number; status?: string; label?: string } | null;
 };
 
 type TodayMobileV2Props = {
@@ -71,6 +76,8 @@ type TodayMobileV2Props = {
   openProgress: () => void;
   openSources?: () => void;
   track: (eventName: string, target?: string) => void;
+  trackProduct?: (eventName: 'mission_open' | 'statistics_flow_opened', objectId?: string) => void;
+  openFinanceImport?: () => void;
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
@@ -149,6 +156,8 @@ export const TodayMobileV2 = ({
   openProgress,
   openSources,
   track,
+  trackProduct,
+  openFinanceImport,
 }: TodayMobileV2Props) => {
   if (loading && !data) return <TodaySkeleton slow={slowLoading} />;
 
@@ -192,6 +201,7 @@ export const TodayMobileV2 = ({
           type="button"
           onClick={() => {
             track('today_focus_open', focus?.screen || 'progress');
+            trackProduct?.('mission_open', data?.growth_loop?.mission_id || focus?.id || focus?.screen);
             if (focus) openTarget(focus.screen, focus.target_scope);
             else openProgress();
           }}
@@ -239,6 +249,8 @@ export const TodayMobileV2 = ({
           </div>
         </motion.section>
       ) : null}
+
+      <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} />
 
       <Section title="За последние 24 часа" subtitle="Только новые факты из подключённых источников.">
         {changes.length ? changes.slice(0, 3).map((item) => <ActivityRow key={item.id} item={item} icon={Clock3} onClick={() => openTarget(item.screen, item.business_id ? { kind: 'business', id: item.business_id } : undefined)} />) : (
