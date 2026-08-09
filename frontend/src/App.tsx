@@ -105,6 +105,11 @@ const ProgressPage = lazy(() =>
     default: module.ProgressPage,
   })),
 );
+const TodayPage = lazy(() =>
+  import("./pages/dashboard/TodayPage").then((module) => ({
+    default: module.TodayPage,
+  })),
+);
 const FinancePage = lazy(() =>
   import("./pages/dashboard/FinancePage").then((module) => ({
     default: module.FinancePage,
@@ -267,7 +272,8 @@ const AppShell = () => {
           <Route path="/cases/:slug" element={<CaseDetailPage />} />
 
           <Route path="/dashboard" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/dashboard/profile" replace />} />
+            <Route index element={<Navigate to="/dashboard/today" replace />} />
+            <Route path="today" element={<TodayPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="card" element={<CardOverviewPage />} />
             <Route path="content" element={<ContentPage />} />

@@ -48,6 +48,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
 
   const menuItems = [
     {
+      id: 'today',
+      label: language === 'ru' ? 'Сегодня' : 'Today',
+      icon: Calendar,
+      path: '/dashboard/today',
+      tooltip: language === 'ru'
+        ? 'Подтверждённые изменения, текущая работа LocalOS и один следующий шаг.'
+        : 'Confirmed changes, current LocalOS work, and one next step.',
+    },
+    {
       id: 'operator',
       label: navigationCopy.operator,
       icon: Bot,
@@ -159,7 +168,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   };
 
   const isActive = (path: string) => {
-    if (path === '/dashboard/progress') {
+    if (path === '/dashboard/today') {
       return location.pathname === '/dashboard' || location.pathname === path;
     }
     return location.pathname === path;

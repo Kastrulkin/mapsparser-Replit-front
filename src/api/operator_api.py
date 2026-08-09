@@ -2032,6 +2032,67 @@ def operator_mobile_today():
         db.close()
 
 
+@operator_bp.route("/today", methods=["GET"])
+def operator_today():
+    """Return the canonical daily brief for authenticated web clients.
+
+    The payload intentionally comes from the same scope-aware builder as the
+    Mini App.  The web route is not coupled to the Telegram feature flag, but
+    it still resolves and verifies the requested scope on the server.
+    """
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        requested_kind, requested_id = _scope_request_values()
+        business_id = str(request.args.get("business_id") or requested_id or "").strip()
+        if requested_kind not in {"", "business"} or not business_id:
+            return jsonify({"success": False, "error": "Выберите бизнес"}), 400
+        has_access, _ = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        cursor.execute(
+            """
+            SELECT b.name, b.network_id, n.name AS network_name
+            FROM businesses b
+            LEFT JOIN networks n ON n.id = b.network_id
+            WHERE b.id = %s
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Бизнес не найден"}), 404
+        if hasattr(row, "keys"):
+            business_name = str(row.get("name") or "Бизнес")
+            network_id = str(row.get("network_id") or "").strip() or None
+            network_name = str(row.get("network_name") or "").strip() or None
+        else:
+            business_name = str(row[0] or "Бизнес")
+            network_id = str(row[1] or "").strip() or None
+            network_name = str(row[2] or "").strip() or None
+        scope = {
+            "kind": "business",
+            "id": business_id,
+            "name": business_name,
+            "business_ids": [business_id],
+            "can_switch": False,
+            "parent_scope": (
+                {"kind": "network", "id": network_id, "name": network_name or "Сеть"}
+                if network_id
+                else None
+            ),
+        }
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
 @operator_bp.route("/mobile/progress", methods=["GET"])
 def operator_mobile_progress():
     user_data = require_auth_from_request()

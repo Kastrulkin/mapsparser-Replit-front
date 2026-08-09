@@ -55,3 +55,48 @@ def test_finance_health_describes_coverage_in_business_terms():
     assert result["data_health"]["coverage"] == ["sales", "services"]
     assert result["data_health"]["missing"] == ["загрузка команды и рабочих мест"]
     assert result["analytics_level"]["level"] == "actionable"
+
+
+class _NetworkFinanceHealthCursor(_FinanceHealthCursor):
+    def fetchall(self):
+        return [
+            {
+                "business_id": "fresh-location",
+                "record_count": 8,
+                "latest_at": "2026-08-08T10:00:00+00:00",
+                "latest_source": "yclients_stats",
+                "source_count": 1,
+                "datasets": ["sales", "services", "capacity"],
+                "active_weeks": 3,
+            },
+            {
+                "business_id": "stale-location",
+                "record_count": 4,
+                "latest_at": "2026-07-01T10:00:00+00:00",
+                "latest_source": "manual",
+                "source_count": 1,
+                "datasets": ["sales"],
+                "active_weeks": 1,
+            },
+        ]
+
+
+def test_network_finance_health_keeps_each_location_visible():
+    result = load_finance_data_health(
+        _NetworkFinanceHealthCursor(),
+        ["fresh-location", "stale-location", "missing-location"],
+        now=NOW,
+    )
+
+    assert result["data_health"]["status"] == "missing"
+    assert result["location_summary"] == {
+        "total": 3,
+        "fresh": 1,
+        "due": 0,
+        "stale": 1,
+        "missing": 1,
+    }
+    locations = {item["business_id"]: item for item in result["location_health"]}
+    assert locations["fresh-location"]["status"] == "fresh"
+    assert locations["stale-location"]["status"] == "stale"
+    assert locations["missing-location"]["status"] == "missing"

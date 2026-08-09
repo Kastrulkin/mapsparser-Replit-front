@@ -32,7 +32,7 @@ def test_network_member_has_business_access():
 
     assert allowed is True
     assert owner_id == "owner-1"
-    assert cursor.executed[0][1] == ("member-1", "member-1", "business-1")
+    assert cursor.executed[0][1] == ("member-1", "member-1", "member-1", "business-1")
 
 
 def test_direct_business_member_has_business_access():
@@ -46,6 +46,24 @@ def test_direct_business_member_has_business_access():
         cursor,
         "business-1",
         {"user_id": "member-1", "is_superadmin": False},
+    )
+
+    assert allowed is True
+    assert owner_id == "owner-1"
+
+
+def test_business_owner_has_business_access():
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": False,
+        "has_network_membership": False,
+        "owns_network": False,
+    })
+
+    allowed, owner_id = verify_business_access(
+        cursor,
+        "business-1",
+        {"user_id": "owner-1", "is_superadmin": False},
     )
 
     assert allowed is True
@@ -67,6 +85,87 @@ def test_unrelated_user_does_not_gain_business_access():
 
     assert allowed is False
     assert owner_id == "owner-1"
+
+
+def test_network_owner_has_business_access():
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": False,
+        "has_network_membership": False,
+        "owns_network": True,
+    })
+
+    allowed, owner_id = verify_business_access(
+        cursor,
+        "business-1",
+        {"user_id": "network-owner", "is_superadmin": False},
+    )
+
+    assert allowed is True
+    assert owner_id == "owner-1"
+
+
+def test_superadmin_has_business_access():
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": False,
+        "has_network_membership": False,
+        "owns_network": False,
+    })
+
+    allowed, _ = verify_business_access(
+        cursor,
+        "business-1",
+        {"user_id": "admin-1", "is_superadmin": True},
+    )
+
+    assert allowed is True
+
+
+def test_demo_session_can_open_its_business_scope():
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": True,
+        "has_network_membership": False,
+        "owns_network": False,
+    })
+
+    allowed, _ = verify_business_access(
+        cursor,
+        "business-1",
+        {
+            "user_id": "member-1",
+            "session_kind": "demo",
+            "scope_business_id": "business-1",
+            "is_superadmin": False,
+        },
+    )
+
+    assert allowed is True
+
+
+def test_demo_session_cannot_escape_its_business_scope():
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": True,
+        "has_network_membership": False,
+        "owns_network": False,
+    })
+
+    allowed, owner_id = verify_business_access(
+        cursor,
+        "business-2",
+        {
+            "user_id": "member-1",
+            "session_kind": "demo",
+            "scope_business_id": "business-1",
+            "is_superadmin": False,
+        },
+    )
+
+    assert allowed is False
+    assert owner_id is None
+    assert cursor.executed == []
 
 
 def test_auth_me_returns_network_member_businesses(monkeypatch):

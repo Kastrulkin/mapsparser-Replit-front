@@ -437,6 +437,19 @@ def build_growth_overview(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     finance_snapshot = snapshot.get("finance_data") if isinstance(snapshot.get("finance_data"), dict) else {}
     data_health = finance_snapshot.get("data_health") if isinstance(finance_snapshot.get("data_health"), dict) else build_data_health(None, None)
+    location_names = {
+        str(item.get("id")): str(item.get("name") or "Точка")
+        for item in (scope.get("locations") or [])
+        if isinstance(item, dict) and item.get("id") is not None
+    }
+    location_health = []
+    for item in finance_snapshot.get("location_health") or []:
+        if not isinstance(item, dict):
+            continue
+        location = dict(item)
+        location["location_name"] = location_names.get(str(location.get("business_id") or ""), "Точка")
+        location_health.append(location)
+    location_summary = finance_snapshot.get("location_summary") if isinstance(finance_snapshot.get("location_summary"), dict) else {}
     analytics_level = finance_snapshot.get("analytics_level") if isinstance(finance_snapshot.get("analytics_level"), dict) else build_analytics_level(data_health)
     rhythm = finance_snapshot.get("rhythm") if isinstance(finance_snapshot.get("rhythm"), dict) else build_rhythm(data_health, 0)
     focus_candidates = [area["action"] for area in areas if area["status"] != "unavailable"]
@@ -501,12 +514,15 @@ def build_growth_overview(snapshot: dict[str, Any]) -> dict[str, Any]:
             "needs_attention": len([area for area in areas if area["status"] == "needs_attention"]),
             "completed_last_30_days": recent_30,
             "locations_count": locations_count,
+            "finance_location_summary": location_summary,
         },
         "focus_action": focus_action,
         "growth_loop": growth_loop,
         "data_health": data_health,
         "analytics_level": analytics_level,
         "rhythm": rhythm,
+        "location_health": location_health,
+        "location_summary": location_summary,
         "areas": areas,
         "recent_achievements": recent_achievements,
         "recent_activity": recent_achievements,

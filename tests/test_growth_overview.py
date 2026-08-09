@@ -130,6 +130,39 @@ def test_stale_finance_data_becomes_focus_without_a_sixth_direction():
     assert "quality_score" not in payload["data_health"]
 
 
+def test_network_overview_keeps_finance_freshness_by_named_location():
+    snapshot = _snapshot()
+    snapshot["scope"].update(
+        {
+            "locations_count": 2,
+            "is_network": True,
+            "locations": [
+                {"id": "business-1", "name": "Центр"},
+                {"id": "business-2", "name": "Север"},
+            ],
+        }
+    )
+    snapshot["finance_data"] = {
+        "data_health": {
+            "status": "stale",
+            "source": "multiple",
+            "location_summary": {"total": 2, "fresh": 1, "due": 0, "stale": 1, "missing": 0},
+        },
+        "location_summary": {"total": 2, "fresh": 1, "due": 0, "stale": 1, "missing": 0},
+        "location_health": [
+            {"business_id": "business-1", "status": "fresh"},
+            {"business_id": "business-2", "status": "stale"},
+        ],
+    }
+
+    payload = build_growth_overview(snapshot)
+
+    assert payload["data_health"]["status"] == "stale"
+    assert payload["location_summary"]["fresh"] == 1
+    assert payload["location_summary"]["stale"] == 1
+    assert payload["location_health"][1]["location_name"] == "Север"
+
+
 class _FakeConnection:
     def cursor(self):
         return object()
