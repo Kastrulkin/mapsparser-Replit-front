@@ -1268,7 +1268,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         angle: String(touch.angle_type || ''),
         subject: touch.subject,
         text: String(touch.approved_text || touch.generated_text || ''),
-        channel_status: touch.message_brief_json?.channel_status || 'manual',
+        channel_status: touch.channel_status || touch.message_brief_json?.channel_status || 'manual',
         quality_gate: touch.quality_gate_json,
         evidence_kind: touch.message_brief_json?.evidence_kind,
         source_url: touch.message_brief_json?.source_url,
@@ -3419,7 +3419,17 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       {savedConversationTouches.map((touch) => {
                         const delivery = touch.id ? deliveryByTouchId.get(touch.id) : undefined;
                         const replyEvents = humanReplyEvents.filter((event) => event.touch_id === touch.id);
-                        const status = String(delivery?.delivery_status || touch.status || 'draft');
+                        const runtimeChannelStatus = String(
+                          touch.channel_status || touch.message_brief_json?.channel_status || '',
+                        );
+                        const runtimeChannelBlocked = !['ready', 'manual'].includes(runtimeChannelStatus);
+                        const status = String(
+                          replyEvents.length > 0
+                            ? 'reply'
+                            : runtimeChannelBlocked
+                              ? runtimeChannelStatus
+                              : delivery?.delivery_status || touch.status || 'draft',
+                        );
                         const touchIndex = Number(touch.sequence_index || 0);
                         const editableTouch = savedCampaignDisplayTouches.find((item) => item.sequence_index === touchIndex);
                         const touchCanBeEdited = canEditSavedTouch(
@@ -3499,7 +3509,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                   ) : null}
                                 </>
                               )}
-                              {touch.quality_gate_json ? (
+                              {touch.quality_gate_json && !savedOutreachCampaign?.requires_regeneration && !runtimeChannelBlocked ? (
                                 <details open={!touch.quality_gate_json.passed} className="mt-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
                                   <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold text-slate-800">
                                     Почему такая оценка ·{' '}

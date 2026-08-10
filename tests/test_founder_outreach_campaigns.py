@@ -802,7 +802,7 @@ def test_telegram_observations_keep_a_concrete_recipient_detail(post, expected):
     assert expected.lower() in natural_observation(candidate).lower()
 
 
-def test_founder_led_beauty_quality_gate_accepts_paraphrased_sourced_observation():
+def test_founder_led_beauty_quality_gate_blocks_abstract_solution_despite_sourced_observation():
     candidate = _private_beauty_founder_candidate()
     story = {
         "story": candidate["founder_story"],
@@ -823,10 +823,11 @@ def test_founder_led_beauty_quality_gate_accepts_paraphrased_sourced_observation
     assert gate["checks"]["removal"] is True
     assert gate["checks"]["bridge"] is True
     assert gate["checks"]["specificity"] is True
-    assert gate["passed"] is True
+    assert gate["passed"] is False
+    assert "ABSTRACT_SOLUTION" in gate["reason_codes"]
 
 
-def test_composite_social_map_signal_does_not_require_internal_activity_counters_in_copy():
+def test_composite_social_map_signal_still_requires_a_concrete_localos_action():
     candidate = _private_beauty_founder_candidate()
     candidate.update({
         "signal_combo": "active_social_with_map_gap",
@@ -858,8 +859,9 @@ def test_composite_social_map_signal_does_not_require_internal_activity_counters
     assert "активно ведёте соцсети" in message
     assert "8 сообщений за 30 дней" not in message
     assert gate["checks"]["removal"] is True
-    assert gate["total_score"] == 18
-    assert gate["passed"] is True
+    assert gate["total_score"] == 16
+    assert "ABSTRACT_SOLUTION" in gate["reason_codes"]
+    assert gate["passed"] is False
 
 
 @pytest.mark.parametrize(
@@ -869,7 +871,7 @@ def test_composite_social_map_signal_does_not_require_internal_activity_counters
         ("beauty_network", "Beauty Today", "Салон красоты"),
     ),
 )
-def test_founder_led_signal_bridge_matches_team_and_network_owner_context(
+def test_founder_led_signal_bridge_alone_does_not_replace_a_concrete_localos_action(
     segment,
     recipient,
     category,
@@ -892,7 +894,8 @@ def test_founder_led_signal_bridge_matches_team_and_network_owner_context(
     )
 
     assert gate["checks"]["bridge"] is True
-    assert gate["passed"] is True
+    assert gate["passed"] is False
+    assert "ABSTRACT_SOLUTION" in gate["reason_codes"]
 
 
 def test_contact_intelligence_job_serialization_is_independent_from_message_gating():
@@ -1914,6 +1917,51 @@ def test_quality_gate_blocks_precise_but_weak_price_coverage_signal():
     assert gate["passed"] is False
     assert "signal_too_weak_for_cold_outreach" in gate["blocking_reasons"]
     assert "DECORATIVE_PERSONALIZATION" in gate["reason_codes"]
+
+
+def test_estem_generic_email_with_no_localos_action_cannot_approve_raw_abstract_solution():
+    candidate = {
+        "recipient": "Эстем",
+        "recipient_segment": "beauty_team",
+        "sender_mode": "localos",
+        "signal_combo": "active_social_content",
+        "observed_fact": (
+            "2 августа в канале Эстем вышел разбор ботулинотерапии "
+            "с тремя преимуществами и указанием врача Дарьи Резник."
+        ),
+        "bridge": "Эту тему можно использовать для работы с контентом.",
+        "localos_action": None,
+        "evidence_kind": "telegram_post",
+        "evidence_status": "observed",
+        "source_url": "https://t.me/estemclinic/2084",
+        "freshness": "fresh",
+        "confidence": 0.95,
+        "next_step": "Показать пример",
+    }
+    text = (
+        "Эстем, здравствуйте!\n\n"
+        "2 августа в канале Эстем вышел разбор ботулинотерапии с тремя "
+        "преимуществами и указанием врача Дарьи Резник.\n\n"
+        "Эту тему можно использовать для работы с контентом.\n\n"
+        "LocalOS может помочь с ведением площадок.\n\n"
+        "Показать пример?"
+    )
+
+    gate = _quality_gate(
+        text,
+        candidate,
+        {"forbidden_claims": []},
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+
+    assert "ABSTRACT_SOLUTION" in gate["human_language_review"]["reason_codes"]
+    assert gate["human_language_review"]["detected_passed"] is False
+    assert gate["passed"] is False
+    assert gate["verdict"] != "approve"
+    assert gate["total_score"] < 18
 
 
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():

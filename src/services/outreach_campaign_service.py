@@ -2717,7 +2717,7 @@ def _quality_gate(
         }
         or (
             _text(angle) == "signal"
-            and bool(candidate.get("localos_action"))
+            and _text(candidate.get("sender_mode")) == "localos"
         )
     ]
     checks["human_language"] = not enforced_language_codes

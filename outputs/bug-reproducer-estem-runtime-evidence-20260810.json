@@ -1,0 +1,46 @@
+{
+  "schema": "bug_reproducer_evidence_v1",
+  "created_at": "2026-08-10T18:03:00+03:00",
+  "classification": "FIX_PROVEN_WITH_BASELINE_FAILURES",
+  "scope": "Estem contact parsing, outreach quality enforcement, and registry runtime state",
+  "production_data_mutated": false,
+  "bugs": [
+    {
+      "key": "tax_and_license_not_phone",
+      "red": "exact Estem HTML produced phone contacts from INN 7811736556 and licence L041-01148-78/00359881",
+      "green": "focused regression passed; full contact suite passed"
+    },
+    {
+      "key": "runtime_state_precedes_saved_snapshot",
+      "red": "saved ready and 18/18 remained visible despite top-level recipient_missing",
+      "green": "two component regressions passed; stale score hidden and Нет контакта rendered"
+    },
+    {
+      "key": "raw_abstract_solution_blocks_localos_signal",
+      "red": "raw ABSTRACT_SOLUTION could still receive approve 18/18 when localos_action was null",
+      "green": "focused regression passed; LocalOS signal messages now enforce the raw language failure"
+    }
+  ],
+  "checks": {
+    "focused_backend": "2 passed",
+    "focused_frontend": "2 passed",
+    "contact_and_founder_backend": "196 passed",
+    "expanded_contact_and_outreach": "431 passed, 2 skipped, 2 baseline failures",
+    "frontend_registry": "2 passed",
+    "frontend_build": "passed",
+    "diff_check": "passed",
+    "production_like_estem": "passed using a read-only component fixture with requires_regeneration, recipient_missing, no selected email recipient, and stale saved ready/18 score"
+  },
+  "baseline_failures": [
+    {
+      "test": "test_campaign_payload_links_delivery_and_human_reply_to_exact_touch",
+      "status": "reproduced on clean HEAD",
+      "reason": "cursor mock does not handle the existing lead_workstream_research query"
+    },
+    {
+      "test": "test_lead_drawer_exposes_manual_touch_actions_for_needs_attention",
+      "status": "unrelated pre-existing dirty-worktree test",
+      "reason": "expects UI copy absent before and after this patch"
+    }
+  ]
+}

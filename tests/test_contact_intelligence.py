@@ -252,6 +252,21 @@ def test_booking_provider_contacts_are_not_attributed_to_the_salon():
     assert ("telegram", "https://t.me/dikidi_business") not in typed_values
 
 
+def test_estem_tax_id_and_medical_license_are_not_extracted_as_phone_contacts():
+    contacts = extract_contacts_from_html(
+        """
+        <html><body>
+          <p>ИНН 7811736556, № Л041-01148-78/00359881</p>
+        </body></html>
+        """,
+        "https://estem-clinic.ru/contacts",
+    )
+
+    assert [
+        item for item in contacts if item["contact_type"] == "phone"
+    ] == []
+
+
 def test_messenger_contact_drops_prefilled_message_query():
     assert normalize_contact_value(
         "whatsapp",

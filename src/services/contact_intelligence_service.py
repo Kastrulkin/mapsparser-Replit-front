@@ -175,6 +175,17 @@ def normalize_phone(value: Any) -> str:
     return "+" + digits
 
 
+def _looks_like_non_phone_identifier(text: str, start: int, end: int) -> bool:
+    """Reject tax and licence identifiers found in unstructured page text."""
+    prefix = text[max(0, start - 32) : start]
+    suffix = text[end : min(len(text), end + 16)]
+    if re.search(r"(?:инн|огрн|кпп|снилс)\s*[:№#-]?\s*$", prefix, re.I):
+        return True
+    if re.search(r"(?:лицензи(?:я|и|ю)|№)\s*[лl]?\s*$", prefix, re.I):
+        return True
+    return bool(re.match(r"\s*/\s*\d", suffix))
+
+
 def normalize_contact_value(contact_type: str, value: Any) -> str:
     normalized_type = str(contact_type or "").strip().lower()
     raw = unescape(str(value or "")).strip()
@@ -675,8 +686,10 @@ def extract_contacts_from_html(html: str, page_url: str) -> list[dict[str, Any]]
     text = soup.get_text(" ", strip=True)
     for email in EMAIL_PATTERN.findall(text):
         add("email", email)
-    for phone in PHONE_PATTERN.findall(text):
-        add("phone", phone)
+    for match in PHONE_PATTERN.finditer(text):
+        if _looks_like_non_phone_identifier(text, match.start(), match.end()):
+            continue
+        add("phone", match.group(0))
     for anchor in soup.select("a[href]"):
         href = str(anchor.get("href") or "").strip()
         if href.lower().startswith("mailto:"):
