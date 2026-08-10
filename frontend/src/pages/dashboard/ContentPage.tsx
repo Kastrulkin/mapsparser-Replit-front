@@ -78,6 +78,7 @@ type PlanItem = {
   content_type?: string;
   metadata_json?: {
     generation_source?: string;
+    selected_channels?: string[];
     brief_answers?: Record<string, string>;
     content_brief_v1?: ContentBrief;
     content_generation_v2?: {
@@ -336,6 +337,33 @@ const selectedChannelsFromPlan = (plan?: PlanPayload | null) => {
   const nested = plan?.generated_plan_json?.meta?.selected_channels;
   const channels = Array.isArray(direct) ? direct : Array.isArray(nested) ? nested : [];
   return channels.map((value) => String(value || '').trim()).filter(Boolean);
+};
+
+const selectedChannelsFromItem = (item?: PlanItem | null) => {
+  const channels = item?.metadata_json?.selected_channels;
+  if (!Array.isArray(channels)) return [];
+  const allowedChannels = new Set(CHANNELS.map((channel) => channel.key));
+  return channels
+    .map((value) => String(value || '').trim())
+    .filter((value, index, values) => allowedChannels.has(value) && values.indexOf(value) === index);
+};
+
+const selectedChannelKeys = (selection: Record<string, boolean>) => (
+  CHANNELS.filter((channel) => Boolean(selection[channel.key])).map((channel) => channel.key)
+);
+
+const sameSelectedChannels = (left: string[], right: string[]) => (
+  left.length === right.length && left.every((channel) => right.includes(channel))
+);
+
+const resolveItemSelectedChannels = (item: PlanItem | null, posts: SocialPost[], plan: PlanPayload | null) => {
+  const itemChannels = selectedChannelsFromItem(item);
+  if (itemChannels.length > 0) return itemChannels;
+  const postChannels = CHANNELS
+    .map((channel) => channel.key)
+    .filter((channel) => posts.some((post) => String(post.platform || '').trim() === channel));
+  if (postChannels.length > 0) return postChannels;
+  return selectedChannelsFromPlan(plan);
 };
 
 const normalizeIsoDate = (value?: string) => {
@@ -931,11 +959,11 @@ export function ContentPage() {
   }, [selectedItemId]);
 
   useEffect(() => {
-    if (!currentPlan?.id) return;
-    const planChannels = selectedChannelsFromPlan(currentPlan);
-    const existingChannels = Array.from(new Set(socialPosts.map((post) => String(post.platform || '').trim()).filter(Boolean)));
-    setPublicationChannels(buildChannelSelection(planChannels.length > 0 ? planChannels : existingChannels));
-  }, [currentPlan?.id, currentPlan?.generated_plan_json, socialPosts]);
+    if (!selectedItemId) return;
+    const item = items.find((candidate) => candidate.id === selectedItemId) || null;
+    const itemPosts = item ? postsByItem[item.id] || [] : [];
+    setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, itemPosts, currentPlan)));
+  }, [currentPlan, items, postsByItem, selectedItemId]);
 
   useEffect(() => {
     if (!selectedItemId || !currentBusinessId) return;
@@ -988,6 +1016,7 @@ export function ContentPage() {
     setDraftEdits((prev) => ({ ...prev, [item.id]: String(item.draft_text || '') }));
     setThemeEdits((prev) => ({ ...prev, [item.id]: String(item.theme || item.goal || '') }));
     setDateEdits((prev) => ({ ...prev, [item.id]: getItemDateKey(item) }));
+    setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, postsByItem[item.id] || [], currentPlan)));
   };
 
   const loadMediaRecommendation = async (itemId: string) => {
@@ -1231,16 +1260,34 @@ export function ContentPage() {
     setError('');
     setActionMessage('');
     try {
+      const selectedPlatforms = selectedChannelKeys(publicationChannels);
+      if (selectedPlatforms.length === 0) {
+        setError('Выберите хотя бы один канал публикации.');
+        return;
+      }
+      const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
+      const channelsChanged = !sameSelectedChannels(selectedPlatforms, storedPlatforms);
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
         body: JSON.stringify({
           theme: themeEdits[selectedItem.id],
           scheduled_for: dateEdits[selectedItem.id],
           draft_text: draftEdits[selectedItem.id],
+          selected_channels: selectedPlatforms,
         }),
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
+      if (channelsChanged && selectedPosts.length > 0) {
+        await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
+          method: 'POST',
+          body: JSON.stringify({
+            item_ids: [selectedItem.id],
+            platforms: selectedPlatforms,
+            replace_platforms: true,
+          }),
+        });
+      }
       if (plan?.id) await loadSocialPosts(plan.id);
       setActionMessage('Изменения сохранены.');
     } catch (saveError) {
@@ -1391,11 +1438,21 @@ export function ContentPage() {
     setBusyAction('prepare');
     setError('');
     try {
-      const selectedPlatforms = CHANNELS.filter((channel) => publicationChannels[channel.key]).map((channel) => channel.key);
+      const selectedPlatforms = selectedChannelKeys(publicationChannels);
       if (selectedPlatforms.length === 0) {
         setError('Выберите хотя бы один канал публикации.');
         return [];
       }
+      const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          theme: themeEdits[selectedItem.id] ?? selectedItem.theme ?? '',
+          scheduled_for: dateEdits[selectedItem.id] ?? selectedItem.scheduled_for ?? '',
+          draft_text: draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '',
+          selected_channels: selectedPlatforms,
+        }),
+      });
+      if (saveResponse.plan) setCurrentPlan(saveResponse.plan);
       const response = await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
         method: 'POST',
         body: JSON.stringify({
@@ -1511,10 +1568,18 @@ export function ContentPage() {
       const currentDraftText = String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '');
       const currentTheme = String(themeEdits[selectedItem.id] ?? selectedItem.theme ?? '');
       const currentDate = String(dateEdits[selectedItem.id] ?? selectedItem.scheduled_for ?? '');
+      const selectedPlatforms = selectedChannelKeys(publicationChannels);
+      if (selectedPlatforms.length === 0) {
+        setError('Выберите хотя бы один канал публикации.');
+        return;
+      }
+      const storedPlatforms = resolveItemSelectedChannels(selectedItem, selectedPosts, currentPlan);
+      const channelsChanged = !sameSelectedChannels(selectedPlatforms, storedPlatforms);
       const draftChanged = currentDraftText !== String(selectedItem.draft_text ?? '');
       const itemChanged = draftChanged
         || currentTheme !== String(selectedItem.theme ?? '')
-        || normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for);
+        || normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for)
+        || channelsChanged;
 
       if (itemChanged) {
         const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
@@ -1523,20 +1588,14 @@ export function ContentPage() {
             theme: currentTheme,
             scheduled_for: currentDate,
             draft_text: currentDraftText,
+            selected_channels: selectedPlatforms,
           }),
         });
         if (saveResponse.plan) setCurrentPlan(saveResponse.plan);
       }
 
       let posts = postsByItem[selectedItem.id] || [];
-      if (posts.length === 0) {
-        const selectedPlatforms = CHANNELS
-          .filter((channel) => publicationChannels[channel.key])
-          .map((channel) => channel.key);
-        if (selectedPlatforms.length === 0) {
-          setError('Выберите хотя бы один канал публикации.');
-          return;
-        }
+      if (posts.length === 0 || channelsChanged) {
         const prepareResponse = await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
           method: 'POST',
           body: JSON.stringify({
@@ -2349,6 +2408,14 @@ export function ContentPage() {
     const currentDraftText = String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim();
     const hasUnsavedDraftChanges = Boolean(item)
       && String(draftEdits[item.id] ?? item.draft_text ?? '') !== String(item.draft_text ?? '');
+    const currentItemChannels = selectedChannelKeys(publicationChannels);
+    const storedItemChannels = resolveItemSelectedChannels(item, selectedPosts, currentPlan);
+    const hasUnsavedItemChanges = Boolean(item) && (
+      hasUnsavedDraftChanges
+      || String(themeEdits[item.id] ?? item.theme ?? '') !== String(item.theme ?? '')
+      || normalizeIsoDate(dateEdits[item.id] ?? item.scheduled_for) !== normalizeIsoDate(item.scheduled_for)
+      || !sameSelectedChannels(currentItemChannels, storedItemChannels)
+    );
     const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
     const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
     const storedBrief = item?.metadata_json?.content_brief_v1;
@@ -2886,7 +2953,7 @@ export function ContentPage() {
                   ) : null}
                 </div>
                 <div className="grid gap-2">
-                  {hasUnsavedDraftChanges ? (
+                  {hasUnsavedItemChanges ? (
                     <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
                       {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
                     </Button>

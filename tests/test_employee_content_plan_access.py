@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from services import content_plan_service
@@ -76,6 +78,8 @@ class ContentPlanAccessCursor:
             ]
         elif "select coalesce(is_superadmin, false)" in normalized:
             self.one = {"coalesce": False}
+        elif "select to_regclass('public.social_posts')" in normalized:
+            self.one = {"to_regclass": "social_posts"}
 
     def fetchone(self):
         return self.one
@@ -148,6 +152,55 @@ def test_active_network_member_can_edit_shared_content_plan_item(monkeypatch):
     assert plan["items"][0]["draft_text"] == "Обновлённый текст"
     assert database.committed is True
     assert any(query.startswith("update contentplanitems") for query, _params in database.cursor_value.executed)
+
+
+def test_content_plan_item_saves_selected_channels_in_metadata(monkeypatch):
+    database = install_access_fixture(monkeypatch, allow_member=True)
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {"id": "plan-1", "items": [{"id": "item-1"}]},
+    )
+
+    content_plan_service.update_content_plan_item(
+        "member-1",
+        "item-1",
+        {"selected_channels": ["telegram", "yandex_maps", "telegram", "unknown"]},
+    )
+
+    update_params = next(
+        params
+        for query, params in database.cursor_value.executed
+        if query.startswith("update contentplanitems")
+    )
+    metadata_payloads = [
+        json.loads(value)
+        for value in update_params
+        if isinstance(value, str) and value.startswith("{")
+    ]
+    assert {"selected_channels": ["telegram", "yandex_maps"]} in metadata_payloads
+
+
+def test_content_plan_item_date_updates_prepared_social_posts(monkeypatch):
+    database = install_access_fixture(monkeypatch, allow_member=True)
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {"id": "plan-1", "items": [{"id": "item-1", "scheduled_for": "2026-08-10"}]},
+    )
+
+    content_plan_service.update_content_plan_item(
+        "member-1",
+        "item-1",
+        {"scheduled_for": "2026-08-10"},
+    )
+
+    social_update = next(
+        (query, params)
+        for query, params in database.cursor_value.executed
+        if query.startswith("update social_posts")
+    )
+    assert social_update[1] == ("2026-08-10", "item-1")
 
 
 def test_unrelated_user_cannot_open_shared_content_plan(monkeypatch):

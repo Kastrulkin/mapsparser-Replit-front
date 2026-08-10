@@ -30,6 +30,17 @@ from services.content_voice_service import load_content_voice_context
 from subscription_manager import get_allowed_content_plan_horizons, get_subscription_access
 
 
+CONTENT_PLAN_PUBLISHING_CHANNELS = (
+    "yandex_maps",
+    "two_gis",
+    "google_business",
+    "telegram",
+    "vk",
+    "instagram",
+    "facebook",
+)
+
+
 def _row_get(row: Any, key: str, index: int = 0, default: Any = None) -> Any:
     if row is None:
         return default
@@ -2267,6 +2278,15 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             previous_answers = metadata_value.get("brief_answers") if isinstance(metadata_value.get("brief_answers"), dict) else {}
             updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
             params.append(json.dumps({"brief_answers": {**previous_answers, **clean_answers}}, ensure_ascii=False))
+        if "selected_channels" in payload:
+            incoming_channels = payload.get("selected_channels") if isinstance(payload.get("selected_channels"), list) else []
+            selected_channels = []
+            for channel in incoming_channels:
+                normalized_channel = str(channel or "").strip()
+                if normalized_channel in CONTENT_PLAN_PUBLISHING_CHANNELS and normalized_channel not in selected_channels:
+                    selected_channels.append(normalized_channel)
+            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
+            params.append(json.dumps({"selected_channels": selected_channels}, ensure_ascii=False))
         if "selected_variant_id" in payload:
             selected_variant_id = str(payload.get("selected_variant_id") or "").strip()
             generation_bundle = metadata_value.get("content_generation_v2") if isinstance(metadata_value.get("content_generation_v2"), dict) else {}
@@ -2306,6 +2326,20 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             """,
             tuple(params),
         )
+        if "scheduled_for" in payload:
+            cursor.execute("SELECT to_regclass('public.social_posts')")
+            social_posts_table = _row_get(cursor.fetchone(), "to_regclass", 0)
+            if social_posts_table:
+                cursor.execute(
+                    """
+                    UPDATE social_posts
+                    SET scheduled_for = %s,
+                        updated_at = NOW()
+                    WHERE content_plan_item_id = %s
+                      AND status NOT IN ('publishing', 'published')
+                    """,
+                    (payload.get("scheduled_for"), item_id),
+                )
         next_status = str(payload.get("status") or "").strip() if "status" in payload else previous_status
         event_type = "edited"
         edit_class = ""
