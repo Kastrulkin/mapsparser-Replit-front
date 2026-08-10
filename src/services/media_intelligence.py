@@ -394,6 +394,8 @@ def _library_label(key: str) -> str:
 def _goal_categories(goal: str, platforms: list[str]) -> list[str]:
     source = goal.lower().replace("ё", "е")
     categories: list[str] = []
+    if "первая стрижк" in source:
+        categories.extend(["first_haircut", "parents", "interior", "process"])
     if any(token in source for token in ["анонс", "событ", "афиша", "напомин"]):
         categories.extend(["event", "atmosphere", "team", "interior"])
     if any(token in source for token in ["акц", "прода", "сертификат", "окна"]):
@@ -437,6 +439,24 @@ def _photo_why(asset: dict[str, Any], platforms: list[str]) -> str:
     return f"Подходит как визуальный актив категории «{category}»."
 
 
+def prioritize_selected_photo(
+    ranked: list[dict[str, Any]],
+    selected_asset_id: str,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], bool]:
+    selected_id = _clean_text(selected_asset_id)
+    if selected_id:
+        for asset in ranked:
+            if _clean_text(asset.get("id")) != selected_id:
+                continue
+            selected = dict(asset)
+            selected["why"] = "Вы выбрали это фото для публикации."
+            alternatives = [item for item in ranked if _clean_text(item.get("id")) != selected_id]
+            return selected, alternatives, True
+    if not ranked:
+        return None, [], False
+    return ranked[0], ranked[1:], False
+
+
 def recommend_media_for_post(
     cursor: Any,
     *,
@@ -469,12 +489,29 @@ def recommend_media_for_post(
     goal = " ".join([_clean_text(item.get("theme")), _clean_text(item.get("goal")), _clean_text(item.get("content_type"))])
     assets = list_photo_assets(cursor, business_id)
     ranked = rank_photo_assets(assets, goal=goal, platforms=platforms)
+    cursor.execute(
+        """
+        SELECT photo_asset_id
+        FROM photo_asset_usage_events
+        WHERE business_id = %s
+          AND usage_type = 'publication'
+          AND target_id = %s
+          AND (target_platform IS NULL OR target_platform = '')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, content_plan_item_id),
+    )
+    selected_usage = _row_to_dict(cursor, cursor.fetchone()) or {}
+    best, alternatives, manually_selected = prioritize_selected_photo(
+        ranked,
+        _clean_text(selected_usage.get("photo_asset_id")),
+    )
     coverage = build_photo_coverage(cursor, business_id)
     hints = [PLATFORM_HINTS[key] for key in platforms if key in PLATFORM_HINTS]
-    if ranked:
-        best = ranked[0]
+    if best:
         status = "ready" if int(best.get("quality_score") or 0) >= 55 else "weak"
-        title = "Фото подобрано" if status == "ready" else "Лучше заменить фото"
+        title = "Фото выбрано" if manually_selected else "Фото подобрано" if status == "ready" else "Лучше заменить фото"
         message = best["why"]
     else:
         best = None
@@ -491,7 +528,8 @@ def recommend_media_for_post(
         "title": title,
         "message": message,
         "selected_asset": best,
-        "alternatives": ranked[1:4],
+        "selection_source": "manual" if manually_selected else "recommendation",
+        "alternatives": alternatives[:3],
         "coverage": coverage,
         "platform_hints": hints[:4],
     }

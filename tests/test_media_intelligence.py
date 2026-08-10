@@ -1,4 +1,4 @@
-from services.media_intelligence import detect_photo_library_key, rank_photo_assets
+from services.media_intelligence import detect_photo_library_key, prioritize_selected_photo, rank_photo_assets
 
 
 def test_detects_kids_hair_salon_library():
@@ -47,3 +47,40 @@ def test_photo_ranking_prefers_platform_and_goal_match():
 
     assert ranked[0]["id"] == "best"
     assert ranked[0]["rank_score"] > ranked[1]["rank_score"]
+
+
+def test_first_haircut_prefers_child_friendly_interior_over_generic_process():
+    assets = [
+        {
+            "id": "generic-process",
+            "category": "process",
+            "quality_score": 90,
+            "freshness_score": 80,
+            "suitable_platforms": [],
+        },
+        {
+            "id": "child-interior",
+            "category": "interior",
+            "quality_score": 90,
+            "freshness_score": 90,
+            "suitable_platforms": [],
+        },
+    ]
+
+    ranked = rank_photo_assets(assets, goal="Первая стрижка ребёнка", platforms=[])
+
+    assert ranked[0]["id"] == "child-interior"
+
+
+def test_manual_photo_selection_overrides_automatic_ranking():
+    ranked = [
+        {"id": "automatic", "why": "Автоматический выбор"},
+        {"id": "manual", "why": "Альтернатива"},
+    ]
+
+    selected, alternatives, manually_selected = prioritize_selected_photo(ranked, "manual")
+
+    assert selected["id"] == "manual"
+    assert selected["why"] == "Вы выбрали это фото для публикации."
+    assert [item["id"] for item in alternatives] == ["automatic"]
+    assert manually_selected is True

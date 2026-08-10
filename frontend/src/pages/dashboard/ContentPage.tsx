@@ -1111,10 +1111,8 @@ export function ContentPage() {
     }
   };
 
-  const recordSelectedPhotoUsage = async () => {
+  const recordPhotoUsage = async (assetId: string) => {
     if (!selectedItem || !currentBusinessId) return;
-    const recommendation = mediaRecommendations[selectedItem.id];
-    const assetId = recommendation?.selected_asset?.id;
     if (!assetId) {
       setError('Сначала загрузите или выберите подходящее фото.');
       return;
@@ -1148,6 +1146,12 @@ export function ContentPage() {
     } finally {
       setBusyAction('');
     }
+  };
+
+  const recordSelectedPhotoUsage = async () => {
+    if (!selectedItem) return;
+    const recommendation = mediaRecommendations[selectedItem.id];
+    await recordPhotoUsage(String(recommendation?.selected_asset?.id || ''));
   };
 
   const saveSelectedItem = async () => {
@@ -2500,7 +2504,14 @@ export function ContentPage() {
                         <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Альтернативы</div>
                         <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                           {mediaRecommendation.alternatives.slice(0, 3).map((asset) => (
-                            <div key={asset.id} className="w-28 shrink-0 rounded-2xl bg-slate-50 p-2">
+                            <button
+                              key={asset.id}
+                              type="button"
+                              onClick={() => { void recordPhotoUsage(String(asset.id || '')); }}
+                              disabled={busyAction === 'photo-usage'}
+                              aria-label={`Выбрать фото: ${formatPhotoCategoryLabel(asset.category)}`}
+                              className="w-28 shrink-0 rounded-2xl bg-slate-50 p-2 text-left transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 disabled:opacity-50"
+                            >
                               {photoImageSrc(asset) ? (
                                 <AuthenticatedImage src={photoImageSrc(asset)} alt="Альтернативное фото" className="h-20 w-full rounded-xl object-cover ring-1 ring-black/10" />
                               ) : (
@@ -2509,7 +2520,8 @@ export function ContentPage() {
                                 </div>
                               )}
                               <div className="mt-1 truncate text-[11px] font-medium text-slate-600">{formatPhotoCategoryLabel(asset.category)}</div>
-                            </div>
+                              <div className="mt-1 text-[11px] font-semibold text-slate-900">Выбрать</div>
+                            </button>
                           ))}
                         </div>
                       </div>
