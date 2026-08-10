@@ -71,7 +71,7 @@ COHORTS = {
         ),
         "angles": (
             "signal", "founder_origin", "content_operations",
-            "average_ticket", "integrated_system", "respectful_close",
+            "average_ticket", "integrated_system", "audit_step",
         ),
     },
     "new_service": {
@@ -80,7 +80,7 @@ COHORTS = {
         "expansion": (),
         "angles": (
             "signal", "founder_origin", "proof",
-            "content_operations", "integrated_system", "respectful_close",
+            "content_operations", "integrated_system", "audit_step",
         ),
     },
     "event": {
@@ -89,7 +89,7 @@ COHORTS = {
         "expansion": (),
         "angles": (
             "signal", "founder_origin", "proof",
-            "content_operations", "integrated_system", "respectful_close",
+            "content_operations", "integrated_system", "audit_step",
         ),
     },
 }

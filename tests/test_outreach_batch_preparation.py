@@ -82,7 +82,7 @@ def test_sequence_selects_localosgo_without_enabling_delivery() -> None:
     ]
     assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12, 18, 25]
     assert [item["angle"] for item in sequence] == [
-        "signal", "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
+        "signal", "founder_story", "proof", "audit_step", "phone_handoff", "integrated_system",
     ]
     assert sequence[0]["sender_account_id"] == "sender-localosgo"
     assert sequence[5]["sender_account_id"] == "sender-localosgo"

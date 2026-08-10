@@ -2302,7 +2302,7 @@ def prepare_outreach_experiment_drafts(experiment_id: str):
             {"channel": "email", "day_offset": 0, "angle": "signal"},
             {"channel": "email", "day_offset": 3, "angle": "founder_story"},
             {"channel": "email", "day_offset": 7, "angle": "proof"},
-            {"channel": "email", "day_offset": 12, "angle": "respectful_close"},
+            {"channel": "email", "day_offset": 12, "angle": "integrated_system"},
         ]
         for candidate in selection["candidates"]:
             preview = build_preview(cursor, candidate["workstream_id"], sequence=sequence, sender_mode="localos")

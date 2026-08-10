@@ -33,6 +33,7 @@ from services.outreach_personalization_ai import (
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.discovered_telegram_source_service import discovered_telegram_signals
+from services.lead_partner_type_service import partner_types_for_category
 
 try:
     import dns.resolver
@@ -82,6 +83,41 @@ UNSUPPORTED_PROMISE_PATTERNS = (
     re.compile(r"недополуча(?:ете|ют) клиент", re.I),
     re.compile(r"внедрим под ключ", re.I),
 )
+
+# Public booking/CRM fingerprints are deliberately registry-driven.  A domain
+# is added only after the provider's own documentation confirms that customer
+# booking links or widgets use it.  Unknown systems require an explicit
+# provider attribute; a generic "Записаться" button is not enough evidence.
+BOOKING_CRM_PROVIDER_REGISTRY = (
+    {
+        "key": "yclients",
+        "name": "YCLIENTS",
+        "domains": ("yclients.com", "yclients.ru"),
+        "text_markers": ("yclients",),
+    },
+    {
+        "key": "dikidi",
+        "name": "DIKIDI",
+        "domains": ("dikidi.net",),
+        "text_markers": ("dikidi",),
+    },
+    {
+        "key": "altegio",
+        "name": "Altegio",
+        "domains": ("alteg.io",),
+        "text_markers": ("altegio",),
+    },
+)
+BOOKING_CONTEXT_MARKERS = (
+    "appointment", "book", "booking", "crm", "online", "reserve", "schedule",
+    "виджет", "запис", "онлайн-запис", "прием", "приём",
+)
+EXPLICIT_PROVIDER_KEYS = {
+    "bookingprovider", "booking_provider", "crmprovider", "crm_provider",
+    "crmsystem", "crm_system", "appointmentprovider", "appointment_provider",
+    "bookingpartner", "booking_partner",
+}
+BOOKING_PARTNER_VALUE_KEYS = {"partner", "provider"}
 
 
 class PersonalizationGenerationError(RuntimeError):
@@ -243,6 +279,346 @@ def _public_http_url(value: Any) -> str | None:
     return candidate
 
 
+def _normalized_host(value: Any) -> str:
+    try:
+        return (urlparse(str(value or "")).hostname or "").lower().removeprefix("www.")
+    except ValueError:
+        return ""
+
+
+def _host_matches_domain(host: str, domain: str) -> bool:
+    normalized_host = str(host or "").lower().removeprefix("www.")
+    normalized_domain = str(domain or "").lower().removeprefix("www.")
+    return bool(
+        normalized_host
+        and normalized_domain
+        and (
+            normalized_host == normalized_domain
+            or normalized_host.endswith(f".{normalized_domain}")
+        )
+    )
+
+
+def _provider_for_host(host: str) -> dict[str, Any] | None:
+    for provider in BOOKING_CRM_PROVIDER_REGISTRY:
+        if any(_host_matches_domain(host, domain) for domain in provider["domains"]):
+            return provider
+    return None
+
+
+def _provider_for_text(value: Any) -> dict[str, Any] | None:
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    if not normalized:
+        return None
+    for provider in BOOKING_CRM_PROVIDER_REGISTRY:
+        if any(marker in normalized for marker in provider["text_markers"]):
+            return provider
+    return None
+
+
+def _booking_context(value: Any) -> bool:
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    return any(marker in normalized for marker in BOOKING_CONTEXT_MARKERS)
+
+
+def _public_urls_in_text(value: Any) -> list[str]:
+    urls = []
+    for match in re.findall(r"https?://[^\s\"'<>]+", str(value or ""), flags=re.IGNORECASE):
+        candidate = match.rstrip(".,);]}")
+        if _normalized_host(candidate):
+            urls.append(candidate)
+    return urls
+
+
+def _crm_observation(
+    *,
+    provider: dict[str, Any] | None,
+    provider_name: str,
+    provider_domain: str,
+    source_url: str,
+    source_type: str,
+    booking_url: str = "",
+    observed_at: Any = None,
+    confidence: float,
+) -> dict[str, Any]:
+    effective_name = str(provider.get("name") if provider else provider_name).strip()
+    return {
+        "provider_key": str(provider.get("key") if provider else "other_booking_crm"),
+        "provider_name": effective_name or "Другая система онлайн-записи",
+        "provider_domain": str(provider_domain or "").lower(),
+        "source_url": str(source_url or "").strip(),
+        "source_type": str(source_type or "public"),
+        "observed_at": str(observed_at or datetime.now(timezone.utc).isoformat()),
+        "confidence": max(0.0, min(float(confidence), 1.0)),
+        "evidence_kind": "public_booking_crm",
+        "booking_url": str(booking_url or "").strip() or None,
+    }
+
+
+def extract_booking_crm_observations_from_html(
+    html: str,
+    page_url: str,
+    *,
+    observed_at: Any = None,
+) -> list[dict[str, Any]]:
+    """Extract explicit booking-system evidence from one official page."""
+    soup = BeautifulSoup(html or "", "html.parser")
+    observations: list[dict[str, Any]] = []
+    explicit_attributes = ("data-booking-provider", "data-crm-provider")
+    for element in soup.select("a[href], script[src], iframe[src], form[action], [data-booking-provider], [data-crm-provider]"):
+        raw_target = str(
+            element.get("href")
+            or element.get("src")
+            or element.get("action")
+            or ""
+        ).strip()
+        target_url = urljoin(page_url, raw_target) if raw_target else ""
+        target_host = _normalized_host(target_url)
+        provider = _provider_for_host(target_host)
+        element_text = " ".join(
+            str(value or "")
+            for value in (
+                element.get_text(" ", strip=True),
+                element.get("class"),
+                element.get("id"),
+                element.get("aria-label"),
+                element.get("title"),
+            )
+        )
+        if provider:
+            observations.append(_crm_observation(
+                provider=provider,
+                provider_name="",
+                provider_domain=target_host,
+                source_url=page_url,
+                source_type="official_website",
+                booking_url=target_url,
+                observed_at=observed_at,
+                confidence=0.96,
+            ))
+            continue
+
+        named_provider = _provider_for_text(element_text)
+        if named_provider and _booking_context(element_text):
+            observations.append(_crm_observation(
+                provider=named_provider,
+                provider_name="",
+                provider_domain=target_host,
+                source_url=page_url,
+                source_type="official_website",
+                booking_url=target_url,
+                observed_at=observed_at,
+                confidence=0.9,
+            ))
+            continue
+
+        explicit_name = next(
+            (
+                str(element.get(attribute) or "").strip()
+                for attribute in explicit_attributes
+                if str(element.get(attribute) or "").strip()
+            ),
+            "",
+        )
+        if (
+            explicit_name
+            and target_host
+            and not _host_matches_domain(target_host, _normalized_host(page_url))
+        ):
+            observations.append(_crm_observation(
+                provider=None,
+                provider_name=explicit_name,
+                provider_domain=target_host,
+                source_url=page_url,
+                source_type="official_website",
+                booking_url=target_url,
+                observed_at=observed_at,
+                confidence=0.78,
+            ))
+
+    unique: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for observation in observations:
+        key = (
+            str(observation.get("provider_key")),
+            str(observation.get("provider_domain")),
+            str(observation.get("source_url")),
+        )
+        unique[key] = observation
+    return list(unique.values())
+
+
+def _map_payload_crm_observations(lead: dict[str, Any]) -> list[dict[str, Any]]:
+    source_url = str(lead.get("source_url") or "").strip()
+    if not _normalized_host(source_url):
+        return []
+    observations: list[dict[str, Any]] = []
+
+    def add_known(value: Any, key_path: str) -> None:
+        raw = str(value or "").strip()
+        urls = _public_urls_in_text(raw)
+        known_url_provider_found = False
+        for booking_url in urls:
+            host = _normalized_host(booking_url)
+            provider = _provider_for_host(host)
+            if provider:
+                known_url_provider_found = True
+                observations.append(_crm_observation(
+                    provider=provider,
+                    provider_name="",
+                    provider_domain=host,
+                    source_url=source_url,
+                    source_type="map_payload",
+                    booking_url=booking_url,
+                    confidence=0.96,
+                ))
+        provider = _provider_for_text(raw)
+        if provider and _booking_context(key_path) and not known_url_provider_found:
+            observations.append(_crm_observation(
+                provider=provider,
+                provider_name="",
+                provider_domain="",
+                source_url=source_url,
+                source_type="map_payload",
+                confidence=0.88,
+            ))
+
+    def walk(value: Any, key_path: str = "", depth: int = 0) -> None:
+        if depth > 7:
+            return
+        if isinstance(value, dict):
+            normalized_items = {
+                str(key or "").strip().lower().replace("-", "_"): item
+                for key, item in value.items()
+            }
+            explicit_provider_field = any(
+                key.replace("_", "") in {
+                    provider_key.replace("_", "")
+                    for provider_key in EXPLICIT_PROVIDER_KEYS
+                }
+                and not isinstance(item, (dict, list))
+                and str(item or "").strip()
+                for key, item in normalized_items.items()
+            )
+            explicit_name = next(
+                (
+                    str(item or "").strip()
+                    for key, item in normalized_items.items()
+                    if key.replace("_", "") in {item.replace("_", "") for item in EXPLICIT_PROVIDER_KEYS}
+                    and not isinstance(item, (dict, list))
+                    and str(item or "").strip()
+                ),
+                "",
+            )
+            if not explicit_name and _booking_context(key_path):
+                explicit_name = next(
+                    (
+                        str(item or "").strip()
+                        for key, item in normalized_items.items()
+                        if key in BOOKING_PARTNER_VALUE_KEYS
+                        and not isinstance(item, (dict, list))
+                        and str(item or "").strip()
+                    ),
+                    "",
+                )
+            if explicit_name:
+                booking_url = next(
+                    (
+                        url
+                        for key, item in normalized_items.items()
+                        if _booking_context(key)
+                        for url in _public_urls_in_text(item)
+                    ),
+                    "",
+                )
+                booking_host = _normalized_host(booking_url)
+                if booking_host or explicit_provider_field or _booking_context(key_path):
+                    provider = _provider_for_host(booking_host) or _provider_for_text(explicit_name)
+                    observations.append(_crm_observation(
+                        provider=provider,
+                        provider_name=explicit_name,
+                        provider_domain=booking_host,
+                        source_url=source_url,
+                        source_type="map_payload",
+                        booking_url=booking_url,
+                        confidence=0.94 if provider else 0.75,
+                    ))
+            for key, item in value.items():
+                child_path = f"{key_path}.{key}" if key_path else str(key)
+                walk(item, child_path, depth + 1)
+            return
+        if isinstance(value, list):
+            for item in value:
+                walk(item, key_path, depth + 1)
+            return
+        add_known(value, key_path)
+
+    for field in ("raw_payload_json", "enrich_payload_json", "messenger_links_json"):
+        walk(lead.get(field), field)
+    return observations
+
+
+def _same_official_website(source_url: Any, website: Any) -> bool:
+    return bool(
+        _normalized_host(source_url)
+        and _normalized_host(source_url) == _normalized_host(website)
+    )
+
+
+def detect_public_booking_crm_observations(
+    lead: dict[str, Any],
+    artifact: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Return source-bound CRM observations for beauty/medical leads only."""
+    verticals = set(partner_types_for_category(lead.get("category")))
+    if not verticals.intersection({"beauty", "medicine", "dentistry"}):
+        return []
+    context = artifact if isinstance(artifact, dict) else {}
+    observations = _map_payload_crm_observations(lead)
+    website = lead.get("website")
+    for item in lead.get("public_crm_observations") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("source_type") != "official_website":
+            continue
+        if not _same_official_website(item.get("source_url"), website):
+            continue
+        observations.append(dict(item))
+    for radar_signal in context.get("radar_signals") or []:
+        if not isinstance(radar_signal, dict) or not radar_signal.get("auto_discovered"):
+            continue
+        source_url = str(radar_signal.get("message_link") or "").strip()
+        if not _normalized_host(source_url):
+            continue
+        message_text = str(radar_signal.get("message_text") or "")
+        for booking_url in _public_urls_in_text(message_text):
+            provider_domain = _normalized_host(booking_url)
+            provider = _provider_for_host(provider_domain)
+            if not provider:
+                continue
+            observations.append(_crm_observation(
+                provider=provider,
+                provider_name="",
+                provider_domain=provider_domain,
+                source_url=source_url,
+                source_type="official_social",
+                booking_url=booking_url,
+                observed_at=radar_signal.get("message_date"),
+                confidence=0.92,
+            ))
+    unique: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for observation in observations:
+        key = (
+            str(observation.get("provider_key")),
+            str(observation.get("provider_name")),
+            str(observation.get("provider_domain")),
+            str(observation.get("source_url")),
+        )
+        current = unique.get(key)
+        if not current or float(observation.get("confidence") or 0) > float(current.get("confidence") or 0):
+            unique[key] = observation
+    return list(unique.values())
+
+
 def extract_contacts_from_html(html: str, page_url: str) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html or "", "html.parser")
     found: list[dict[str, Any]] = []
@@ -368,12 +744,15 @@ def _contact_pages(html: str, website_url: str, limit: int = 5) -> list[str]:
     return pages
 
 
-def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]], list[str]]:
+def collect_public_website_intelligence(
+    website: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     safe_url = _public_http_url(website)
     if not safe_url:
-        return [], ["Официальный сайт не указан или недоступен для безопасной проверки"]
+        return [], [], ["Официальный сайт не указан или недоступен для безопасной проверки"]
     headers = {"User-Agent": "LocalOS Contact Intelligence/1.0 (+https://localos.pro)"}
     contacts: list[dict[str, Any]] = []
+    crm_observations: list[dict[str, Any]] = []
     warnings: list[str] = []
     queue = [safe_url]
     visited: set[str] = set()
@@ -398,6 +777,9 @@ def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]],
                 continue
             html = body.decode(response.encoding or "utf-8", errors="replace")
             contacts.extend(extract_contacts_from_html(html, response.url))
+            crm_observations.extend(
+                extract_booking_crm_observations_from_html(html, response.url)
+            )
             if len(visited) == 1:
                 queue.extend(_contact_pages(html, response.url))
         except (requests.RequestException, Urllib3HTTPError):
@@ -406,7 +788,20 @@ def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]],
     for contact in contacts:
         key = (str(contact.get("contact_type")), str(contact.get("normalized_value")))
         unique[key] = contact
-    return list(unique.values()), warnings
+    unique_crm: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for observation in crm_observations:
+        key = (
+            str(observation.get("provider_key")),
+            str(observation.get("provider_domain")),
+            str(observation.get("source_url")),
+        )
+        unique_crm[key] = observation
+    return list(unique.values()), list(unique_crm.values()), warnings
+
+
+def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    contacts, _crm_observations, warnings = collect_public_website_intelligence(website)
+    return contacts, warnings
 
 
 def legacy_contact_candidates(lead: dict[str, Any]) -> list[dict[str, Any]]:
@@ -824,6 +1219,7 @@ def build_native_research_payload(
         published_at: Any = None,
         source_type: str | None = None,
         hypothesis: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         clean_fact = re.sub(r"\s+", " ", str(fact or "")).strip()
         clean_url = str(url or source_url or "").strip()
@@ -879,6 +1275,8 @@ def build_native_research_payload(
             "usable_for_outreach": usable_for_outreach,
             "rejected_reason": ",".join(rejected_reasons) or None,
         }
+        if isinstance(metadata, dict):
+            signal.update(metadata)
         signals.append(signal)
         if not any(item.get("url") == clean_url for item in sources):
             sources.append({
@@ -921,6 +1319,47 @@ def build_native_research_payload(
             "usable_for_outreach": False,
             "rejected_reason": "observation_missing_hypothesis_only",
         })
+
+    crm_observations = detect_public_booking_crm_observations(lead, artifact)
+    if workstream.get("workstream_type") == "localos_sales":
+        for observation in crm_observations:
+            provider_name = str(observation.get("provider_name") or "систему онлайн-записи").strip()
+            source_type = str(observation.get("source_type") or "public").strip()
+            source_label = {
+                "map_payload": "публичных данных карточки на картах",
+                "official_website": "официального сайта",
+                "official_social": "официальной соцсети",
+            }.get(source_type, "публичного источника")
+            add_signal(
+                "crm_presence",
+                f"В {source_label} найдена запись через {provider_name}.",
+                (
+                    "Это признак структурированного учёта записей, а не подтверждение боли. "
+                    "Он открывает только условные сценарии на основе безопасно переданных данных."
+                ),
+                url=str(observation.get("source_url") or ""),
+                confidence=float(observation.get("confidence") or 0.75),
+                published_at=(
+                    observation.get("observed_at")
+                    if source_type == "official_social" else None
+                ),
+                source_type=source_type,
+                metadata={
+                    "provider_key": observation.get("provider_key"),
+                    "provider_name": provider_name,
+                    "provider_domain": observation.get("provider_domain"),
+                    "booking_url": observation.get("booking_url"),
+                    "evidence_kind": observation.get("evidence_kind") or "public_booking_crm",
+                    "observed_at": observation.get("observed_at") or researched_at,
+                    "not_a_pain": True,
+                    "integration_mode": "manual_or_capability_check_required",
+                    "safe_angles": [
+                        "conditional_cross_sell_and_repeat_offer",
+                        "conditional_average_ticket_analysis",
+                        "manual_completed_service_content_draft",
+                    ],
+                },
+            )
 
     rating = lead.get("rating")
     try:
@@ -1110,6 +1549,8 @@ def build_native_research_payload(
             return 0
         if "указан рейтинг" in fact:
             return 1
+        if item.get("kind") == "crm_presence":
+            return 1
         if "официальный сайт не указан" in fact:
             return 2
         if "сейчас" in fact and "отзыв" in fact:
@@ -1123,6 +1564,24 @@ def build_native_research_payload(
         limitations.append("Не найден публичный специфичный сигнал, пригодный для персонализации")
     category = str(lead.get("category") or "").strip()
     signal_text = str(usable_signals[0].get("observed_fact") if usable_signals else "").strip()
+    crm_signal = next(
+        (item for item in usable_signals if item.get("kind") == "crm_presence"),
+        None,
+    )
+    crm_context = None
+    if crm_signal:
+        crm_context = {
+            "provider_key": crm_signal.get("provider_key"),
+            "provider_name": crm_signal.get("provider_name"),
+            "provider_domain": crm_signal.get("provider_domain"),
+            "source_url": crm_signal.get("source_url"),
+            "observed_at": crm_signal.get("observed_at") or researched_at,
+            "confidence": crm_signal.get("confidence"),
+            "evidence_kind": crm_signal.get("evidence_kind") or "public_booking_crm",
+            "not_a_pain": True,
+            "integration_mode": "manual_or_capability_check_required",
+            "safe_angles": list(crm_signal.get("safe_angles") or []),
+        }
     if workstream.get("workstream_type") == "client_partnership":
         client_name = str(workstream.get("client_business_name") or "бизнеса").strip()
         brief = {
@@ -1138,18 +1597,36 @@ def build_native_research_payload(
             "cta": "Обсудить один безопасный тест?",
         }
     else:
+        primary_is_crm = bool(
+            usable_signals and usable_signals[0].get("kind") == "crm_presence"
+        )
         brief = {
             "segment": category,
             "buyer_persona": "",
-            "kpi": "качество локального присутствия и обращений",
-            "pain": signal_text,
-            "pain_strength": "observed" if signal_text else "unknown",
-            "awareness": "unknown",
+            "kpi": (
+                "повторные обращения, средний чек и регулярный контент"
+                if primary_is_crm else "качество локального присутствия и обращений"
+            ),
+            "pain": "" if primary_is_crm else signal_text,
+            "pain_strength": (
+                "not_observed" if primary_is_crm
+                else "observed" if signal_text else "unknown"
+            ),
+            "awareness": "system_aware" if primary_is_crm else "unknown",
             "signal": signal_text,
-            "result": "короткого аудита карточки с одной проверяемой рекомендацией",
-            "angle": "публичный сигнал и практический следующий шаг",
-            "cta": "Прислать короткий разбор?",
+            "result": (
+                "проверки одного условного сценария на обезличенных или вручную переданных данных"
+                if primary_is_crm
+                else "короткого аудита карточки с одной проверяемой рекомендацией"
+            ),
+            "angle": (
+                "структурированный учёт записей без предположения о внутренней боли"
+                if primary_is_crm else "публичный сигнал и практический следующий шаг"
+            ),
+            "cta": "Показать один сценарий?" if primary_is_crm else "Прислать короткий разбор?",
         }
+        if crm_context:
+            brief["crm_context"] = crm_context
     contact_summary = artifact.get("contact_summary") if isinstance(artifact.get("contact_summary"), dict) else {}
     match_score = max(0, min(int(match.get("match_score") or 0), 100))
     raw_payload = lead.get("raw_payload_json") if isinstance(lead.get("raw_payload_json"), dict) else {}
@@ -1181,7 +1658,12 @@ def build_native_research_payload(
         service_compatibility = 0
         problem_strength = min(
             35,
-            sum(18 if item.get("kind") in {"map_issue", "review"} else 8 for item in usable_signals),
+            sum(
+                0 if item.get("kind") == "crm_presence"
+                else 18 if item.get("kind") in {"map_issue", "review"}
+                else 8
+                for item in usable_signals
+            ),
         )
         score = icp_fit + problem_strength + timing + evidence_quality + reachability
     if disqualifiers:
@@ -1213,11 +1695,20 @@ def build_native_research_payload(
             "fact": signal["observed_fact"],
             "status": "observed",
             "source_url": signal["source_url"],
-            "observed_at": signal.get("published_at") or researched_at,
+            "observed_at": signal.get("published_at") or signal.get("observed_at") or researched_at,
             "freshness": signal["freshness"],
             "confidence": signal["confidence"],
             "hypothesis": signal.get("hypothesis"),
             "relevance": signal["relevance"],
+            "source_type": signal.get("source_type"),
+            "researched_at": signal.get("researched_at") or researched_at,
+            "provider_key": signal.get("provider_key"),
+            "provider_name": signal.get("provider_name"),
+            "provider_domain": signal.get("provider_domain"),
+            "evidence_kind": signal.get("evidence_kind"),
+            "not_a_pain": bool(signal.get("not_a_pain")),
+            "integration_mode": signal.get("integration_mode"),
+            "safe_angles": list(signal.get("safe_angles") or []),
         }
         for index, signal in enumerate(usable_signals)
     ]
@@ -1567,6 +2058,13 @@ def build_message_brief(
         ),
         "suppression_safe": not suppressed,
     }
+    crm_context = (
+        stored_brief.get("crm_context")
+        if isinstance(stored_brief.get("crm_context"), dict)
+        else {}
+    )
+    if crm_context:
+        brief["crm_context"] = dict(crm_context)
     missing: list[str] = []
     missing_items: list[dict[str, str]] = []
 
@@ -1601,7 +2099,7 @@ def build_message_brief(
             add_missing("recipient_role", "Найдите роль получателя")
         if not signal:
             add_missing("timing_signal", "Добавьте публичный сигнал «почему сейчас»")
-        if not brief["pain"]:
+        if not brief["pain"] and not crm_context.get("not_a_pain"):
             add_missing("confirmed_problem", "Добавьте подтверждённую проблему")
         if not brief["result"]:
             add_missing("first_step_result", "Укажите один конкретный результат первого шага")
@@ -2333,7 +2831,10 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     contacts = legacy_contact_candidates(lead)
-    website_contacts, warnings = collect_public_website_contacts(lead.get("website"))
+    website_contacts, website_crm_observations, warnings = collect_public_website_intelligence(
+        lead.get("website")
+    )
+    lead["public_crm_observations"] = website_crm_observations
     contacts.extend(website_contacts)
     contacts = exclude_public_channel_contacts(cursor, str(lead["id"]), contacts)
     upsert_contact_points(cursor, str(lead["id"]), contacts)

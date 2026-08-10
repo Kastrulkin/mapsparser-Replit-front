@@ -59,8 +59,16 @@ def test_localos_default_sequence_uses_reviewed_six_touch_order():
         ("max", 7, "proof"),
         ("vk_manual", 12, "audit_step"),
         ("phone", 18, "phone_handoff"),
-        ("email", 25, "respectful_close"),
+        ("email", 25, "integrated_system"),
     )
+
+
+def test_every_outreach_email_subject_uses_approved_client_template():
+    candidate = _private_beauty_founder_candidate()
+    candidate["recipient"] = "FGF medical"
+
+    assert _email_subject("signal", candidate) == "FGF medical | ЛокалОС | Сотрудничество"
+    assert _email_subject("matching_authority", candidate) == "FGF medical | ЛокалОС | Сотрудничество"
 
 
 def _private_beauty_founder_candidate():
@@ -311,7 +319,7 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     }
     messages = {
         angle: _message_for_angle(angle, candidate, story, [])
-        for angle in ("signal", "founder_story", "proof", "respectful_close")
+        for angle in ("signal", "founder_story", "proof", "integrated_system")
     }
 
     assert "3 отзыва и рейтинг 4,2" in messages["signal"]
@@ -319,12 +327,12 @@ def test_founder_led_beauty_recipe_uses_signal_only_as_conversation_entry():
     assert "сначала нужно работать с клиентами" not in messages["signal"]
     assert "3 отзыва" not in messages["founder_story"]
     assert "3 отзыва" not in messages["proof"]
-    assert "3 отзыва" not in messages["respectful_close"]
+    assert "3 отзыва" not in messages["integrated_system"]
     assert "клиенты и ежедневная операционка всегда срочнее" in messages["founder_story"]
     assert "не просто выдаёт список рекомендаций" not in messages["founder_story"]
     assert "с 0 до 10 клиентов в день" in messages["proof"]
-    assert "больше напоминать не буду" not in messages["respectful_close"]
-    assert "зачем я создал LocalOS" in messages["respectful_close"]
+    assert "больше напоминать не буду" not in messages["integrated_system"]
+    assert "LocalOS помогает не только с картами" in messages["integrated_system"]
     assert all(message.count("?") == 1 for message in messages.values())
     assert all(
         phrase not in " ".join(messages.values()).lower()
@@ -349,6 +357,89 @@ def test_founder_led_beauty_extended_sequence_has_distinct_audit_and_phone_touch
     assert "накапливает опыт" in audit_text
     assert "Это Александр Демьянов, LocalOS" in phone_text
     assert "самая болезненная?" in phone_text
+
+
+def test_fgf_average_ticket_editorial_contract_preserves_owner_phrases_and_one_final_cta():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "recipient": "FGF medical",
+        "approved_copy_contract": "fgf_average_ticket_owner_v1",
+        "observed_fact": "В Яндексе указаны два комплекса лазерной эпиляции с финальными ценами.",
+        "evidence_kind": "map_services",
+        "source_url": "https://yandex.example/fgf",
+        "evidence_status": "observed",
+        "next_step": "Увеличить средний чек",
+    })
+
+    message = _message_for_angle("average_ticket", candidate, None, [])
+    gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="telegram",
+        channel_status="ready",
+        suppressed=False,
+        angle="average_ticket",
+    )
+
+    assert "Подскажите, прорабатывали ли другие способы увеличения среднего чека?" in message
+    assert message.endswith("Вам было бы интересно увеличить средний чек?")
+    assert "по подтверждённому прайсу соберёт матрицу услуг и допов" in message
+    assert "Медицинскую совместимость подтверждает врач." in message
+    assert "провер" not in message.lower()
+    assert message.count("?") == 2
+    assert gate["checks"]["single_cta"] is True
+
+
+def test_two_questions_remain_rejected_without_the_selected_editorial_contract():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "observed_fact": "В карточке указаны услуги с ценами.",
+        "evidence_kind": "map_services",
+        "source_url": "https://yandex.example/services",
+        "evidence_status": "observed",
+        "next_step": "Короткий разбор",
+    })
+
+    gate = _quality_gate(
+        "Вам знакома проблема допродаж?\n\nВам было бы интересно увеличить средний чек?",
+        candidate,
+        None,
+        channel="telegram",
+        channel_status="ready",
+        suppressed=False,
+        angle="average_ticket",
+    )
+
+    assert gate["checks"]["single_cta"] is False
+    assert "MULTIPLE_CTA" in gate["reason_codes"]
+
+
+def test_fgf_contract_rejects_altered_two_question_copy_even_when_selected():
+    candidate = _private_beauty_founder_candidate()
+    candidate.update({
+        "approved_copy_contract": "fgf_average_ticket_owner_v1",
+        "observed_fact": "В карточке указаны услуги с ценами.",
+        "evidence_kind": "map_services",
+        "source_url": "https://yandex.example/services",
+        "evidence_status": "observed",
+        "next_step": "Увеличить средний чек",
+    })
+
+    gate = _quality_gate(
+        "Подскажите, прорабатывали ли другие способы роста среднего чека?\n\n"
+        "Вам было бы интересно увеличить средний чек?\n\n"
+        "Показать матрицу?",
+        candidate,
+        None,
+        channel="telegram",
+        channel_status="ready",
+        suppressed=False,
+        angle="average_ticket",
+    )
+
+    assert gate["checks"]["single_cta"] is False
+    assert "MULTIPLE_CTA" in gate["reason_codes"]
 
 
 def test_proof_case_follows_services_and_price_signal():
@@ -1237,7 +1328,7 @@ def test_residential_message_invites_residents_instead_of_selling_generic_pilot(
     assert message.count("?") == 1
 
 
-def test_respectful_close_quality_does_not_require_repeating_the_observation():
+def test_sequence_quality_rejects_closing_language():
     candidate = {
         "recipient": "ЖК Новые кварталы",
         "observed_fact": 'В публичной карточке указана категория "Жилой комплекс".',
@@ -1267,8 +1358,9 @@ def test_respectful_close_quality_does_not_require_repeating_the_observation():
         angle="respectful_close",
     )
 
-    assert gate["passed"] is True
-    assert "DECORATIVE_PERSONALIZATION" not in gate["reason_codes"]
+    assert gate["passed"] is False
+    assert "sequence_closing_language" in gate["blocking_reasons"]
+    assert "STYLE_VIOLATION" in gate["reason_codes"]
 
 
 def test_partner_compatibility_is_valid_evidence_without_invented_problem():
@@ -1459,7 +1551,7 @@ def test_operator_approved_partnership_reason_creates_distinct_human_sequence():
     assert offers[0]["cta"] != manual_reason
     assert candidate["bridge"] != manual_reason
     assert candidate["next_step"] != manual_reason
-    assert _email_subject("matching_authority", candidate) == "B&C for baby | Весёлая расчёска"
+    assert _email_subject("matching_authority", candidate) == "B&C for baby | ЛокалОС | Сотрудничество"
 
 
 def test_residential_evidence_uses_recipient_type_instead_of_placeholder_services():
@@ -2737,18 +2829,17 @@ def test_residential_followups_are_scored_by_recipient_offer_relevance_not_liter
             [],
             True,
         ),
-        (
-            "respectful_close",
-            "telegram",
-            "Здравствуйте!\n\n"
-            "Похоже, сейчас эта тема не в приоритете.\n\n"
-            "Если позже захотите сделать что-то полезное для локального сообщества "
-            "жителей Yes Apart вместе с соседними бизнесами - будем рады обсудить. "
-            "Пока больше отвлекать не будем.",
-            18,
-            [],
-            True,
-        ),
+            (
+                "integrated_system",
+                "telegram",
+                "Здравствуйте!\n\n"
+                "Для Yes Apart можно заранее подготовить один понятный сценарий для жителей: "
+                "участники, роли, черновик материала и ручная проверка перед внешним шагом.\n\n"
+                "Показать такой сценарий?",
+                18,
+                [],
+                True,
+            ),
     ]
 
     for angle, channel, message, expected_score, expected_reasons, expected_passed in messages:

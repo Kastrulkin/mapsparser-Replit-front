@@ -312,10 +312,10 @@ def _messages(config: dict[str, str], name: str, category: str) -> list[dict[str
         {"angle": "matching_authority", "text": f"Здравствуйте! {offer['implementation']} Показать готовый вариант?"},
         {"angle": "proof", "text": f"Здравствуйте! {third} Прислать короткий план?"},
         {
-            "angle": "respectful_close",
+            "angle": "integrated_system",
             "text": (
-                f"Здравствуйте! Не хотим отвлекать команду {name}. Если предложение от {config['genitive']} "
-                "сейчас неактуально, больше писать не будем. Вернуться к нему позже?"
+                f"Здравствуйте! Для {name} предложение от {config['genitive']} можно оформить как один "
+                "понятный сценарий: аудитория, роли и материалы для ручного согласования. Показать структуру?"
             ),
         },
     ]

@@ -24,6 +24,7 @@ B2B_METHOD_RULES = (
     "Писать кратко: узнаваемая ситуация, что делает LocalOS, один подтверждённый результат и один короткий вопрос.",
     "Не повторять одну боль во всей цепочке: каждое касание должно показывать новую сторону системы.",
     "Не называть касание последним: получатель мог не видеть предыдущие.",
+    "Тема каждого outreach email: «Название клиента | ЛокалОС | Сотрудничество».",
 )
 
 BEAUTY_OWNER_PAINS = (
@@ -457,6 +458,56 @@ APPROVED_LOCALOS_MESSAGE_EXAMPLES = (
             "Вам может быть это интересно?"
         ),
     },
+    {
+        "key": "fgf_partnership_acquisition_owner_v1",
+        "pain_key": "marketing_and_clients",
+        "status": "approved",
+        "source": "founder_editorial_correction",
+        "text": (
+            "Здравствуйте! Я Александр Демьянов, основатель LocalOS.\n\n"
+            "Вижу, что FGF уже использует платное продвижение в Яндексе. "
+            "Но не стоит зависеть от одного канала привлечения.\n\n"
+            "LocalOS подберёт местные бизнесы со смежной аудиторией и подготовит "
+            "предложение о партнёрстве. Вы сами решите, кому отправить.\n\n"
+            "Вам было бы интересно найти новые источники клиентов через партнёрства?"
+        ),
+    },
+)
+
+# These are versioned product corrections, not model inspiration.  A draft may
+# use one only when its candidate explicitly selects the contract key.
+APPROVED_OUTREACH_COPY_CONTRACTS = (
+    {
+        "key": "fgf_average_ticket_owner_v1",
+        "status": "approved",
+        "source": "founder_editorial_correction",
+        "angle": "average_ticket",
+        "required_exact_phrases": (
+            "Подскажите, прорабатывали ли другие способы увеличения среднего чека?",
+            "Вам было бы интересно увеличить средний чек?",
+        ),
+        "rules": (
+            "Первый вопрос — диагностический; финальный вопрос — единственный CTA.",
+            "Матрица строится из подтверждённого прайса, а медицинскую совместимость подтверждает врач.",
+            "Не подменять трудозатраты ручной адаптации темой повторной проверки фактов.",
+            "Писать кратко и без дополнительного CTA.",
+        ),
+    },
+    {
+        "key": "fgf_partnership_acquisition_owner_v1",
+        "status": "approved",
+        "source": "founder_editorial_correction",
+        "angle": "integrated_system",
+        "required_exact_phrases": (
+            "Но не стоит зависеть от одного канала привлечения.",
+            "Вам было бы интересно найти новые источники клиентов через партнёрства?",
+        ),
+        "rules": (
+            "Говорить о партнёрствах как о дополнительном источнике клиентов, без обещания результата.",
+            "Подбор и предложение — черновики; получателей утверждает пользователь.",
+            "Не добавлять второй CTA.",
+        ),
+    },
 )
 
 
@@ -503,6 +554,14 @@ def beauty_outreach_guidance() -> dict[str, Any]:
             for item in APPROVED_LOCALOS_CASES
         ],
         "approved_message_examples": [dict(item) for item in APPROVED_LOCALOS_MESSAGE_EXAMPLES],
+        "approved_copy_contracts": [
+            {
+                **item,
+                "required_exact_phrases": list(item["required_exact_phrases"]),
+                "rules": list(item["rules"]),
+            }
+            for item in APPROVED_OUTREACH_COPY_CONTRACTS
+        ],
         "approved_proofs": list(APPROVED_LOCALOS_PROOFS),
         "constraints": [
             "Не приписывать боль получателю без отдельного evidence.",

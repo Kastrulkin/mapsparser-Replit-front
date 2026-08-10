@@ -176,22 +176,22 @@ def _sequence(email_sender_id: str | None, sender_mode: str) -> list[dict[str, A
         "angle": "signal",
         "skip_if_unavailable": True,
     }
-    closing_email_touch: dict[str, Any] = {
+    final_email_touch: dict[str, Any] = {
         "channel": "email",
         "day_offset": 25,
-        "angle": "respectful_close",
+        "angle": "integrated_system",
         "skip_if_unavailable": True,
     }
     if email_sender_id:
         first_email_touch["sender_account_id"] = email_sender_id
-        closing_email_touch["sender_account_id"] = email_sender_id
+        final_email_touch["sender_account_id"] = email_sender_id
     return [
         first_email_touch,
         {"channel": "telegram", "day_offset": 3, "angle": second_angle, "skip_if_unavailable": True},
         {"channel": "max", "day_offset": 7, "angle": "proof", "skip_if_unavailable": True},
         {"channel": "vk_manual", "day_offset": 12, "angle": "audit_step", "skip_if_unavailable": True},
         {"channel": "phone", "day_offset": 18, "angle": "phone_handoff", "skip_if_unavailable": True},
-        closing_email_touch,
+        final_email_touch,
     ]
 
 

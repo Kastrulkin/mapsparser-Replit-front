@@ -8,6 +8,7 @@ from services.outreach_personalization_ai import (
     _generation_prompt,
     _request_record,
     _review_prompt,
+    _safe_subject,
     generation_contract_current,
     generate_personalized_sequence,
 )
@@ -17,6 +18,13 @@ def test_outreach_personalization_uses_gigachat_pro_for_russian_copy() -> None:
     config = GigaChatConfig()
 
     assert config.get_model_config(task_type="outreach_personalization")["model"] == "GigaChat-2-Pro"
+
+
+def test_safe_email_subject_preserves_exact_bars_and_cyrillic_brand_spelling():
+    assert _safe_subject("email", "FGF medical", {}, "signal") == (
+        "FGF medical | ЛокалОС | Сотрудничество"
+    )
+    assert _safe_subject("telegram", "FGF medical", {}, "signal") is None
 
 
 OBSERVATION = "Рейтинг - 4,1; публичных отзывов - 27."
@@ -135,6 +143,31 @@ def test_request_record_prefers_campaign_offer_over_legacy_profile_offer():
 
     assert "1200" in record["sender"]["offer"]
     assert record["sender"]["offer"].startswith("Короткий разбор карточки.")
+
+
+def test_request_record_and_prompt_preserve_selected_editorial_copy_contract():
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "FGF medical"},
+        candidate={
+            "evidence_id": "fgf-price-list",
+            "observed_fact": "В Яндексе указаны комплексы лазерной эпиляции.",
+            "source_url": "https://yandex.example/fgf",
+            "recipient_segment": "beauty_team",
+            "approved_copy_contract": "fgf_average_ticket_owner_v1",
+        },
+        founder_story={"story": "Опыт основателя", "offer": "Матрица услуг"},
+        sequence=[{"sequence_index": 0, "channel": "telegram", "angle": "average_ticket", "day_offset": 0}],
+        voice_examples=[],
+    )
+
+    assert record["personalization"]["approved_copy_contract"] == "fgf_average_ticket_owner_v1"
+    assert "approved_copy_contract" in _generation_prompt(record)
+    contract = record["outreach_playbook"]["approved_copy_contracts"][0]
+    assert contract["required_exact_phrases"] == [
+        "Подскажите, прорабатывали ли другие способы увеличения среднего чека?",
+        "Вам было бы интересно увеличить средний чек?",
+    ]
 
 
 def test_saved_generation_contract_accepts_current_manual_product_correction():
@@ -279,7 +312,7 @@ def test_founder_led_beauty_uses_ai_for_review_without_spending_generation_call(
             (0, "signal"),
             (3, "founder_story"),
             (7, "proof"),
-            (12, "respectful_close"),
+            (12, "integrated_system"),
         ))
     ]
     response = {
@@ -566,7 +599,7 @@ def test_generation_accepts_provider_control_character_then_validates_content():
     )
 
     assert result["status"] == "ready"
-    assert result["touches"][1]["subject"] == "Короткий вопрос по карточке Клиника"
+    assert result["touches"][1]["subject"] == "Клиника | ЛокалОС | Сотрудничество"
 
 
 def test_policy_bound_choices_produce_clean_founder_led_copy():
@@ -589,7 +622,7 @@ def test_policy_bound_choices_produce_clean_founder_led_copy():
         "Здравствуйте! Я Александр, руководитель LocalOS."
     )
     assert result["touches"][0]["text"].count("?") == 1
-    assert result["touches"][1]["subject"] == "Короткий вопрос по карточке Клиника"
+    assert result["touches"][1]["subject"] == "Клиника | ЛокалОС | Сотрудничество"
     assert "Гипотеза для проверки:" in result["touches"][0]["text"]
 
 
@@ -681,7 +714,7 @@ def test_localos_for_partner_uses_neighbour_language_without_audit_pitch() -> No
     assert "несколько простых форматов" in result["touches"][0]["text"]
     assert "по карточке" not in result["touches"][0]["text"]
     assert result["touches"][1]["subject"] == (
-        "Идея для Весёлая расчёска и Плоды Просвещения"
+        "Плоды Просвещения | ЛокалОС | Сотрудничество"
     )
 
 

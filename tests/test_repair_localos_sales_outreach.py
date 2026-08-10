@@ -81,7 +81,8 @@ def test_sequence_has_four_angles_and_does_not_repeat_fact_in_followups():
     assert all(message["text"].count("?") == 1 for message in messages)
     assert all("—" not in message["text"] for message in messages)
     assert "Я Александр Демьянов" in messages[0]["text"]
-    assert "больше писать не буду" in messages[3]["text"]
+    assert messages[3]["angle"] == "integrated_system"
+    assert "в одном рабочем контуре" in messages[3]["text"]
 
 
 def test_sequence_does_not_require_recipient_name_declension():
@@ -90,7 +91,7 @@ def test_sequence_does_not_require_recipient_name_declension():
     messages = _messages(name, evidence, FOUNDER_STORY)
     assert f"По карточке {name}" in messages[1]["text"]
     assert f"Для карточки {name}" in messages[2]["text"]
-    assert "отвлекать вашу команду" in messages[3]["text"]
+    assert "ручной проверкой" in messages[3]["text"]
 
 
 def test_missing_evidence_never_creates_generic_offer():

@@ -38,11 +38,12 @@ from services.outreach_decision_service import (
     trust_candidates,
 )
 from services.outreach_founder_led_copy import (
-    founder_led_localos_subject,
+    approved_copy_contract,
     founder_led_localos_text,
     localos_case_for_angle,
     localos_beauty_segment,
     observation_is_grounded,
+    outreach_email_subject,
     select_approved_localos_case,
 )
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
@@ -87,9 +88,23 @@ DEFAULT_SEQUENCE = (
     ("max", 7, "proof"),
     ("vk_manual", 12, "audit_step"),
     ("phone", 18, "phone_handoff"),
-    ("email", 25, "respectful_close"),
+    ("email", 25, "integrated_system"),
 )
 PLATFORM_DEFAULT_EMAIL_SENDER = "localosgo@gmail.com"
+
+
+def _evidence_aware_sequence_angle(
+    angle: Any,
+    crm_evidence: dict[str, Any] | None,
+) -> str:
+    normalized = _text(angle)
+    if normalized == "respectful_close":
+        normalized = "integrated_system"
+    if crm_evidence and normalized in {"audit_step", "average_ticket"}:
+        return "crm_growth"
+    if crm_evidence and normalized == "integrated_system":
+        return "crm_content"
+    return normalized
 
 
 def _publication_capability_snapshot(
@@ -1624,6 +1639,13 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "author_or_organization": _text(signal.get("author_or_organization")) or None,
             "source_type": _text(signal.get("source_type")) or None,
             "rejected_reason": None,
+            "provider_key": _text(signal.get("provider_key")) or None,
+            "provider_name": _text(signal.get("provider_name")) or None,
+            "provider_domain": _text(signal.get("provider_domain")) or None,
+            "evidence_kind": _text(signal.get("evidence_kind")) or None,
+            "not_a_pain": bool(signal.get("not_a_pain")),
+            "integration_mode": _text(signal.get("integration_mode")) or None,
+            "safe_angles": _list(signal.get("safe_angles")),
         })
     rating = context.get("rating")
     if rating is not None and float(rating) < 4.5 and context.get("source_url"):
@@ -1890,6 +1912,15 @@ def build_personalization_candidates(
         if _is_residential_recipient(context)
         else "business"
     )
+    crm_evidence = next(
+        (
+            item for item in ledger
+            if _text(item.get("kind")) == "crm_presence"
+            and _text(item.get("provider_name"))
+            and _text(item.get("source_url"))
+        ),
+        None,
+    )
     for index, evidence in enumerate(ledger[:3]):
         recipient_segment = localos_beauty_segment(
             context.get("category"),
@@ -1919,6 +1950,22 @@ def build_personalization_candidates(
             for item in _list(evidence.get("supporting_evidence"))
             if isinstance(item, dict)
         ]
+        if crm_evidence and _text(crm_evidence.get("id")) not in evidence_ids:
+            evidence_ids.append(_text(crm_evidence.get("id")))
+            supporting_evidence.append({
+                "evidence_id": _text(crm_evidence.get("id")),
+                "kind": "crm_presence",
+                "observation": _text(crm_evidence.get("fact")),
+                "source_url": _text(crm_evidence.get("source_url")),
+                "source_type": _text(crm_evidence.get("source_type")) or "public",
+                "observed_at": crm_evidence.get("observed_at"),
+                "confidence": crm_evidence.get("confidence"),
+                "freshness": crm_evidence.get("freshness"),
+                "provider_key": crm_evidence.get("provider_key"),
+                "provider_name": crm_evidence.get("provider_name"),
+                "provider_domain": crm_evidence.get("provider_domain"),
+                "integration_mode": crm_evidence.get("integration_mode"),
+            })
         map_observation = ""
         if (
             supporting_map_evidence
@@ -1993,6 +2040,17 @@ def build_personalization_candidates(
             "observed_at": evidence.get("observed_at"),
             "evidence_status": evidence.get("status"),
             "limitations": ["public_evidence_only"] if evidence.get("confidence", 0) < 0.8 else [],
+            "crm_evidence": dict(crm_evidence) if crm_evidence else None,
+            "crm_type": _text((crm_evidence or {}).get("provider_key")),
+            "crm_provider_name": _text((crm_evidence or {}).get("provider_name")),
+            "crm_provider_domain": _text((crm_evidence or {}).get("provider_domain")),
+            "crm_observation": _text((crm_evidence or {}).get("fact")),
+            "crm_source_url": _text((crm_evidence or {}).get("source_url")),
+            "crm_integration_mode": (
+                _text((crm_evidence or {}).get("integration_mode"))
+                or "manual_or_capability_check_required"
+                if crm_evidence else ""
+            ),
             "sender_mode": sender_mode,
             "represented_business": context.get("represented_business_name"),
             "representation_disclosure": "",
@@ -2266,7 +2324,25 @@ def _quality_gate(
     angle: str | None = None,
 ) -> dict[str, Any]:
     question_count = text.count("?")
-    allowed_question_count = 2 if _text(angle) == "reviews_service" else 1
+    contract = approved_copy_contract(candidate)
+    approved_two_question_copy = False
+    if (
+        _text(angle) == "average_ticket"
+        and contract
+        and contract.get("key") == "fgf_average_ticket_owner_v1"
+    ):
+        required_phrases = tuple(contract.get("required_exact_phrases") or ())
+        if len(required_phrases) == 2:
+            diagnostic_question, final_cta = required_phrases
+            approved_two_question_copy = bool(
+                diagnostic_question in text
+                and final_cta in text
+                and text.rstrip().endswith(final_cta)
+            )
+    allowed_question_count = 2 if (
+        _text(angle) == "reviews_service"
+        or approved_two_question_copy
+    ) else 1
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
     normalized_text = text.lower()
@@ -2453,13 +2529,26 @@ def _quality_gate(
         candidate.get("trust_statement"),
     )
     proof_context = story or {}
-    respectful_close = _text(angle) == "respectful_close"
+    standalone_new_angle = _text(angle) in {
+        "integrated_system", "crm_growth", "crm_content",
+    }
     banned_machine_phrases = (
         "есть конкретный элемент карточки",
         "подтверждённый контекст",
         "отзыв даёт проверяемую тему",
         "без приписывания бизнесу скрытой проблемы",
     )
+    sequence_closing_language = bool(re.search(
+        r"(?:последн(?:ее|ий)\s+письм|"
+        r"больше\s+писать\s+не\s+(?:буду|будем)|"
+        r"больше\s+(?:вас\s+)?(?:напоминать|отвлекать)\s+не\s+(?:буду|будем)|"
+        r"не\s+(?:буду|будем)\s+больше\s+(?:писать|напоминать|отвлекать)|"
+        r"больше\s+не\s+(?:напомню|напомним|пишу|пишем)|"
+        r"закрыва(?:ю|ем)\s+переписк|"
+        r"закро(?:ю|ем)\s+тем)",
+        normalized_text,
+        flags=re.UNICODE,
+    ))
     residential_partnership = bool(
         _text(candidate.get("sender_mode")) in {
             SENDER_MODE_PARTNER_BUSINESS,
@@ -2500,20 +2589,21 @@ def _quality_gate(
             or grounded_observation
             or approved_case_present
             or operator_idea_present
-            or respectful_close
+            or standalone_new_angle
             or residential_relevance
         ) or bool(
             founder_led_beauty
             and (
                 (_text(angle) == "signal" and grounded_observation)
                 or _text(angle) in {
-                    "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
+                    "founder_story", "proof", "audit_step", "phone_handoff",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
+                    "crm_growth", "crm_content",
                 }
             )
             and (
                 founder_context_present
-                or respectful_close
+                or standalone_new_angle
                 or selected_candidate_link
             )
         ),
@@ -2546,14 +2636,15 @@ def _quality_gate(
             or bool(
                 founder_led_beauty
                 and _text(angle) in {
-                    "founder_story", "proof", "audit_step", "phone_handoff", "respectful_close",
+                    "founder_story", "proof", "audit_step", "phone_handoff",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
+                    "crm_growth", "crm_content",
                 }
                 and (founder_context_present or selected_candidate_link)
             )
             or operator_idea_present
             or residential_relevance
-            or (respectful_close and contains(candidate.get("recipient")))
+            or standalone_new_angle
         ),
         "fact": bool(
             candidate.get("evidence_status") in {"approved", "observed"}
@@ -2571,7 +2662,7 @@ def _quality_gate(
         "specificity": bool(
             (contains(candidate.get("recipient")) or founder_led_beauty)
             and (
-                respectful_close
+                standalone_new_angle
                 or operator_idea_present
                 or selected_candidate_link
                 or founder_context_present
@@ -2583,13 +2674,13 @@ def _quality_gate(
         "channel_fit": channel in SUPPORTED_CHANNELS and word_count <= channel_word_limit,
         "single_cta": (
             question_count == allowed_question_count
-            or (respectful_close and question_count == 0)
         ) and bool(_text(candidate.get("next_step"))),
         "suppression_safety": not suppressed,
         "human_tone": not any(phrase in normalized_text for phrase in banned_machine_phrases),
         "sensitive_review": candidate.get("evidence_kind") != "review",
         "signal_strength": _signal_is_material(candidate),
         "style_contract": not any(mark in text for mark in ("—", "«", "»")),
+        "sequence_policy": not sequence_closing_language,
     }
     language_review = review_human_language(
         text,
@@ -2651,6 +2742,8 @@ def _quality_gate(
         blocking_reasons.append("signal_too_weak_for_cold_outreach")
     if not checks["style_contract"]:
         blocking_reasons.append("style_contract_violation")
+    if not checks["sequence_policy"]:
+        blocking_reasons.append("sequence_closing_language")
     if enforced_language_codes:
         blocking_reasons.append("human_language_gate_failed")
     if salon_price_proof_present and not salon_price_proof_scope_valid:
@@ -2665,6 +2758,7 @@ def _quality_gate(
         "sensitive_review_requires_manual_rewrite": "SENSITIVE_TARGETING",
         "signal_too_weak_for_cold_outreach": "DECORATIVE_PERSONALIZATION",
         "style_contract_violation": "STYLE_VIOLATION",
+        "sequence_closing_language": "STYLE_VIOLATION",
         "human_language_gate_failed": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
         "salon_price_proof_scope_mismatch": "PROOF_SCOPE_MISMATCH",
     }
@@ -2683,6 +2777,7 @@ def _quality_gate(
         "sensitive_review": "SENSITIVE_TARGETING",
         "signal_strength": "DECORATIVE_PERSONALIZATION",
         "style_contract": "STYLE_VIOLATION",
+        "sequence_policy": "STYLE_VIOLATION",
         "human_language": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
     }
     diagnostic_codes = [key for key, passed in checks.items() if not passed]
@@ -2731,6 +2826,8 @@ def _message_for_angle(
     story: dict[str, Any] | None,
     previous_angles: list[str],
 ) -> str:
+    if angle == "respectful_close":
+        angle = "integrated_system"
     founder_led_message = founder_led_localos_text(angle, candidate, story)
     if founder_led_message:
         return format_outreach_message(founder_led_message)
@@ -2765,6 +2862,22 @@ def _message_for_angle(
         _text(candidate.get("evidence_kind"))
         == "operator_approved_partnership_reason"
     )
+    if angle == "integrated_system":
+        if sender_mode in {SENDER_MODE_PARTNER_BUSINESS, SENDER_MODE_LOCALOS_FOR_PARTNER}:
+            opening = "Здравствуйте!"
+            if represented_business_opening:
+                opening += f"\n\n{represented_business_opening}"
+            return (
+                f'{opening}\n\nДля знакомства с "{name}" можно заранее подготовить один понятный '
+                "сценарий: участники, роли, черновик материала и ручная проверка перед любым внешним шагом."
+                "\n\nПоказать такой сценарий?"
+            )
+        return (
+            "Здравствуйте! LocalOS помогает не только с одной публичной карточкой.\n\n"
+            "Система готовит черновики контента и ответов на отзывы, помогает с услугами, "
+            "показателями и рабочими сценариями. Каждый внешний шаг остаётся на ручной проверке.\n\n"
+            "Показать один пример сценария?"
+        )
     if operator_approved_partnership_reason:
         if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
             opening = "Здравствуйте!"
@@ -2822,9 +2935,9 @@ def _message_for_angle(
                 "\n\nПоказать черновик?"
             )
         return (
-            f"{opening}\n\nКоротко закроем тему. Для команды {name} предлагали формат: {proposal_title}. "
-            "Если сейчас неактуально, больше писать не будем. "
-            "Вернуться к идее позже?"
+            f"{opening}\n\nДля команды {name} можно подготовить один черновик формата: "
+            f"{proposal_title}. В нём будут участники, роли и шаг ручной проверки."
+            "\n\nПоказать черновик?"
         )
     residential_recipient = _text(candidate.get("recipient_type")) == "residential_complex"
     if residential_recipient:
@@ -2862,8 +2975,8 @@ def _message_for_angle(
             )
         return (
             opening
-            + f"Коротко закроем тему по {name}. {invitation} {bridge}. "
-            + "Если сейчас неактуально, больше писать не будем. Вернуться к этому позже?"
+            + f"Для {name} можно заранее подготовить один вариант предложения для жителей. "
+            + f"{invitation} {bridge}. {terms} Показать вариант?"
         )
     if angle == "signal":
         if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
@@ -2900,31 +3013,18 @@ def _message_for_angle(
         verb = "дополним" if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER else "дополню"
         return f'Здравствуйте! {company_identity}Коротко {verb} по "{name}". {proof}. {next_step} - прислать детали?'
     if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
-        return f'Здравствуйте! {represented_business_opening} Коротко закроем тему по "{name}". {bridge}. Если сейчас неактуально, больше писать не будем. Вернуться позже?'
-    return f'Здравствуйте! {representation_block}Коротко закрою тему по "{name}". {bridge}. Если сейчас неактуально, больше не напомню. Вернуться позже?'
+        return (
+            f'Здравствуйте! {represented_business_opening} Для знакомства с "{name}" можно '
+            "подготовить один черновик совместного формата с ручной проверкой. Показать?"
+        )
+    return (
+        f'Здравствуйте! {representation_block}Для "{name}" можно подготовить один понятный '
+        "сценарий с черновиком и ручной проверкой. Показать?"
+    )
 
 
 def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
-    founder_led_subject = founder_led_localos_subject(angle, candidate)
-    if founder_led_subject:
-        return founder_led_subject[:200]
-    if _text(candidate.get("evidence_kind")) == "operator_approved_partnership_reason":
-        recipient = _text(candidate.get("recipient"))[:100]
-        represented_business = _text(candidate.get("represented_business"))[:90]
-        if recipient and represented_business:
-            return f"{recipient} | {represented_business}"[:200]
-    labels = {
-        "signal": "короткий вопрос по публичному сигналу",
-        "founder_story": "вопрос по публичной карточке",
-        "business_reputation": "идея для знакомства компаний",
-        "matching_authority": "основание для знакомства компаний",
-        "proof": "пример, который может быть полезен",
-        "audit_step": "практический шаг из разбора",
-        "phone_handoff": "короткий вопрос по разбору",
-        "respectful_close": "закрою тему",
-    }
-    recipient = _text(candidate.get("recipient"))[:100]
-    return f"{recipient} - {labels.get(angle, 'короткий вопрос')}"[:200]
+    return outreach_email_subject(candidate.get("recipient"))
 
 
 def _normalize_touch_overrides(
@@ -3151,6 +3251,20 @@ def build_preview(
         (candidate for candidate in candidates if candidate.get("id") == selected_candidate_id),
         candidates[0],
     )
+    crm_evidence = (
+        primary_candidate.get("crm_evidence")
+        if isinstance(primary_candidate.get("crm_evidence"), dict)
+        else None
+    )
+    normalized_sequence = []
+    for item in selected_sequence:
+        normalized_item = dict(item)
+        normalized_item["angle"] = _evidence_aware_sequence_angle(
+            normalized_item.get("angle"),
+            crm_evidence,
+        )
+        normalized_sequence.append(normalized_item)
+    selected_sequence = normalized_sequence
     if context.get("workstream_type") == "localos_sales" and (
         primary_candidate.get("recipient_segment")
         or _text(primary_candidate.get("signal_combo"))
@@ -3187,6 +3301,24 @@ def build_preview(
         # new signal in a follow-up (especially a negative review) requires a separate
         # explicit personalization selection and a new approval version.
         candidate = primary_candidate
+        if crm_evidence and angle in {"crm_growth", "crm_content"}:
+            candidate = {
+                **primary_candidate,
+                "evidence_id": _text(crm_evidence.get("id")),
+                "evidence_ids": [_text(crm_evidence.get("id"))],
+                "observed_fact": _text(crm_evidence.get("fact")),
+                "problem_hypothesis": None,
+                "problem_hypothesis_status": "missing",
+                "relevance_to_offer": _text(crm_evidence.get("relevance")),
+                "bridge": _text(crm_evidence.get("relevance")),
+                "evidence_kind": "crm_presence",
+                "source_url": _text(crm_evidence.get("source_url")),
+                "source_type": _text(crm_evidence.get("source_type")),
+                "confidence": crm_evidence.get("confidence"),
+                "freshness": crm_evidence.get("freshness"),
+                "observed_at": crm_evidence.get("observed_at"),
+                "evidence_status": crm_evidence.get("status") or "observed",
+            }
         message = format_outreach_message(
             _message_for_angle(angle, candidate, story, previous_angles)
         )

@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from services.outreach_playbook import (
+    APPROVED_OUTREACH_COPY_CONTRACTS,
     APPROVED_FOUNDER_ORIGIN,
     APPROVED_LOCALOS_CASES,
     APPROVED_LOCALOS_MESSAGE_EXAMPLES,
@@ -61,6 +62,27 @@ PUBLICATION_PLATFORM_LABELS = {
 
 def clean_copy(value: Any) -> str:
     return " ".join(str(value or "").replace("—", "-").replace("«", '"').replace("»", '"').split())
+
+
+def outreach_email_subject(lead_name: Any) -> str:
+    """Return the approved, invariant email subject for every outreach lead."""
+
+    normalized_name = clean_copy(lead_name) or "Клиент"
+    suffix = " | ЛокалОС | Сотрудничество"
+    return f"{normalized_name[:200 - len(suffix)]}{suffix}"
+
+
+def approved_copy_contract(candidate: dict[str, Any]) -> dict[str, Any] | None:
+    """Return an explicitly selected, versioned editorial contract only."""
+
+    key = clean_copy(candidate.get("approved_copy_contract"))
+    return next(
+        (
+            item for item in APPROVED_OUTREACH_COPY_CONTRACTS
+            if item["key"] == key and item["status"] == "approved"
+        ),
+        None,
+    )
 
 
 def _ready_publication_labels(candidate: dict[str, Any]) -> list[str]:
@@ -333,6 +355,8 @@ def founder_led_localos_text(
     candidate: dict[str, Any],
     story: dict[str, Any] | None,
 ) -> str | None:
+    if clean_copy(angle) == "respectful_close":
+        angle = "integrated_system"
     if clean_copy(candidate.get("sender_mode")) not in {"", "localos"}:
         return None
     segment = clean_copy(candidate.get("recipient_segment")) or localos_beauty_segment(
@@ -348,6 +372,7 @@ def founder_led_localos_text(
     sender = clean_copy(candidate.get("sender"))
     role = clean_copy(candidate.get("sender_role"))
     introduction = ", ".join(part for part in (sender, role) if part)
+    sender_identity = introduction or "Александр Демьянов, основатель LocalOS"
     approved_story = clean_copy(candidate.get("founder_story"))
     approved_proof = clean_copy(candidate.get("founder_proof"))
     if not approved_proof and story:
@@ -589,6 +614,18 @@ def founder_led_localos_text(
         )
 
     if angle == "average_ticket":
+        contract = approved_copy_contract(candidate)
+        if contract and contract["key"] == "fgf_average_ticket_owner_v1":
+            diagnostic_question, final_cta = contract["required_exact_phrases"]
+            return (
+                f"Здравствуйте! Я {sender_identity}.\n\n"
+                "В карточке FGF medical опубликованы два комплекса лазерной эпиляции. "
+                f"{diagnostic_question}\n\n"
+                "LocalOS по подтверждённому прайсу соберёт матрицу услуг и допов, "
+                "сценарии для администратора и поможет отследить результат. "
+                "Медицинскую совместимость подтверждает врач.\n\n"
+                f"{final_cta}"
+            )
         approved_case = localos_case_for_angle(angle, candidate)
         return (
             "Здравствуйте! Вам знакома проблема, когда работы много, а средний чек всё равно маленький?\n\n"
@@ -604,6 +641,29 @@ def founder_led_localos_text(
             if item.get("key") == "reviews_owner_day_interruption"
         )
         return str(example["text"])
+
+    if angle == "crm_growth":
+        provider_name = clean_copy(candidate.get("crm_provider_name")) or "CRM"
+        recipient = clean_copy(candidate.get("recipient")) or "вашего бизнеса"
+        return (
+            f"Здравствуйте! Я {sender_identity}.\n\n"
+            f"На ваших публичных площадках видна запись через {provider_name}. "
+            "Это показывает, что приёмы уже учитываются в системе, но само по себе не говорит о проблеме.\n\n"
+            "Если вручную передать обезличенную статистику по услугам и визитам, LocalOS помогает "
+            "проверить сценарии повторных предложений, допродаж и работы со средним чеком.\n\n"
+            f"Актуальна ли для {recipient} задача увеличивать средний чек?"
+        )
+
+    if angle == "crm_content":
+        provider_name = clean_copy(candidate.get("crm_provider_name")) or "CRM"
+        return (
+            f"Здравствуйте! Я {sender_identity}.\n\n"
+            f"Ещё одна возможность, если запись ведётся через {provider_name}.\n\n"
+            "Из названия выполненной услуги можно подготовить черновик публикации без данных клиента. "
+            "Если прямое подключение не поддерживается, исходные данные передаются вручную; "
+            "публикация остаётся только после вашей проверки.\n\n"
+            "Показать короткий пример?"
+        )
 
     if angle == "integrated_system":
         return (
@@ -636,13 +696,6 @@ def founder_led_localos_text(
             "Какая из этих задач сейчас самая болезненная?"
         )
 
-    if angle == "respectful_close":
-        return (
-            "Здравствуйте! Коротко о том, зачем я создал LocalOS.\n\n"
-            f"{APPROVED_FOUNDER_ORIGIN}\n\n"
-            "LocalOS также накапливает опыт других компаний: рабочие связки можно проверять, улучшать и переносить в понятные сценарии.\n\n"
-            "Вам может быть это интересно?"
-        )
     return None
 
 
@@ -654,19 +707,7 @@ def founder_led_localos_subject(angle: str, candidate: dict[str, Any]) -> str | 
     )
     if not segment and clean_copy(candidate.get("signal_combo")) not in FOUNDER_LED_SIGNAL_COMBOS:
         return None
-    recipient = clean_copy(candidate.get("recipient"))
-    labels = {
-        "signal": f"{recipient} | короткий вопрос",
-        "founder_story": "Почему я создал LocalOS",
-        "proof": "Как LocalOS снимает регулярные задачи",
-        "content_operations": "Контент без лишней операционки",
-        "average_ticket": "Короткий вопрос про средний чек",
-        "reviews_service": "Короткий вопрос про отзывы",
-        "integrated_system": "Что ещё снимает LocalOS",
-        "founder_origin": "Почему я создал LocalOS",
-        "respectful_close": "Почему я создал LocalOS",
-    }
-    return labels.get(angle)
+    return outreach_email_subject(candidate.get("recipient"))
 
 
 def observation_is_grounded(text: str, observation: Any) -> bool:

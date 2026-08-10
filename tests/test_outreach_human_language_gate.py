@@ -7,6 +7,25 @@ from psycopg2.extras import RealDictCursor
 from services import outreach_pain_library_service
 from services.outreach_campaign_service import _message_for_angle, _quality_gate
 from services.outreach_human_language import review_human_language
+
+
+def test_approved_fgf_partnership_contract_accepts_exact_owner_offer_only():
+    exact = (
+        "LocalOS подберёт местные бизнесы со смежной аудиторией и подготовит "
+        "предложение о партнёрстве. Вы сами решите, кому отправить."
+    )
+
+    approved = review_human_language(
+        exact,
+        approved_copy_contract="fgf_partnership_acquisition_owner_v1",
+    )
+    altered = review_human_language(
+        "LocalOS подготовит предложение о партнёрстве.",
+        approved_copy_contract="fgf_partnership_acquisition_owner_v1",
+    )
+
+    assert approved["checks"]["concrete_solution"] is True
+    assert altered["checks"]["concrete_solution"] is False
 from services.outreach_pain_library_service import (
     fetch_monitored_pain_documents,
     retrieve_language_support,

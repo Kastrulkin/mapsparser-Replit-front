@@ -182,6 +182,7 @@ def review_human_language(
     language_support: dict[str, Any] | None = None,
     require_signal_flow: bool = False,
     publication_capabilities: dict[str, Any] | None = None,
+    approved_copy_contract: str | None = None,
 ) -> dict[str, Any]:
     """Return explainable checks; corpus similarity is never the sole verdict."""
 
@@ -201,6 +202,14 @@ def review_human_language(
         concrete_solution = bool(
             CONCRETE_VERB_RE.search(normalized) and CONCRETE_OBJECT_RE.search(normalized)
         )
+    if (
+        _clean(approved_copy_contract) == "fgf_partnership_acquisition_owner_v1"
+        and "localos подберёт местные бизнесы со смежной аудиторией" in normalized
+        and "подготовит предложение о партнёрстве" in normalized
+    ):
+        # This founder-approved wording is a concrete partnership offer even
+        # though the generic object lexicon does not include "партнёрство".
+        concrete_solution = True
 
     pain_as_fact = False
     if pain_hypothesis and not pain_is_recipient_fact:
