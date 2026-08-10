@@ -194,6 +194,7 @@ LocalOS помогает владельцам и управляющим лока
 - 🗺️ [Google Business Profile: production и повторная заявка](./docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md) — OAuth-клиенты, агентская организация, case Google и checklist после одобрения
 - 🤝 [Roadmap поиска партнёрств](./docs/PARTNERSHIP_ROADMAP_BACKLOG.md) — P0–P10, включая fallback-режим импорта партнёров файлом
 - ✉️ [Founder-led мультиканальный аутрич](./docs/OUTREACH_SYSTEM.md) — поиск, контакты, сигналы, sender identity, персонализация, approval, stop-on-reply и learning loop
+- ✍️ [Утренний редакторский контур](./docs/FOUNDER_CONTENT_EDITORIAL_LOOP.md) — продуктовый brief, B2B-теория, Telegram-черновик, авторская правка и preference learning без автопубликации
 - 🧩 [Архитектура агентов LocalOS v1](./docs/LOCALOS_AGENT_ARCHITECTURE_V1.md) — канон Agent/Persona/Blueprint/Compiled Workflow/OpenClaw и инвентаризация существующих блоков
 - 🧑‍💼 [Модель интерфейса агентов Compiled AI](./docs/AGENTS_INTERFACE_MODEL_COMPILED_AI.md) — агенты как ИИ-сотрудники, IA раздела и путь create → test → approve → enable → running
 - 🤖 [10 популярных примеров агентов](./docs/agents/popular-account-examples.md) — стартовый набор draft/templates для каждого аккаунта

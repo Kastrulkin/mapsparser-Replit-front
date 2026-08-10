@@ -85,6 +85,11 @@ from services.superadmin_telegram_notifications import (
     load_superadmin_telegram_recipients,
     mark_outreach_reply_notification_sent,
 )
+from services.founder_content_editorial import (
+    format_founder_content_telegram_message,
+    mark_founder_content_delivered,
+    prepare_due_founder_content_drafts,
+)
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -100,6 +105,7 @@ _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
 _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT = 0.0
+_LAST_FOUNDER_CONTENT_AT = 0.0
 
 
 def _record_external_card_change_if_enabled(
@@ -1680,6 +1686,67 @@ def _run_card_automation_if_due() -> None:
             pass
 
 
+def _run_founder_content_if_due() -> None:
+    global _LAST_FOUNDER_CONTENT_AT
+    if not _env_bool("FOUNDER_CONTENT_MORNING_ENABLED", False):
+        return
+
+    now = time.time()
+    interval_sec = max(30, int(os.getenv("FOUNDER_CONTENT_SCAN_INTERVAL_SEC", "60")))
+    if now - _LAST_FOUNDER_CONTENT_AT < interval_sec:
+        return
+    _LAST_FOUNDER_CONTENT_AT = now
+
+    database = None
+    try:
+        database = DatabaseManager()
+        drafts = prepare_due_founder_content_drafts(database.conn)
+        database.conn.commit()
+        for draft in drafts:
+            draft_id = str(draft.get("id") or "")
+            telegram_id = str(draft.get("telegram_id") or "").strip()
+            message = format_founder_content_telegram_message(draft)
+            if not draft_id or not telegram_id or not message:
+                continue
+            send_result = _send_telegram_message_result(telegram_id, message)
+            message_id = int(send_result.get("message_id") or 0)
+            if not send_result.get("success") or not message_id:
+                print(
+                    f"[FOUNDER_CONTENT] telegram send failed draft_id={draft_id} telegram_id={telegram_id}",
+                    flush=True,
+                )
+                continue
+            if mark_founder_content_delivered(
+                database.conn,
+                draft_id=draft_id,
+                telegram_message_id=message_id,
+            ):
+                database.conn.commit()
+                print(
+                    f"[FOUNDER_CONTENT] delivered draft_id={draft_id} telegram_id={telegram_id}",
+                    flush=True,
+                )
+            else:
+                database.conn.rollback()
+                print(
+                    f"[FOUNDER_CONTENT] delivery state was not persisted draft_id={draft_id}",
+                    flush=True,
+                )
+    except Exception as error:
+        if database:
+            try:
+                database.conn.rollback()
+            except Exception:
+                pass
+        print(f"[FOUNDER_CONTENT] error: {error}", flush=True)
+    finally:
+        if database:
+            try:
+                database.close()
+            except Exception:
+                pass
+
+
 def _dispatch_agent_schedules_if_due() -> None:
     global _LAST_AGENT_SCHEDULE_DISPATCH_AT
     if not _env_bool("AGENT_SCHEDULE_DISPATCH_ENABLED", False):
@@ -2266,11 +2333,11 @@ def _dispatch_openclaw_callback_outbox_if_due() -> None:
         print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
 
 
-def _send_telegram_plain_message(chat_id: str, text: str, reply_markup: dict | None = None) -> bool:
+def _send_telegram_message_result(chat_id: str, text: str, reply_markup: dict | None = None) -> dict[str, Any]:
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = str(chat_id or "").strip()
     if not token or not chat_id:
-        return False
+        return {"success": False, "message_id": 0, "reason_code": "telegram_not_configured"}
     try:
         payload_dict = {
             "chat_id": chat_id,
@@ -2287,13 +2354,26 @@ def _send_telegram_plain_message(chat_id: str, text: str, reply_markup: dict | N
             method="POST",
         )
         with telegram_urlopen(req, timeout=10) as resp:
-            return 200 <= int(getattr(resp, "status", 500)) < 300
+            status = int(getattr(resp, "status", 500))
+            raw = resp.read()
+            data = json.loads(raw.decode("utf-8")) if raw else {}
+            result = data.get("result") if isinstance(data, dict) else {}
+            message_id = int(result.get("message_id") or 0) if isinstance(result, dict) else 0
+            return {
+                "success": 200 <= status < 300 and bool(data.get("ok")),
+                "message_id": message_id,
+                "reason_code": "",
+            }
     except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError) as e:
         print(f"[BILLING_RECONCILE] telegram send failed chat_id={chat_id}: {e}", flush=True)
-        return False
+        return {"success": False, "message_id": 0, "reason_code": type(e).__name__}
     except Exception as e:
         print(f"[BILLING_RECONCILE] telegram unexpected error chat_id={chat_id}: {e}", flush=True)
-        return False
+        return {"success": False, "message_id": 0, "reason_code": type(e).__name__}
+
+
+def _send_telegram_plain_message(chat_id: str, text: str, reply_markup: dict | None = None) -> bool:
+    return bool(_send_telegram_message_result(chat_id, text, reply_markup=reply_markup).get("success"))
 
 
 def _incident_snapshot_lines(snapshot: Dict[str, Any]) -> List[str]:
@@ -6887,6 +6967,7 @@ if __name__ == "__main__":
         try:
             process_queue()
             _run_card_automation_if_due()
+            _run_founder_content_if_due()
             _dispatch_agent_schedules_if_due()
             _process_agent_run_queue_if_due()
             _process_operator_async_job_if_due()

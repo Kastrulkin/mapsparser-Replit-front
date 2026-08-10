@@ -105,6 +105,7 @@ from services.telegram_static_answers import (
 )
 from services.gigachat_client import analyze_screenshot_with_gigachat
 from services.llm import analyze_text_with_gigachat
+from services.founder_content_editorial import capture_founder_content_correction_from_telegram
 from subscription_manager import get_subscription_info
 from auth_system import create_session
 
@@ -5428,6 +5429,35 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
     user_id = str(update.effective_user.id)
     text = update.message.text
+    reply_to_message = getattr(update.message, "reply_to_message", None)
+    reply_to_message_id = int(getattr(reply_to_message, "message_id", 0) or 0)
+    if reply_to_message_id:
+        try:
+            editorial_result = capture_founder_content_correction_from_telegram(
+                telegram_id=user_id,
+                reply_to_message_id=reply_to_message_id,
+                corrected_text=text,
+            )
+        except Exception:
+            logger.exception("Founder content correction capture failed")
+            editorial_result = {"captured": False, "matched": False}
+        if editorial_result.get("captured"):
+            edit_percent = round(float(editorial_result.get("edit_ratio") or 0) * 100)
+            feedback_summary = str(editorial_result.get("feedback_summary") or "зафиксировал правки")
+            await update.message.reply_text(
+                "Принял исправленную версию.\n\n"
+                f"Изменено примерно {edit_percent}% текста: {feedback_summary}.\n"
+                "Исходник, итоговая версия и разница сохранены. "
+                "Следующие черновики будут учитывать эти редакторские примеры.\n\n"
+                "Ничего автоматически не опубликовано."
+            )
+            return
+        if editorial_result.get("matched"):
+            await update.message.reply_text(
+                "Вижу, что это ответ на утренний черновик, но исправленная версия слишком короткая. "
+                "Пришлите полную версию поста ответом на исходное сообщение."
+            )
+            return
     telegram_agent_decision = _telegram_agent_message_decision(update)
     if not telegram_agent_decision.get("allow_normal_routing"):
         logger.warning(
