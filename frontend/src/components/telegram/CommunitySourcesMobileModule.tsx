@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, CircleAlert, ExternalLink, Loader2, Pencil, Plus, Radio, Trash2, X } from 'lucide-react';
+import ActionPreviewSheet, { type MobileActionPreview } from './ActionPreviewSheet';
 
 type CommunitySource = {
   id: string;
@@ -41,6 +42,37 @@ const read = async (response: Response) => {
   if (!response.ok || payload.success === false) throw new Error(typeof payload.error === 'string' ? payload.error : 'Не удалось выполнить запрос');
   return payload;
 };
+const actionPreview = (value: unknown): MobileActionPreview | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const fields = Object.fromEntries(Object.entries(value));
+  const objectRows = (items: unknown): Array<{ id?: string; business_name?: string }> | undefined => Array.isArray(items) ? items.map((item) => {
+    const row = item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item)) : {};
+    return { id: typeof row.id === 'string' ? row.id : undefined, business_name: typeof row.business_name === 'string' ? row.business_name : undefined };
+  }) : undefined;
+  const businessRows = (items: unknown): Array<{ id?: string; name?: string }> | undefined => Array.isArray(items) ? items.map((item) => {
+    const row = item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item)) : {};
+    return { id: typeof row.id === 'string' ? row.id : undefined, name: typeof row.name === 'string' ? row.name : undefined };
+  }) : undefined;
+  const changeRows = (items: unknown): Array<{ object_id?: string; operation?: string; label?: string }> | undefined => Array.isArray(items) ? items.map((item) => {
+    const row = item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item)) : {};
+    return {
+      object_id: typeof row.object_id === 'string' ? row.object_id : undefined,
+      operation: typeof row.operation === 'string' ? row.operation : undefined,
+      label: typeof row.label === 'string' ? row.label : undefined,
+    };
+  }) : undefined;
+  return {
+    action_id: typeof fields.action_id === 'string' ? fields.action_id : undefined,
+    capability: typeof fields.capability === 'string' ? fields.capability : undefined,
+    target_businesses: businessRows(fields.target_businesses),
+    objects: objectRows(fields.objects),
+    changes: changeRows(fields.changes),
+    estimated_credits: typeof fields.estimated_credits === 'number' ? fields.estimated_credits : undefined,
+    external_effects: fields.external_effects === true,
+    is_mass_action: fields.is_mass_action === true,
+    expires_at: typeof fields.expires_at === 'string' ? fields.expires_at : undefined,
+  };
+};
 const dateLabel = (value?: string) => {
   if (!value) return 'ещё не собирали';
   const date = new Date(value);
@@ -69,6 +101,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [preview, setPreview] = useState<MobileActionPreview | null>(null);
 
   const load = useCallback(async () => {
     if (!businessId) { setLoading(false); return; }
@@ -147,7 +180,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
     finally { setBusy(''); }
   };
 
-  const remove = async () => {
+  const prepareRemove = async () => {
     if (!businessId || !removeId) return;
     const sourceId = removeId;
     setBusy(`remove:${sourceId}`); setError('');
@@ -157,9 +190,36 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
         setRemoveId(''); setEditingId(''); setMessage('Источник больше не влияет на ваш «Пульс сообщества».');
         return;
       }
-      await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE', headers: headers() }).then(read);
+      const payload = await fetch('/api/operator/mobile/actions/preview', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          scope_type: 'business',
+          scope_id: businessId,
+          capability: 'community_sources.unsubscribe',
+          input: { business_id: businessId, source_id: sourceId },
+        }),
+      }).then(read);
+      const nextPreview = actionPreview(payload.preview);
+      if (!nextPreview?.action_id) throw new Error('Не удалось подготовить проверку действия');
+      setRemoveId('');
+      setPreview(nextPreview);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось отключить источник'); }
+    finally { setBusy(''); }
+  };
+
+  const confirmRemove = async () => {
+    const actionId = preview?.action_id;
+    const sourceId = preview?.objects?.[0]?.id;
+    if (!actionId || !sourceId) return;
+    setBusy(`confirm:${actionId}`); setError('');
+    try {
+      await fetch(`/api/operator/mobile/actions/${encodeURIComponent(actionId)}/confirm`, {
+        method: 'POST', headers: headers(), body: JSON.stringify({}),
+      }).then(read);
       setItems((current) => current.filter((item) => item.id !== sourceId));
-      setRemoveId(''); setEditingId(''); setMessage('Источник больше не влияет на ваш «Пульс сообщества».');
+      setEditingId(''); setPreview(null);
+      setMessage('Источник больше не влияет на ваш «Пульс сообщества».');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось отключить источник'); }
     finally { setBusy(''); }
   };
@@ -173,7 +233,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
       {defaultSourcesCount ? <div className="mb-5 border-b border-white/[0.06] pb-5"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-emerald-400/10 text-emerald-300"><Check className="h-5 w-5" /></span><div className="min-w-0 flex-1"><small className="font-semibold uppercase tracking-[0.12em] text-emerald-300/80">Уже работает</small><h2 className="mt-1 text-balance text-lg font-semibold">{industry?.key === 'beauty' ? 'Бьюти-пульс уже включён' : 'Отраслевой пульс уже включён'}</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">ЛокалОС уже собирает обсуждения из <span className="tabular-nums text-zinc-300">{defaultSourcesCount}</span> проверенных открытых источников и показывает главное на экране «Сегодня».</p></div></div>{industry?.default_sources?.length ? <p className="mt-3 line-clamp-2 text-pretty text-[11px] leading-5 text-zinc-600">Например: {industry.default_sources.map((source) => source.title).filter(Boolean).join(' · ')}</p> : null}</div> : null}
       <span className="grid h-11 w-11 place-items-center rounded-[15px] bg-primary/15 text-primary"><Radio className="h-5 w-5" /></span>
       <h2 className="mt-4 text-balance text-xl font-semibold tracking-[-0.03em]">{defaultSourcesCount ? 'Добавить свои источники' : 'За чем следить?'}</h2>
-      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">Добавьте публичный канал или открытую группу. ЛокалОС включит их в ваше саммари и общую отраслевую базу без повторного сбора сообщений.</p>
+      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">Добавьте публичный канал или открытую группу. ЛокалОС добавит важные темы в вашу сводку. Если источник уже есть в общей базе, повторно собирать его не придётся.</p>
       <form onSubmit={add} className="mt-5">
         <label className="text-xs font-medium text-zinc-400"><span className="mb-2 block px-1">Ссылка на публичный канал или группу</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://t.me/channel" inputMode="url" autoCapitalize="none" className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
         <details className="mt-3 rounded-[18px] bg-black/15 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
@@ -201,9 +261,10 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] leading-4 text-zinc-600"><span><b className="block font-medium text-zinc-400">Последний сбор</b>{dateLabel(item.last_collected_at)}</span><span><b className="block font-medium text-zinc-400">Следующий</b>{dateLabel(item.next_sync_at)}</span><span className="col-span-2"><b className="font-medium text-zinc-400">Ваш график:</b> {intervalLabel(item.schedule_json?.interval_hours)}</span>{item.topics_json?.length ? <span className="col-span-2 text-pretty"><b className="font-medium text-zinc-400">Темы:</b> {item.topics_json.join(', ')}</span> : null}</div>
         <AnimatePresence initial={false}>{editing ? <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring} className="overflow-hidden"><div className="mt-4 border-t border-white/[0.055] pt-4"><label className="text-[11px] text-zinc-600"><span className="mb-1.5 block px-1">Темы через запятую</span><input value={editTopics} onChange={(event) => setEditTopics(event.target.value)} className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /></label><label className="mt-3 block text-[11px] text-zinc-600"><span className="mb-1.5 block px-1">Как часто проверять</span><select value={editInterval} onChange={(event) => setEditInterval(event.target.value)} className="min-h-12 w-full rounded-2xl bg-zinc-900 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07]">{intervalOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="mt-3 grid grid-cols-[1fr_48px] gap-2"><button type="button" disabled={busy === `save:${item.id}`} onClick={() => void save(item.id)} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-45">{busy === `save:${item.id}` ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button><button type="button" aria-label="Не отслеживать" onClick={() => setRemoveId(item.id)} className="grid h-12 w-12 place-items-center rounded-2xl text-rose-300 shadow-[0_0_0_1px_rgba(251,113,133,0.16)] transition-transform active:scale-[0.96]"><Trash2 className="h-4 w-4" /></button></div></div></motion.div> : null}</AnimatePresence>
         {!editing ? <button type="button" onClick={() => startEditing(item)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.045] text-xs font-semibold text-zinc-400 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition-[background-color,transform] active:scale-[0.96]"><Pencil className="h-4 w-4" />Настроить</button> : null}
-      </motion.article>; })}</div> : <div className="mt-3 rounded-[24px] bg-white/[0.025] p-7 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"><Radio className="mx-auto h-7 w-7 text-zinc-700" /><b className="mt-3 block">{defaultSourcesCount ? 'Отраслевой пульс уже работает' : 'Добавьте первый источник'}</b><p className="mx-auto mt-2 max-w-xs text-pretty text-xs leading-5 text-zinc-600">{defaultSourcesCount ? 'Свои каналы добавлять необязательно. Используйте их, если хотите видеть в саммари конкретные источники.' : 'Добавьте отраслевой канал или публичный канал бизнеса по ссылке выше.'}</p></div>}
+      </motion.article>; })}</div> : <div className="mt-3 rounded-[24px] bg-white/[0.025] p-7 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"><Radio className="mx-auto h-7 w-7 text-zinc-700" /><b className="mt-3 block">{defaultSourcesCount ? 'Отраслевой пульс уже работает' : 'Добавьте первый источник'}</b><p className="mx-auto mt-2 max-w-xs text-pretty text-xs leading-5 text-zinc-600">{defaultSourcesCount ? 'Свои каналы добавлять необязательно. Добавьте их, если хотите видеть в сводке конкретные источники.' : 'Добавьте отраслевой канал или публичный канал бизнеса по ссылке выше.'}</p></div>}
     </section>
 
-    <AnimatePresence initial={false}>{removeId ? <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setRemoveId('')}><motion.section role="dialog" aria-modal="true" aria-labelledby="remove-source-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-[28px] bg-zinc-900 p-5 shadow-[0_28px_100px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.1)]" initial={{ y: 32 }} animate={{ y: 0 }} exit={{ y: 24 }} transition={spring}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-rose-400/10 text-rose-300"><Trash2 className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h2 id="remove-source-title" className="text-balance text-lg font-semibold">Перестать следить?</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">Источник исчезнет из вашего «Пульса». Уже собранные публичные материалы не удаляются.</p></div><button type="button" aria-label="Закрыть" onClick={() => setRemoveId('')} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-zinc-500 active:scale-[0.96]"><X className="h-4 w-4" /></button></div><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setRemoveId('')} className="min-h-12 rounded-2xl bg-white/[0.05] text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.07)] active:scale-[0.96]">Оставить</button><button type="button" disabled={busy === `remove:${removeId}`} onClick={() => void remove()} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-rose-500 text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{busy === `remove:${removeId}` ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}Не отслеживать</button></div></motion.section></motion.div> : null}</AnimatePresence>
+    <AnimatePresence initial={false}>{removeId ? <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setRemoveId('')}><motion.section role="dialog" aria-modal="true" aria-labelledby="remove-source-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-[28px] bg-zinc-900 p-5 shadow-[0_28px_100px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.1)]" initial={{ y: 32 }} animate={{ y: 0 }} exit={{ y: 24 }} transition={spring}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-rose-400/10 text-rose-300"><Trash2 className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h2 id="remove-source-title" className="text-balance text-lg font-semibold">Перестать следить?</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">Источник исчезнет из вашего «Пульса». Уже собранные публичные материалы не удаляются.</p></div><button type="button" aria-label="Закрыть" onClick={() => setRemoveId('')} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-zinc-500 active:scale-[0.96]"><X className="h-4 w-4" /></button></div><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setRemoveId('')} className="min-h-12 rounded-2xl bg-white/[0.05] text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.07)] active:scale-[0.96]">Оставить</button><button type="button" disabled={busy === `remove:${removeId}`} onClick={() => void prepareRemove()} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-rose-500 text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{busy === `remove:${removeId}` ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}Не отслеживать</button></div></motion.section></motion.div> : null}</AnimatePresence>
+    <ActionPreviewSheet preview={preview} busy={Boolean(preview?.action_id && busy === `confirm:${preview.action_id}`)} confirmLabel="Не отслеживать" onCancel={() => setPreview(null)} onConfirm={() => void confirmRemove()} />
   </div>;
 };

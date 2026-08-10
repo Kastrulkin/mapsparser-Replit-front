@@ -310,6 +310,9 @@ export const TelegramControlPage = () => {
   const [restoredJobBusy, setRestoredJobBusy] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const trackedTodayScope = useRef('');
+  const scopeRequestVersion = useRef(0);
+  const catalogSearchVersion = useRef(0);
+  const networkLocationSearchVersion = useRef(0);
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
   const summary = workspace?.summary || bootstrap?.summary;
@@ -318,8 +321,6 @@ export const TelegramControlPage = () => {
   const catalog = bootstrap?.catalog;
   const hasSwitcher = Boolean(scope?.can_switch || Number(catalog?.total_choices || 0) > 1);
   const visibleNavigation = (bootstrap?.navigation || []).filter((item) => item.status !== 'hidden' && item.key !== 'analytics');
-  const showProgress = visibleNavigation.some((item) => item.key === 'progress');
-  const showMore = visibleNavigation.some((item) => ['cards', 'content', 'services', 'finance', 'partnerships', 'agents', 'settings', 'company', 'companies', 'community_sources', 'diagnostics'].includes(item.key));
 
   const onboardingKey = bootstrap?.user?.id ? `localos-mini-onboarding-v3:${bootstrap.user.id}` : '';
   const finishOnboarding = () => {
@@ -330,25 +331,31 @@ export const TelegramControlPage = () => {
     trackMobileInteraction('onboarding_completed');
   };
 
-  const loadWorkspace = async (nextScope?: MobileScope) => {
+  const loadWorkspace = async (nextScope?: MobileScope, requestVersion = scopeRequestVersion.current) => {
     if (preview) return;
     const params = scopeQuery(nextScope || scope);
     const result = await fetch(`/api/operator/mobile/workspace?${params.toString()}`, { headers: authHeaders() }).then(readJson<Workspace>);
+    if (requestVersion !== scopeRequestVersion.current) return;
     setWorkspace(result);
   };
 
-  const loadToday = async (nextScope?: MobileScope, enabled = bootstrap?.today_v2_enabled !== false, quietly = false) => {
+  const loadToday = async (nextScope?: MobileScope, enabled = bootstrap?.today_v2_enabled !== false, quietly = false, requestVersion = scopeRequestVersion.current) => {
     if (preview || !enabled) return;
     if (!quietly) setTodayLoading(true);
-    const timer = window.setTimeout(() => setTodaySlowLoading(true), 400);
+    const timer = window.setTimeout(() => { if (requestVersion === scopeRequestVersion.current) setTodaySlowLoading(true); }, 400);
     try {
       const params = scopeQuery(nextScope || scope);
       const result = await fetch(`/api/operator/mobile/today?${params.toString()}`, { headers: authHeaders() }).then(readJson<TodayPayload>);
+      if (requestVersion !== scopeRequestVersion.current) return;
       setTodayData(result); setError('');
     } catch (requestError) {
-      if (!quietly) setError(requestError instanceof Error ? requestError.message : 'Не удалось собрать картину дня.');
+      if (!quietly && requestVersion === scopeRequestVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось собрать картину дня.');
     } finally {
-      window.clearTimeout(timer); setTodaySlowLoading(false); if (!quietly) setTodayLoading(false);
+      window.clearTimeout(timer);
+      if (requestVersion === scopeRequestVersion.current) {
+        setTodaySlowLoading(false);
+        if (!quietly) setTodayLoading(false);
+      }
     }
   };
 
@@ -369,10 +376,12 @@ export const TelegramControlPage = () => {
     }).catch(() => undefined);
   };
 
-  const loadBootstrap = async (query = '', cursor = '', appendCatalog = false) => {
+  const loadBootstrap = async (query = '', cursor = '', appendCatalog = false, catalogOnly = false, requestedVersion?: number) => {
     if (preview) return;
     if (!initData) { setLoading(false); return; }
-    const timer = window.setTimeout(() => setSlowLoading(true), 400);
+    const requestVersion = catalogOnly ? requestedVersion ?? catalogSearchVersion.current + 1 : 0;
+    if (catalogOnly && requestedVersion === undefined) catalogSearchVersion.current = requestVersion;
+    const timer = catalogOnly ? undefined : window.setTimeout(() => setSlowLoading(true), 400);
     try {
       const deepLink = new URLSearchParams(window.location.search);
       const filters: Record<string, string> = {};
@@ -392,6 +401,7 @@ export const TelegramControlPage = () => {
           filters,
         }),
       }).then(readJson<Bootstrap>);
+      if (catalogOnly && requestVersion !== catalogSearchVersion.current) return;
       if (result.web_session_token) window.sessionStorage.setItem('localos_mini_session', result.web_session_token);
       if (appendCatalog) {
         setBootstrap((current) => ({
@@ -403,16 +413,19 @@ export const TelegramControlPage = () => {
             businesses: [...(current?.catalog?.businesses || []), ...(result.catalog?.businesses || [])],
           },
         }));
+      } else if (catalogOnly) {
+        setBootstrap((current) => ({ ...current, catalog: result.catalog }));
       } else {
         setBootstrap(result);
         setRestoredJob(result.active_job || null);
       }
-      if (!query && !cursor) await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
+      if (!catalogOnly && !query && !cursor) await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
       setError('');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть ЛокалОС.');
+      if (!catalogOnly || requestVersion === catalogSearchVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть ЛокалОС.');
     } finally {
-      window.clearTimeout(timer); setSlowLoading(false); setLoading(false);
+      if (timer !== undefined) window.clearTimeout(timer);
+      if (!catalogOnly) { setSlowLoading(false); setLoading(false); }
     }
   };
 
@@ -456,12 +469,16 @@ export const TelegramControlPage = () => {
   useEffect(() => {
     if (!picker || !initData) return;
     if (pickerNetwork) return;
-    const timer = window.setTimeout(() => void loadBootstrap(search.trim()), 250);
+    const requestVersion = catalogSearchVersion.current + 1;
+    catalogSearchVersion.current = requestVersion;
+    const timer = window.setTimeout(() => void loadBootstrap(search.trim(), '', false, true, requestVersion), 250);
     return () => window.clearTimeout(timer);
   }, [initData, picker, pickerNetwork, search]);
 
-  const loadNetworkLocations = async (network: NetworkCatalogItem, query = '', cursor = '', append = false) => {
+  const loadNetworkLocations = async (network: NetworkCatalogItem, query = '', cursor = '', append = false, requestedVersion?: number) => {
     if (!network.id) return;
+    const requestVersion = requestedVersion ?? networkLocationSearchVersion.current + 1;
+    if (requestedVersion === undefined) networkLocationSearchVersion.current = requestVersion;
     if (preview) {
       const items = (catalog?.businesses || []).filter((item) => item.network_id === network.id);
       setNetworkLocations({ items, counts: { total: items.length }, cursor: null });
@@ -473,21 +490,24 @@ export const TelegramControlPage = () => {
       if (query.trim()) params.set('q', query.trim());
       if (cursor) params.set('cursor', cursor);
       const result = await fetch(`/api/operator/mobile/network-locations?${params.toString()}`, { headers: authOnlyHeaders() }).then(readJson<NetworkLocationsResult>);
+      if (requestVersion !== networkLocationSearchVersion.current) return;
       setNetworkLocations((current) => ({
         ...result,
         items: append ? [...(current.items || []), ...(result.items || [])] : result.items,
       }));
       setError('');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить точки сети.');
+      if (requestVersion === networkLocationSearchVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить точки сети.');
     } finally {
-      setNetworkLocationsLoading(false);
+      if (requestVersion === networkLocationSearchVersion.current) setNetworkLocationsLoading(false);
     }
   };
 
   useEffect(() => {
     if (!picker || !pickerNetwork?.id) return;
-    const timer = window.setTimeout(() => void loadNetworkLocations(pickerNetwork, networkSearch), 200);
+    const requestVersion = networkLocationSearchVersion.current + 1;
+    networkLocationSearchVersion.current = requestVersion;
+    const timer = window.setTimeout(() => void loadNetworkLocations(pickerNetwork, networkSearch, '', false, requestVersion), 200);
     return () => window.clearTimeout(timer);
   }, [picker, pickerNetwork, networkSearch]);
 
@@ -502,13 +522,30 @@ export const TelegramControlPage = () => {
 
   const chooseScope = async (kind: string, id?: string | null) => {
     if (preview) { setPicker(false); setPickerNetwork(null); return true; }
+    const requestVersion = scopeRequestVersion.current + 1;
+    scopeRequestVersion.current = requestVersion;
     setLoading(true);
     try {
       const result = await fetch('/api/operator/telegram/scope', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData, scope_type: kind, scope_id: id || null }),
       }).then(readJson<Bootstrap>);
-      setBootstrap((current) => ({ ...current, ...result, catalog: current?.catalog }));
-      await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
+      if (requestVersion !== scopeRequestVersion.current) return false;
+      const scopeChanged = result.selected_scope?.kind !== scope?.kind || (result.selected_scope?.id || null) !== (scope?.id || null);
+      if (scopeChanged) {
+        setSelectedReviews([]);
+        setActionPreview(null);
+        setReviewLocation('');
+        setDeepLinkReviewId('');
+        setDeepLinkItemId('');
+        setRestoredJob(result.active_job || null);
+        setRestoredJobBusy(false);
+      }
+      setBootstrap((current) => ({ ...current, ...result, resolved_deep_link: result.resolved_deep_link, catalog: current?.catalog }));
+      await Promise.all([
+        loadWorkspace(result.selected_scope, requestVersion),
+        loadToday(result.selected_scope, result.today_v2_enabled !== false, false, requestVersion),
+      ]);
+      if (requestVersion !== scopeRequestVersion.current) return false;
       setProgressData(null);
       setPicker(false); setPickerNetwork(null); setNetworkSearch(''); setTab('today'); setError('');
       return true;
@@ -534,7 +571,7 @@ export const TelegramControlPage = () => {
     setPicker(true);
   };
 
-  const loadReviews = async (status = reviewStatus, append = false) => {
+  const loadReviews = async (status = reviewStatus, append = false, requestVersion = scopeRequestVersion.current) => {
     if (preview) { setReviews({ items: previewReviews, counts: { total: 164, unanswered: 50, drafts: 12 } }); return; }
     setReviewsLoading(true);
     try {
@@ -545,10 +582,14 @@ export const TelegramControlPage = () => {
       if (deepLinkReviewId) params.set('review_id', deepLinkReviewId);
       if (append && reviews.cursor) params.set('cursor', reviews.cursor);
       const result = await fetch(`/api/operator/mobile/reviews?${params.toString()}`, { headers: authHeaders() }).then(readJson<ReviewResult>);
+      if (requestVersion !== scopeRequestVersion.current) return;
       setReviews((current) => ({ ...result, items: append ? [...(current.items || []), ...(result.items || [])] : result.items }));
       setError('');
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить отзывы.'); }
-    finally { setReviewsLoading(false); }
+    } catch (requestError) {
+      if (requestVersion === scopeRequestVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить отзывы.');
+    } finally {
+      if (requestVersion === scopeRequestVersion.current) setReviewsLoading(false);
+    }
   };
 
   useEffect(() => { if (tab === 'reviews') void loadReviews(reviewStatus); }, [tab, reviewStatus, reviewSource, reviewRating, reviewLocation, scope?.kind, scope?.id]);
@@ -567,7 +608,7 @@ export const TelegramControlPage = () => {
 
   useEffect(() => { if (tab === 'operator') void loadOperatorHistory(); }, [tab, scope?.kind, scope?.id]);
 
-  const loadModule = async (moduleKey = module, quietly = false) => {
+  const loadModule = async (moduleKey = module, quietly = false, requestVersion = scopeRequestVersion.current) => {
     if (!moduleKey || preview) return;
     if (!quietly) setModuleLoading(true);
     if (moduleKey === 'company' || moduleKey === 'companies' || moduleKey === 'community_sources') { setModuleLoading(false); setError(''); return; }
@@ -576,16 +617,16 @@ export const TelegramControlPage = () => {
       if (!quietly) setProgressLoading(true);
       await fetch(`/api/operator/mobile/progress?${params.toString()}`, { headers: authHeaders() })
         .then(readJson<ProgressPayload>)
-        .then((result) => { setProgressData(result); setError(''); })
-        .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить прогресс.'))
-        .finally(() => { if (!quietly) { setModuleLoading(false); setProgressLoading(false); } });
+        .then((result) => { if (requestVersion === scopeRequestVersion.current) { setProgressData(result); setError(''); } })
+        .catch((requestError) => { if (requestVersion === scopeRequestVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить прогресс.'); })
+        .finally(() => { if (!quietly && requestVersion === scopeRequestVersion.current) { setModuleLoading(false); setProgressLoading(false); } });
       return;
     }
     const load = (key: string) => fetch(`/api/operator/mobile/modules/${key}?${params.toString()}`, { headers: authHeaders() }).then(readJson<ModuleData>);
     await load(moduleKey === 'finance_import' ? 'finance' : moduleKey)
-      .then((result) => { setModuleData(result); setError(''); })
-      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить раздел.'))
-      .finally(() => { if (!quietly) setModuleLoading(false); });
+      .then((result) => { if (requestVersion === scopeRequestVersion.current) { setModuleData(result); setError(''); } })
+      .catch((requestError) => { if (requestVersion === scopeRequestVersion.current) setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить раздел.'); })
+      .finally(() => { if (!quietly && requestVersion === scopeRequestVersion.current) setModuleLoading(false); });
   };
 
   useEffect(() => {
@@ -724,7 +765,7 @@ export const TelegramControlPage = () => {
         body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: 'review_replies.generate', input: { review_ids: reviewIds } }),
       }).then(readJson<{ preview?: MobileActionPreview }>);
       setActionPreview(result.preview || null); setError('');
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось собрать preview.'); }
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось подготовить проверку перед действием.'); }
     finally { setReviewActionBusy(''); }
   };
 
@@ -792,16 +833,16 @@ export const TelegramControlPage = () => {
         header={<TopBar />}
         error={error}
         overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{showOnboarding ? <MobileOnboarding hasSwitcher={hasSwitcher} networkMode={scope?.kind === 'network' || Boolean(scope?.parent_scope?.id)} onFinish={finishOnboarding} /> : null}</>}
-        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'reviews' ? 'tasks' : tab} showProgress={showProgress} showMore={showMore} setCurrent={(next) => { setModule(''); setTab(next); }} /> : null}
+        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' ? 'more' : tab} setCurrent={(next) => { setModule(''); setTab(next); }} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
-            {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true)} /> : null}
+            {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
             {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
-            {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Понятный путь роста: сделанное, препятствия и один следующий шаг."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
+            {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
@@ -832,7 +873,7 @@ const TopBar = () => {
 const Today = ({ summary, tasks, command, setCommand, ask, openTask }: { summary?: Summary; tasks: AttentionItem[]; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openTask: (item: AttentionItem) => void }) => {
   const primary = tasks[0];
   return <div className="px-4">
-    <section className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />ЛокалОС уже разобрался</div><div className="mt-4 flex items-start gap-4"><div className="min-w-0 flex-1"><h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">{primary?.title || 'Всё под контролем'}</h1><p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">{primary?.description || 'Новых решений от вас сейчас не требуется.'}</p></div>{primary?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{primary.count}</b> : <Check className="h-8 w-8 text-emerald-400" />}</div>{primary ? <PrimaryButton onClick={() => openTask(primary)}>Перейти к решению</PrimaryButton> : null}</section>
+    <section className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />Главное на сегодня</div><div className="mt-4 flex items-start gap-4"><div className="min-w-0 flex-1"><h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">{primary?.title || 'Новых задач нет'}</h1><p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">{primary?.description || 'По последним загруженным данным решений от вас сейчас не требуется.'}</p></div>{primary?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{primary.count}</b> : <Check className="h-8 w-8 text-emerald-400" />}</div>{primary ? <PrimaryButton onClick={() => openTask(primary)}>Открыть задачу</PrimaryButton> : null}</section>
     <form onSubmit={ask} className="mt-3 rounded-[22px] bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.07]"><label className="px-1 text-xs font-medium text-zinc-500">Что сделать?</label><div className="mt-2 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" /><button aria-label="Отправить" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></div><p className="px-1 pt-2 text-[11px] leading-4 text-zinc-600">Опишите задачу. Внешние действия всегда попросят подтверждение.</p></form>
     {tasks.slice(1, 3).map((item) => <TaskRow key={item.id || item.title} item={item} onClick={() => openTask(item)} />)}
     <section className="mt-6"><h2 className="text-lg font-semibold tracking-[-0.025em]">Что уже сделано</h2><div className="mt-3 grid grid-cols-2 gap-2">{(summary?.metrics || []).slice(0, 4).map((metric) => <div key={metric.key} className="rounded-[20px] bg-white/[0.035] p-4 ring-1 ring-inset ring-white/[0.06]"><small className="text-zinc-600">{metric.label}</small><b className="mt-1 block text-2xl tabular-nums">{metric.value ?? '—'}</b><span className="mt-1 block truncate text-[10px] text-zinc-700">{metric.source_label || metric.source || 'ЛокалОС'}</span></div>)}</div></section>
@@ -841,7 +882,7 @@ const Today = ({ summary, tasks, command, setCommand, ask, openTask }: { summary
 
 const Tasks = ({ items, filter, setFilter, openTask }: { items: AttentionItem[]; filter: string; setFilter: (value: string) => void; openTask: (item: AttentionItem) => void }) => {
   const visible = items.filter((item) => filter === 'done' ? item.status === 'completed' : filter === 'working' ? item.status === 'in_progress' : item.status === 'needs_attention' || !item.status);
-  return <Screen title="В работе" subtitle="Всё, что ждёт решения, выполняется сейчас или уже завершено."><Segments value={filter} setValue={setFilter} options={[['attention', 'Нужно решить'], ['working', 'ЛокалОС делает'], ['done', 'Готово']]} />{visible.length ? visible.map((item) => <TaskRow key={item.id || item.title} item={item} onClick={() => openTask(item)} />) : <Empty icon={ClipboardCheck} title={filter === 'attention' ? 'Решений не требуется' : filter === 'working' ? 'Фоновой работы сейчас нет' : 'Готовые результаты появятся здесь'} text={filter === 'attention' ? 'ЛокалОС продолжает следить за изменениями и покажет здесь только то, где действительно нужно ваше решение.' : 'Когда состояние изменится, очередь обновится автоматически.'} />}</Screen>;
+  return <Screen title="В работе" subtitle="Задачи, которые ждут вашего решения, выполняются или уже завершены."><Segments value={filter} setValue={setFilter} options={[['attention', 'Нужно решить'], ['working', 'Выполняется'], ['done', 'Готово']]} />{visible.length ? visible.map((item) => <TaskRow key={item.id || item.title} item={item} onClick={() => openTask(item)} />) : <Empty icon={ClipboardCheck} title={filter === 'attention' ? 'Решений не требуется' : filter === 'working' ? 'Сейчас ничего не выполняется' : 'Готовые результаты появятся здесь'} text={filter === 'attention' ? 'Здесь появятся только задачи, для которых нужно ваше решение.' : 'Когда состояние изменится, список обновится автоматически.'} />}</Screen>;
 };
 
 type ReviewsProps = {
@@ -875,7 +916,11 @@ const ReviewCard = ({ review, selected, toggle, busy, generate, updateDraft, mar
   const [editing, setEditing] = useState(false);
   const [draftText, setDraftText] = useState(review.reply_draft_text || '');
   useEffect(() => setDraftText(review.reply_draft_text || ''), [review.reply_draft_text]);
-  return <article className={`mb-3 rounded-[24px] p-4 ring-1 ring-inset transition-[background-color,box-shadow] ${selected ? 'bg-primary/[0.075] ring-primary/30' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><button type="button" aria-label={selected ? 'Убрать из выбранных' : 'Выбрать отзыв'} aria-pressed={selected} onClick={toggle} className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-sm font-bold active:scale-[0.96] ${selected ? 'bg-primary text-white' : 'bg-amber-400/10 text-amber-300'}`}>{selected ? <Check className="h-5 w-5" /> : review.rating || '—'}</button><div className="min-w-0 flex-1"><b className="block truncate">{review.author_name || 'Гость'}</b><small className="block truncate text-zinc-600">{[review.source, review.location_name].filter(Boolean).join(' · ')}</small><small className="mt-1 block text-[11px] font-medium text-zinc-400">Отзыв от {review.published_at ? new Date(review.published_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'дата не указана источником'}</small></div></div><p className="mt-4 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-300">{review.text || 'Клиент оставил оценку без текста.'}</p>{review.response_text ? <ResponseBox label="Опубликованный ответ" text={review.response_text} /> : review.reply_draft_text ? <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex min-h-11 items-center justify-between"><small className="font-semibold text-primary">Черновик ЛокалОС</small><div className="flex"><button type="button" onClick={() => setEditing((value) => !value)} className="min-h-11 px-3 text-xs font-semibold text-zinc-400">{editing ? 'Отмена' : 'Изменить'}</button><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(draftText)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div></div>{editing ? <><textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} className="min-h-32 w-full resize-none rounded-2xl bg-white/[0.04] p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button disabled={busy} onClick={() => void updateDraft(review, draftText)} className="mt-2 min-h-11 w-full rounded-2xl bg-primary text-sm font-semibold disabled:opacity-50">{busy ? 'Сохраняем…' : 'Сохранить черновик'}</button></> : <><p className="text-sm leading-6 text-zinc-300">{draftText}</p><button type="button" disabled={busy} onClick={() => void markPublished(review)} className="mt-3 min-h-11 w-full rounded-2xl bg-white/[0.045] text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96] disabled:opacity-50">{busy ? 'Сохраняем…' : 'Я опубликовал ответ вручную'}</button></>}</div> : <button disabled={busy} onClick={() => void generate(review, false)} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-primary/12 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 active:scale-[0.96] disabled:opacity-50"><WandSparkles className="h-4 w-4" />{busy ? 'Проверяем…' : 'Подготовить ответ'}</button>}</article>;
+  const publishedAt = review.published_at ? new Date(review.published_at) : null;
+  const publishedAtLabel = publishedAt && !Number.isNaN(publishedAt.getTime())
+    ? publishedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'дата не указана источником';
+  return <article className={`mb-3 rounded-[24px] p-4 ring-1 ring-inset transition-[background-color,box-shadow] ${selected ? 'bg-primary/[0.075] ring-primary/30' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><button type="button" aria-label={selected ? 'Убрать из выбранных' : 'Выбрать отзыв'} aria-pressed={selected} onClick={toggle} className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-sm font-bold active:scale-[0.96] ${selected ? 'bg-primary text-white' : 'bg-amber-400/10 text-amber-300'}`}>{selected ? <Check className="h-5 w-5" /> : review.rating || '—'}</button><div className="min-w-0 flex-1"><b className="block truncate">{review.author_name || 'Гость'}</b><small className="block truncate text-zinc-600">{[review.source, review.location_name].filter(Boolean).join(' · ')}</small><small className="mt-1 block text-[11px] font-medium text-zinc-400">Отзыв от {publishedAtLabel}</small></div></div><p className="mt-4 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-300">{review.text || 'Клиент оставил оценку без текста.'}</p>{review.response_text ? <ResponseBox label="Опубликованный ответ" text={review.response_text} /> : review.reply_draft_text ? <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex min-h-11 items-center justify-between"><small className="font-semibold text-primary">Черновик ЛокалОС</small><div className="flex"><button type="button" onClick={() => setEditing((value) => !value)} className="min-h-11 px-3 text-xs font-semibold text-zinc-400">{editing ? 'Отмена' : 'Изменить'}</button><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(draftText)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div></div>{editing ? <><textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} className="min-h-32 w-full resize-none rounded-2xl bg-white/[0.04] p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button disabled={busy} onClick={() => void updateDraft(review, draftText)} className="mt-2 min-h-11 w-full rounded-2xl bg-primary text-sm font-semibold disabled:opacity-50">{busy ? 'Сохраняем…' : 'Сохранить черновик'}</button></> : <><p className="text-sm leading-6 text-zinc-300">{draftText}</p><button type="button" disabled={busy} onClick={() => void markPublished(review)} className="mt-3 min-h-11 w-full rounded-2xl bg-white/[0.045] text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96] disabled:opacity-50">{busy ? 'Сохраняем…' : 'Я опубликовал ответ вручную'}</button></>}</div> : <button disabled={busy} onClick={() => void generate(review, false)} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-primary/12 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 active:scale-[0.96] disabled:opacity-50"><WandSparkles className="h-4 w-4" />{busy ? 'Проверяем…' : 'Подготовить ответ'}</button>}</article>;
 };
 
 const MetricMini = ({ label, value, accent = false }: { label: string; value?: string | number | null; accent?: boolean }) => <div className="min-w-0 px-1 py-1"><b className={`block truncate text-xl tabular-nums ${accent ? 'text-primary' : 'text-zinc-200'}`}>{value ?? '—'}</b><small className="block truncate text-[10px] text-zinc-600">{label}</small></div>;
@@ -883,18 +928,18 @@ const FilterSelect = ({ label, value, setValue, options }: { label: string; valu
 
 const ResponseBox = ({ label, text }: { label: string; text: string }) => <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex items-center justify-between"><small className="font-semibold text-primary">{label}</small><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(text)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div><p className="text-sm leading-6 text-zinc-300">{text}</p></div>;
 
-const Operator = ({ messages, busy, command, setCommand, ask, openScreen }: { messages: OperatorMessage[]; busy: boolean; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openScreen: (screen: string) => void }) => <Screen title="Оператор" subtitle="Опишите, какой результат нужен. ЛокалОС разберётся, что открыть или подготовить."><div className="min-h-[42vh] space-y-3">{messages.length ? messages.map((message, index) => <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}><p className="whitespace-pre-wrap">{message.text}</p>{message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 block text-[10px] text-zinc-600">Готово</small> : null}{message.role === 'operator' && message.screen ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Открыть результат</button> : null}</div>) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}{busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Разбираюсь и собираю результат…</div> : null}</div><form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary active:scale-[0.96]"><Send className="h-4 w-4" /></button></form></Screen>;
+const Operator = ({ messages, busy, command, setCommand, ask, openScreen }: { messages: OperatorMessage[]; busy: boolean; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openScreen: (screen: string) => void }) => <Screen title="Оператор" subtitle="Напишите задачу обычными словами. Результат появится здесь или в нужном разделе."><div className="min-h-[42vh] space-y-3">{messages.length ? messages.map((message, index) => <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}><p className="whitespace-pre-wrap">{message.text}</p>{message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 block text-[10px] text-zinc-600">Готово</small> : null}{message.role === 'operator' && message.screen ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Открыть результат</button> : null}</div>) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}{busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}</div><form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary active:scale-[0.96]"><Send className="h-4 w-4" /></button></form></Screen>;
 
 const More = ({ navigation, onOpen, openProgress, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; restartTour: () => void }) => {
-  return <Screen title="Развитие" subtitle="Выберите не инструмент, а результат, которого хотите добиться.">
+  return <Screen title="Развитие" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
     <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onRestartTour={restartTour} />
   </Screen>;
 };
 
 const moduleNames: Record<string, [string, string]> = {
-  progress: ['Прогресс', 'Подтверждённый путь роста и один следующий шаг.'],
-  cards: ['Клиенты из карт', 'Видно, где карточки теряют клиентов и что исправить следующим.'], content: ['Контент без рутины', 'Текущий план, готовые тексты и один следующий шаг.'], services: ['Меню, которое продаёт', 'Цены, описания и понятные улучшения меню услуг.'],
-  finance: ['Выручка под контролем', 'Продажи, прибыль, загрузка и точки роста в одном месте.'], finance_import: ['Загрузить финансовую сводку', 'Сначала проверьте строки — данные появятся только после подтверждения.'], analytics: ['Выручка под контролем', 'Выручка, заказы и динамика без перехода в веб-кабинет.'], partnerships: ['Партнёры рядом', 'Поиск, предложение, ответы и подтверждённый результ.'], company: ['Как выглядит моя компания', 'Карты, контакты, публичные услуги, аудиты и история.'], companies: ['Компании в поле зрения', 'Клиенты, лиды, партнёры и их публичная история.'], agents: ['Порученная работа', 'Что ЛокалОС делает, что ждёт проверки и какой результат уже получен.'], settings: ['Настройки и подключения', 'Уведомления, источники, тариф и доступ.'], diagnostics: ['Контроль системы', 'Очереди и ошибки, которые требуют решения суперадмина.'],
+  progress: ['Прогресс', 'Выполненные шаги, текущие проблемы и следующее действие.'],
+  cards: ['Карточки на картах', 'Данные из Яндекса и 2ГИС, свежесть, ошибки и история обновлений.'], content: ['Контент', 'Календарь, текущий план, черновики и публикации.'], services: ['Услуги', 'Цены, описания, данные с карт и предложения по улучшению.'],
+  finance: ['Финансы', 'Выручка, прибыль, средний чек, загрузка и динамика.'], finance_import: ['Загрузить финансовую сводку', 'Сначала проверьте распознанные данные. В аналитику они попадут только после подтверждения.'], analytics: ['Финансы', 'Выручка, заказы и динамика по выбранному периоду.'], partnerships: ['Партнёрства', 'Кандидаты, предложения, отправки, ответы и отчёт.'], company: ['Моя компания', 'Локации, карты, контакты, публичные услуги, аудиты и история.'], companies: ['Компании', 'Клиенты, лиды, партнёры, локации и история публичных данных.'], agents: ['Работа ЛокалОС', 'Запуски, текущие этапы, результаты и ошибки.'], settings: ['Настройки и подключения', 'Уведомления, источники, тариф и доступ.'], diagnostics: ['Диагностика', 'Ошибки парсеров, интеграций и фоновых задач.'],
   community_sources: ['Источники Пульса', 'Публичные Telegram-каналы и открытые группы, за которыми следит ЛокалОС.'],
 };
 
@@ -914,18 +959,29 @@ type ModuleScreenProps = {
 };
 
 const ModuleScreen = ({ module, focusItemId, scope, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
-  const content = moduleNames[module] || ['Раздел', 'Рабочая очередь ЛокалОС.'];
+  const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
     {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
 const providerName = (value: string) => value.includes('2gis') || value.includes('two') || value.includes('2_gis') ? '2ГИС' : value.includes('yandex') ? 'Яндекс' : value;
-const dateLabel = (value?: string) => value ? new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'ещё не обновлялась';
+const dateLabel = (value?: string) => {
+  if (!value) return 'дата неизвестна';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'дата неизвестна'
+    : date.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
 const contentDateKey = (value?: string) => {
   const raw = String(value || '').trim();
   const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match?.[1]) return match[1];
+  if (match?.[1]) {
+    const [year, month, day] = match[1].split('-').map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day) return match[1];
+    return '';
+  }
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return '';
   return [parsed.getUTCFullYear(), String(parsed.getUTCMonth() + 1).padStart(2, '0'), String(parsed.getUTCDate()).padStart(2, '0')].join('-');
@@ -1221,7 +1277,7 @@ const ServiceItemCard = ({ item, editing, busy, setEditing, update, changeActive
   const [description, setDescription] = useState(item.subtitle || '');
   const [price, setPrice] = useState(item.price || '');
   const [category, setCategory] = useState(item.category || '');
-  return <article id={`service-item-${item.id || ''}`} className={`scroll-mt-24 rounded-[22px] p-4 ring-1 ring-inset ${item.status === 'archived' ? 'bg-white/[0.02] opacity-70 ring-white/[0.05]' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small><small className="mt-1 block text-[10px] text-zinc-700">{item.source ? `Получено из ${providerName(item.source)}` : 'Добавлено в ЛокалОС'} · обновлено {dateLabel(item.updated_at)}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={name} onChange={(event) => setName(event.target.value)} aria-label="Название услуги" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><div className="grid grid-cols-2 gap-2"><input value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Категория услуги" placeholder="Категория" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /><input value={price} onChange={(event) => setPrice(event.target.value)} aria-label="Цена услуги" placeholder="Цена" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /></div><textarea value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Описание услуги" rows={4} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button type="button" disabled={busy} onClick={() => void update({ name, description, price, category })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить изменения</button></div> : <><p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p><div className="mt-3 flex items-center justify-between"><b className="text-sm tabular-nums text-zinc-200">{item.price || 'Цена не указана'}</b><div className="flex gap-1"><button type="button" disabled={busy} onClick={changeActive} className="min-h-11 rounded-[14px] px-3 text-xs font-semibold text-zinc-500 transition-transform active:scale-[0.96] disabled:opacity-50">{item.status === 'archived' ? 'Вернуть' : 'В архив'}</button>{item.status !== 'archived' ? <button type="button" onClick={setEditing} className="flex min-h-11 items-center gap-2 rounded-[14px] bg-white/[0.055] px-3 text-xs font-semibold ring-1 ring-inset ring-white/[0.08] active:scale-[0.96]"><Pencil className="h-4 w-4" />Изменить</button> : null}</div></div></>}</article>;
+  return <article id={`service-item-${item.id || ''}`} className={`scroll-mt-24 rounded-[22px] p-4 ring-1 ring-inset ${item.status === 'archived' ? 'bg-white/[0.02] opacity-70 ring-white/[0.05]' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small><small className="mt-1 block text-[10px] text-zinc-700">{item.source ? `Получено из ${providerName(item.source)}` : 'Добавлено в ЛокалОС'} · {item.updated_at ? `обновлено ${dateLabel(item.updated_at)}` : 'ещё не обновлялось'}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={name} onChange={(event) => setName(event.target.value)} aria-label="Название услуги" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><div className="grid grid-cols-2 gap-2"><input value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Категория услуги" placeholder="Категория" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /><input value={price} onChange={(event) => setPrice(event.target.value)} aria-label="Цена услуги" placeholder="Цена" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /></div><textarea value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Описание услуги" rows={4} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button type="button" disabled={busy} onClick={() => void update({ name, description, price, category })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить изменения</button></div> : <><p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p><div className="mt-3 flex items-center justify-between"><b className="text-sm tabular-nums text-zinc-200">{item.price || 'Цена не указана'}</b><div className="flex gap-1"><button type="button" disabled={busy} onClick={changeActive} className="min-h-11 rounded-[14px] px-3 text-xs font-semibold text-zinc-500 transition-transform active:scale-[0.96] disabled:opacity-50">{item.status === 'archived' ? 'Вернуть' : 'В архив'}</button>{item.status !== 'archived' ? <button type="button" onClick={setEditing} className="flex min-h-11 items-center gap-2 rounded-[14px] bg-white/[0.055] px-3 text-xs font-semibold ring-1 ring-inset ring-white/[0.08] active:scale-[0.96]"><Pencil className="h-4 w-4" />Изменить</button> : null}</div></div></>}</article>;
 };
 
 type RecognizedSale = { id?: string; transaction_date?: string; amount?: number; title?: string; sale_type?: 'service' | 'upsell' | 'cross_sell'; notes?: string };
@@ -1383,7 +1439,7 @@ const FinanceTools = ({ businessId, dashboard, reload, requestCrm, trackProduct 
     window.requestAnimationFrame(() => document.getElementById('finance-file-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
   const submitCrm = async (values: { crmName: string; crmUrl: string; contact: string; comment: string }) => { await requestCrm(values); setCrmRequest({ crm_name: values.crmName, status: 'open' }); };
-  return <div className="space-y-4"><FinanceCrmMobilePanel onOpenFileImport={openYclientsImport} onRequestCrm={submitCrm} currentRequest={crmRequest} /><FinanceImport businessId={businessId} dashboard={dashboard} reload={reload} preferredProfile={preferredProfile} trackProduct={trackProduct} /><FinanceThresholds businessId={businessId} reload={reload} /><FinanceRoi /><FinanceTransactions businessId={businessId} reload={reload} /></div>;
+  return <div className="space-y-4"><FinanceCrmMobilePanel onOpenFileImport={openYclientsImport} onRequestCrm={submitCrm} currentRequest={crmRequest} /><FinanceImport businessId={businessId} dashboard={dashboard} reload={reload} preferredProfile={preferredProfile} trackProduct={trackProduct} /><FinanceThresholds businessId={businessId} reload={reload} /><FinanceRoi businessId={businessId} /><FinanceTransactions businessId={businessId} reload={reload} /></div>;
 };
 
 const FinanceThresholds = ({ businessId, reload }: { businessId: string; reload: () => Promise<void> }) => {
@@ -1401,17 +1457,17 @@ const FinanceThresholds = ({ businessId, reload }: { businessId: string; reload:
   return <section className="rounded-[22px] bg-white/[0.04] ring-1 ring-inset ring-white/[0.07]"><button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex min-h-20 w-full items-center gap-3 p-4 text-left"><span className="grid h-11 w-11 place-items-center rounded-[14px] bg-primary/12 text-primary"><Settings className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block text-sm">Нормы KPI</b><small className="mt-1 block text-zinc-600">{keys.length} показателей · свои нормы: {keys.filter((key) => thresholds[key]?.source === 'custom').length}</small></span><ChevronRight className={`h-4 w-4 text-zinc-600 transition-transform ${open ? 'rotate-90' : ''}`} /></button><AnimatePresence initial={false}>{open ? <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={spring} className="overflow-hidden"><div className="space-y-3 border-t border-white/[0.06] p-4">{keys.map((key) => { const item = thresholds[key] || {}; return <div key={key} className="rounded-[16px] bg-black/20 p-3"><div className="flex items-center justify-between gap-2"><b className="text-xs">{item.label || key.replaceAll('_', ' ')}</b><small className="text-zinc-700">{item.source === 'custom' ? 'Своя' : 'Базовая'}</small></div><div className="mt-3 grid grid-cols-2 gap-2">{[['green_min', 'Зелёная от'], ['green_max', 'Зелёная до'], ['yellow_min', 'Жёлтая от'], ['yellow_max', 'Жёлтая до']].map(([field, label]) => <label key={field} className="text-[9px] text-zinc-600">{label}<input inputMode="decimal" value={String(item[field === 'green_min' ? 'green_min' : field === 'green_max' ? 'green_max' : field === 'yellow_min' ? 'yellow_min' : 'yellow_max'] ?? '')} onChange={(event) => update(key, field === 'green_min' ? 'green_min' : field === 'green_max' ? 'green_max' : field === 'yellow_min' ? 'yellow_min' : 'yellow_max', event.target.value)} className="mt-1 min-h-11 w-full rounded-[12px] bg-white/[0.04] px-3 text-xs ring-1 ring-inset ring-white/[0.06]" /></label>)}</div><label className="mt-2 block text-[9px] text-zinc-600">Правило красной зоны<input value={item.red_rule || ''} onChange={(event) => update(key, 'red_rule', event.target.value)} className="mt-1 min-h-11 w-full rounded-[12px] bg-white/[0.04] px-3 text-xs ring-1 ring-inset ring-white/[0.06]" /></label></div>; })}{message ? <p className="text-xs text-zinc-400">{message}</p> : null}<div className="grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={() => void reset()} className="min-h-11 rounded-[14px] bg-white/[0.05] text-xs font-semibold ring-1 ring-inset ring-white/[0.07]">Сбросить</button><button type="button" disabled={busy} onClick={() => void save()} className="min-h-11 rounded-[14px] bg-primary text-xs font-semibold">{busy ? 'Сохраняем…' : 'Сохранить'}</button></div></div></motion.div> : null}</AnimatePresence></section>;
 };
 
-const FinanceRoi = () => {
+const FinanceRoi = ({ businessId }: { businessId: string }) => {
   const today = financeDate(new Date());
   const [values, setValues] = useState({ investment_amount: '', returns_amount: '', period_start: today, period_end: today });
   const [roi, setRoi] = useState(0);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
-  const load = async () => { try { const result = await fetch('/api/finance/roi', { headers: authOnlyHeaders() }).then(readJson<{ roi?: { investment_amount?: number; returns_amount?: number; roi_percentage?: number; period_start?: string | null; period_end?: string | null } }>); const value = result.roi; if (value) { setValues({ investment_amount: String(value.investment_amount || ''), returns_amount: String(value.returns_amount || ''), period_start: value.period_start || today, period_end: value.period_end || today }); setRoi(value.roi_percentage || 0); } } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить ROI.'); } };
+  const load = async () => { try { const params = new URLSearchParams({ business_id: businessId }); const result = await fetch(`/api/finance/roi?${params.toString()}`, { headers: authOnlyHeaders() }).then(readJson<{ roi?: { investment_amount?: number; returns_amount?: number; roi_percentage?: number; period_start?: string | null; period_end?: string | null } }>); const value = result.roi; if (value) { setValues({ investment_amount: String(value.investment_amount || ''), returns_amount: String(value.returns_amount || ''), period_start: value.period_start || today, period_end: value.period_end || today }); setRoi(value.roi_percentage || 0); } } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить ROI.'); } };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(); }, []);
-  const save = async () => { setBusy(true); try { const result = await fetch('/api/finance/roi', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ investment_amount: financeNumeric(values.investment_amount), returns_amount: financeNumeric(values.returns_amount), period_start: values.period_start, period_end: values.period_end }) }).then(readJson<{ roi?: { roi_percentage?: number } }>); setRoi(result.roi?.roi_percentage || 0); setOpen(false); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось рассчитать ROI.'); } finally { setBusy(false); } };
+  useEffect(() => { void load(); }, [businessId]);
+  const save = async () => { setBusy(true); try { const result = await fetch('/api/finance/roi', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: businessId, investment_amount: financeNumeric(values.investment_amount), returns_amount: financeNumeric(values.returns_amount), period_start: values.period_start, period_end: values.period_end }) }).then(readJson<{ roi?: { roi_percentage?: number } }>); setRoi(result.roi?.roi_percentage || 0); setOpen(false); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось рассчитать ROI.'); } finally { setBusy(false); } };
   return <section className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-center justify-between"><div><b className="text-sm">Окупаемость вложений</b><p className="mt-1 text-xs text-zinc-600">ROI за выбранный период</p></div><b className={`text-xl tabular-nums ${roi >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(roi)}%</b></div>{open ? <div className="mt-4 grid grid-cols-2 gap-2"><FinanceSmallInput label="Вложения" value={values.investment_amount} setValue={(value) => setValues((current) => ({ ...current, investment_amount: value }))} /><FinanceSmallInput label="Возврат" value={values.returns_amount} setValue={(value) => setValues((current) => ({ ...current, returns_amount: value }))} /><label className="text-[10px] text-zinc-600">Начало<input type="date" value={values.period_start} onChange={(event) => setValues((current) => ({ ...current, period_start: event.target.value }))} className="mt-1 min-h-11 w-full rounded-[12px] bg-zinc-900 px-2 text-xs ring-1 ring-inset ring-white/[0.06]" /></label><label className="text-[10px] text-zinc-600">Конец<input type="date" value={values.period_end} onChange={(event) => setValues((current) => ({ ...current, period_end: event.target.value }))} className="mt-1 min-h-11 w-full rounded-[12px] bg-zinc-900 px-2 text-xs ring-1 ring-inset ring-white/[0.06]" /></label><button type="button" disabled={busy} onClick={() => void save()} className="col-span-2 min-h-11 rounded-[14px] bg-primary text-xs font-semibold">{busy ? 'Считаем…' : 'Рассчитать и сохранить'}</button></div> : <button type="button" onClick={() => setOpen(true)} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold ring-1 ring-inset ring-white/[0.07]">Изменить расчёт</button>}{error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}</section>;
 };
 
@@ -1501,7 +1557,7 @@ const ModuleUnavailable = () => <Empty icon={CircleEllipsis} title="Раздел
 const NotificationSettings = ({ preferences, saving, save }: { preferences: NotificationPreferences; saving: boolean; save: (preferences: NotificationPreferences) => Promise<void> }) => {
   const [value, setValue] = useState<NotificationPreferences>(preferences);
   useEffect(() => setValue(preferences), [preferences]);
-  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утреннее саммари', 'Только реальные задачи'], ['finance_rhythm', 'Ритм статистики', 'Один раз перед сроком и один — после'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или интеграция требует внимания'], ['agent_results', 'ИИ-сотрудники', 'Результат готов к review']];
+  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утренняя сводка', 'Задачи и изменения за сутки'], ['finance_rhythm', 'Ритм статистики', 'Один раз перед сроком и один — после'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или подключение требует внимания'], ['agent_results', 'Результаты ЛокалОС', 'Новый результат готов к проверке']];
   return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div><button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
 };
 
@@ -1527,7 +1583,7 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
   >
     <button type="button" onClick={() => void choose('network', network.id)} className={`flex min-h-[76px] w-full items-center gap-3 rounded-[22px] px-4 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-[background-color,transform] active:scale-[0.96] ${currentIsNetwork ? 'bg-primary/12' : 'bg-white/[0.045]'}`}>
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-primary/15 text-primary"><Network className="h-5 w-5" /></span>
-      <span className="min-w-0 flex-1"><b className="block text-sm">{currentIsNetworkLocation ? 'К саммари сети' : 'Саммари сети'}</b><small className="mt-1 block text-pretty text-zinc-500">{locationCountLabel(displayedTotal)} в общей картине</small></span>
+      <span className="min-w-0 flex-1"><b className="block text-sm">{currentIsNetworkLocation ? 'К сводке сети' : 'Сводка сети'}</b><small className="mt-1 block text-pretty text-zinc-500">{locationCountLabel(displayedTotal)} в общей картине</small></span>
       {currentIsNetwork ? <Check className="h-5 w-5 text-primary" /> : <ChevronRight className="h-5 w-5 text-zinc-600" />}
     </button>
     <div className="mb-3 mt-6 flex items-end justify-between gap-3"><div><h2 className="text-balance text-lg font-semibold">Точки сети</h2><p className="mt-1 text-xs text-zinc-600">Данные и действия будут относиться только к выбранной точке.</p></div><span className="shrink-0 text-xs tabular-nums text-zinc-600">{displayedTotal}</span></div>
@@ -1543,7 +1599,7 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
 
 const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
-const BottomNav = ({ current, showProgress, showMore, setCurrent }: { current: Tab; showProgress: boolean; showMore: boolean; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'В работе', ClipboardCheck]]; if (showProgress) items.push(['progress', 'Прогресс', TrendingUp]); items.push(['operator', 'Оператор', Bot]); if (showMore) items.push(['more', 'Развитие', LayoutGrid]); return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={current === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
+const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'В работе', ClipboardCheck], ['reviews', 'Отзывы', MessageCircle], ['operator', 'Оператор', Bot], ['more', 'Развитие', LayoutGrid]]; return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={current === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
 
 const Screen = ({ title, subtitle, children, action }: { title: string; subtitle: string; children: React.ReactNode; action?: React.ReactNode }) => <section className="px-4"><div className="mb-5 flex items-start gap-3"><div className="min-w-0 flex-1"><h1 className="text-balance text-2xl font-semibold tracking-[-0.04em]">{title}</h1><p className="mt-1 text-pretty text-sm leading-6 text-zinc-500">{subtitle}</p></div>{action}</div>{children}</section>;
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;

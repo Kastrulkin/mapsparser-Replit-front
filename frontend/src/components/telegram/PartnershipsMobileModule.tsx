@@ -19,6 +19,8 @@ import {
   Upload,
   Users,
 } from "lucide-react";
+import ActionPreviewSheet, { type MobileActionPreview } from "./ActionPreviewSheet";
+import { confirmMobileAction } from "../../lib/mobileDataClient";
 
 type Scope = {
   kind: "platform" | "network" | "business";
@@ -144,6 +146,15 @@ type Blockers = {
 type PartnershipTab = "overview" | "leads" | "drafts" | "send" | "analytics";
 
 const spring = { type: "spring", duration: 0.3, bounce: 0 };
+const listUniqueStrings = (values: string[]) => {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const clean = value.trim();
+    if (!clean || seen.has(clean)) return false;
+    seen.add(clean);
+    return true;
+  });
+};
 const headers = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${window.sessionStorage.getItem("localos_mini_session") || ""}`,
@@ -158,15 +169,18 @@ const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
     throw new Error(data.error || "Не удалось выполнить действие");
   return data;
 };
-const dateLabel = (value?: string) =>
-  value
-    ? new Date(value).toLocaleString("ru-RU", {
+const dateLabel = (value?: string) => {
+  if (!value) return "дата неизвестна";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "дата неизвестна"
+    : date.toLocaleString("ru-RU", {
         day: "numeric",
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
-      })
-    : "нет даты";
+      });
+};
 const pipelineLabel = (value?: string) =>
   ({
     unprocessed: "Новый",
@@ -239,7 +253,9 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [bulkStage, setBulkStage] = useState("in_progress");
-  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<MobileActionPreview | null>(null);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [pendingDeleteDraftId, setPendingDeleteDraftId] = useState("");
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
   const [confirmBatch, setConfirmBatch] = useState<Batch | null>(null);
   const [showIntake, setShowIntake] = useState(false);
@@ -409,20 +425,104 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           comment: "Отмечено вручную из мини-приложения ЛокалОС",
         },
       );
-    if (operation === "delete") {
-      await action(
-        `${lead.id}:delete`,
-        `/api/partnership/leads/${lead.id}?business_id=${encodeURIComponent(businessId)}`,
-        undefined,
-        "DELETE",
+    if (operation === "delete") await prepareDelete([lead.id]);
+  };
+  const prepareDelete = async (leadIds: string[]) => {
+    const cleanIds = listUniqueStrings(leadIds);
+    if (!cleanIds.length) return;
+    setBusy("delete:preview");
+    setError("");
+    try {
+      const capability = cleanIds.length === 1
+        ? "partnerships.lead.delete"
+        : "partnerships.leads.bulk_delete";
+      const result = await request<{ preview?: MobileActionPreview }>(
+        "/api/operator/mobile/actions/preview",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            scope_type: scope?.kind,
+            scope_id: scope?.id || null,
+            capability,
+            input: {
+              business_id: businessId,
+              lead_id: cleanIds.length === 1 ? cleanIds[0] : undefined,
+              lead_ids: cleanIds,
+            },
+          }),
+        },
       );
-      setSelectedLead(null);
+      if (!result.preview?.action_id) throw new Error("Не удалось подготовить проверку.");
+      setPendingDeleteIds(cleanIds);
+      setDeletePreview(result.preview);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось проверить удаление.");
+    } finally {
+      setBusy("");
+    }
+  };
+  const prepareDraftDelete = async (draftId: string) => {
+    if (!draftId) return;
+    setBusy(`delete-draft:${draftId}`);
+    setError("");
+    try {
+      const result = await request<{ preview?: MobileActionPreview }>(
+        "/api/operator/mobile/actions/preview",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            scope_type: scope?.kind,
+            scope_id: scope?.id || null,
+            capability: "partnerships.draft.delete",
+            input: { business_id: businessId, draft_id: draftId },
+          }),
+        },
+      );
+      if (!result.preview?.action_id) throw new Error("Не удалось подготовить проверку.");
+      setPendingDeleteIds([]);
+      setPendingDeleteDraftId(draftId);
+      setDeletePreview(result.preview);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось проверить удаление черновика.");
+    } finally {
+      setBusy("");
+    }
+  };
+  const confirmDelete = async () => {
+    if (!deletePreview?.action_id) return;
+    setBusy("delete:confirm");
+    setError("");
+    try {
+      await confirmMobileAction(deletePreview.action_id, scope);
+      if (pendingDeleteDraftId) {
+        setDrafts((current) => current.filter((item) => item.id !== pendingDeleteDraftId));
+        setMessage("Черновик удалён.");
+        setDeletePreview(null);
+        setPendingDeleteDraftId("");
+        await load(true);
+        return;
+      }
+      const deleted = new Set(pendingDeleteIds);
+      setSelectedLeads((current) => current.filter((id) => !deleted.has(id)));
+      if (selectedLead && deleted.has(selectedLead.id)) setSelectedLead(null);
+      setMessage(pendingDeleteIds.length === 1 ? "Кандидат удалён из партнёрской работы." : `Удалено кандидатов: ${pendingDeleteIds.length}`);
+      setDeletePreview(null);
+      setPendingDeleteIds([]);
+      await load(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось удалить кандидата.");
+    } finally {
+      setBusy("");
     }
   };
   const bulkLeadAction = async (
     mode: "update" | "enrich" | "match" | "delete",
   ) => {
     if (!selectedLeads.length) return;
+    if (mode === "delete") {
+      await prepareDelete(selectedLeads);
+      return;
+    }
     setBusy(`bulk:${mode}`);
     setError("");
     try {
@@ -431,9 +531,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           ? "/api/partnership/leads/bulk-update"
           : mode === "enrich"
             ? "/api/partnership/leads/bulk-enrich-contacts"
-            : mode === "match"
-              ? "/api/partnership/leads/bulk-match"
-              : "/api/partnership/leads/bulk-delete";
+          : "/api/partnership/leads/bulk-match";
       const payload =
         mode === "update"
           ? {
@@ -445,7 +543,6 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
       await request(path, { method: "POST", body: JSON.stringify(payload) });
       setMessage(`Обработано кандидатов: ${selectedLeads.length}`);
       setSelectedLeads([]);
-      setBulkDeleteConfirm(false);
       await load(true);
     } catch (requestError) {
       setError(
@@ -878,31 +975,12 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                 <button
                   aria-label="Удалить выбранных"
                   disabled={busy !== ""}
-                  onClick={() => setBulkDeleteConfirm(true)}
+                  onClick={() => void bulkLeadAction("delete")}
                   className="grid h-11 w-11 place-items-center rounded-[13px] bg-rose-500/10 text-rose-300"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              {bulkDeleteConfirm ? (
-                <div className="mt-3 rounded-[14px] bg-rose-500/10 p-3 text-xs text-rose-200">
-                  Удалить выбранных кандидатов? Это действие нельзя отменить.
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setBulkDeleteConfirm(false)}
-                      className="min-h-11 rounded-[12px] bg-white/[0.05]"
-                    >
-                      Оставить
-                    </button>
-                    <button
-                      onClick={() => void bulkLeadAction("delete")}
-                      className="min-h-11 rounded-[12px] bg-rose-500 font-semibold text-white"
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ) : null}
             </section>
           ) : null}
           {leads.length ? (
@@ -1033,15 +1111,8 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                     <div className="mt-3 grid grid-cols-[44px_1fr] gap-2">
                       <button
                         aria-label="Удалить черновик"
-                        onClick={() => {
-                          if (window.confirm("Удалить этот черновик?"))
-                            void action(
-                              `delete:${draft.id}`,
-                              `/api/partnership/drafts/${draft.id}?business_id=${encodeURIComponent(businessId)}`,
-                              undefined,
-                              "DELETE",
-                            );
-                        }}
+                        disabled={busy === `delete-draft:${draft.id}`}
+                        onClick={() => void prepareDraftDelete(draft.id)}
                         className="grid h-11 w-11 place-items-center rounded-[13px] bg-rose-500/10 text-rose-300"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1338,6 +1409,13 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           />
         ) : null}
       </AnimatePresence>
+      <ActionPreviewSheet
+        preview={deletePreview}
+        busy={busy === "delete:confirm"}
+        confirmLabel={pendingDeleteDraftId ? "Удалить черновик" : pendingDeleteIds.length > 1 ? "Удалить кандидатов" : "Удалить кандидата"}
+        onCancel={() => { setDeletePreview(null); setPendingDeleteIds([]); setPendingDeleteDraftId(""); }}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 };
@@ -1364,7 +1442,6 @@ const LeadSheet = ({
   ) => Promise<void>;
 }) => {
   const [editing, setEditing] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [values, setValues] = useState({
     name: lead.name || "",
     city: lead.city || "",
@@ -1585,11 +1662,7 @@ const LeadSheet = ({
                 disabled={busy !== ""}
                 onClick={() =>
                   lead.sales_room_slug
-                    ? window.open(
-                        `/room/${lead.sales_room_slug}`,
-                        "_blank",
-                        "noopener,noreferrer",
-                      )
+                    ? window.location.assign(`/room/${lead.sales_room_slug}`)
                     : void operate(lead, "room")
                 }
                 className="min-h-11 w-full rounded-[13px] bg-white/[0.05] px-3 text-left text-xs ring-1 ring-inset ring-white/[0.07]"
@@ -1614,37 +1687,13 @@ const LeadSheet = ({
               >
                 Отметить, что связались вручную
               </button>
-              {deleteConfirm ? (
-                <div className="rounded-[13px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">
-                  <p>
-                    Удалить кандидата и связанную рабочую историю? Отменить это
-                    действие не получится.
-                  </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setDeleteConfirm(false)}
-                      className="min-h-11 rounded-[12px] bg-white/[0.05]"
-                    >
-                      Оставить
-                    </button>
-                    <button
-                      disabled={busy !== ""}
-                      onClick={() => void operate(lead, "delete")}
-                      className="min-h-11 rounded-[12px] bg-rose-500 font-semibold text-white"
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  disabled={busy !== ""}
-                  onClick={() => setDeleteConfirm(true)}
-                  className="min-h-11 w-full rounded-[13px] px-3 text-left text-xs text-rose-300/80"
-                >
-                  Удалить кандидата
-                </button>
-              )}
+              <button
+                disabled={busy !== ""}
+                onClick={() => void operate(lead, "delete")}
+                className="min-h-11 w-full rounded-[13px] px-3 text-left text-xs text-rose-300/80"
+              >
+                Удалить кандидата
+              </button>
             </div>
           </>
         )}

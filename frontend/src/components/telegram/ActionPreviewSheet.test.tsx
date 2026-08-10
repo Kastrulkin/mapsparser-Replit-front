@@ -27,4 +27,11 @@ describe('ActionPreviewSheet', () => {
     await user.click(screen.getByRole('button', { name: 'Закрыть проверку' }));
     expect(cancel).not.toHaveBeenCalled();
   });
+
+  it('uses the correct Russian form for two publications', () => {
+    render(<ActionPreviewSheet preview={{ action_id: 'action-1', changes: [{ object_id: 'plan-1', label: 'Удалить план', items_count: 2 }] }} busy={false} onCancel={() => undefined} onConfirm={() => undefined} />);
+
+    expect(screen.getByText(/2 публикации/)).toBeInTheDocument();
+    expect(screen.queryByText(/2 публикаций/)).not.toBeInTheDocument();
+  });
 });

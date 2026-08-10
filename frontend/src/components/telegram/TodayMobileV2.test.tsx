@@ -54,4 +54,26 @@ describe('TodayMobileV2', () => {
     await userEvent.click(screen.getByRole('button', { name: /Север/ }));
     expect(openTarget).toHaveBeenCalledWith('cards', { kind: 'business', id: 'business-2' });
   });
+
+  it('uses natural Russian declension for community message counts', () => {
+    render(
+      <TodayMobileV2
+        data={{
+          scope: { kind: 'business', id: 'business-1', name: 'Салон' },
+          community_pulse: [{ id: 'topic-1', title: 'Рост цен', summary: 'Обсуждают новых поставщиков.', source_name: 'Beauty Owners', message_count: 21 }],
+        }}
+        loading={false}
+        slowLoading={false}
+        command=""
+        setCommand={vi.fn()}
+        ask={vi.fn()}
+        openTarget={vi.fn()}
+        openProgress={vi.fn()}
+        track={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/21 сообщение/)).toBeInTheDocument();
+    expect(screen.queryByText(/21 сообщений/)).not.toBeInTheDocument();
+  });
 });

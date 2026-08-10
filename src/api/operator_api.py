@@ -121,6 +121,35 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
     return items
 
 
+def _mobile_active_job(cursor, *, user_id: str, scope: dict, is_superadmin: bool) -> dict | None:
+    cursor.execute("SELECT to_regclass('public.operator_async_jobs') AS table_ref")
+    if not dict(cursor.fetchone() or {}).get("table_ref"):
+        return None
+    business_ids = [str(item) for item in scope.get("business_ids") or []]
+    cursor.execute(
+        """
+        SELECT id
+        FROM operator_async_jobs
+        WHERE user_id = %s
+          AND status IN ('queued', 'running', 'waiting_for_review')
+          AND (%s OR business_id = ANY(%s))
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (user_id, scope.get("kind") == "platform", business_ids),
+    )
+    active_row = cursor.fetchone()
+    if not active_row:
+        return None
+    return load_operator_async_job(
+        cursor,
+        job_id=str(dict(active_row).get("id") or ""),
+        user_id=user_id,
+        scope=scope,
+        is_superadmin=is_superadmin,
+    )
+
+
 def _mobile_task_item(item: dict) -> dict:
     value = dict(item)
     status = str(value.get("status") or "needs_attention")
@@ -416,31 +445,12 @@ def operator_telegram_bootstrap():
             item_id=str(payload.get("item_id") or ""),
             filters=payload.get("filters") if isinstance(payload.get("filters"), dict) else {},
         )
-        active_job = None
-        cursor.execute("SELECT to_regclass('public.operator_async_jobs') AS table_ref")
-        if dict(cursor.fetchone() or {}).get("table_ref"):
-            selected_business_ids = [str(item) for item in (selected or {}).get("business_ids") or []]
-            cursor.execute(
-                """
-                SELECT id
-                FROM operator_async_jobs
-                WHERE user_id = %s
-                  AND status IN ('queued', 'running', 'waiting_for_review')
-                  AND (%s OR business_id = ANY(%s))
-                ORDER BY updated_at DESC
-                LIMIT 1
-                """,
-                (user_id, (selected or {}).get("kind") == "platform", selected_business_ids),
-            )
-            active_row = cursor.fetchone()
-            if active_row:
-                active_job = load_operator_async_job(
-                    cursor,
-                    job_id=str(dict(active_row).get("id") or ""),
-                    user_id=user_id,
-                    scope=selected or {},
-                    is_superadmin=bool(user.get("is_superadmin")),
-                )
+        active_job = _mobile_active_job(
+            cursor,
+            user_id=user_id,
+            scope=selected or {},
+            is_superadmin=bool(user.get("is_superadmin")),
+        )
         return jsonify(
             {
                 "success": True,
@@ -493,7 +503,13 @@ def operator_telegram_select_scope():
             return jsonify({"success": False, "error": "Контекст не найден или недоступен"}), 403
         db.conn.commit()
         summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
-        return jsonify({"success": True, "selected_scope": scope, "summary": summary})
+        active_job = _mobile_active_job(
+            cursor,
+            user_id=user_id,
+            scope=scope,
+            is_superadmin=bool(user.get("is_superadmin")),
+        )
+        return jsonify({"success": True, "selected_scope": scope, "summary": summary, "active_job": active_job})
     except Exception:
         db.conn.rollback()
         raise
@@ -3061,6 +3077,91 @@ def operator_mobile_action_confirm(action_id: str):
                 "external_writes_performed": False,
             }
 
+        def partnership_delete_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            lead_ids = list(dict.fromkeys(str(item).strip() for item in envelope.get("lead_ids") or [] if str(item).strip()))
+            if len(targets) != 1 or targets[0] != business_id or not lead_ids:
+                return {"status": "blocked", "blocked_reasons": ["partnership_delete_preview_changed"]}
+            cursor.execute(
+                """
+                DELETE FROM lead_workstreams
+                WHERE lead_id = ANY(%s)
+                  AND client_business_id = %s
+                  AND workstream_type = 'client_partnership'
+                RETURNING lead_id
+                """,
+                (lead_ids, business_id),
+            )
+            deleted_ids = [str(dict(item).get("lead_id") or "") for item in (cursor.fetchall() or [])]
+            if set(deleted_ids) != set(lead_ids):
+                return {"status": "blocked", "blocked_reasons": ["partnership_leads_changed_after_preview"]}
+            cursor.execute(
+                """
+                DELETE FROM prospectingleads lead
+                WHERE lead.id = ANY(%s)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM lead_workstreams workstream WHERE workstream.lead_id = lead.id
+                  )
+                """,
+                (deleted_ids,),
+            )
+            return {
+                "status": "completed",
+                "capability": "partnerships.lead.delete" if len(deleted_ids) == 1 else "partnerships.leads.bulk_delete",
+                "deleted_ids": deleted_ids,
+                "deleted_count": len(deleted_ids),
+                "external_writes_performed": False,
+            }
+
+        def community_source_unsubscribe_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            source_id = str(envelope.get("source_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not source_id:
+                return {"status": "blocked", "blocked_reasons": ["community_source_preview_changed"]}
+            cursor.execute(
+                """
+                UPDATE knowledge_source_subscriptions
+                SET is_active = FALSE, updated_at = NOW()
+                WHERE business_id = %s AND source_id = %s AND is_active = TRUE
+                RETURNING source_id
+                """,
+                (business_id, source_id),
+            )
+            if not cursor.fetchone():
+                return {"status": "blocked", "blocked_reasons": ["community_source_changed_after_preview"]}
+            return {
+                "status": "completed",
+                "capability": "community_sources.unsubscribe",
+                "source_id": source_id,
+                "external_writes_performed": False,
+            }
+
+        def partnership_draft_delete_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            draft_id = str(envelope.get("draft_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not draft_id:
+                return {"status": "blocked", "blocked_reasons": ["partnership_draft_preview_changed"]}
+            cursor.execute(
+                """
+                DELETE FROM outreachmessagedrafts draft
+                USING prospectingleads lead
+                WHERE draft.id = %s
+                  AND draft.lead_id = lead.id
+                  AND lead.business_id = %s
+                  AND COALESCE(lead.intent, 'client_outreach') = 'partnership_outreach'
+                RETURNING draft.id
+                """,
+                (draft_id, business_id),
+            )
+            if not cursor.fetchone():
+                return {"status": "blocked", "blocked_reasons": ["partnership_draft_changed_after_preview"]}
+            return {
+                "status": "completed",
+                "capability": "partnerships.draft.delete",
+                "draft_id": draft_id,
+                "external_writes_performed": False,
+            }
+
         def card_schedule_executor(envelope: dict, targets: list[str], _scope: dict):
             business_id = str(envelope.get("business_id") or "")
             if len(targets) != 1 or targets[0] != business_id:
@@ -3415,6 +3516,10 @@ def operator_mobile_action_confirm(action_id: str):
                 "review_replies.generate": generate_executor,
                 "finance.sales_import": finance_sales_executor,
                 "finance.transaction.delete": finance_transaction_delete_executor,
+                "partnerships.lead.delete": partnership_delete_executor,
+                "partnerships.leads.bulk_delete": partnership_delete_executor,
+                "partnerships.draft.delete": partnership_draft_delete_executor,
+                "community_sources.unsubscribe": community_source_unsubscribe_executor,
                 "cards.schedule.update": card_schedule_executor,
                 "cards.refresh": card_refresh_executor,
                 "diagnostics.retry": diagnostic_retry_executor,

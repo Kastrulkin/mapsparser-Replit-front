@@ -21,7 +21,13 @@ const post = async (path: string, body: unknown) => {
   if (!response.ok || payload?.success === false) throw new Error(payload?.error || 'Не удалось добавить компанию в работу');
   return payload;
 };
-const dateLabel = (value?: string) => value ? new Date(value).toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) : 'ещё не обновлялось';
+const dateLabel = (value?: string) => {
+  if (!value) return 'Дата неизвестна';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'Дата неизвестна'
+    : date.toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+};
 const valueText = (value: unknown) => typeof value === 'string' || typeof value === 'number' ? String(value) : value && typeof value === 'object' ? JSON.stringify(value) : 'Не указано';
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
 

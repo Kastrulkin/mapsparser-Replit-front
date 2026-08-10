@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, Coins, Loader2, MapPin, ShieldCheck, X } from 'lucide-react';
+import { ruCountLabel } from '@/lib/ruPlural';
 
 export type MobileActionPreview = {
   action_id?: string;
@@ -35,7 +36,7 @@ export default function ActionPreviewSheet({ preview, busy, confirmLabel = 'По
         <div className="mt-5 space-y-2">
           {preview.objects?.length ? <div className="flex min-h-11 items-center gap-2 rounded-[15px] bg-white/[0.04] px-3 ring-1 ring-inset ring-white/[0.06]"><Check className="h-4 w-4 shrink-0 text-emerald-300" /><span className="text-xs text-zinc-400">Объектов: <b className="tabular-nums text-zinc-200">{preview.objects.length}</b></span></div> : null}
           {preview.target_businesses?.map((business) => <div key={business.id} className="flex min-h-11 items-center gap-2 rounded-[15px] bg-white/[0.04] px-3 ring-1 ring-inset ring-white/[0.06]"><MapPin className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0 flex-1 truncate text-xs font-medium">{business.name || 'Выбранная точка'}</span></div>)}
-          {preview.changes?.map((change, index) => <div key={change.object_id || `${change.operation}-${index}`} className="flex min-h-11 items-center gap-2 px-3 text-xs text-zinc-400"><Check className="h-4 w-4 shrink-0 text-emerald-300" /><span className="text-pretty">{change.label || 'Подготовленное изменение'}{change.items_count ? <> · <span className="tabular-nums">{change.items_count}</span> публикаций</> : null}{change.interval_hours ? <> · каждые <span className="tabular-nums">{change.interval_hours}</span> ч.</> : null}</span></div>)}
+          {preview.changes?.map((change, index) => <div key={change.object_id || `${change.operation}-${index}`} className="flex min-h-11 items-center gap-2 px-3 text-xs text-zinc-400"><Check className="h-4 w-4 shrink-0 text-emerald-300" /><span className="text-pretty">{change.label || 'Подготовленное изменение'}{change.items_count ? <> · <span className="tabular-nums">{ruCountLabel(change.items_count, 'публикация', 'публикации', 'публикаций')}</span></> : null}{change.interval_hours ? <> · каждые <span className="tabular-nums">{change.interval_hours}</span> ч.</> : null}</span></div>)}
         </div>
         {preview.external_effects ? <div className="mt-4 flex gap-3 rounded-[16px] bg-amber-400/[0.07] p-3 text-xs leading-5 text-amber-100/80 ring-1 ring-inset ring-amber-400/15"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />{externalEffectCopy(preview.capability)}</div> : null}
         <div className="mt-4 flex min-h-11 items-center gap-2 border-t border-white/[0.06] pt-3 text-xs text-zinc-500"><Coins className="h-4 w-4" /><span>Стоимость</span><b className="ml-auto tabular-nums text-zinc-200">{preview.estimated_credits || 0} кредитов</b></div>

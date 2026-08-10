@@ -2831,32 +2831,25 @@ def get_financial_breakdown():
 @finance_bp.route('/api/finance/roi', methods=['GET'])
 def get_roi_data():
     """Получить данные ROI"""
+    user_data, business_id, auth_error = _require_finance_user_and_business()
+    if auth_error:
+        return auth_error
     try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Получаем последние данные ROI
         cursor.execute("""
-            SELECT * FROM ROIData
-            WHERE user_id = %s
+            SELECT investment_amount, returns_amount, roi_percentage, period_start, period_end
+            FROM roidata
+            WHERE user_id = %s AND business_id = %s
             ORDER BY created_at DESC
             LIMIT 1
-        """, (user_data['user_id'],))
+        """, (user_data['user_id'], business_id))
 
         roi_data = cursor.fetchone()
 
         if not roi_data:
-            # Если данных нет, возвращаем базовую структуру
+            db.close()
             return jsonify({
                 "success": True,
                 "roi": {
@@ -2869,16 +2862,17 @@ def get_roi_data():
                 "message": "Данные ROI не найдены. Добавьте транзакции для расчета."
             })
 
+        roi = _row_to_dict(cursor, roi_data)
         db.close()
 
         return jsonify({
             "success": True,
             "roi": {
-                "investment_amount": float(roi_data[2]),
-                "returns_amount": float(roi_data[3]),
-                "roi_percentage": float(roi_data[4]),
-                "period_start": roi_data[5],
-                "period_end": roi_data[6]
+                "investment_amount": float(roi.get("investment_amount") or 0),
+                "returns_amount": float(roi.get("returns_amount") or 0),
+                "roi_percentage": float(roi.get("roi_percentage") or 0),
+                "period_start": roi.get("period_start"),
+                "period_end": roi.get("period_end")
             }
         })
 
@@ -2888,18 +2882,11 @@ def get_roi_data():
 @finance_bp.route('/api/finance/roi', methods=['POST'])
 def calculate_roi():
     """Рассчитать и сохранить ROI"""
+    user_data, business_id, auth_error = _require_finance_user_and_business()
+    if auth_error:
+        return auth_error
     try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
 
         # Валидация
         if 'investment_amount' not in data or 'returns_amount' not in data:
@@ -2924,15 +2911,16 @@ def calculate_roi():
 
         cursor.execute("""
             INSERT INTO roidata
-            (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (id, user_id, business_id, investment_amount, returns_amount, roi_percentage, period_start, period_end)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (id) DO UPDATE SET
+                business_id = EXCLUDED.business_id,
                 investment_amount = EXCLUDED.investment_amount,
                 returns_amount = EXCLUDED.returns_amount,
                 roi_percentage = EXCLUDED.roi_percentage,
                 period_start = EXCLUDED.period_start,
                 period_end = EXCLUDED.period_end
-        """, (roi_id, user_data['user_id'], investment, returns, roi_percentage, period_start, period_end))
+        """, (roi_id, user_data['user_id'], business_id, investment, returns, roi_percentage, period_start, period_end))
 
         db.conn.commit()
         db.close()

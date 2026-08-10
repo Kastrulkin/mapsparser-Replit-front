@@ -20,7 +20,7 @@ describe('MobileOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
     expect(await screen.findByRole('heading', { name: 'Сеть целиком или одна точка' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    expect(await screen.findByRole('heading', { name: 'Прогресс превращает задачи в путь роста' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Один план вместо десятков задач' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Открыть Сегодня' }));
     expect(finish).toHaveBeenCalledTimes(1);
@@ -35,7 +35,7 @@ describe('MobileOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
     await screen.findByRole('heading', { name: 'Сразу видно, что важно сейчас' });
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    expect(await screen.findByRole('heading', { name: 'Прогресс превращает задачи в путь роста' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Один план вместо десятков задач' })).toBeInTheDocument();
     expect(screen.queryByText('Сеть целиком или одна точка')).not.toBeInTheDocument();
   });
 });

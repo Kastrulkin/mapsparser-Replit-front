@@ -24,6 +24,10 @@ MOBILE_ACTIONS = {
     "services.restore": {"estimated_credits_per_item": 0, "external_effects": False},
     "services.optimize": {"estimated_credits_per_item": 1, "external_effects": False},
     "services.compress": {"estimated_credits_per_item": 0, "external_effects": False},
+    "partnerships.lead.delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "partnerships.leads.bulk_delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "partnerships.draft.delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "community_sources.unsubscribe": {"estimated_credits_per_item": 0, "external_effects": False},
     "agents.run": {"estimated_credits_per_item": 2, "external_effects": False},
     "diagnostics.retry": {"estimated_credits_per_item": 10, "external_effects": True},
 }
@@ -319,6 +323,103 @@ def create_mobile_action_preview(
             changes = [{"object_id": item.get("id"), "operation": capability, "label": str(item.get("name") or "Услуга")} for item in services]
         else:
             changes = [{"object_id": item.get("id"), "operation": capability, "label": f"Подготовить улучшение: {item.get('name') or 'услуга'}"} for item in services]
+    elif capability in {"partnerships.lead.delete", "partnerships.leads.bulk_delete"}:
+        requested_business_id = _requested_business_id(scope, input_payload)
+        if not _business_allowed(scope, requested_business_id):
+            return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
+        requested_ids = (
+            [str(input_payload.get("lead_id") or "").strip()]
+            if capability == "partnerships.lead.delete"
+            else [str(item).strip() for item in (input_payload.get("lead_ids") or []) if str(item).strip()]
+        )
+        lead_ids = list(dict.fromkeys(item for item in requested_ids if item))[:100]
+        if not lead_ids:
+            return {"status": "blocked", "blocked_reasons": ["partnership_leads_required"]}
+        cursor.execute(
+            """
+            SELECT lead.id, lead.name, lead.city, lead.category,
+                   workstream.client_business_id AS business_id, business.name AS business_name
+            FROM lead_workstreams workstream
+            JOIN prospectingleads lead ON lead.id = workstream.lead_id
+            JOIN businesses business ON business.id = workstream.client_business_id
+            WHERE workstream.client_business_id = %s
+              AND workstream.workstream_type = 'client_partnership'
+              AND lead.id = ANY(%s)
+            ORDER BY lead.name, lead.id
+            """,
+            (requested_business_id, lead_ids),
+        )
+        objects = [_row(cursor, item) for item in (cursor.fetchall() or [])]
+        if len(objects) != len(lead_ids):
+            return {"status": "blocked", "blocked_reasons": ["partnership_leads_not_found_or_forbidden"]}
+        targets = [requested_business_id]
+        envelope = {"business_id": requested_business_id, "lead_ids": lead_ids}
+        changes = [
+            {
+                "object_id": str(item.get("id") or ""),
+                "operation": capability,
+                "label": f"Удалить из партнёрской работы: {item.get('name') or 'кандидат'}",
+            }
+            for item in objects
+        ]
+    elif capability == "community_sources.unsubscribe":
+        requested_business_id = _requested_business_id(scope, input_payload)
+        source_id = str(input_payload.get("source_id") or "").strip()
+        if not source_id or not _business_allowed(scope, requested_business_id):
+            return {"status": "blocked", "blocked_reasons": ["community_source_not_found_or_forbidden"]}
+        cursor.execute(
+            """
+            SELECT subscription.source_id AS id, subscription.business_id,
+                   source.title, source.canonical_url, business.name AS business_name
+            FROM knowledge_source_subscriptions subscription
+            JOIN knowledge_sources source ON source.id = subscription.source_id
+            JOIN businesses business ON business.id = subscription.business_id
+            WHERE subscription.business_id = %s
+              AND subscription.source_id = %s
+              AND subscription.is_active = TRUE
+            """,
+            (requested_business_id, source_id),
+        )
+        subscription = _row(cursor, cursor.fetchone())
+        if not subscription:
+            return {"status": "blocked", "blocked_reasons": ["community_source_not_found_or_forbidden"]}
+        targets = [requested_business_id]
+        objects = [subscription]
+        envelope = {"business_id": requested_business_id, "source_id": source_id}
+        changes = [{
+            "object_id": source_id,
+            "operation": capability,
+            "label": f"Перестать следить: {subscription.get('title') or 'источник Telegram'}",
+        }]
+    elif capability == "partnerships.draft.delete":
+        requested_business_id = _requested_business_id(scope, input_payload)
+        draft_id = str(input_payload.get("draft_id") or "").strip()
+        if not draft_id or not _business_allowed(scope, requested_business_id):
+            return {"status": "blocked", "blocked_reasons": ["partnership_draft_not_found_or_forbidden"]}
+        cursor.execute(
+            """
+            SELECT draft.id, draft.lead_id, draft.channel, draft.status,
+                   lead.name AS lead_name, lead.business_id, business.name AS business_name
+            FROM outreachmessagedrafts draft
+            JOIN prospectingleads lead ON lead.id = draft.lead_id
+            JOIN businesses business ON business.id = lead.business_id
+            WHERE draft.id = %s
+              AND lead.business_id = %s
+              AND COALESCE(lead.intent, 'client_outreach') = 'partnership_outreach'
+            """,
+            (draft_id, requested_business_id),
+        )
+        draft = _row(cursor, cursor.fetchone())
+        if not draft:
+            return {"status": "blocked", "blocked_reasons": ["partnership_draft_not_found_or_forbidden"]}
+        targets = [requested_business_id]
+        objects = [draft]
+        envelope = {"business_id": requested_business_id, "draft_id": draft_id}
+        changes = [{
+            "object_id": draft_id,
+            "operation": capability,
+            "label": f"Удалить черновик для {draft.get('lead_name') or 'партнёра'}",
+        }]
     elif capability == "agents.run":
         blueprint_id = str(input_payload.get("blueprint_id") or "").strip()
         cursor.execute(
@@ -401,6 +502,41 @@ def create_mobile_action_preview(
         "expires_at": expires_at.isoformat(),
         **preview_extras,
     }
+    cursor.execute(
+        """
+        SELECT id, status, expires_at
+        FROM operatoractions
+        WHERE user_id = %s AND idempotency_key = %s
+        FOR UPDATE
+        """,
+        (user_id, idempotency_key),
+    )
+    existing = _row(cursor, cursor.fetchone())
+    existing_expires_at = existing.get("expires_at")
+    existing_is_current = (
+        bool(existing)
+        and str(existing.get("status") or "") in {"pending", "pending_approval", "preview"}
+        and (not existing_expires_at or existing_expires_at >= datetime.now(timezone.utc))
+    )
+    if existing_is_current:
+        cursor.execute(
+            """
+            UPDATE operatoractions
+            SET preview_json = %s::jsonb, expires_at = %s, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+            """,
+            (json.dumps(preview, ensure_ascii=False, default=str), expires_at, existing.get("id"), user_id),
+        )
+        return {"status": "preview", "action_id": existing.get("id"), "idempotency_key": idempotency_key, **preview}
+    if existing:
+        cursor.execute(
+            """
+            UPDATE operatoractions
+            SET idempotency_key = idempotency_key || ':closed:' || LEFT(id, 8), updated_at = NOW()
+            WHERE id = %s AND user_id = %s AND idempotency_key = %s
+            """,
+            (existing.get("id"), user_id, idempotency_key),
+        )
     cursor.execute(
         """
         INSERT INTO operatoractions (

@@ -74,15 +74,15 @@ export default function GrowthNavigation({ navigation, onOpen, onOpenProgress, o
       {visible.has('progress') ? (
         <section className="rounded-[24px] bg-gradient-to-b from-primary/[0.11] to-white/[0.035] p-5 shadow-[0_18px_54px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.15)]">
           <span className="flex items-center gap-2 text-xs font-semibold text-primary"><TrendingUp className="h-4 w-4" />Не знаете, с чего начать?</span>
-          <h2 className="mt-3 text-balance text-xl font-semibold">ЛокалОС уже расставил шаги по приоритету</h2>
-          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Откройте путь роста: наверху будет одно действие, которое сейчас даст максимальный эффект.</p>
-          <button type="button" onClick={onOpenProgress} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform duration-150 ease-out active:scale-[0.96]">Продолжить путь роста<ChevronRight className="h-4 w-4" /></button>
+          <h2 className="mt-3 text-balance text-xl font-semibold">Начните с главной задачи</h2>
+          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Первая задача в плане выбрана по свежести данных, серьёзности проблемы и ожидаемому результату.</p>
+          <button type="button" onClick={onOpenProgress} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform duration-150 ease-out active:scale-[0.96]">Открыть план роста<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : null}
 
       <section className="mt-7">
         <h2 className="text-balance text-lg font-semibold">Чего хотите добиться?</h2>
-        <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Выберите результат — ЛокалОС откроет нужное место для работы.</p>
+        <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Выберите цель — откроется нужный раздел и первое действие.</p>
         <div className="mt-3 space-y-2">
           {visibleOutcomes.map((outcome) => {
             const primary = visible.get(outcome.key);

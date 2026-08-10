@@ -100,7 +100,7 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
     return <div className="space-y-3" aria-busy="true"><div className="h-52 animate-pulse rounded-[24px] bg-white/[0.045] motion-reduce:animate-none" /><div className="h-24 animate-pulse rounded-[22px] bg-white/[0.035] motion-reduce:animate-none" /><div className="h-24 animate-pulse rounded-[22px] bg-white/[0.035] motion-reduce:animate-none" /></div>;
   }
   if (!data?.summary) {
-    return <div className="rounded-[22px] bg-white/[0.035] p-6 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.07)]"><Circle className="mx-auto h-6 w-6 text-zinc-700" /><b className="mt-3 block text-sm">Прогресс пока не собран</b><p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Выберите бизнес или сеть, чтобы ЛокалОС собрал подтверждённый путь роста.</p></div>;
+    return <div className="rounded-[22px] bg-white/[0.035] p-6 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.07)]"><Circle className="mx-auto h-6 w-6 text-zinc-700" /><b className="mt-3 block text-sm">Нет данных для плана</b><p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Выберите бизнес или сеть. Здесь появятся выполненные шаги, проблемы и следующее действие.</p></div>;
   }
 
   const summary = data.summary;
@@ -109,9 +109,9 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
   return (
     <div>
       <section className="rounded-[24px] bg-gradient-to-b from-primary/[0.11] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.15)]">
-        <div className="flex items-center gap-2 text-xs font-medium text-primary"><Sparkles className="h-4 w-4" />{isNetwork ? 'Общий путь сети' : 'Понятный план роста'}</div>
-        <h2 className="mt-3 text-balance text-xl font-semibold">{isNetwork ? 'Все точки — в одной картине' : 'Десятки задач собраны в один путь'}</h2>
-        <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{isNetwork ? `${data.network_summary?.locations_count || summary.locations_count || 0} точек: видно общий прогресс и где данные требуют внимания.` : 'Карты, контент, партнёрства, автоматизация и допродажи — с подтверждёнными результатами и одним следующим шагом.'}</p>
+        <div className="flex items-center gap-2 text-xs font-medium text-primary"><Sparkles className="h-4 w-4" />{isNetwork ? 'План роста сети' : 'План роста бизнеса'}</div>
+        <h2 className="mt-3 text-balance text-xl font-semibold">{isNetwork ? 'Прогресс по всем точкам' : 'Пять направлений в одном плане'}</h2>
+        <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{isNetwork ? `${data.network_summary?.locations_count || summary.locations_count || 0} точек: видно, где шаги выполнены, а где нужны данные или решение.` : 'Карты, контент, партнёрства, автоматизация и допродажи. Для каждого направления виден фактический прогресс и следующее действие.'}</p>
         <div className="mt-5 flex items-end justify-between gap-4">
           <div><b className="text-3xl tabular-nums">{summary.completed_milestones || 0}</b><span className="text-lg tabular-nums text-zinc-600"> / {summary.total_milestones || 0}</span><small className="mt-1 block text-zinc-600">шагов подтверждено</small></div>
           <b className="text-2xl tabular-nums text-primary">{summary.percent || 0}%</b>
@@ -154,7 +154,7 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
                   {isOpen ? (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring} className="overflow-hidden">
                       <div className="border-t border-white/[0.055] p-4">
-                        {area.problem ? <div className="text-pretty text-xs leading-5 text-amber-200/75"><b>Мешает двигаться:</b> {area.problem}</div> : <div className="text-pretty text-xs leading-5 text-emerald-200/75">Направление работает без критичных препятствий.</div>}
+                        {area.problem ? <div className="text-pretty text-xs leading-5 text-amber-200/75"><b>Что требует внимания:</b> {area.problem}</div> : <div className="text-pretty text-xs leading-5 text-emerald-200/75">Сейчас нет критичных проблем.</div>}
                         <div className="mt-4 space-y-3">
                           {(area.milestones || []).map((milestone) => (
                             <div key={milestone.key} className="flex gap-3"><span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg ${milestone.status === 'done' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.05] text-zinc-600'}`}>{milestone.status === 'done' ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</span><span className="min-w-0"><b className="block text-xs text-zinc-300">{milestone.label}</b>{milestone.evidence ? <small className="mt-1 block text-pretty leading-4 text-zinc-600">{milestone.evidence}</small> : null}</span></div>

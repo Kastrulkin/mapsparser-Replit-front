@@ -28,7 +28,7 @@ describe('GrowthNavigation', () => {
 
     await user.click(screen.getByRole('button', { name: /Ответить на отзывы/ }));
     expect(open).toHaveBeenCalledWith('reviews');
-    await user.click(screen.getByRole('button', { name: /Продолжить путь роста/ }));
+    await user.click(screen.getByRole('button', { name: /Открыть план роста/ }));
     expect(openProgress).toHaveBeenCalledTimes(1);
   });
 });

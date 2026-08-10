@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { GrowthLoopPanel, type AnalyticsLevel, type AnalyticsModule, type DataHealth, type GrowthLoop, type GrowthRhythm, type LocationBreakdown, type NetworkSummary, type ProblemLocation } from '@/components/telegram/GrowthLoopPanel';
+import { ruCountLabel } from '@/lib/ruPlural';
 
 export type TodayFocusAction = {
   id?: string;
@@ -184,15 +185,15 @@ export const TodayMobileV2 = ({
       >
         <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <Sparkles className="h-4 w-4" />
-          {focus ? (isNetwork ? 'Главное по сети' : 'Сейчас важнее всего') : 'Сегодня всё под контролем'}
+          {focus ? (isNetwork ? 'Главное по сети' : 'Сейчас важнее всего') : 'Новых задач нет'}
         </div>
         <div className="mt-4 flex items-start gap-4">
           <div className="min-w-0 flex-1">
             <h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">
-              {focus?.title || 'От вас ничего не требуется'}
+              {focus?.title || 'Сегодня от вас ничего не требуется'}
             </h1>
             <p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">
-              {focus?.reason || (isNetwork ? 'ЛокалОС сверяет точки сети и покажет, где нужен следующий шаг.' : 'ЛокалОС продолжает следить за данными и покажет здесь следующий важный шаг.')}
+              {focus?.reason || (isNetwork ? 'По точкам сети нет задач, которые сейчас требуют вашего решения.' : 'По последним загруженным данным новых задач для вас нет.')}
             </p>
           </div>
           {focus?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{focus.count}</b> : <Check className="h-8 w-8 shrink-0 text-emerald-400" />}
@@ -212,7 +213,7 @@ export const TodayMobileV2 = ({
           }}
           className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]"
         >
-          {focus?.cta_label || (isPlatform ? 'Открыть платформенный inbox' : 'Посмотреть прогресс')}
+          {focus?.cta_label || (isPlatform ? 'Открыть очередь платформы' : 'Открыть план роста')}
           <ChevronRight className="h-4 w-4" />
         </button>
       </motion.section>
@@ -235,7 +236,7 @@ export const TodayMobileV2 = ({
         <motion.section layout className="mt-4 rounded-[22px] bg-sky-400/[0.055] p-4 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold">ЛокалОС сейчас</h2>
+            <h2 className="text-sm font-semibold">Сейчас выполняется</h2>
             <span className="ml-auto h-2 w-2 rounded-full bg-sky-300 motion-safe:animate-pulse" />
           </div>
           <div className="mt-3 space-y-3">
@@ -279,7 +280,7 @@ export const TodayMobileV2 = ({
                 {item.eyebrow ? <small className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-primary/80">{item.eyebrow}</small> : null}
                 <b className="block text-balance text-sm leading-5">{item.title}</b>
                 <small className="mt-1 block text-pretty text-[11px] leading-4 text-zinc-600">{item.description}</small>
-                <small className="mt-2 block truncate text-[10px] text-zinc-700">{[item.source_name, item.message_count ? `${item.message_count} сообщений` : '', timeLabel(item.last_discussed_at)].filter(Boolean).join(' · ')}</small>
+                <small className="mt-2 block truncate text-[10px] text-zinc-700">{[item.source_name, item.message_count ? ruCountLabel(item.message_count, 'сообщение', 'сообщения', 'сообщений') : '', timeLabel(item.last_discussed_at)].filter(Boolean).join(' · ')}</small>
               </span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-700" />
             </a>
@@ -287,7 +288,7 @@ export const TodayMobileV2 = ({
         </Section>
       ) : null}
 
-      <Section title="ЛокалОС сделал" subtitle="Подтверждённые результаты, а не обещания или технические события.">
+      <Section title="ЛокалОС сделал" subtitle="Только завершённые действия с датой и источником.">
         {results.length ? (
           <AnimatePresence initial={false}>
             {results.slice(0, 3).map((item) => (
@@ -303,21 +304,21 @@ export const TodayMobileV2 = ({
         <section className="mt-7 rounded-[24px] bg-gradient-to-br from-primary/[0.1] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.14)]">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <small className="text-zinc-600">Подтверждённый путь</small>
+              <small className="text-zinc-600">Выполнено по плану</small>
               <b className="mt-1 block text-lg">Прогресс бизнеса</b>
             </div>
             <b className="text-2xl tabular-nums text-primary">{progress.percent || 0}%</b>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: `${progress.percent || 0}%` }} transition={spring} /></div>
           <p className="mt-3 text-pretty text-xs leading-5 text-zinc-500"><span className="tabular-nums">{progress.completed_milestones || 0}</span> из <span className="tabular-nums">{progress.total_milestones || 0}</span> шагов подтверждены реальными данными.</p>
-          <button type="button" onClick={() => { track('today_progress_open', 'progress'); openProgress(); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.07] pl-4 pr-3.5 text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform active:scale-[0.96]">Продолжить путь роста<ChevronRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { track('today_progress_open', 'progress'); openProgress(); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.07] pl-4 pr-3.5 text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform active:scale-[0.96]">Открыть план роста<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : isPlatform ? (
         <section className="mt-7 rounded-[24px] bg-gradient-to-br from-primary/[0.1] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.14)]">
           <small className="text-zinc-600">Операционная картина платформы</small>
           <b className="mt-1 block text-balance text-lg">Все очереди и инциденты в одном месте</b>
-          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Откройте inbox, чтобы разобрать следующие платформенные задачи по приоритету.</p>
-          <button type="button" onClick={() => { track('today_progress_open', 'platform_inbox'); openTarget('tasks'); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.07] pl-4 pr-3.5 text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform active:scale-[0.96]">Открыть платформенный inbox<ChevronRight className="h-4 w-4" /></button>
+          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">В очереди собраны инциденты и задачи платформы в порядке приоритета.</p>
+          <button type="button" onClick={() => { track('today_progress_open', 'platform_inbox'); openTarget('tasks'); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.07] pl-4 pr-3.5 text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform active:scale-[0.96]">Открыть очередь платформы<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : null}
     </div>

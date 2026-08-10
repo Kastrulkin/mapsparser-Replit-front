@@ -25,8 +25,8 @@ describe('ProgressMobileModule network scope', () => {
       track={vi.fn()}
     />);
 
-    expect(screen.getByText('Общий путь сети')).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Все точки — в одной картине' })).toBeVisible();
+    expect(screen.getByText('План роста сети')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Прогресс по всем точкам' })).toBeVisible();
     expect(screen.getAllByText(/3 точек/)).toHaveLength(2);
     await userEvent.click(screen.getByRole('button', { name: /Запад/ }));
     expect(openTarget).toHaveBeenCalledWith('finance', { kind: 'business', id: 'business-3' });
