@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Copy,
+  Download,
   ImageIcon,
   Eye,
   FileText,
@@ -1015,6 +1017,75 @@ export function ContentPage() {
     if (!url) return '';
     if (url.startsWith('/')) return url;
     return url;
+  };
+
+  const loadOriginalPhotoBlob = async (asset: PhotoAsset) => {
+    const assetId = String(asset.id || '').trim();
+    if (!assetId) throw new Error('Сначала выберите фото для публикации');
+    const token = newAuth.getToken() || '';
+    const response = await fetch(`${API_URL}/api/media-intelligence/photos/${encodeURIComponent(assetId)}/file?variant=original`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!response.ok) throw new Error('Не удалось получить исходное фото');
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('Исходный файл не является изображением');
+    return blob;
+  };
+
+  const photoFileExtension = (blob: Blob) => {
+    if (blob.type === 'image/png') return 'png';
+    if (blob.type === 'image/webp') return 'webp';
+    return 'jpg';
+  };
+
+  const savePhotoBlob = (asset: PhotoAsset, blob: Blob) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `localos-photo-${String(asset.id || 'original')}.${photoFileExtension(blob)}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  };
+
+  const downloadOriginalPhoto = async (asset: PhotoAsset) => {
+    setBusyAction('photo-download');
+    setError('');
+    try {
+      const blob = await loadOriginalPhotoBlob(asset);
+      savePhotoBlob(asset, blob);
+      setActionMessage('Исходное фото скачано без уменьшения качества.');
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать фото');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const copyOriginalPhoto = async (asset: PhotoAsset) => {
+    setBusyAction('photo-copy');
+    setError('');
+    let originalBlob: Blob | null = null;
+    try {
+      originalBlob = await loadOriginalPhotoBlob(asset);
+      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+        savePhotoBlob(asset, originalBlob);
+        setActionMessage('Браузер не умеет копировать изображения. Исходное фото скачано без уменьшения качества.');
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ [originalBlob.type]: originalBlob })]);
+      setActionMessage('Исходное фото скопировано. Его можно вставить при ручном размещении.');
+    } catch (copyError) {
+      if (originalBlob) {
+        savePhotoBlob(asset, originalBlob);
+        setActionMessage('Буфер обмена не принял изображение. Исходное фото скачано без уменьшения качества.');
+        return;
+      }
+      setError(copyError instanceof Error ? copyError.message : 'Не удалось скопировать фото');
+    } finally {
+      setBusyAction('');
+    }
   };
 
   const loadMediaAssets = async () => {
@@ -2515,6 +2586,30 @@ export function ContentPage() {
                           >
                             {busyAction === 'photo-usage' ? 'Сохраняем...' : 'Использовать фото'}
                           </Button>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => { void downloadOriginalPhoto(selectedPhoto); }}
+                              disabled={Boolean(busyAction)}
+                              className="min-h-10 rounded-xl bg-white px-3 text-xs"
+                            >
+                              <Download className="mr-2 h-4 w-4" />
+                              {busyAction === 'photo-download' ? 'Скачиваем...' : 'Скачать оригинал'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => { void copyOriginalPhoto(selectedPhoto); }}
+                              disabled={Boolean(busyAction)}
+                              className="min-h-10 rounded-xl bg-white px-3 text-xs"
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              {busyAction === 'photo-copy' ? 'Копируем...' : 'Скопировать фото'}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -2684,6 +2779,18 @@ export function ContentPage() {
                                       <Button type="button" variant="outline" size="sm" onClick={() => { void navigator.clipboard?.writeText(post.platform_text || post.base_text || ''); setActionMessage('Текст скопирован.'); }} className="min-h-10 rounded-xl bg-white px-3 text-xs">
                                         Скопировать текст
                                       </Button>
+                                      {selectedPhoto?.id ? (
+                                        <>
+                                          <Button type="button" variant="outline" size="sm" onClick={() => { void downloadOriginalPhoto(selectedPhoto); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs">
+                                            <Download className="mr-2 h-4 w-4" />
+                                            Скачать фото
+                                          </Button>
+                                          <Button type="button" variant="outline" size="sm" onClick={() => { void copyOriginalPhoto(selectedPhoto); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs">
+                                            <Copy className="mr-2 h-4 w-4" />
+                                            Скопировать фото
+                                          </Button>
+                                        </>
+                                      ) : null}
                                       <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
                                         Отметить размещённым
                                       </Button>

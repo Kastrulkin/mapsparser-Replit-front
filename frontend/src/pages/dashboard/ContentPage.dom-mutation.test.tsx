@@ -89,3 +89,15 @@ describe('Content page DOM ownership', () => {
     expect(() => fireEvent.click(generateButton)).not.toThrow();
   });
 });
+
+describe('Content page manual photo handoff', () => {
+  it('offers the original photo for manual placement', () => {
+    const source = readFileSync('src/pages/dashboard/ContentPage.tsx', 'utf-8');
+
+    expect(source).toContain('variant=original');
+    expect(source).toContain('Скачать оригинал');
+    expect(source).toContain('Скачать фото');
+    expect(source).toContain('Скопировать фото');
+    expect(source).toContain('Исходное фото скачано без уменьшения качества.');
+  });
+});
