@@ -1412,6 +1412,25 @@ export function ContentPage() {
     }
   };
 
+  const useManualPublish = async (post: SocialPost) => {
+    if (!currentPlan?.id) return;
+    setBusyAction(`manual-publish-${post.id}`);
+    setError('');
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/use-manual-publish`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Ручное размещение выбрано в контент-плане.' }),
+      });
+      await loadSocialPosts(currentPlan.id);
+      setActionMessage(`${platformShortLabel(post)}: подготовлено для ручного размещения.`);
+      setChannelDetailsOpen(true);
+    } catch (manualError) {
+      setError(manualError instanceof Error ? manualError.message : 'Не удалось выбрать ручное размещение');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const approveSelectedItem = async () => {
     if (!selectedItem || !currentPlan?.id) return;
     setBusyAction('approve');
@@ -2619,7 +2638,9 @@ export function ContentPage() {
                             {selectedPosts.map((post) => {
                               const statusLabel = getChannelStatusDisplay(post);
                               const readiness = getPostPlatformReadiness(post);
+                              const normalizedPostStatus = String(post.status || '').toLowerCase();
                               const canEditPlatformText = !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase());
+                              const canChooseManualPublish = ['approved', 'queued', 'failed', 'needs_supervised_publish'].includes(normalizedPostStatus);
                               const isEditing = editingPlatformPostId === post.id;
                               return (
                                 <div key={post.id} className="rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-100">
@@ -2665,6 +2686,20 @@ export function ContentPage() {
                                       </Button>
                                       <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
                                         Отметить размещённым
+                                      </Button>
+                                    </div>
+                                  ) : null}
+                                  {canChooseManualPublish ? (
+                                    <div className="mt-3">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => { void useManualPublish(post); }}
+                                        disabled={Boolean(busyAction)}
+                                        className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform"
+                                      >
+                                        {busyAction === `manual-publish-${post.id}` ? 'Готовим...' : 'Разместить вручную'}
                                       </Button>
                                     </div>
                                   ) : null}
@@ -2814,6 +2849,15 @@ export function ContentPage() {
                   <div className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
                     <div className="font-semibold">Что нужно сделать</div>
                     <div className="mt-1">{error}</div>
+                    {hasPosts ? (
+                      <button
+                        type="button"
+                        onClick={() => setChannelDetailsOpen(true)}
+                        className="mt-2 inline-flex min-h-9 items-center font-semibold underline decoration-red-300 underline-offset-4 hover:decoration-red-700 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                      >
+                        Показать каналы
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 {actionMessage ? (

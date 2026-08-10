@@ -1478,6 +1478,60 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
     finally:
         db.close()
 
+def move_social_post_to_manual_publish(
+    user_id: str,
+    post_id: str,
+    reason: str = "",
+) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        status = str(post.get("status") or "").strip()
+        if status not in {
+            "approved",
+            "queued",
+            "failed",
+            "needs_supervised_publish",
+            "needs_manual_publish",
+        }:
+            raise ValueError("Перед ручным размещением нужно проверить и утвердить публикацию")
+        if status == "failed" and not post.get("approved_at"):
+            raise ValueError("Перед ручным размещением нужно повторно утвердить публикацию")
+        if status == "needs_manual_publish":
+            return post
+
+        selected_reason = str(reason or "").strip() or "Пользователь выбрал ручное размещение."
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata["manual_publish"] = {
+            "selected": True,
+            "selected_at": datetime.now(timezone.utc).isoformat(),
+            "selected_by": str(user_id or "").strip(),
+            "reason": selected_reason,
+        }
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = 'needs_manual_publish',
+                metadata_json = %s,
+                last_error = NULL,
+                automation_task_id = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (_json_dumps(metadata), post_id),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
 def mark_supervised_publish_blocked(
     user_id: str,
     post_id: str,

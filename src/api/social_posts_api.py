@@ -26,6 +26,7 @@ from services.social_post_service import (
     mark_manual_published,
     mark_manual_published_posts,
     mark_supervised_publish_blocked,
+    move_social_post_to_manual_publish,
     prepare_social_posts_for_item,
     prepare_social_posts_for_items,
     preview_social_posts_for_item,
@@ -790,6 +791,30 @@ def social_posts_mark_manual_published(post_id: str):
             post_id,
             provider_post_url=str(data.get("provider_post_url") or "").strip(),
             provider_post_id=str(data.get("provider_post_id") or "").strip(),
+        )
+        return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>/use-manual-publish", methods=["POST"])
+def social_posts_use_manual_publish(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "manual-publish")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    try:
+        post = move_social_post_to_manual_publish(
+            str(user_data.get("user_id") or ""),
+            post_id,
+            reason=str(data.get("reason") or "").strip(),
         )
         return jsonify({"success": True, "post": post})
     except PermissionError:

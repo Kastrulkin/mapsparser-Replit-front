@@ -553,6 +553,36 @@ def test_social_post_mark_supervised_blocked_endpoint_records_manual_fallback(mo
     }
 
 
+def test_social_post_use_manual_publish_endpoint_selects_manual_mode(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    captured = {}
+
+    def fake_move_to_manual(user_id, post_id, reason=""):
+        captured["user_id"] = user_id
+        captured["post_id"] = post_id
+        captured["reason"] = reason
+        return {"id": post_id, "status": "needs_manual_publish"}
+
+    monkeypatch.setattr(social_posts_api, "move_social_post_to_manual_publish", fake_move_to_manual)
+
+    response = app.test_client().post(
+        "/api/social-posts/post-1/use-manual-publish",
+        json={"reason": "Пользователь выбрал ручное размещение."},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["post"]["status"] == "needs_manual_publish"
+    assert captured == {
+        "user_id": "user-1",
+        "post_id": "post-1",
+        "reason": "Пользователь выбрал ручное размещение.",
+    }
+
+
 def test_social_post_create_supervised_task_requires_explicit_approval(monkeypatch):
     app = Flask(__name__)
     app.register_blueprint(social_posts_api.social_posts_bp)

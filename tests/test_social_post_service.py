@@ -73,6 +73,7 @@ from services.social_post_service import (
     rehearse_social_post_publish,
     rehearse_social_posts_publish,
     mark_manual_published,
+    move_social_post_to_manual_publish,
     record_social_post_attribution_event,
     record_social_post_attribution_events,
     run_scoped_social_dispatch_once,
@@ -369,6 +370,17 @@ class FakeManualPublishedCursor:
                 "metadata_json": params[3],
                 "provider_post_url": params[1],
                 "provider_post_id": params[2],
+            }
+            self.next_row = self.conn.updated_row
+            return
+        if "update social_posts" in normalized and "set status = 'needs_manual_publish'" in normalized:
+            self.conn.updated_row = {
+                "id": params[1],
+                "business_id": "biz-1",
+                "platform": "google_business",
+                "status": "needs_manual_publish",
+                "metadata_json": params[0],
+                "last_error": None,
             }
             self.next_row = self.conn.updated_row
             return
@@ -1514,6 +1526,53 @@ def test_mark_manual_published_rejects_approved_api_post(monkeypatch):
         mark_manual_published("user-1", "post-api")
 
     assert FakeManualPublishedDB.last_conn.updated_row == {}
+    assert FakeManualPublishedDB.last_conn.committed is False
+    assert FakeManualPublishedDB.last_conn.rolled_back is True
+
+
+def test_move_social_post_to_manual_publish_preserves_approval(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeManualPublishedDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "google_business",
+            "status": "approved",
+            "approved_at": "2026-08-10T12:00:00+00:00",
+            "metadata_json": {},
+        },
+    )
+
+    post = move_social_post_to_manual_publish("user-1", "post-1")
+
+    assert post["status"] == "needs_manual_publish"
+    assert post["metadata_json"]["manual_publish"]["selected"] is True
+    assert post["metadata_json"]["manual_publish"]["selected_by"] == "user-1"
+    assert FakeManualPublishedDB.last_conn.committed is True
+
+
+def test_move_failed_unapproved_social_post_to_manual_publish_is_rejected(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeManualPublishedDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "google_business",
+            "status": "failed",
+            "approved_at": None,
+            "metadata_json": {},
+        },
+    )
+
+    with pytest.raises(ValueError, match="повторно утвердить"):
+        move_social_post_to_manual_publish("user-1", "post-1")
+
     assert FakeManualPublishedDB.last_conn.committed is False
     assert FakeManualPublishedDB.last_conn.rolled_back is True
 
