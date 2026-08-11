@@ -14,6 +14,11 @@ class FakeCursor:
             "metadata": {"parsequeue_id": "queue-1", "settlement_status": "charged"},
         }
         self.contact = {"business_name": "Оливер", "telegram_id": "12345"}
+        self.superadmin_contact = {"telegram_id": "99999"}
+        self.scheduled_event = {
+            "id": "event-1",
+            "payload_json": {"task_id": "queue-1"},
+        }
         self.queue = {
             "id": "queue-1",
             "business_id": "biz-1",
@@ -39,18 +44,25 @@ class FakeCursor:
             }
         ]
         self.metadata_updates = []
+        self.event_metadata_updates = []
 
     def execute(self, query, params=None):
         self.last_query = " ".join(str(query or "").lower().split())
         self.last_params = params or ()
         if self.last_query.startswith("update operatorcreditreservations"):
             self.metadata_updates.append(params)
+        if self.last_query.startswith("update businesscardautomationevents"):
+            self.event_metadata_updates.append(params)
 
     def fetchone(self):
         if "select id, status, metadata from operatorcreditreservations" in self.last_query:
             return self.reservation
+        if "select id, payload_json from businesscardautomationevents" in self.last_query:
+            return self.scheduled_event
         if "from businesses b join users u" in self.last_query:
             return self.contact
+        if "from users" in self.last_query and "is_superadmin" in self.last_query:
+            return self.superadmin_contact
         if "from parsequeue" in self.last_query:
             return self.queue
         if "select to_regclass" in self.last_query:
@@ -108,6 +120,27 @@ def test_dispatch_refresh_followup_sends_once_and_marks_metadata() -> None:
     assert "telegram_refresh_followup_delivered_at" in cursor.metadata_updates[1][0]
 
 
+def test_scheduled_refresh_without_operator_reservation_still_sends_followup() -> None:
+    cursor = FakeCursor()
+    cursor.reservation = None
+    cursor.queue["triggered_by"] = "scheduler"
+    sent_messages = []
+
+    result = dispatch_operator_refresh_telegram_followup(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        queue_id="queue-1",
+        send_func=lambda chat_id, text: sent_messages.append((chat_id, text)) or True,
+    )
+
+    assert result["status"] == "sent"
+    assert result["sent"] is True
+    assert sent_messages[0][0] == "12345"
+    assert "Без ответа: 1" in sent_messages[0][1]
+    assert len(cursor.event_metadata_updates) == 2
+
+
 def test_dispatch_refresh_followup_skips_duplicate_attempt() -> None:
     cursor = FakeCursor()
     cursor.reservation["metadata"] = {
@@ -128,21 +161,22 @@ def test_dispatch_refresh_followup_skips_duplicate_attempt() -> None:
     assert cursor.metadata_updates == []
 
 
-def test_dispatch_refresh_followup_skips_without_owner_telegram() -> None:
+def test_dispatch_refresh_followup_falls_back_to_superadmin_without_owner_telegram() -> None:
     cursor = FakeCursor()
     cursor.contact = {"business_name": "Оливер", "telegram_id": ""}
+    sent_messages = []
 
     result = dispatch_operator_refresh_telegram_followup(
         cursor,
         business_id="biz-1",
         user_id="user-1",
         queue_id="queue-1",
-        send_func=lambda chat_id, text: True,
+        send_func=lambda chat_id, text: sent_messages.append((chat_id, text)) or True,
     )
 
-    assert result["status"] == "skipped"
-    assert result["reason"] == "owner_telegram_id_missing"
-    assert cursor.metadata_updates == []
+    assert result["status"] == "sent"
+    assert result["recipient_kind"] == "superadmin"
+    assert sent_messages[0][0] == "99999"
 
 
 def test_format_refresh_followup_keeps_copy_publish_boundary() -> None:

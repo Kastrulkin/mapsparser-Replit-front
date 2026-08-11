@@ -1,6 +1,6 @@
 from core import card_automation
 from datetime import date
-from services import superadmin_telegram_notifications
+from services import operator_scope_summary, superadmin_telegram_notifications
 
 
 class _FakeConn:
@@ -321,6 +321,56 @@ def test_superadmin_platform_attention_prioritizes_reply_and_hides_duplicate_met
     assert "Затронуто 120 бизнесов" in text
     assert "1 645 активных бизнесов · 11 сетей" in text
     assert "Данные\n" not in text
+
+
+def test_superadmin_platform_attention_names_unanswered_reviews() -> None:
+    text = superadmin_telegram_notifications.format_superadmin_platform_attention(
+        {
+            "attention_items": [
+                {"id": "reviews_unanswered", "count": 10, "affected_businesses": 1},
+            ],
+            "metrics": [
+                {"key": "businesses_total", "value": 1},
+                {"key": "networks_total", "value": 0},
+            ],
+        }
+    )
+
+    assert "10 отзывов без ответа" in text
+    assert "Нужно подготовить ответы" in text
+
+
+def test_platform_summary_includes_unanswered_reviews(monkeypatch) -> None:
+    class _PlatformCursor:
+        def __init__(self) -> None:
+            self.query = ""
+
+        def execute(self, query, params=None) -> None:
+            self.query = " ".join(str(query or "").lower().split())
+
+        def fetchone(self):
+            if "from businesses" in self.query:
+                return {"cnt": 3}
+            if "from networks" in self.query:
+                return {"cnt": 1}
+            return {"cnt": 0}
+
+    def _count(_cursor, table_name, query, params=()):
+        if table_name != "externalbusinessreviews":
+            return 0
+        if "distinct" in " ".join(str(query).lower().split()):
+            return 1
+        return 10
+
+    monkeypatch.setattr(operator_scope_summary, "_safe_count", _count)
+    summary = operator_scope_summary._platform_summary(
+        _PlatformCursor(),
+        {"kind": "platform", "id": "platform"},
+    )
+
+    review_item = next(item for item in summary["attention_items"] if item["id"] == "reviews_unanswered")
+    assert review_item["count"] == 10
+    assert review_item["affected_businesses"] == 1
 
 
 def test_reply_notification_contains_original_touch_reply_and_stop_status():

@@ -367,6 +367,28 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         "social_posts",
         "SELECT COUNT(*) AS cnt FROM social_posts WHERE status IN ('draft', 'needs_review', 'failed')",
     )
+    reviews_unanswered = _safe_count(
+        cursor,
+        "externalbusinessreviews",
+        """
+        SELECT COUNT(*) AS cnt
+        FROM externalbusinessreviews review
+        JOIN businesses business ON business.id = review.business_id
+        WHERE COALESCE(business.is_active, TRUE) = TRUE
+          AND COALESCE(TRIM(review.response_text), '') = ''
+        """,
+    )
+    review_businesses = _safe_count(
+        cursor,
+        "externalbusinessreviews",
+        """
+        SELECT COUNT(DISTINCT review.business_id) AS cnt
+        FROM externalbusinessreviews review
+        JOIN businesses business ON business.id = review.business_id
+        WHERE COALESCE(business.is_active, TRUE) = TRUE
+          AND COALESCE(TRIM(review.response_text), '') = ''
+        """,
+    )
     metrics = [
         _metric("businesses_total", "Активных бизнесов", businesses_count, source="businesses", scope="platform"),
         _metric("networks_total", "Сетей", networks_count, source="networks", scope="platform"),
@@ -374,6 +396,7 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         _metric("failed_jobs", "Ошибки обновлений", failed_jobs, source="parsequeue", scope="platform"),
         _metric("outreach_replies", "Ответы и внимание в аутриче", outreach_replies, source="outreach_campaign_touches", scope="platform"),
         _metric("pending_posts", "Публикации к разбору", pending_posts, source="social_posts", scope="platform"),
+        _metric("reviews_unanswered", "Отзывы без ответа", reviews_unanswered, source="externalbusinessreviews", scope="platform"),
     ]
     attention = []
     for key, title, description, count in (
@@ -381,11 +404,14 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         ("pending_approvals", "Действия ждут решения", "Операции не выполнятся без ручного подтверждения.", pending_approvals),
         ("outreach_replies", "Ответы в аутриче", "Новые ответы останавливают следующие касания и требуют разбора.", outreach_replies),
         ("pending_posts", "Публикации требуют внимания", "Проверьте черновики и ошибки публикаций.", pending_posts),
+        ("reviews_unanswered", "Отзывы без ответа", "Нужно подготовить ответы и проверить их перед публикацией.", reviews_unanswered),
     ):
         if count > 0:
             item = {"id": key, "title": title, "description": description, "count": count, "severity": "high" if key == "failed_jobs" else "medium"}
             if key == "failed_jobs":
                 item["affected_businesses"] = failed_businesses
+            elif key == "reviews_unanswered":
+                item["affected_businesses"] = review_businesses
             attention.append(item)
     if not attention:
         attention.append({"id": "platform_ok", "title": "Срочных задач нет", "description": "По операционным очередям критичных сигналов нет.", "count": 0, "severity": "low"})

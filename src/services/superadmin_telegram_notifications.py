@@ -234,7 +234,7 @@ def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
     by_key = {str(item.get("id") or ""): item for item in attention_items}
     ordered = [
         by_key[key]
-        for key in ("outreach_replies", "pending_approvals", "failed_jobs", "pending_posts")
+        for key in ("outreach_replies", "reviews_unanswered", "pending_approvals", "failed_jobs", "pending_posts")
         if key in by_key
     ]
     ordered.extend(item for item in attention_items if item not in ordered)
@@ -251,6 +251,14 @@ def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
             title = "Новый ответ в аутриче" if count == 1 else f"{rendered_count} {reply_word} в аутриче"
             description = "Следующие касания остановлены. Нужно прочитать ответ и выбрать дальнейшее действие."
             icon = "💬"
+        elif key == "reviews_unanswered":
+            review_word = _plural_ru(count, "отзыв", "отзыва", "отзывов")
+            title = f"{rendered_count} {review_word} без ответа"
+            affected = int(item.get("affected_businesses") or 0)
+            business_word = _plural_ru(affected, "бизнеса", "бизнесов", "бизнесов")
+            affected_text = f" у {affected:,} {business_word}".replace(",", " ") if affected else ""
+            description = f"Нужно подготовить ответы{affected_text} и проверить их перед публикацией."
+            icon = "⭐"
         elif key == "pending_approvals":
             action_word = _plural_ru(count, "действие", "действия", "действий")
             title = f"{rendered_count} {action_word} ждут подтверждения"
