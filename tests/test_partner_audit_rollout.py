@@ -193,6 +193,29 @@ def test_specialized_audit_does_not_invent_demo_services_or_revenue(monkeypatch)
     assert audit["revenue_potential"]["label"] == "Без денежной оценки"
 
 
+def test_audit_prefers_current_lead_rating_and_reviews_over_stale_snapshot(monkeypatch) -> None:
+    monkeypatch.setattr(
+        card_audit,
+        "_resolve_lead_business_snapshot",
+        lambda _lead: {"rating": 1.6, "reviews_count": 1},
+    )
+    audit = build_lead_card_preview_snapshot(
+        {
+            "id": "lead-padrina",
+            "name": "Padrina_studio",
+            "city": "Колпино",
+            "category": "Салон красоты",
+            "source_url": "https://yandex.ru/maps/org/padrina_studio/68716502058/",
+            "rating": 2.5,
+            "reviews_count": 3,
+            "search_payload_json": {"rating": 1.6, "reviews_count": 1},
+        }
+    )
+
+    assert audit["current_state"]["rating"] == 2.5
+    assert audit["current_state"]["reviews_count"] == 3
+
+
 def test_partner_audit_uses_the_parsed_company_snapshot() -> None:
     lead = {
         "business_id": "organika-tenant",

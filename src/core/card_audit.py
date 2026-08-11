@@ -4510,15 +4510,20 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
     audit_profile = str(audit_profile_details.get("profile") or "default_local_business")
 
-    rating_raw = snapshot.get("rating") if snapshot.get("rating") is not None else lead.get("rating")
+    rating_raw = lead.get("rating") if lead.get("rating") is not None else snapshot.get("rating")
     rating = _extract_numeric(rating_raw)
+    lead_reviews_count = _extract_int(lead.get("reviews_count") or 0)
     imported_reviews_count = _extract_int(
         lead_import_payload.get("reviews_count")
         if lead_import_payload.get("reviews_count") is not None
         else (lead.get("reviews_count") or 0)
     )
     snapshot_reviews_count = _extract_int(snapshot.get("reviews_count") or 0)
-    reviews_count = imported_reviews_count if imported_reviews_count > 0 else snapshot_reviews_count
+    reviews_count = (
+        lead_reviews_count
+        if lead_reviews_count > 0
+        else imported_reviews_count if imported_reviews_count > 0 else snapshot_reviews_count
+    )
     parsed_contacts = snapshot.get("parsed_contacts") or {}
     has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
     has_description = bool(snapshot.get("description_present")) or _has_meaningful_business_description(
