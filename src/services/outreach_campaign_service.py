@@ -1420,6 +1420,18 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
                    WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
                    LIMIT 1
                ) AS public_audit_url,
+               (
+                   SELECT public_offer.page_json
+                   FROM adminprospectingleadpublicoffers public_offer
+                   WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
+                   LIMIT 1
+               ) AS public_audit_page_json,
+               (
+                   SELECT public_offer.updated_at
+                   FROM adminprospectingleadpublicoffers public_offer
+                   WHERE public_offer.lead_id = l.id AND public_offer.is_active = TRUE
+                   LIMIT 1
+               ) AS public_audit_updated_at,
                l.business_id AS lead_business_id,
                client.name AS client_business_name,
                client.business_type AS client_business_type,
@@ -1551,6 +1563,49 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
 def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     research = context.get("research") or {}
     ledger: list[dict[str, Any]] = []
+    audit_page = (
+        context.get("public_audit_page_json")
+        if isinstance(context.get("public_audit_page_json"), dict)
+        else {}
+    )
+    audit = audit_page.get("audit") if isinstance(audit_page.get("audit"), dict) else {}
+    audit_state = (
+        audit.get("current_state")
+        if isinstance(audit.get("current_state"), dict)
+        else {}
+    )
+    if context.get("source_url") and audit_state:
+        audit_observed_at = context.get("public_audit_updated_at") or context.get("updated_at")
+        if audit_state.get("description_present") is False:
+            ledger.append({
+                "id": "map-description-gap",
+                "kind": "map_description_gap",
+                "fact": f"В карточке {_text(context.get('lead_name'))} нет описания бизнеса.",
+                "status": "observed",
+                "source_url": context.get("source_url"),
+                "observed_at": audit_observed_at,
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+                "hypothesis": None,
+                "relevance": "Можно подготовить короткое описание из опубликованных услуг и фактов.",
+                "source_type": "public_audit_current_state",
+                "signal_combo": "map_description_gap",
+            })
+        if int(audit_state.get("news_count") or 0) == 0:
+            ledger.append({
+                "id": "map-content-gap",
+                "kind": "map_gap",
+                "fact": f"В карточке {_text(context.get('lead_name'))} нет новостей.",
+                "status": "observed",
+                "source_url": context.get("source_url"),
+                "observed_at": audit_observed_at,
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+                "hypothesis": None,
+                "relevance": "Можно готовить отдельные черновики для соцсетей и карт.",
+                "source_type": "public_audit_current_state",
+                "signal_combo": "map_content_gap",
+            })
     research_brief = (
         research.get("message_brief_json")
         if isinstance(research.get("message_brief_json"), dict)
@@ -1744,6 +1799,14 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = 0
         elif beauty_sales and kind in {"telegram_post", "social_post"}:
             rank = 1
+        elif kind == "map_rating":
+            rank = 1
+        elif kind == "map_issue":
+            rank = 2
+        elif kind == "map_description_gap":
+            rank = 3
+        elif kind == "map_gap":
+            rank = 4
         elif (
             "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact

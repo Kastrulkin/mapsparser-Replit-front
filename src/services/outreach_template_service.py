@@ -78,6 +78,15 @@ OUTREACH_TEMPLATES = (
         "required_evidence": ("current_map_service_price_coverage",),
         "question_policy": "single_cta",
     },
+    {
+        "key": "map_description_gap_v1",
+        "label": "Нет описания в карточке",
+        "version": 1,
+        "angles": ("content_operations", "audit_step"),
+        "pain_key": "marketing_and_clients",
+        "required_evidence": ("current_map_description_gap",),
+        "question_policy": "single_cta",
+    },
 )
 
 _TEMPLATE_BY_KEY = {item["key"]: item for item in OUTREACH_TEMPLATES}
@@ -198,6 +207,13 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "услуг" in fact and "цен" in fact
         ):
             reasons.append("map_service_price_coverage_required")
+    elif template_key == "map_description_gap_v1":
+        fact = _text(candidate.get("observed_fact")).lower()
+        if _text(candidate.get("evidence_kind")).lower() != "map_description_gap" or not (
+            "нет описания" in fact
+            or "описание бизнеса не найдено" in fact
+        ):
+            reasons.append("map_description_gap_required")
     return not reasons, reasons
 
 
@@ -358,6 +374,15 @@ def _render_outreach_template_body(
             "LocalOS сверит услуги и цены в карточке и подготовит список точечных изменений. "
             "Вы сами выберете, что обновить.\n\n"
             "Показать, что можно поправить в карточке?"
+        )
+    if key == "map_description_gap_v1":
+        observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
+        return (
+            f"Здравствуйте! Я {identity}.\n\n"
+            f"{observation}\n\n"
+            "Без короткого описания клиенту приходится открывать услуги и отзывы, чтобы понять, чем вы занимаетесь.\n\n"
+            "LocalOS подготовит черновик описания из опубликованных услуг и фактов. Вы проверите текст перед обновлением.\n\n"
+            "Показать черновик?"
         )
     return None
 
