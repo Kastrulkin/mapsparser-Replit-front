@@ -4339,8 +4339,32 @@ LIVE_CONTENT_SIGNAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+UNCLEAR_CONTENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "музыку будут свайпать",
+        re.compile(r"\bмузык\w*\s+буд\w*\s+свайп\w*\b", re.IGNORECASE),
+    ),
+    (
+        "на числовые ответы ставить",
+        re.compile(r"\bчислов\w*\s+ответ\w*\s*[—-]\s*став\w*\b", re.IGNORECASE),
+    ),
+    (
+        "выбирайте механику",
+        re.compile(r"\bвыбира\w*\s+механик\w*\b", re.IGNORECASE),
+    ),
+)
 
-def _editorial_quality_issues(text: str, voice: dict[str, Any]) -> tuple[list[str], list[str]]:
+NARRATIVE_TRANSITION_RE = re.compile(
+    r"\b(?:сначала|затем|после\s+этого|на\s+следующ\w+\s+день|уже\s+на\s+следующ\w+\s+день|"
+    r"в\s+финале|к\s+концу)\b|(?:^|[.!?]\s+)а\s+\d{1,2}\s+",
+    re.IGNORECASE,
+)
+
+
+def _editorial_quality_issues(
+    text: str,
+    voice: dict[str, Any],
+) -> tuple[list[str], list[str], list[str], list[str]]:
     first_paragraph = next((part.strip() for part in text.split("\n\n") if part.strip()), "")
     first_sentence = next(
         (part.strip() for part in re.split(r"(?<=[.!?])\s+", first_paragraph) if part.strip()),
@@ -4359,12 +4383,23 @@ def _editorial_quality_issues(text: str, voice: dict[str, Any]) -> tuple[list[st
         editorial_issues.append("Сухое начало от имени источника вместо живого входа в тему")
     if enumeration_only:
         editorial_issues.append("Текст перечисляет даты и названия, но не раскрывает человеческий интерес или механику")
+    unclear_hits = [label for label, pattern in UNCLEAR_CONTENT_PATTERNS if pattern.search(text)]
+    clarity_issues = [f"Непонятная сжатая формулировка: {label}" for label in unclear_hits]
+    full_title_mentions = len(re.findall(r"«[^»]{2,80}»", text))
+    describes_several_events = full_title_mentions >= 3 and bool(
+        re.search(r"\bтри\s+(?:разн\w+\s+)?(?:событ\w*|вечер\w*|дат\w*)\b", text, flags=re.IGNORECASE)
+        or len(re.findall(r"\b\d{1,2}(?:-го|\s+августа)\b", text, flags=re.IGNORECASE)) >= 3
+    )
+    narrative_transitions = NARRATIVE_TRANSITION_RE.findall(text)
+    story_issues: list[str] = []
+    if describes_several_events and len(narrative_transitions) < 2:
+        story_issues.append("Несколько событий нужно связать в короткий рассказ, а не перечислять")
     voice_summary = str(voice.get("summary") or "").lower()
     voice_requires_hook = "интриг" in voice_summary or "механик" in voice_summary
     voice_issues: list[str] = []
     if voice_requires_hook and (source_led_opening or enumeration_only):
         voice_issues.append("Текст не выполняет правило голоса: начать с интриги или механики")
-    return editorial_issues, voice_issues
+    return editorial_issues, voice_issues, clarity_issues, story_issues
 
 
 def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], voice: dict[str, Any]) -> dict[str, Any]:
@@ -4398,9 +4433,11 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
     if any(marker in text.lower() for marker in meta_copy_markers):
         style_issues.append("В текст попала внутренняя формулировка контент-плана")
     style_issues.extend(f"Рекламное клише: {value}" for value in dict.fromkeys(cliche_hits))
-    editorial_issues, voice_issues = _editorial_quality_issues(text, voice)
+    editorial_issues, voice_issues, clarity_issues, story_issues = _editorial_quality_issues(text, voice)
     style_issues.extend(editorial_issues)
     style_issues.extend(voice_issues)
+    style_issues.extend(clarity_issues)
+    style_issues.extend(story_issues)
     score = 0
     if grounded:
         score += 55
@@ -4410,7 +4447,7 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         score += 8
     if not cliche_hits:
         score += 10
-    if 1 <= paragraph_count <= 4:
+    if 1 <= paragraph_count <= 5:
         score += 5
     return {
         **candidate,
@@ -4418,8 +4455,10 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         "grounded": grounded,
         "factual_gate_passed": grounded,
         "neuroslop_passed": not cliche_hits,
-        "editorial_quality_passed": not editorial_issues,
+        "editorial_quality_passed": not editorial_issues and not clarity_issues and not story_issues,
         "voice_adherence_passed": not voice_issues,
+        "clarity_passed": not clarity_issues,
+        "story_passed": not story_issues,
         "quality_passed": grounded and score >= 70 and not style_issues,
         "issues": [
             *(unsupported or []),
@@ -4452,7 +4491,10 @@ def _content_generation_v2_prompt(
         "Редакторские правила для каждого варианта:\n"
         "- одна публикация раскрывает одну главную мысль;\n"
         "- начинай с конкретной ситуации или факта, а не с описания компании и не с рекламного вопроса;\n"
-        "- используй 1–4 коротких абзаца; текст длиннее 260 символов обязательно разделяй пустой строкой;\n"
+        "- пиши коротко, по делу и именно об этом бизнесе; читатель должен понять каждую фразу без знания маркетингового жаргона;\n"
+        "- если в публикации несколько событий, свяжи их в короткий рассказ: общий вход, развитие через переходы во времени или настроении, ясный финал; не выдавай перечень дат и названий;\n"
+        "- объясняй механику события обычными словами; не сжимай разные смыслы в метафоры вроде «музыку свайпать» или «выбирать механику»;\n"
+        "- используй 1–5 коротких абзацев; текст длиннее 260 символов обязательно разделяй пустой строкой;\n"
         "- не переноси в готовый текст слова «цель публикации», «бизнес-задача», «в фокусе публикации» или другие внутренние инструкции;\n"
         "- не используй хэштеги, рекламные клише и больше одного восклицательного знака;\n"
         "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"

@@ -168,7 +168,7 @@ def test_dry_katok_bulletin_does_not_pass_live_voice_gate():
     assert any("Сухое начало" in issue for issue in scored["issues"])
 
 
-def test_live_katok_opening_passes_editorial_and_voice_gates():
+def test_compressed_katok_metaphors_do_not_pass_clarity_and_story_gates():
     candidate = {
         "id": "variant-1",
         "angle": "Механики событий",
@@ -199,9 +199,53 @@ def test_live_katok_opening_passes_editorial_and_voice_gates():
 
     scored = _score_content_candidate(candidate, brief, voice)
 
+    assert scored["quality_passed"] is False
+    assert scored["clarity_passed"] is False
+    assert scored["story_passed"] is False
+
+
+def test_short_individual_katok_story_passes_all_quality_gates():
+    candidate = {
+        "id": "variant-1",
+        "angle": "Три разных вечера",
+        "text": (
+            "В конце августа в «Катке» можно прожить три совершенно разных вечера.\n\n"
+            "22 августа классическая музыка станет поводом познакомиться: на «Тиндере Чайковского» "
+            "гости будут слушать произведения, узнавать любовные истории композиторов и искать совпавшую пару.\n\n"
+            "Уже на следующий день настроение изменится. В «Локстоке» понадобятся чувство числа, "
+            "немного смелости и умение вовремя сказать «пас».\n\n"
+            "А 28 августа зал будет слушать Вивальди особенно внимательно — музыка подскажет, "
+            "что спрятано в «Чёрном ящике».\n\n"
+            "Все три события начинаются в 19:00. Осталось выбрать, какой вечер хочется прожить первым."
+        ),
+        "used_fact_ids": ["event", "owner_detail", "owner_source"],
+        "unsupported_facts": [],
+    }
+    brief = {
+        "sources": [
+            {"id": "event"},
+            {"id": "owner_detail"},
+            {"id": "owner_source"},
+        ],
+        "confirmed_details": ["Три события опубликованы в официальной афише"],
+    }
+    voice = {
+        "summary": (
+            "Разговорно, интеллектуально и с лёгкой дерзостью. Начинать с интриги "
+            "или необычной механики события, затем давать точные дату, время и формат."
+        ),
+        "forbidden_phrases": [],
+    }
+
+    scored = _score_content_candidate(candidate, brief, voice)
+
     assert scored["quality_passed"] is True
+    assert scored["factual_gate_passed"] is True
+    assert scored["neuroslop_passed"] is True
     assert scored["editorial_quality_passed"] is True
     assert scored["voice_adherence_passed"] is True
+    assert scored["clarity_passed"] is True
+    assert scored["story_passed"] is True
 
 
 def test_candidate_with_unknown_fact_is_disqualified():
@@ -253,8 +297,11 @@ def test_generation_prompt_uses_confirmed_business_and_audience_descriptions():
 
     assert "Культурный центр для жителей района" in prompt
     assert "Жители, которые ищут события рядом с домом" in prompt
-    assert "коротких абзаца" in prompt
+    assert "коротких абзацев" in prompt
     assert "не копируй источник дословно" in prompt
+    assert "свяжи их в короткий рассказ" in prompt
+    assert "не выдавай перечень дат и названий" in prompt
+    assert "без знания маркетингового жаргона" in prompt
 
 
 def test_missing_optional_prompt_does_not_abort_generation_transaction():
