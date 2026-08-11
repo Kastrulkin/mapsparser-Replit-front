@@ -8,6 +8,7 @@ from services.outreach_template_service import (
     template_copy_matches,
 )
 from services.outreach_campaign_service import _message_for_angle, _quality_gate
+from services.outreach_playbook import beauty_outreach_guidance
 
 
 def _candidate(**overrides):
@@ -34,6 +35,13 @@ def test_library_contains_seven_versioned_owner_templates():
     assert len(OUTREACH_TEMPLATES) == 7
     assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 7
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
+
+
+def test_playbook_keeps_owner_rule_for_weak_map_first_touch():
+    rules = " ".join(beauty_outreach_guidance()["method_rules"])
+    assert "карточка на Яндекс Картах" in rules
+    assert "риск недополучать клиентов" in rules
+    assert "ссылка на аудит" in rules
 
 
 def test_low_rating_template_is_selected_and_uses_approved_owner_copy():
