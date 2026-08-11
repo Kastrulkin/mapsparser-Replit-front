@@ -238,6 +238,7 @@ def test_yandex_audit_does_not_treat_missing_business_description_as_a_gap(monke
     assert audit["current_state"]["description_applicable"] is False
     assert audit["current_state"]["description_present"] is None
     assert all(item.get("id") != "positioning_description_gap" for item in audit["issue_blocks"])
+    assert "описан" not in audit["summary_text"].lower()
     action_text = " ".join(
         str(text)
         for values in audit["action_plan"].values()
