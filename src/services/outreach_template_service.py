@@ -376,13 +376,13 @@ def _render_outreach_template_body(
                 observation = (
                     f"Вижу, что в карточке {recipient_genitive} на Яндекс Картах есть "
                     f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
-                    f"только для {counts.group(2)} из них."
+                    f"только у {counts.group(2)}."
                 )
             else:
                 observation = (
                     f"Вижу, что в карточке компании {recipient} на Яндекс Картах есть "
                     f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
-                    f"только для {counts.group(2)} из них."
+                    f"для {counts.group(2)}."
                 )
         return (
             f"Здравствуйте! Я {identity}.\n\n"

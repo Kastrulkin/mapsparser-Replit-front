@@ -143,7 +143,7 @@ def test_map_price_gap_names_yandex_maps_and_follows_sales_flow():
     assert selection["key"] == "map_service_price_coverage_v3"
     assert (
         "Вижу, что в карточке Кожно-венерологического диспансера № 7 на Яндекс Картах "
-        "есть 27 услуг, но цена указана только для 3 из них."
+        "есть 27 услуг, но цена указана только у 3."
     ) in text
     assert "может недополучать обращения с карт" in text
     assert "LocalOS поможет исправить карточку" in text
