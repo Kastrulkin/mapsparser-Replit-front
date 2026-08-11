@@ -25,6 +25,7 @@ def dispatch_due_outreach_queue(
     campaign_only: bool = False,
     allowed_business_ids: list[str] | None = None,
     allow_platform: bool = False,
+    max_daily_outreach_batch: int | None = None,
 ) -> dict[str, Any]:
     """Dispatch queued/retry outreach items to the configured outbound provider."""
     from api import admin_prospecting as p
@@ -67,7 +68,14 @@ def dispatch_due_outreach_queue(
             (sent_row.get("count") if hasattr(sent_row, "get") else sent_row[0] if sent_row else 0)
             or 0
         )
-        safe_batch_size = min(safe_batch_size, max(0, int(p.MAX_DAILY_OUTREACH_BATCH) - sent_today))
+        supervised_daily_cap = max(
+            1,
+            min(
+                int(max_daily_outreach_batch or p.MAX_DAILY_OUTREACH_BATCH),
+                200,
+            ),
+        )
+        safe_batch_size = min(safe_batch_size, max(0, supervised_daily_cap - sent_today))
         if safe_batch_size <= 0:
             return {
                 "success": True,

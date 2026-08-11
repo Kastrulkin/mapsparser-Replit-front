@@ -9,6 +9,8 @@ import os
 import smtplib
 import socket
 import ssl
+import re
+import time
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.message import EmailMessage, Message
@@ -262,6 +264,67 @@ def load_mailbox_config(sender_account: dict[str, Any]) -> dict[str, Any]:
     return normalize_mailbox_config(payload)
 
 
+def _gmail_mailbox_name(raw_line: bytes) -> str:
+    line = raw_line.decode("utf-8", errors="replace").strip()
+    match = re.search(r'\)\s+"(?:[^"\\]|\\.)*"\s+("(?:[^"\\]|\\.)*"|\S+)\s*$', line)
+    if not match:
+        raise EmailAdapterError("email_sent_label_unavailable", "Gmail mailbox list could not be parsed")
+    value = match.group(1)
+    if value.startswith('"') and value.endswith('"'):
+        value = value[1:-1].replace(r'\"', '"').replace(r'\\', '\\')
+    return value
+
+
+def _apply_gmail_sent_label(
+    config: dict[str, Any],
+    *,
+    message_id: str,
+    label_name: str,
+    timeout: int,
+) -> dict[str, Any]:
+    """Apply one existing Gmail label to one exact sent message."""
+    normalized_label = _text(label_name)
+    if not normalized_label or any(character in normalized_label for character in ('"', "\r", "\n")):
+        raise EmailAdapterError("email_sent_label_invalid", "Gmail sent label is invalid")
+    client = None
+    try:
+        client = _imap_connection(config, timeout=timeout)
+        capabilities = {
+            value.decode("ascii", errors="ignore").upper() if isinstance(value, bytes) else str(value).upper()
+            for value in client.capabilities
+        }
+        if "X-GM-EXT-1" not in capabilities:
+            raise EmailAdapterError("email_sent_label_unavailable", "Gmail label extension is unavailable")
+        status, data = client.list()
+        if _text(status).upper() != "OK":
+            raise EmailAdapterError("email_sent_label_unavailable", "Gmail mailbox list is unavailable")
+        lines = [item for item in (data or []) if isinstance(item, bytes)]
+        sent_names = [_gmail_mailbox_name(line) for line in lines if b"\\Sent" in line]
+        label_names = [_gmail_mailbox_name(line) for line in lines]
+        if len(sent_names) != 1 or normalized_label not in label_names:
+            raise EmailAdapterError("email_sent_label_unavailable", "Gmail Sent mailbox or label is unavailable")
+        status, _ = client.select(sent_names[0], readonly=False)
+        if _text(status).upper() != "OK":
+            raise EmailAdapterError("email_sent_label_unavailable", "Gmail Sent mailbox is unavailable")
+        matched: list[str] = []
+        for _attempt in range(10):
+            status, result = client.uid("search", None, "X-GM-RAW", f'"rfc822msgid:{message_id}"')
+            if _text(status).upper() != "OK":
+                raise EmailAdapterError("email_sent_label_unavailable", "Gmail sent message lookup failed")
+            matched = _text(result[0] if result else "").split()
+            if matched:
+                break
+            time.sleep(0.25)
+        if len(matched) != 1:
+            raise EmailAdapterError("email_sent_label_message_not_found", "Sent message was not found for labeling")
+        status, _ = client.uid("store", matched[0], "+X-GM-LABELS", f'("{normalized_label}")')
+        if _text(status).upper() != "OK":
+            raise EmailAdapterError("email_sent_label_failed", "Gmail label could not be applied")
+        return {"status": "labeled", "label": normalized_label}
+    finally:
+        _close_imap(client)
+
+
 def send_email(
     sender_account: dict[str, Any],
     *,
@@ -294,7 +357,7 @@ def send_email(
         refused = client.send_message(message, from_addr=config["email"], to_addrs=[recipient_email])
         if refused:
             raise EmailAdapterError("email_recipient_rejected", "Recipient address was rejected")
-        return {
+        result = {
             "success": True,
             "provider_name": "native_email",
             "provider_account_id": str(sender_account.get("id") or ""),
@@ -302,6 +365,28 @@ def send_email(
             "recipient_kind": "email",
             "recipient_value": recipient_email,
         }
+        capabilities = (
+            sender_account.get("capabilities_json")
+            if isinstance(sender_account.get("capabilities_json"), dict)
+            else {}
+        )
+        sent_label = _text(capabilities.get("sent_label"))
+        if sent_label:
+            try:
+                result["sent_label"] = _apply_gmail_sent_label(
+                    config,
+                    message_id=message_id,
+                    label_name=sent_label,
+                    timeout=timeout,
+                )
+            except Exception as label_error:
+                classified_label_error = classify_email_exception(label_error)
+                result["sent_label"] = {
+                    "status": "warning",
+                    "label": sent_label,
+                    "reason_code": classified_label_error.code,
+                }
+        return result
     except Exception as exc:
         classified = classify_email_exception(exc)
         if submission_started and classified.code not in {

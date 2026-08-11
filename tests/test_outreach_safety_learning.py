@@ -819,6 +819,52 @@ def test_background_dispatch_query_targets_only_allowed_business_campaigns(monke
     assert dispatch_params[1:3] == ["business-a", "business-b"]
 
 
+def test_supervised_dispatch_can_raise_daily_cap_for_one_exact_run(monkeypatch):
+    from api import admin_prospecting
+
+    class FakeCursor:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, query, params=()):
+            self.calls.append((query, list(params)))
+
+        def fetchone(self):
+            return {"count": 10}
+
+        def fetchall(self):
+            return []
+
+    class FakeConnection:
+        def __init__(self):
+            self.cursor_instance = FakeCursor()
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    connection = FakeConnection()
+    monkeypatch.setattr(admin_prospecting, "get_db_connection", lambda: connection)
+
+    result = dispatch_due_outreach_queue(
+        batch_size=9,
+        queue_id="exact-queue",
+        campaign_only=True,
+        allow_platform=True,
+        max_daily_outreach_batch=20,
+    )
+
+    assert result["picked"] == 0
+    dispatch_query, dispatch_params = connection.cursor_instance.calls[1]
+    assert "q.id = %s" in dispatch_query
+    assert 9 in dispatch_params
+
+
 def test_manual_pilot_dispatch_is_not_primary_for_future_schedule():
     admin_ui = Path("frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(encoding="utf-8")
     dispatcher = Path("src/services/outreach_dispatch_service.py").read_text(encoding="utf-8")

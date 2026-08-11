@@ -140,6 +140,96 @@ def test_native_email_send_uses_concrete_sender_and_message_id(monkeypatch):
     assert "secret" not in sent_messages[0].as_string(policy=policy.default)
 
 
+def test_native_email_applies_configured_label_after_successful_smtp(monkeypatch):
+    class FakeSmtp:
+        def send_message(self, _message, **_kwargs):
+            return {}
+
+        def quit(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.load_mailbox_config",
+        lambda _sender: {
+            "email": "localosgo@gmail.com",
+            "display_name": "LocalOS",
+            "username": "localosgo@gmail.com",
+            "password": "secret",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 465,
+            "smtp_security": "ssl",
+            "imap_host": "imap.gmail.com",
+            "imap_port": 993,
+            "imap_security": "ssl",
+            "imap_folder": "INBOX",
+        },
+    )
+    monkeypatch.setattr("services.outreach_email_adapter._smtp_connection", lambda *_args, **_kwargs: FakeSmtp())
+    labeled = []
+    monkeypatch.setattr(
+        "services.outreach_email_adapter._apply_gmail_sent_label",
+        lambda _config, **kwargs: labeled.append(kwargs) or {"status": "labeled", "label": kwargs["label_name"]},
+    )
+
+    result = send_email(
+        {"id": "sender-1", "capabilities_json": {"sent_label": "Localos"}},
+        recipient="lead@example.net",
+        subject="Тема",
+        body="Текст",
+        idempotency_key="outreach:touch-1",
+    )
+
+    assert result["success"] is True
+    assert result["sent_label"] == {"status": "labeled", "label": "Localos"}
+    assert labeled[0]["label_name"] == "Localos"
+    assert labeled[0]["message_id"] == result["provider_message_id"]
+
+
+def test_native_email_label_failure_does_not_turn_confirmed_send_into_retry(monkeypatch):
+    class FakeSmtp:
+        def send_message(self, _message, **_kwargs):
+            return {}
+
+        def quit(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.load_mailbox_config",
+        lambda _sender: {
+            "email": "localosgo@gmail.com",
+            "display_name": "LocalOS",
+            "username": "localosgo@gmail.com",
+            "password": "secret",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 465,
+            "smtp_security": "ssl",
+            "imap_host": "imap.gmail.com",
+            "imap_port": 993,
+            "imap_security": "ssl",
+            "imap_folder": "INBOX",
+        },
+    )
+    monkeypatch.setattr("services.outreach_email_adapter._smtp_connection", lambda *_args, **_kwargs: FakeSmtp())
+    monkeypatch.setattr(
+        "services.outreach_email_adapter._apply_gmail_sent_label",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            EmailAdapterError("email_sent_label_message_not_found", "not found")
+        ),
+    )
+
+    result = send_email(
+        {"id": "sender-1", "capabilities_json": {"sent_label": "Localos"}},
+        recipient="lead@example.net",
+        subject="Тема",
+        body="Текст",
+        idempotency_key="outreach:touch-1",
+    )
+
+    assert result["success"] is True
+    assert result["sent_label"]["status"] == "warning"
+    assert result["sent_label"]["reason_code"] == "email_sent_label_message_not_found"
+
+
 def test_native_email_does_not_retry_when_transport_fails_after_send_started(monkeypatch):
     class AmbiguousSmtp:
         def send_message(self, _message, **_kwargs):
