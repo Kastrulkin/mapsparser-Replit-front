@@ -57,13 +57,16 @@ def test_public_audit_link_is_added_only_for_explicit_first_touch():
     selection = select_outreach_template("signal", candidate)
     text = render_outreach_template(selection, candidate)
 
-    assert "Аудит карточки: https://localos.pro/padrina-studio" in text
+    assert (
+        "Мы подготовили аудит карточки на картах, сможете поправить сами: "
+        "https://localos.pro/padrina-studio"
+    ) in text
     assert text.endswith("Вам может быть это интересно?")
-    assert "Аудит карточки:" not in attach_public_audit_link(
+    assert "Мы подготовили аудит" not in attach_public_audit_link(
         "Здравствуйте!\n\nПоказать?",
         {**candidate, "include_public_audit_link": False},
     )
-    assert "Аудит карточки:" not in attach_public_audit_link(
+    assert "Мы подготовили аудит" not in attach_public_audit_link(
         "Здравствуйте!\n\nПоказать?",
         {**candidate, "public_audit_url": "https://example.com/audit"},
     )

@@ -266,7 +266,10 @@ def attach_public_audit_link(text: str, candidate: dict[str, Any]) -> str:
     ):
         return text
     paragraphs = text.split("\n\n")
-    audit_paragraph = f"Аудит карточки: {audit_url}"
+    audit_paragraph = (
+        "Мы подготовили аудит карточки на картах, "
+        f"сможете поправить сами: {audit_url}"
+    )
     if len(paragraphs) < 2:
         return f"{text}\n\n{audit_paragraph}"
     paragraphs.insert(-1, audit_paragraph)
