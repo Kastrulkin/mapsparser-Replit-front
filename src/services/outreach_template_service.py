@@ -361,8 +361,8 @@ def _render_outreach_template_body(
         )
         if counts:
             observation = (
-                f"В карточке {recipient} на Яндекс Картах опубликовано {counts.group(1)} услуг, "
-                f"но цена указана только у {counts.group(2)}."
+                f"В карточке {recipient} на Яндекс Картах указаны услуги: "
+                f"всего - {counts.group(1)}, с ценой - {counts.group(2)}."
             )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
