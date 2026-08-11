@@ -1450,7 +1450,7 @@ def build_native_research_payload(
             if services_value > 0 and priced_value < services_value and price_coverage <= 0.8:
                 add_signal(
                     "map_issue",
-                    f"По данным аудита карточки: всего услуг - {services_value}; с ценой - {priced_value}.",
+                    f"По данным аудита карточки на Яндекс Картах: всего услуг - {services_value}; с ценой - {priced_value}.",
                     "Можно предметно проверить, для каких услуг клиент видит цену прямо в карточке.",
                     url=audit_source_url,
                     confidence=0.95,
@@ -1468,7 +1468,11 @@ def build_native_research_payload(
                     source_type=audit_source_type,
                 )
         parse_context = audit.get("parse_context") if isinstance(audit.get("parse_context"), dict) else {}
-        if parse_context.get("description_present") is False:
+        if (
+            parse_context.get("description_present") is False
+            and current_state.get("description_applicable") is not False
+            and "yandex." not in str(source_url or "").lower()
+        ):
             add_signal(
                 "map_issue",
                 "В аудите публичной карточки описание бизнеса не найдено.",
@@ -1557,6 +1561,7 @@ def build_native_research_payload(
             "услуг, цена указана" in fact
             or "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact
+            or "по данным аудита карточки на яндекс картах: всего услуг" in fact
             or "описание бизнеса не найдено" in fact
         ):
             return 0

@@ -1294,7 +1294,7 @@ def _normalize_outreach_fact(value: Any) -> str:
     )
     if services_match:
         return (
-            "По данным аудита карточки: всего услуг - "
+            "По данным аудита карточки на Яндекс Картах: всего услуг - "
             f"{services_match.group(1)}; с ценой - {services_match.group(2)}."
         )
     compact_services_match = re.search(
@@ -1305,19 +1305,19 @@ def _normalize_outreach_fact(value: Any) -> str:
     )
     if compact_services_match:
         return (
-            "По данным аудита карточки: всего услуг - "
+            "По данным аудита карточки на Яндекс Картах: всего услуг - "
             f"{compact_services_match.group(1)}; с ценой - "
             f"{compact_services_match.group(2)}."
         )
     current_services_match = re.search(
-        r"(?:по данным аудита карточки:\s*)?всего услуг\s*[—-]\s*(\d+);"
+        r"(?:по данным аудита карточки(?: на яндекс картах)?:\s*)?всего услуг\s*[—-]\s*(\d+);"
         r"\s*с ценой\s*[—-]\s*(\d+)",
         fact,
         flags=re.I,
     )
     if current_services_match:
         return (
-            "По данным аудита карточки: всего услуг - "
+            "По данным аудита карточки на Яндекс Картах: всего услуг - "
             f"{current_services_match.group(1)}; с ценой - {current_services_match.group(2)}."
         )
     rating_match = re.search(

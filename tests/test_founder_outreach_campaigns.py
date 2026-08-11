@@ -1670,7 +1670,7 @@ def test_structured_audit_evidence_stays_primary_when_saved_research_has_review_
 
     assert evidence[0]["id"] == "audit-1"
     assert evidence[0]["fact"] == (
-        "По данным аудита карточки: всего услуг - 20; с ценой - 5."
+        "По данным аудита карточки на Яндекс Картах: всего услуг - 20; с ценой - 5."
     )
     assert evidence[-1]["kind"] == "review"
 
@@ -1722,7 +1722,7 @@ def test_saved_compact_service_fact_is_normalized_to_style_contract():
 
     assert "—" not in evidence[0]["fact"]
     assert evidence[0]["fact"] == (
-        "По данным аудита карточки: всего услуг - 60; с ценой - 15."
+        "По данным аудита карточки на Яндекс Картах: всего услуг - 60; с ценой - 15."
     )
 
 

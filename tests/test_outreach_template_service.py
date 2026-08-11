@@ -30,7 +30,7 @@ def _candidate(**overrides):
 
 
 def test_library_contains_seven_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v2"
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v3"
     assert len(OUTREACH_TEMPLATES) == 7
     assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 7
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
@@ -112,7 +112,39 @@ def test_map_price_gap_cannot_be_reused_as_average_ticket_signal():
     )
 
     assert select_outreach_template("average_ticket", candidate)["status"] == "individual_copy_required"
-    assert select_outreach_template("content_operations", candidate)["key"] == "map_service_price_coverage_v1"
+    assert select_outreach_template("content_operations", candidate)["key"] == "map_service_price_coverage_v2"
+
+
+def test_map_price_gap_names_yandex_maps_and_follows_sales_flow():
+    candidate = _candidate(
+        recipient="Кожно-венерологический диспансер № 7",
+        observed_fact=(
+            "По данным аудита карточки на Яндекс Картах: "
+            "всего услуг - 27; с ценой - 3."
+        ),
+        evidence_kind="map_issue",
+        public_audit_url=(
+            "https://localos.pro/kozhno-venerologicheskiy-dispanser-7"
+        ),
+        include_public_audit_link=True,
+    )
+
+    selection = select_outreach_template("content_operations", candidate)
+    text = render_outreach_template(selection, candidate)
+
+    assert selection["key"] == "map_service_price_coverage_v2"
+    assert (
+        "В карточке Кожно-венерологический диспансер № 7 на Яндекс Картах "
+        "опубликовано 27 услуг, но цена указана только у 3."
+    ) in text
+    assert "может недополучать обращения с карт" in text
+    assert "LocalOS поможет исправить карточку" in text
+    assert "мы с нуля привлекли 10 клиентов с карт" in text
+    assert "Стоимость - от 1200 рублей в месяц" in text
+    assert "сможете поправить сами" in text
+    assert text.endswith("Вам может быть это интересно?")
+    assert text.count("?") == 1
+    assert "—" not in text
 
 
 def test_description_gap_is_not_an_outreach_signal_for_yandex_maps():

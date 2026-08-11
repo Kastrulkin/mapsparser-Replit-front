@@ -618,7 +618,7 @@ def test_structured_card_fact_is_preferred_to_negative_review():
         },
     )
 
-    assert payload["why_now"] == "По данным аудита карточки: всего услуг - 20; с ценой - 5."
+    assert payload["why_now"] == "По данным аудита карточки на Яндекс Картах: всего услуг - 20; с ценой - 5."
     json.dumps(payload["signals_json"])
     json.dumps(payload["evidence_json"])
 

@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v2"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v3"
 
 OUTREACH_TEMPLATES = (
     {
@@ -70,9 +70,9 @@ OUTREACH_TEMPLATES = (
         "question_policy": "single_cta",
     },
     {
-        "key": "map_service_price_coverage_v1",
+        "key": "map_service_price_coverage_v2",
         "label": "Услуги и цены в карточке",
-        "version": 1,
+        "version": 2,
         "angles": ("content_operations", "audit_step"),
         "pain_key": "marketing_and_clients",
         "required_evidence": ("current_map_service_price_coverage",),
@@ -192,7 +192,7 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             marker in fact for marker in ("нет новостей", "новости отсутствуют", "карточка не заполнена")
         ):
             reasons.append("map_content_gap_required")
-    elif template_key == "map_service_price_coverage_v1":
+    elif template_key == "map_service_price_coverage_v2":
         fact = _text(candidate.get("observed_fact")).lower()
         if _text(candidate.get("evidence_kind")).lower() not in {"map_issue", "map_services"} or not (
             "услуг" in fact and "цен" in fact
@@ -350,15 +350,27 @@ def _render_outreach_template_body(
             "Сотруднику останется проверить и опубликовать текст.\n\n"
             "Вам было бы интересно привлекать больше клиентов с карт?"
         )
-    if key == "map_service_price_coverage_v1":
+    if key == "map_service_price_coverage_v2":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
+        counts = re.search(
+            r"всего услуг\s*-\s*(\d+);\s*с ценой\s*-\s*(\d+)",
+            observation,
+            flags=re.IGNORECASE,
+        )
+        if counts:
+            observation = (
+                f"В карточке {recipient} на Яндекс Картах опубликовано {counts.group(1)} услуг, "
+                f"но цена указана только у {counts.group(2)}."
+            )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
-            f"В карточке {recipient} {observation[0].lower() + observation[1:]}\n\n"
-            "Когда у части услуг нет цены, клиенту сложнее сравнить варианты и решить, записываться ли.\n\n"
-            "LocalOS сверит услуги и цены в карточке и подготовит список точечных изменений. "
-            "Вы сами выберете, что обновить.\n\n"
-            "Показать, что можно поправить в карточке?"
+            f"{observation}\n\n"
+            "Когда по большинству услуг нет цены, клиенту сложнее выбрать и записаться. "
+            "Из-за этого компания может недополучать обращения с карт.\n\n"
+            "LocalOS поможет исправить карточку: сверит услуги и цены и подготовит конкретные изменения. "
+            "Для одного салона красоты мы с нуля привлекли 10 клиентов с карт.\n\n"
+            "Стоимость - от 1200 рублей в месяц.\n\n"
+            "Вам может быть это интересно?"
         )
     return None
 
