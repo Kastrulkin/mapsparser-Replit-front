@@ -5,7 +5,11 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from services import outreach_pain_library_service
-from services.outreach_campaign_service import _message_for_angle, _quality_gate
+from services.outreach_campaign_service import (
+    _format_channel_outreach_message,
+    _message_for_angle,
+    _quality_gate,
+)
 from services.outreach_human_language import review_human_language
 
 
@@ -190,7 +194,11 @@ def test_price_update_preview_passes_full_gate_with_supported_public_language_re
     }
     candidate["pain_hypothesis"] = candidate["problem_hypothesis"]
 
-    message = _message_for_angle("signal", candidate, {}, [])
+    message = _format_channel_outreach_message(
+        _message_for_angle("signal", candidate, {}, []),
+        channel="email",
+        sender_mode="localos",
+    )
     gate = _quality_gate(
         message,
         candidate,
@@ -201,10 +209,12 @@ def test_price_update_preview_passes_full_gate_with_supported_public_language_re
         angle="signal",
     )
 
-    assert message.endswith(
+    assert (
         "Салон красоты в пару кликов обновляет прайс-лист на 300+ позиций через LocalOS. "
         "Вам может быть интересно также сэкономить время?"
+        in message
     )
+    assert message.endswith("--\nАлександр\nоснователь ЛокалОС")
     assert gate["passed"] is True
     assert gate["score"] == 18
     assert gate["human_language_review"]["enforced_reason_codes"] == []

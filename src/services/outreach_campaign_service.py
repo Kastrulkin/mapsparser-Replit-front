@@ -46,6 +46,58 @@ from services.outreach_founder_led_copy import (
     outreach_email_subject,
     select_approved_localos_case,
 )
+
+
+LOCALOS_EMAIL_SIGNATURE = "--\nАлександр\nоснователь ЛокалОС"
+_LOCALOS_EMAIL_IDENTITY_RE = re.compile(
+    r"(?:^|\n\n)Я Александр Демьянов, основатель (?:LocalOS|ЛокалОС)\.?(?=\n\n|$)"
+)
+
+
+def _format_channel_outreach_message(
+    value: Any,
+    *,
+    channel: str,
+    sender_mode: str,
+) -> str:
+    """Apply the approved channel-specific sender identity contract."""
+
+    raw = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if channel == "email" and sender_mode == SENDER_MODE_LOCALOS:
+        raw = re.sub(
+            r"\n\n--\nАлександр\nоснователь ЛокалОС\s*$",
+            "",
+            raw,
+        )
+    message = format_outreach_message(raw)
+    if channel != "email" or sender_mode != SENDER_MODE_LOCALOS or not message:
+        return message
+    message = re.sub(
+        r"^(Здравствуйте!)\s*Я Александр Демьянов, "
+        r"основатель (?:LocalOS|ЛокалОС)\.?\s*",
+        r"\1\n\n",
+        message,
+    )
+    message = _LOCALOS_EMAIL_IDENTITY_RE.sub("", message)
+    message = message.strip()
+    return f"{message}\n\n{LOCALOS_EMAIL_SIGNATURE}"
+
+
+def _message_content_without_localos_email_signature(value: Any) -> str:
+    message = str(value or "").rstrip()
+    suffix = f"\n\n{LOCALOS_EMAIL_SIGNATURE}"
+    return message[:-len(suffix)] if message.endswith(suffix) else message
+
+
+def _message_for_template_match(value: Any) -> str:
+    message = _message_content_without_localos_email_signature(value)
+    opening = "Здравствуйте!\n\n"
+    if message.startswith(opening):
+        return (
+            "Здравствуйте! Я Александр Демьянов, основатель LocalOS.\n\n"
+            + message[len(opening):]
+        )
+    return message
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_template_service import (
     attach_public_audit_link,
@@ -2393,14 +2445,14 @@ def _quality_gate(
                 and text.rstrip().endswith(final_cta)
             )
     approved_template_two_question_copy = template_allows_two_questions(
-        text,
+        _message_for_template_match(text),
         _text(angle),
         candidate,
     )
     selected_template_key = _text(candidate.get("outreach_template_key"))
     selected_template_copy = bool(
         selected_template_key
-        and template_copy_matches(text, _text(angle), candidate)
+        and template_copy_matches(_message_for_template_match(text), _text(angle), candidate)
     )
     allowed_question_count = 2 if (
         (_text(angle) == "reviews_service" and not selected_template_copy)
@@ -2747,6 +2799,15 @@ def _quality_gate(
         "signal_strength": _signal_is_material(candidate),
         "style_contract": not any(mark in text for mark in ("—", "«", "»")),
         "sequence_policy": not sequence_closing_language,
+        "email_signature_contract": bool(
+            channel != "email"
+            or _text(candidate.get("sender_mode")) != SENDER_MODE_LOCALOS
+            or (
+                "Я Александр Демьянов, основатель LocalOS." not in text
+                and text.endswith(LOCALOS_EMAIL_SIGNATURE)
+                and text.count(LOCALOS_EMAIL_SIGNATURE) == 1
+            )
+        ),
     }
     language_review = review_human_language(
         text,
@@ -2815,6 +2876,8 @@ def _quality_gate(
         blocking_reasons.append("style_contract_violation")
     if not checks["sequence_policy"]:
         blocking_reasons.append("sequence_closing_language")
+    if not checks["email_signature_contract"]:
+        blocking_reasons.append("email_signature_contract_failed")
     if enforced_language_codes:
         blocking_reasons.append("human_language_gate_failed")
     if salon_price_proof_present and not salon_price_proof_scope_valid:
@@ -2830,6 +2893,7 @@ def _quality_gate(
         "signal_too_weak_for_cold_outreach": "DECORATIVE_PERSONALIZATION",
         "style_contract_violation": "STYLE_VIOLATION",
         "sequence_closing_language": "STYLE_VIOLATION",
+        "email_signature_contract_failed": "EMAIL_SIGNATURE_CONTRACT",
         "human_language_gate_failed": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
         "salon_price_proof_scope_mismatch": "PROOF_SCOPE_MISMATCH",
     }
@@ -2849,6 +2913,7 @@ def _quality_gate(
         "signal_strength": "DECORATIVE_PERSONALIZATION",
         "style_contract": "STYLE_VIOLATION",
         "sequence_policy": "STYLE_VIOLATION",
+        "email_signature_contract": "EMAIL_SIGNATURE_CONTRACT",
         "human_language": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
     }
     diagnostic_codes = [key for key, passed in checks.items() if not passed]
@@ -3425,10 +3490,14 @@ def build_preview(
         sequence_key = _text(template_selection.get("key")) or f"angle:{angle}"
         if sequence_key in previous_sequence_keys:
             sequence_issues.append(f"duplicate_sequence_reason:{sequence_key}")
-        message = format_outreach_message(attach_public_audit_link(
-            _message_for_angle(angle, candidate, story, previous_angles),
-            candidate,
-        ))
+        message = _format_channel_outreach_message(
+            attach_public_audit_link(
+                _message_for_angle(angle, candidate, story, previous_angles),
+                candidate,
+            ),
+            channel=requested_channel,
+            sender_mode=_text(context.get("sender_mode")),
+        )
         requested_sender_id = _text(item.get("sender_account_id"))
         if requested_channel in AUTOMATIC_CHANNELS and requested_sender_id:
             sender_option = next(
@@ -3577,6 +3646,11 @@ def build_preview(
                         generated_text,
                         {**primary_candidate, "include_public_audit_link": True},
                     ))
+                generated_text = _format_channel_outreach_message(
+                    generated_text,
+                    channel=_text(touch.get("channel")),
+                    sender_mode=_text(context.get("sender_mode")),
+                )
                 touch["text"] = generated_text
                 if touch["channel"] == "email":
                     touch["subject"] = generated_touch.get("subject") or touch.get("subject")
@@ -3625,7 +3699,11 @@ def build_preview(
             if index not in override_by_index:
                 continue
             override = override_by_index[index]
-            touch["text"] = override["text"]
+            touch["text"] = _format_channel_outreach_message(
+                override["text"],
+                channel=_text(touch.get("channel")),
+                sender_mode=_text(context.get("sender_mode")),
+            )
             if touch["channel"] == "email" and override["subject"]:
                 touch["subject"] = override["subject"]
             touch["generation_source"] = "manual_product_correction"

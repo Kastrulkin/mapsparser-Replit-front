@@ -7,7 +7,11 @@ from services.outreach_template_service import (
     template_allows_two_questions,
     template_copy_matches,
 )
-from services.outreach_campaign_service import _message_for_angle, _quality_gate
+from services.outreach_campaign_service import (
+    _format_channel_outreach_message,
+    _message_for_angle,
+    _quality_gate,
+)
 from services.outreach_playbook import beauty_outreach_guidance
 
 
@@ -251,7 +255,11 @@ def test_all_six_templates_pass_current_quality_gate_on_supported_evidence():
             "outreach_template_version": selection["version"],
             "trust_statement": "Подтверждённый опыт LocalOS",
         }
-        message = _message_for_angle(angle, reviewed_candidate, None, [])
+        message = _format_channel_outreach_message(
+            _message_for_angle(angle, reviewed_candidate, None, []),
+            channel="email",
+            sender_mode="localos",
+        )
         gate = _quality_gate(
             message,
             reviewed_candidate,

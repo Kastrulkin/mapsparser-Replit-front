@@ -11,6 +11,7 @@ from services.outreach_campaign_service import (
     _aggregate_quality_gate,
     _contact_outreach_rank,
     _email_subject,
+    _format_channel_outreach_message,
     _message_for_angle,
     _review_record,
     _quality_gate,
@@ -27,6 +28,29 @@ from services.outreach_campaign_service import (
     _strategy_dimensions,
     resolve_sender_mode,
 )
+
+
+def test_localos_email_moves_sender_identity_to_exact_signature():
+    text = _format_channel_outreach_message(
+        "Здравствуйте! Я Александр Демьянов, основатель LocalOS.\n\nВижу сигнал.\n\nВам может быть это интересно?",
+        channel="email",
+        sender_mode="localos",
+    )
+
+    assert text.startswith("Здравствуйте!\n\nВижу сигнал.")
+    assert "Я Александр Демьянов, основатель LocalOS." not in text
+    assert text.endswith("--\nАлександр\nоснователь ЛокалОС")
+
+
+def test_localos_email_signature_is_idempotent_and_other_channels_are_unchanged():
+    email = "Здравствуйте!\n\nВам интересно?\n\n--\nАлександр\nоснователь ЛокалОС"
+    assert _format_channel_outreach_message(
+        email, channel="email", sender_mode="localos"
+    ) == email
+    telegram = "Здравствуйте! Я Александр Демьянов, основатель LocalOS."
+    assert _format_channel_outreach_message(
+        telegram, channel="telegram", sender_mode="localos"
+    ) == telegram
 from services.outreach_decision_service import (
     build_outreach_decision,
     offer_candidates,
@@ -643,7 +667,11 @@ def test_quality_gate_accepts_singular_unanswered_review_without_printing_number
         "forbidden_claims": [],
     }
 
-    message = _message_for_angle("signal", candidate, story, [])
+    message = _format_channel_outreach_message(
+        _message_for_angle("signal", candidate, story, []),
+        channel="email",
+        sender_mode="localos",
+    )
     gate = _quality_gate(
         message,
         candidate,
@@ -682,7 +710,11 @@ def test_quality_gate_accepts_exact_new_service_and_event_timing_observations():
             "observed_fact": observed_fact,
             "public_audit_url": "https://localos.pro/example-audit",
         })
-        message = _message_for_angle("signal", candidate, story, [])
+        message = _format_channel_outreach_message(
+            _message_for_angle("signal", candidate, story, []),
+            channel="email",
+            sender_mode="localos",
+        )
         gate = _quality_gate(
             message,
             candidate,
