@@ -229,6 +229,12 @@ def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
     result = text
     for source, target in replacements:
         result = result.replace(source, target)
+    result = re.sub(
+        r"\bуверен\w*\s*,?\s+что\b",
+        "проверьте, можно ли",
+        result,
+        flags=re.IGNORECASE,
+    )
     result = result.replace("—", "-").replace("–", "-")
 
     if audit_profile not in {"medical", "hospitality"}:

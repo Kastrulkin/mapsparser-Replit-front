@@ -156,7 +156,9 @@ def test_normalize_public_audit_removes_neuroslop_and_long_dashes_from_all_copy(
     page_json = _sample_page_json()
     page_json["audit"]["health_label"] = "Есть точки роста"
     page_json["audit"]["action_plan"] = {
-        "next_7d": ["Инновационный подход — комплексное решение за 3–5 дней."]
+        "next_7d": [
+            "Инновационный подход — комплексное решение за 3–5 дней. Уверены, что это поможет."
+        ]
     }
 
     normalized = normalize_public_audit_page_json(page_json)
@@ -165,6 +167,7 @@ def test_normalize_public_audit_removes_neuroslop_and_long_dashes_from_all_copy(
     assert "точки роста" not in rendered
     assert "инновационн" not in rendered
     assert "комплексное решение" not in rendered
+    assert "уверены, что" not in rendered
     assert "—" not in rendered
     assert "–" not in rendered
 
