@@ -4526,9 +4526,13 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
     parsed_contacts = snapshot.get("parsed_contacts") or {}
     has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
-    has_description = bool(snapshot.get("description_present")) or _has_meaningful_business_description(
-        lead.get("description"),
-        lead.get("address"),
+    map_source_url = str(snapshot.get("source_url") or lead.get("source_url") or "").lower()
+    description_applicable = "yandex." not in map_source_url
+    has_description = (
+        bool(snapshot.get("description_present"))
+        or _has_meaningful_business_description(lead.get("description"), lead.get("address"))
+        if description_applicable
+        else True
     )
     has_phone = bool(str(lead.get("phone") or parsed_contacts.get("phone") or business.get("phone") or "").strip())
     has_email = bool(str(lead.get("email") or parsed_contacts.get("email") or business.get("email") or "").strip())
@@ -5221,7 +5225,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "news_status": news_status or None,
             "photos_state": photos_state,
             "photos_count": photos_count,
-            "description_present": has_description,
+            "description_applicable": description_applicable,
+            "description_present": has_description if description_applicable else None,
             "booking_offer_count": booking_offer_count if hospitality_mode else 0,
         },
         "revenue_potential": revenue_potential,

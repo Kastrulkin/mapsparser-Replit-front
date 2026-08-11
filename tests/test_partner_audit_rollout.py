@@ -216,6 +216,36 @@ def test_audit_prefers_current_lead_rating_and_reviews_over_stale_snapshot(monke
     assert audit["current_state"]["reviews_count"] == 3
 
 
+def test_yandex_audit_does_not_treat_missing_business_description_as_a_gap(monkeypatch) -> None:
+    monkeypatch.setattr(
+        card_audit,
+        "_resolve_lead_business_snapshot",
+        lambda _lead: {"description_present": False, "news_count": 0},
+    )
+    audit = build_lead_card_preview_snapshot(
+        {
+            "id": "lead-annie",
+            "name": "Анни",
+            "city": "Санкт-Петербург",
+            "category": "Салон красоты",
+            "source_url": "https://yandex.ru/maps/org/anni/123/",
+            "rating": 4.7,
+            "reviews_count": 20,
+            "search_payload_json": {},
+        }
+    )
+
+    assert audit["current_state"]["description_applicable"] is False
+    assert audit["current_state"]["description_present"] is None
+    assert all(item.get("id") != "positioning_description_gap" for item in audit["issue_blocks"])
+    action_text = " ".join(
+        str(text)
+        for values in audit["action_plan"].values()
+        for text in (values if isinstance(values, list) else [])
+    ).lower()
+    assert "добавить описание" not in action_text
+
+
 def test_partner_audit_uses_the_parsed_company_snapshot() -> None:
     lead = {
         "business_id": "organika-tenant",
