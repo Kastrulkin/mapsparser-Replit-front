@@ -169,6 +169,7 @@ def test_news_gap_template_offers_client_acquisition_instead_of_time_saving():
     text = render_outreach_template(selection, candidate)
 
     assert selection["key"] == "map_content_gap_v2"
+    assert "В карточке Анни на Яндекс Картах нет новостей." in text
     assert "актуальные услуги" in text
     assert "привлекать больше клиентов с карт" in text
     assert "сэкономить время" not in text

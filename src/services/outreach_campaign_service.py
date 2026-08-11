@@ -1580,7 +1580,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             ledger.append({
                 "id": "map-content-gap",
                 "kind": "map_gap",
-                "fact": f"В карточке {_text(context.get('lead_name'))} нет новостей.",
+                "fact": f"В карточке {_text(context.get('lead_name'))} на Яндекс Картах нет новостей.",
                 "status": "observed",
                 "source_url": context.get("source_url"),
                 "observed_at": audit_observed_at,
