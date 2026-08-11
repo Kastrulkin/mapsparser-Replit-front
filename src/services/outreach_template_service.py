@@ -247,10 +247,12 @@ def select_outreach_template(
     candidate: dict[str, Any],
     *,
     used_template_keys: list[str] | tuple[str, ...] | None = None,
+    used_pain_keys: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Choose the first fully supported template or return an auditable fallback."""
 
     used = set(used_template_keys or ())
+    used_pains = set(used_pain_keys or ())
     requested = _text(candidate.get("outreach_template_key"))
     ordered = (
         [_TEMPLATE_BY_KEY[requested]]
@@ -261,6 +263,9 @@ def select_outreach_template(
     for template in ordered:
         if template["key"] in used:
             rejected.append({"key": template["key"], "reasons": ["already_used_in_sequence"]})
+            continue
+        if template["pain_key"] in used_pains:
+            rejected.append({"key": template["key"], "reasons": ["pain_already_used_in_sequence"]})
             continue
         matches, reasons = _matches(template["key"], angle, candidate)
         if matches:

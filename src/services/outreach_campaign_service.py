@@ -3382,6 +3382,7 @@ def build_preview(
     previous_angles: list[str] = []
     previous_sequence_keys: list[str] = []
     used_template_keys: list[str] = []
+    used_pain_keys: list[str] = []
     sequence_issues: list[str] = []
     start = start_at or datetime.now(timezone.utc)
     previous_offset: int | None = None
@@ -3475,6 +3476,7 @@ def build_preview(
             angle,
             candidate,
             used_template_keys=used_template_keys,
+            used_pain_keys=used_pain_keys,
         )
         if template_selection.get("status") == "selected":
             candidate = {
@@ -3485,6 +3487,7 @@ def build_preview(
                 "include_public_audit_link": len(touches) == 0,
             }
             used_template_keys.append(_text(template_selection.get("key")))
+            used_pain_keys.append(_text(template_selection.get("pain_key")))
         else:
             candidate = {
                 **candidate,

@@ -238,6 +238,28 @@ def test_templates_do_not_repeat_inside_one_sequence():
     )
 
 
+def test_templates_do_not_repeat_one_owner_pain_inside_sequence():
+    rating = _candidate()
+    services = _candidate(
+        observed_fact="По данным аудита карточки: всего услуг - 30; с ценой - 2.",
+        evidence_kind="map_issue",
+    )
+    first = select_outreach_template("signal", rating)
+    second = select_outreach_template(
+        "content_operations",
+        services,
+        used_template_keys=[first["key"]],
+        used_pain_keys=[first["pain_key"]],
+    )
+
+    assert second["status"] == "individual_copy_required"
+    assert any(
+        item["key"] == "map_service_price_coverage_v3"
+        and "pain_already_used_in_sequence" in item["reasons"]
+        for item in second["rejected"]
+    )
+
+
 def test_selected_template_rejects_copy_without_owner_pain_language():
     candidate = _candidate(
         recipient="Анни",
