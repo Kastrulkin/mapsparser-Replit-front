@@ -28,10 +28,10 @@ def _candidate(**overrides):
     return candidate
 
 
-def test_library_contains_six_versioned_owner_templates():
+def test_library_contains_seven_versioned_owner_templates():
     assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v1"
-    assert len(OUTREACH_TEMPLATES) == 6
-    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 6
+    assert len(OUTREACH_TEMPLATES) == 7
+    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 7
     assert all(item["version"] == 1 for item in OUTREACH_TEMPLATES)
 
 
@@ -128,6 +128,10 @@ def test_all_six_templates_pass_current_quality_gate_on_supported_evidence():
             observed_fact="В карточке нет новостей.",
             evidence_kind="map_gap",
             signal_combo="map_content_gap",
+        )),
+        ("content_operations", _candidate(
+            observed_fact="По данным аудита карточки: всего услуг - 30; с ценой - 2.",
+            evidence_kind="map_issue",
         )),
     )
 

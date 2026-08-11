@@ -3286,24 +3286,28 @@ def build_preview(
         )
         normalized_sequence.append(normalized_item)
     selected_sequence = normalized_sequence
-    if context.get("workstream_type") == "localos_sales" and (
-        primary_candidate.get("recipient_segment")
-        or _text(primary_candidate.get("signal_combo"))
-    ):
-        primary_candidate["outreach_playbook"] = pain_playbook or load_approved_pain_library(cursor)
-        primary_candidate["language_support"] = language_support_for_candidate(
-            cursor,
-            primary_candidate,
-            primary_candidate["outreach_playbook"],
-        )
-        primary_candidate["pain_hypothesis"] = primary_candidate.get("problem_hypothesis")
-        primary_candidate["pain_support"] = (
-            primary_candidate["language_support"].get("pain_support")
-            or primary_candidate["language_support"]
-        )
-        primary_candidate["pain_reference_ids"] = list(
-            primary_candidate["language_support"].get("pain_reference_ids") or []
-        )
+    if context.get("workstream_type") == "localos_sales":
+        approved_playbook = pain_playbook or load_approved_pain_library(cursor)
+        for supported_candidate in candidates:
+            if not (
+                supported_candidate.get("recipient_segment")
+                or _text(supported_candidate.get("signal_combo"))
+            ):
+                continue
+            supported_candidate["outreach_playbook"] = approved_playbook
+            supported_candidate["language_support"] = language_support_for_candidate(
+                cursor,
+                supported_candidate,
+                approved_playbook,
+            )
+            supported_candidate["pain_hypothesis"] = supported_candidate.get("problem_hypothesis")
+            supported_candidate["pain_support"] = (
+                supported_candidate["language_support"].get("pain_support")
+                or supported_candidate["language_support"]
+            )
+            supported_candidate["pain_reference_ids"] = list(
+                supported_candidate["language_support"].get("pain_reference_ids") or []
+            )
     override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()
@@ -3318,10 +3322,16 @@ def build_preview(
             sequence_issues.append(f"duplicate_angle:{angle}")
         if previous_offset is not None and day_offset <= previous_offset:
             sequence_issues.append(f"unsafe_interval:{previous_offset}:{day_offset}")
-        # A sequence changes the angle, not the underlying public fact. Introducing a
-        # new signal in a follow-up (especially a negative review) requires a separate
-        # explicit personalization selection and a new approval version.
-        candidate = primary_candidate
+        requested_candidate_id = _text(item.get("personalization_candidate_id"))
+        candidate = next(
+            (
+                personalization_candidate
+                for personalization_candidate in candidates
+                if requested_candidate_id
+                and _text(personalization_candidate.get("id")) == requested_candidate_id
+            ),
+            primary_candidate,
+        )
         if crm_evidence and angle in {"crm_growth", "crm_content"}:
             candidate = {
                 **primary_candidate,

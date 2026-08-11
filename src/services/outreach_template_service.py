@@ -68,6 +68,15 @@ OUTREACH_TEMPLATES = (
         "required_evidence": ("current_map_content_gap",),
         "question_policy": "single_cta",
     },
+    {
+        "key": "map_service_price_coverage_v1",
+        "label": "Услуги и цены в карточке",
+        "version": 1,
+        "angles": ("content_operations", "audit_step"),
+        "pain_key": "marketing_and_clients",
+        "required_evidence": ("current_map_service_price_coverage",),
+        "question_policy": "single_cta",
+    },
 )
 
 _TEMPLATE_BY_KEY = {item["key"]: item for item in OUTREACH_TEMPLATES}
@@ -185,6 +194,12 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             marker in fact for marker in ("нет новостей", "новости отсутствуют", "карточка не заполнена")
         ):
             reasons.append("map_content_gap_required")
+    elif template_key == "map_service_price_coverage_v1":
+        fact = _text(candidate.get("observed_fact")).lower()
+        if _text(candidate.get("evidence_kind")).lower() not in {"map_issue", "map_services"} or not (
+            "услуг" in fact and "цен" in fact
+        ):
+            reasons.append("map_service_price_coverage_required")
     return not reasons, reasons
 
 
@@ -309,6 +324,16 @@ def render_outreach_template(
             "Если новости и услуги обновляются на разных площадках вручную, один и тот же материал приходится готовить несколько раз.\n\n"
             "LocalOS подготовит отдельные черновики для Telegram, VK и Яндекс Карт. Публикация останется после вашей проверки.\n\n"
             "Вы бы хотели сэкономить время на постах?"
+        )
+    if key == "map_service_price_coverage_v1":
+        observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
+        return (
+            f"Здравствуйте! Я {identity}.\n\n"
+            f"В карточке {recipient} {observation[0].lower() + observation[1:]}\n\n"
+            "Когда у части услуг нет цены, клиенту сложнее сравнить варианты и решить, записываться ли.\n\n"
+            "LocalOS сверит услуги и цены в карточке и подготовит список точечных изменений. "
+            "Вы сами выберете, что обновить.\n\n"
+            "Показать, что можно поправить в карточке?"
         )
     return None
 
