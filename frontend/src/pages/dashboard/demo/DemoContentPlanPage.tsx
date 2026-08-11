@@ -30,18 +30,35 @@ const copy: Record<Language, Copy> = {
 type Stage = 'intro' | 'setup' | 'preview' | 'saved' | 'review';
 const STORAGE_KEY = 'localos:demo-content-plan:v1';
 
+function isStage(value: unknown): value is Stage {
+  return value === 'intro' || value === 'setup' || value === 'preview' || value === 'saved' || value === 'review';
+}
+
+function readStoredPlan(defaultDraft: string) {
+  const saved = window.sessionStorage.getItem(STORAGE_KEY);
+  if (isStage(saved)) return { stage: saved, draft: defaultDraft };
+  if (!saved) return { stage: 'intro' satisfies Stage, draft: defaultDraft };
+  try {
+    const parsed = JSON.parse(saved);
+    if (parsed && isStage(parsed.stage) && typeof parsed.draft === 'string') {
+      return { stage: parsed.stage, draft: parsed.draft };
+    }
+  } catch {
+    // Ignore stale or malformed demo-session state and start with safe defaults.
+  }
+  return { stage: 'intro' satisfies Stage, draft: defaultDraft };
+}
+
 export function DemoContentPlanPage() {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const t = copy[language];
-  const [stage, setStage] = useState<Stage>(() => {
-    const saved = window.sessionStorage.getItem(STORAGE_KEY);
-    return saved === 'setup' || saved === 'preview' || saved === 'saved' || saved === 'review' ? saved : 'intro';
-  });
-  const [draft, setDraft] = useState(t.draftValue);
+  const [stage, setStage] = useState<Stage>(() => readStoredPlan(t.draftValue).stage);
+  const [draft, setDraft] = useState(() => readStoredPlan(t.draftValue).draft);
 
-  useEffect(() => { window.sessionStorage.setItem(STORAGE_KEY, stage); }, [stage]);
-  useEffect(() => { setDraft(t.draftValue); }, [t.draftValue]);
+  useEffect(() => {
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, stage, draft }));
+  }, [draft, stage]);
   useEffect(() => {
     const requestedStage = searchParams.get('demo_stage');
     if (requestedStage === 'setup' || requestedStage === 'preview' || requestedStage === 'saved' || requestedStage === 'review') setStage(requestedStage);

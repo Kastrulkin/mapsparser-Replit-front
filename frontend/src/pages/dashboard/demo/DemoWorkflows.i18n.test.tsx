@@ -28,13 +28,21 @@ describe('safe multilingual demo workflows', () => {
 
   it('creates a content-plan draft entirely in session storage', async () => {
     window.localStorage.setItem('language', 'en');
-    render(<MemoryRouter><LanguageProvider><DemoContentPlanPage /></LanguageProvider></MemoryRouter>);
+    const contentPlan = render(<MemoryRouter><LanguageProvider><DemoContentPlanPage /></LanguageProvider></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'Create plan' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show preview plan' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Edited demo draft' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save to plan' }));
     expect(screen.getByText('Edited demo draft')).toBeInTheDocument();
-    expect(window.sessionStorage.getItem('localos:demo-content-plan:v1')).toBe('saved');
+    expect(JSON.parse(window.sessionStorage.getItem('localos:demo-content-plan:v1') || '{}')).toMatchObject({
+      version: 1,
+      stage: 'saved',
+      draft: 'Edited demo draft',
+    });
+
+    contentPlan.unmount();
+    render(<MemoryRouter><LanguageProvider><DemoContentPlanPage /></LanguageProvider></MemoryRouter>);
+    expect(await screen.findByText('Edited demo draft')).toBeInTheDocument();
   });
 
   it('runs an agent example and exposes the human approval boundary', async () => {
