@@ -2,6 +2,7 @@ from services.outreach_template_service import (
     OUTREACH_TEMPLATES,
     TEMPLATE_LIBRARY_VERSION,
     render_outreach_template,
+    attach_public_audit_link,
     select_outreach_template,
     template_allows_two_questions,
     template_copy_matches,
@@ -46,6 +47,26 @@ def test_low_rating_template_is_selected_and_uses_approved_owner_copy():
     assert "от 1200 рублей в месяц" in text
     assert text.count("?") == 1
     assert "—" not in text
+
+
+def test_public_audit_link_is_added_only_for_explicit_first_touch():
+    candidate = _candidate(
+        public_audit_url="https://localos.pro/padrina-studio",
+        include_public_audit_link=True,
+    )
+    selection = select_outreach_template("signal", candidate)
+    text = render_outreach_template(selection, candidate)
+
+    assert "Аудит карточки: https://localos.pro/padrina-studio" in text
+    assert text.endswith("Вам может быть это интересно?")
+    assert "Аудит карточки:" not in attach_public_audit_link(
+        "Здравствуйте!\n\nПоказать?",
+        {**candidate, "include_public_audit_link": False},
+    )
+    assert "Аудит карточки:" not in attach_public_audit_link(
+        "Здравствуйте!\n\nПоказать?",
+        {**candidate, "public_audit_url": "https://example.com/audit"},
+    )
 
 
 def test_crm_template_requires_a_confirmed_provider_and_current_source():

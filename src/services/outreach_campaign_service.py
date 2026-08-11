@@ -48,6 +48,7 @@ from services.outreach_founder_led_copy import (
 )
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_template_service import (
+    attach_public_audit_link,
     select_outreach_template,
     template_allows_two_questions,
     template_copy_matches,
@@ -3361,6 +3362,7 @@ def build_preview(
                 "outreach_template_key": template_selection.get("key"),
                 "outreach_template_version": template_selection.get("version"),
                 "outreach_template_disabled": False,
+                "include_public_audit_link": len(touches) == 0,
             }
             used_template_keys.append(_text(template_selection.get("key")))
         else:
@@ -3369,10 +3371,12 @@ def build_preview(
                 "outreach_template_key": None,
                 "outreach_template_version": None,
                 "outreach_template_disabled": True,
+                "include_public_audit_link": len(touches) == 0,
             }
-        message = format_outreach_message(
-            _message_for_angle(angle, candidate, story, previous_angles)
-        )
+        message = format_outreach_message(attach_public_audit_link(
+            _message_for_angle(angle, candidate, story, previous_angles),
+            candidate,
+        ))
         requested_sender_id = _text(item.get("sender_account_id"))
         if requested_channel in AUTOMATIC_CHANNELS and requested_sender_id:
             sender_option = next(
@@ -3514,7 +3518,13 @@ def build_preview(
                 index = int(touch["sequence_index"])
                 generated_touch = generated_by_index[index]
                 semantic_review = review_by_index[index]
-                touch["text"] = format_outreach_message(generated_touch["text"])
+                generated_text = format_outreach_message(generated_touch["text"])
+                if index == 0:
+                    generated_text = format_outreach_message(attach_public_audit_link(
+                        generated_text,
+                        {**primary_candidate, "include_public_audit_link": True},
+                    ))
+                touch["text"] = generated_text
                 if touch["channel"] == "email":
                     touch["subject"] = generated_touch.get("subject") or touch.get("subject")
                 touch["problem_hypothesis"] = generated_touch.get("problem_hypothesis")
