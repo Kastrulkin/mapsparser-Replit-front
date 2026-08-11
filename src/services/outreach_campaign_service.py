@@ -3326,6 +3326,7 @@ def build_preview(
     usable = [channel for channel, item in availability.items() if item["status"] in {"ready", "manual"}]
     touches = []
     previous_angles: list[str] = []
+    previous_sequence_keys: list[str] = []
     used_template_keys: list[str] = []
     sequence_issues: list[str] = []
     start = start_at or datetime.now(timezone.utc)
@@ -3386,8 +3387,6 @@ def build_preview(
         availability_item = dict(availability[requested_channel])
         angle = _text(item.get("angle") or "proof")
         day_offset = max(0, int(item.get("day_offset") or 0))
-        if angle in previous_angles:
-            sequence_issues.append(f"duplicate_angle:{angle}")
         if previous_offset is not None and day_offset <= previous_offset:
             sequence_issues.append(f"unsafe_interval:{previous_offset}:{day_offset}")
         requested_candidate_id = _text(item.get("personalization_candidate_id"))
@@ -3440,6 +3439,9 @@ def build_preview(
                 "outreach_template_disabled": True,
                 "include_public_audit_link": len(touches) == 0,
             }
+        sequence_key = _text(template_selection.get("key")) or f"angle:{angle}"
+        if sequence_key in previous_sequence_keys:
+            sequence_issues.append(f"duplicate_sequence_reason:{sequence_key}")
         message = format_outreach_message(attach_public_audit_link(
             _message_for_angle(angle, candidate, story, previous_angles),
             candidate,
@@ -3519,6 +3521,7 @@ def build_preview(
             "template_version": template_selection.get("version"),
         })
         previous_angles.append(angle)
+        previous_sequence_keys.append(sequence_key)
         previous_offset = day_offset
     ai_enabled = (
         ai_personalization_enabled() if generate_ai is None else bool(generate_ai)
