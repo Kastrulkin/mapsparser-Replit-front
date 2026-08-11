@@ -120,6 +120,10 @@ export default function ReviewReplyAssistant({
   ];
 
   const loadExamples = async () => {
+    if (user?.demo_mode) {
+      setExamples([]);
+      return;
+    }
     try {
       const data = await newAuth.makeRequest('/review-examples');
       if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));

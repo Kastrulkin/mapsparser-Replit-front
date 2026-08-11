@@ -83,6 +83,10 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const loadNews = async () => {
     // Сбрасываем страницу при загрузке новых новостей
     setCurrentPage(1);
+    if (user?.demo_mode) {
+      setNews(getDemoShowcaseData(interfaceLanguage).news);
+      return;
+    }
     try {
       const token = localStorage.getItem('auth_token');
       const params = new URLSearchParams();
@@ -100,6 +104,10 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
 
   useEffect(() => { loadNews(); }, [interfaceLanguage, user?.demo_mode]);
   useEffect(() => {
+    if (user?.demo_mode) {
+      setAbModeAllowed(false);
+      return;
+    }
     (async () => {
       try {
         const token = localStorage.getItem('auth_token');
@@ -116,8 +124,12 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         setAbModeAllowed(false);
       }
     })();
-  }, []);
+  }, [user?.demo_mode]);
   useEffect(() => {
+    if (user?.demo_mode) {
+      setExamples([]);
+      return;
+    }
     (async () => {
       try {
         const token = localStorage.getItem('auth_token');
@@ -126,7 +138,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
       } catch { }
     })();
-  }, []);
+  }, [user?.demo_mode]);
 
   // Загрузка транзакций
   const loadTransactions = async () => {

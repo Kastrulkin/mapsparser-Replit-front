@@ -52,5 +52,6 @@ describe('ReviewReplyAssistant localization', () => {
     expect(await screen.findByText('Κριτική επίδειξης για την περιποίηση, την προσοχή του ειδικού και την εύκολη κράτηση.')).toBeInTheDocument();
     expect(screen.queryByText(/DEMO Яндекс Карты/)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    expect(vi.mocked(newAuth.makeRequest).mock.calls.some(([url]) => url === '/review-examples')).toBe(false);
   });
 });

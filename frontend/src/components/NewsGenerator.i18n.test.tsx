@@ -34,5 +34,6 @@ describe('NewsGenerator localization', () => {
     expect(await screen.findByText('İçerik planı')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
     expect(container.textContent).not.toContain('Source Material');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

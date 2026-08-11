@@ -1079,6 +1079,10 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const loadLearningMetrics = async () => {
+    if (user?.demo_mode) {
+      setLearningMetrics([]);
+      return;
+    }
     try {
       const data = await loadPartnershipLearningMetrics();
       setLearningMetrics(Array.isArray(data.items) ? data.items : []);
