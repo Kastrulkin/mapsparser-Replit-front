@@ -94,7 +94,6 @@ _BEAUTY_MEDICAL_MARKERS = (
     "студия красоты",
     "эпиляц",
 )
-_MEDICAL_MARKERS = ("врач", "клиник", "медиц", "косметолог")
 
 
 def _text(value: Any) -> str:
@@ -111,11 +110,6 @@ def _identity_text(candidate: dict[str, Any]) -> str:
 def _is_beauty_or_medical(candidate: dict[str, Any]) -> bool:
     identity = _identity_text(candidate)
     return any(marker in identity for marker in _BEAUTY_MEDICAL_MARKERS)
-
-
-def _is_medical(candidate: dict[str, Any]) -> bool:
-    identity = _identity_text(candidate)
-    return any(marker in identity for marker in _MEDICAL_MARKERS)
 
 
 def _is_current_and_sourced(candidate: dict[str, Any]) -> bool:
@@ -290,12 +284,11 @@ def render_outreach_template(
             "Вам было бы интересно сэкономить время на ведении соцсетей?"
         )
     if key == "average_ticket_service_matrix_v1":
-        medical = " Медицинскую совместимость подтверждает врач." if _is_medical(candidate) else ""
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             "Вам знакома проблема: услуг много, а средний чек всё равно маленький?\n\n"
             "LocalOS по вашему прайсу соберёт матрицу услуг и допродаж, подготовит подсказки для администратора "
-            f"и поможет отследить результат.{medical}\n\n"
+            "и поможет отследить результат.\n\n"
             "Вам было бы интересно увеличить средний чек?"
         )
     if key == "local_partnership_acquisition_v1":

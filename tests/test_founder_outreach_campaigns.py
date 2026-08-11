@@ -413,7 +413,7 @@ def test_fgf_average_ticket_editorial_contract_preserves_owner_phrases_and_one_f
     assert "Подскажите, прорабатывали ли другие способы увеличения среднего чека?" in message
     assert message.endswith("Вам было бы интересно увеличить средний чек?")
     assert "по подтверждённому прайсу соберёт матрицу услуг и допов" in message
-    assert "Медицинскую совместимость подтверждает врач." in message
+    assert "Медицинскую совместимость" not in message
     assert "провер" not in message.lower()
     assert message.count("?") == 2
     assert gate["checks"]["single_cta"] is True
