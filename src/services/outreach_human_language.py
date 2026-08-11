@@ -287,6 +287,18 @@ def review_human_language(
         normalized,
         publication_capabilities,
     )
+    named_online_channels = sum(
+        bool(pattern.search(normalized))
+        for pattern in (
+            re.compile(r"\btelegram\b", re.IGNORECASE),
+            re.compile(r"(?:^|[^a-zа-яё0-9])vk(?:[^a-zа-яё0-9]|$)", re.IGNORECASE),
+            re.compile(r"яндекс\w*\s+карт\w*", re.IGNORECASE),
+        )
+    )
+    cta_scope_aligned = not (
+        named_online_channels >= 2
+        and bool(re.search(r"клиент\w*\s+с\s+карт\w*\s*\?\s*$", normalized))
+    )
 
     checks = {
         "cliche_free": not matched_phrases,
@@ -297,6 +309,7 @@ def review_human_language(
         "language_support": support_status in {"supported", "not_checked", "unavailable"}
         or conditional_operator_support,
         "publication_claim_supported": publication_claim_supported,
+        "cta_scope_aligned": cta_scope_aligned,
     }
     reason_codes: list[str] = []
     if matched_phrases:
@@ -320,6 +333,8 @@ def review_human_language(
         reason_codes.append("PROOF_WORDING_CHANGED")
     if not publication_claim_supported:
         reason_codes.append("UNSUPPORTED_PUBLICATION_CLAIM")
+    if not cta_scope_aligned:
+        reason_codes.append("CTA_SCOPE_MISMATCH")
 
     return {
         "passed": not reason_codes,

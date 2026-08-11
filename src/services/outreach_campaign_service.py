@@ -2781,6 +2781,7 @@ def _quality_gate(
             "PAIN_SUPPORT_INSUFFICIENT",
             "PROOF_WORDING_CHANGED",
             "UNSUPPORTED_PUBLICATION_CLAIM",
+            "CTA_SCOPE_MISMATCH",
         }
         or (
             _text(candidate.get("sender_mode")) == "localos"

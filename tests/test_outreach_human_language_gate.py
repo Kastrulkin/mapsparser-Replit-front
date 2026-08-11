@@ -43,6 +43,21 @@ def test_report_style_map_signal_fails_human_language_gate():
     assert "SLOP_CLICHE" in result["reason_codes"]
 
 
+def test_multi_channel_solution_rejects_maps_only_cta():
+    old = review_human_language(
+        "LocalOS подготовит черновики для Telegram, VK и Яндекс Карт. "
+        "Вам было бы интересно привлекать больше клиентов с карт?"
+    )
+    corrected = review_human_language(
+        "LocalOS подготовит черновики для Telegram, VK и Яндекс Карт. "
+        "Вам было бы интересно привлекать больше клиентов онлайн?"
+    )
+
+    assert old["passed"] is False
+    assert "CTA_SCOPE_MISMATCH" in old["reason_codes"]
+    assert corrected["checks"]["cta_scope_aligned"] is True
+
+
 PRICE_UPDATE_MESSAGE = (
     "Здравствуйте! Я Александр Демьянов из LocalOS.\n\n"
     "Увидел, что вы обновили цены и прайс-лист. Если после такого обновления "
