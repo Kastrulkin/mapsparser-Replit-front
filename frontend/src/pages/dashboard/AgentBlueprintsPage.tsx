@@ -21,6 +21,7 @@ import {
 import { isAgentWorkRun, isBusinessBlockerApproval, needsScenarioRebuildForSourceResult, needsGoogleSheetsSourceSetup, needsGoogleAccessReconnect, hasFreshGoogleSheetsAccessAfterResult } from './agents/results';
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
 import { AgentBlueprintsView } from './agents/view';
+import { DemoAgentsPage } from './demo/DemoAgentsPage';
 
 type AgentRunResumeState = {
   runId: string;
@@ -86,7 +87,7 @@ const clearAgentRunResume = (businessId: string, expectedRunId = '') => {
   }
 };
 
-export const AgentBlueprintsPage = () => {
+const AgentBlueprintsWorkspace = () => {
   const location = useLocation();
   const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
@@ -2241,4 +2242,9 @@ export const AgentBlueprintsPage = () => {
       }}
     />
   );
+};
+
+export const AgentBlueprintsPage = () => {
+  const { demoMode } = useOutletContext<DashboardContext>();
+  return demoMode ? <DemoAgentsPage /> : <AgentBlueprintsWorkspace />;
 };

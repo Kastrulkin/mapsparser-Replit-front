@@ -39,6 +39,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { fillContentCalendarTemplate, getContentCalendarCopy, getDemoContentCalendarThemes, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { localizeDemoBusinessName } from './operatorPageCopy';
+import { DemoContentPlanPage } from './demo/DemoContentPlanPage';
 
 type DashboardBusiness = {
   id: string;
@@ -706,7 +707,7 @@ const DraftGenerationFeedback = ({ ready }: { ready: boolean }) => {
   return <motion.div aria-live="polite" initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={draftFeedbackSpring} className={`rounded-2xl px-4 py-3 shadow-[0_0_0_1px_rgba(148,163,184,0.16),0_12px_32px_rgba(15,23,42,0.06)] transition-[background-color,box-shadow] ${ready ? 'bg-emerald-50' : 'bg-orange-50'}`}><div className="flex items-center gap-3"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ready ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}><AnimatePresence initial={false} mode="popLayout">{ready ? <motion.span key="done" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={draftFeedbackSpring}><Check className="h-5 w-5" /></motion.span> : <motion.span key="work" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={draftFeedbackSpring}><Sparkles className="h-5 w-5" /></motion.span>}</AnimatePresence></span><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-slate-950">{ready ? 'Готово — можно редактировать' : 'LocalOS готовит черновик'}</div><div className="mt-1 text-xs text-slate-600">{stage}</div></div><b className={`tabular-nums text-xs ${ready ? 'text-emerald-700' : 'text-orange-700'}`}>{progress}%</b></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/80"><motion.div className={`h-full rounded-full ${ready ? 'bg-emerald-500' : 'bg-orange-500'}`} animate={{ width: `${progress}%` }} transition={draftFeedbackSpring} /></div></motion.div>;
 };
 
-export function ContentPage() {
+function ContentWorkspace() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useLanguage();
@@ -3405,6 +3406,11 @@ export function ContentPage() {
       ) : null}
     </div>
   );
+}
+
+export function ContentPage() {
+  const { demoMode } = useOutletContext<DashboardOutletContext>();
+  return demoMode ? <DemoContentPlanPage /> : <ContentWorkspace />;
 }
 
 function AuthenticatedImage({ src, alt, className }: { src: string; alt: string; className?: string }) {

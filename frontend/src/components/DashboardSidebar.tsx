@@ -26,6 +26,7 @@ import { DESIGN_TOKENS } from '../lib/design-tokens';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
+import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
@@ -44,17 +45,16 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const { t, language } = useLanguage();
   const demoCopy = getDemoWorkspaceCopy(language).sidebar;
   const navigationCopy = getDashboardNavigationCopy(language);
+  const shellCopy = getDashboardShellCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
     {
       id: 'today',
-      label: language === 'ru' ? 'Сегодня' : 'Today',
+      label: shellCopy.today,
       icon: Calendar,
       path: '/dashboard/today',
-      tooltip: language === 'ru'
-        ? 'Подтверждённые изменения, текущая работа LocalOS и один следующий шаг.'
-        : 'Confirmed changes, current LocalOS work, and one next step.',
+      tooltip: shellCopy.todayHint,
     },
     {
       id: 'operator',
@@ -68,18 +68,14 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: t.dashboard.sidebar.profile,
       icon: User,
       path: '/dashboard/profile',
-      tooltip: language === 'ru'
-        ? 'Заполните данные бизнеса, добавьте ссылку на карты и запустите первый аудит.'
-        : 'Fill in business details, add the map link, and start the first audit.',
+      tooltip: shellCopy.profileHint,
     },
     {
       id: 'card',
       label: t.dashboard.sidebar.card,
       icon: FileText,
       path: '/dashboard/card',
-      tooltip: language === 'ru'
-        ? 'Управляйте данными карточки на картах, услугами, отзывами и запуском обновления.'
-        : 'Manage listing data, services, reviews, and start data refresh.',
+      tooltip: shellCopy.cardHint,
     },
     {
       id: 'content',
@@ -100,27 +96,21 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: t.dashboard.sidebar.progress,
       icon: TrendingUp,
       path: '/dashboard/progress',
-      tooltip: language === 'ru'
-        ? 'Показывает, что уже сделано, что требует внимания и какой шаг важнее всего сейчас.'
-        : 'Shows what is done, what needs attention, and the most important next step.',
+      tooltip: shellCopy.progressHint,
     },
     {
       id: 'finance',
       label: t.dashboard.sidebar.finance,
       icon: DollarSign,
       path: '/dashboard/finance',
-      tooltip: language === 'ru'
-        ? 'Финансовые показатели бизнеса и рабочая экономика.'
-        : 'Business financial metrics and operating economics.',
+      tooltip: shellCopy.financeHint,
     },
     {
       id: 'chats',
       label: t.dashboard.sidebar.chats,
       icon: MessageSquare,
       path: '/dashboard/chats',
-      tooltip: language === 'ru'
-        ? 'Здесь собраны клиентские диалоги и ответы по каналам связи.'
-        : 'This section contains customer conversations and replies across channels.',
+      tooltip: shellCopy.chatsHint,
     },
     {
       id: 'partnerships',
@@ -155,9 +145,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: t.dashboard.sidebar.settings,
       icon: Settings,
       path: '/dashboard/settings',
-      tooltip: language === 'ru'
-        ? 'Общие настройки аккаунта, интеграций и рабочих режимов.'
-        : 'General account, integration, and workflow settings.',
+      tooltip: shellCopy.settingsHint,
     },
   ];
 

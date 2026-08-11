@@ -37,6 +37,7 @@ import {
   localizedGrowthText,
   localizedProgressBusinessName,
   progressPageCopyForLanguage,
+  progressRuntimeCopyForLanguage,
   type ProgressPageCopy,
 } from './progressPageCopy';
 
@@ -278,6 +279,7 @@ export const ProgressPage = () => {
   const { currentBusinessId, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = progressPageCopyForLanguage(language);
+  const runtime = progressRuntimeCopyForLanguage(language);
   const [overviewData, setOverviewData] = useState<GrowthOverview | null>(null);
   const [overviewBusinessId, setOverviewBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -316,12 +318,24 @@ export const ProgressPage = () => {
       if (!data?.summary || !Array.isArray(data.areas)) {
         throw new Error(copy.loadErrorTitle);
       }
-      setOverviewData(data);
+      const normalizedData: GrowthOverview = {
+        ...data,
+        areas: data.areas.map((area) => ({
+          ...area,
+          milestones: Array.isArray(area.milestones) ? area.milestones : [],
+          metrics: Array.isArray(area.metrics) ? area.metrics : [],
+        })),
+        recent_achievements: Array.isArray(data.recent_achievements) ? data.recent_achievements : [],
+        problem_locations: Array.isArray(data.problem_locations) ? data.problem_locations : [],
+        analytics_modules: Array.isArray(data.analytics_modules) ? data.analytics_modules : [],
+        scope: data.scope ? { ...data.scope, locations: Array.isArray(data.scope.locations) ? data.scope.locations : [] } : data.scope,
+      };
+      setOverviewData(normalizedData);
       setOverviewBusinessId(scopeId);
-      const focusArea = data.areas.find((area) => (area.action.cta_url || area.action.screen) === (data.focus_action?.cta_url || data.focus_action?.screen));
-      setExpandedArea((current) => current ?? focusArea?.key ?? data.areas[0]?.key ?? null);
+      const focusArea = normalizedData.areas.find((area) => (area.action?.cta_url || area.action?.screen) === (normalizedData.focus_action?.cta_url || normalizedData.focus_action?.screen));
+      setExpandedArea((current) => current ?? focusArea?.key ?? normalizedData.areas[0]?.key ?? null);
 
-      const locations = data.scope?.locations || [];
+      const locations = normalizedData.scope?.locations || [];
       setSelectedAuditBusinessId((current) => {
         if (locations.some((location) => location.id === current)) return current;
         return locations[0]?.id || currentBusinessId;
@@ -460,7 +474,7 @@ export const ProgressPage = () => {
       objectId: overview?.growth_loop?.mission_id || currentMission.cta_url || currentMission.screen,
     });
     if (currentMission.target_scope?.kind === 'business' && currentMission.target_scope.id) {
-      const targetName = overview.location_breakdown?.find((location) => location.business_id === currentMission.target_scope?.id)?.business_name || 'Точка сети';
+      const targetName = overview.location_breakdown?.find((location) => location.business_id === currentMission.target_scope?.id)?.business_name || runtime.networkLocation;
       onBusinessChange?.(currentMission.target_scope.id);
       onControlScopeChange?.({ kind: 'business', id: currentMission.target_scope.id, name: targetName });
     }
@@ -468,7 +482,7 @@ export const ProgressPage = () => {
   };
   const openAreaAction = (action: GrowthAction) => {
     if (action.target_scope?.kind === 'business' && action.target_scope.id) {
-      const targetName = overview.location_breakdown?.find((location) => location.business_id === action.target_scope?.id)?.business_name || 'Точка сети';
+      const targetName = overview.location_breakdown?.find((location) => location.business_id === action.target_scope?.id)?.business_name || runtime.networkLocation;
       onBusinessChange?.(action.target_scope.id);
       onControlScopeChange?.({ kind: 'business', id: action.target_scope.id, name: targetName });
     }
@@ -537,13 +551,13 @@ export const ProgressPage = () => {
 
       <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
 
-      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">Аналитика: {overview.analytics_level?.label || 'в процессе'}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">Следующий уровень: {overview.analytics_level.next_unlock}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">Ритм: {overview.rhythm.label}</span> : null}</div> : null}
+      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">{runtime.analytics}: {localizedGrowthText(language, overview.analytics_level?.label) || runtime.inProgress}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{runtime.nextLevel}: {localizedGrowthText(language, overview.analytics_level.next_unlock)}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">{runtime.rhythm}: {localizedGrowthText(language, overview.rhythm.label)}</span> : null}</div> : null}
 
-      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{module.label}: {module.status === 'ready' ? 'готово' : module.status === 'available' ? 'обновить' : 'нужны данные'}</span>)}</div> : null}
+      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{localizedGrowthText(language, module.label)}: {module.status === 'ready' ? runtime.ready : module.status === 'available' ? runtime.update : runtime.needsData}</span>)}</div> : null}
 
       {scopeKind === 'network' && overview.network_summary ? (
         <section className="rounded-2xl bg-slate-50 px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> точек в сети</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> требуют внимания</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> без открытых проблем</span></div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> {runtime.networkLocations}</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> {runtime.attention}</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> {runtime.healthy}</span></div>
           {overview.problem_locations?.length ? <div className="mt-3 flex flex-wrap gap-2">{overview.problem_locations.slice(0, 6).map((location) => <Button key={location.business_id} type="button" variant="outline" className="min-h-11" onClick={() => openProblemLocation(location)}>{location.business_name}<ArrowRight className="ml-2 h-4 w-4" /></Button>)}</div> : null}
         </section>
       ) : null}

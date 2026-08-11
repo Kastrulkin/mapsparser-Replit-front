@@ -441,10 +441,11 @@ const automationCopy: Record<Language, AutomationTourCopy> = {
 export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy => {
   const base = copyByLanguage[language];
   const automation = automationCopy[language];
+  const contentPlan = base.steps['content-calendar'];
   return {
     ...base,
     chapters: { ...base.chapters, automation: automation.chapter },
-    steps: { ...base.steps, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control },
+    steps: { ...base.steps, 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.control, 'agents-review': automation.control, 'agents-history': automation.today },
   };
 };
 

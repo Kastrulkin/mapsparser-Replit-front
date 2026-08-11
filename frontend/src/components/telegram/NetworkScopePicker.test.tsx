@@ -25,7 +25,7 @@ describe('NetworkScopePicker', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /Саммари сети/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Сводка сети/ })).toBeInTheDocument();
     expect(screen.getByText('Невский, 10')).toBeInTheDocument();
     expect(screen.getByText('Лесная, 4')).toBeInTheDocument();
 

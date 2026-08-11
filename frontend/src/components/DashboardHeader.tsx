@@ -10,6 +10,8 @@ import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
 import { LogOut, LogIn, Settings, Bell, Search, UserCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { ControlScope } from './DashboardLayout';
+import { useLanguage } from '../i18n/LanguageContext';
+import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
 import { DESIGN_TOKENS } from '../lib/design-tokens';
 import {
   AlertDialog,
@@ -44,6 +46,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onControlScopeChange,
 }) => {
   const { currency, setCurrency } = useCurrency();
+  const { language } = useLanguage();
+  const shellCopy = getDashboardShellCopy(language);
   const navigate = useNavigate();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -121,15 +125,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           {currentBusiness?.network_id && onControlScopeChange ? (
             <Select value={`${controlScope?.kind || 'business'}:${controlScope?.id || currentBusinessId || ''}`} onValueChange={(value) => {
               if (value === `network:${currentBusiness.network_id}`) {
-                onControlScopeChange({ kind: 'network', id: currentBusiness.network_id, name: currentBusiness.network_name || 'Сеть' });
+                onControlScopeChange({ kind: 'network', id: currentBusiness.network_id, name: currentBusiness.network_name || shellCopy.network });
                 return;
               }
-              onControlScopeChange({ kind: 'business', id: currentBusinessId || currentBusiness.id, name: currentBusiness.name || 'Бизнес' });
+              onControlScopeChange({ kind: 'business', id: currentBusinessId || currentBusiness.id, name: currentBusiness.name || shellCopy.business });
             }}>
               <SelectTrigger className="h-11 min-w-[144px] bg-white text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={`business:${currentBusinessId || currentBusiness.id}`}>Текущая точка</SelectItem>
-                <SelectItem value={`network:${currentBusiness.network_id}`}>{currentBusiness.network_name || 'Вся сеть'}</SelectItem>
+                <SelectItem value={`business:${currentBusinessId || currentBusiness.id}`}>{shellCopy.currentLocation}</SelectItem>
+                <SelectItem value={`network:${currentBusiness.network_id}`}>{currentBusiness.network_name || shellCopy.wholeNetwork}</SelectItem>
               </SelectContent>
             </Select>
           ) : null}

@@ -6,7 +6,7 @@ from playwright.sync_api import expect, sync_playwright
 APP_URL = "http://127.0.0.1:4173/dashboard/operator"
 
 
-def test_guided_tour_keeps_the_current_step_when_progress_save_gets_502():
+def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502():
     progress_puts = 0
     page_errors: list[str] = []
 
@@ -16,6 +16,7 @@ def test_guided_tour_keeps_the_current_step_when_progress_save_gets_502():
         context.add_init_script(
             """
             window.localStorage.setItem('demo_auth_token', 'test-demo-token');
+            window.localStorage.setItem('language', 'ru');
             window.sessionStorage.setItem('localos_demo_mode', '1');
             """
         )
@@ -102,15 +103,17 @@ def test_guided_tour_keeps_the_current_step_when_progress_save_gets_502():
         expect(start_button).to_be_visible()
         start_button.click()
 
-        step_indicator = page.get_by_text("Шаг 2 из 15", exact=True)
+        step_indicator = page.get_by_text("Шаг 2 из 38", exact=True)
         expect(step_indicator).to_be_visible()
         page.get_by_role("button", name="Дальше").click()
 
         page.wait_for_timeout(100)
-        rendered_step = page.get_by_text(re.compile(r"^Шаг \d+ из 15$"))
+        rendered_step = page.get_by_text(re.compile(r"^Шаг \d+ из 38$"))
         assert not page_errors, f"Unexpected unhandled errors: {page_errors}"
-        expect(rendered_step).to_have_text("Шаг 2 из 15")
-        expect(page.get_by_text("Не удалось сохранить прогресс. Попробуйте ещё раз.", exact=True)).to_be_visible()
+        expect(rendered_step).to_have_text("Шаг 3 из 38")
+        expect(page.get_by_text("Не удалось сохранить прогресс. Попробуйте ещё раз.", exact=True)).to_have_count(0)
+        local_progress = page.evaluate("Object.values(sessionStorage).find(value => value.includes('operator-overview'))")
+        assert local_progress
 
         context.close()
         browser.close()

@@ -18,7 +18,7 @@ export type GuidedTourStep = {
 type GuidedTourStepLayout = Omit<GuidedTourStep, 'chapterTitle' | 'title' | 'body'>;
 
 export const GUIDED_TOUR_KEY = 'roga-i-kopyta-v1';
-export const GUIDED_TOUR_VERSION = 3;
+export const GUIDED_TOUR_VERSION = 4;
 
 export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'welcome', chapter: 'network-pulse', route: '/dashboard/operator' },
@@ -43,11 +43,18 @@ export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'geo-promotion', chapter: 'card-content', route: '/dashboard/ai-chat-promotion', target: 'nav-ai-chat-promotion' },
   { key: 'content-nav', chapter: 'card-content', route: '/dashboard/card', target: 'nav-content' },
   { key: 'content-calendar', chapter: 'card-content', route: '/dashboard/content?section=calendar', target: 'content-calendar' },
+  { key: 'content-plan-setup', chapter: 'card-content', route: '/dashboard/content?demo_stage=setup', target: 'content-plan-setup' },
+  { key: 'content-plan-preview', chapter: 'card-content', route: '/dashboard/content?demo_stage=preview', target: 'content-plan-preview' },
+  { key: 'content-plan-save', chapter: 'card-content', route: '/dashboard/content?demo_stage=saved', target: 'content-plan-save' },
+  { key: 'content-plan-review', chapter: 'card-content', route: '/dashboard/content?demo_stage=review', target: 'content-plan-review' },
   { key: 'agents-nav', chapter: 'automation', route: '/dashboard/content?section=calendar', target: 'nav-agents' },
   { key: 'agents-signals', chapter: 'automation', route: '/dashboard/agents', target: 'agents-workspace' },
   { key: 'agents-today', chapter: 'automation', route: '/dashboard/agents', target: 'agents-today' },
   { key: 'agents-employees', chapter: 'automation', route: '/dashboard/agents', target: 'agents-employees' },
   { key: 'agents-control', chapter: 'automation', route: '/dashboard/agents', target: 'agents-control' },
+  { key: 'agents-run', chapter: 'automation', route: '/dashboard/agents', target: 'agents-run' },
+  { key: 'agents-review', chapter: 'automation', route: '/dashboard/agents', target: 'agents-review' },
+  { key: 'agents-history', chapter: 'automation', route: '/dashboard/agents', target: 'agents-history' },
   { key: 'partnership-nav', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'nav-partnerships' },
   { key: 'partnership-workspace', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-workspace' },
   { key: 'partnership-candidates', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-candidates' },

@@ -86,6 +86,20 @@ const seoOperationalCopy: Record<string, Record<string, string>> = {
     },
 };
 
+type SeoCoreCopy = { negativeTitle: string; negativePlaceholder: string; globalScope: string; categoryScope: string; categoryPlaceholder: string; showBlocked: string; negativeEmpty: string; searchPlaceholder: string; findQueries: string; currentSearch: string; allFrequency: string; actions: string; remove: string; add: string; reject: string; loading: string; failure: string };
+const buildSeoOperationalCopy = (value: SeoCoreCopy): Record<string, string> => ({
+    negativeTitle: value.negativeTitle, negativePlaceholder: value.negativePlaceholder, globalScope: value.globalScope, categoryScope: value.categoryScope, categoryPlaceholder: value.categoryPlaceholder, showBlocked: value.showBlocked, loading: value.loading, negativeEmpty: value.negativeEmpty, searchPlaceholder: value.searchPlaceholder, searching: value.loading, findQueries: value.findQueries, add: value.add, reject: value.reject, noSuggestions: value.failure, currentSearch: value.currentSearch, allFrequency: value.allFrequency, highFrequency: value.allFrequency, midFrequency: value.allFrequency, lowFrequency: value.allFrequency, actions: value.actions, remove: value.remove, categoryRequired: value.categoryPlaceholder, loadNegativeError: value.failure, addNegativeError: value.failure, negativeAdded: value.add, bulkError: value.failure, bulkAdded: value.add, removeNegativeError: value.failure, updateError: value.failure, chooseBusiness: value.failure, keywordRemoveError: value.failure, keywordRemoved: value.remove, searchError: value.failure, keywordAddError: value.failure, keywordAdded: value.add,
+});
+const additionalSeoOperationalCopy: Record<string, Record<string, string>> = {
+    fr: buildSeoOperationalCopy({ negativeTitle: 'Mots-clés négatifs SEO', negativePlaceholder: 'Ajouter un mot-clé négatif', globalScope: 'Global', categoryScope: 'Par catégorie', categoryPlaceholder: 'Catégorie', showBlocked: 'Afficher les requêtes exclues', negativeEmpty: 'Aucun mot-clé négatif', searchPlaceholder: 'Rechercher dans Wordstat', findQueries: 'Trouver des requêtes', currentSearch: 'Rechercher dans les requêtes actuelles', allFrequency: 'Toutes les fréquences', actions: 'Actions', remove: 'Supprimer', add: 'Ajouter', reject: 'Rejeter', loading: 'Chargement…', failure: 'Impossible d’effectuer cette action' }),
+    es: buildSeoOperationalCopy({ negativeTitle: 'Palabras negativas SEO', negativePlaceholder: 'Añadir palabra negativa', globalScope: 'Global', categoryScope: 'Por categoría', categoryPlaceholder: 'Categoría', showBlocked: 'Mostrar consultas excluidas', negativeEmpty: 'No hay palabras negativas', searchPlaceholder: 'Buscar en Wordstat', findQueries: 'Buscar consultas', currentSearch: 'Buscar en consultas actuales', allFrequency: 'Todas las frecuencias', actions: 'Acciones', remove: 'Eliminar', add: 'Añadir', reject: 'Rechazar', loading: 'Cargando…', failure: 'No se pudo realizar la acción' }),
+    el: buildSeoOperationalCopy({ negativeTitle: 'Αρνητικές λέξεις SEO', negativePlaceholder: 'Προσθήκη αρνητικής λέξης', globalScope: 'Γενικά', categoryScope: 'Ανά κατηγορία', categoryPlaceholder: 'Κατηγορία', showBlocked: 'Προβολή εξαιρούμενων αναζητήσεων', negativeEmpty: 'Δεν υπάρχουν αρνητικές λέξεις', searchPlaceholder: 'Αναζήτηση στο Wordstat', findQueries: 'Εύρεση αναζητήσεων', currentSearch: 'Αναζήτηση στις τρέχουσες λέξεις', allFrequency: 'Όλες οι συχνότητες', actions: 'Ενέργειες', remove: 'Διαγραφή', add: 'Προσθήκη', reject: 'Απόρριψη', loading: 'Φόρτωση…', failure: 'Η ενέργεια δεν ολοκληρώθηκε' }),
+    de: buildSeoOperationalCopy({ negativeTitle: 'Negative SEO-Keywords', negativePlaceholder: 'Negatives Keyword hinzufügen', globalScope: 'Global', categoryScope: 'Nach Kategorie', categoryPlaceholder: 'Kategorie', showBlocked: 'Ausgeschlossene Suchanfragen anzeigen', negativeEmpty: 'Keine negativen Keywords', searchPlaceholder: 'In Wordstat suchen', findQueries: 'Suchanfragen finden', currentSearch: 'Aktuelle Suchanfragen durchsuchen', allFrequency: 'Alle Häufigkeiten', actions: 'Aktionen', remove: 'Entfernen', add: 'Hinzufügen', reject: 'Ablehnen', loading: 'Laden…', failure: 'Aktion konnte nicht ausgeführt werden' }),
+    th: buildSeoOperationalCopy({ negativeTitle: 'คีย์เวิร์ดเชิงลบ SEO', negativePlaceholder: 'เพิ่มคีย์เวิร์ดเชิงลบ', globalScope: 'ทั้งหมด', categoryScope: 'ตามหมวดหมู่', categoryPlaceholder: 'หมวดหมู่', showBlocked: 'แสดงคำค้นที่ยกเว้น', negativeEmpty: 'ยังไม่มีคีย์เวิร์ดเชิงลบ', searchPlaceholder: 'ค้นหาใน Wordstat', findQueries: 'ค้นหาคำค้น', currentSearch: 'ค้นหาในคำค้นปัจจุบัน', allFrequency: 'ทุกความถี่', actions: 'การดำเนินการ', remove: 'ลบ', add: 'เพิ่ม', reject: 'ปฏิเสธ', loading: 'กำลังโหลด…', failure: 'ดำเนินการไม่สำเร็จ' }),
+    ar: buildSeoOperationalCopy({ negativeTitle: 'الكلمات السلبية لـ SEO', negativePlaceholder: 'إضافة كلمة سلبية', globalScope: 'عام', categoryScope: 'حسب الفئة', categoryPlaceholder: 'الفئة', showBlocked: 'عرض الاستعلامات المستبعدة', negativeEmpty: 'لا توجد كلمات سلبية', searchPlaceholder: 'البحث في Wordstat', findQueries: 'البحث عن استعلامات', currentSearch: 'البحث في الاستعلامات الحالية', allFrequency: 'كل التكرارات', actions: 'الإجراءات', remove: 'حذف', add: 'إضافة', reject: 'رفض', loading: 'جارٍ التحميل…', failure: 'تعذر تنفيذ الإجراء' }),
+    ha: buildSeoOperationalCopy({ negativeTitle: 'Kalmomin SEO da aka hana', negativePlaceholder: 'Ƙara kalmar da aka hana', globalScope: 'Gaba ɗaya', categoryScope: 'Ta rukuni', categoryPlaceholder: 'Rukuni', showBlocked: 'Nuna tambayoyin da aka cire', negativeEmpty: 'Babu kalmomin da aka hana', searchPlaceholder: 'Bincika a Wordstat', findQueries: 'Nemo tambayoyi', currentSearch: 'Bincika tambayoyin yanzu', allFrequency: 'Duk yawan nema', actions: 'Ayyuka', remove: 'Cire', add: 'Ƙara', reject: 'Ƙi', loading: 'Ana lodawa…', failure: 'Ba a iya yin aikin ba' }),
+};
+
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { language, t } = useLanguage();
     const { user } = useOutletContext<any>();
@@ -111,7 +125,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [negativeCategory, setNegativeCategory] = useState('');
     const [negativeBulkText, setNegativeBulkText] = useState('');
     const [negativeLoading, setNegativeLoading] = useState(false);
-    const operationalCopy = seoOperationalCopy[language] || seoOperationalCopy.en;
+    const operationalCopy = seoOperationalCopy[language] || additionalSeoOperationalCopy[language] || seoOperationalCopy.en;
 
     const loadKeywords = async () => {
         setLoading(true);
@@ -433,75 +447,24 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     });
 
     const seoCopy = t.dashboard.card.seoKeywords || {};
-    const fallbackSeoCopy = language === 'ru'
-        ? {
-            title: 'SEO-запросы',
-            subtitle: 'Популярные поисковые запросы из Яндекс.Wordstat, которые используются для ИИ-оптимизации.',
-            update: 'Обновить данные',
-            updating: 'Обновляем...',
-            all: 'Все запросы',
-            loading: 'Загружаем запросы...',
-            empty: 'Запросы не найдены. Нажмите «Обновить данные», чтобы загрузить Wordstat.',
-            columns: {
-                keyword: 'Запрос',
-                category: 'Категория',
-                views: 'Показов в месяц',
-                updated: 'Обновлено',
-            },
-            categories: {
-                grooming: 'Груминг',
-                other: 'Другое',
-                custom: 'Свои',
-            },
-        }
-        : language === 'tr'
-        ? {
-            title: 'SEO sorguları',
-            subtitle: 'Yapay zekâ optimizasyonunda kullanılan popüler Yandex.Wordstat arama sorguları.',
-            update: 'Verileri yenile',
-            updating: 'Yenileniyor...',
-            all: 'Tüm sorgular',
-            loading: 'Sorgular yükleniyor...',
-            empty: 'Sorgu bulunamadı. Wordstat verilerini almak için “Verileri yenile” düğmesine basın.',
-            columns: {
-                keyword: 'Anahtar kelime',
-                category: 'Kategori',
-                views: 'Aylık görüntüleme',
-                updated: 'Son güncelleme',
-            },
-            categories: {
-                grooming: 'Bakım',
-                other: 'Diğer',
-                custom: 'Özel',
-            },
-        }
-        : {
-            title: 'SEO Keywords',
-            subtitle: 'Top search queries from Yandex.Wordstat used for AI optimization.',
-            update: 'Update Data',
-            updating: 'Updating...',
-            all: 'All Keywords',
-            loading: 'Loading keywords...',
-            empty: 'No keywords found. Click "Update Data" to fetch from Wordstat.',
-            columns: {
-                keyword: 'Keyword',
-                category: 'Category',
-                views: 'Monthly Views',
-                updated: 'Last Updated',
-            },
-            categories: {
-                grooming: 'Grooming',
-                other: 'Other',
-                custom: 'Custom',
-            },
-        };
+    const fallbackSeoCopy = {
+        title: language === 'ru' ? 'SEO-запросы' : language === 'tr' ? 'SEO sorguları' : `SEO · ${operationalCopy.findQueries}`,
+        subtitle: operationalCopy.searchPlaceholder,
+        update: operationalCopy.findQueries,
+        updating: operationalCopy.loading,
+        all: operationalCopy.allFrequency,
+        loading: operationalCopy.loading,
+        empty: operationalCopy.negativeEmpty,
+        columns: { keyword: operationalCopy.findQueries, category: operationalCopy.categoryPlaceholder, views: operationalCopy.allFrequency, updated: operationalCopy.loading },
+        categories: { grooming: operationalCopy.categoryScope, other: operationalCopy.globalScope, custom: operationalCopy.actions },
+    };
 
-    const getSeoText = (key: 'title' | 'subtitle' | 'update' | 'updating' | 'all' | 'loading' | 'empty') => seoCopy[key] || fallbackSeoCopy[key];
-    const getSeoColumnText = (key: 'keyword' | 'category' | 'views' | 'updated') => seoCopy.columns?.[key] || fallbackSeoCopy.columns[key];
+    const getSeoText = (key: 'title' | 'subtitle' | 'update' | 'updating' | 'all' | 'loading' | 'empty') => language === 'en' ? seoCopy[key] || fallbackSeoCopy[key] : fallbackSeoCopy[key];
+    const getSeoColumnText = (key: 'keyword' | 'category' | 'views' | 'updated') => language === 'en' ? seoCopy.columns?.[key] || fallbackSeoCopy.columns[key] : fallbackSeoCopy.columns[key];
     const negativeBulkLabels = negativeBulkCopy[language] || negativeBulkCopy.en;
     const formatCategory = (category: string) => {
         const normalized = String(category || 'other').trim().toLowerCase();
-        const categoryLabels = seoCopy.categories || fallbackSeoCopy.categories;
+        const categoryLabels = language === 'en' ? seoCopy.categories || fallbackSeoCopy.categories : fallbackSeoCopy.categories;
         return categoryLabels[normalized] || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : fallbackSeoCopy.categories.other);
     };
 

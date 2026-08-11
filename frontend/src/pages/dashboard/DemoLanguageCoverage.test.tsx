@@ -5,6 +5,7 @@ import { GUIDED_TOUR_STEP_LAYOUTS } from '@/components/guided-tour/tourConfig';
 import { guidedTourStepsForLanguage } from '@/components/guided-tour/tourConfig';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
+import { getDashboardShellCopy } from '@/i18n/dashboardShellCopy';
 import { getContentCalendarCopy, getDemoContentCalendarThemes } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
@@ -18,11 +19,11 @@ const localizedCardLanguages = supportedLanguages.filter((language) => language 
 const nonRussianLanguages = supportedLanguages.filter((language) => language !== 'ru');
 
 describe('demo language coverage', () => {
-  it('keeps the language contract aligned with all 31 guided-tour steps', () => {
+  it('keeps the language contract aligned with all 38 guided-tour steps', () => {
     expect(supportedLanguages).toHaveLength(10);
-    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(31);
+    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(38);
     supportedLanguages.forEach((language) => {
-      expect(guidedTourStepsForLanguage(language)).toHaveLength(31);
+      expect(guidedTourStepsForLanguage(language)).toHaveLength(38);
     });
   });
 
@@ -41,6 +42,7 @@ describe('demo language coverage', () => {
 
     expect(renderedCopy).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getDashboardNavigationCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(getDashboardShellCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getContentCalendarCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getDemoContentCalendarThemes(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getContentWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);

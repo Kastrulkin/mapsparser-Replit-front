@@ -59,6 +59,34 @@ const el: ProgressPageCopy = {
   eyebrow: 'Επισκόπηση επιχείρησης', title: 'Πρόοδος επιχείρησης', description: 'Δείτε τι έχει ολοκληρωθεί, πού χρειάζεται βοήθεια και ποιο βήμα θα φέρει το επόμενο πρακτικό αποτέλεσμα.', selectBusinessDescription: 'Επιλέξτε επιχείρηση για να δείτε την πρόοδο και το επόμενο βήμα.', loadingDescription: 'Συλλέγουμε επιβεβαιωμένα αποτελέσματα από τις ενότητες του LocalOS.', fallbackDescription: 'Συνολική εικόνα ολοκληρωμένης εργασίας και επόμενων ενεργειών.', refresh: 'Ανανέωση', retry: 'Δοκιμή ξανά', loadErrorTitle: 'Δεν ήταν δυνατή η δημιουργία της επισκόπησης', loadErrorDescription: 'Δοκιμάστε να ανανεώσετε τα δεδομένα.', staleData: 'Η νέα σύνοψη δεν φορτώθηκε ακόμη. Εμφανίζονται τα προηγούμενα επιβεβαιωμένα δεδομένα.', newResult: 'Νέο αποτέλεσμα', confirmedPath: 'Επιβεβαιωμένη πρόοδος', confirmedSteps: 'βήματα επιβεβαιώθηκαν με πραγματικά δεδομένα', resultsIn30Days: 'αποτελέσματα σε 30 ημέρες', activeAreas: 'τομείς ξεκίνησαν', needAttention: 'χρειάζονται προσοχή', currentPriority: 'Πιο σημαντικό τώρα', continueWorking: 'Συνεχίστε την εργασία', result: 'Αποτέλεσμα', growthAreas: 'Τομείς ανάπτυξης', growthAreasDescription: 'Ανοίξτε έναν τομέα για να δείτε τι ολοκληρώθηκε και ποιο είναι το επόμενο βήμα.', completed: 'Ολοκληρώθηκε', of: 'από', path: 'Διαδρομή', nextStepOutcome: 'Τι θα προσφέρει το επόμενο βήμα', currentAudit: 'Τρέχων έλεγχος', auditReady: 'Ο έλεγχος είναι έτοιμος', auditReadyUpdated: 'ενημερώθηκε', auditReadySuffix: 'Ανοίξτε τον για να δείτε τα στοιχεία και τις προτεραιότητες της καταχώρισης.', auditPending: 'Ο πλήρης έλεγχος θα εμφανιστεί εδώ μετά την πρώτη επιτυχημένη συλλογή δεδομένων.', viewFullAudit: 'Προβολή πλήρους ελέγχου', mapsAndReputation: 'Χάρτες και φήμη', fullAudit: 'Πλήρης έλεγχος καταχώρισης', location: 'Τοποθεσία', auditDescription: 'Δεδομένα, αιτίες προβλημάτων και συγκεκριμένες ενέργειες.', selectAuditLocation: 'Επιλέξτε τοποθεσία για έλεγχο', selectLocation: 'Επιλέξτε τοποθεσία', hideFullAudit: 'Απόκρυψη πλήρους ελέγχου', parseQueued: 'Η συλλογή δεδομένων περιμένει να ξεκινήσει. Ο τρέχων έλεγχος παραμένει διαθέσιμος.', parseProcessing: 'Συλλέγονται νέα δεδομένα. Ο τρέχων έλεγχος παραμένει στην οθόνη.', cardHistory: 'Ιστορικό ενημερώσεων καταχώρισης', recentResults: 'Πρόσφατα αποτελέσματα', recentResultsEmpty: 'Εδώ θα εμφανιστούν επιβεβαιωμένα αποτελέσματα: ολοκληρωμένος έλεγχος, πλάνο περιεχομένου, συνεργάτες, εργασίες και πρόσθετες πωλήσεις.',
 };
 
+type ProgressLabels = {
+  eyebrow: string; title: string; description: string; select: string; loading: string; refresh: string; retry: string; error: string;
+  stale: string; confirmed: string; steps: string; results: string; areas: string; attention: string; priority: string; outcome: string;
+  growth: string; growthDescription: string; completed: string; of: string; path: string; audit: string; location: string; recent: string; empty: string;
+};
+
+const buildProgressCopy = (value: ProgressLabels): ProgressPageCopy => ({
+  eyebrow: value.eyebrow, title: value.title, description: value.description, selectBusinessDescription: value.select,
+  loadingDescription: value.loading, fallbackDescription: value.description, refresh: value.refresh, retry: value.retry,
+  loadErrorTitle: value.error, loadErrorDescription: value.retry, staleData: value.stale, newResult: value.results,
+  confirmedPath: value.confirmed, confirmedSteps: value.steps, resultsIn30Days: value.results, activeAreas: value.areas,
+  needAttention: value.attention, currentPriority: value.priority, continueWorking: value.growthDescription, result: value.outcome,
+  growthAreas: value.growth, growthAreasDescription: value.growthDescription, completed: value.completed, of: value.of, path: value.path,
+  nextStepOutcome: value.outcome, currentAudit: value.audit, auditReady: value.audit, auditReadyUpdated: value.refresh,
+  auditReadySuffix: value.growthDescription, auditPending: value.loading, viewFullAudit: value.audit, mapsAndReputation: value.growth,
+  fullAudit: value.audit, location: value.location, auditDescription: value.growthDescription, selectAuditLocation: value.select,
+  selectLocation: value.select, hideFullAudit: value.audit, parseQueued: value.loading, parseProcessing: value.loading,
+  cardHistory: value.path, recentResults: value.recent, recentResultsEmpty: value.empty,
+});
+
+const en = buildProgressCopy({ eyebrow: 'BUSINESS OVERVIEW', title: 'Business progress', description: 'See what is complete, where help is needed, and which step will produce the next practical result.', select: 'Select a business to see its progress and next step.', loading: 'Collecting confirmed results from LocalOS workspaces.', refresh: 'Refresh', retry: 'Try again', error: 'Could not build the overview', stale: 'The new summary is not ready. Previous confirmed data is shown.', confirmed: 'Confirmed path', steps: 'steps confirmed by real data', results: 'results in 30 days', areas: 'areas started', attention: 'need attention', priority: 'Most important now', outcome: 'Result of the next step', growth: 'Growth areas', growthDescription: 'Open an area to see completed work and the next action.', completed: 'Completed', of: 'of', path: 'Path', audit: 'Full listing audit', location: 'Location', recent: 'Recent results', empty: 'Confirmed audits, content plans, partners, completed work, and upsells will appear here.' });
+const fr = buildProgressCopy({ eyebrow: 'VUE D’ENSEMBLE', title: 'Progression de l’entreprise', description: 'Voyez ce qui est terminé, où une aide est nécessaire et quelle étape produira le prochain résultat concret.', select: 'Sélectionnez une entreprise pour voir sa progression et l’étape suivante.', loading: 'Collecte des résultats confirmés dans LocalOS.', refresh: 'Actualiser', retry: 'Réessayer', error: 'Impossible de créer la vue d’ensemble', stale: 'Le nouveau résumé n’est pas prêt. Les dernières données confirmées sont affichées.', confirmed: 'Parcours confirmé', steps: 'étapes confirmées par des données réelles', results: 'résultats sur 30 jours', areas: 'axes commencés', attention: 'demandent votre attention', priority: 'Priorité actuelle', outcome: 'Résultat de l’étape suivante', growth: 'Axes de croissance', growthDescription: 'Ouvrez un axe pour voir le travail terminé et l’action suivante.', completed: 'Terminé', of: 'sur', path: 'Parcours', audit: 'Audit complet de la fiche', location: 'Point de vente', recent: 'Résultats récents', empty: 'Les audits, plans de contenu, partenaires, travaux terminés et ventes additionnelles apparaîtront ici.' });
+const es = buildProgressCopy({ eyebrow: 'RESUMEN DEL NEGOCIO', title: 'Progreso del negocio', description: 'Consulta qué está terminado, dónde hace falta ayuda y qué paso dará el siguiente resultado práctico.', select: 'Selecciona un negocio para ver su progreso y siguiente paso.', loading: 'Recopilando resultados confirmados de LocalOS.', refresh: 'Actualizar', retry: 'Reintentar', error: 'No se pudo crear el resumen', stale: 'El nuevo resumen aún no está listo. Se muestran los datos confirmados anteriores.', confirmed: 'Ruta confirmada', steps: 'pasos confirmados con datos reales', results: 'resultados en 30 días', areas: 'áreas iniciadas', attention: 'requieren atención', priority: 'Lo más importante ahora', outcome: 'Resultado del siguiente paso', growth: 'Áreas de crecimiento', growthDescription: 'Abre un área para ver el trabajo realizado y la siguiente acción.', completed: 'Completado', of: 'de', path: 'Ruta', audit: 'Auditoría completa de la ficha', location: 'Ubicación', recent: 'Resultados recientes', empty: 'Aquí aparecerán auditorías, planes de contenido, socios, trabajos terminados y ventas adicionales.' });
+const de = buildProgressCopy({ eyebrow: 'GESCHÄFTSÜBERBLICK', title: 'Geschäftsfortschritt', description: 'Sehen Sie, was erledigt ist, wo Hilfe nötig ist und welcher Schritt das nächste praktische Ergebnis bringt.', select: 'Wählen Sie ein Unternehmen, um Fortschritt und nächsten Schritt zu sehen.', loading: 'Bestätigte Ergebnisse aus LocalOS werden gesammelt.', refresh: 'Aktualisieren', retry: 'Erneut versuchen', error: 'Übersicht konnte nicht erstellt werden', stale: 'Die neue Zusammenfassung ist noch nicht bereit. Vorherige bestätigte Daten werden angezeigt.', confirmed: 'Bestätigter Weg', steps: 'Schritte durch echte Daten bestätigt', results: 'Ergebnisse in 30 Tagen', areas: 'Bereiche begonnen', attention: 'brauchen Aufmerksamkeit', priority: 'Jetzt am wichtigsten', outcome: 'Ergebnis des nächsten Schritts', growth: 'Wachstumsbereiche', growthDescription: 'Öffnen Sie einen Bereich, um erledigte Arbeit und die nächste Aktion zu sehen.', completed: 'Erledigt', of: 'von', path: 'Weg', audit: 'Vollständiges Eintragsaudit', location: 'Standort', recent: 'Letzte Ergebnisse', empty: 'Audits, Content-Pläne, Partner, erledigte Arbeiten und Zusatzverkäufe erscheinen hier.' });
+const th = buildProgressCopy({ eyebrow: 'ภาพรวมธุรกิจ', title: 'ความคืบหน้าของธุรกิจ', description: 'ดูสิ่งที่เสร็จ จุดที่ต้องช่วย และขั้นต่อไปที่จะให้ผลจริง', select: 'เลือกธุรกิจเพื่อดูความคืบหน้าและขั้นต่อไป', loading: 'กำลังรวบรวมผลลัพธ์ที่ยืนยันแล้ว', refresh: 'รีเฟรช', retry: 'ลองใหม่', error: 'สร้างภาพรวมไม่ได้', stale: 'สรุปใหม่ยังไม่พร้อม กำลังแสดงข้อมูลที่ยืนยันก่อนหน้า', confirmed: 'เส้นทางที่ยืนยัน', steps: 'ขั้นที่ยืนยันด้วยข้อมูลจริง', results: 'ผลลัพธ์ใน 30 วัน', areas: 'ด้านที่เริ่มแล้ว', attention: 'ต้องดูแล', priority: 'สำคัญที่สุดตอนนี้', outcome: 'ผลของขั้นต่อไป', growth: 'ด้านการเติบโต', growthDescription: 'เปิดแต่ละด้านเพื่อดูงานที่เสร็จและขั้นต่อไป', completed: 'เสร็จ', of: 'จาก', path: 'เส้นทาง', audit: 'ตรวจสอบรายการแบบเต็ม', location: 'สาขา', recent: 'ผลลัพธ์ล่าสุด', empty: 'ผลที่ยืนยันแล้วจะแสดงที่นี่' });
+const ar = buildProgressCopy({ eyebrow: 'نظرة عامة على العمل', title: 'تقدم العمل', description: 'شاهد ما اكتمل وأين تلزم المساعدة والخطوة التي ستحقق النتيجة التالية.', select: 'اختر نشاطًا لرؤية التقدم والخطوة التالية.', loading: 'جارٍ جمع النتائج المؤكدة.', refresh: 'تحديث', retry: 'إعادة المحاولة', error: 'تعذر إنشاء النظرة العامة', stale: 'الملخص الجديد غير جاهز. تظهر البيانات المؤكدة السابقة.', confirmed: 'المسار المؤكد', steps: 'خطوات مؤكدة ببيانات حقيقية', results: 'نتائج في 30 يومًا', areas: 'مجالات بدأت', attention: 'تحتاج انتباهًا', priority: 'الأهم الآن', outcome: 'نتيجة الخطوة التالية', growth: 'مجالات النمو', growthDescription: 'افتح مجالًا لرؤية العمل المنجز والإجراء التالي.', completed: 'مكتمل', of: 'من', path: 'المسار', audit: 'تدقيق كامل للبطاقة', location: 'الموقع', recent: 'النتائج الأخيرة', empty: 'ستظهر هنا النتائج المؤكدة.' });
+const ha = buildProgressCopy({ eyebrow: 'BAYANIN KASUWANCI', title: 'Ci gaban kasuwanci', description: 'Duba abin da aka gama, inda ake buƙatar taimako da matakin da zai kawo sakamako na gaba.', select: 'Zaɓi kasuwanci don ganin ci gaba da mataki na gaba.', loading: 'Ana tattara sakamakon da aka tabbatar.', refresh: 'Sabunta', retry: 'Sake gwadawa', error: 'Ba a iya gina bayanin ba', stale: 'Sabon taƙaitaccen bayani bai shirya ba. Ana nuna bayanan da aka tabbatar a baya.', confirmed: 'Hanyar da aka tabbatar', steps: 'matakai da aka tabbatar da bayanai', results: 'sakamako cikin kwanaki 30', areas: 'wuraren da aka fara', attention: 'suna buƙatar kulawa', priority: 'Mafi muhimmanci yanzu', outcome: 'Sakamakon mataki na gaba', growth: 'Wuraren bunƙasa', growthDescription: 'Buɗe wuri don ganin aikin da aka gama da mataki na gaba.', completed: 'An gama', of: 'cikin', path: 'Hanya', audit: 'Cikakken binciken kati', location: 'Wuri', recent: 'Sakamako na baya-bayan nan', empty: 'Sakamakon da aka tabbatar zai bayyana a nan.' });
+
 const statusTr: Record<string, string> = {
   healthy: 'Çalışıyor',
   in_progress: 'Devam ediyor',
@@ -283,22 +311,74 @@ const translateDynamicTr = (value: string) => {
   return value;
 };
 
-export const progressPageCopyForLanguage = (language: Language) => language === 'tr' ? tr : language === 'el' ? el : ru;
+const progressCopies: Record<Language, ProgressPageCopy> = { ru, en, fr, es, el, de, th, ar, ha, tr };
+
+const genericText: Record<Exclude<Language, 'ru'>, string> = {
+  en: 'Open this area to see the current details and next action.',
+  fr: 'Ouvrez cette section pour voir la situation actuelle et l’action suivante.',
+  es: 'Abre esta sección para ver el estado actual y la siguiente acción.',
+  el: 'Ανοίξτε αυτή την ενότητα για να δείτε την τρέχουσα κατάσταση και την επόμενη ενέργεια.',
+  de: 'Öffnen Sie diesen Bereich, um den aktuellen Stand und die nächste Aktion zu sehen.',
+  th: 'เปิดส่วนนี้เพื่อดูสถานะปัจจุบันและขั้นตอนถัดไป',
+  ar: 'افتح هذا القسم لرؤية الحالة الحالية والإجراء التالي.',
+  ha: 'Buɗe wannan sashe don ganin halin yanzu da mataki na gaba.',
+  tr: 'Güncel durumu ve sonraki adımı görmek için bu alanı açın.',
+};
+
+const statuses: Record<Exclude<Language, 'ru'>, Record<string, string>> = {
+  en: { healthy: 'Working', in_progress: 'In progress', needs_attention: 'Needs attention', not_started: 'Not started', unavailable: 'No data' },
+  fr: { healthy: 'Opérationnel', in_progress: 'En cours', needs_attention: 'À vérifier', not_started: 'Non commencé', unavailable: 'Sans données' },
+  es: { healthy: 'En funcionamiento', in_progress: 'En curso', needs_attention: 'Requiere atención', not_started: 'Sin iniciar', unavailable: 'Sin datos' },
+  el: statusEl,
+  de: { healthy: 'Aktiv', in_progress: 'In Arbeit', needs_attention: 'Aufmerksamkeit nötig', not_started: 'Nicht begonnen', unavailable: 'Keine Daten' },
+  th: { healthy: 'ทำงานอยู่', in_progress: 'กำลังดำเนินการ', needs_attention: 'ต้องดูแล', not_started: 'ยังไม่เริ่ม', unavailable: 'ไม่มีข้อมูล' },
+  ar: { healthy: 'يعمل', in_progress: 'قيد التنفيذ', needs_attention: 'يحتاج إلى اهتمام', not_started: 'لم يبدأ', unavailable: 'لا توجد بيانات' },
+  ha: { healthy: 'Yana aiki', in_progress: 'Ana aiki', needs_attention: 'Yana buƙatar kulawa', not_started: 'Ba a fara ba', unavailable: 'Babu bayanai' },
+  tr: statusTr,
+};
+
+const areas: Record<Exclude<Language, 'ru'>, Record<string, string>> = {
+  en: { maps: 'Maps and reputation', content: 'Content', partnerships: 'Partnerships', automation: 'Automation', upsells: 'Upsells' },
+  fr: { maps: 'Cartes et réputation', content: 'Contenu', partnerships: 'Partenariats', automation: 'Automatisation', upsells: 'Ventes additionnelles' },
+  es: { maps: 'Mapas y reputación', content: 'Contenido', partnerships: 'Alianzas', automation: 'Automatización', upsells: 'Ventas adicionales' },
+  el: areaEl,
+  de: { maps: 'Karten und Ruf', content: 'Inhalte', partnerships: 'Partnerschaften', automation: 'Automatisierung', upsells: 'Zusatzverkäufe' },
+  th: { maps: 'แผนที่และชื่อเสียง', content: 'เนื้อหา', partnerships: 'พันธมิตร', automation: 'ระบบอัตโนมัติ', upsells: 'ยอดขายเพิ่มเติม' },
+  ar: { maps: 'الخرائط والسمعة', content: 'المحتوى', partnerships: 'الشراكات', automation: 'الأتمتة', upsells: 'المبيعات الإضافية' },
+  ha: { maps: 'Taswirori da suna', content: 'Abun ciki', partnerships: 'Haɗin gwiwa', automation: 'Aiki ta atomatik', upsells: 'Ƙarin tallace-tallace' },
+  tr: areaTr,
+};
+
+const runtimeCopy: Record<Language, { analytics: string; inProgress: string; nextLevel: string; rhythm: string; ready: string; update: string; needsData: string; networkLocations: string; attention: string; healthy: string; networkLocation: string }> = {
+  ru: { analytics: 'Аналитика', inProgress: 'в процессе', nextLevel: 'Следующий уровень', rhythm: 'Ритм', ready: 'готово', update: 'обновить', needsData: 'нужны данные', networkLocations: 'точек в сети', attention: 'требуют внимания', healthy: 'без открытых проблем', networkLocation: 'Точка сети' },
+  en: { analytics: 'Analytics', inProgress: 'in progress', nextLevel: 'Next level', rhythm: 'Rhythm', ready: 'ready', update: 'update', needsData: 'data needed', networkLocations: 'network locations', attention: 'need attention', healthy: 'without open issues', networkLocation: 'Network location' },
+  fr: { analytics: 'Analytique', inProgress: 'en cours', nextLevel: 'Niveau suivant', rhythm: 'Rythme', ready: 'prêt', update: 'actualiser', needsData: 'données requises', networkLocations: 'points du réseau', attention: 'à vérifier', healthy: 'sans problème ouvert', networkLocation: 'Point du réseau' },
+  es: { analytics: 'Analítica', inProgress: 'en curso', nextLevel: 'Siguiente nivel', rhythm: 'Ritmo', ready: 'listo', update: 'actualizar', needsData: 'faltan datos', networkLocations: 'ubicaciones de la red', attention: 'requieren atención', healthy: 'sin problemas abiertos', networkLocation: 'Ubicación de red' },
+  el: { analytics: 'Αναλυτικά', inProgress: 'σε εξέλιξη', nextLevel: 'Επόμενο επίπεδο', rhythm: 'Ρυθμός', ready: 'έτοιμο', update: 'ενημέρωση', needsData: 'χρειάζονται δεδομένα', networkLocations: 'σημεία δικτύου', attention: 'χρειάζονται προσοχή', healthy: 'χωρίς ανοικτά προβλήματα', networkLocation: 'Σημείο δικτύου' },
+  de: { analytics: 'Analyse', inProgress: 'in Arbeit', nextLevel: 'Nächste Stufe', rhythm: 'Rhythmus', ready: 'bereit', update: 'aktualisieren', needsData: 'Daten benötigt', networkLocations: 'Netzwerkstandorte', attention: 'brauchen Aufmerksamkeit', healthy: 'ohne offene Probleme', networkLocation: 'Netzwerkstandort' },
+  th: { analytics: 'การวิเคราะห์', inProgress: 'กำลังดำเนินการ', nextLevel: 'ระดับถัดไป', rhythm: 'จังหวะ', ready: 'พร้อม', update: 'อัปเดต', needsData: 'ต้องมีข้อมูล', networkLocations: 'สาขาในเครือข่าย', attention: 'ต้องดูแล', healthy: 'ไม่มีปัญหาค้างอยู่', networkLocation: 'สาขาในเครือข่าย' },
+  ar: { analytics: 'التحليلات', inProgress: 'قيد التنفيذ', nextLevel: 'المستوى التالي', rhythm: 'الإيقاع', ready: 'جاهز', update: 'تحديث', needsData: 'تحتاج بيانات', networkLocations: 'مواقع الشبكة', attention: 'تحتاج إلى اهتمام', healthy: 'دون مشكلات مفتوحة', networkLocation: 'موقع الشبكة' },
+  ha: { analytics: 'Nazari', inProgress: 'ana aiki', nextLevel: 'Mataki na gaba', rhythm: 'Tsari', ready: 'a shirye', update: 'sabunta', needsData: 'ana buƙatar bayanai', networkLocations: 'wuraren cibiyar', attention: 'suna buƙatar kulawa', healthy: 'ba matsala a buɗe', networkLocation: 'Wurin cibiyar' },
+  tr: { analytics: 'Analiz', inProgress: 'devam ediyor', nextLevel: 'Sonraki seviye', rhythm: 'Ritim', ready: 'hazır', update: 'güncelle', needsData: 'veri gerekli', networkLocations: 'ağ konumu', attention: 'dikkat gerektiriyor', healthy: 'açık sorun yok', networkLocation: 'Ağ konumu' },
+};
+
+export const progressPageCopyForLanguage = (language: Language) => progressCopies[language];
+export const progressRuntimeCopyForLanguage = (language: Language) => runtimeCopy[language];
 
 export const localizedGrowthStatus = (language: Language, status: string, fallback: string) => (
-  language === 'tr' ? statusTr[status] || fallback : language === 'el' ? statusEl[status] || fallback : fallback
+  language === 'ru' ? fallback : statuses[language][status] || genericText[language]
 );
 
 export const localizedGrowthArea = (language: Language, key: string, fallback: string) => (
-  language === 'tr' ? areaTr[key] || fallback : language === 'el' ? areaEl[key] || fallback : fallback
+  language === 'ru' ? fallback : areas[language][key] || genericText[language]
 );
 
 export const localizedGrowthMilestone = (language: Language, key: string, fallback: string) => (
-  language === 'tr' ? milestoneTr[key] || fallback : language === 'el' ? milestoneEl[key] || fallback : fallback
+  language === 'tr' ? milestoneTr[key] || genericText.tr : language === 'el' ? milestoneEl[key] || genericText.el : language === 'ru' ? fallback : genericText[language]
 );
 
 export const localizedGrowthMetric = (language: Language, fallback: string) => (
-  language === 'tr' ? metricTr[fallback] || translateDynamicTr(fallback) : language === 'el' ? metricEl[fallback] || translateDynamicEl(fallback) : fallback
+  language === 'tr' ? metricTr[fallback] || translateDynamicTr(fallback) : language === 'el' ? metricEl[fallback] || translateDynamicEl(fallback) : language === 'ru' ? fallback : /[А-Яа-яЁё]/.test(fallback) ? genericText[language] : fallback
 );
 
 export const localizedGrowthText = (language: Language, value?: string | null) => {
@@ -306,11 +386,12 @@ export const localizedGrowthText = (language: Language, value?: string | null) =
   if (!normalized) return normalized;
   if (language === 'tr') return textTr[normalized] || translateDynamicTr(normalized);
   if (language === 'el') return textEl[normalized] || translateDynamicEl(normalized);
+  if (language !== 'ru' && /[А-Яа-яЁё]/.test(normalized)) return genericText[language];
   return normalized;
 };
 
 export const localizedProgressBusinessName = (language: Language, value?: string | null) => {
   const normalized = String(value || '').trim();
-  if ((language === 'tr' || language === 'el') && normalized.toLowerCase() === 'рога и копыта') return 'Roga i Kopyta';
+  if (language !== 'ru' && normalized.toLowerCase() === 'рога и копыта') return 'Roga i Kopyta';
   return normalized;
 };

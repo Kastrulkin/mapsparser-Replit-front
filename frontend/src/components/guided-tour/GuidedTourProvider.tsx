@@ -24,6 +24,7 @@ type TourProgress = {
   chapter_key?: string | null;
   step_key?: string | null;
   completed_steps?: string[];
+  updated_at?: string | null;
 };
 
 type TargetRect = {
@@ -71,6 +72,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const steps = useMemo(() => guidedTourStepsForLanguage(language), [language]);
   const currentStep = steps[currentIndex] || steps[0];
   const isDemo = Boolean(user.demo_mode);
+  const localProgressKey = `localos:guided-tour:${GUIDED_TOUR_KEY}:v${GUIDED_TOUR_VERSION}:${user.id}`;
   const isWelcome = currentStep.key === 'welcome';
   const robotState = status === 'not_started'
     ? 'waiting'
@@ -117,41 +119,58 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     nextCompletedSteps: string[],
   ) => {
     setProgressError(null);
-    try {
-      await persistProgress(nextStatus, step, nextCompletedSteps);
-      return true;
-    } catch (progressSaveError) {
-      console.warn('Guided tour progress was not saved:', progressSaveError);
-      setProgressError(copy.controls.progressSaveError);
-      return false;
-    }
-  }, [copy.controls.progressSaveError, persistProgress]);
+    const localProgress = { ...progressForStep(nextStatus, step, nextCompletedSteps), updated_at: new Date().toISOString() };
+    window.sessionStorage.setItem(localProgressKey, JSON.stringify(localProgress));
+    void persistProgress(nextStatus, step, nextCompletedSteps)
+      .then(() => setProgressError(null))
+      .catch((progressSaveError) => console.warn('Guided tour progress will be synchronized later:', progressSaveError));
+    return true;
+  }, [localProgressKey, persistProgress]);
 
   useEffect(() => {
     if (!isDemo) return;
     let cancelled = false;
+    const rawLocalProgress = window.sessionStorage.getItem(localProgressKey);
+    let localProgress: TourProgress | null = null;
+    if (rawLocalProgress) {
+      try {
+        const parsed = JSON.parse(rawLocalProgress);
+        if (parsed && typeof parsed === 'object') localProgress = parsed;
+      } catch (parseError) {
+        console.warn('Invalid local guided tour progress was ignored:', parseError);
+      }
+    }
+    const applyProgress = (progress: TourProgress) => {
+      const nextStatus = progress.status || 'not_started';
+      const nextIndex = Math.max(0, steps.findIndex((step) => step.key === progress.step_key));
+      setStatus(nextStatus);
+      setCurrentIndex(nextIndex);
+      setCompletedSteps(Array.isArray(progress.completed_steps) ? progress.completed_steps : []);
+      setOpen(nextStatus === 'not_started' || nextStatus === 'active');
+      setLoaded(true);
+    };
     newAuth.makeRequest(`/guided-tours/${GUIDED_TOUR_KEY}/progress`, { method: 'GET' })
       .then((response) => {
         if (cancelled) return;
-        const progress: TourProgress = response.progress || {};
-        const nextStatus = progress.status || 'not_started';
-        const nextIndex = Math.max(0, steps.findIndex((step) => step.key === progress.step_key));
-        setStatus(nextStatus);
-        setCurrentIndex(nextIndex);
-        setCompletedSteps(Array.isArray(progress.completed_steps) ? progress.completed_steps : []);
-        setOpen(nextStatus === 'not_started' || nextStatus === 'active');
-        setLoaded(true);
+        const serverProgress: TourProgress = response.progress || {};
+        const localUpdated = Date.parse(localProgress?.updated_at || '');
+        const serverUpdated = Date.parse(serverProgress.updated_at || '');
+        const selectedProgress = localProgress && (!Number.isFinite(serverUpdated) || localUpdated >= serverUpdated) ? localProgress : serverProgress;
+        applyProgress(selectedProgress);
+        if (selectedProgress === localProgress && localProgress?.step_key) {
+          const localStep = steps.find((step) => step.key === localProgress?.step_key) || steps[0];
+          void persistProgress(localProgress.status, localStep, localProgress.completed_steps || []);
+        }
       })
       .catch((progressError) => {
         if (cancelled) return;
         console.warn('Guided tour progress was not loaded:', progressError);
-        setLoaded(true);
-        setOpen(true);
+        applyProgress(localProgress || { status: 'not_started', completed_steps: [] });
       });
     return () => {
       cancelled = true;
     };
-  }, [isDemo, steps]);
+  }, [isDemo, localProgressKey, persistProgress, steps]);
 
   useEffect(() => {
     if (!open || !isWelcome) return;

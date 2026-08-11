@@ -15,6 +15,7 @@ vi.mock('@/lib/auth_new', () => ({
 
 describe('Content audience workspace localization', () => {
   beforeEach(() => {
+    vi.mocked(newAuth.makeRequest).mockReset();
     window.localStorage.clear();
     window.localStorage.setItem('language', 'el');
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ items: [] });
@@ -32,7 +33,7 @@ describe('Content audience workspace localization', () => {
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
-  it('localizes the Russian demo business name on the Turkish content page', async () => {
+  it('opens the safe Turkish demo content-plan flow without API mutations or Russian copy', async () => {
     window.localStorage.setItem('language', 'tr');
     vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
       if (path.startsWith('/content-plans/context')) return { context: {} };
@@ -76,10 +77,9 @@ describe('Content audience workspace localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'İçerik' })).toBeInTheDocument();
-    expect(screen.getByText('Roga i Kopyta')).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'İçerik hazır' })).toBeInTheDocument();
-    expect(await screen.findByText('Müşteri aramasını yanıtla: Saint Petersburg güzellik salonu')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'İçerik planı' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Plan oluştur' })).toBeInTheDocument();
+    expect(newAuth.makeRequest).not.toHaveBeenCalled();
     await waitFor(() => expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/));
   });
 });

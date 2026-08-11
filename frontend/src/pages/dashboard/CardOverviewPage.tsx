@@ -789,6 +789,12 @@ export const CardOverviewPage = () => {
   }, [automationAccess.automationAllowed, automationLockedMessage, firstRunCopy.helpMissingMap, hasConfiguredMapLink, hasSupportedConfiguredMapLink, isRu, parseRefreshPolicy.accepted_invites_count, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.invite_override_available, parseRefreshPolicy.last_completed_at, parseRefreshPolicy.reason, parseStatus, parseStatusError, user?.is_superadmin]);
 
   const handleRefreshCardData = async () => {
+    if (isDemoMode) {
+      setError(null);
+      setSuccess(pageCopy.parseDone);
+      setParseStatus('done');
+      return;
+    }
     if (!currentBusinessId || !automationAccess.automationAllowed || !canRefreshCardData) {
       if (!automationAccess.automationAllowed) {
         setError(automationLockedMessage);
