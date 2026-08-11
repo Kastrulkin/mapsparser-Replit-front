@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.outreach_template_service import (
+    OUTREACH_TEMPLATES,
+    TEMPLATE_LIBRARY_VERSION,
+)
+
 
 PLAYBOOK_VERSION = "localos_outreach_playbook_v4"
 CORPUS_TAG = "telegram_b2b"
@@ -585,6 +590,15 @@ def beauty_outreach_guidance() -> dict[str, Any]:
                 "rules": list(item["rules"]),
             }
             for item in APPROVED_OUTREACH_COPY_CONTRACTS
+        ],
+        "template_library_version": TEMPLATE_LIBRARY_VERSION,
+        "outreach_templates": [
+            {
+                **item,
+                "angles": list(item["angles"]),
+                "required_evidence": list(item["required_evidence"]),
+            }
+            for item in OUTREACH_TEMPLATES
         ],
         "approved_proofs": list(APPROVED_LOCALOS_PROOFS),
         "constraints": [

@@ -47,6 +47,11 @@ from services.outreach_founder_led_copy import (
     select_approved_localos_case,
 )
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
+from services.outreach_template_service import (
+    select_outreach_template,
+    template_allows_two_questions,
+    template_copy_matches,
+)
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
     mark_room_ready_after_positive_reply,
@@ -2118,6 +2123,8 @@ def _strategy_dimensions(
             else []
         ),
         "localos_action": candidate.get("localos_action"),
+        "outreach_template_key": candidate.get("outreach_template_key"),
+        "outreach_template_version": candidate.get("outreach_template_version"),
         "publication_capabilities": candidate.get("publication_capabilities") or {},
         "channel": channel,
         "sequence_index": sequence_index,
@@ -2339,9 +2346,20 @@ def _quality_gate(
                 and final_cta in text
                 and text.rstrip().endswith(final_cta)
             )
+    approved_template_two_question_copy = template_allows_two_questions(
+        text,
+        _text(angle),
+        candidate,
+    )
+    selected_template_key = _text(candidate.get("outreach_template_key"))
+    selected_template_copy = bool(
+        selected_template_key
+        and template_copy_matches(text, _text(angle), candidate)
+    )
     allowed_question_count = 2 if (
-        _text(angle) == "reviews_service"
+        (_text(angle) == "reviews_service" and not selected_template_copy)
         or approved_two_question_copy
+        or approved_template_two_question_copy
     ) else 1
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
@@ -2455,7 +2473,7 @@ def _quality_gate(
             and "цен" in normalized_text
             and "прайс" in normalized_text
         )
-    grounded_observation = composite_signal_grounded or observation_is_grounded(
+    grounded_observation = selected_template_copy or composite_signal_grounded or observation_is_grounded(
         text,
         source_observation,
     )
@@ -2608,6 +2626,8 @@ def _quality_gate(
             )
         ),
         "bridge": (
+            selected_template_copy
+            or
             any(contains(anchor) for anchor in personalization_anchors[1:])
             or approved_case_present
             or bool(
@@ -3238,6 +3258,7 @@ def build_preview(
     usable = [channel for channel, item in availability.items() if item["status"] in {"ready", "manual"}]
     touches = []
     previous_angles: list[str] = []
+    used_template_keys: list[str] = []
     sequence_issues: list[str] = []
     start = start_at or datetime.now(timezone.utc)
     previous_offset: int | None = None
@@ -3319,6 +3340,26 @@ def build_preview(
                 "observed_at": crm_evidence.get("observed_at"),
                 "evidence_status": crm_evidence.get("status") or "observed",
             }
+        template_selection = select_outreach_template(
+            angle,
+            candidate,
+            used_template_keys=used_template_keys,
+        )
+        if template_selection.get("status") == "selected":
+            candidate = {
+                **candidate,
+                "outreach_template_key": template_selection.get("key"),
+                "outreach_template_version": template_selection.get("version"),
+                "outreach_template_disabled": False,
+            }
+            used_template_keys.append(_text(template_selection.get("key")))
+        else:
+            candidate = {
+                **candidate,
+                "outreach_template_key": None,
+                "outreach_template_version": None,
+                "outreach_template_disabled": True,
+            }
         message = format_outreach_message(
             _message_for_angle(angle, candidate, story, previous_angles)
         )
@@ -3392,6 +3433,9 @@ def build_preview(
             "source_fact_fingerprint": source_fact_fingerprint,
             "strategy": strategy,
             "strategy_fingerprint": strategy_fingerprint(strategy),
+            "template_selection": template_selection,
+            "template_key": template_selection.get("key"),
+            "template_version": template_selection.get("version"),
         })
         previous_angles.append(angle)
         previous_offset = day_offset
@@ -3691,6 +3735,10 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "original_generated_text": touch.get("original_generated_text"),
                     "original_generated_subject": touch.get("original_generated_subject"),
                     "source_fact_fingerprint": touch.get("source_fact_fingerprint"),
+                    "template_key": touch.get("template_key"),
+                    "template_version": touch.get("template_version"),
+                    "template_label": (touch.get("template_selection") or {}).get("label"),
+                    "template_selection": touch.get("template_selection") or {},
                 }),
                 Json(touch["quality_gate"]),
                 touch.get("strategy_fingerprint"), Json(touch.get("strategy") or {}),

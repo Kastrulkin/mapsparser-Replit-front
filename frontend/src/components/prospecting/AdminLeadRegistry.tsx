@@ -459,6 +459,9 @@ interface SavedOutreachCampaign {
       human_edited?: boolean;
       manual_edit_review_required?: boolean;
       manual_edit_review_passed?: boolean;
+      template_key?: string | null;
+      template_version?: number | null;
+      template_label?: string | null;
     };
   }>;
   inbound_events?: OutreachInboundEvent[];
@@ -3452,6 +3455,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
+                              {touch.message_brief_json?.template_label ? (
+                                <p className="mt-2 text-xs font-medium text-sky-700">
+                                  Основа: {touch.message_brief_json.template_label}
+                                </p>
+                              ) : null}
                               {touch.message_brief_json?.observation || touch.message_brief_json?.pain_hypothesis || touch.message_brief_json?.problem_hypothesis || touch.message_brief_json?.solution || touch.message_brief_json?.relevance_bridge ? (
                                 <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                                   {touch.message_brief_json?.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.message_brief_json.observation}</p> : null}

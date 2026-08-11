@@ -32,6 +32,12 @@ describe('OutreachCampaignBuilder', () => {
               evidence_kind: 'operator_approved_partnership_reason',
               observation: 'Предложить совместный показ в ТРК Гранд Каньон.',
               relevance_bridge: 'У каждого участника есть понятная роль.',
+              template_selection: {
+                status: 'selected',
+                key: 'local_partnership_acquisition_v1',
+                version: 1,
+                label: 'Новые клиенты через партнёрства',
+              },
               quality_gate: { passed: true, total_score: 18, max_score: 18 },
             }],
           },
@@ -47,5 +53,6 @@ describe('OutreachCampaignBuilder', () => {
     expect(await screen.findByText('Подтверждённая идея:')).toBeInTheDocument();
     expect(screen.queryByText('Факт:')).not.toBeInTheDocument();
     expect(screen.getByText('Почему предложение подходит:')).toBeInTheDocument();
+    expect(screen.getByText('Основа: Новые клиенты через партнёрства')).toBeInTheDocument();
   });
 });

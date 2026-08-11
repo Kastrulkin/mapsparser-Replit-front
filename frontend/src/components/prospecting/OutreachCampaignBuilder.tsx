@@ -98,6 +98,15 @@ type TouchPreview = {
   language_support?: LanguageSupport;
   pain_support?: LanguageSupport;
   relevance_bridge?: string | null;
+  template_key?: string | null;
+  template_version?: number | null;
+  template_label?: string | null;
+  template_selection?: {
+    status?: string;
+    key?: string | null;
+    version?: number | null;
+    label?: string | null;
+  };
   quality_gate?: QualityGate;
   status?: string;
   generated_text?: string;
@@ -124,6 +133,9 @@ type CampaignTouch = TouchPreview & {
     language_support?: LanguageSupport;
     pain_support?: LanguageSupport;
     relevance_bridge?: string | null;
+    template_key?: string | null;
+    template_version?: number | null;
+    template_label?: string | null;
   };
 };
 
@@ -338,6 +350,9 @@ export function OutreachCampaignBuilder({
             observation: touch.observation || touch.message_brief_json?.observation || null,
             problem_hypothesis: touch.problem_hypothesis || touch.message_brief_json?.problem_hypothesis || null,
             relevance_bridge: touch.relevance_bridge || touch.message_brief_json?.relevance_bridge || null,
+            template_key: touch.template_key || touch.message_brief_json?.template_key || null,
+            template_version: touch.template_version || touch.message_brief_json?.template_version || null,
+            template_label: touch.template_selection?.label || touch.message_brief_json?.template_label || null,
           })),
         }));
       setCampaigns(nextCampaigns);
@@ -1010,6 +1025,11 @@ export function OutreachCampaignBuilder({
                     {touch.quality_gate?.passed ? 'Факты проверены' : touch.status || 'Нужна проверка'}
                   </span>
                 </div>
+                {touch.template_label || touch.template_selection?.label ? (
+                  <p className="mt-2 text-xs font-medium text-sky-700">
+                    Основа: {touch.template_label || touch.template_selection?.label}
+                  </p>
+                ) : null}
                 {touch.observation || touch.pain_hypothesis || touch.problem_hypothesis || touch.solution || touch.relevance_bridge ? (
                   <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                     {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
