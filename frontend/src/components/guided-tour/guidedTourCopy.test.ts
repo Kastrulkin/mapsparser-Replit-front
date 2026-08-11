@@ -54,6 +54,31 @@ describe('guided tour localization', () => {
     expect(JSON.stringify(copy)).not.toMatch(internalJargon);
   });
 
+  it('uses concrete Russian copy instead of abstract product language', () => {
+    const steps = guidedTourStepsForLanguage('ru');
+    const text = steps.map((step) => `${step.title} ${step.body}`).join(' ');
+    const vaguePhrases = /хранит контекст|ведутся по этапам|картина бизнеса|практический результат|следующий результат|рабочий экран|история сохраняет факты|решение остаётся за вами/i;
+
+    expect(text).not.toMatch(vaguePhrases);
+    expect(steps.find((step) => step.key === 'partnership-candidates')).toMatchObject({
+      title: 'Готовое предложение для «Ромашки»',
+      body: 'В карточке видно, что предложить партнёру, как с ним связаться и что делать после согласования.',
+    });
+  });
+
+  it('gives every Russian content-plan and agent step its own explanation', () => {
+    const steps = guidedTourStepsForLanguage('ru');
+    const keys = [
+      'content-plan-setup', 'content-plan-preview', 'content-plan-save', 'content-plan-review',
+      'agents-signals', 'agents-today', 'agents-employees', 'agents-control', 'agents-run', 'agents-review', 'agents-history',
+    ];
+    const selected = steps.filter((step) => keys.includes(step.key));
+
+    expect(selected).toHaveLength(keys.length);
+    expect(new Set(selected.map((step) => step.title)).size).toBe(keys.length);
+    expect(new Set(selected.map((step) => step.body)).size).toBe(keys.length);
+  });
+
   it('uses the demo link language before saved and browser preferences', () => {
     expect(resolveInitialLanguage('/demo', '?lang=tr', 'ru', 'de-DE')).toBe('tr');
     expect(resolveInitialLanguage('/demo', '?lang=ar', null, 'en-US')).toBe('ar');
