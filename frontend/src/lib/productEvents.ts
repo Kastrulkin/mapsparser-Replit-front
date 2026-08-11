@@ -9,6 +9,7 @@ type ProductEvent = {
 /** Analytics must never delay or block an operational action. */
 export const trackProductEvent = ({ eventName, businessId, objectType, objectId, properties }: ProductEvent) => {
   if (!businessId || typeof window === 'undefined') return;
+  if (window.sessionStorage.getItem('localos_demo_mode') === '1' || window.localStorage.getItem('demo_auth_token')) return;
 
   const payload = {
     event_name: eventName,
