@@ -54,7 +54,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
               <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[9px] font-semibold text-amber-200 ring-1 ring-inset ring-amber-300/15">Через файл</span>
             </div>
             <p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">
-              Загрузите выгрузку CSV или Excel. ЛокалОС покажет найденные показатели до сохранения, чтобы вы могли всё проверить.
+              Загрузите выгрузку из любой CRM. ЛокалОС распознает структуру и попросит проверить только неоднозначные колонки.
             </p>
           </div>
         </div>

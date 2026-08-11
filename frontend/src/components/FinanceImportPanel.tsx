@@ -19,8 +19,19 @@ type ImportPreview = {
   valid_rows: number;
   failed_rows: number;
   mapping: Record<string, string>;
+  mapping_details?: MappingDetail[];
+  needs_mapping_confirmation?: boolean;
+  unmapped_headers?: string[];
+  source_headers?: string[];
   preview: Array<Record<string, unknown>>;
   errors: Array<{ row: number; errors: string[] }>;
+};
+
+type MappingDetail = {
+  target: string;
+  source: string;
+  confidence: number;
+  method: 'header' | 'values' | 'manual' | string;
 };
 
 type ImportTemplateInfo = {
@@ -46,6 +57,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   const [templateProfile, setTemplateProfile] = useState('manual');
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [mappingDirty, setMappingDirty] = useState(false);
+  const [mappingConfirmed, setMappingConfirmed] = useState(false);
   const [imports, setImports] = useState<ImportBatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -106,7 +118,9 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
       setPreview(data);
       setMapping(data.mapping || {});
       setMappingDirty(false);
-      setMessage(`Найдено строк: ${data.rows_total}. Готово к импорту: ${data.valid_rows}. Ошибок: ${data.failed_rows}.`);
+      setMappingConfirmed(!data.needs_mapping_confirmation);
+      const recognizedCount = Object.keys(data.mapping || {}).length;
+      setMessage(`LocalOS распознал ${recognizedCount} колонок. Готово к импорту: ${data.valid_rows}. Ошибок: ${data.failed_rows}.`);
     } catch (error) {
       setMessage('Ошибка соединения с сервером');
     } finally {
@@ -122,6 +136,10 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
     }
     if (mappingDirty) {
       setMessage('Вы изменили сопоставление колонок. Сначала снова нажмите «Проверить файл».');
+      return;
+    }
+    if (!mappingConfirmed) {
+      setMessage('Проверьте неоднозначные колонки и подтвердите сопоставление.');
       return;
     }
     if (preview.valid_rows <= 0) {
@@ -145,6 +163,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
       setPreview(null);
       setFile(null);
       setMappingDirty(false);
+      setMappingConfirmed(false);
       await loadImports();
       if (onImported) onImported();
     } catch (error) {
@@ -157,7 +176,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   return (
     <DashboardSection
       title="Импорт финансовых данных"
-      description="Загрузите CSV, TSV или Excel из CRM. LocalOS предложит соответствия для знакомых колонок, покажет ошибки и не запишет дубли повторно."
+      description="Загрузите выгрузку из любой CRM. LocalOS попробует распознать структуру файла и попросит подтвердить только неоднозначные колонки."
       actions={
         <Button variant="outline" className="gap-2" onClick={() => window.open(`/api/finance/import-template?profile=${templateProfile}`, '_blank')}>
           <Download className="h-4 w-4" />
@@ -193,12 +212,15 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
               <Label>CSV, TSV или XLSX</Label>
               <Input
                 type="file"
+                aria-label="Файл из CRM"
                 accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={(event) => {
                   const selected = event.target.files && event.target.files.length > 0 ? event.target.files[0] : null;
                   setFile(selected);
                   setPreview(null);
+                  setMapping({});
                   setMappingDirty(false);
+                  setMappingConfirmed(false);
                   setMessage(null);
                 }}
               />
@@ -216,7 +238,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
             <div className="grid gap-2 text-sm sm:grid-cols-3">
               <ImportStep active={Boolean(file)} label="1. Файл выбран" />
               <ImportStep active={Boolean(preview) && !mappingDirty} label="2. Preview проверен" />
-              <ImportStep active={Boolean(preview) && !mappingDirty && preview.valid_rows > 0} label="3. Можно импортировать" />
+              <ImportStep active={Boolean(preview) && !mappingDirty && mappingConfirmed && preview.valid_rows > 0} label="3. Можно импортировать" />
             </div>
 
             {message ? (
@@ -232,7 +254,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
               </Button>
               <Button
                 onClick={runImport}
-                disabled={!file || loading || !currentBusinessId || !preview || mappingDirty || preview.valid_rows <= 0}
+                disabled={!file || loading || !currentBusinessId || !preview || mappingDirty || !mappingConfirmed || preview.valid_rows <= 0}
                 className="gap-2"
               >
                 <Upload className="h-4 w-4" />
@@ -252,11 +274,25 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
                     Сопоставление изменено. Повторно проверьте файл перед импортом, чтобы не записать строки не в те поля.
                   </div>
                 ) : null}
+                {preview.needs_mapping_confirmation && !mappingConfirmed && !mappingDirty ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    <div className="font-semibold">Нужна быстрая проверка</div>
+                    <p className="mt-1 text-pretty leading-6 text-amber-900">
+                      Некоторые колонки определены по значениям, а не по названию. Проверьте их ниже или поправьте.
+                    </p>
+                    <Button type="button" variant="outline" className="mt-3 min-h-11" onClick={() => setMappingConfirmed(true)}>
+                      Всё верно, подтвердить
+                    </Button>
+                  </div>
+                ) : null}
                 <MappingEditor
                   mapping={mapping}
+                  details={preview.mapping_details || []}
+                  unmappedHeaders={preview.unmapped_headers || []}
                   onChange={(nextMapping) => {
                     setMapping(nextMapping);
                     setMappingDirty(true);
+                    setMappingConfirmed(false);
                   }}
                 />
                 <PreviewTable rows={preview.preview} />
@@ -358,10 +394,13 @@ const mappingLabels: Record<string, string> = {
 
 const MappingEditor: React.FC<{
   mapping: Record<string, string>;
+  details: MappingDetail[];
+  unmappedHeaders: string[];
   onChange: (mapping: Record<string, string>) => void;
-}> = ({ mapping, onChange }) => {
+}> = ({ mapping, details, unmappedHeaders, onChange }) => {
   const entries = Object.entries(mapping);
   if (entries.length === 0) return null;
+  const detailByTarget = new Map(details.map((detail) => [detail.target, detail]));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="font-semibold text-slate-950">Сопоставление колонок</div>
@@ -371,7 +410,19 @@ const MappingEditor: React.FC<{
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         {entries.map(([field, source]) => (
           <div key={field} className="space-y-2">
-            <Label>{mappingLabels[field] || field}</Label>
+            <div className="flex min-h-6 items-center justify-between gap-2">
+              <Label>{mappingLabels[field] || field}</Label>
+              {detailByTarget.get(field)?.confidence !== undefined ? (
+                <span className={cn(
+                  'rounded-full px-2 py-1 text-[10px] font-medium tabular-nums',
+                  (detailByTarget.get(field)?.confidence || 0) >= 0.85
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-800',
+                )}>
+                  {(detailByTarget.get(field)?.confidence || 0) >= 0.85 ? 'Уверенно' : 'Проверьте'}
+                </span>
+              ) : null}
+            </div>
             <Input
               value={source}
               onChange={(event) => onChange({ ...mapping, [field]: event.target.value })}
@@ -379,6 +430,11 @@ const MappingEditor: React.FC<{
           </div>
         ))}
       </div>
+      {unmappedHeaders.length > 0 ? (
+        <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+          <span className="font-medium text-slate-800">Не используются:</span> {unmappedHeaders.join(', ')}. Это нормально, если эти колонки не нужны для финансового отчёта.
+        </div>
+      ) : null}
     </div>
   );
 };

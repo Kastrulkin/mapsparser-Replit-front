@@ -115,3 +115,53 @@ def test_finance_import_duplicate_key_is_stable_for_same_entry() -> None:
 
     assert result["rows"][0]["duplicate_key"] == result["rows"][1]["duplicate_key"]
     assert build_duplicate_key(result["rows"][0]) == result["rows"][0]["duplicate_key"]
+
+
+def test_finance_import_recognizes_common_crm_export_headers() -> None:
+    rows = [
+        {
+            "Дата визита": "11.08.2026",
+            "Сумма оплаты, RUB": "3 500,00 ₽",
+            "Название услуги": "Стрижка",
+            "Специалист": "Анна",
+            "ID записи": "visit-42",
+        }
+    ]
+
+    result = normalize_finance_import_rows(rows, period_start="2026-08-01", period_end="2026-08-31")
+
+    assert result["mapping"]["date"] == "Дата визита"
+    assert result["mapping"]["amount"] == "Сумма оплаты, RUB"
+    assert result["mapping"]["service_name"] == "Название услуги"
+    assert result["mapping"]["staff_name"] == "Специалист"
+    assert result["mapping"]["external_id"] == "ID записи"
+    assert result["needs_mapping_confirmation"] is False
+    assert result["rows"][0]["revenue"] == 3500
+
+
+def test_finance_import_uses_values_for_unknown_date_and_amount_headers() -> None:
+    rows = [
+        {"Колонка A": "2026-08-10", "Колонка B": "1 250,50 ₽", "Колонка C": "revenue"},
+        {"Колонка A": "2026-08-11", "Колонка B": "900 ₽", "Колонка C": "income"},
+    ]
+
+    result = normalize_finance_import_rows(rows)
+
+    assert result["mapping"] == {"date": "Колонка A", "type": "Колонка C", "amount": "Колонка B"}
+    assert result["needs_mapping_confirmation"] is True
+    assert {item["method"] for item in result["mapping_details"]} == {"values"}
+    assert result["errors"] == []
+    assert result["rows"][0]["amount"] == 1250.5
+
+
+def test_finance_import_does_not_guess_between_ambiguous_numeric_columns() -> None:
+    rows = [
+        {"Поле A": "10", "Поле B": "1000"},
+        {"Поле A": "12", "Поле B": "1500"},
+    ]
+
+    result = normalize_finance_import_rows(rows)
+
+    assert "amount" not in result["mapping"]
+    assert result["rows"] == []
+    assert len(result["errors"]) == 2

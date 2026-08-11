@@ -48,19 +48,19 @@ YCLIENTS_STATS_EXPENSE_ROWS = {
 
 FIELD_ALIASES = {
     "record_type": ["record_type", "type_record", "тип записи", "тип строки", "раздел"],
-    "date": ["date", "transaction_date", "дата", "день"],
-    "type": ["type", "тип", "доход/расход", "операция"],
+    "date": ["date", "transaction_date", "transaction date", "visit date", "appointment date", "created at", "дата", "день", "дата визита", "дата записи", "дата оплаты"],
+    "type": ["type", "transaction type", "operation type", "тип", "доход/расход", "операция", "тип операции"],
     "category": ["category", "категория", "статья", "направление"],
-    "amount": ["amount", "sum", "сумма", "выручка", "расход"],
+    "amount": ["amount", "sum", "total", "paid", "payment amount", "total amount", "сумма", "итого", "оплачено", "сумма оплаты", "к оплате", "стоимость", "выручка", "расход"],
     "comment": ["comment", "notes", "комментарий", "примечание"],
-    "service_name": ["service_name", "service", "услуга", "название услуги"],
-    "staff_name": ["staff_name", "master", "мастер", "сотрудник"],
+    "service_name": ["service_name", "service", "service name", "service title", "item", "product", "услуга", "название услуги", "услуга или товар", "номенклатура"],
+    "staff_name": ["staff_name", "master", "employee", "employee name", "specialist", "provider", "мастер", "сотрудник", "специалист", "исполнитель", "врач"],
     "role": ["role", "роль", "должность"],
     "workplace_name": ["workplace_name", "workplace", "кресло", "кабинет", "рабочее место"],
     "workplace_type": ["workplace_type", "тип места", "тип рабочего места"],
     "period_start": ["period_start", "начало периода", "период начало"],
     "period_end": ["period_end", "конец периода", "период конец"],
-    "revenue": ["revenue", "выручка услуги", "выручка мастера", "выручка места"],
+    "revenue": ["revenue", "sales revenue", "gross revenue", "turnover", "оборот", "выручка услуги", "выручка мастера", "выручка места"],
     "visits_count": ["visits_count", "visits", "визиты", "продаж", "количество"],
     "avg_price": ["avg_price", "average_price", "средняя цена", "средний чек"],
     "duration_minutes": ["duration_minutes", "duration", "длительность", "минут"],
@@ -73,8 +73,15 @@ FIELD_ALIASES = {
     "no_show_count": ["no_show_count", "no-show", "неявки"],
     "rebooking_count": ["rebooking_count", "rebooking", "повторная запись"],
     "gross_profit": ["gross_profit", "валовая прибыль", "прибыль"],
-    "external_id": ["external_id", "id", "внешний id", "номер"],
+    "external_id": ["external_id", "id", "record id", "appointment id", "transaction id", "visit id", "внешний id", "номер", "id записи", "номер записи"],
 }
+
+ENTRY_TYPE_ALIASES = {
+    "revenue": {"revenue", "income", "sale", "sales", "payment", "paid", "доход", "приход", "продажа", "оплата"},
+    "expense": {"expense", "cost", "write off", "refund", "расход", "списание", "возврат", "затрата"},
+}
+
+MAPPING_CONFIRMATION_THRESHOLD = 0.85
 
 
 TEMPLATE_COLUMNS = [
@@ -362,16 +369,121 @@ def _normalize_header(value: Any) -> str:
     return str(value or "").strip().lower().replace("\ufeff", "")
 
 
-def suggest_finance_mapping(headers: list[str]) -> dict[str, str]:
-    normalized_headers = {_normalize_header(header): header for header in headers}
-    mapping = {}
+def _header_words(value: Any) -> list[str]:
+    normalized = re.sub(r"[^\w]+", " ", _normalize_header(value), flags=re.UNICODE)
+    return [word for word in normalized.split() if word]
+
+
+def _header_match_score(header: str, candidate: str, canonical: str) -> tuple[float, str]:
+    normalized_header = _normalize_header(header)
+    normalized_candidate = _normalize_header(candidate)
+    if normalized_header == normalized_candidate:
+        return (1.0 if normalized_candidate == _normalize_header(canonical) else 0.98, "header")
+
+    header_words = set(_header_words(header))
+    candidate_words = set(_header_words(candidate))
+    if not header_words or not candidate_words:
+        return 0.0, ""
+    if len(candidate_words) > 1 and candidate_words.issubset(header_words):
+        return 0.92, "header"
+    overlap = len(header_words & candidate_words) / len(header_words | candidate_words)
+    if overlap >= 0.66:
+        return 0.86, "header"
+    if len(candidate_words) == 1 and candidate_words.issubset(header_words):
+        return 0.84, "header"
+    return 0.0, ""
+
+
+def _nonempty_column_values(rows: list[dict[str, Any]], header: str) -> list[Any]:
+    normalized_header = _normalize_header(header)
+    values = []
+    for row in rows[:100]:
+        normalized_row = {_normalize_header(key): value for key, value in row.items()}
+        value = normalized_row.get(normalized_header)
+        if _str(value):
+            values.append(value)
+    return values
+
+
+def _ratio(values: list[Any], predicate) -> float:
+    if not values:
+        return 0.0
+    return sum(1 for value in values if predicate(value)) / len(values)
+
+
+def _entry_type(value: Any) -> str:
+    normalized = " ".join(_header_words(value))
+    for canonical, aliases in ENTRY_TYPE_ALIASES.items():
+        if normalized in aliases:
+            return canonical
+    return normalized
+
+
+def analyze_finance_mapping(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    headers = list(rows[0].keys()) if rows else []
+    candidates = []
     for canonical, aliases in FIELD_ALIASES.items():
-        candidates = [_normalize_header(canonical)] + [_normalize_header(alias) for alias in aliases]
-        for candidate in candidates:
-            if candidate in normalized_headers:
-                mapping[canonical] = normalized_headers[candidate]
-                break
-    return mapping
+        for header in headers:
+            best_score = 0.0
+            best_method = ""
+            for alias in [canonical, *aliases]:
+                score, method = _header_match_score(header, alias, canonical)
+                if score > best_score:
+                    best_score = score
+                    best_method = method
+            if best_score > 0:
+                candidates.append((best_score, canonical, header, best_method))
+
+    mapping = {}
+    details = []
+    used_headers = set()
+    for score, canonical, header, method in sorted(candidates, key=lambda item: item[0], reverse=True):
+        if canonical in mapping or header in used_headers:
+            continue
+        mapping[canonical] = header
+        used_headers.add(header)
+        details.append({"target": canonical, "source": header, "confidence": round(score, 2), "method": method})
+
+    remaining_headers = [header for header in headers if header not in used_headers]
+    for header in list(remaining_headers):
+        values = _nonempty_column_values(rows, header)
+        date_ratio = _ratio(values, lambda value: _date(value) is not None)
+        type_ratio = _ratio(values, lambda value: _entry_type(value) in ENTRY_TYPES)
+        if "date" not in mapping and date_ratio >= 0.8:
+            mapping["date"] = header
+            used_headers.add(header)
+            details.append({"target": "date", "source": header, "confidence": 0.78, "method": "values"})
+        elif "type" not in mapping and type_ratio >= 0.8:
+            mapping["type"] = header
+            used_headers.add(header)
+            details.append({"target": "type", "source": header, "confidence": 0.78, "method": "values"})
+
+    remaining_headers = [header for header in headers if header not in used_headers]
+    numeric_headers = []
+    for header in remaining_headers:
+        values = _nonempty_column_values(rows, header)
+        if values and _ratio(values, lambda value: _money(value) is not None) >= 0.9:
+            numeric_headers.append(header)
+    if "amount" not in mapping and "revenue" not in mapping and len(numeric_headers) == 1:
+        header = numeric_headers[0]
+        mapping["amount"] = header
+        used_headers.add(header)
+        details.append({"target": "amount", "source": header, "confidence": 0.68, "method": "values"})
+
+    details.sort(key=lambda item: list(FIELD_ALIASES).index(item["target"]))
+    needs_confirmation = any(item["confidence"] < MAPPING_CONFIRMATION_THRESHOLD for item in details)
+    return {
+        "mapping": mapping,
+        "mapping_details": details,
+        "needs_mapping_confirmation": needs_confirmation,
+        "unmapped_headers": [header for header in headers if header not in used_headers],
+        "source_headers": headers,
+    }
+
+
+def suggest_finance_mapping(headers: list[str]) -> dict[str, str]:
+    placeholder_row = {header: "" for header in headers}
+    return analyze_finance_mapping([placeholder_row]).get("mapping", {})
 
 
 def normalize_finance_import_rows(
@@ -380,7 +492,20 @@ def normalize_finance_import_rows(
     period_start: str | None = None,
     period_end: str | None = None,
 ) -> dict[str, Any]:
-    mapping = mapping or suggest_finance_mapping(list(rows[0].keys()) if rows else [])
+    supplied_mapping = bool(mapping)
+    analysis = {
+        "mapping": mapping or {},
+        "mapping_details": [
+            {"target": canonical, "source": source, "confidence": 1.0, "method": "manual"}
+            for canonical, source in (mapping or {}).items()
+        ],
+        "needs_mapping_confirmation": False,
+        "unmapped_headers": [],
+        "source_headers": list(rows[0].keys()) if rows else [],
+    }
+    if not supplied_mapping:
+        analysis = analyze_finance_mapping(rows)
+    mapping = analysis.get("mapping", {})
     normalized = []
     errors = []
 
@@ -396,6 +521,10 @@ def normalize_finance_import_rows(
 
     return {
         "mapping": mapping,
+        "mapping_details": analysis.get("mapping_details", []),
+        "needs_mapping_confirmation": analysis.get("needs_mapping_confirmation", False),
+        "unmapped_headers": analysis.get("unmapped_headers", []),
+        "source_headers": analysis.get("source_headers", []),
         "rows": normalized,
         "errors": errors,
         "total": len(rows),
@@ -420,7 +549,7 @@ def _normalize_import_row(row: dict[str, Any], default_start: str | None, defaul
     item = {"record_type": record_type, "external_id": _str(row.get("external_id"))}
 
     if record_type == "entry":
-        entry_type = _str(row.get("type")).lower()
+        entry_type = _entry_type(row.get("type"))
         if entry_type not in ENTRY_TYPES:
             errors.append("type должен быть revenue или expense")
         item.update(
@@ -527,14 +656,28 @@ def _str(value: Any) -> str:
 
 
 def _money(value: Any) -> float | None:
-    raw = _str(value).replace(" ", "").replace("\u00a0", "").replace(",", ".")
+    raw = _str(value).replace(" ", "").replace("\u00a0", "")
     if raw == "":
         return 0.0
+    negative = raw.startswith("-") or (raw.startswith("(") and raw.endswith(")"))
+    raw = re.sub(r"[^0-9,.-]", "", raw).strip(".")
+    if "," in raw and "." in raw:
+        decimal_separator = "," if raw.rfind(",") > raw.rfind(".") else "."
+        thousands_separator = "." if decimal_separator == "," else ","
+        raw = raw.replace(thousands_separator, "").replace(decimal_separator, ".")
+    elif raw.count(",") == 1:
+        left, right = raw.split(",")
+        raw = f"{left}.{right}" if len(right) <= 2 else f"{left}{right}"
+    elif raw.count(".") == 1:
+        left, right = raw.split(".")
+        raw = f"{left}.{right}" if len(right) <= 2 else f"{left}{right}"
+    else:
+        raw = raw.replace(",", "").replace(".", "")
     try:
         result = float(raw)
     except Exception:
         return None
-    if result < 0:
+    if negative or result < 0:
         return None
     return result
 

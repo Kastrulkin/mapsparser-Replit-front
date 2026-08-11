@@ -1413,6 +1413,10 @@ def preview_finance_import():
             "valid_rows": len(normalized.get("rows", [])),
             "failed_rows": len(normalized.get("errors", [])),
             "mapping": normalized.get("mapping", {}),
+            "mapping_details": normalized.get("mapping_details", []),
+            "needs_mapping_confirmation": normalized.get("needs_mapping_confirmation", False),
+            "unmapped_headers": normalized.get("unmapped_headers", []),
+            "source_headers": normalized.get("source_headers", []),
             "preview": preview_rows,
             "errors": normalized.get("errors", [])[:20],
         })
