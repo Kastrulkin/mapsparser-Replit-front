@@ -244,8 +244,8 @@ def test_superadmin_morning_digest_names_posts_and_separates_manual_actions():
 
     assert "«Летние стрижки» → Telegram: выйдет автоматически" in text
     assert "«Летние стрижки» → VK: проверить и подтвердить текст" in text
-    assert superadmin_telegram_notifications.CONTENT_URL in text
-    assert "Автоматических касаний на сегодня нет" in text
+    assert superadmin_telegram_notifications.CONTENT_URL not in text
+    assert "Аутрич" not in text
 
 
 def test_superadmin_morning_digest_explains_automatic_and_manual_outreach():
@@ -273,9 +273,54 @@ def test_superadmin_morning_digest_explains_automatic_and_manual_outreach():
         ],
     )
 
-    assert "LocalOS → 047 Beauty Zone · Email в 10:00: уйдёт автоматически" in text
-    assert "Оливер → Legenda · MAX в 12:00: отправить вручную" in text
-    assert superadmin_telegram_notifications.OUTREACH_URL in text
+    assert "1 касание · Email · по расписанию на 10:00: уйдут автоматически" in text
+    assert "1 касание · MAX · по расписанию на 12:00: нужно отправить вручную" in text
+    assert superadmin_telegram_notifications.OUTREACH_URL not in text
+
+
+def test_superadmin_morning_digest_groups_disabled_outreach_instead_of_listing_every_lead():
+    items = [
+        {
+            "business_name": "LocalOS",
+            "lead_name": f"Лид {index}",
+            "channel": "email",
+            "local_time": f"08:{index:02d}",
+            "touch_status": "scheduled",
+            "campaign_status": "approved",
+            "queue_status": "queued",
+            "dispatch_enabled": False,
+        }
+        for index in range(10)
+    ]
+
+    text = superadmin_telegram_notifications.format_superadmin_morning_operations([], items)
+
+    assert "10 касаний · Email · по расписанию 08:00–08:09: не будут отправлены — автоматическая отправка выключена" in text
+    assert "Лид 0" not in text
+    assert "Ещё 2 касаний" not in text
+
+
+def test_superadmin_platform_attention_prioritizes_reply_and_hides_duplicate_metrics():
+    text = superadmin_telegram_notifications.format_superadmin_platform_attention(
+        {
+            "attention_items": [
+                {"id": "failed_jobs", "count": 1647, "affected_businesses": 120},
+                {"id": "pending_approvals", "count": 24},
+                {"id": "outreach_replies", "count": 1},
+            ],
+            "metrics": [
+                {"key": "businesses_total", "value": 1645},
+                {"key": "networks_total", "value": 11},
+                {"key": "failed_jobs", "value": 1647},
+            ],
+        }
+    )
+
+    assert text.index("Новый ответ в аутриче") < text.index("24 действия ждут подтверждения")
+    assert "1 647 заданий обновления завершились с ошибкой" in text
+    assert "Затронуто 120 бизнесов" in text
+    assert "1 645 активных бизнесов · 11 сетей" in text
+    assert "Данные\n" not in text
 
 
 def test_reply_notification_contains_original_touch_reply_and_stop_status():

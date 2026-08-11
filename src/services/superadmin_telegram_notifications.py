@@ -81,6 +81,18 @@ def _platform_label(value: Any) -> str:
     return PLATFORM_LABELS.get(key, key or "канал")
 
 
+def _plural_ru(number: int, one: str, few: str, many: str) -> str:
+    modulo_100 = number % 100
+    modulo_10 = number % 10
+    if 11 <= modulo_100 <= 14:
+        return many
+    if modulo_10 == 1:
+        return one
+    if 2 <= modulo_10 <= 4:
+        return few
+    return many
+
+
 def _content_action(item: dict[str, Any]) -> str:
     status = str(item.get("status") or "").strip().lower()
     publish_mode = str(item.get("publish_mode") or "").strip().lower()
@@ -158,18 +170,33 @@ def _format_content_items(items: list[dict[str, Any]], *, automatic: bool, limit
 
 def _format_outreach_items(items: list[dict[str, Any]], *, automatic: bool, limit: int = 8) -> list[str]:
     filtered = [item for item in items if _is_automatic_outreach(item) == automatic]
-    lines: list[str] = []
-    for item in filtered[:limit]:
-        lead_name = _compact_text(item.get("lead_name") or "Лид", 60)
-        business_name = _compact_text(item.get("business_name") or "LocalOS", 42)
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in filtered:
         channel = _platform_label(item.get("channel"))
-        time_text = str(item.get("local_time") or "").strip()
-        timing = f" в {time_text}" if time_text else ""
-        action = "уйдёт автоматически" if automatic else _outreach_action(item)
-        lines.append(f"• {business_name} → {lead_name} · {channel}{timing}: {action}")
-    remaining = max(0, len(filtered) - limit)
+        action = "уйдут автоматически" if automatic else _outreach_action(item)
+        grouped.setdefault((channel, action), []).append(item)
+
+    lines: list[str] = []
+    for (channel, action), group in list(grouped.items())[:limit]:
+        count = len(group)
+        times = sorted({str(item.get("local_time") or "").strip() for item in group if str(item.get("local_time") or "").strip()})
+        if len(times) > 1:
+            timing = f" · по расписанию {times[0]}–{times[-1]}"
+        elif times:
+            timing = f" · по расписанию на {times[0]}"
+        else:
+            timing = ""
+        if action == "автоматическая отправка выключена — проверить кампанию":
+            action_text = "не будут отправлены — автоматическая отправка выключена"
+        elif action == "отправить вручную":
+            action_text = "нужно отправить вручную"
+        else:
+            action_text = action
+        touch_word = _plural_ru(count, "касание", "касания", "касаний")
+        lines.append(f"• {count} {touch_word} · {channel}{timing}: {action_text}")
+    remaining = max(0, len(grouped) - limit)
     if remaining:
-        lines.append(f"• Ещё {remaining} касаний — в разделе «Аутрич»")
+        lines.append(f"• Ещё {remaining} групп касаний")
     return lines
 
 
@@ -182,21 +209,79 @@ def format_superadmin_morning_operations(
     automatic_outreach = _format_outreach_items(outreach_items, automatic=True)
     manual_outreach = _format_outreach_items(outreach_items, automatic=False)
 
-    content_lines = ["📝 Публикации"]
-    content_lines.append("Автоматически:")
-    content_lines.extend(automatic_content or ["• Ничего не готово к автоматической публикации"])
-    content_lines.append("Нужно зайти и сделать:")
-    content_lines.extend(manual_content or ["• Ручных действий на сегодня нет"])
-    content_lines.append(f"Открыть: {CONTENT_URL}")
+    sections: list[str] = []
+    if automatic_content or manual_content:
+        content_lines = ["📝 Публикации на сегодня"]
+        if automatic_content:
+            content_lines.extend(["Выйдут автоматически:", *automatic_content])
+        if manual_content:
+            content_lines.extend(["Требуют решения:", *manual_content])
+        sections.append("\n".join(content_lines))
 
-    outreach_lines = ["📨 Аутрич"]
-    outreach_lines.append("Автоматически:")
-    outreach_lines.extend(automatic_outreach or ["• Автоматических касаний на сегодня нет"])
-    outreach_lines.append("Нужно зайти и сделать:")
-    outreach_lines.extend(manual_outreach or ["• Ручных действий на сегодня нет"])
-    outreach_lines.append(f"Открыть: {OUTREACH_URL}")
+    if automatic_outreach or manual_outreach:
+        outreach_lines = ["📨 Аутрич на сегодня"]
+        if automatic_outreach:
+            outreach_lines.extend(["Уйдут автоматически:", *automatic_outreach])
+        if manual_outreach:
+            outreach_lines.extend(["Требуют решения:", *manual_outreach])
+        sections.append("\n".join(outreach_lines))
 
-    return "\n".join(content_lines) + "\n\n" + "\n".join(outreach_lines)
+    return "\n\n".join(sections)
+
+
+def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
+    attention_items = [item for item in (summary.get("attention_items") or []) if int(item.get("count") or 0) > 0]
+    by_key = {str(item.get("id") or ""): item for item in attention_items}
+    ordered = [
+        by_key[key]
+        for key in ("outreach_replies", "pending_approvals", "failed_jobs", "pending_posts")
+        if key in by_key
+    ]
+    ordered.extend(item for item in attention_items if item not in ordered)
+    if not ordered:
+        return "Сегодня всё под контролем\nПо операционным очередям срочных сигналов нет."
+
+    lines = ["Сейчас важнее всего"]
+    for index, item in enumerate(ordered[:4]):
+        key = str(item.get("id") or "")
+        count = int(item.get("count") or 0)
+        rendered_count = f"{count:,}".replace(",", " ")
+        if key == "outreach_replies":
+            reply_word = _plural_ru(count, "новый ответ", "новых ответа", "новых ответов")
+            title = "Новый ответ в аутриче" if count == 1 else f"{rendered_count} {reply_word} в аутриче"
+            description = "Следующие касания остановлены. Нужно прочитать ответ и выбрать дальнейшее действие."
+            icon = "💬"
+        elif key == "pending_approvals":
+            action_word = _plural_ru(count, "действие", "действия", "действий")
+            title = f"{rendered_count} {action_word} ждут подтверждения"
+            description = "LocalOS подготовил изменения, но не выполнит их без вашего решения."
+            icon = "🟠"
+        elif key == "failed_jobs":
+            job_word = _plural_ru(count, "задание", "задания", "заданий")
+            title = f"{rendered_count} {job_word} обновления завершились с ошибкой"
+            affected = int(item.get("affected_businesses") or 0)
+            business_word = _plural_ru(affected, "бизнес", "бизнеса", "бизнесов")
+            affected_text = f" Затронуто {affected:,} {business_word}.".replace(",", " ") if affected else ""
+            description = f"Причины — ошибки получения данных и captcha.{affected_text}"
+            icon = "🔴"
+        elif key == "pending_posts":
+            publication_word = _plural_ru(count, "публикация", "публикации", "публикаций")
+            title = f"{rendered_count} {publication_word} требуют проверки"
+            description = "Проверьте черновики и ошибки перед размещением."
+            icon = "📝"
+        else:
+            title = str(item.get("title") or "Требуется внимание")
+            description = str(item.get("description") or "").strip()
+            icon = "🟠"
+        if index == 1:
+            lines.extend(["", "Ещё требуют внимания"])
+        lines.extend([f"{icon} {title}", description])
+
+    metrics = {str(item.get("key") or ""): item.get("value") for item in (summary.get("metrics") or [])}
+    businesses = int(metrics.get("businesses_total") or 0)
+    networks = int(metrics.get("networks_total") or 0)
+    lines.extend(["", "Под контролем", f"{businesses:,} активных бизнесов · {networks:,} сетей".replace(",", " ")])
+    return "\n".join(lines)
 
 
 def collect_superadmin_morning_operations(conn: Any, local_today: date) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

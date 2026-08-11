@@ -352,6 +352,11 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         "parsequeue",
         "SELECT COUNT(*) AS cnt FROM parsequeue WHERE status IN ('error', 'failed', 'captcha_required')",
     )
+    failed_businesses = _safe_count(
+        cursor,
+        "parsequeue",
+        "SELECT COUNT(DISTINCT business_id) AS cnt FROM parsequeue WHERE status IN ('error', 'failed', 'captcha_required') AND business_id IS NOT NULL",
+    )
     outreach_replies = _safe_count(
         cursor,
         "outreach_campaign_touches",
@@ -378,7 +383,10 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         ("pending_posts", "Публикации требуют внимания", "Проверьте черновики и ошибки публикаций.", pending_posts),
     ):
         if count > 0:
-            attention.append({"id": key, "title": title, "description": description, "count": count, "severity": "high" if key == "failed_jobs" else "medium"})
+            item = {"id": key, "title": title, "description": description, "count": count, "severity": "high" if key == "failed_jobs" else "medium"}
+            if key == "failed_jobs":
+                item["affected_businesses"] = failed_businesses
+            attention.append(item)
     if not attention:
         attention.append({"id": "platform_ok", "title": "Срочных задач нет", "description": "По операционным очередям критичных сигналов нет.", "count": 0, "severity": "low"})
     return {

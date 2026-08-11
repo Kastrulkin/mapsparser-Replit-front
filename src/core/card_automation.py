@@ -22,9 +22,12 @@ from core.industry_pattern_recalibration import (
 )
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.llm import analyze_text_with_gigachat
-from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
+from services.operator_scope_summary import build_operator_scope_summary
 from services.operator_mobile_today import build_mobile_today
-from services.superadmin_telegram_notifications import build_superadmin_morning_operations_block
+from services.superadmin_telegram_notifications import (
+    build_superadmin_morning_operations_block,
+    format_superadmin_platform_attention,
+)
 from services.telegram_control_scope import resolve_control_scope
 
 
@@ -1785,42 +1788,63 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             text += "\n\n" + "\n\n".join(business_sections)
         if bool(bucket.get("is_superadmin")):
             platform_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'tasks', 'scope_type': 'platform'})}"
-            reply_markup = {"inline_keyboard": [[{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}]]}
+            outreach_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'partnerships', 'scope_type': 'platform'})}"
+            diagnostics_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'diagnostics', 'scope_type': 'platform'})}"
+            today_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'today', 'scope_type': 'platform'})}"
+            reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "Ответы и кампании", "web_app": {"url": outreach_link}},
+                        {"text": "Подтверждения", "web_app": {"url": platform_link}},
+                    ],
+                    [
+                        {"text": "Ошибки обновлений", "web_app": {"url": diagnostics_link}},
+                        {"text": "Сегодня", "web_app": {"url": today_link}},
+                    ],
+                ]
+            }
+            greeting_name = str(os.getenv("SUPERADMIN_DIGEST_GREETING_NAME") or "Александр").strip() or "Александр"
+            month_names = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
+            report_time = datetime.now(_zoneinfo(DEFAULT_TIMEZONE)).strftime("%H:%M")
+            text = (
+                f"Доброе утро, {greeting_name}.\n\n"
+                "LocalOS · Вся платформа\n"
+                f"{sent_date.day} {month_names[sent_date.month - 1]} · сводка собрана в {report_time}"
+            )
+            operator_block = _superadmin_operator_summary_block(conn, str(bucket.get("owner_id") or ""))
+            if operator_block:
+                text += f"\n\n{operator_block}"
             operations_block = build_superadmin_morning_operations_block(conn, sent_date)
-            text += f"\n\n{operations_block}"
+            if operations_block:
+                text += f"\n\n{operations_block}"
             completed_sections = [
                 f"🏢 {item['business_name']}\n" + "\n".join(item["completed_lines"])
                 for item in bucket["businesses"]
                 if item.get("completed_lines")
             ]
             if completed_sections:
-                text += "\n\n✅ Что LocalOS уже сделал\n" + "\n\n".join(completed_sections)
+                visible_completed = completed_sections[:5]
+                remaining_completed = len(completed_sections) - len(visible_completed)
+                text += "\n\n✅ Что LocalOS уже сделал\n" + "\n\n".join(visible_completed)
+                if remaining_completed:
+                    text += f"\n\nЕщё результатов по бизнесам: {remaining_completed}"
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
-            operator_block = _superadmin_operator_summary_block(conn, str(bucket.get("owner_id") or ""))
-            if operator_block:
-                text += f"\n\n{operator_block}"
             monthly_block = _superadmin_monthly_recalibration_block(conn, sent_date)
             if monthly_block:
                 text += f"\n\n{monthly_block}"
-                reply_markup = {
-                    "inline_keyboard": [
-                        [{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}],
-                        [{"text": "Показать предложения", "callback_data": "industry_patterns_show"}],
-                        [{"text": "Применить только после review", "callback_data": "industry_patterns_policy"}],
-                    ]
-                }
+                reply_markup["inline_keyboard"].extend([
+                    [{"text": "Показать предложения", "callback_data": "industry_patterns_show"}],
+                    [{"text": "Применить только после review", "callback_data": "industry_patterns_policy"}],
+                ])
             impact_block = _superadmin_monthly_impact_block(conn, sent_date)
             if impact_block:
                 text += f"\n\n{impact_block}"
-                reply_markup = {
-                    "inline_keyboard": [
-                        [{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}],
-                        [{"text": "Impact report", "callback_data": "industry_patterns_impact"}],
-                        [{"text": "Health active-паттернов", "callback_data": "industry_patterns_health"}],
-                    ]
-                }
+                reply_markup["inline_keyboard"].extend([
+                    [{"text": "Impact report", "callback_data": "industry_patterns_impact"}],
+                    [{"text": "Health active-паттернов", "callback_data": "industry_patterns_health"}],
+                ])
         else:
             first_business = bucket["businesses"][0] if bucket.get("businesses") else {}
             network_id = str(first_business.get("network_id") or "")
@@ -1923,7 +1947,7 @@ def _superadmin_operator_summary_block(conn, owner_id: str) -> str:
             },
             user_id=owner_id,
         )
-        return format_scope_summary_for_telegram(summary)
+        return format_superadmin_platform_attention(summary)
     except Exception:
         try:
             conn.rollback()
