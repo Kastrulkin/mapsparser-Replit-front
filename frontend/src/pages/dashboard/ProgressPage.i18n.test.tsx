@@ -116,6 +116,29 @@ describe('ProgressPage localization', () => {
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
+  it('renders the empty recent-results state when the API omits recent achievements', async () => {
+    const { recent_achievements: omittedRecentAchievements, ...overviewWithoutRecentAchievements } = overview;
+    void omittedRecentAchievements;
+    vi.mocked(newAuth.makeRequest).mockImplementation((url: string) => {
+      if (url.startsWith('/operator/progress?')) return Promise.resolve(overviewWithoutRecentAchievements);
+      return Promise.resolve({ success: true, status: 'idle' });
+    });
+
+    render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<ProgressPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/Doğrulanmış sonuçlar burada görünecek/)).toBeInTheDocument();
+  });
+
   it('shows the data freshness action when the overview reports missing analytics inputs', async () => {
     window.localStorage.setItem('language', 'ru');
     vi.mocked(newAuth.makeRequest).mockImplementation((url: string) => {

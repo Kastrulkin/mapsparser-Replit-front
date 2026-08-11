@@ -443,6 +443,7 @@ export const ProgressPage = () => {
   const mapsArea = overview?.areas.find((area) => area.key === 'maps') || null;
   const mapAuditMilestone = mapsArea?.milestones.find((milestone) => milestone.key === 'map_audited');
   const networkLocations = overview?.scope?.locations || [];
+  const recentAchievements = Array.isArray(overview?.recent_achievements) ? overview.recent_achievements : [];
   const selectedAuditLocation = networkLocations.find((location) => location.id === selectedAuditBusinessId);
   const currentMission = overview?.focus_action || overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || null;
   const openProblemLocation = (location: NonNullable<GrowthOverview['problem_locations']>[number]) => {
@@ -717,9 +718,9 @@ export const ProgressPage = () => {
           <Clock3 className="h-5 w-5 text-slate-500" />
           <h2 className="text-lg font-semibold text-slate-950">{copy.recentResults}</h2>
         </div>
-        {overview.recent_achievements.length > 0 ? (
+        {recentAchievements.length > 0 ? (
           <div className="mt-4 divide-y divide-slate-100">
-            {overview.recent_achievements.map((item) => {
+            {recentAchievements.map((item) => {
               const Icon = AREA_ICONS[item.area];
               return (
                 <div key={item.key} className="flex gap-3 py-3 first:pt-0 last:pb-0">
