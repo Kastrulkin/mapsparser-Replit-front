@@ -1576,21 +1576,6 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     )
     if context.get("source_url") and audit_state:
         audit_observed_at = context.get("public_audit_updated_at") or context.get("updated_at")
-        if audit_state.get("description_present") is False:
-            ledger.append({
-                "id": "map-description-gap",
-                "kind": "map_description_gap",
-                "fact": f"В карточке {_text(context.get('lead_name'))} нет описания бизнеса.",
-                "status": "observed",
-                "source_url": context.get("source_url"),
-                "observed_at": audit_observed_at,
-                "freshness": "current_snapshot",
-                "confidence": 0.95,
-                "hypothesis": None,
-                "relevance": "Можно подготовить короткое описание из опубликованных услуг и фактов.",
-                "source_type": "public_audit_current_state",
-                "signal_combo": "map_description_gap",
-            })
         if int(audit_state.get("news_count") or 0) == 0:
             ledger.append({
                 "id": "map-content-gap",
@@ -1602,7 +1587,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
                 "freshness": "current_snapshot",
                 "confidence": 0.95,
                 "hypothesis": None,
-                "relevance": "Можно готовить отдельные черновики для соцсетей и карт.",
+                "relevance": "Новости показывают актуальные услуги и дают клиентам ещё один повод обратиться из карт.",
                 "source_type": "public_audit_current_state",
                 "signal_combo": "map_content_gap",
             })
@@ -1803,14 +1788,11 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = 1
         elif kind == "map_issue":
             rank = 2
-        elif kind == "map_description_gap":
-            rank = 3
         elif kind == "map_gap":
-            rank = 4
+            rank = 3
         elif (
             "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact
-            or "описание бизнеса не найдено" in fact
         ):
             rank = 2
         elif "рейтинг -" in fact and "отзывов -" in fact:

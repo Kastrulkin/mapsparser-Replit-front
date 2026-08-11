@@ -1992,7 +1992,7 @@ def test_estem_generic_email_with_no_localos_action_cannot_approve_raw_abstract_
     assert gate["total_score"] < 18
 
 
-def test_public_audit_current_state_adds_distinct_description_and_news_signals():
+def test_public_audit_current_state_adds_news_but_not_description_signal():
     ledger = build_evidence_ledger(
         {
             "lead_name": "Padrina_studio",
@@ -2013,9 +2013,8 @@ def test_public_audit_current_state_adds_distinct_description_and_news_signals()
     )
 
     by_id = {item["id"]: item for item in ledger}
-    assert by_id["map-description-gap"]["kind"] == "map_description_gap"
     assert by_id["map-content-gap"]["kind"] == "map_gap"
-    assert by_id["map-description-gap"]["fact"] != by_id["map-content-gap"]["fact"]
+    assert "map-description-gap" not in by_id
 
 
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():

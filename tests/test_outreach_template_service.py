@@ -29,11 +29,11 @@ def _candidate(**overrides):
     return candidate
 
 
-def test_library_contains_eight_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v1"
-    assert len(OUTREACH_TEMPLATES) == 8
-    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 8
-    assert all(item["version"] == 1 for item in OUTREACH_TEMPLATES)
+def test_library_contains_seven_versioned_owner_templates():
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v2"
+    assert len(OUTREACH_TEMPLATES) == 7
+    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 7
+    assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
 
 
 def test_low_rating_template_is_selected_and_uses_approved_owner_copy():
@@ -115,18 +115,32 @@ def test_map_price_gap_cannot_be_reused_as_average_ticket_signal():
     assert select_outreach_template("content_operations", candidate)["key"] == "map_service_price_coverage_v1"
 
 
-def test_description_gap_template_is_grounded_and_passes_strict_flow():
+def test_description_gap_is_not_an_outreach_signal_for_yandex_maps():
     candidate = _candidate(
         observed_fact="В карточке Padrina_studio нет описания бизнеса.",
         evidence_kind="map_description_gap",
         signal_combo="map_description_gap",
     )
     selection = select_outreach_template("content_operations", candidate)
+    assert selection["status"] == "individual_copy_required"
+    assert selection["key"] is None
+
+
+def test_news_gap_template_offers_client_acquisition_instead_of_time_saving():
+    candidate = _candidate(
+        recipient="Анни",
+        observed_fact="В карточке Анни нет новостей.",
+        evidence_kind="map_gap",
+        signal_combo="map_content_gap",
+    )
+    selection = select_outreach_template("content_operations", candidate)
     text = render_outreach_template(selection, candidate)
 
-    assert selection["key"] == "map_description_gap_v1"
-    assert "нет описания бизнеса" in text
-    assert "LocalOS подготовит черновик описания" in text
+    assert selection["key"] == "map_content_gap_v2"
+    assert "актуальные услуги" in text
+    assert "привлекать больше клиентов с карт" in text
+    assert "сэкономить время" not in text
+    assert text.count("?") == 1
 
 
 def test_templates_do_not_repeat_inside_one_sequence():
@@ -183,11 +197,6 @@ def test_all_six_templates_pass_current_quality_gate_on_supported_evidence():
         ("content_operations", _candidate(
             observed_fact="По данным аудита карточки: всего услуг - 30; с ценой - 2.",
             evidence_kind="map_issue",
-        )),
-        ("content_operations", _candidate(
-            observed_fact="В карточке Padrina_studio нет описания бизнеса.",
-            evidence_kind="map_description_gap",
-            signal_combo="map_description_gap",
         )),
     )
 

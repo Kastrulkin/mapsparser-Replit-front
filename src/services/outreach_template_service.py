@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v1"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v2"
 
 OUTREACH_TEMPLATES = (
     {
@@ -61,9 +61,9 @@ OUTREACH_TEMPLATES = (
         "question_policy": "single_cta",
     },
     {
-        "key": "map_content_gap_v1",
+        "key": "map_content_gap_v2",
         "label": "Нет новостей в карточке",
-        "version": 1,
+        "version": 2,
         "angles": ("signal", "content_operations"),
         "pain_key": "marketing_and_clients",
         "required_evidence": ("current_map_content_gap",),
@@ -76,15 +76,6 @@ OUTREACH_TEMPLATES = (
         "angles": ("content_operations", "audit_step"),
         "pain_key": "marketing_and_clients",
         "required_evidence": ("current_map_service_price_coverage",),
-        "question_policy": "single_cta",
-    },
-    {
-        "key": "map_description_gap_v1",
-        "label": "Нет описания в карточке",
-        "version": 1,
-        "angles": ("content_operations", "audit_step"),
-        "pain_key": "marketing_and_clients",
-        "required_evidence": ("current_map_description_gap",),
         "question_policy": "single_cta",
     },
 )
@@ -192,7 +183,7 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "отзыв" in fact and "без ответ" in fact
         ):
             reasons.append("unanswered_review_required")
-    elif template_key == "map_content_gap_v1":
+    elif template_key == "map_content_gap_v2":
         fact = _text(candidate.get("observed_fact")).lower()
         if signal_combo not in {
             "active_external_channels_with_incomplete_map_profile",
@@ -207,13 +198,6 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "услуг" in fact and "цен" in fact
         ):
             reasons.append("map_service_price_coverage_required")
-    elif template_key == "map_description_gap_v1":
-        fact = _text(candidate.get("observed_fact")).lower()
-        if _text(candidate.get("evidence_kind")).lower() != "map_description_gap" or not (
-            "нет описания" in fact
-            or "описание бизнеса не найдено" in fact
-        ):
-            reasons.append("map_description_gap_required")
     return not reasons, reasons
 
 
@@ -356,14 +340,15 @@ def _render_outreach_template_body(
             "LocalOS отслеживает новые отзывы, группирует темы и готовит черновики ответов. Сотруднику остаётся проверить и опубликовать ответ.\n\n"
             "Вам было бы интересно сэкономить время на работе с отзывами?"
         )
-    if key == "map_content_gap_v1":
+    if key == "map_content_gap_v2":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
-            "Если новости и услуги обновляются на разных площадках вручную, один и тот же материал приходится готовить несколько раз.\n\n"
-            "LocalOS подготовит отдельные черновики для Telegram, VK и Яндекс Карт. Публикация останется после вашей проверки.\n\n"
-            "Вы бы хотели сэкономить время на постах?"
+            "Новости показывают клиентам актуальные услуги и дают ещё один повод обратиться из карт.\n\n"
+            "LocalOS подготовит отдельные черновики новостей для Telegram, VK и Яндекс Карт. "
+            "Сотруднику останется проверить и опубликовать текст.\n\n"
+            "Вам было бы интересно привлекать больше клиентов с карт?"
         )
     if key == "map_service_price_coverage_v1":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
@@ -374,15 +359,6 @@ def _render_outreach_template_body(
             "LocalOS сверит услуги и цены в карточке и подготовит список точечных изменений. "
             "Вы сами выберете, что обновить.\n\n"
             "Показать, что можно поправить в карточке?"
-        )
-    if key == "map_description_gap_v1":
-        observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
-        return (
-            f"Здравствуйте! Я {identity}.\n\n"
-            f"{observation}\n\n"
-            "Без короткого описания клиенту приходится открывать услуги и отзывы, чтобы понять, чем вы занимаетесь.\n\n"
-            "LocalOS подготовит черновик описания из опубликованных услуг и фактов. Вы проверите текст перед обновлением.\n\n"
-            "Показать черновик?"
         )
     return None
 
