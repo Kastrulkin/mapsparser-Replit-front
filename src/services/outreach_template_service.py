@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v4"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v5"
 
 OUTREACH_TEMPLATES = (
     {
@@ -21,15 +21,19 @@ OUTREACH_TEMPLATES = (
         "version": 1,
         "angles": ("signal",),
         "pain_key": "marketing_and_clients",
+        "owner_language": "Клиентов с карт мало.",
+        "pain_markers": ("терять клиентов из карт",),
         "required_evidence": ("current_map_rating", "beauty_segment"),
         "question_policy": "single_cta",
     },
     {
-        "key": "crm_completed_service_content_v1",
+        "key": "crm_completed_service_content_v2",
         "label": "CRM и контент без ручной работы",
-        "version": 1,
+        "version": 2,
         "angles": ("crm_content", "content_operations"),
         "pain_key": "operations_and_burnout",
+        "owner_language": "Не знаю, что публиковать, и времени на контент не хватает.",
+        "pain_markers": ("не всегда понятно, что публиковать", "времени на контент не хватает"),
         "required_evidence": ("confirmed_crm_provider",),
         "question_policy": "single_cta",
     },
@@ -39,6 +43,8 @@ OUTREACH_TEMPLATES = (
         "version": 1,
         "angles": ("average_ticket", "crm_growth"),
         "pain_key": "pricing_and_average_ticket",
+        "owner_language": "Работы много, а средний чек всё равно маленький.",
+        "pain_markers": ("услуг много", "средний чек всё равно маленький"),
         "required_evidence": ("confirmed_crm_or_pricelist", "beauty_or_medical_segment"),
         "question_policy": "diagnostic_plus_cta",
     },
@@ -48,24 +54,30 @@ OUTREACH_TEMPLATES = (
         "version": 1,
         "angles": ("integrated_system",),
         "pain_key": "marketing_and_clients",
+        "owner_language": "Не хочу зависеть от одного канала привлечения.",
+        "pain_markers": ("зависеть от одного канала привлечения",),
         "required_evidence": ("current_service_or_event_signal",),
         "question_policy": "single_cta",
     },
     {
-        "key": "unanswered_review_response_v1",
+        "key": "unanswered_review_response_v2",
         "label": "Отзывы без ответа",
-        "version": 1,
+        "version": 2,
         "angles": ("signal", "reviews_service"),
         "pain_key": "reviews_and_service",
+        "owner_language": "День забит, а тут приходит новый отзыв.",
+        "pain_markers": ("день забит", "приходит новый отзыв"),
         "required_evidence": ("current_unanswered_review",),
         "question_policy": "single_cta",
     },
     {
-        "key": "map_content_gap_v3",
+        "key": "map_content_gap_v4",
         "label": "Нет новостей в карточке",
-        "version": 3,
+        "version": 4,
         "angles": ("signal", "content_operations"),
-        "pain_key": "marketing_and_clients",
+        "pain_key": "operations_and_burnout",
+        "owner_language": "Не успеваю готовить посты для всех площадок.",
+        "pain_markers": ("не успеваете", "для каждой площадки отдельно"),
         "required_evidence": ("current_map_content_gap",),
         "question_policy": "single_cta",
     },
@@ -75,6 +87,8 @@ OUTREACH_TEMPLATES = (
         "version": 3,
         "angles": ("content_operations", "audit_step"),
         "pain_key": "marketing_and_clients",
+        "owner_language": "Без цен клиенту сложнее выбрать и записаться.",
+        "pain_markers": ("без цен клиенту сложнее выбрать и записаться",),
         "required_evidence": ("current_map_service_price_coverage",),
         "question_policy": "single_cta",
     },
@@ -169,7 +183,7 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             reasons.append("low_map_rating_required")
         if not _is_beauty_or_medical(candidate):
             reasons.append("beauty_segment_required")
-    elif template_key == "crm_completed_service_content_v1":
+    elif template_key == "crm_completed_service_content_v2":
         if not _crm_provider(candidate):
             reasons.append("confirmed_crm_provider_required")
     elif template_key == "average_ticket_service_matrix_v1":
@@ -188,13 +202,13 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "new_service", "service_launch", "event", "new_equipment",
         }:
             reasons.append("service_or_event_signal_required")
-    elif template_key == "unanswered_review_response_v1":
+    elif template_key == "unanswered_review_response_v2":
         fact = _text(candidate.get("observed_fact")).lower()
         if signal_combo != "active_social_with_unanswered_negative_review" and not (
             "отзыв" in fact and "без ответ" in fact
         ):
             reasons.append("unanswered_review_required")
-    elif template_key == "map_content_gap_v3":
+    elif template_key == "map_content_gap_v4":
         fact = _text(candidate.get("observed_fact")).lower()
         if signal_combo not in {
             "active_external_channels_with_incomplete_map_profile",
@@ -241,6 +255,8 @@ def select_outreach_template(
                 "version": template["version"],
                 "label": template["label"],
                 "pain_key": template["pain_key"],
+                "owner_language": template["owner_language"],
+                "pain_markers": list(template["pain_markers"]),
                 "question_policy": template["question_policy"],
                 "required_evidence": list(template["required_evidence"]),
                 "rejected": rejected,
@@ -314,11 +330,13 @@ def _render_outreach_template_body(
             "Стоимость - от 1200 рублей в месяц.\n\n"
             "Вам может быть это интересно?"
         )
-    if key == "crm_completed_service_content_v1":
+    if key == "crm_completed_service_content_v2":
         provider = _crm_provider(candidate)
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"Вижу, вы пользуетесь {provider}.\n\n"
+            "Возможно, вам знакома ситуация: не всегда понятно, что публиковать, "
+            "а времени на контент не хватает.\n\n"
             f"На основе выгрузки из {provider} LocalOS автоматически подготовит черновики постов о выполненных услугах "
             "для Telegram, VK, Яндекс Карт и других площадок.\n\n"
             "Вам было бы интересно сэкономить время на ведении соцсетей?"
@@ -338,30 +356,32 @@ def _render_outreach_template_body(
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
-            "Такая услуга может стать первым знакомством с компанией для клиентов бизнесов с похожей аудиторией.\n\n"
+            "Если не хочется зависеть от одного канала привлечения, такая услуга может стать "
+            "первым знакомством с компанией для клиентов бизнесов с похожей аудиторией.\n\n"
             "LocalOS подготовит список местных бизнесов со смежной аудиторией и черновик предложения о партнёрстве. "
             "Вы сами решите, кому его отправить.\n\n"
             "Вам было бы интересно находить новых клиентов через партнёрства?"
         )
-    if key == "unanswered_review_response_v1":
+    if key == "unanswered_review_response_v2":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
+            "День забит, а тут приходит новый отзыв - отвечать снова владельцу или сотруднику.\n\n"
             "LocalOS отслеживает новые отзывы, группирует темы и готовит черновики ответов. Сотруднику остаётся проверить и опубликовать ответ.\n\n"
             "Вам было бы интересно сэкономить время на работе с отзывами?"
         )
-    if key == "map_content_gap_v3":
+    if key == "map_content_gap_v4":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         if "нет новостей" in observation.lower() and "яндекс картах" not in observation.lower():
             observation = f"В карточке {recipient} на Яндекс Картах нет новостей."
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
-            "Новости показывают клиентам актуальные услуги и дают ещё один повод обратиться из карт.\n\n"
+            "Возможно, вы просто не успеваете готовить новости для каждой площадки отдельно.\n\n"
             "LocalOS подготовит отдельные черновики новостей для Telegram, VK и Яндекс Карт. "
             "Сотруднику останется проверить и опубликовать текст.\n\n"
-            "Вам было бы интересно привлекать больше клиентов онлайн?"
+            "Вам было бы интересно сэкономить время на публикациях?"
         )
     if key == "map_service_price_coverage_v3":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
@@ -436,3 +456,21 @@ def template_copy_matches(
     selection = select_outreach_template(angle, candidate)
     expected = render_outreach_template(selection, candidate)
     return bool(expected and _text(expected) == _text(text))
+
+
+def template_owner_pain_matches(
+    text: str,
+    angle: str,
+    candidate: dict[str, Any],
+) -> bool:
+    """Require the selected template's approved owner-language pain markers."""
+
+    if not _text(candidate.get("outreach_template_key")):
+        return True
+    selection = select_outreach_template(angle, candidate)
+    key = _text(selection.get("key"))
+    if not key:
+        return True
+    markers = tuple(_TEMPLATE_BY_KEY[key].get("pain_markers") or ())
+    normalized = _text(text).lower()
+    return bool(markers and all(_text(marker).lower() in normalized for marker in markers))

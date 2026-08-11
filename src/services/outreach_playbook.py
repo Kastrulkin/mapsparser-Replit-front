@@ -15,7 +15,7 @@ from services.outreach_template_service import (
 )
 
 
-PLAYBOOK_VERSION = "localos_outreach_playbook_v6"
+PLAYBOOK_VERSION = "localos_outreach_playbook_v7"
 CORPUS_TAG = "telegram_b2b"
 PAIN_SIGNAL_LIBRARY_VERSION = "beauty_pain_signals_v4"
 
@@ -37,7 +37,8 @@ B2B_METHOD_RULES = (
     "Первое касание о слабой карточке строить так: проверяемый сигнал, риск недополучать клиентов, исправление силами LocalOS, подтверждённый кейс и цена, ссылка на аудит для самостоятельного исправления, один вопрос.",
     "Не подставлять название компании после слов «в карточке» в именительном падеже: использовать подтверждённый родительный падеж или перестраивать фразу без склонения.",
     "Не писать сигнал как строку отчёта «Карточка: услуг - N, с ценой - M»; начинать естественно с «Вижу, что...» и полноценного предложения.",
-    "Если решение охватывает Telegram, VK и Яндекс Карты, CTA должен говорить о клиентах онлайн, а не только о клиентах с карт.",
+    "CTA должен продолжать выбранную боль: при нехватке времени спрашивать об экономии времени, при слабом привлечении - о клиентах онлайн.",
+    "В каждом касании использовать одну узнаваемую формулировку боли из библиотеки владельцев; боль получателя обозначать только как вопрос или гипотезу.",
 )
 
 BEAUTY_OWNER_PAINS = (
@@ -107,6 +108,14 @@ BEAUTY_OWNER_PAINS = (
         "localos_bridge": "Финансовые КПИ, разбор услуг и регулярный контроль показателей.",
         "support": "supported",
     },
+)
+
+LOCALOS_SUPPORTED_OWNER_PAIN_KEYS = (
+    "marketing_and_clients",
+    "reviews_and_service",
+    "pricing_and_average_ticket",
+    "operations_and_burnout",
+    "revenue_without_profit",
 )
 
 # These mappings are hypotheses to test, never facts about a recipient.  Each
@@ -563,6 +572,8 @@ def beauty_outreach_guidance() -> dict[str, Any]:
             }
             for item in BEAUTY_OWNER_PAINS
         ],
+        "localos_supported_pain_keys": list(LOCALOS_SUPPORTED_OWNER_PAIN_KEYS),
+        "localos_supported_pain_count": len(LOCALOS_SUPPORTED_OWNER_PAIN_KEYS),
         "pain_signal_library_version": PAIN_SIGNAL_LIBRARY_VERSION,
         "pain_signal_hypotheses": [
             {

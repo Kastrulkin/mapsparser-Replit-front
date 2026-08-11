@@ -104,6 +104,7 @@ from services.outreach_template_service import (
     select_outreach_template,
     template_allows_two_questions,
     template_copy_matches,
+    template_owner_pain_matches,
 )
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
@@ -2808,6 +2809,7 @@ def _quality_gate(
                 and text.count(LOCALOS_EMAIL_SIGNATURE) == 1
             )
         ),
+        "owner_pain_language": template_owner_pain_matches(text, _text(angle), candidate),
     }
     language_review = review_human_language(
         text,
@@ -2878,6 +2880,8 @@ def _quality_gate(
         blocking_reasons.append("sequence_closing_language")
     if not checks["email_signature_contract"]:
         blocking_reasons.append("email_signature_contract_failed")
+    if not checks["owner_pain_language"]:
+        blocking_reasons.append("owner_pain_language_missing")
     if enforced_language_codes:
         blocking_reasons.append("human_language_gate_failed")
     if salon_price_proof_present and not salon_price_proof_scope_valid:
@@ -2894,6 +2898,7 @@ def _quality_gate(
         "style_contract_violation": "STYLE_VIOLATION",
         "sequence_closing_language": "STYLE_VIOLATION",
         "email_signature_contract_failed": "EMAIL_SIGNATURE_CONTRACT",
+        "owner_pain_language_missing": "OWNER_PAIN_LANGUAGE_MISSING",
         "human_language_gate_failed": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
         "salon_price_proof_scope_mismatch": "PROOF_SCOPE_MISMATCH",
     }
@@ -2914,6 +2919,7 @@ def _quality_gate(
         "style_contract": "STYLE_VIOLATION",
         "sequence_policy": "STYLE_VIOLATION",
         "email_signature_contract": "EMAIL_SIGNATURE_CONTRACT",
+        "owner_pain_language": "OWNER_PAIN_LANGUAGE_MISSING",
         "human_language": enforced_language_codes[0] if enforced_language_codes else "STYLE_VIOLATION",
     }
     diagnostic_codes = [key for key, passed in checks.items() if not passed]
