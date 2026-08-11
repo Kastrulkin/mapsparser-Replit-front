@@ -157,7 +157,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   return (
     <DashboardSection
       title="Импорт финансовых данных"
-      description="Загрузите CSV/XLSX по шаблону или статистику YCLIENTS/Altegio по дням: LocalOS покажет preview, ошибки и пропустит дубли при повторной загрузке."
+      description="Загрузите CSV, TSV или Excel из CRM. LocalOS предложит соответствия для знакомых колонок, покажет ошибки и не запишет дубли повторно."
       actions={
         <Button variant="outline" className="gap-2" onClick={() => window.open(`/api/finance/import-template?profile=${templateProfile}`, '_blank')}>
           <Download className="h-4 w-4" />
@@ -208,7 +208,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
                 </div>
               ) : (
                 <div className="text-sm text-slate-500">
-                  Поддерживаются и широкие выгрузки статистики с колонками вроде «1 июня (нал)», «1 июня (б/н)», «1 июня (Всего)».
+                  Если названия колонок незнакомы, после проверки файла их можно сопоставить вручную.
                 </div>
               )}
             </div>

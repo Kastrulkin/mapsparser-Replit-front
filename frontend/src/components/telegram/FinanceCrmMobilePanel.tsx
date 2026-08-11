@@ -50,11 +50,11 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <b className="text-balance text-base">Загрузить данные из YCLIENTS</b>
+              <b className="text-balance text-base">Загрузить данные из CRM</b>
               <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[9px] font-semibold text-amber-200 ring-1 ring-inset ring-amber-300/15">Через файл</span>
             </div>
             <p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">
-              Сейчас ЛокалОС принимает отчёт Excel. Перед записью вы увидите найденные показатели и сможете всё проверить.
+              Загрузите выгрузку CSV или Excel. ЛокалОС покажет найденные показатели до сохранения, чтобы вы могли всё проверить.
             </p>
           </div>
         </div>
@@ -67,7 +67,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
         >
           <span className="min-w-0 flex-1">
             <b className="block text-sm">Как выгрузить файл</b>
-            <small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-600">Четыре шага в веб-версии YCLIENTS</small>
+            <small className="mt-1 block text-pretty text-[10px] leading-4 text-zinc-600">Как выгрузить CSV или Excel из вашей CRM</small>
           </span>
           <ChevronRight className={`h-4 w-4 shrink-0 text-zinc-600 transition-transform ${instructionOpen ? 'rotate-90' : ''}`} />
         </button>
@@ -83,10 +83,10 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
             >
               <ol className="mt-3 space-y-3 rounded-[18px] bg-black/20 p-4 ring-1 ring-inset ring-white/[0.06]">
                 {[
-                  ['Откройте отчёт', 'В веб-версии YCLIENTS перейдите: Финансы → Отчёты → Финансовый отчёт.'],
-                  ['Выберите период', 'Укажите нужные даты, оставьте статьи с движением средств и нажмите «Показать».'],
-                  ['Скачайте Excel', 'Нажмите «Выгрузить в Excel» в правом верхнем углу. Не меняйте названия строк и столбцов.'],
-                  ['Загрузите в ЛокалОС', 'Выберите ниже профиль «YCLIENTS / Altegio статистика», добавьте файл и сначала проверьте распознанные данные.'],
+                  ['Откройте отчёт', 'Найдите в CRM раздел с продажами, визитами или финансовыми отчётами.'],
+                  ['Выберите период', 'Укажите нужные даты и добавьте в отчёт дату, сумму, услугу и сотрудника, если эти поля доступны.'],
+                  ['Скачайте файл', 'Выберите CSV или Excel. Не объединяйте ячейки и не удаляйте названия столбцов.'],
+                  ['Проверьте распознавание', 'Загрузите файл в ЛокалОС. Если названия колонок незнакомы, сопоставьте их вручную перед сохранением.'],
                 ].map(([title, text], index) => (
                   <li key={title} className="flex gap-3">
                     <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[10px] bg-primary/12 text-[11px] font-bold tabular-nums text-primary">{index + 1}</span>
@@ -107,7 +107,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
           className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-primary px-4 text-sm font-semibold shadow-[0_10px_28px_rgba(255,92,51,0.18)] active:scale-[0.96]"
         >
           <Upload className="h-4 w-4" />
-          Загрузить файл YCLIENTS
+          Загрузить файл из CRM
         </button>
       </div>
 
@@ -117,8 +117,8 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
             <MessageCircle className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <b className="block text-sm">У вас другая CRM?</b>
-            <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Напишите её название. Мы учтём ваш запрос и подскажем доступный способ загрузки.</p>
+            <b className="block text-sm">Нужно прямое подключение к CRM?</b>
+            <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Для загрузки файла подключение не нужно. Оставьте запрос, если хотите автоматическую синхронизацию.</p>
           </div>
         </div>
         {currentRequest && requestState !== 'success' ? <div className="mt-3 rounded-[15px] bg-sky-500/10 p-3 text-xs leading-5 text-sky-100 ring-1 ring-inset ring-sky-400/20"><b>{currentRequest.crm_name}</b> · {requestStatusLabel(currentRequest.status)}</div> : null}
@@ -131,7 +131,7 @@ const FinanceCrmMobilePanel = ({ onOpenFileImport, onRequestCrm, currentRequest 
             {requestState === 'error' ? <p role="alert" className="text-xs leading-5 text-rose-200">{requestError}</p> : null}
             <button type="submit" disabled={!crmName.trim() || requestState === 'pending'} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-white/[0.08] px-4 text-sm font-semibold text-zinc-100 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96] disabled:opacity-45">{requestState === 'pending' ? 'Отправляем запрос…' : 'Отправить запрос'}</button>
           </form>
-        ) : <button type="button" onClick={() => setRequestOpen(true)} className="mt-3 min-h-12 w-full rounded-[15px] bg-white/[0.055] px-4 text-sm font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96]">Написать, какая у вас CRM</button>}
+        ) : <button type="button" onClick={() => setRequestOpen(true)} className="mt-3 min-h-12 w-full rounded-[15px] bg-white/[0.055] px-4 text-sm font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-[background-color,transform] active:scale-[0.96]">Заказать подключение</button>}
       </div>
     </section>
   );

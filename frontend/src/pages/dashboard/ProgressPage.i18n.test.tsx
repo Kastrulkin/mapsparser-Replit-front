@@ -155,7 +155,7 @@ describe('ProgressPage localization', () => {
           ...overview,
           data_health: {
             status: 'stale',
-            source_label: 'Выгрузка YCLIENTS',
+            source_label: 'unknown',
             missing: ['оплаты за текущий период'],
           },
         });
@@ -175,7 +175,7 @@ describe('ProgressPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('button', { name: 'Загрузить файл YCLIENTS' })).toBeInTheDocument();
-    expect(screen.getByText(/Источник: Выгрузка YCLIENTS/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Загрузить файл из CRM' })).toBeInTheDocument();
+    expect(screen.getByText(/Источник: не указан/)).toBeInTheDocument();
   });
 });

@@ -101,26 +101,26 @@ export const FinancePage = () => {
             <FinanceThresholdsPanel currentBusinessId={currentBusinessId} />
             <FinanceImportPanel currentBusinessId={currentBusinessId} />
             <DashboardSection
-              title="Как подготовить выгрузку YCLIENTS"
-              description="В YCLIENTS откройте отчёт за нужный период, выгрузите его в XLSX или CSV и загрузите выше. Доступ к API и токен не нужны."
+              title="Как подготовить выгрузку из CRM"
+              description="Выберите нужный период, выгрузите CSV или Excel и загрузите файл выше. LocalOS попробует узнать колонки; перед импортом вы сможете проверить и поправить соответствия."
             >
               <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-3">
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />1. Выберите период и выгрузите отчёт.</div>
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />2. Загрузите файл и проверьте preview.</div>
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />3. Импортируйте только подтверждённые строки.</div>
+                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />1. Выберите период и выгрузите отчёт из CRM.</div>
+                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />2. Проверьте, как LocalOS понял колонки и строки.</div>
+                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />3. Подтвердите импорт только после проверки.</div>
               </div>
               <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200"><MessageCircle className="h-5 w-5" /></span>
                     <div>
-                      <div className="font-semibold text-slate-950">У вас другая CRM?</div>
-                      <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Напишите её название — мы сохраним запрос и свяжемся по подключению.</p>
+                      <div className="font-semibold text-slate-950">Нужно прямое подключение к CRM?</div>
+                      <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Файл можно загрузить без подключения. Если нужна автоматическая синхронизация, отправьте название вашей CRM.</p>
                     </div>
                   </div>
                   {crmRequestState !== 'success' ? (
                     <Button type="button" variant="outline" className="min-h-11 shrink-0 transition-transform active:scale-[0.96]" onClick={() => setCrmRequestOpen((value) => !value)}>
-                      Написать, какая у вас CRM
+                      Заказать подключение
                     </Button>
                   ) : null}
                 </div>
