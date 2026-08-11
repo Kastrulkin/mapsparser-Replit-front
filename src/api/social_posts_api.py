@@ -366,6 +366,7 @@ def social_posts_prepare(item_id: str):
             item_id,
             platforms,
             replace_platforms=bool(data.get("replace_platforms")),
+            force_variants=bool(data.get("force_variants")),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:
@@ -411,6 +412,7 @@ def social_posts_bulk_prepare():
             item_ids,
             platforms,
             replace_platforms=bool(data.get("replace_platforms")),
+            force_variants=bool(data.get("force_variants")),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:

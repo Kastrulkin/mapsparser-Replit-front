@@ -20,6 +20,7 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.social_posts.platform_variants import deterministic_platform_variant
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -405,22 +406,7 @@ def _base_text_from_item(item: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 def _platform_text(platform: str, base_text: str) -> str:
-    text = str(base_text or "").strip()
-    if not text:
-        return ""
-    if platform == "telegram":
-        return text
-    if platform == "vk":
-        sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
-        return f"{sentences[0]}\n\n{' '.join(sentences[1:])}".strip() if len(sentences) > 1 else text
-    if platform in {"instagram", "facebook"}:
-        sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
-        return f"{sentences[0]}\n\n{' '.join(sentences[1:])}".strip() if len(sentences) > 1 else text
-    if platform == "google_business":
-        return " ".join(text.split())[:1500]
-    if platform in BROWSER_OR_MANUAL_PLATFORMS:
-        return " ".join(text.split())[:1200]
-    return text
+    return deterministic_platform_variant(platform, base_text)
 
 def _normalize_platforms(platforms: list[str] | None) -> list[str]:
     if platforms is None:

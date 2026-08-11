@@ -19,6 +19,7 @@ from core.telegram_network import telegram_urlopen
 from core.telegram_token_store import decode_telegram_bot_token
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.social_posts.platform_variants import PLATFORM_VARIANT_RULES_VERSION, platform_variant_base_hash
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -1326,13 +1327,25 @@ def _require_business_access(cursor: Any, user_id: str, business_id: str) -> Non
         return
     raise PermissionError("Нет доступа к бизнесу")
 
-def _upsert_social_post(cursor: Any, user_id: str, item: dict[str, Any], platform: str, base_text: str) -> dict[str, Any]:
+def _upsert_social_post(
+    cursor: Any,
+    user_id: str,
+    item: dict[str, Any],
+    platform: str,
+    base_text: str,
+    variant: dict[str, Any] | None = None,
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     item_id = str(item.get("id") or "").strip()
     plan_id = str(item.get("plan_id") or item.get("parent_plan_id") or "").strip()
     business_id = str(item.get("business_id") or item.get("plan_business_id") or "").strip()
     scheduled_for = item.get("scheduled_for")
     publish_mode = default_publish_mode(platform)
-    platform_text = _platform_text(platform, base_text)
+    variant_payload = variant or {}
+    platform_text = str(variant_payload.get("text") or _platform_text(platform, base_text)).strip()
+    metadata = _initial_metadata(platform, publish_mode, item)
+    metadata.update(_json_dict((existing or {}).get("metadata_json")))
+    metadata.update(_json_dict(variant_payload.get("metadata")))
     status = "needs_review" if platform_text.strip() else "draft"
     cursor.execute(
         """
@@ -1392,7 +1405,7 @@ def _upsert_social_post(cursor: Any, user_id: str, item: dict[str, Any], platfor
             scheduled_for,
             base_text,
             platform_text,
-            _json_dumps(_initial_metadata(platform, publish_mode, item)),
+            _json_dumps(metadata),
             user_id,
         ),
     )
@@ -1473,6 +1486,11 @@ def _initial_metadata(platform: str, publish_mode: str, item: dict[str, Any] | N
         "approval_required": True,
         "source": "localos_content_plan",
         "channel_adapter_version": "v2",
+        "variant_source": "deterministic",
+        "variant_status": "current",
+        "base_text_hash": platform_variant_base_hash(_base_text_from_item(item or {})),
+        "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
+        "manually_edited": False,
     }
     item_metadata = _json_dict((item or {}).get("metadata_json"))
     brief = _json_dict(item_metadata.get("content_brief_v1"))

@@ -85,6 +85,50 @@ def test_candidates_require_known_fact_ids_and_quality_threshold():
     assert all(candidate["quality_passed"] for candidate in scored)
 
 
+def test_long_candidate_requires_short_paragraphs():
+    candidate = {
+        "id": "variant-1",
+        "angle": "Объяснение",
+        "text": (
+            "После прилёта проверьте подтверждённое место встречи и держите телефон включённым. "
+            "Если багаж задержался, сообщите об этом до выхода из терминала. "
+            "Так водитель получит обновление, а пассажиру не придётся искать машину в другой зоне аэропорта. "
+            "Все детали поездки остаются в бронировании."
+        ),
+        "used_fact_ids": ["event"],
+        "unsupported_facts": [],
+    }
+
+    scored = _score_content_candidate(
+        candidate,
+        {"sources": [{"id": "event"}], "confirmed_details": ["Место встречи подтверждено"]},
+        {},
+    )
+
+    assert scored["quality_passed"] is False
+    assert "Разделите длинный текст на короткие абзацы" in scored["issues"]
+
+
+def test_candidate_blocks_internal_plan_language_and_slop_cliches():
+    candidate = {
+        "id": "variant-1",
+        "angle": "Анонс",
+        "text": "Цель публикации — показать уникальную возможность и вывести бизнес на новый уровень.",
+        "used_fact_ids": ["event"],
+        "unsupported_facts": [],
+    }
+
+    scored = _score_content_candidate(
+        candidate,
+        {"sources": [{"id": "event"}], "confirmed_details": ["Новый формат"]},
+        {},
+    )
+
+    assert scored["quality_passed"] is False
+    assert any("внутренняя формулировка" in issue for issue in scored["issues"])
+    assert any("Рекламное клише" in issue for issue in scored["issues"])
+
+
 def test_candidate_with_unknown_fact_is_disqualified():
     candidate = {
         "id": "variant-1",
@@ -134,6 +178,8 @@ def test_generation_prompt_uses_confirmed_business_and_audience_descriptions():
 
     assert "Культурный центр для жителей района" in prompt
     assert "Жители, которые ищут события рядом с домом" in prompt
+    assert "коротких абзаца" in prompt
+    assert "не копируй источник дословно" in prompt
 
 
 def test_missing_optional_prompt_does_not_abort_generation_transaction():

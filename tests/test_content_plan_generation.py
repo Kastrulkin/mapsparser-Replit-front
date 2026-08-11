@@ -1035,11 +1035,17 @@ def test_sanitize_generated_news_text_extracts_json_and_removes_markup():
 
     result = _sanitize_generated_news_text(raw)
 
-    assert result == "Что выбрать сейчас: Осень – время перемен!"
+    assert result == "Что выбрать сейчас:\n\nОсень – время перемен!"
     assert "{" not in result
     assert "}" not in result
     assert "**" not in result
     assert "#" not in result
+
+
+def test_sanitize_generated_news_text_preserves_short_paragraphs():
+    raw = "Сначала один конкретный факт.\n\nЗатем польза для клиента.\n\nПодробности — в карточке."
+
+    assert _sanitize_generated_news_text(raw) == raw
 
 
 def test_sanitize_generated_news_text_extracts_fenced_payload():

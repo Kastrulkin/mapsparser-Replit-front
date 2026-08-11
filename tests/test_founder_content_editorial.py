@@ -58,6 +58,20 @@ def test_telegram_proposal_explicitly_keeps_publication_manual():
     assert "автоматически не происходит" in message
 
 
+def test_failed_language_gate_is_delivered_with_manual_review_warning():
+    message = founder_content_editorial.format_founder_content_telegram_message(
+        {
+            "brief_title": "Поиск партнёров",
+            "generated_text": "Рабочий материал для ручной редакции.",
+            "status": "needs_review",
+        }
+    )
+
+    assert "не прошёл внутреннюю проверку естественности" in message
+    assert "только как материал для вашей редакции" in message
+    assert "автоматически не происходит" in message
+
+
 class CorrectionCursor:
     def __init__(self):
         self.current = None

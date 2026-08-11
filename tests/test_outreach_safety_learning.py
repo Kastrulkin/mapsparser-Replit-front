@@ -836,6 +836,18 @@ def test_manual_pilot_dispatch_is_not_primary_for_future_schedule():
     assert "Открыть канал" in admin_ui
 
 
+def test_lead_drawer_exposes_manual_touch_actions_for_needs_attention():
+    admin_ui = Path("frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(encoding="utf-8")
+
+    assert "Отметить отправленным" in admin_ui
+    assert "Пропустить" in admin_ui
+    assert "Записать ответ" in admin_ui
+    assert "awaiting_manual_send" in admin_ui
+    assert "needs_attention" in admin_ui
+    assert "manual_expired" in admin_ui
+    assert "/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/touches/${encodeURIComponent(touch.id)}/manual-event" in admin_ui
+
+
 def test_worker_dispatch_is_limited_to_versioned_campaign_cohort():
     worker = Path("src/worker.py").read_text(encoding="utf-8")
     function_start = worker.index("def _dispatch_outreach_queue_if_due()")

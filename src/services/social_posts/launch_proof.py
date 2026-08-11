@@ -19,6 +19,7 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.social_posts.platform_variants import platform_variant_base_hash
 from core.ai_learning import record_ai_learning_event
 
 
@@ -894,6 +895,7 @@ def prepare_social_posts_for_items(
     item_ids: list[str],
     platforms: list[str] | None = None,
     replace_platforms: bool = False,
+    force_variants: bool = False,
 ) -> dict[str, Any]:
     posts: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
@@ -901,7 +903,13 @@ def prepare_social_posts_for_items(
     preserved_platforms: list[str] = []
     for item_id in _normalize_ids(item_ids):
         try:
-            payload = prepare_social_posts_for_item(user_id, item_id, platforms, replace_platforms=replace_platforms)
+            payload = prepare_social_posts_for_item(
+                user_id,
+                item_id,
+                platforms,
+                replace_platforms=replace_platforms,
+                force_variants=force_variants,
+            )
             posts.extend(payload.get("posts") or [])
             removed_platforms.extend([str(item) for item in payload.get("removed_platforms") or [] if str(item or "").strip()])
             preserved_platforms.extend([str(item) for item in payload.get("preserved_platforms") or [] if str(item or "").strip()])
@@ -1041,6 +1049,10 @@ def update_social_post_text(
             "edited_at": datetime.now(timezone.utc).isoformat(),
             "approval_reset": current_status == "approved",
         }
+        metadata["variant_source"] = "manual"
+        metadata["variant_status"] = "current"
+        metadata["manually_edited"] = True
+        metadata["base_text_hash"] = platform_variant_base_hash(next_base_text)
         next_status = _status_after_social_text_edit(current_status, next_text)
         cursor.execute(
             """

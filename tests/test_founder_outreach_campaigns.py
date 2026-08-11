@@ -39,10 +39,38 @@ from services.outreach_founder_led_copy import (
     select_approved_localos_case,
 )
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
+from services.outreach_playbook import (
+    APPROVED_LOCALOS_MESSAGE_EXAMPLES,
+    B2B_METHOD_RULES,
+)
 from scripts.backfill_partnership_match_artifacts import _skip_reason
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_estem_content_example_requires_configured_deidentified_yclients_transfer():
+    example = next(
+        item
+        for item in APPROVED_LOCALOS_MESSAGE_EXAMPLES
+        if item["key"] == "estem_yclients_content_time_v1"
+    )
+
+    assert example["status"] == "approved"
+    assert "Посты для нескольких площадок" in example["text"]
+    assert "а это отнимает время" in example["text"]
+    assert "Если из YCLIENTS можно передавать" in example["text"]
+    assert "без данных пациента" in example["text"]
+    assert "публикация в Картах останется ручной" in example["text"]
+    assert not any(
+        phrase in example["text"].lower()
+        for phrase in (
+            "автоматически публикует",
+            "после каждой услуги",
+        )
+    )
+    assert any("знакомой работы и цены времени" in rule for rule in B2B_METHOD_RULES)
+    assert any("выполненная услуга → пост" in rule for rule in B2B_METHOD_RULES)
 
 
 def test_next_sequence_channel_reuses_ready_channel_after_unique_channels_end():

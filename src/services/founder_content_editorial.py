@@ -498,13 +498,12 @@ def prepare_due_founder_content_drafts(
                 ),
             )
             draft = _row(cursor, cursor.fetchone())
-            if status == "draft":
-                cursor.execute(
-                    "UPDATE founder_content_briefs SET status = 'used', updated_at = NOW() WHERE id = %s",
-                    (brief.get("id"),),
-                )
-                draft["brief_title"] = _clean(brief.get("title"))
-                created.append(draft)
+            cursor.execute(
+                "UPDATE founder_content_briefs SET status = 'used', updated_at = NOW() WHERE id = %s",
+                (brief.get("id"),),
+            )
+            draft["brief_title"] = _clean(brief.get("title"))
+            created.append(draft)
         return created
     finally:
         cursor.close()
@@ -513,9 +512,16 @@ def prepare_due_founder_content_drafts(
 def format_founder_content_telegram_message(draft: dict[str, Any]) -> str:
     title = _clean(draft.get("brief_title")) or "обновление LocalOS"
     text = str(draft.get("generated_text") or "").strip()
+    review_note = ""
+    if str(draft.get("status") or "") == "needs_review":
+        review_note = (
+            "⚠️ Этот вариант не прошёл внутреннюю проверку естественности. "
+            "Отправляю его только как материал для вашей редакции.\n\n"
+        )
     return (
         f"✍️ Черновик LocalOS на сегодня\n"
         f"Тема: {title}\n\n"
+        f"{review_note}"
         f"{text}\n\n"
         "Ответьте на это сообщение своей исправленной версией. "
         "LocalOS сохранит разницу и учтёт её в следующих черновиках.\n"
@@ -536,7 +542,7 @@ def mark_founder_content_delivered(
             UPDATE founder_content_drafts
             SET status = 'delivered', telegram_message_id = %s,
                 delivered_at = NOW(), updated_at = NOW()
-            WHERE id = %s AND status = 'draft'
+            WHERE id = %s AND status IN ('draft', 'needs_review')
             """,
             (telegram_message_id, draft_id),
         )

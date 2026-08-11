@@ -19,6 +19,11 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.social_posts.platform_variants import (
+    PLATFORM_VARIANT_RULES_VERSION,
+    build_platform_variants,
+    platform_variant_base_hash,
+)
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -125,6 +130,7 @@ def prepare_social_posts_for_item(
     item_id: str,
     platforms: list[str] | None = None,
     replace_platforms: bool = False,
+    force_variants: bool = False,
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -133,9 +139,23 @@ def prepare_social_posts_for_item(
         item = _load_plan_item_for_user(cursor, user_id, item_id)
         requested_platforms = _normalize_platforms(platforms)
         base_text = _base_text_from_item(item)
+        existing_by_platform = _existing_social_posts_for_item(cursor, item_id)
+        generation_platforms = [
+            platform
+            for platform in requested_platforms
+            if _platform_variant_needs_generation(existing_by_platform.get(platform), base_text, force_variants)
+        ]
+        generated_variants = build_platform_variants(base_text, generation_platforms, item)
         created_or_updated = []
         for platform in requested_platforms:
-            post = _upsert_social_post(cursor, user_id, item, platform, base_text)
+            existing = existing_by_platform.get(platform)
+            variant = _platform_variant_for_prepare(
+                platform=platform,
+                base_text=base_text,
+                existing=existing,
+                generated=generated_variants.get(platform),
+            )
+            post = _upsert_social_post(cursor, user_id, item, platform, base_text, variant, existing)
             created_or_updated.append(post)
         removed_platforms: list[str] = []
         preserved_platforms: list[str] = []
@@ -158,6 +178,79 @@ def prepare_social_posts_for_item(
         raise sys.exc_info()[1]
     finally:
         db.close()
+
+
+def _platform_variant_needs_generation(
+    existing: dict[str, Any] | None,
+    base_text: str,
+    force_variants: bool = False,
+) -> bool:
+    if not str(base_text or "").strip():
+        return False
+    if not existing:
+        return True
+    status = str(existing.get("status") or "").strip().lower()
+    if status in {"queued", "publishing", "published"}:
+        return False
+    metadata = _json_dict(existing.get("metadata_json"))
+    if bool(metadata.get("manually_edited")):
+        return False
+    if force_variants:
+        return True
+    current_hash = platform_variant_base_hash(base_text)
+    return not (
+        str(existing.get("platform_text") or "").strip()
+        and str(metadata.get("base_text_hash") or "").strip() == current_hash
+        and str(metadata.get("variant_status") or "current").strip() == "current"
+        and str(metadata.get("platform_rules_version") or "").strip() == PLATFORM_VARIANT_RULES_VERSION
+    )
+
+
+def _platform_variant_for_prepare(
+    *,
+    platform: str,
+    base_text: str,
+    existing: dict[str, Any] | None,
+    generated: dict[str, Any] | None,
+) -> dict[str, Any]:
+    current_hash = platform_variant_base_hash(base_text)
+    existing_post = existing or {}
+    existing_metadata = _json_dict(existing_post.get("metadata_json"))
+    existing_status = str(existing_post.get("status") or "").strip().lower()
+    existing_text = str(existing_post.get("platform_text") or "").strip()
+    if existing_status in {"queued", "publishing", "published"}:
+        return {"text": existing_text, "metadata": existing_metadata}
+    if bool(existing_metadata.get("manually_edited")) and existing_text:
+        metadata = dict(existing_metadata)
+        variant_base_hash = str(existing_metadata.get("base_text_hash") or "").strip() or current_hash
+        metadata.update(
+            {
+                "variant_source": "manual",
+                "variant_status": (
+                    "current"
+                    if variant_base_hash == current_hash
+                    else "stale"
+                ),
+                "base_text_hash": variant_base_hash,
+                "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
+                "manually_edited": True,
+            }
+        )
+        return {"text": existing_text, "metadata": metadata}
+    if generated:
+        return generated
+    if existing_text and str(existing_metadata.get("base_text_hash") or "").strip() == current_hash:
+        return {"text": existing_text, "metadata": existing_metadata}
+    return {
+        "text": _platform_text(platform, base_text),
+        "metadata": {
+            "variant_source": "deterministic",
+            "variant_status": "current",
+            "base_text_hash": current_hash,
+            "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
+            "manually_edited": False,
+        },
+    }
 
 def preview_social_posts_for_item(user_id: str, item_id: str, platforms: list[str] | None = None) -> dict[str, Any]:
     db = DatabaseManager()

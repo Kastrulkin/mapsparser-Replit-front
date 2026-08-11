@@ -157,7 +157,7 @@ describe('Content page publication settings', () => {
     expect(screen.getByRole('button', { name: 'Instagram' })).toHaveAttribute('aria-pressed', 'false');
 
     fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-08-10' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Сохранить изменения' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Обновить версии для каналов' }));
 
     await waitFor(() => {
       expect(newAuth.makeRequest).toHaveBeenCalledWith('/content-plans/items/item-1', expect.objectContaining({
@@ -170,5 +170,31 @@ describe('Content page publication settings', () => {
         }),
       }));
     });
+    expect(newAuth.makeRequest).toHaveBeenCalledWith('/content-plans/social-posts/bulk-prepare', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        item_ids: ['item-1'],
+        platforms: ['yandex_maps', 'two_gis', 'telegram'],
+        replace_platforms: true,
+        force_variants: false,
+      }),
+    }));
+  });
+
+  it('requires platform preview before approval', async () => {
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+
+    expect(await screen.findByRole('button', { name: 'Подготовить версии для каналов' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Утвердить' })).not.toBeInTheDocument();
   });
 });

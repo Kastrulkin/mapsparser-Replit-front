@@ -27,6 +27,7 @@ from core.seo_keywords import collect_ranked_keywords
 from core.content_plan_generator import build_content_plan_skeleton
 from services.llm import analyze_text_with_gigachat
 from services.content_voice_service import load_content_voice_context
+from services.outreach_human_language import SLOP_PATTERNS
 from subscription_manager import get_allowed_content_plan_horizons, get_subscription_access
 
 
@@ -4079,7 +4080,14 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
         for char in text
         if unicodedata.category(char) not in {"So", "Sk"}
     )
-    text = re.sub(r"\s+", " ", text).strip()
+    # Keep deliberate paragraph breaks: they are part of the publication, not
+    # transport whitespace. Single line breaks inside a paragraph are joined.
+    paragraphs = []
+    for paragraph in re.split(r"\n\s*\n", text.replace("\r\n", "\n").replace("\r", "\n")):
+        clean_paragraph = re.sub(r"[ \t\n]+", " ", paragraph).strip()
+        if clean_paragraph:
+            paragraphs.append(clean_paragraph)
+    text = "\n\n".join(paragraphs)
     if text.count('"') % 2 == 1:
         last_quote_index = text.rfind('"')
         if last_quote_index >= 0:
@@ -4329,6 +4337,28 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
     forbidden = [str(value).lower() for value in voice.get("forbidden_phrases") or [] if str(value).strip()]
     default_cliches = ["уютное пространство", "профессиональная команда", "идеальный выбор", "ждём вас"]
     cliche_hits = [value for value in [*forbidden, *default_cliches] if value in text.lower()]
+    cliche_hits.extend(label for label, pattern in SLOP_PATTERNS if pattern.search(text))
+    paragraph_count = len([value for value in text.split("\n\n") if value.strip()])
+    style_issues: list[str] = []
+    if len(text) > 260 and paragraph_count < 2:
+        style_issues.append("Разделите длинный текст на короткие абзацы")
+    if paragraph_count > 5:
+        style_issues.append("Слишком много абзацев для короткой публикации")
+    if re.search(r"#[\wа-яё-]+", text, flags=re.IGNORECASE):
+        style_issues.append("Хэштеги не нужны")
+    if text.count("!") > 1:
+        style_issues.append("Слишком много восклицаний")
+    meta_copy_markers = (
+        "цель публикации",
+        "бизнес-задача",
+        "в фокусе публикации",
+        "эта публикация",
+        "публикация должна",
+        "контент-план",
+    )
+    if any(marker in text.lower() for marker in meta_copy_markers):
+        style_issues.append("В текст попала внутренняя формулировка контент-плана")
+    style_issues.extend(f"Рекламное клише: {value}" for value in dict.fromkeys(cliche_hits))
     score = 0
     if grounded:
         score += 55
@@ -4340,7 +4370,7 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         score += 5
     if not cliche_hits:
         score += 10
-    if text.count("\n") <= 5:
+    if 1 <= paragraph_count <= 4:
         score += 5
     if any(marker in text.lower() for marker in ("подробност", "афиш", "запис", "смотрите", "узнайте")):
         score += 7
@@ -4348,8 +4378,13 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         **candidate,
         "score": min(score, 100),
         "grounded": grounded,
-        "quality_passed": grounded and score >= 70,
-        "issues": [*(unsupported or []), *(["Не указаны источники использованных фактов"] if not used_ids else []), *cliche_hits],
+        "quality_passed": grounded and score >= 70 and not style_issues,
+        "issues": [
+            *(unsupported or []),
+            *(["Не указаны источники использованных фактов"] if not used_ids else []),
+            *style_issues,
+        ],
+        "paragraph_count": paragraph_count,
     }
 
 
@@ -4372,6 +4407,14 @@ def _content_generation_v2_prompt(
         f"{_content_plan_language_instruction(language)}\n"
         "Варианты: конкретный анонс/объяснение, человеческая история, спокойный атмосферный подход. "
         "Не добавляй факты, даты, участников, цены, адреса или обещания, которых нет в источниках. До 700 символов каждый.\n"
+        "Редакторские правила для каждого варианта:\n"
+        "- одна публикация раскрывает одну главную мысль;\n"
+        "- начинай с конкретной ситуации или факта, а не с описания компании и не с рекламного вопроса;\n"
+        "- используй 1–4 коротких абзаца; текст длиннее 260 символов обязательно разделяй пустой строкой;\n"
+        "- не переноси в готовый текст слова «цель публикации», «бизнес-задача», «в фокусе публикации» или другие внутренние инструкции;\n"
+        "- не используй хэштеги, рекламные клише и больше одного восклицательного знака;\n"
+        "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"
+        "- завершай одним естественным следующим шагом, только если он следует из редакторского брифа.\n"
         "Верни строго JSON: {\"candidates\":[{\"id\":\"variant-1\",\"angle\":\"...\",\"text\":\"...\","
         "\"used_fact_ids\":[\"source_id\"],\"unsupported_facts\":[]}]}\n\n"
         f"Факты о бизнесе:\n{_build_content_plan_business_fact_block(business_facts)}\n\n"
@@ -4529,6 +4572,11 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "- не добавляй лекции, концерты, мастерские, события, команду, специалистов, атмосферу или оборудование, если этого нет в фактах;\n"
             "- не начинай публикацию с описания компании или карточки;\n"
             "- одна публикация должна раскрывать только одну мысль;\n"
+            "- используй короткие абзацы; если текст длиннее 260 символов, раздели его пустой строкой;\n"
+            "- начинай с конкретной ситуации или факта, а не с рекламного вопроса;\n"
+            "- не переноси в готовый текст внутренние формулировки вроде цель публикации, бизнес-задача, в фокусе публикации;\n"
+            "- не копируй формулировки источника дословно и не имитируй стиль конкретного автора;\n"
+            "- используй не больше одного восклицательного знака и один понятный следующий шаг;\n"
             "- не используй пустые рекламные клише вроде уютное пространство, профессиональная команда, без забот, идеальный выбор;\n"
             "- не используй сезонность, если источник идеи не seasonal;\n"
             "- главная тема новости обязана совпадать с полем «Тема» ниже;\n"

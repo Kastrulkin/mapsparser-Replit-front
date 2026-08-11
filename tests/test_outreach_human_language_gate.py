@@ -291,6 +291,54 @@ def test_agreed_corpus_blacklist_is_rejected_deterministically(phrase):
 
 
 @pytest.mark.parametrize(
+    "text",
+    (
+        (
+            "В карточке Padrina_studio нет новостей. "
+            "Когда инфоповоды остаются только в расписании и прайсе, "
+            "карточка не показывает текущую работу студии. "
+            "LocalOS подготовит черновики постов. Показать пример?"
+        ),
+        (
+            "В карточке Padrina_studio опубликованы услуги с ценами. "
+            "Администратору сложно держать в голове все подходящие дополнения. "
+            "LocalOS соберёт матрицу услуг. "
+            "Вам было бы интересно проверить сценарии увеличения среднего чека?"
+        ),
+    ),
+)
+def test_padrina_owner_rejected_templates_do_not_pass_neuroslop_filter(text):
+    result = review_human_language(text)
+
+    assert result["passed"] is False
+    assert "SLOP_CLICHE" in result["reason_codes"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        (
+            "В карточке Padrina_studio опубликована ссылка на запись через DIKIDI. "
+            "Посты для нескольких площадок приходится писать и редактировать несколько раз, а это отнимает время. "
+            "После загрузки выгрузки из DIKIDI LocalOS автоматически подготовит черновики постов о выполненных услугах. "
+            "Вам было бы интересно сэкономить время на ведении соцсетей?"
+        ),
+        (
+            "В карточке Padrina_studio опубликованы услуги с ценами. "
+            "У салонов бывает так: услуг много, а средний чек всё равно маленький. "
+            "LocalOS по вашему прайсу соберёт матрицу услуг и допродаж, подготовит подсказки для администратора и покажет результ. "
+            "Вам было бы интересно увеличить средний чек?"
+        ),
+    ),
+)
+def test_padrina_owner_rewrites_pass_neuroslop_filter(text):
+    result = review_human_language(text)
+
+    assert result["passed"] is True
+    assert result["reason_codes"] == []
+
+
+@pytest.mark.parametrize(
     ("text", "pain_hypothesis", "proof_keys"),
     (
         (

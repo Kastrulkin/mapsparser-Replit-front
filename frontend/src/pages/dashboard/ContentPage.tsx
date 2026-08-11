@@ -174,6 +174,11 @@ type SocialPost = {
   inquiries?: number;
   leads?: number;
   metadata_json?: {
+    variant_source?: 'ai' | 'deterministic' | 'manual';
+    variant_status?: 'current' | 'stale' | 'failed';
+    manually_edited?: boolean;
+    platform_rules_version?: string;
+    adaptation_error?: string;
     platform_rule_readiness?: {
       label?: string;
       message?: string;
@@ -454,9 +459,14 @@ const getChannelStatusLabel = (status?: string) => {
 };
 
 const getChannelNextAction = (post: SocialPost) => {
+  const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
+  const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
+  if (variantStatus === 'stale') return 'Общий текст изменился. Проверьте сохранённую версию этого канала.';
   const readiness = getPostPlatformReadiness(post);
   if (readiness?.message) return readiness.message;
   const normalized = String(post.status || '').toLowerCase();
+  if (normalized === 'needs_review' && variantSource === 'ai') return 'Текст адаптирован для этой площадки. Проверьте его перед подтверждением.';
+  if (normalized === 'needs_review' && variantSource === 'deterministic') return 'Проверьте версию: автоматическая адаптация была недоступна.';
   if (normalized === 'approved') return 'Можно планировать. Подключение проверим перед публикацией.';
   if (normalized === 'queued') return 'Запланировано. Если канал не подключён, появится понятный шаг.';
   return getPostNextAction(post);
@@ -480,9 +490,13 @@ const getPostPlatformReadiness = (post: SocialPost) => {
 };
 
 const getChannelStatusDisplay = (post: SocialPost) => {
+  const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
+  const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
+  if (variantStatus === 'stale') return 'Версия устарела';
   const readiness = getPostPlatformReadiness(post);
   const normalized = String(post.status || '').toLowerCase();
   if (readiness?.label && !['queued', 'published'].includes(normalized)) return readiness.label;
+  if (normalized === 'needs_review' && variantSource) return 'Версия готова';
   return getChannelStatusLabel(post.status);
 };
 
@@ -1433,7 +1447,7 @@ export function ContentPage() {
     }
   };
 
-  const prepareSelectedItem = async () => {
+  const prepareSelectedItem = async (forceVariants = false) => {
     if (!selectedItem || !currentPlan?.id) return [];
     setBusyAction('prepare');
     setError('');
@@ -1459,16 +1473,19 @@ export function ContentPage() {
           item_ids: [selectedItem.id],
           platforms: selectedPlatforms,
           replace_platforms: true,
+          force_variants: forceVariants,
         }),
       });
       const removed = Array.isArray(response.removed_platforms) ? response.removed_platforms.length : 0;
       const preserved = Array.isArray(response.preserved_platforms) ? response.preserved_platforms.length : 0;
       setActionMessage(
         preserved > 0
-          ? `Каналы обновлены. Уже исполняемые или опубликованные варианты сохранены: ${preserved}.`
+          ? `Версии обновлены. Запланированные или опубликованные тексты сохранены: ${preserved}.`
           : removed > 0
-            ? `Каналы обновлены. Ненужные черновики убраны: ${removed}.`
-            : `Подготовлено каналов: ${selectedPlatforms.length}.`,
+            ? `Версии обновлены. Ненужные черновики убраны: ${removed}.`
+            : forceVariants
+              ? `Автоматические версии обновлены: ${selectedPlatforms.length}. Ручные правки сохранены.`
+              : `Подготовлено версий для каналов: ${selectedPlatforms.length}.`,
       );
       return await loadSocialPosts(currentPlan.id);
     } catch (prepareError) {
@@ -1595,7 +1612,7 @@ export function ContentPage() {
       }
 
       let posts = postsByItem[selectedItem.id] || [];
-      if (posts.length === 0 || channelsChanged) {
+      if (posts.length === 0 || itemChanged) {
         const prepareResponse = await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
           method: 'POST',
           body: JSON.stringify({
@@ -1607,20 +1624,6 @@ export function ContentPage() {
         posts = Array.isArray(prepareResponse.posts)
           ? prepareResponse.posts.filter((post: SocialPost) => post.content_plan_item_id === selectedItem.id)
           : [];
-      } else if (draftChanged) {
-        const editablePosts = posts.filter((post) => !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase()));
-        await Promise.all(editablePosts.map((post) => {
-          const editedPlatformText = platformTextEdits[post.id];
-          const platformTextChanged = typeof editedPlatformText === 'string'
-            && editedPlatformText !== String(post.platform_text ?? '');
-          return newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              platform_text: platformTextChanged ? editedPlatformText : currentDraftText,
-              base_text: currentDraftText,
-            }),
-          });
-        }));
       }
       const postIds = posts
         .filter((post) => !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase()))
@@ -1657,7 +1660,7 @@ export function ContentPage() {
         .filter(Boolean);
       if (postIds.length === 0) {
         if (posts.length === 0) {
-          setError('Сначала нажмите «Подготовить каналы». После этого LocalOS создаст варианты для площадок.');
+          setError('Сначала подготовьте версии для каналов. После этого их можно проверить и утвердить.');
         } else if (posts.some((post) => String(post.status || '').toLowerCase() === 'needs_review')) {
           setError('Сначала проверьте текст и нажмите «Утвердить». После этого появится расписание.');
         } else if (posts.some((post) => isAutomaticSendBlockedStatus(post.status) || isPlatformRuleBlocked(post))) {
@@ -2444,9 +2447,11 @@ export function ContentPage() {
     const scheduleAlreadyHandled = scheduledPostCount > 0 && approvedPostCount === 0 && needsReviewChannelCount === 0;
     const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
     const queueNeedsAttention = hasPosts && !canQueueSelectedItem && !scheduleAlreadyHandled;
-    const hasEditableChannelPosts = selectedPosts.some((post) => !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase()));
+    const needsPlatformPreparation = hasDraftText && (!hasPosts || hasUnsavedItemChanges);
     const canApproveSelectedItem = hasDraftText
-      && (!hasPosts || needsReviewChannelCount > 0 || (hasUnsavedDraftChanges && hasEditableChannelPosts));
+      && hasPosts
+      && !hasUnsavedItemChanges
+      && needsReviewChannelCount > 0;
     const approveButtonLabel = busyAction === 'approve'
       ? 'Утверждаем...'
       : hasUnsavedDraftChanges && canApproveSelectedItem
@@ -2463,7 +2468,7 @@ export function ContentPage() {
     const queueHelpText = canQueueSelectedItem
       ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
       : !hasPosts
-        ? 'Сначала нажмите «Подготовить каналы», чтобы LocalOS создал варианты для площадок.'
+        ? 'Сначала подготовьте версии для каналов, чтобы проверить тексты для каждой площадки.'
         : needsReviewChannelCount > 0
           ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
           : blockedChannelCount > 0
@@ -2813,6 +2818,11 @@ export function ContentPage() {
                                     </span>
                                   </div>
                                   <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
+                                  {post.platform_text ? (
+                                    <div className="mt-3 whitespace-pre-line rounded-xl bg-white px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-100 line-clamp-5">
+                                      {post.platform_text}
+                                    </div>
+                                  ) : null}
                                   {String(post.status || '').toLowerCase() === 'published' ? (
                                     <div className="mt-3 rounded-xl bg-white p-3 ring-1 ring-slate-100">
                                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600 tabular-nums">
@@ -2932,6 +2942,21 @@ export function ContentPage() {
                                 </div>
                               );
                             })}
+                            {selectedPosts.some((post) => (
+                              !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase())
+                              && !post.metadata_json?.manually_edited
+                            )) ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { void prepareSelectedItem(true); }}
+                                disabled={Boolean(busyAction)}
+                                className="min-h-10 w-full rounded-xl bg-white px-3 text-xs"
+                              >
+                                {busyAction === 'prepare' ? 'Обновляем версии...' : 'Переписать автоматические версии'}
+                              </Button>
+                            ) : null}
                           </div>
                         ) : (
                           <div className="border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">
@@ -2953,7 +2978,15 @@ export function ContentPage() {
                   ) : null}
                 </div>
                 <div className="grid gap-2">
-                  {hasUnsavedItemChanges ? (
+                  {needsPlatformPreparation ? (
+                    <Button type="button" onClick={() => { void prepareSelectedItem(); }} disabled={Boolean(busyAction)} className="min-h-12 rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500 active:scale-[0.96] transition-transform">
+                      {busyAction === 'prepare'
+                        ? 'Подготавливаем версии...'
+                        : hasPosts
+                          ? 'Обновить версии для каналов'
+                          : 'Подготовить версии для каналов'}
+                    </Button>
+                  ) : hasUnsavedItemChanges ? (
                     <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
                       {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
                     </Button>
