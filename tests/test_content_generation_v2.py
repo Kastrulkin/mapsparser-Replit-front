@@ -129,6 +129,81 @@ def test_candidate_blocks_internal_plan_language_and_slop_cliches():
     assert any("Рекламное клише" in issue for issue in scored["issues"])
 
 
+def test_dry_katok_bulletin_does_not_pass_live_voice_gate():
+    candidate = {
+        "id": "variant-1",
+        "angle": "Анонс",
+        "text": (
+            "В афише «Катка» опубликованы три события на 22, 23 и 28 августа. "
+            "22 августа в 19:00 — «Тиндер Чайковского»; 23 августа в 19:00 — «Локсток»; "
+            "28 августа в 19:00 — «Черный ящик». Все события проходят в «Катке» в Краснодаре.\n\n"
+            "Подробности — на официальной странице «Катка»."
+        ),
+        "used_fact_ids": ["event", "owner_detail", "owner_source"],
+        "unsupported_facts": [],
+    }
+    brief = {
+        "sources": [
+            {"id": "event"},
+            {"id": "owner_detail"},
+            {"id": "owner_source"},
+        ],
+        "confirmed_details": ["Три события опубликованы в официальной афише"],
+    }
+    voice = {
+        "summary": (
+            "Разговорно, интеллектуально и с лёгкой дерзостью. Начинать с интриги "
+            "или необычной механики события, затем давать точные дату, время и формат."
+        ),
+        "forbidden_phrases": [],
+    }
+
+    scored = _score_content_candidate(candidate, brief, voice)
+
+    assert scored["quality_passed"] is False
+    assert scored["factual_gate_passed"] is True
+    assert scored["neuroslop_passed"] is True
+    assert scored["editorial_quality_passed"] is False
+    assert scored["voice_adherence_passed"] is False
+    assert any("Сухое начало" in issue for issue in scored["issues"])
+
+
+def test_live_katok_opening_passes_editorial_and_voice_gates():
+    candidate = {
+        "id": "variant-1",
+        "angle": "Механики событий",
+        "text": (
+            "В конце августа в «Катке» музыку будут свайпать, на числовые ответы — ставить, "
+            "а Вивальди превратят в подсказку к чёрному ящику.\n\n"
+            "22 августа — «Тиндер Чайковского», 23-го — «Локсток», 28-го — «Черный ящик». "
+            "Все три вечера начинаются в 19:00. Выбирайте механику в афише «Катка»."
+        ),
+        "used_fact_ids": ["event", "owner_detail", "owner_source"],
+        "unsupported_facts": [],
+    }
+    brief = {
+        "sources": [
+            {"id": "event"},
+            {"id": "owner_detail"},
+            {"id": "owner_source"},
+        ],
+        "confirmed_details": ["Три события опубликованы в официальной афише"],
+    }
+    voice = {
+        "summary": (
+            "Разговорно, интеллектуально и с лёгкой дерзостью. Начинать с интриги "
+            "или необычной механики события, затем давать точные дату, время и формат."
+        ),
+        "forbidden_phrases": [],
+    }
+
+    scored = _score_content_candidate(candidate, brief, voice)
+
+    assert scored["quality_passed"] is True
+    assert scored["editorial_quality_passed"] is True
+    assert scored["voice_adherence_passed"] is True
+
+
 def test_candidate_with_unknown_fact_is_disqualified():
     candidate = {
         "id": "variant-1",

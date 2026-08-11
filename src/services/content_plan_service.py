@@ -4327,6 +4327,46 @@ def _parse_content_candidates(raw: Any) -> list[dict[str, Any]]:
     return result
 
 
+SOURCE_LED_CONTENT_OPENING_RE = re.compile(
+    r"^(?:в\s+)?(?:официальн\w+\s+)?(?:афиш\w+|страниц\w+|сайт\w+)\s+"
+    r"(?:[^.!?]{0,60}\s+)?(?:опубликован\w*|сообща\w*|указан\w*|уточня\w*)\b",
+    re.IGNORECASE,
+)
+
+LIVE_CONTENT_SIGNAL_RE = re.compile(
+    r"\b(?:свайп\w*|став\w*|угада\w*|услыш\w*|реш\w*|выбер\w*|сравн\w*|"
+    r"знаком\w*|спор\w*|риск\w*|игра\w*|ищ\w*|слуша\w*|обсуд\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _editorial_quality_issues(text: str, voice: dict[str, Any]) -> tuple[list[str], list[str]]:
+    first_paragraph = next((part.strip() for part in text.split("\n\n") if part.strip()), "")
+    first_sentence = next(
+        (part.strip() for part in re.split(r"(?<=[.!?])\s+", first_paragraph) if part.strip()),
+        first_paragraph,
+    )
+    source_led_opening = bool(SOURCE_LED_CONTENT_OPENING_RE.search(first_sentence))
+    date_mentions = len(CONTENT_BRIEF_DATE_RE.findall(first_paragraph))
+    title_mentions = len(re.findall(r"«[^»]{2,80}»", first_paragraph))
+    enumeration_only = (
+        date_mentions >= 3
+        and title_mentions >= 3
+        and not LIVE_CONTENT_SIGNAL_RE.search(first_paragraph)
+    )
+    editorial_issues: list[str] = []
+    if source_led_opening:
+        editorial_issues.append("Сухое начало от имени источника вместо живого входа в тему")
+    if enumeration_only:
+        editorial_issues.append("Текст перечисляет даты и названия, но не раскрывает человеческий интерес или механику")
+    voice_summary = str(voice.get("summary") or "").lower()
+    voice_requires_hook = "интриг" in voice_summary or "механик" in voice_summary
+    voice_issues: list[str] = []
+    if voice_requires_hook and (source_led_opening or enumeration_only):
+        voice_issues.append("Текст не выполняет правило голоса: начать с интриги или механики")
+    return editorial_issues, voice_issues
+
+
 def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], voice: dict[str, Any]) -> dict[str, Any]:
     text = str(candidate.get("text") or "").strip()
     allowed_ids = {str(item.get("id") or "") for item in brief.get("sources") or []}
@@ -4358,6 +4398,9 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
     if any(marker in text.lower() for marker in meta_copy_markers):
         style_issues.append("В текст попала внутренняя формулировка контент-плана")
     style_issues.extend(f"Рекламное клише: {value}" for value in dict.fromkeys(cliche_hits))
+    editorial_issues, voice_issues = _editorial_quality_issues(text, voice)
+    style_issues.extend(editorial_issues)
+    style_issues.extend(voice_issues)
     score = 0
     if grounded:
         score += 55
@@ -4365,18 +4408,18 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         score += 10
     if any(char.isdigit() for char in text) or len(brief.get("confirmed_details") or []) >= 1:
         score += 8
-    if voice.get("summary"):
-        score += 5
     if not cliche_hits:
         score += 10
     if 1 <= paragraph_count <= 4:
         score += 5
-    if any(marker in text.lower() for marker in ("подробност", "афиш", "запис", "смотрите", "узнайте")):
-        score += 7
     return {
         **candidate,
         "score": min(score, 100),
         "grounded": grounded,
+        "factual_gate_passed": grounded,
+        "neuroslop_passed": not cliche_hits,
+        "editorial_quality_passed": not editorial_issues,
+        "voice_adherence_passed": not voice_issues,
         "quality_passed": grounded and score >= 70 and not style_issues,
         "issues": [
             *(unsupported or []),
