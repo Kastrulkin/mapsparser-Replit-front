@@ -33,7 +33,6 @@ from subscription_manager import get_allowed_content_plan_horizons, get_subscrip
 
 CONTENT_PLAN_PUBLISHING_CHANNELS = (
     "yandex_maps",
-    "two_gis",
     "google_business",
     "telegram",
     "vk",

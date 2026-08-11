@@ -716,6 +716,13 @@ def test_default_publish_mode_keeps_yandex_manual_when_browser_capability_is_abs
     assert default_publish_mode("two_gis") == "manual"
 
 
+def test_two_gis_is_not_a_content_publication_destination():
+    assert social_post_service._normalize_platforms(["yandex_maps", "two_gis", "telegram"]) == [
+        "yandex_maps",
+        "telegram",
+    ]
+
+
 def test_openclaw_browser_available_detects_live_catalog_action(monkeypatch):
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { useState } from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,6 +50,14 @@ function renderContentPage() {
   );
 }
 
+function deferredResponse<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 describe('Content page DOM ownership', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -88,6 +97,99 @@ describe('Content page DOM ownership', () => {
 
     expect(() => fireEvent.click(generateButton)).not.toThrow();
   });
+
+  it('does not replace the selected business plan with a late response from the previous business', async () => {
+    const oldContext = deferredResponse<{ context: Record<string, never> }>();
+    const oldPlan = {
+      ...plan,
+      id: 'plan-old',
+      items: [{ ...plan.items[0], id: 'item-old', theme: 'Старая точка — 7 августа', scheduled_for: '2026-08-07' }],
+    };
+    const newPlan = {
+      ...plan,
+      id: 'plan-new',
+      items: [{ ...plan.items[0], id: 'item-new', theme: 'Текущая точка — 10 августа', scheduled_for: '2026-08-10' }],
+    };
+
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path === '/content-plans/context?business_id=business-old') return oldContext.promise;
+      if (path === '/content-plans?business_id=business-old') return { plans: [oldPlan] };
+      if (path === '/content-plans/plan-old') return { plan: oldPlan };
+      if (path === '/content-plans/plan-old/social-posts') return { posts: [], summary: {} };
+      if (path === '/content-plans/context?business_id=business-new') return { context: {} };
+      if (path === '/content-plans?business_id=business-new') return { plans: [newPlan] };
+      if (path === '/content-plans/plan-new') return { plan: newPlan };
+      if (path === '/content-plans/plan-new/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    const ContextRoute = () => {
+      const [businessId, setBusinessId] = useState('business-old');
+      return (
+        <>
+          <button type="button" onClick={() => setBusinessId('business-new')}>Switch business</button>
+          <Outlet context={{
+            currentBusinessId: businessId,
+            currentBusiness: { id: businessId, name: businessId },
+            demoMode: false,
+          }} />
+        </>
+      );
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard/content']}>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route path="/dashboard/content" element={<ContentPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Switch business' }));
+    expect(await screen.findByRole('button', { name: /Текущая точка — 10 августа/ })).toBeInTheDocument();
+
+    await act(async () => {
+      oldContext.resolve({ context: {} });
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(newAuth.makeRequest).not.toHaveBeenCalledWith('/content-plans?business_id=business-old', { method: 'GET' });
+    expect(screen.queryByRole('button', { name: /Старая точка — 7 августа/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Текущая точка — 10 августа/ })).toBeInTheDocument();
+  });
+
+  it('shows only items belonging to the selected location in a shared network plan', async () => {
+    const networkPlan = {
+      ...plan,
+      items: [
+        { ...plan.items[0], id: 'item-other', business_id: 'business-other', theme: 'Другая точка — 7 августа', scheduled_for: '2026-08-07' },
+        { ...plan.items[0], id: 'item-1', business_id: 'business-1', theme: 'Выбранная точка — 10 августа', scheduled_for: '2026-08-10' },
+      ],
+    };
+    const posts = [
+      { id: 'post-other', content_plan_item_id: 'item-other', platform: 'yandex_maps', status: 'published' },
+      { id: 'post-current', content_plan_item_id: 'item-1', platform: 'yandex_maps', status: 'published' },
+    ];
+
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [networkPlan] };
+      if (path === '/content-plans/plan-1') return { plan: networkPlan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts, summary: { total: 2, published: 2 } };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    renderContentPage();
+
+    expect(await screen.findByRole('button', { name: /Выбранная точка — 10 августа/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Другая точка — 7 августа/ })).not.toBeInTheDocument();
+  });
 });
 
 describe('Content page manual photo handoff', () => {
@@ -107,17 +209,17 @@ describe('Content page publication settings', () => {
     const itemPlan = {
       ...plan,
       generated_plan_json: {
-        selected_channels: ['yandex_maps', 'two_gis', 'google_business', 'telegram', 'vk', 'instagram', 'facebook'],
+        selected_channels: ['yandex_maps', 'google_business', 'telegram', 'vk', 'instagram', 'facebook'],
       },
       items: [{
         ...plan.items[0],
         metadata_json: {
           generation_source: 'manual',
-          selected_channels: ['yandex_maps', 'two_gis', 'telegram'],
+          selected_channels: ['yandex_maps', 'telegram'],
         },
       }],
     };
-    const itemPosts = ['yandex_maps', 'two_gis', 'telegram'].map((platform, index) => ({
+    const itemPosts = ['yandex_maps', 'telegram'].map((platform, index) => ({
       id: `post-${index + 1}`,
       content_plan_item_id: 'item-1',
       platform,
@@ -166,7 +268,7 @@ describe('Content page publication settings', () => {
           theme: 'Тестовая тема публикации',
           scheduled_for: '2026-08-10',
           draft_text: 'Готовый текст публикации.',
-          selected_channels: ['yandex_maps', 'two_gis', 'telegram'],
+          selected_channels: ['yandex_maps', 'telegram'],
         }),
       }));
     });
@@ -174,7 +276,7 @@ describe('Content page publication settings', () => {
       method: 'POST',
       body: JSON.stringify({
         item_ids: ['item-1'],
-        platforms: ['yandex_maps', 'two_gis', 'telegram'],
+        platforms: ['yandex_maps', 'telegram'],
         replace_platforms: true,
         force_variants: false,
       }),

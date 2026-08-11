@@ -32,6 +32,7 @@ SOCIAL_POST_PLATFORMS = [
     "instagram",
     "facebook",
 ]
+CONTENT_PUBLICATION_PLATFORMS = [platform for platform in SOCIAL_POST_PLATFORMS if platform != "two_gis"]
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
 BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
@@ -410,12 +411,12 @@ def _platform_text(platform: str, base_text: str) -> str:
 
 def _normalize_platforms(platforms: list[str] | None) -> list[str]:
     if platforms is None:
-        return list(SOCIAL_POST_PLATFORMS)
+        return list(CONTENT_PUBLICATION_PLATFORMS)
     result = []
     seen = set()
     for value in platforms:
         platform = str(value or "").strip()
-        if platform not in SOCIAL_POST_PLATFORMS or platform in seen:
+        if platform not in CONTENT_PUBLICATION_PLATFORMS or platform in seen:
             continue
         seen.add(platform)
         result.append(platform)

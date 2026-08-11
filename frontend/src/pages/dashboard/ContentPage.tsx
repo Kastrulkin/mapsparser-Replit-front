@@ -70,6 +70,7 @@ type ContentPlanContext = {
 
 type PlanItem = {
   id: string;
+  business_id?: string;
   scheduled_for?: string;
   theme?: string;
   goal?: string;
@@ -274,7 +275,6 @@ const DEFAULT_PLAN_PERIODS = [30];
 
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
-  { key: 'two_gis', label: '2ГИС', mode: 'controlled' },
   { key: 'google_business', label: 'Google', mode: 'api' },
   { key: 'telegram', label: 'Telegram', mode: 'api' },
   { key: 'vk', label: 'VK', mode: 'api' },
@@ -309,7 +309,6 @@ const DEFAULT_CREATE_DRAFT: CreatePlanDraft = {
   },
   channels: {
     yandex_maps: true,
-    two_gis: true,
     google_business: true,
     telegram: true,
     vk: true,
@@ -360,6 +359,16 @@ const selectedChannelKeys = (selection: Record<string, boolean>) => (
 const sameSelectedChannels = (left: string[], right: string[]) => (
   left.length === right.length && left.every((channel) => right.includes(channel))
 );
+
+const summarizeSocialPosts = (posts: SocialPost[]): SocialSummary => ({
+  total: posts.length,
+  needs_review: posts.filter((post) => post.status === 'needs_review').length,
+  scheduled: posts.filter((post) => post.status === 'queued' || post.status === 'publishing').length,
+  needs_supervised_publish: posts.filter((post) => post.status === 'needs_supervised_publish').length,
+  needs_manual_publish: posts.filter((post) => post.status === 'needs_manual_publish').length,
+  published: posts.filter((post) => post.status === 'published').length,
+  failed: posts.filter((post) => post.status === 'failed').length,
+});
 
 const resolveItemSelectedChannels = (item: PlanItem | null, posts: SocialPost[], plan: PlanPayload | null) => {
   const itemChannels = selectedChannelsFromItem(item);
@@ -753,6 +762,7 @@ export function ContentPage() {
   const [mediaLoading, setMediaLoading] = useState(false);
   const publicationDetailsRef = useRef<HTMLDivElement | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
+  const contentLoadSequenceRef = useRef(0);
   const [mediaUploadProgress, setMediaUploadProgress] = useState('');
   const [mediaAnalyzingId, setMediaAnalyzingId] = useState('');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
@@ -847,45 +857,74 @@ export function ContentPage() {
     });
   }, [mediaAssets, mediaFilter]);
 
-  const loadSocialPosts = async (planId: string) => {
+  const loadSocialPosts = async (planId: string, loadSequence?: number, itemIds?: Set<string>) => {
     const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts`, { method: 'GET' });
-    const posts = Array.isArray(response.posts) ? response.posts : [];
+    const rawPosts: SocialPost[] = Array.isArray(response.posts) ? response.posts : [];
+    const publicationPlatforms = new Set(CHANNELS.map((channel) => channel.key));
+    const visibleItemIds = itemIds || new Set((currentPlan?.items || []).map((item) => item.id));
+    const posts = rawPosts.filter((post) => (
+      publicationPlatforms.has(String(post.platform || ''))
+      && (visibleItemIds.size === 0 || visibleItemIds.has(String(post.content_plan_item_id || '')))
+    ));
+    if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return posts;
     setSocialPosts(posts);
-    setSocialSummary(response.summary || null);
+    setSocialSummary(summarizeSocialPosts(posts));
     return posts;
   };
 
-  const loadCurrentPlan = async (planId: string) => {
+  const loadCurrentPlan = async (planId: string, loadSequence?: number) => {
     const planResponse = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}`, { method: 'GET' });
-    const plan = planResponse.plan || null;
+    const rawPlan: PlanPayload | null = planResponse.plan || null;
+    if (loadSequence !== undefined && loadSequence !== contentLoadSequenceRef.current) return null;
+    const rawItems = Array.isArray(rawPlan?.items) ? rawPlan.items : [];
+    const hasLocationItems = rawItems.some((item) => Boolean(String(item.business_id || '').trim()));
+    const visibleItems = hasLocationItems
+      ? rawItems.filter((item) => String(item.business_id || '').trim() === String(currentBusinessId || '').trim())
+      : rawItems;
+    const plan = rawPlan ? { ...rawPlan, items: visibleItems } : null;
     setCurrentPlan(plan);
     if (plan?.id) {
-      await loadSocialPosts(plan.id);
+      await loadSocialPosts(plan.id, loadSequence, new Set(visibleItems.map((item) => item.id)));
     }
     return plan;
   };
 
   const loadContent = async () => {
-    if (!currentBusinessId) return;
+    const loadSequence = contentLoadSequenceRef.current + 1;
+    contentLoadSequenceRef.current = loadSequence;
+    setCurrentPlan(null);
+    setSocialPosts([]);
+    setSocialSummary(null);
+    setSelectedItemId('');
+    if (!currentBusinessId) {
+      setContext(null);
+      setPlans([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const contextResponse = await newAuth.makeRequest(`/content-plans/context?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      if (loadSequence !== contentLoadSequenceRef.current) return;
       setContext(contextResponse.context || null);
       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      if (loadSequence !== contentLoadSequenceRef.current) return;
       const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
       setPlans(nextPlans);
       if (nextPlans.length > 0) {
-        await loadCurrentPlan(nextPlans[0].id);
+        await loadCurrentPlan(nextPlans[0].id, loadSequence);
       } else {
         setCurrentPlan(null);
         setSocialPosts([]);
         setSocialSummary(null);
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить контент');
+      if (loadSequence === contentLoadSequenceRef.current) {
+        setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить контент');
+      }
     } finally {
-      setLoading(false);
+      if (loadSequence === contentLoadSequenceRef.current) setLoading(false);
     }
   };
 
