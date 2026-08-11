@@ -34,6 +34,15 @@ from services.outreach_playbook import beauty_outreach_guidance
 from tests.conftest import PROJECT_ROOT, _run_flask_db_upgrade
 
 
+def test_report_style_map_signal_fails_human_language_gate():
+    result = review_human_language(
+        "Карточка Am Estetik на Яндекс Картах: услуг - 15, с ценой - 10."
+    )
+
+    assert result["passed"] is False
+    assert "SLOP_CLICHE" in result["reason_codes"]
+
+
 PRICE_UPDATE_MESSAGE = (
     "Здравствуйте! Я Александр Демьянов из LocalOS.\n\n"
     "Увидел, что вы обновили цены и прайс-лист. Если после такого обновления "

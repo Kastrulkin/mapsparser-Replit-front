@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v3"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v4"
 
 OUTREACH_TEMPLATES = (
     {
@@ -61,18 +61,18 @@ OUTREACH_TEMPLATES = (
         "question_policy": "single_cta",
     },
     {
-        "key": "map_content_gap_v2",
+        "key": "map_content_gap_v3",
         "label": "Нет новостей в карточке",
-        "version": 2,
+        "version": 3,
         "angles": ("signal", "content_operations"),
         "pain_key": "marketing_and_clients",
         "required_evidence": ("current_map_content_gap",),
         "question_policy": "single_cta",
     },
     {
-        "key": "map_service_price_coverage_v2",
+        "key": "map_service_price_coverage_v3",
         "label": "Услуги и цены в карточке",
-        "version": 2,
+        "version": 3,
         "angles": ("content_operations", "audit_step"),
         "pain_key": "marketing_and_clients",
         "required_evidence": ("current_map_service_price_coverage",),
@@ -102,6 +102,14 @@ _RECIPIENT_GENITIVE_OVERRIDES = {
 
 def _text(value: Any) -> str:
     return " ".join(str(value or "").replace("—", "-").replace("«", '"').replace("»", '"').split())
+
+
+def _service_word(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return "услуга"
+    if count % 10 in {2, 3, 4} and count % 100 not in {12, 13, 14}:
+        return "услуги"
+    return "услуг"
 
 
 def _identity_text(candidate: dict[str, Any]) -> str:
@@ -186,7 +194,7 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "отзыв" in fact and "без ответ" in fact
         ):
             reasons.append("unanswered_review_required")
-    elif template_key == "map_content_gap_v2":
+    elif template_key == "map_content_gap_v3":
         fact = _text(candidate.get("observed_fact")).lower()
         if signal_combo not in {
             "active_external_channels_with_incomplete_map_profile",
@@ -195,7 +203,7 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             marker in fact for marker in ("нет новостей", "новости отсутствуют", "карточка не заполнена")
         ):
             reasons.append("map_content_gap_required")
-    elif template_key == "map_service_price_coverage_v2":
+    elif template_key == "map_service_price_coverage_v3":
         fact = _text(candidate.get("observed_fact")).lower()
         if _text(candidate.get("evidence_kind")).lower() not in {"map_issue", "map_services"} or not (
             "услуг" in fact and "цен" in fact
@@ -343,7 +351,7 @@ def _render_outreach_template_body(
             "LocalOS отслеживает новые отзывы, группирует темы и готовит черновики ответов. Сотруднику остаётся проверить и опубликовать ответ.\n\n"
             "Вам было бы интересно сэкономить время на работе с отзывами?"
         )
-    if key == "map_content_gap_v2":
+    if key == "map_content_gap_v3":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         if "нет новостей" in observation.lower() and "яндекс картах" not in observation.lower():
             observation = f"В карточке {recipient} на Яндекс Картах нет новостей."
@@ -353,9 +361,9 @@ def _render_outreach_template_body(
             "Новости показывают клиентам актуальные услуги и дают ещё один повод обратиться из карт.\n\n"
             "LocalOS подготовит отдельные черновики новостей для Telegram, VK и Яндекс Карт. "
             "Сотруднику останется проверить и опубликовать текст.\n\n"
-            "Вам было бы интересно привлекать больше клиентов с карт?"
+            "Вам было бы интересно привлекать больше клиентов онлайн?"
         )
-    if key == "map_service_price_coverage_v2":
+    if key == "map_service_price_coverage_v3":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         counts = re.search(
             r"всего услуг\s*-\s*(\d+);\s*с ценой\s*-\s*(\d+)",
@@ -366,13 +374,15 @@ def _render_outreach_template_body(
             recipient_genitive = _RECIPIENT_GENITIVE_OVERRIDES.get(recipient)
             if recipient_genitive:
                 observation = (
-                    f"В карточке {recipient_genitive} на Яндекс Картах опубликовано "
-                    f"{counts.group(1)} услуг, но цена указана только у {counts.group(2)}."
+                    f"Вижу, что в карточке {recipient_genitive} на Яндекс Картах есть "
+                    f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
+                    f"только для {counts.group(2)} из них."
                 )
             else:
                 observation = (
-                    f"Карточка {recipient} на Яндекс Картах: "
-                    f"услуг - {counts.group(1)}, с ценой - {counts.group(2)}."
+                    f"Вижу, что в карточке компании {recipient} на Яндекс Картах есть "
+                    f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
+                    f"только для {counts.group(2)} из них."
                 )
         return (
             f"Здравствуйте! Я {identity}.\n\n"

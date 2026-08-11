@@ -31,7 +31,7 @@ def _candidate(**overrides):
 
 
 def test_library_contains_seven_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v3"
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v4"
     assert len(OUTREACH_TEMPLATES) == 7
     assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 7
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
@@ -120,7 +120,7 @@ def test_map_price_gap_cannot_be_reused_as_average_ticket_signal():
     )
 
     assert select_outreach_template("average_ticket", candidate)["status"] == "individual_copy_required"
-    assert select_outreach_template("content_operations", candidate)["key"] == "map_service_price_coverage_v2"
+    assert select_outreach_template("content_operations", candidate)["key"] == "map_service_price_coverage_v3"
 
 
 def test_map_price_gap_names_yandex_maps_and_follows_sales_flow():
@@ -140,10 +140,10 @@ def test_map_price_gap_names_yandex_maps_and_follows_sales_flow():
     selection = select_outreach_template("content_operations", candidate)
     text = render_outreach_template(selection, candidate)
 
-    assert selection["key"] == "map_service_price_coverage_v2"
+    assert selection["key"] == "map_service_price_coverage_v3"
     assert (
-        "В карточке Кожно-венерологического диспансера № 7 на Яндекс Картах "
-        "опубликовано 27 услуг, но цена указана только у 3."
+        "Вижу, что в карточке Кожно-венерологического диспансера № 7 на Яндекс Картах "
+        "есть 27 услуг, но цена указана только для 3 из них."
     ) in text
     assert "может недополучать обращения с карт" in text
     assert "LocalOS поможет исправить карточку" in text
@@ -176,10 +176,10 @@ def test_news_gap_template_offers_client_acquisition_instead_of_time_saving():
     selection = select_outreach_template("content_operations", candidate)
     text = render_outreach_template(selection, candidate)
 
-    assert selection["key"] == "map_content_gap_v2"
+    assert selection["key"] == "map_content_gap_v3"
     assert "В карточке Анни на Яндекс Картах нет новостей." in text
     assert "актуальные услуги" in text
-    assert "привлекать больше клиентов с карт" in text
+    assert "привлекать больше клиентов онлайн" in text
     assert "сэкономить время" not in text
     assert text.count("?") == 1
 
