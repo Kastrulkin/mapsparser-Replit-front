@@ -43,6 +43,7 @@ def test_low_rating_template_is_selected_and_uses_approved_owner_copy():
 
     assert selection["key"] == "weak_map_rating_beauty_v1"
     assert "рейтинг 2,5" in text
+    assert "В карточке Padrina_studio сейчас рейтинг 2,5" in text
     assert "мы с нуля привлекли 10 клиентов с карт" in text
     assert "от 1200 рублей в месяц" in text
     assert text.count("?") == 1
@@ -90,8 +91,9 @@ def test_crm_template_requires_a_confirmed_provider_and_current_source():
 
 def test_average_ticket_template_has_strict_two_question_contract():
     candidate = _candidate(
-        observed_fact="В карточке опубликованы услуги с ценами.",
-        evidence_kind="map_services",
+        observed_fact="На сайте запись ведётся через DIKIDI.",
+        evidence_kind="crm_presence",
+        crm_provider_name="DIKIDI",
     )
     selection = select_outreach_template("average_ticket", candidate)
     text = render_outreach_template(selection, candidate)
@@ -101,6 +103,16 @@ def test_average_ticket_template_has_strict_two_question_contract():
     assert template_copy_matches(text, "average_ticket", candidate) is True
     assert template_allows_two_questions(text.replace("увеличить", "поднять"), "average_ticket", candidate) is False
     assert template_copy_matches(text.replace("увеличить", "поднять"), "average_ticket", candidate) is False
+
+
+def test_map_price_gap_cannot_be_reused_as_average_ticket_signal():
+    candidate = _candidate(
+        observed_fact="По данным аудита карточки: всего услуг - 30; с ценой - 4.",
+        evidence_kind="map_issue",
+    )
+
+    assert select_outreach_template("average_ticket", candidate)["status"] == "individual_copy_required"
+    assert select_outreach_template("content_operations", candidate)["key"] == "map_service_price_coverage_v1"
 
 
 def test_templates_do_not_repeat_inside_one_sequence():
@@ -136,8 +148,9 @@ def test_all_six_templates_pass_current_quality_gate_on_supported_evidence():
             crm_provider_name="DIKIDI",
         )),
         ("average_ticket", _candidate(
-            observed_fact="В карточке опубликованы услуги с ценами.",
-            evidence_kind="map_services",
+            observed_fact="На сайте запись ведётся через DIKIDI.",
+            evidence_kind="crm_presence",
+            crm_provider_name="DIKIDI",
         )),
         ("integrated_system", _candidate(
             observed_fact="26 июля опубликована новая услуга диагностики кожи.",

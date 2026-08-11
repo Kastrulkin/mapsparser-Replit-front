@@ -186,6 +186,14 @@ def _normalize_public_audit_copy(text: Any, *, audit_profile: str = "") -> str:
         return result
     result = normalize_audit_text(result, audit_profile=audit_profile)
     replacements = (
+        ("Есть точки роста", "Нужно исправить"),
+        ("точки роста", "места для улучшения"),
+        ("точка роста", "место для улучшения"),
+        ("Инновационный", "Новый"),
+        ("инновационный", "новый"),
+        ("комплексное решение", "набор изменений"),
+        ("Уверен, что", "Проверьте, можно ли"),
+        ("уверен, что", "проверьте, можно ли"),
         ("beauty-услуги", "услуги"),
         ("beauty-услугу", "услугу"),
         ("beauty-описания", "описания услуг"),
@@ -228,6 +236,7 @@ def _normalize_public_audit_copy(text: Any, *, audit_profile: str = "") -> str:
     )
     for source, target in replacements:
         result = result.replace(source, target)
+    result = result.replace("—", "-").replace("–", "-")
     result = _normalize_city_copy(result)
     if audit_profile not in {"medical", "hospitality"}:
         result = result.replace("Пациент", "Клиент").replace("пациент", "клиент")

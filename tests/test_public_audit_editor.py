@@ -1,3 +1,5 @@
+import json
+
 from src.core.public_audit_editor import (
     ACTION_PLAN_BLOCK_KEY,
     STRONG_DEMAND_BLOCK_KEY,
@@ -148,6 +150,23 @@ def test_normalize_public_audit_removes_template_markers_and_adds_summary_varian
     assert "audit_full" not in normalized
     assert "ai_enrichment" not in audit
     assert audit["editorial_quality_gate"]["status"] == "pass"
+
+
+def test_normalize_public_audit_removes_neuroslop_and_long_dashes_from_all_copy() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["health_label"] = "Есть точки роста"
+    page_json["audit"]["action_plan"] = {
+        "next_7d": ["Инновационный подход — комплексное решение за 3–5 дней."]
+    }
+
+    normalized = normalize_public_audit_page_json(page_json)
+    rendered = json.dumps(normalized["audit"], ensure_ascii=False).lower()
+
+    assert "точки роста" not in rendered
+    assert "инновационн" not in rendered
+    assert "комплексное решение" not in rendered
+    assert "—" not in rendered
+    assert "–" not in rendered
 
 
 def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> None:
@@ -314,7 +333,7 @@ def test_normalize_public_audit_removes_public_action_plan_anglicisms() -> None:
     assert "updates" not in joined
     assert "ресепшен" not in joined
     assert "медицинский центр" in joined
-    assert "3–5 публикаций" in " | ".join(next_7d)
+    assert "3-5 публикаций" in " | ".join(next_7d)
 
 
 def test_normalize_public_audit_builds_medical_summary_from_trust_and_patient_queries() -> None:

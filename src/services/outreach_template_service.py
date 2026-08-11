@@ -162,10 +162,13 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
         if not _crm_provider(candidate):
             reasons.append("confirmed_crm_provider_required")
     elif template_key == "average_ticket_service_matrix_v1":
-        fact = _text(candidate.get("observed_fact")).lower()
-        if not _crm_provider(candidate) and not any(
-            marker in fact for marker in ("прайс", "услуг", "цен")
-        ):
+        evidence_kind = _text(candidate.get("evidence_kind")).lower()
+        if not _crm_provider(candidate) and evidence_kind not in {
+            "price_list",
+            "pricelist",
+            "website_pricing",
+            "service_catalog",
+        }:
             reasons.append("crm_or_pricelist_required")
         if not _is_beauty_or_medical(candidate):
             reasons.append("beauty_or_medical_segment_required")
@@ -293,7 +296,7 @@ def _render_outreach_template_body(
         rating_text = (f"{rating:.1f}" if rating is not None else "").replace(".", ",")
         return (
             f"Здравствуйте! Я {identity}.\n\n"
-            f"У {recipient} сейчас рейтинг {rating_text} на Яндекс Картах. "
+            f"В карточке {recipient} сейчас рейтинг {rating_text} на Яндекс Картах. "
             "С таким рейтингом карточка может терять клиентов из карт.\n\n"
             "LocalOS помогает исправить ситуацию: отслеживает отзывы, готовит ответы и подсказывает, "
             "что изменить в карточке. Для одного салона красоты мы с нуля привлекли 10 клиентов с карт.\n\n"
@@ -310,8 +313,10 @@ def _render_outreach_template_body(
             "Вам было бы интересно сэкономить время на ведении соцсетей?"
         )
     if key == "average_ticket_service_matrix_v1":
+        observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         return (
             f"Здравствуйте! Я {identity}.\n\n"
+            f"{observation}\n\n"
             "Вам знакома проблема: услуг много, а средний чек всё равно маленький?\n\n"
             "LocalOS по вашему прайсу соберёт матрицу услуг и допродаж, подготовит подсказки для администратора "
             "и поможет отследить результат.\n\n"

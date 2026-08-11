@@ -2718,7 +2718,8 @@ def _quality_gate(
             else None
         ),
         require_signal_flow=(
-            _text(angle) == "signal" and bool(candidate.get("localos_action"))
+            bool(candidate.get("outreach_template_key"))
+            or (_text(angle) == "signal" and bool(candidate.get("localos_action")))
         ),
         publication_capabilities=(
             candidate.get("publication_capabilities")
@@ -2737,8 +2738,11 @@ def _quality_gate(
             "UNSUPPORTED_PUBLICATION_CLAIM",
         }
         or (
-            _text(angle) == "signal"
-            and _text(candidate.get("sender_mode")) == "localos"
+            _text(candidate.get("sender_mode")) == "localos"
+            and (
+                _text(angle) == "signal"
+                or bool(candidate.get("outreach_template_key"))
+            )
         )
     ]
     checks["human_language"] = not enforced_language_codes
