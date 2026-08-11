@@ -95,6 +95,9 @@ _BEAUTY_MEDICAL_MARKERS = (
     "студия красоты",
     "эпиляц",
 )
+_RECIPIENT_GENITIVE_OVERRIDES = {
+    "Кожно-венерологический диспансер № 7": "Кожно-венерологического диспансера № 7",
+}
 
 
 def _text(value: Any) -> str:
@@ -360,10 +363,17 @@ def _render_outreach_template_body(
             flags=re.IGNORECASE,
         )
         if counts:
-            observation = (
-                f"В карточке {recipient} на Яндекс Картах указаны услуги: "
-                f"всего - {counts.group(1)}, с ценой - {counts.group(2)}."
-            )
+            recipient_genitive = _RECIPIENT_GENITIVE_OVERRIDES.get(recipient)
+            if recipient_genitive:
+                observation = (
+                    f"В карточке {recipient_genitive} на Яндекс Картах опубликовано "
+                    f"{counts.group(1)} услуг, но цена указана только у {counts.group(2)}."
+                )
+            else:
+                observation = (
+                    f"Карточка {recipient} на Яндекс Картах: "
+                    f"услуг - {counts.group(1)}, с ценой - {counts.group(2)}."
+                )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
