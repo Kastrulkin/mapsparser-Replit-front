@@ -35,10 +35,10 @@ def _candidate(**overrides):
     return candidate
 
 
-def test_library_contains_seven_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v5"
-    assert len(OUTREACH_TEMPLATES) == 7
-    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 7
+def test_library_contains_eight_versioned_owner_templates():
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v6"
+    assert len(OUTREACH_TEMPLATES) == 8
+    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 8
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
     assert all(item.get("owner_language") for item in OUTREACH_TEMPLATES)
 
@@ -50,6 +50,31 @@ def test_playbook_exposes_five_supported_owner_pains():
     assert set(guidance["localos_supported_pain_keys"]).issubset(
         {item["key"] for item in guidance["pain_library"]}
     )
+    assert set(guidance["localos_supported_pain_keys"]) == {
+        item["pain_key"] for item in OUTREACH_TEMPLATES
+    }
+
+
+def test_revenue_without_profit_template_uses_owner_language_as_hypothesis():
+    candidate = _candidate(
+        observed_fact="На сайте запись ведётся через DIKIDI.",
+        evidence_kind="crm_presence",
+        crm_provider_name="DIKIDI",
+    )
+    selection = select_outreach_template("integrated_system", candidate)
+    selected = {
+        **candidate,
+        "outreach_template_key": selection["key"],
+        "outreach_template_version": selection["version"],
+        "trust_statement": "Подтверждённый опыт LocalOS",
+    }
+    text = render_outreach_template(selection, selected)
+
+    assert selection["key"] == "revenue_without_profit_control_v1"
+    assert "выручка есть, а прибыли нет" in text
+    assert "Не знаю, актуально ли это для вас" in text
+    assert "обезличенные данные" in text
+    assert template_owner_pain_matches(text, "integrated_system", selected) is True
 
 
 def test_playbook_keeps_owner_rule_for_weak_map_first_touch():
@@ -241,7 +266,7 @@ def test_missing_evidence_returns_explicit_individual_copy_fallback():
     assert selection["rejected"]
 
 
-def test_all_six_templates_pass_current_quality_gate_on_supported_evidence():
+def test_all_templates_pass_current_quality_gate_on_supported_evidence():
     cases = (
         ("signal", _candidate()),
         ("crm_content", _candidate(
@@ -258,6 +283,11 @@ def test_all_six_templates_pass_current_quality_gate_on_supported_evidence():
             observed_fact="26 июля опубликована новая услуга диагностики кожи.",
             evidence_kind="new_service",
             signal_combo="recent_new_service_announcement",
+        )),
+        ("integrated_system", _candidate(
+            observed_fact="На сайте запись ведётся через DIKIDI.",
+            evidence_kind="crm_presence",
+            crm_provider_name="DIKIDI",
         )),
         ("reviews_service", _candidate(
             observed_fact="В карточке есть свежий отзыв без ответа компании.",

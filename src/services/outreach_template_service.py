@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v5"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v6"
 
 OUTREACH_TEMPLATES = (
     {
@@ -57,6 +57,17 @@ OUTREACH_TEMPLATES = (
         "owner_language": "Не хочу зависеть от одного канала привлечения.",
         "pain_markers": ("зависеть от одного канала привлечения",),
         "required_evidence": ("current_service_or_event_signal",),
+        "question_policy": "single_cta",
+    },
+    {
+        "key": "revenue_without_profit_control_v1",
+        "label": "Выручка есть, а прибыли нет",
+        "version": 1,
+        "angles": ("integrated_system",),
+        "pain_key": "revenue_without_profit",
+        "owner_language": "Выручка есть, а прибыли нет.",
+        "pain_markers": ("выручка есть", "прибыли нет"),
+        "required_evidence": ("confirmed_crm_provider", "beauty_or_medical_segment"),
         "question_policy": "single_cta",
     },
     {
@@ -202,6 +213,11 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "new_service", "service_launch", "event", "new_equipment",
         }:
             reasons.append("service_or_event_signal_required")
+    elif template_key == "revenue_without_profit_control_v1":
+        if not _crm_provider(candidate):
+            reasons.append("confirmed_crm_provider_required")
+        if not _is_beauty_or_medical(candidate):
+            reasons.append("beauty_or_medical_segment_required")
     elif template_key == "unanswered_review_response_v2":
         fact = _text(candidate.get("observed_fact")).lower()
         if signal_combo != "active_social_with_unanswered_negative_review" and not (
@@ -361,6 +377,17 @@ def _render_outreach_template_body(
             "LocalOS подготовит список местных бизнесов со смежной аудиторией и черновик предложения о партнёрстве. "
             "Вы сами решите, кому его отправить.\n\n"
             "Вам было бы интересно находить новых клиентов через партнёрства?"
+        )
+    if key == "revenue_without_profit_control_v1":
+        provider = _crm_provider(candidate)
+        return (
+            f"Здравствуйте! Я {identity}.\n\n"
+            f"Вижу, вы пользуетесь {provider}.\n\n"
+            "Владельцы описывают эту боль просто: выручка есть, а прибыли нет. "
+            "Не знаю, актуально ли это для вас.\n\n"
+            "Если загрузить в LocalOS обезличенные данные по услугам и оплатам, система соберёт "
+            "выручку, средний чек и расходы в одном месте.\n\n"
+            "Вам было бы интересно видеть эти цифры в одном месте?"
         )
     if key == "unanswered_review_response_v2":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
