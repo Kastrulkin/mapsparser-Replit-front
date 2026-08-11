@@ -70,7 +70,7 @@ describe('TodayPage', () => {
       analytics_modules: [{ key: 'trend', label: 'Динамика и доказательные рекомендации', status: 'locked' }],
       active_work: [],
       changes_24h: [],
-      completed_results: [{ id: 'result-1', title: 'Контент-план создан' }],
+      completed_results: [{ id: 'result-1', title: 'Контент-план создан', source: 'Прогресс LocalOS' }],
       community_pulse: [{ id: 'pulse-1', title: 'Вопрос из Telegram' }],
       data_health: { status: 'missing', source: 'unknown', missing: ['продажи'] },
     });
@@ -81,7 +81,9 @@ describe('TodayPage', () => {
     expect(screen.getByText('Данные за последние 8 недель')).toBeInTheDocument();
     expect(screen.getByText('Сравнение показателей по неделям: загрузите сводку')).toBeInTheDocument();
     expect(screen.getByText('Готово в LocalOS')).toBeInTheDocument();
+    expect(screen.getByText('Источник: история выполненных задач')).toBeInTheDocument();
     expect(screen.getByText('Что обсуждают в ваших источниках')).toBeInTheDocument();
+    expect(screen.getByText('Источник финансовых данных:', { exact: false })).toBeInTheDocument();
     expect(screen.getByText('не указан', { exact: false })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/выбранного контура|ритм данных|финансовую картину|точки роста|доказательные рекомендации|пульс сообщества|путь роста/i);
   });

@@ -64,6 +64,11 @@ const dataSourceLabel = (source?: string) => {
   return source;
 };
 
+const resultSourceLabel = (source?: string) => {
+  if (source === 'Прогресс LocalOS') return 'история выполненных задач';
+  return source;
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return null;
   const date = new Date(value);
@@ -201,11 +206,11 @@ export const TodayPage = () => {
         </DashboardSection>
       </div>
 
-      {completedResults.length ? <DashboardSection title="Готово в LocalOS" description="Черновики, планы и отчёты, которые уже можно открыть и проверить. Ничего не опубликовано и не отправлено автоматически."><div className="divide-y divide-slate-100">{completedResults.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><div className="font-medium text-slate-950">{item.title}</div>{item.description ? <p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.description}</p> : null}{item.source ? <div className="mt-1 text-xs text-slate-500">Источник: {item.source}</div> : null}</div></div>)}</div></DashboardSection> : null}
+      {completedResults.length ? <DashboardSection title="Готово в LocalOS" description="Черновики, планы и отчёты, которые уже можно открыть и проверить. Ничего не опубликовано и не отправлено автоматически."><div className="divide-y divide-slate-100">{completedResults.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><div className="font-medium text-slate-950">{item.title}</div>{item.description ? <p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.description}</p> : null}{item.source ? <div className="mt-1 text-xs text-slate-500">Источник: {resultSourceLabel(item.source)}</div> : null}</div></div>)}</div></DashboardSection> : null}
 
       {communityPulse.length ? <DashboardSection title="Что обсуждают в ваших источниках" description="Сообщения из подключённых Telegram-каналов и других источников. LocalOS только показывает их здесь."><div className="space-y-3">{communityPulse.map((item) => <div key={item.id} className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3"><Radio className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0"><div className="font-medium text-slate-950">{item.title}</div>{item.description ? <p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.description}</p> : null}{item.source ? <div className="mt-1 text-xs text-slate-500">Источник: {item.source}</div> : null}</div></div>)}</div></DashboardSection> : null}
 
-      {dataHealth ? <div className={cn('flex items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-[0_0_0_1px_rgba(15,23,42,0.08)]', dataNeedsAttention ? 'bg-amber-50 text-amber-950' : 'bg-slate-50 text-slate-700')}><TriangleAlert className={cn('mt-0.5 h-5 w-5 shrink-0', dataNeedsAttention ? 'text-amber-700' : 'text-slate-500')} /><div><span className="font-semibold">Финансовая сводка:</span> {dataSourceLabel(dataHealth.source_label || dataHealth.source)}{formatDate(dataHealth.source_updated_at || dataHealth.updated_at || dataHealth.last_updated_at) ? <span className="tabular-nums"> · обновлено {formatDate(dataHealth.source_updated_at || dataHealth.updated_at || dataHealth.last_updated_at)}</span> : null}{dataNeedsAttention && dataHealth.missing?.length ? <span> · нужно добавить: {dataHealth.missing.join(', ')}</span> : null}</div></div> : null}
+      {dataHealth ? <div className={cn('flex items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-[0_0_0_1px_rgba(15,23,42,0.08)]', dataNeedsAttention ? 'bg-amber-50 text-amber-950' : 'bg-slate-50 text-slate-700')}><TriangleAlert className={cn('mt-0.5 h-5 w-5 shrink-0', dataNeedsAttention ? 'text-amber-700' : 'text-slate-500')} /><div><span className="font-semibold">Источник финансовых данных:</span> {dataSourceLabel(dataHealth.source_label || dataHealth.source)}{formatDate(dataHealth.source_updated_at || dataHealth.updated_at || dataHealth.last_updated_at) ? <span className="tabular-nums"> · обновлено {formatDate(dataHealth.source_updated_at || dataHealth.updated_at || dataHealth.last_updated_at)}</span> : null}{dataNeedsAttention && dataHealth.missing?.length ? <span> · нужно добавить: {dataHealth.missing.join(', ')}</span> : null}</div></div> : null}
 
       <DashboardSection title="Все задачи и результаты" description="Откройте полный список: выполненные шаги, найденные проблемы и действия, которые ещё нужно сделать.">
         <Button type="button" variant="outline" onClick={() => navigate('/dashboard/progress')} className="min-h-11 gap-2 transition-transform active:scale-[0.96]">Открыть прогресс<ArrowRight className="h-4 w-4" /></Button>
