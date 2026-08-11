@@ -362,8 +362,52 @@ const runtimeCopy: Record<Language, { analytics: string; inProgress: string; nex
   tr: { analytics: 'Analiz', inProgress: 'devam ediyor', nextLevel: 'Sonraki seviye', rhythm: 'Ritim', ready: 'hazır', update: 'güncelle', needsData: 'veri gerekli', networkLocations: 'ağ konumu', attention: 'dikkat gerektiriyor', healthy: 'açık sorun yok', networkLocation: 'Ağ konumu' },
 };
 
+type ProgressDynamicCopy = {
+  analyticsSetup: string;
+  firstFinance: string;
+  rhythmForming: string;
+  sales: string;
+  services: string;
+  capacity: string;
+  trend: string;
+  financeTitle: string;
+  financeReason: string;
+  financeOutcome: string;
+  uploadData: string;
+};
+
+const dynamicCopy: Record<Language, ProgressDynamicCopy> = {
+  ru: { analyticsSetup: 'Нужны данные', firstFinance: 'Загрузите первую финансовую сводку, чтобы открыть аналитику.', rhythmForming: 'Ритм формируется', sales: 'Продажи и средний чек', services: 'Услуги и допродажи', capacity: 'Загрузка команды', trend: 'Динамика и доказательные рекомендации', financeTitle: 'Обновите финансовые данные', financeReason: 'Финансовые данные давно не обновлялись.', financeOutcome: 'LocalOS сможет показать актуальную финансовую картину и точки роста.', uploadData: 'Загрузить данные' },
+  en: { analyticsSetup: 'Data needed', firstFinance: 'Upload the first financial summary to unlock analytics.', rhythmForming: 'Rhythm is forming', sales: 'Sales and average ticket', services: 'Services and upsells', capacity: 'Team capacity', trend: 'Trends and evidence-based recommendations', financeTitle: 'Update financial data', financeReason: 'The financial data is out of date.', financeOutcome: 'LocalOS will show the current financial picture and growth opportunities.', uploadData: 'Upload data' },
+  fr: { analyticsSetup: 'Données requises', firstFinance: 'Importez le premier récapitulatif financier pour débloquer l’analyse.', rhythmForming: 'Le rythme se met en place', sales: 'Ventes et panier moyen', services: 'Services et ventes additionnelles', capacity: 'Charge de l’équipe', trend: 'Tendances et recommandations étayées', financeTitle: 'Actualisez les données financières', financeReason: 'Les données financières ne sont plus à jour.', financeOutcome: 'LocalOS affichera la situation financière actuelle et les possibilités de croissance.', uploadData: 'Importer les données' },
+  es: { analyticsSetup: 'Faltan datos', firstFinance: 'Carga el primer resumen financiero para activar el análisis.', rhythmForming: 'El ritmo se está formando', sales: 'Ventas y ticket medio', services: 'Servicios y ventas adicionales', capacity: 'Carga del equipo', trend: 'Tendencias y recomendaciones basadas en datos', financeTitle: 'Actualiza los datos financieros', financeReason: 'Los datos financieros están desactualizados.', financeOutcome: 'LocalOS mostrará la situación financiera actual y las oportunidades de crecimiento.', uploadData: 'Cargar datos' },
+  el: { analyticsSetup: 'Χρειάζονται δεδομένα', firstFinance: 'Ανεβάστε την πρώτη οικονομική σύνοψη για να ενεργοποιήσετε τα αναλυτικά στοιχεία.', rhythmForming: 'Ο ρυθμός διαμορφώνεται', sales: 'Πωλήσεις και μέση απόδειξη', services: 'Υπηρεσίες και πρόσθετες πωλήσεις', capacity: 'Φόρτος ομάδας', trend: 'Τάσεις και τεκμηριωμένες προτάσεις', financeTitle: 'Ενημερώστε τα οικονομικά δεδομένα', financeReason: 'Τα οικονομικά δεδομένα δεν είναι πλέον ενημερωμένα.', financeOutcome: 'Το LocalOS θα δείξει την τρέχουσα οικονομική εικόνα και τις ευκαιρίες ανάπτυξης.', uploadData: 'Ανέβασμα δεδομένων' },
+  de: { analyticsSetup: 'Daten benötigt', firstFinance: 'Laden Sie die erste Finanzübersicht hoch, um die Analyse freizuschalten.', rhythmForming: 'Der Rhythmus entsteht', sales: 'Umsatz und Durchschnittsbon', services: 'Leistungen und Zusatzverkäufe', capacity: 'Teamauslastung', trend: 'Trends und belegte Empfehlungen', financeTitle: 'Finanzdaten aktualisieren', financeReason: 'Die Finanzdaten sind nicht mehr aktuell.', financeOutcome: 'LocalOS zeigt die aktuelle Finanzlage und Wachstumsmöglichkeiten.', uploadData: 'Daten hochladen' },
+  th: { analyticsSetup: 'ต้องมีข้อมูล', firstFinance: 'อัปโหลดสรุปการเงินครั้งแรกเพื่อเปิดการวิเคราะห์', rhythmForming: 'กำลังสร้างจังหวะการทำงาน', sales: 'ยอดขายและยอดใช้จ่ายเฉลี่ย', services: 'บริการและยอดขายเพิ่มเติม', capacity: 'ภาระงานของทีม', trend: 'แนวโน้มและคำแนะนำที่มีหลักฐาน', financeTitle: 'อัปเดตข้อมูลการเงิน', financeReason: 'ข้อมูลการเงินไม่เป็นปัจจุบัน', financeOutcome: 'LocalOS จะแสดงภาพรวมการเงินปัจจุบันและโอกาสเติบโต', uploadData: 'อัปโหลดข้อมูล' },
+  ar: { analyticsSetup: 'تحتاج إلى بيانات', firstFinance: 'حمّل أول ملخص مالي لتفعيل التحليلات.', rhythmForming: 'الإيقاع قيد التكوين', sales: 'المبيعات ومتوسط الفاتورة', services: 'الخدمات والمبيعات الإضافية', capacity: 'حِمل الفريق', trend: 'الاتجاهات والتوصيات المدعومة بالأدلة', financeTitle: 'حدّث البيانات المالية', financeReason: 'البيانات المالية غير محدثة.', financeOutcome: 'سيعرض LocalOS الصورة المالية الحالية وفرص النمو.', uploadData: 'تحميل البيانات' },
+  ha: { analyticsSetup: 'Ana buƙatar bayanai', firstFinance: 'Loda taƙaitaccen bayanin kuɗi na farko domin buɗe nazari.', rhythmForming: 'Tsarin aiki yana samuwa', sales: 'Tallace-tallace da matsakaicin kuɗin saye', services: 'Ayyuka da ƙarin tallace-tallace', capacity: 'Nauyin aikin ƙungiya', trend: 'Sauye-sauye da shawarwari masu hujja', financeTitle: 'Sabunta bayanan kuɗi', financeReason: 'Bayanan kuɗi sun tsufa.', financeOutcome: 'LocalOS zai nuna halin kuɗi na yanzu da damar bunƙasa.', uploadData: 'Loda bayanai' },
+  tr: { analyticsSetup: 'Veri gerekli', firstFinance: 'Analizleri açmak için ilk finans özetini yükleyin.', rhythmForming: 'Çalışma ritmi oluşuyor', sales: 'Satışlar ve ortalama sepet', services: 'Hizmetler ve ek satışlar', capacity: 'Ekip kapasitesi', trend: 'Eğilimler ve kanıta dayalı öneriler', financeTitle: 'Finansal verileri güncelleyin', financeReason: 'Finansal veriler güncel değil.', financeOutcome: 'LocalOS güncel finansal görünümü ve büyüme fırsatlarını gösterecek.', uploadData: 'Veri yükle' },
+};
+
 export const progressPageCopyForLanguage = (language: Language) => progressCopies[language];
 export const progressRuntimeCopyForLanguage = (language: Language) => runtimeCopy[language];
+export const localizedAnalyticsLevel = (language: Language, level: string | undefined, fallback: string | undefined) => level === 'setup' ? dynamicCopy[language].analyticsSetup : localizedGrowthText(language, fallback);
+export const localizedAnalyticsNext = (language: Language, level: string | undefined, fallback: string | undefined) => level === 'setup' ? dynamicCopy[language].firstFinance : localizedGrowthText(language, fallback);
+export const localizedRhythm = (language: Language, status: string | undefined, fallback: string | undefined) => status === 'forming' ? dynamicCopy[language].rhythmForming : localizedGrowthText(language, fallback);
+export const localizedAnalyticsModule = (language: Language, key: string | undefined, fallback: string | undefined) => {
+  if (key === 'sales') return dynamicCopy[language].sales;
+  if (key === 'services') return dynamicCopy[language].services;
+  if (key === 'capacity') return dynamicCopy[language].capacity;
+  if (key === 'trend') return dynamicCopy[language].trend;
+  return localizedGrowthText(language, fallback);
+};
+export const localizedFocusAction = (language: Language, id: string | undefined, field: 'title' | 'reason' | 'outcome' | 'cta', fallback: string | undefined) => {
+  if (id !== 'growth:finance') return localizedGrowthText(language, fallback);
+  if (field === 'title') return dynamicCopy[language].financeTitle;
+  if (field === 'reason') return dynamicCopy[language].financeReason;
+  if (field === 'outcome') return dynamicCopy[language].financeOutcome;
+  return dynamicCopy[language].uploadData;
+};
 
 export const localizedGrowthStatus = (language: Language, status: string, fallback: string) => (
   language === 'ru' ? fallback : statuses[language][status] || genericText[language]
@@ -384,8 +428,14 @@ export const localizedGrowthMetric = (language: Language, fallback: string) => (
 export const localizedGrowthText = (language: Language, value?: string | null) => {
   const normalized = String(value || '').trim();
   if (!normalized) return normalized;
-  if (language === 'tr') return textTr[normalized] || translateDynamicTr(normalized);
-  if (language === 'el') return textEl[normalized] || translateDynamicEl(normalized);
+  if (language === 'tr') {
+    const translated = textTr[normalized] || translateDynamicTr(normalized);
+    return /[А-Яа-яЁё]/.test(translated) ? genericText.tr : translated;
+  }
+  if (language === 'el') {
+    const translated = textEl[normalized] || translateDynamicEl(normalized);
+    return /[А-Яа-яЁё]/.test(translated) ? genericText.el : translated;
+  }
   if (language !== 'ru' && /[А-Яа-яЁё]/.test(normalized)) return genericText[language];
   return normalized;
 };

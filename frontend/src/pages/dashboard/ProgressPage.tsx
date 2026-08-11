@@ -30,12 +30,17 @@ import { cn } from '@/lib/utils';
 import type { ControlScope } from '@/components/DashboardLayout';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import {
+  localizedAnalyticsLevel,
+  localizedAnalyticsModule,
+  localizedAnalyticsNext,
+  localizedFocusAction,
   localizedGrowthArea,
   localizedGrowthMetric,
   localizedGrowthMilestone,
   localizedGrowthStatus,
   localizedGrowthText,
   localizedProgressBusinessName,
+  localizedRhythm,
   progressPageCopyForLanguage,
   progressRuntimeCopyForLanguage,
   type ProgressPageCopy,
@@ -45,6 +50,7 @@ type GrowthAreaKey = 'maps' | 'content' | 'partnerships' | 'automation' | 'upsel
 type GrowthAreaStatus = 'not_started' | 'in_progress' | 'healthy' | 'needs_attention' | 'unavailable';
 
 type GrowthAction = {
+  id?: string;
   title: string;
   reason: string;
   expected_outcome: string;
@@ -110,7 +116,7 @@ type GrowthOverview = {
     mission?: GrowthAction;
   };
   data_health?: GrowthDataHealth | null;
-  analytics_level?: { label?: string; next_unlock?: string | null } | null;
+  analytics_level?: { level?: string; label?: string; next_unlock?: string | null } | null;
   analytics_modules?: Array<{ key?: string; label?: string; status?: string; next_unlock?: string | null }>;
   data_rhythm?: { coverage?: number; completed_periods_8w?: number; next_due_at?: string | null } | null;
   rhythm?: { label?: string; active_weeks?: number; status?: string } | null;
@@ -551,9 +557,9 @@ export const ProgressPage = () => {
 
       <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
 
-      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">{runtime.analytics}: {localizedGrowthText(language, overview.analytics_level?.label) || runtime.inProgress}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{runtime.nextLevel}: {localizedGrowthText(language, overview.analytics_level.next_unlock)}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">{runtime.rhythm}: {localizedGrowthText(language, overview.rhythm.label)}</span> : null}</div> : null}
+      {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">{runtime.analytics}: {localizedAnalyticsLevel(language, overview.analytics_level?.level, overview.analytics_level?.label) || runtime.inProgress}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{runtime.nextLevel}: {localizedAnalyticsNext(language, overview.analytics_level.level, overview.analytics_level.next_unlock)}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">{runtime.rhythm}: {localizedRhythm(language, overview.rhythm.status, overview.rhythm.label)}</span> : null}</div> : null}
 
-      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{localizedGrowthText(language, module.label)}: {module.status === 'ready' ? runtime.ready : module.status === 'available' ? runtime.update : runtime.needsData}</span>)}</div> : null}
+      {overview.analytics_modules?.length ? <div className="flex flex-wrap gap-2">{overview.analytics_modules.map((module) => <span key={module.key || module.label} className={cn('rounded-full px-3 py-1.5 text-sm', module.status === 'ready' ? 'bg-emerald-50 text-emerald-800' : module.status === 'available' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-600')}>{localizedAnalyticsModule(language, module.key, module.label)}: {module.status === 'ready' ? runtime.ready : module.status === 'available' ? runtime.update : runtime.needsData}</span>)}</div> : null}
 
       {scopeKind === 'network' && overview.network_summary ? (
         <section className="rounded-2xl bg-slate-50 px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
@@ -583,12 +589,12 @@ export const ProgressPage = () => {
 
         <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" data-tour-target="progress-focus-action">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.currentPriority}</div>
-          <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{localizedGrowthText(language, currentMission?.title) || copy.continueWorking}</h2>
-          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{localizedGrowthText(language, currentMission?.reason)}</p>
+          <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{localizedFocusAction(language, currentMission?.id, 'title', currentMission?.title) || copy.continueWorking}</h2>
+          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{localizedFocusAction(language, currentMission?.id, 'reason', currentMission?.reason)}</p>
           {currentMission ? (
             <>
               <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                <strong>{copy.result}:</strong> {localizedGrowthText(language, currentMission.expected_outcome)}
+                <strong>{copy.result}:</strong> {localizedFocusAction(language, currentMission.id, 'outcome', currentMission.expected_outcome)}
               </div>
               {currentMission.estimated_effect?.amount ? (
                 <div className="mt-2 text-sm font-medium tabular-nums text-emerald-700">
@@ -596,7 +602,7 @@ export const ProgressPage = () => {
                 </div>
               ) : null}
               <Button type="button" className="mt-4 min-h-11 w-full bg-orange-500 text-white transition-transform hover:bg-orange-600 active:scale-[0.96]" onClick={openMission}>
-                {localizedGrowthText(language, currentMission.cta_label)}
+                {localizedFocusAction(language, currentMission.id, 'cta', currentMission.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </>

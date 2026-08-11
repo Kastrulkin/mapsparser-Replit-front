@@ -22,12 +22,20 @@ const overview = {
     locations_count: 1,
   },
   focus_action: {
-    title: 'Получите данные карты',
-    reason: 'Карта подключена, но свежих данных и аудита ещё нет.',
-    expected_outcome: 'Появится аудит с конкретными проблемами карточки.',
-    cta_label: 'Обновить карту',
-    cta_url: '/dashboard/profile',
+    id: 'growth:finance',
+    title: 'Обновите финансовые данные',
+    reason: 'Финансовые данные давно не обновлялись.',
+    expected_outcome: 'LocalOS сможет показать актуальную финансовую картину и точки роста.',
+    cta_label: 'Загрузить данные',
+    screen: 'finance',
   },
+  data_health: { status: 'stale', source: 'demo_grooming_network', reason: 'Загрузите свежую выгрузку, чтобы открыть актуальную аналитику.' },
+  analytics_level: { level: 'setup', label: 'Нужны данные', next_unlock: 'Загрузите первую финансовую сводку, чтобы открыть аналитику.' },
+  analytics_modules: [
+    { key: 'sales', label: 'Продажи и средний чек', status: 'available' },
+    { key: 'trend', label: 'Динамика и доказательные рекомендации', status: 'locked' },
+  ],
+  rhythm: { status: 'forming', label: 'Ритм формируется' },
   areas: [
     {
       key: 'maps',
