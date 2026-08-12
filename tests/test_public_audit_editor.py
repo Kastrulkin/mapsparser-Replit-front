@@ -420,8 +420,35 @@ def test_normalize_public_audit_declines_single_word_russian_business_name() -> 
     summary = normalized["audit"]["summary_text"]
 
     assert summary.startswith("У «Проформы» отзывы есть")
-    assert "направлений - косметология, массаж" in summary
+    assert "направления - косметология, массаж" in summary
     assert "про косметология" not in summary
+
+    normalized_twice = normalize_public_audit_page_json(normalized)
+    assert normalized_twice == normalized
+
+
+def test_normalize_public_audit_repairs_legacy_service_case_phrases() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["issue_blocks"] = [
+        {
+            "id": "category_positioning_gap",
+            "title": "Категории и направления можно сделать точнее",
+            "fix": "Проверить категории и разделить направления так, чтобы клиент быстро находил косметология, массаж без лишнего поиска.",
+        },
+        {
+            "id": "positioning_description_gap",
+            "title": "Описание не показывает услуги",
+            "fix": "Добавить короткий блок про косметология, массаж: отличие, ориентир по выбору и следующий шаг.",
+        },
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    text = str(normalized["audit"]["issue_blocks"])
+
+    assert "находил нужный раздел: косметология, массаж" in text
+    assert "блок о направлениях - косметология, массаж" in text
+    assert "находил косметология" not in text
+    assert "про косметология" not in text
 
 
 def test_normalize_public_audit_rewrites_abstract_new_traffic_copy() -> None:

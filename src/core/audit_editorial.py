@@ -130,6 +130,18 @@ def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
     if not text:
         return text
 
+    text = re.sub(
+        r"Проверить категории и разделить направления так, чтобы клиент быстро находил (.+?) без лишнего поиска\.",
+        r"Проверить категории и разделить направления так, чтобы клиент быстро находил нужный раздел: \1.",
+        text,
+    )
+    text = re.sub(
+        r"\bдобавить короткий блок про ([^:.;]+)(?=:)",
+        r"добавить короткий блок о направлениях - \1",
+        text,
+        flags=re.IGNORECASE,
+    )
+
     replacements = (
         ("Есть точки роста", "Нужно исправить"),
         ("точки роста", "места для улучшения"),
@@ -584,7 +596,7 @@ def _pattern_hint(audit: dict[str, Any]) -> str:
 def _summary_variant_index(audit: dict[str, Any]) -> int:
     basis = "|".join(
         str(audit.get(key) or "")
-        for key in ("lead_id", "business_name", "name", "audit_profile", "audit_slug", "business_address", "summary_text")
+        for key in ("lead_id", "business_name", "name", "audit_profile", "audit_slug", "business_address")
     )
     return sum((index + 1) * ord(char) for index, char in enumerate(basis)) % 7
 
