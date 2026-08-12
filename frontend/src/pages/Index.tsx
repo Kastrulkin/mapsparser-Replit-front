@@ -251,6 +251,19 @@ const enCopy: LandingCopy = {
 const taskIcons = [MapPinned, MessageSquareText, CircleDollarSign, ClipboardCheck, BarChart3];
 const stepIcons = [Building2, Eye, Layers3, ClipboardCheck, FileCheck2];
 
+const compiledArticleLinkByLanguage: Record<Language, string> = {
+  ru: "Почитать про технологию Compiled AI",
+  en: "Read about Compiled AI",
+  fr: "Découvrir la technologie Compiled AI",
+  es: "Conocer la tecnología Compiled AI",
+  el: "Διαβάστε για την τεχνολογία Compiled AI",
+  de: "Mehr über Compiled AI erfahren",
+  th: "อ่านเกี่ยวกับเทคโนโลยี Compiled AI",
+  ar: "اقرأ عن تقنية Compiled AI",
+  ha: "Karanta game da fasahar Compiled AI",
+  tr: "Compiled AI teknolojisini okuyun",
+};
+
 const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
   ru: {
     intro: "Эти вопросы владельцы снова и снова задают друг другу в рабочих чатах. Задачи повторяются — значит, найденное решение можно проверить, сохранить и использовать снова.",
@@ -499,6 +512,7 @@ const Index = () => {
   const copy = copyForLanguage(language);
   const networkQuestions = networkQuestionsByLanguage[language];
   const productPreview = productPreviewByLanguage[language];
+  const compiledArticleLink = compiledArticleLinkByLanguage[language];
 
   useEffect(() => {
     if (!["#agents", "#cta", "#hero-form"].includes(location.hash)) return;
@@ -795,6 +809,13 @@ const Index = () => {
               <p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-slate-300">{copy.workIntro}</p>
               <div className="mt-9 rounded-2xl bg-orange-500/10 p-5 shadow-[inset_0_0_0_1px_rgba(251,146,60,0.18)]">
                 <p className="text-pretty text-sm font-semibold leading-6 text-orange-100">{copy.workSummary}</p>
+                <Link
+                  className="mt-5 inline-flex min-h-11 items-center gap-2 border-t border-orange-300/20 pt-4 text-sm font-bold text-orange-300 transition-colors hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  to="/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz"
+                >
+                  {compiledArticleLink}
+                  <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </Link>
               </div>
             </div>
 
@@ -820,12 +841,9 @@ const Index = () => {
 
         <section className="bg-white px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
-            <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
-              <div>
-                <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">{copy.casesEyebrow}</span>
-                <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.casesTitle}</h2>
-              </div>
-              <p className="max-w-2xl text-pretty text-lg leading-8 text-slate-600 lg:justify-self-end">{copy.casesIntro}</p>
+            <div>
+              <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">{copy.casesEyebrow}</span>
+              <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.casesTitle}</h2>
             </div>
             <div className="mt-10 grid gap-5 lg:grid-cols-3">
               {publishedCases.slice(0, 3).map((caseItem) => (
