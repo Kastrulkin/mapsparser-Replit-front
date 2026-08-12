@@ -331,10 +331,15 @@ def attach_public_audit_link(text: str, candidate: dict[str, Any]) -> str:
     ):
         return text
     paragraphs = text.split("\n\n")
-    if _text(candidate.get("evidence_kind")) in {"active_social_activity", "active_map_news"}:
+    if _text(candidate.get("evidence_kind")) == "active_map_news":
         audit_paragraph = (
             "Помимо этого, мы подготовили аудит карточки с конкретными изменениями. "
             f"Их можно внедрить самостоятельно или поручить нам: {audit_url}"
+        )
+    elif _text(candidate.get("evidence_kind")) == "active_social_activity":
+        audit_paragraph = (
+            "Помимо этого, мы ещё собрали аудит по вашей карточке на картах. "
+            f"Сможете поправить сами: {audit_url}"
         )
     else:
         audit_paragraph = (
