@@ -1276,6 +1276,32 @@ def test_fresh_snapshot_replaces_larger_stale_imported_counts(monkeypatch) -> No
     assert all("27" not in str(item) for item in audit.get("issue_blocks") or [])
 
 
+def test_card_version_selection_prefers_latest_not_historic_maximum() -> None:
+    from src.core.card_audit import _select_preferred_metrics_card, _select_preferred_rich_card
+
+    cards = [
+        {
+            "id": "old",
+            "created_at": "2026-07-01T10:00:00+00:00",
+            "rating": 4.1,
+            "reviews_count": 999,
+            "products": [{"title": f"Старая {index}"} for index in range(27)],
+            "news": [{"title": "Старая новость"}],
+        },
+        {
+            "id": "fresh",
+            "created_at": "2026-08-12T10:00:00+00:00",
+            "rating": 4.8,
+            "reviews_count": 41,
+            "products": [{"title": f"Текущая {index}"} for index in range(3)],
+            "news": [],
+        },
+    ]
+
+    assert _select_preferred_metrics_card(cards)["id"] == "fresh"
+    assert _select_preferred_rich_card(cards)["id"] == "fresh"
+
+
 def test_fresh_parse_verification_contract_is_shared_by_full_and_preview_audits() -> None:
     now = datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc)
 

@@ -914,40 +914,37 @@ def _card_richness_score(card: Optional[Dict[str, Any]]) -> int:
 
 
 def _select_preferred_rich_card(cards: List[Dict[str, Any]]) -> Dict[str, Any]:
-    best_card: Dict[str, Any] = {}
-    best_key = (-1, datetime.min.replace(tzinfo=timezone.utc))
-    for card in cards:
-        snapshot_type = _card_snapshot_type(card)
-        if snapshot_type and snapshot_type != "full":
-            continue
-        score = _card_richness_score(card)
-        created_at = _coerce_dt(card.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)
-        key = (score, created_at)
-        if key > best_key:
-            best_card = card
-            best_key = key
-    return best_card
+    eligible = [
+        card
+        for card in cards
+        if not _card_snapshot_type(card) or _card_snapshot_type(card) == "full"
+    ]
+    if not eligible:
+        return {}
+    # A card row is a versioned observation. Completeness is useful only as a
+    # tiebreaker within the same observation time; it must not resurrect a
+    # historically larger catalog or old news after a fresh parse.
+    return max(
+        eligible,
+        key=lambda card: (
+            _coerce_dt(card.get("created_at") or card.get("updated_at"))
+            or datetime.min.replace(tzinfo=timezone.utc),
+            _card_richness_score(card),
+        ),
+    )
 
 
 def _select_preferred_metrics_card(cards: List[Dict[str, Any]]) -> Dict[str, Any]:
-    best_card: Dict[str, Any] = {}
-    best_key = (
-        -1,
-        -1,
-        datetime.min.replace(tzinfo=timezone.utc),
+    eligible = [card for card in cards if _card_has_metric_payload(card)]
+    if not eligible:
+        return {}
+    return max(
+        eligible,
+        key=lambda card: (
+            _coerce_dt(card.get("created_at") or card.get("updated_at"))
+            or datetime.min.replace(tzinfo=timezone.utc),
+        ),
     )
-    for card in cards:
-        if not _card_has_metric_payload(card):
-            continue
-        reviews_count = _extract_int(card.get("reviews_count") or 0)
-        rating_value = _extract_numeric(card.get("rating"))
-        rating_score = int(round((rating_value or 0) * 100))
-        created_at = _coerce_dt(card.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)
-        key = (reviews_count, rating_score, created_at)
-        if key > best_key:
-            best_card = card
-            best_key = key
-    return best_card
 
 
 def _extract_yandex_org_id_from_url(url: Any) -> Optional[str]:
