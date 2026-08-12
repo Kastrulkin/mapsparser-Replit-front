@@ -454,7 +454,7 @@ def _render_outreach_template_body(
         )
     if key == "map_content_gap_v4":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
-        if "нет новостей" in observation.lower() and "яндекс картах" not in observation.lower():
+        if "нет новостей" in observation.lower():
             observation = f"В карточке компании {recipient} на Яндекс Картах нет новостей."
         return (
             f"Здравствуйте! Я {identity}.\n\n"
