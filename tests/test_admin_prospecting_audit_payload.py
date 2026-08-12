@@ -36,9 +36,11 @@ from src.core.card_audit import (
     _estimate_average_check_from_services,
     _extract_lead_import_payload,
     _format_ru_location_prepositional,
+    _fresh_parse_is_verified,
     _merge_action_plan,
     _merge_issue_blocks,
     _normalize_generated_location_phrases,
+    build_lead_card_preview_snapshot,
     estimate_card_revenue_gap,
 )
 from src.core.audit_editorial import build_editorial_summary
@@ -1129,6 +1131,116 @@ def test_lead_has_channel_contact_checks_matching_field_only() -> None:
     assert _lead_has_channel_contact(lead, "max") is False
     assert _lead_has_channel_contact(lead, "email") is False
     assert _lead_has_channel_contact(lead, "manual") is True
+
+
+def test_lead_preview_audit_omits_unproven_zeroes_and_gap_findings(monkeypatch) -> None:
+    from src.core import card_audit
+
+    monkeypatch.setattr(
+        card_audit,
+        "_resolve_lead_business_snapshot",
+        lambda _lead: {
+            "source_url": "https://yandex.ru/maps/org/anni/1/",
+            "last_parse_status": "lead_preview",
+            "last_parse_at": "2026-07-20T10:00:00+00:00",
+            "services_count": 0,
+            "priced_services_count": 0,
+            "news_count": 0,
+            "recent_news_count": 0,
+            "has_recent_activity": False,
+            "description_present": False,
+            "services_preview": [],
+            "news_preview": [],
+            "parsed_contacts": {},
+        },
+    )
+    audit = build_lead_card_preview_snapshot(
+        {
+            "id": "lead-anni",
+            "name": "Анни",
+            "category": "Салон красоты",
+            "city": "Санкт-Петербург",
+            "source_url": "https://yandex.ru/maps/org/anni/1/",
+            "rating": 4.5,
+            "reviews_count": 10,
+        }
+    )
+
+    assert audit["parse_context"]["facts_verified"] is False
+    assert audit["current_state"]["services_count"] is None
+    assert audit["current_state"]["services_with_price_count"] is None
+    assert audit["current_state"]["news_count"] is None
+    assert audit["current_state"]["description_present"] is None
+    issue_ids = {str(item.get("id") or "") for item in audit.get("issue_blocks") or []}
+    assert not issue_ids.intersection({
+        "services_no_price",
+        "services_price_gap",
+        "activity_signals_gap",
+        "positioning_description_gap",
+    })
+
+
+def test_old_completed_snapshot_is_not_marked_as_verified_current_state(monkeypatch) -> None:
+    from src.core import card_audit
+
+    monkeypatch.setattr(
+        card_audit,
+        "_resolve_lead_business_snapshot",
+        lambda _lead: {
+            "source_url": "https://yandex.ru/maps/org/anni/1/",
+            "last_parse_status": "completed",
+            "last_parse_at": "2026-07-20T10:00:00+00:00",
+            "services_count": 12,
+            "priced_services_count": 3,
+            "news_count": 0,
+            "recent_news_count": 0,
+            "has_recent_activity": False,
+            "description_present": False,
+            "services_preview": [],
+            "news_preview": [],
+            "parsed_contacts": {},
+        },
+    )
+    audit = build_lead_card_preview_snapshot(
+        {
+            "id": "lead-anni",
+            "name": "Анни",
+            "category": "Салон красоты",
+            "city": "Санкт-Петербург",
+            "source_url": "https://yandex.ru/maps/org/anni/1/",
+            "rating": 4.5,
+            "reviews_count": 10,
+        }
+    )
+
+    assert audit["parse_context"]["facts_verified"] is False
+    assert audit["current_state"]["services_count"] is None
+    assert audit["current_state"]["news_count"] is None
+
+
+def test_fresh_parse_verification_contract_is_shared_by_full_and_preview_audits() -> None:
+    now = datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc)
+
+    assert _fresh_parse_is_verified(
+        "completed",
+        "2026-08-12T10:00:00+00:00",
+        now=now,
+    ) is True
+    assert _fresh_parse_is_verified(
+        "done",
+        "2026-08-12T10:00:00+00:00",
+        now=now,
+    ) is True
+    assert _fresh_parse_is_verified(
+        "completed",
+        "2026-07-20T10:00:00+00:00",
+        now=now,
+    ) is False
+    assert _fresh_parse_is_verified(
+        "lead_preview",
+        "2026-08-12T10:00:00+00:00",
+        now=now,
+    ) is False
 
 
 def test_lead_has_channel_contact_detects_max_from_messenger_links() -> None:

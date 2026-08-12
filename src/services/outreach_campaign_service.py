@@ -54,6 +54,35 @@ _LOCALOS_EMAIL_IDENTITY_RE = re.compile(
 )
 
 
+def _fresh_successful_snapshot(
+    parse_context: Any,
+    *,
+    now: datetime | None = None,
+    max_age: timedelta = timedelta(days=7),
+) -> bool:
+    """Allow absence/count claims only from a recent full parse."""
+
+    if not isinstance(parse_context, dict):
+        return False
+    if str(parse_context.get("last_parse_status") or "").strip().lower() not in {
+        "completed",
+        "success",
+    }:
+        return False
+    raw_observed_at = str(parse_context.get("last_parse_at") or "").strip()
+    if not raw_observed_at:
+        return False
+    try:
+        observed_at = datetime.fromisoformat(raw_observed_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=timezone.utc)
+    checked_at = now or datetime.now(timezone.utc)
+    age = checked_at - observed_at.astimezone(timezone.utc)
+    return timedelta(0) <= age <= max_age
+
+
 def _format_channel_outreach_message(
     value: Any,
     *,
@@ -1433,8 +1462,68 @@ def _signal_is_material(candidate: dict[str, Any]) -> bool:
     if rating_match:
         rating = float(rating_match.group(1).replace(",", "."))
         reviews = int(rating_match.group(2))
-        return rating <= 4.2 or reviews <= 10
+        return rating > 0 and (rating <= 4.2 or reviews <= 10)
     return True
+
+
+def _merge_recent_research_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Keep the latest research contract while retaining recent public evidence."""
+    if not rows:
+        return {}
+    merged = dict(rows[0])
+    identity_fields = {
+        "signals_json": ("evidence_id", "id", "source_url", "url", "observed_fact", "fact"),
+        "evidence_json": ("evidence_id", "id", "source_url", "url", "observed_fact", "fact"),
+        "sources_json": ("url", "source_url", "title"),
+        "contact_evidence_json": ("contact_type", "type", "normalized_value", "value", "source_url"),
+    }
+    for field, keys in identity_fields.items():
+        values: list[Any] = []
+        seen: set[str] = set()
+        for row in rows:
+            for item in _list(row.get(field)):
+                if not isinstance(item, dict):
+                    continue
+                identity = "|".join(_text(item.get(key)).lower() for key in keys)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                values.append(item)
+        merged[field] = values
+    merged["research_history_rows_merged"] = len(rows)
+    return merged
+
+
+def _russian_publication_count(value: int) -> str:
+    """Return a human Russian verb and noun form for a publication count."""
+    tail_100 = value % 100
+    tail_10 = value % 10
+    if 11 <= tail_100 <= 14:
+        noun = "публикаций"
+    elif tail_10 == 1:
+        noun = "публикация"
+    elif 2 <= tail_10 <= 4:
+        noun = "публикации"
+    else:
+        noun = "публикаций"
+    verb = "вышла" if noun == "публикация" else "вышло"
+    return f"{verb} {value} {noun}"
+
+
+def _russian_visible_service_count(value: int) -> str:
+    """Return a human Russian phrase for the visible service count."""
+    tail_100 = value % 100
+    tail_10 = value % 10
+    if 11 <= tail_100 <= 14:
+        noun = "услуг"
+    elif tail_10 == 1:
+        noun = "услуга"
+    elif 2 <= tail_10 <= 4:
+        noun = "услуги"
+    else:
+        noun = "услуг"
+    verb = "видна" if noun == "услуга" else "видны"
+    return f"{verb} {value} {noun}"
 
 
 def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
@@ -1518,11 +1607,15 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         """
         SELECT * FROM lead_workstream_research
         WHERE workstream_id = %s
-        ORDER BY researched_at DESC, created_at DESC LIMIT 1
+          AND researched_at >= NOW() - INTERVAL '90 days'
+        ORDER BY researched_at DESC, created_at DESC
+        LIMIT 25
         """,
         (workstream_id,),
     )
-    workstream["research"] = _dict(cursor.fetchone())
+    workstream["research"] = _merge_recent_research_rows(
+        [_dict(row) for row in cursor.fetchall()]
+    )
     cursor.execute(
         """
         SELECT * FROM outreach_sender_profiles
@@ -1580,7 +1673,10 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         SELECT MAX(document.published_at) AS last_post_at,
                COUNT(*) FILTER (WHERE document.published_at >= NOW() - INTERVAL '30 days') AS posts_30d,
                COUNT(*) FILTER (WHERE document.published_at >= NOW() - INTERVAL '90 days') AS posts_90d,
-               MAX(source.canonical_url) AS source_url
+               MAX(source.canonical_url) AS source_url,
+               BOOL_AND(source.sync_status = 'ready') AS source_sync_ready,
+               BOOL_AND(source.backfill_completed_at IS NOT NULL) AS source_backfill_complete,
+               MAX(source.last_collected_at) AS source_last_collected_at
         FROM lead_signal_links link
         JOIN knowledge_sources source ON source.id::text = link.source_id
         JOIN knowledge_documents document
@@ -1590,14 +1686,37 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
           AND link.status = 'selected'
           AND source.status = 'active'
           AND source.visibility = 'public'
+          AND LOWER(source.canonical_url) NOT SIMILAR TO
+              '%%(dikidi_business|yclients|altegio|sonline)%%'
+          AND EXISTS (
+              SELECT 1
+              FROM lead_contact_points source_contact
+              WHERE source_contact.lead_id = %s
+                AND source_contact.contact_type = 'telegram'
+                AND LOWER(RTRIM(COALESCE(
+                    source_contact.normalized_value,
+                    source_contact.value
+                ), '/')) = LOWER(RTRIM(source.canonical_url, '/'))
+                AND source_contact.source_url IS NOT NULL
+          )
           AND document.document_type = 'telegram_message'
         """,
-        (workstream_id,),
+        (workstream_id, workstream.get("lead_id")),
     )
     social_activity = _dict(cursor.fetchone())
+    last_collected_at = social_activity.get("source_last_collected_at")
+    if last_collected_at and getattr(last_collected_at, "tzinfo", None) is None:
+        last_collected_at = last_collected_at.replace(tzinfo=timezone.utc)
+    social_count_verified = bool(
+        social_activity.get("source_sync_ready")
+        and social_activity.get("source_backfill_complete")
+        and last_collected_at
+        and datetime.now(timezone.utc) - last_collected_at <= timedelta(hours=48)
+    )
     workstream["official_social_activity"] = {
         **social_activity,
         "official": bool(social_activity.get("last_post_at")),
+        "count_verified": social_count_verified,
     }
     if workstream.get("workstream_type") == "client_partnership":
         cursor.execute(
@@ -1627,8 +1746,13 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
         if isinstance(audit.get("current_state"), dict)
         else {}
     )
-    if context.get("source_url") and audit_state:
-        audit_observed_at = context.get("public_audit_updated_at") or context.get("updated_at")
+    parse_context = audit.get("parse_context") if isinstance(audit.get("parse_context"), dict) else {}
+    audit_facts_verified = bool(
+        parse_context.get("facts_verified") is True
+        and _fresh_successful_snapshot(parse_context)
+    )
+    if context.get("source_url") and audit_state and audit_facts_verified:
+        audit_observed_at = parse_context.get("last_parse_at")
         if int(audit_state.get("news_count") or 0) == 0:
             ledger.append({
                 "id": "map-content-gap",
@@ -1644,6 +1768,54 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
                 "source_type": "public_audit_current_state",
                 "signal_combo": "map_content_gap",
             })
+    social_activity = (
+        context.get("official_social_activity")
+        if isinstance(context.get("official_social_activity"), dict)
+        else {}
+    )
+    posts_30d = int(social_activity.get("posts_30d") or 0)
+    if (
+        social_activity.get("official") is True
+        and social_activity.get("count_verified") is True
+        and posts_30d > 0
+        and _text(social_activity.get("source_url"))
+    ):
+        ledger.append({
+            "id": "official-social-activity-30d",
+            "kind": "active_social_activity",
+            "fact": (
+                f"Вижу, вы ведёте соцсети: за последние 30 дней в Telegram "
+                f"{_russian_publication_count(posts_30d)}."
+            ),
+            "status": "observed",
+            "source_url": social_activity.get("source_url"),
+            "observed_at": social_activity.get("last_post_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.95,
+            "hypothesis": None,
+            "relevance": "Публикации для нескольких площадок приходится адаптировать отдельно.",
+            "source_type": "official_telegram_activity",
+            "signal_combo": "active_social_multichannel_content",
+        })
+    map_services_count = int(context.get("map_services_count") or 0)
+    if 0 < map_services_count <= 100 and _text(context.get("source_url")):
+        ledger.append({
+            "id": "current-map-service-catalog",
+            "kind": "service_catalog",
+            "fact": (
+                f"В карточке {_text(context.get('lead_name'))} на Яндекс Картах "
+                f"{_russian_visible_service_count(map_services_count)}."
+            ),
+            "status": "observed",
+            "source_url": context.get("source_url"),
+            "observed_at": context.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.9,
+            "hypothesis": None,
+            "relevance": "Опубликованный список услуг позволяет проверить пары основной и дополнительной услуги.",
+            "source_type": "public_map_service_catalog",
+            "signal_combo": "current_service_catalog",
+        })
     research_brief = (
         research.get("message_brief_json")
         if isinstance(research.get("message_brief_json"), dict)
@@ -1747,7 +1919,11 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "safe_angles": _list(signal.get("safe_angles")),
         })
     rating = context.get("rating")
-    if rating is not None and float(rating) < 4.5 and context.get("source_url"):
+    if (
+        rating is not None
+        and 0 < float(rating) < 4.5
+        and context.get("source_url")
+    ):
         ledger.append({
             "id": "map-rating",
             "kind": "map_rating",
@@ -1835,11 +2011,11 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = -1
         elif kind == "service_compatibility":
             rank = 0
-        elif beauty_sales and kind in {"telegram_post", "social_post"}:
+        elif beauty_sales and kind in {"active_social_activity", "telegram_post", "social_post"}:
             rank = 1
         elif kind == "map_rating":
             rank = 1
-        elif kind == "map_issue":
+        elif kind in {"map_issue", "service_catalog"}:
             rank = 2
         elif kind == "map_gap":
             rank = 3

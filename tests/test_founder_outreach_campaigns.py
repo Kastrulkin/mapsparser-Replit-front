@@ -22,12 +22,158 @@ from services.outreach_campaign_service import (
     build_personalization_candidates,
     channel_availability,
     _localos_representative_profile,
+    _merge_recent_research_rows,
     _normalize_touch_overrides,
     _publication_capability_snapshot,
     _resolve_next_sequence_channel,
     _strategy_dimensions,
     resolve_sender_mode,
 )
+
+
+def test_recent_research_history_keeps_latest_contract_and_older_public_signals():
+    rows = [
+        {
+            "report_hash": "latest-map-audit",
+            "message_brief_json": {"angle": "map_gap"},
+            "signals_json": [
+                {
+                    "evidence_id": "map-gap",
+                    "kind": "map_issue",
+                    "observed_fact": "В карточке нет новостей.",
+                    "source_url": "https://yandex.ru/maps/org/example/1",
+                }
+            ],
+            "sources_json": [{"url": "https://yandex.ru/maps/org/example/1"}],
+        },
+        {
+            "report_hash": "older-social-research",
+            "message_brief_json": {"angle": "social_content"},
+            "signals_json": [
+                {
+                    "evidence_id": "telegram-post-42",
+                    "kind": "telegram_post",
+                    "observed_fact": "В Telegram опубликован разбор новой услуги.",
+                    "source_url": "https://t.me/example/42",
+                },
+                {
+                    "evidence_id": "map-gap",
+                    "kind": "map_issue",
+                    "observed_fact": "В карточке нет новостей.",
+                    "source_url": "https://yandex.ru/maps/org/example/1",
+                },
+            ],
+            "sources_json": [
+                {"url": "https://t.me/example/42"},
+                {"url": "https://yandex.ru/maps/org/example/1"},
+            ],
+        },
+    ]
+
+    merged = _merge_recent_research_rows(rows)
+
+    assert merged["report_hash"] == "latest-map-audit"
+    assert merged["message_brief_json"] == {"angle": "map_gap"}
+    assert [item["evidence_id"] for item in merged["signals_json"]] == [
+        "map-gap",
+        "telegram-post-42",
+    ]
+    assert [item["url"] for item in merged["sources_json"]] == [
+        "https://yandex.ru/maps/org/example/1",
+        "https://t.me/example/42",
+    ]
+    assert merged["research_history_rows_merged"] == 2
+
+
+def test_current_map_service_catalog_is_evidence_without_overstating_total_catalog():
+    evidence = build_evidence_ledger(
+        {
+            "lead_name": "Эстем",
+            "source_url": "https://yandex.ru/maps/org/estem/1",
+            "updated_at": "2026-08-11T10:00:00Z",
+            "map_services_count": 10,
+            "research": {},
+        }
+    )
+
+    catalog = next(item for item in evidence if item["id"] == "current-map-service-catalog")
+    assert catalog["kind"] == "service_catalog"
+    assert catalog["fact"] == "В карточке Эстем на Яндекс Картах видны 10 услуг."
+    assert "всего" not in catalog["fact"].lower()
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(1, "видна 1 услуга"), (22, "видны 22 услуги"), (25, "видны 25 услуг")],
+)
+def test_current_map_service_catalog_uses_human_russian_count_agreement(count, expected):
+    evidence = build_evidence_ledger(
+        {
+            "lead_name": "Эстем",
+            "source_url": "https://yandex.ru/maps/org/estem/1",
+            "map_services_count": count,
+            "research": {},
+        }
+    )
+    fact = next(item["fact"] for item in evidence if item["id"] == "current-map-service-catalog")
+    assert expected in fact
+
+
+def test_zero_map_rating_sentinel_is_not_outreach_evidence():
+    evidence = build_evidence_ledger(
+        {
+            "lead_name": "Тест",
+            "source_url": "https://yandex.ru/maps/org/test/1",
+            "rating": 0,
+            "reviews_count": 2,
+            "research": {},
+        }
+    )
+    assert all(item["id"] != "map-rating" for item in evidence)
+
+
+def test_implausibly_large_map_catalog_is_not_used_for_personalization():
+    evidence = build_evidence_ledger(
+        {
+            "lead_name": "Beauty Inside",
+            "source_url": "https://yandex.ru/maps/org/example/1",
+            "map_services_count": 800,
+            "research": {},
+        }
+    )
+    assert all(item["id"] != "current-map-service-catalog" for item in evidence)
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [
+        (1, "вышла 1 публикация"),
+        (2, "вышло 2 публикации"),
+        (5, "вышло 5 публикаций"),
+        (21, "вышла 21 публикация"),
+        (23, "вышло 23 публикации"),
+    ],
+)
+def test_social_activity_uses_human_russian_count_agreement(count, expected):
+    evidence = build_evidence_ledger(
+        {
+            "research": {},
+            "official_social_activity": {
+                "official": True,
+                "count_verified": True,
+                "posts_30d": count,
+                "source_url": "https://t.me/example",
+                "last_post_at": "2026-08-10T10:00:00Z",
+            },
+        }
+    )
+
+    fact = next(
+        item["fact"]
+        for item in evidence
+        if item["id"] == "official-social-activity-30d"
+    )
+    assert expected in fact
 
 
 def test_localos_email_moves_sender_identity_to_exact_signature():
@@ -2032,6 +2178,11 @@ def test_public_audit_current_state_adds_news_but_not_description_signal():
             "public_audit_updated_at": "2026-08-11T12:00:00+00:00",
             "public_audit_page_json": {
                 "audit": {
+                    "parse_context": {
+                        "last_parse_status": "completed",
+                        "last_parse_at": datetime.now(timezone.utc).isoformat(),
+                        "facts_verified": True,
+                    },
                     "current_state": {
                         "description_present": False,
                         "news_count": 0,
@@ -2047,6 +2198,70 @@ def test_public_audit_current_state_adds_news_but_not_description_signal():
     by_id = {item["id"]: item for item in ledger}
     assert by_id["map-content-gap"]["kind"] == "map_gap"
     assert "map-description-gap" not in by_id
+
+
+def test_stale_or_preview_audit_cannot_create_current_map_content_gap():
+    ledger = build_evidence_ledger(
+        {
+            "lead_name": "Анни",
+            "source_url": "https://yandex.ru/maps/org/anni/1/",
+            "public_audit_updated_at": "2026-08-11T12:00:00+00:00",
+            "public_audit_page_json": {
+                "audit": {
+                    "parse_context": {
+                        "last_parse_status": "lead_preview",
+                        "last_parse_at": "2026-07-20T10:00:00+00:00",
+                    },
+                    "current_state": {"news_count": 0},
+                }
+            },
+            "research": {},
+            "workstream_type": "localos_sales",
+            "category": "Салон красоты",
+        }
+    )
+
+    assert all(item["id"] != "map-content-gap" for item in ledger)
+
+
+def test_completed_but_old_audit_cannot_create_current_map_content_gap():
+    ledger = build_evidence_ledger(
+        {
+            "lead_name": "Анни",
+            "source_url": "https://yandex.ru/maps/org/anni/1/",
+            "public_audit_page_json": {
+                "audit": {
+                    "parse_context": {
+                        "last_parse_status": "completed",
+                        "last_parse_at": "2026-07-20T10:00:00+00:00",
+                        "facts_verified": True,
+                    },
+                    "current_state": {"news_count": 0},
+                }
+            },
+            "research": {},
+        }
+    )
+
+    assert all(item["id"] != "map-content-gap" for item in ledger)
+
+
+def test_incomplete_telegram_snapshot_cannot_create_exact_30d_count():
+    ledger = build_evidence_ledger(
+        {
+            "research": {},
+            "official_social_activity": {
+                "official": True,
+                "posts_30d": 5,
+                "source_url": "https://t.me/example",
+                "last_post_at": "2026-08-10T10:00:00Z",
+                "sync_status": "partial",
+                "backfill_completed_at": None,
+            },
+        }
+    )
+
+    assert all(item["id"] != "official-social-activity-30d" for item in ledger)
 
 
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():

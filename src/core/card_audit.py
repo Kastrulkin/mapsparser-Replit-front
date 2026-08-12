@@ -1245,6 +1245,29 @@ def _has_meaningful_business_description(description: Any, address: Any) -> bool
     return True
 
 
+def _fresh_parse_is_verified(
+    status: Any,
+    observed_at: Any,
+    *,
+    now: Optional[datetime] = None,
+    max_age: timedelta = timedelta(days=7),
+) -> bool:
+    if str(status or "").strip().lower() not in {"completed", "done", "success"}:
+        return False
+    raw = str(observed_at or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed_at.tzinfo is None:
+        parsed_at = parsed_at.replace(tzinfo=timezone.utc)
+    checked_at = now or datetime.now(timezone.utc)
+    age = checked_at - parsed_at.astimezone(timezone.utc)
+    return timedelta(0) <= age <= max_age
+
+
 def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any) -> str:
     return str(_detect_audit_profile_details(business_type, business_name, overview).get("profile") or "default_local_business")
 
@@ -4480,6 +4503,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         city = str(address.split(",", 1)[0] or "").strip()
     recent_days = int(policy_value("activity", "recent_days", 45))
     snapshot = _resolve_lead_business_snapshot(lead)
+    last_parse_status = str(snapshot.get("last_parse_status") or "lead_preview").strip().lower()
+    last_parse_at = snapshot.get("last_parse_at")
+    facts_verified = _fresh_parse_is_verified(last_parse_status, last_parse_at)
     lead_import_payload = _extract_lead_import_payload(lead)
     business = snapshot.get("business") or {}
     imported_services_preview = lead_import_payload.get("services_preview") if isinstance(lead_import_payload.get("services_preview"), list) else []
@@ -5153,10 +5179,15 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         or (lead_import_payload.get("news_preview") if isinstance(lead_import_payload.get("news_preview"), list) else None)
         or []
     )
-    last_parse_status = snapshot.get("last_parse_status") or "lead_preview"
     no_new_services_found = bool(
         services_count <= 0 and str(last_parse_status).lower() not in {"lead_preview", "preview"}
     )
+    if not facts_verified:
+        issue_blocks = []
+        findings = []
+        recommended_actions = []
+        top_issues = []
+        action_plan = {"next_24h": [], "next_7d": [], "ongoing": []}
     reasoning = _build_reasoning_fields(
         audit_profile=audit_profile,
         business_name=lead_name,
@@ -5184,6 +5215,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         "parse_context": {
             "last_parse_at": snapshot.get("last_parse_at") or lead.get("updated_at") or lead.get("created_at"),
             "last_parse_status": last_parse_status,
+            "facts_verified": facts_verified,
             "last_parse_task_id": snapshot.get("last_parse_task_id"),
             "last_parse_retry_after": snapshot.get("last_parse_retry_after"),
             "last_parse_error": snapshot.get("last_parse_error"),
@@ -5211,22 +5243,22 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "rating": rating,
             "reviews_count": reviews_count,
             "unanswered_reviews_count": unanswered_reviews_count,
-            "services_count": services_count,
-            "services_with_price_count": priced_services_count,
+            "services_count": services_count if facts_verified else None,
+            "services_with_price_count": priced_services_count if facts_verified else None,
             "is_verified": audit_is_verified,
             "raw_is_verified": is_verified,
             "paid_promotion_detected": paid_promotion_detected,
             "has_website": has_website,
-            "has_recent_activity": has_recent_activity,
-            "news_count": news_count,
-            "recent_news_count": recent_news_count,
-            "old_news_count": old_news_count,
-            "latest_news_at": latest_news_at,
-            "news_status": news_status or None,
+            "has_recent_activity": has_recent_activity if facts_verified else None,
+            "news_count": news_count if facts_verified else None,
+            "recent_news_count": recent_news_count if facts_verified else None,
+            "old_news_count": old_news_count if facts_verified else None,
+            "latest_news_at": latest_news_at if facts_verified else None,
+            "news_status": (news_status or None) if facts_verified else None,
             "photos_state": photos_state,
             "photos_count": photos_count,
             "description_applicable": description_applicable,
-            "description_present": has_description if description_applicable else None,
+            "description_present": has_description if description_applicable and facts_verified else None,
             "booking_offer_count": booking_offer_count if hospitality_mode else 0,
         },
         "revenue_potential": revenue_potential,
@@ -6070,6 +6102,10 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             and services_count > 0
         )
         has_successful_parse = bool(latest_successful_parse.get("updated_at"))
+        facts_verified = _fresh_parse_is_verified(
+            latest_parse.get("status"),
+            latest_parse.get("updated_at"),
+        )
 
         result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -6084,6 +6120,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "last_parse_status": latest_parse.get("status"),
                 "last_successful_parse_at": latest_successful_parse.get("updated_at"),
                 "has_successful_parse": has_successful_parse,
+                "facts_verified": facts_verified,
                 "no_new_services_found": no_new_services_found,
             },
             "audit_mode": "hospitality" if hospitality_mode else "default",

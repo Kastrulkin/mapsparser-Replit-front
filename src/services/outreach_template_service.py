@@ -12,9 +12,20 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v6"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v7"
 
 OUTREACH_TEMPLATES = (
+    {
+        "key": "active_social_multichannel_content_v1",
+        "label": "Активные соцсети без повторной ручной работы",
+        "version": 1,
+        "angles": ("signal", "content_operations"),
+        "pain_key": "operations_and_burnout",
+        "owner_language": "Посты для нескольких площадок отнимают время.",
+        "pain_markers": ("приходится готовить несколько раз", "отнимает время"),
+        "required_evidence": ("current_official_social_activity",),
+        "question_policy": "single_cta",
+    },
     {
         "key": "weak_map_rating_beauty_v1",
         "label": "Низкий рейтинг на картах",
@@ -190,10 +201,13 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
     evidence_kind = _text(candidate.get("evidence_kind")).lower()
     if template_key == "weak_map_rating_beauty_v1":
         rating = _rating(candidate)
-        if rating is None or rating > 4.4:
+        if rating is None or rating <= 0 or rating > 4.4:
             reasons.append("low_map_rating_required")
         if not _is_beauty_or_medical(candidate):
             reasons.append("beauty_segment_required")
+    elif template_key == "active_social_multichannel_content_v1":
+        if evidence_kind != "active_social_activity":
+            reasons.append("current_official_social_activity_required")
     elif template_key == "crm_completed_service_content_v2":
         if not _crm_provider(candidate):
             reasons.append("confirmed_crm_provider_required")
@@ -317,10 +331,16 @@ def attach_public_audit_link(text: str, candidate: dict[str, Any]) -> str:
     ):
         return text
     paragraphs = text.split("\n\n")
-    audit_paragraph = (
-        "Мы подготовили аудит карточки на картах, "
-        f"сможете поправить сами: {audit_url}"
-    )
+    if _text(candidate.get("evidence_kind")) == "active_social_activity":
+        audit_paragraph = (
+            "Помимо этого, мы ещё собрали аудит по вашей карточке на картах. "
+            f"Сможете поправить сами: {audit_url}"
+        )
+    else:
+        audit_paragraph = (
+            "Мы подготовили аудит карточки на картах, "
+            f"сможете поправить сами: {audit_url}"
+        )
     if len(paragraphs) < 2:
         return f"{text}\n\n{audit_paragraph}"
     paragraphs.insert(-1, audit_paragraph)
@@ -339,6 +359,16 @@ def _render_outreach_template_body(
     recipient = _text(candidate.get("recipient")) or "вашего бизнеса"
     identity = _sender_identity(candidate)
 
+    if key == "active_social_multichannel_content_v1":
+        observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
+        return (
+            f"Здравствуйте! Я {identity}.\n\n"
+            f"{observation}\n\n"
+            "Посты для нескольких площадок приходится готовить несколько раз, а это отнимает время.\n\n"
+            "LocalOS подготовит отдельные черновики для Telegram, VK и Яндекс Карт. "
+            "Сотруднику останется проверить и опубликовать текст.\n\n"
+            "Вам было бы интересно сэкономить время на ведении площадок?"
+        )
     if key == "weak_map_rating_beauty_v1":
         rating = _rating(candidate)
         rating_text = (f"{rating:.1f}" if rating is not None else "").replace(".", ",")

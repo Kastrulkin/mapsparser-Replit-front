@@ -35,10 +35,10 @@ def _candidate(**overrides):
     return candidate
 
 
-def test_library_contains_eight_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v6"
-    assert len(OUTREACH_TEMPLATES) == 8
-    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 8
+def test_library_contains_nine_versioned_owner_templates():
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v7"
+    assert len(OUTREACH_TEMPLATES) == 9
+    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 9
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
     assert all(item.get("owner_language") for item in OUTREACH_TEMPLATES)
 
@@ -98,6 +98,42 @@ def test_low_rating_template_is_selected_and_uses_approved_owner_copy():
     assert "—" not in text
 
 
+def test_zero_rating_sentinel_cannot_select_low_rating_template():
+    candidate = _candidate(observed_fact="Рейтинг - 0,0; публичных отзывов - 2.")
+    candidate["rating"] = 0
+
+    selection = select_outreach_template("signal", candidate)
+
+    assert selection["status"] == "individual_copy_required"
+    assert any(
+        item["key"] == "weak_map_rating_beauty_v1"
+        and "low_map_rating_required" in item["reasons"]
+        for item in selection["rejected"]
+    )
+
+
+def test_active_social_template_uses_time_pain_and_concrete_multichannel_result():
+    candidate = _candidate(
+        observed_fact=(
+            "Вижу, вы ведёте соцсети: за последние 30 дней в Telegram "
+            "вышло 8 публикаций."
+        ),
+        evidence_kind="active_social_activity",
+        signal_combo="active_social_multichannel_content",
+    )
+
+    selection = select_outreach_template("content_operations", candidate)
+    text = render_outreach_template(selection, candidate)
+
+    assert selection["key"] == "active_social_multichannel_content_v1"
+    assert "приходится готовить несколько раз" in text
+    assert "это отнимает время" in text
+    assert "Telegram, VK и Яндекс Карт" in text
+    assert text.endswith("Вам было бы интересно сэкономить время на ведении площадок?")
+    assert text.count("?") == 1
+    assert "—" not in text
+
+
 def test_public_audit_link_is_added_only_for_explicit_first_touch():
     candidate = _candidate(
         public_audit_url="https://localos.pro/padrina-studio",
@@ -119,6 +155,25 @@ def test_public_audit_link_is_added_only_for_explicit_first_touch():
         "Здравствуйте!\n\nПоказать?",
         {**candidate, "public_audit_url": "https://example.com/audit"},
     )
+
+
+def test_social_content_touch_introduces_map_audit_as_an_additional_result():
+    candidate = _candidate(
+        observed_fact="В Telegram за 30 дней вышло 8 публикаций.",
+        evidence_kind="active_social_activity",
+        signal_combo="active_social_multichannel_content",
+        public_audit_url="https://localos.pro/example",
+        include_public_audit_link=True,
+    )
+    selection = select_outreach_template("content_operations", candidate)
+
+    text = render_outreach_template(selection, candidate)
+
+    assert (
+        "Помимо этого, мы ещё собрали аудит по вашей карточке на картах. "
+        "Сможете поправить сами: https://localos.pro/example"
+    ) in text
+    assert text.count("?") == 1
 
 
 def test_crm_template_requires_a_confirmed_provider_and_current_source():
@@ -290,6 +345,11 @@ def test_missing_evidence_returns_explicit_individual_copy_fallback():
 
 def test_all_templates_pass_current_quality_gate_on_supported_evidence():
     cases = (
+        ("content_operations", _candidate(
+            observed_fact="За последние 30 дней в Telegram вышло 8 публикаций.",
+            evidence_kind="active_social_activity",
+            signal_combo="active_social_multichannel_content",
+        )),
         ("signal", _candidate()),
         ("crm_content", _candidate(
             observed_fact="В карточке опубликована запись через DIKIDI.",
