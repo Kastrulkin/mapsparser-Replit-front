@@ -54,7 +54,12 @@ def _json_changed(before: Any, after: Any) -> bool:
 def _normalize_page(value: Any, slug: str) -> dict[str, Any] | None:
     if not isinstance(value, dict) or not value:
         return None
-    return normalize_public_audit_page_json(value, slug=slug)
+    normalized = normalize_public_audit_page_json(value, slug=slug)
+    audit = normalized.get("audit") if isinstance(normalized.get("audit"), dict) else None
+    if audit is not None:
+        profile = str(audit.get("audit_profile") or "").strip()
+        normalized["audit"] = _normalize_editor_text(audit, audit_profile=profile)
+    return normalized
 
 
 def _audit_profile_from(*values: Any) -> str:
