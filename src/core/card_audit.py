@@ -4536,7 +4536,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
     audit_profile = str(audit_profile_details.get("profile") or "default_local_business")
 
-    rating_raw = lead.get("rating") if lead.get("rating") is not None else snapshot.get("rating")
+    # A completed, fresh parse is authoritative. Imported lead fields have no
+    # per-fact observation timestamp and must not override newer card data.
+    rating_raw = snapshot.get("rating") if facts_verified else None
     rating = _extract_numeric(rating_raw)
     lead_reviews_count = _extract_int(lead.get("reviews_count") or 0)
     imported_reviews_count = _extract_int(
@@ -4545,11 +4547,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         else (lead.get("reviews_count") or 0)
     )
     snapshot_reviews_count = _extract_int(snapshot.get("reviews_count") or 0)
-    reviews_count = (
-        lead_reviews_count
-        if lead_reviews_count > 0
-        else imported_reviews_count if imported_reviews_count > 0 else snapshot_reviews_count
-    )
+    reviews_count = snapshot_reviews_count if facts_verified else 0
     parsed_contacts = snapshot.get("parsed_contacts") or {}
     has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
     map_source_url = str(snapshot.get("source_url") or lead.get("source_url") or "").lower()
@@ -4579,19 +4577,19 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     services_preview_limited = bool(lead_import_payload.get("services_preview_limited"))
     snapshot_services_count = _extract_int(snapshot.get("services_count") or 0)
     snapshot_priced_services_count = _extract_int(snapshot.get("priced_services_count") or 0)
-    services_count = max(snapshot_services_count, imported_services_total_count)
-    priced_services_count = max(snapshot_priced_services_count, imported_services_with_price_count)
+    services_count = snapshot_services_count if facts_verified else 0
+    priced_services_count = snapshot_priced_services_count if facts_verified else 0
     unanswered_reviews_count = _extract_int(snapshot.get("unanswered_reviews_count") or 0)
     imported_photos = lead_import_payload.get("photos") if isinstance(lead_import_payload.get("photos"), list) else []
     snapshot_photos = snapshot.get("photo_urls") if isinstance(snapshot.get("photo_urls"), list) else []
     effective_photos = imported_photos if imported_photos else snapshot_photos
-    photos_count = _extract_int(snapshot.get("photos_count") or len(effective_photos) or 0)
-    news_count = _extract_int(snapshot.get("news_count") or 0)
-    recent_news_count = _extract_int(snapshot.get("recent_news_count") or 0)
-    old_news_count = _extract_int(snapshot.get("old_news_count") or 0)
-    latest_news_at = snapshot.get("latest_news_at")
-    news_status = str(snapshot.get("news_status") or "").strip().lower()
-    has_recent_activity = bool(snapshot.get("has_recent_activity") or recent_news_count > 0)
+    photos_count = _extract_int(snapshot.get("photos_count") or len(snapshot_photos) or 0) if facts_verified else 0
+    news_count = _extract_int(snapshot.get("news_count") or 0) if facts_verified else 0
+    recent_news_count = _extract_int(snapshot.get("recent_news_count") or 0) if facts_verified else 0
+    old_news_count = _extract_int(snapshot.get("old_news_count") or 0) if facts_verified else 0
+    latest_news_at = snapshot.get("latest_news_at") if facts_verified else None
+    news_status = str(snapshot.get("news_status") or "").strip().lower() if facts_verified else ""
+    has_recent_activity = bool(snapshot.get("has_recent_activity") or recent_news_count > 0) if facts_verified else False
     cadence_news_min = int(policy_value("cadence", "news_posts_per_month_min", 4))
     cadence_photos_min = int(policy_value("cadence", "photos_per_month_min", 8))
     cadence_response_hours_max = int(policy_value("cadence", "reviews_response_hours_max", 48))
@@ -5168,16 +5166,14 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     if audit_profile in baseline_profiles:
         action_plan = _merge_action_plan(action_plan, baseline_action_plan)
     snapshot_services_preview = snapshot.get("services_preview") if isinstance(snapshot.get("services_preview"), list) else []
-    if snapshot_services_preview:
+    if facts_verified and snapshot_services_preview:
         services_preview = snapshot_services_preview
-    elif imported_services_preview and not hospitality_mode:
-        services_preview = imported_services_preview
-    elif not services_preview and audit_profile not in {"shopping_center", *SPECIALIZED_LOCAL_PROFILES}:
+    elif facts_verified and not services_preview and audit_profile not in {"shopping_center", *SPECIALIZED_LOCAL_PROFILES}:
         services_preview = _lead_demo_services_preview(business_type)
+    else:
+        services_preview = []
     news_preview = (
-        snapshot.get("news_preview")
-        or (lead_import_payload.get("news_preview") if isinstance(lead_import_payload.get("news_preview"), list) else None)
-        or []
+        (snapshot.get("news_preview") or []) if facts_verified else []
     )
     no_new_services_found = bool(
         services_count <= 0 and str(last_parse_status).lower() not in {"lead_preview", "preview"}
@@ -5240,9 +5236,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         },
         "findings": findings[:5],
         "current_state": {
-            "rating": rating,
-            "reviews_count": reviews_count,
-            "unanswered_reviews_count": unanswered_reviews_count,
+            "rating": rating if facts_verified else None,
+            "reviews_count": reviews_count if facts_verified else None,
+            "unanswered_reviews_count": unanswered_reviews_count if facts_verified else None,
             "services_count": services_count if facts_verified else None,
             "services_with_price_count": priced_services_count if facts_verified else None,
             "is_verified": audit_is_verified,
@@ -5255,8 +5251,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "old_news_count": old_news_count if facts_verified else None,
             "latest_news_at": latest_news_at if facts_verified else None,
             "news_status": (news_status or None) if facts_verified else None,
-            "photos_state": photos_state,
-            "photos_count": photos_count,
+            "photos_state": photos_state if facts_verified else None,
+            "photos_count": photos_count if facts_verified else None,
             "description_applicable": description_applicable,
             "description_present": has_description if description_applicable and facts_verified else None,
             "booking_offer_count": booking_offer_count if hospitality_mode else 0,

@@ -193,7 +193,7 @@ def test_specialized_audit_does_not_invent_demo_services_or_revenue(monkeypatch)
     assert audit["revenue_potential"]["label"] == "Без денежной оценки"
 
 
-def test_audit_prefers_current_lead_rating_and_reviews_over_stale_snapshot(monkeypatch) -> None:
+def test_audit_does_not_publish_unversioned_lead_metrics_as_current(monkeypatch) -> None:
     monkeypatch.setattr(
         card_audit,
         "_resolve_lead_business_snapshot",
@@ -212,8 +212,9 @@ def test_audit_prefers_current_lead_rating_and_reviews_over_stale_snapshot(monke
         }
     )
 
-    assert audit["current_state"]["rating"] == 2.5
-    assert audit["current_state"]["reviews_count"] == 3
+    assert audit["parse_context"]["facts_verified"] is False
+    assert audit["current_state"]["rating"] is None
+    assert audit["current_state"]["reviews_count"] is None
 
 
 def test_yandex_audit_does_not_treat_missing_business_description_as_a_gap(monkeypatch) -> None:

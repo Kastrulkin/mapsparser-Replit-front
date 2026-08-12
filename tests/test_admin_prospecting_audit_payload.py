@@ -1214,8 +1214,66 @@ def test_old_completed_snapshot_is_not_marked_as_verified_current_state(monkeypa
     )
 
     assert audit["parse_context"]["facts_verified"] is False
+    assert audit["current_state"]["rating"] is None
+    assert audit["current_state"]["reviews_count"] is None
+    assert audit["current_state"]["photos_count"] is None
     assert audit["current_state"]["services_count"] is None
     assert audit["current_state"]["news_count"] is None
+
+
+def test_fresh_snapshot_replaces_larger_stale_imported_counts(monkeypatch) -> None:
+    from src.core import card_audit
+
+    monkeypatch.setattr(
+        card_audit,
+        "_resolve_lead_business_snapshot",
+        lambda _lead: {
+            "source_url": "https://yandex.ru/maps/org/kvd7/7/",
+            "last_parse_status": "completed",
+            "last_parse_at": datetime.now(timezone.utc).isoformat(),
+            "rating": 4.8,
+            "reviews_count": 41,
+            "services_count": 3,
+            "priced_services_count": 3,
+            "news_count": 2,
+            "recent_news_count": 1,
+            "photos_count": 12,
+            "description_present": False,
+            "services_preview": [
+                {"current_name": "Приём врача", "note": "Цена: 1200"},
+            ],
+            "news_preview": [{"title": "Новость"}],
+            "parsed_contacts": {},
+        },
+    )
+    audit = build_lead_card_preview_snapshot(
+        {
+            "id": "lead-kvd7",
+            "name": "Кожно-венерологический диспансер № 7",
+            "category": "Медицинская клиника",
+            "city": "Санкт-Петербург",
+            "source_url": "https://yandex.ru/maps/org/kvd7/7/",
+            "rating": 4.1,
+            "reviews_count": 99,
+            "search_payload_json": {
+                "services_total_count": 27,
+                "services_with_price_count": 3,
+                "menu_full": [
+                    {"title": f"Старая услуга {index}", "price": ""}
+                    for index in range(27)
+                ],
+            },
+        }
+    )
+
+    assert audit["parse_context"]["facts_verified"] is True
+    assert audit["current_state"]["rating"] == 4.8
+    assert audit["current_state"]["reviews_count"] == 41
+    assert audit["current_state"]["services_count"] == 3
+    assert audit["current_state"]["services_with_price_count"] == 3
+    assert audit["current_state"]["news_count"] == 2
+    assert audit["current_state"]["description_applicable"] is False
+    assert all("27" not in str(item) for item in audit.get("issue_blocks") or [])
 
 
 def test_fresh_parse_verification_contract_is_shared_by_full_and_preview_audits() -> None:
