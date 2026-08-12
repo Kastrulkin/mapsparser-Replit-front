@@ -1774,7 +1774,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
                 "kind": "active_map_news",
                 "fact": (
                     f"Вижу, вы ведёте карточку {_text(context.get('lead_name'))} "
-                    "на Яндекс Картах: там опубликованы новости."
+                    "на Яндекс Картах и публикуете новости."
                 ),
                 "status": "observed",
                 "source_url": context.get("source_url"),

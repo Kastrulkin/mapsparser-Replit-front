@@ -2342,7 +2342,7 @@ def test_current_map_news_is_a_supported_content_activity_signal():
 
     signal = ledger[0]
     assert signal["kind"] == "active_map_news"
-    assert "опубликованы новости" in signal["fact"]
+    assert signal["fact"] == "Вижу, вы ведёте карточку Эсма на Яндекс Картах и публикуете новости."
     candidate = {
         "evidence_kind": signal["kind"],
         "observed_fact": signal["fact"],
