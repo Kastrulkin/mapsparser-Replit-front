@@ -115,13 +115,13 @@ const ruCopy: LandingCopy = {
     "Новые сервисы редко снимают эту нагрузку. Обычно у владельца появляется ещё одно место, которое нужно открывать и контролировать.",
     "LocalOS превращает повторяющуюся работу в регулярные задачи, выполняет их и показывает владельцу только то, что требует решения.",
   ],
-  networkTitle: "У вас может быть одна точка. Опыт — как у сети",
+  networkTitle: "У вас одна точка. Опыт — как у сети",
   networkParagraphs: [
-    "Сеть не решает одну и ту же задачу отдельно в каждом филиале. Если способ сработал, его проверяют и используют снова.",
-    "LocalOS делает этот подход доступным отдельному бизнесу. Мы собираем рабочие практики, проверяем их и превращаем в готовые сценарии. Поэтому следующая компания начинает не с пустого листа.",
+    "У локальных компаний много похожих задач: как оформить услуги, ответить на сложный отзыв, вернуть клиентов или понять, на какие цифры смотреть. Обычно в такой ситуации хочется спросить владельца, который уже с этим разобрался.",
+    "LocalOS собирает такой опыт. Если способ работы дал результат, мы проверяем его, отделяем полезное от случайного и превращаем в готовый сценарий. Следующему владельцу не приходится искать решение с нуля.",
   ],
-  networkPrivacy: "Данные компаний и клиентов не передаются другим бизнесам. Общими становятся только проверенные правила и обезличенные способы работы.",
-  networkLabels: ["Один бизнес находит решение", "LocalOS проверяет практику", "Другие начинают не с нуля"],
+  networkPrivacy: "Данные компаний и клиентов остаются закрытыми. Другим бизнесам доступны только общие правила и обезличенные способы работы.",
+  networkLabels: ["Один бизнес решает знакомую задачу", "LocalOS проверяет, что сработало", "Другие используют готовый способ"],
   tasksEyebrow: "Работа LocalOS",
   tasksTitle: "Что больше не нужно держать на себе",
   tasksIntro: "Пять задач, которые обычно возвращаются к владельцу.",
@@ -143,7 +143,7 @@ const ruCopy: LandingCopy = {
     { title: "Показываем то, что требует решения", description: "Публикации, сообщения, массовые изменения и другие важные действия ждут подтверждения владельца." },
     { title: "Сохраняем результат", description: "Если способ работы подтвердил пользу, его можно повторить в этом бизнесе и использовать как обобщённую практику для других компаний." },
   ],
-  workSummary: "ИИ используется для анализа и подготовки. Повторяющаяся работа выполняется по правилам. Контроль остаётся у владельца.",
+  workSummary: "ИИ помогает описать задачу, анализирует данные и пишет скрипт: точную последовательность действий, проверок и ограничений. Владелец проверяет сценарий и подтверждает запуск. После этого задачу выполняет скрипт — строго по утверждённым правилам, без импровизации ИИ. Если возникает ситуация, которой нет в сценарии, выполнение останавливается, а владелец получает запрос на решение. ИИ анализирует и готовит скрипт. Скрипт выполняет задачу. Владелец утверждает правила и сохраняет контроль.",
   casesEyebrow: "Кейсы",
   casesTitle: "Что владельцы уже сняли с себя",
   casesIntro: "Исходная ситуация, выполненная работа и изменения за указанный период.",
@@ -498,35 +498,35 @@ const Index = () => {
             <div className="mt-12 grid gap-6 lg:grid-cols-3">
               {publishedCases.slice(0, 3).map((caseItem) => (
                 <article className="flex h-full flex-col rounded-2xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-black/5" key={caseItem.slug}>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap content-start gap-2 lg:min-h-28">
                     {caseItem.metrics.map((metric) => (
                       <span className="rounded-full bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700" key={metric.label}>
                         <span className="tabular-nums">{metric.value}</span> {metric.label}
                       </span>
                     ))}
                   </div>
-                  <h3 className="mt-6 text-2xl font-bold leading-8">{caseItem.title}</h3>
+                  <h3 className="mt-6 text-balance text-2xl font-bold leading-8 lg:min-h-16">{caseItem.title}</h3>
                   <dl className="mt-6 flex-1 space-y-5 text-sm leading-6">
-                    <div>
+                    <div className="lg:min-h-[8.5rem]">
                       <dt className="font-bold uppercase tracking-[0.1em] text-slate-400">{copy.situation}</dt>
-                      <dd className="mt-1 text-slate-600">{caseItem.situation}</dd>
+                      <dd className="mt-1 text-pretty text-slate-600">{caseItem.situation}</dd>
                     </div>
-                    <div>
+                    <div className="lg:min-h-[10.5rem]">
                       <dt className="font-bold uppercase tracking-[0.1em] text-slate-400">{copy.workDone}</dt>
                       <dd className="mt-2">
                         <ul className="space-y-2 text-slate-600">
-                          {caseItem.actions.slice(0, 2).map((action) => <li className="flex gap-2" key={action}><Check className="mt-1 h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />{action}</li>)}
+                          {caseItem.actions.slice(0, 2).map((action) => <li className="flex gap-2 text-pretty" key={action}><Check className="mt-1 h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />{action}</li>)}
                         </ul>
                       </dd>
                     </div>
                     <div>
                       <dt className="font-bold uppercase tracking-[0.1em] text-slate-400">{copy.result}</dt>
-                      <dd className="mt-1 text-slate-600">{caseItem.result}</dd>
+                      <dd className="mt-1 text-pretty text-slate-600">{caseItem.result}</dd>
                     </div>
                   </dl>
-                  <Link className="mt-7 inline-flex min-h-10 items-center font-semibold text-orange-600 transition-colors hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2" to={`/cases/${caseItem.slug}`}>
+                  <Link className="mt-7 inline-flex min-h-12 items-start text-pretty font-semibold leading-6 text-orange-600 transition-colors hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2" to={`/cases/${caseItem.slug}`}>
                     {caseItem.title}
-                    <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                    <ArrowRight className="ml-2 mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
                   </Link>
                 </article>
               ))}
