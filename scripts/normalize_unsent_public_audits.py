@@ -73,7 +73,7 @@ def _audit_profile_from(*values: Any) -> str:
     return ""
 
 
-def _load_target_rows(cur, limit: int | None, lead_id: str | None) -> list[dict[str, Any]]:
+def _load_target_rows(cur, limit: int | None, lead_id: str | None, *, include_contacted: bool = False) -> list[dict[str, Any]]:
     params: list[Any] = []
     lead_filter = ""
     if lead_id:
@@ -82,8 +82,23 @@ def _load_target_rows(cur, limit: int | None, lead_id: str | None) -> list[dict[
     limit_sql = ""
     if limit and limit > 0:
         limit_sql = "LIMIT %s"
-        params.append(limit)
 
+    safety_filter = "" if include_contacted else """
+          AND COALESCE(l.status, '') NOT IN %s
+          AND COALESCE(l.partnership_stage, '') NOT IN %s
+          AND NOT EXISTS (
+              SELECT 1
+              FROM outreachsendqueue q
+              WHERE q.lead_id = o.lead_id
+                AND COALESCE(q.delivery_status, '') IN %s
+              LIMIT 1
+          )
+    """
+    query_params = list(params)
+    if not include_contacted:
+        query_params.extend([SENT_STATUSES, SENT_STATUSES, SENT_STATUSES])
+    if limit_sql:
+        query_params.append(limit)
     cur.execute(
         f"""
         SELECT
@@ -103,21 +118,11 @@ def _load_target_rows(cur, limit: int | None, lead_id: str | None) -> list[dict[
           ON l.id = o.lead_id
         WHERE o.is_active = TRUE
           {lead_filter}
-          AND COALESCE(l.status, '') NOT IN %s
-          AND COALESCE(l.partnership_stage, '') NOT IN %s
-          AND NOT EXISTS (
-              SELECT 1
-              FROM outreachsendqueue q
-              WHERE q.lead_id = o.lead_id
-                AND COALESCE(q.delivery_status, '') IN %s
-              LIMIT 1
-          )
+          {safety_filter}
         ORDER BY o.updated_at ASC NULLS FIRST, o.created_at ASC NULLS FIRST
         {limit_sql}
         """,
-        tuple(params + [SENT_STATUSES, SENT_STATUSES, SENT_STATUSES])
-        if not limit_sql
-        else tuple(params[:-1] + [SENT_STATUSES, SENT_STATUSES, SENT_STATUSES, params[-1]]),
+        tuple(query_params),
     )
     return [dict(row) for row in cur.fetchall() or []]
 
@@ -158,6 +163,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--lead-id", type=str, default="")
+    parser.add_argument("--include-contacted", action="store_true")
     args = parser.parse_args()
 
     conn = _connect()
@@ -168,6 +174,7 @@ def main() -> None:
             cur,
             args.limit if args.limit > 0 else None,
             str(args.lead_id or "").strip() or None,
+            include_contacted=bool(args.include_contacted),
         )
         print(json.dumps({"target_total": len(target_rows), "dry_run": bool(args.dry_run)}, ensure_ascii=False), flush=True)
 
