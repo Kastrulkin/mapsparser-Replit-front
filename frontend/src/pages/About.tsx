@@ -4,14 +4,95 @@ import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { ArrowUpRight, BriefcaseBusiness, Clock3, Store, Truck, Wrench } from "lucide-react";
+import { useLanguage, type Language } from "@/i18n/LanguageContext";
 import { newAuth } from "@/lib/auth_new";
+
+type AboutStoryCopy = {
+  eyebrow: string;
+  title: string;
+  intro: string;
+  workdayValue: string;
+  workdayText: string;
+  workdayNote: string;
+  storyEyebrow: string;
+  storyTitle: string;
+  storyIntro: string;
+  chapterOneTitle: string;
+  chapterOneText: string;
+  chapterTwoTitle: string;
+  chapterTwoText: string;
+  chapterThreeTitle: string;
+  chapterThreeText: string;
+  chapterFourTitle: string;
+  chapterFourText: string;
+  industries: [string, string, string];
+  channelEyebrow: string;
+  channelTitle: string;
+  channelText: string;
+  channelButton: string;
+};
+
+const getAboutStoryCopy = (language: Language): AboutStoryCopy => {
+  if (language === "ru") {
+    return {
+      eyebrow: "Команда LocalOS",
+      title: "Мы начинали бизнес, чтобы стать свободнее",
+      intro: "Но по мере роста свободы становилось меньше. Утром — цифры и сотрудники. Днём — клиенты и срочные вопросы. Вечером — то, что не успели. Выключить телефон или уехать на неделю казалось рискованным.",
+      workdayValue: "14 часов",
+      workdayText: "может длиться день владельца, когда всё важное проходит через него",
+      workdayNote: "Нам знаком этот режим изнутри.",
+      storyEyebrow: "Почему мы сделали LocalOS",
+      storyTitle: "15 лет: от логистики до LocalOS",
+      storyIntro: "Мы строили компании и автоматизировали работу в ритейле, услугах и перевозках.",
+      chapterOneTitle: "Начали с процессов, где ошибка стоит дорого",
+      chapterOneText: "Для сети АЗС мы пересчитали логистику и внедрили схему, которая экономила 80 миллионов рублей в год. Затем создали Riderra — сервис трансферов, который вырос с нуля до работы в 40 странах и прошёл через два больших кризиса.",
+      chapterTwoTitle: "Сначала освободили от операционки себя",
+      chapterTwoText: "В Riderra мы собрали удалённую команду из 15 человек, автоматизировали продажи, отчётность, поиск перевозчиков и обработку заказов. Постепенно ежедневная работа компании перестала требовать постоянного участия основателя.",
+      chapterThreeTitle: "Потом увидели: у владельцев повторяются одни и те же задачи",
+      chapterThreeText: "Найти клиентов, удержать сотрудников, понять цифры, ничего не упустить. У мастера, врача, магазина или перевозчика разная работа, но операционка снова возвращается к владельцу. Даже когда решение известно, у него нет времени поднять голову и встроить его в работу.",
+      chapterFourTitle: "LocalOS вырос из этого опыта",
+      chapterFourText: "Это программная версия систем, которые мы годами строили для собственных компаний. ИИ помогает описать и проверить процесс, владелец утверждает правила, а повторяющуюся работу выполняет сценарий. Найденный способ можно сохранить и использовать снова, чтобы следующему бизнесу не начинать с нуля.",
+      industries: ["Ритейл", "Услуги", "Перевозки"],
+      channelEyebrow: "Дневник команды",
+      channelTitle: "Покупай мою шаверму",
+      channelText: "Пишем о реальном предпринимательстве: выгорании, операционке, учёте, автоматизации и идеях, из которых растёт LocalOS. Показываем рабочие заметки, ошибки и выводы.",
+      channelButton: "Читать в Telegram",
+    };
+  }
+
+  return {
+    eyebrow: "The LocalOS team",
+    title: "We started businesses to become more free",
+    intro: "Growth brought the opposite. Mornings were for numbers and staff, days for customers and urgent issues, evenings for everything left unfinished. Switching off the phone or leaving for a week felt risky.",
+    workdayValue: "14 hours",
+    workdayText: "is how long an owner's day can last when every important task comes back to them",
+    workdayNote: "We know this routine from the inside.",
+    storyEyebrow: "Why we built LocalOS",
+    storyTitle: "15 years: from logistics to LocalOS",
+    storyIntro: "We built companies and automated work in retail, services, and transport.",
+    chapterOneTitle: "We started where operational mistakes are expensive",
+    chapterOneText: "For a petrol station network, we redesigned logistics and implemented a model that saved 80 million rubles a year. We then built Riderra from zero into a transfer service operating in 40 countries and guided it through two major crises.",
+    chapterTwoTitle: "First, we freed ourselves from daily operations",
+    chapterTwoText: "At Riderra, we built a remote team of 15 and automated sales, reporting, carrier sourcing, and order processing. Day-to-day work gradually stopped depending on the founder's constant involvement.",
+    chapterThreeTitle: "Then we saw the same tasks return to every owner",
+    chapterThreeText: "Find customers, retain the team, understand the numbers, miss nothing. A craftsperson, doctor, shop, and transport company do different work, yet operations keep returning to the owner. Even when the answer is known, there is no time to step back and put it into practice.",
+    chapterFourTitle: "LocalOS grew out of that experience",
+    chapterFourText: "It is the software version of the operating systems we spent years building for our own companies. AI helps describe and test a process, the owner approves the rules, and a procedure handles the recurring work. A proven method can be saved and reused so the next business does not start from zero.",
+    industries: ["Retail", "Services", "Transport"],
+    channelEyebrow: "Team journal",
+    channelTitle: "Покупай мою шаверму",
+    channelText: "We write about entrepreneurship as it is: burnout, operations, accounting, automation, and the ideas behind LocalOS. Expect working notes, mistakes, and conclusions.",
+    channelButton: "Read on Telegram",
+  };
+};
 
 const About = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language } = useLanguage();
   const isRu = language === "ru";
+  const story = getAboutStoryCopy(language);
 
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
@@ -97,182 +178,103 @@ const About = () => {
     <div className="min-h-screen bg-background">
       <SeoMeta
         description={isRu
-          ? "LocalOS берёт на себя регулярную работу локального бизнеса. ИИ готовит сценарий, скрипт выполняет задачу, а владелец сохраняет контроль."
-          : "LocalOS handles recurring work for local businesses. AI prepares the procedure, a script performs the task, and the owner stays in control."}
+          ? "История команды LocalOS: 15 лет в бизнесе, автоматизация ритейла, услуг и перевозок и опыт, из которого вырос продукт."
+          : "The LocalOS team story: 15 years in business, automating retail, services, and transport, and the experience behind the product."}
         path="/about"
-        title={isRu ? "О LocalOS — меньше рутины для владельца" : "About LocalOS — less routine work for owners"}
+        title={isRu ? "О команде LocalOS — 15 лет автоматизации бизнеса" : "About the LocalOS team — 15 years of business automation"}
       />
 
-      {/* Hero Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-8">
-            {t.about.heroTitle}
-          </h1>
-          <p className="text-2xl text-gray-600 max-w-4xl mx-auto mb-8 leading-relaxed">
-            {t.about.heroSubtitle}
-          </p>
+      <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/20 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" aria-hidden="true" />
+        <div className="relative mx-auto grid max-w-7xl items-end gap-14 lg:grid-cols-12 lg:gap-20">
+          <div className="lg:col-span-8">
+            <div className="mb-7 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.22em] text-orange-300">
+              <span className="h-px w-8 bg-orange-400" aria-hidden="true" />
+              {story.eyebrow}
+            </div>
+            <h1 className="max-w-5xl text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl lg:text-7xl lg:leading-[1.02]">
+              {story.title}
+            </h1>
+            <p className="mt-8 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl sm:leading-9">
+              {story.intro}
+            </p>
+          </div>
+
+          <div className="lg:col-span-4">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-7 shadow-2xl shadow-black/20 backdrop-blur-sm sm:p-8">
+              <Clock3 className="h-6 w-6 text-orange-400" aria-hidden="true" />
+              <div className="mt-8 text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">{story.workdayValue}</div>
+              <p className="mt-4 text-base leading-7 text-slate-300">{story.workdayText}</p>
+              <p className="mt-6 border-t border-white/10 pt-5 text-sm font-medium text-orange-300">{story.workdayNote}</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Problem Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
-        <div className="max-w-5xl mx-auto">
-          <div className="space-y-8 text-lg text-gray-600 leading-relaxed">
-            <p className="text-xl">
-              {t.about.problemText}
-            </p>
-            <div className="text-center py-8">
-              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent">
-                {t.about.problemHighlight}
+      <section className="bg-white px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-14 lg:grid-cols-12 lg:gap-20">
+            <aside className="lg:col-span-4">
+              <div className="lg:sticky lg:top-24">
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">{story.storyEyebrow}</div>
+                <h2 className="mt-5 text-balance text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">{story.storyTitle}</h2>
+                <p className="mt-6 max-w-md text-lg leading-8 text-slate-600">{story.storyIntro}</p>
+                <div className="mt-8 flex flex-wrap gap-2">
+                  {story.industries.map((industry, index) => {
+                    const icons = [Store, Wrench, Truck];
+                    const Icon = icons[index];
+                    return (
+                      <span key={industry} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+                        <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
+                        {industry}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </aside>
+
+            <div className="lg:col-span-8">
+              <ol className="border-l border-slate-200">
+                {[
+                  [story.chapterOneTitle, story.chapterOneText],
+                  [story.chapterTwoTitle, story.chapterTwoText],
+                  [story.chapterThreeTitle, story.chapterThreeText],
+                  [story.chapterFourTitle, story.chapterFourText],
+                ].map(([title, text], index) => (
+                  <li key={title} className="relative pb-14 pl-8 last:pb-0 sm:pl-12">
+                    <span className="absolute -left-4 top-0 grid h-8 w-8 place-items-center rounded-full border-4 border-white bg-slate-950 text-[10px] font-semibold tracking-wider text-white">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="text-balance text-2xl font-semibold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h3>
+                    <p className="mt-4 max-w-3xl text-pretty text-base leading-8 text-slate-600 sm:text-lg">{text}</p>
+                  </li>
+                ))}
+              </ol>
+
+              <div className="mt-16 overflow-hidden rounded-[28px] bg-orange-50 ring-1 ring-inset ring-orange-200/70">
+                <div className="grid gap-8 p-7 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-end lg:p-10">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
+                      <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
+                      {story.channelEyebrow}
+                    </div>
+                    <h3 className="mt-5 text-balance text-3xl font-semibold tracking-[-0.035em] text-slate-950">{story.channelTitle}</h3>
+                    <p className="mt-4 max-w-2xl text-pretty text-base leading-7 text-slate-700">{story.channelText}</p>
+                  </div>
+                  <a
+                    href="https://t.me/meowandco"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 motion-reduce:transform-none"
+                  >
+                    {story.channelButton}
+                    <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* About Us Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.teamTitle}</h2>
-          <p className="text-lg text-muted-foreground mb-8">
-            {t.about.teamText}
-          </p>
-        </div>
-      </section>
-
-      {/* Target Audience Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/50">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.targetTitle}</h2>
-          <p className="text-xl text-muted-foreground mb-8">
-            {t.about.targetText}
-          </p>
-
-          <div className="grid md:grid-cols-4 gap-6 mb-8">
-            <div className="text-center">
-              <div className="text-3xl mb-2">💇‍♀️</div>
-              <div className="font-medium text-foreground">{t.about.salons}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">💅</div>
-              <div className="font-medium text-foreground">{t.about.masters}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🎨</div>
-              <div className="font-medium text-foreground">{t.about.studios}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🏪</div>
-              <div className="font-medium text-foreground">{t.about.localBusiness}</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Results Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="bg-white rounded-3xl p-8 sm:p-12 lg:p-16 shadow-2xl shadow-orange-500/10 border-2 border-orange-200">
-            <h2 className="text-4xl font-bold text-gray-900 mb-8">{t.about.resultsTitle}</h2>
-            {t.about.resultsPercent ? <div className="text-7xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-6">{t.about.resultsPercent}</div> : null}
-            <p className="text-xl sm:text-2xl text-gray-700 leading-relaxed text-pretty">
-              {t.about.resultsText}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* How We Work Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-foreground mb-12 text-center">{t.about.howTitle}</h2>
-
-          <div className="mb-12">
-            <h3 className="text-2xl font-semibold text-foreground mb-6 text-center">
-              {t.about.howSubtitle}
-            </h3>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-12">
-            {/* Option 1 */}
-            <Card className="group min-w-0 p-6 sm:p-10 bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
-              <CardContent className="p-0">
-                <div className="flex min-w-0 items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-xl">1</span>
-                  </div>
-                  <h3 className="min-w-0 text-2xl font-bold text-gray-900 text-balance">{t.about.option1Title}</h3>
-                </div>
-                <div className="space-y-4 text-gray-600 mb-8">
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point1}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point2}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point3}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option1Point4}</span>
-                  </div>
-                </div>
-                <Button
-                  size="lg"
-                  className="mt-2 w-full whitespace-normal px-4 py-6 text-base sm:px-10 sm:text-lg btn-iridescent"
-                  onClick={() => {
-                    window.location.href = '/#hero-form';
-                  }}
-                >
-                  {t.about.option1Button}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Option 2 */}
-            <Card className="group min-w-0 p-6 sm:p-10 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl">
-              <CardContent className="p-0">
-                <div className="flex min-w-0 items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-xl">2</span>
-                  </div>
-                  <h3 className="min-w-0 text-2xl font-bold text-gray-900 text-balance">{t.about.option2Title}</h3>
-                </div>
-                <div className="space-y-4 text-gray-700 mb-8">
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point1}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point2}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point3}</span>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-orange-500 text-xl">•</span>
-                    <span className="text-base">{t.about.option2Point4}</span>
-                  </div>
-                </div>
-                <Button
-                  variant="default"
-                  size="lg"
-                  className="mt-2 w-full whitespace-normal px-4 py-6 text-base sm:px-10 sm:text-lg btn-iridescent"
-                  onClick={() => {
-                    navigate('/contact');
-                  }}
-                >
-                  {t.about.option2Button}
-                </Button>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
