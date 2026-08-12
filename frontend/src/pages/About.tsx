@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
-import { ArrowUpRight, BriefcaseBusiness, Clock3, Store, Truck, Wrench } from "lucide-react";
+import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, Truck, Wrench } from "lucide-react";
 import { useLanguage, type Language } from "@/i18n/LanguageContext";
 import { newAuth } from "@/lib/auth_new";
 
@@ -26,7 +26,7 @@ type AboutStoryCopy = {
   chapterThreeText: string;
   chapterFourTitle: string;
   chapterFourText: string;
-  industries: [string, string, string];
+  industries: string[];
   channelEyebrow: string;
   channelTitle: string;
   channelText: string;
@@ -43,17 +43,17 @@ const getAboutStoryCopy = (language: Language): AboutStoryCopy => {
       workdayText: "может длиться день владельца, когда всё важное проходит через него",
       workdayNote: "Нам знаком этот режим изнутри.",
       storyEyebrow: "Почему мы сделали LocalOS",
-      storyTitle: "15 лет: от логистики до LocalOS",
-      storyIntro: "Мы строили компании и автоматизировали работу в ритейле, услугах и перевозках.",
+      storyTitle: "15 лет в бизнесе и автоматизации",
+      storyIntro: "Мы работали в транспорте, ритейле, производстве, логистике и услугах.",
       chapterOneTitle: "Начали с процессов, где ошибка стоит дорого",
-      chapterOneText: "Для сети АЗС мы пересчитали логистику и внедрили схему, которая экономила 80 миллионов рублей в год. Затем создали Riderra — сервис трансферов, который вырос с нуля до работы в 40 странах и прошёл через два больших кризиса.",
+      chapterOneText: "Для сети АЗС мы пересчитали логистику и внедрили схему, которая экономила 80 миллионов рублей в год. Один из наших транспортных проектов вырос с нуля до работы в 40 странах и прошёл через два больших кризиса.",
       chapterTwoTitle: "Сначала освободили от операционки себя",
-      chapterTwoText: "В Riderra мы собрали удалённую команду из 15 человек, автоматизировали продажи, отчётность, поиск перевозчиков и обработку заказов. Постепенно ежедневная работа компании перестала требовать постоянного участия основателя.",
+      chapterTwoText: "Мы собрали удалённую команду из 15 человек, автоматизировали продажи, отчётность, поиск перевозчиков и обработку заказов. Постепенно ежедневная работа компании перестала требовать постоянного участия основателя.",
       chapterThreeTitle: "Потом увидели: у владельцев повторяются одни и те же задачи",
       chapterThreeText: "Найти клиентов, удержать сотрудников, понять цифры, ничего не упустить. У мастера, врача, магазина или перевозчика разная работа, но операционка снова возвращается к владельцу. Даже когда решение известно, у него нет времени поднять голову и встроить его в работу.",
       chapterFourTitle: "LocalOS вырос из этого опыта",
       chapterFourText: "Это программная версия систем, которые мы годами строили для собственных компаний. ИИ помогает описать и проверить процесс, владелец утверждает правила, а повторяющуюся работу выполняет сценарий. Найденный способ можно сохранить и использовать снова, чтобы следующему бизнесу не начинать с нуля.",
-      industries: ["Ритейл", "Услуги", "Перевозки"],
+      industries: ["Транспорт", "Ритейл", "Производство", "Логистика", "Услуги"],
       channelEyebrow: "Дневник команды",
       channelTitle: "Покупай мою шаверму",
       channelText: "Пишем о реальном предпринимательстве: выгорании, операционке, учёте, автоматизации и идеях, из которых растёт LocalOS. Показываем рабочие заметки, ошибки и выводы.",
@@ -69,17 +69,17 @@ const getAboutStoryCopy = (language: Language): AboutStoryCopy => {
     workdayText: "is how long an owner's day can last when every important task comes back to them",
     workdayNote: "We know this routine from the inside.",
     storyEyebrow: "Why we built LocalOS",
-    storyTitle: "15 years: from logistics to LocalOS",
-    storyIntro: "We built companies and automated work in retail, services, and transport.",
+    storyTitle: "15 years in business and automation",
+    storyIntro: "We worked across transport, retail, manufacturing, logistics, and services.",
     chapterOneTitle: "We started where operational mistakes are expensive",
-    chapterOneText: "For a petrol station network, we redesigned logistics and implemented a model that saved 80 million rubles a year. We then built Riderra from zero into a transfer service operating in 40 countries and guided it through two major crises.",
+    chapterOneText: "For a petrol station network, we redesigned logistics and implemented a model that saved 80 million rubles a year. One of our transport projects grew from zero to operating in 40 countries and made it through two major crises.",
     chapterTwoTitle: "First, we freed ourselves from daily operations",
-    chapterTwoText: "At Riderra, we built a remote team of 15 and automated sales, reporting, carrier sourcing, and order processing. Day-to-day work gradually stopped depending on the founder's constant involvement.",
+    chapterTwoText: "We built a remote team of 15 and automated sales, reporting, carrier sourcing, and order processing. Day-to-day work gradually stopped depending on the founder's constant involvement.",
     chapterThreeTitle: "Then we saw the same tasks return to every owner",
     chapterThreeText: "Find customers, retain the team, understand the numbers, miss nothing. A craftsperson, doctor, shop, and transport company do different work, yet operations keep returning to the owner. Even when the answer is known, there is no time to step back and put it into practice.",
     chapterFourTitle: "LocalOS grew out of that experience",
     chapterFourText: "It is the software version of the operating systems we spent years building for our own companies. AI helps describe and test a process, the owner approves the rules, and a procedure handles the recurring work. A proven method can be saved and reused so the next business does not start from zero.",
-    industries: ["Retail", "Services", "Transport"],
+    industries: ["Transport", "Retail", "Manufacturing", "Logistics", "Services"],
     channelEyebrow: "Team journal",
     channelTitle: "Покупай мою шаверму",
     channelText: "We write about entrepreneurship as it is: burnout, operations, accounting, automation, and the ideas behind LocalOS. Expect working notes, mistakes, and conclusions.",
@@ -178,8 +178,8 @@ const About = () => {
     <div className="min-h-screen bg-background">
       <SeoMeta
         description={isRu
-          ? "История команды LocalOS: 15 лет в бизнесе, автоматизация ритейла, услуг и перевозок и опыт, из которого вырос продукт."
-          : "The LocalOS team story: 15 years in business, automating retail, services, and transport, and the experience behind the product."}
+          ? "История команды LocalOS: 15 лет в бизнесе и автоматизации транспорта, ритейла, производства, логистики и услуг."
+          : "The LocalOS team story: 15 years in business and automation across transport, retail, manufacturing, logistics, and services."}
         path="/about"
         title={isRu ? "О команде LocalOS — 15 лет автоматизации бизнеса" : "About the LocalOS team — 15 years of business automation"}
       />
@@ -222,7 +222,7 @@ const About = () => {
                 <p className="mt-6 max-w-md text-lg leading-8 text-slate-600">{story.storyIntro}</p>
                 <div className="mt-8 flex flex-wrap gap-2">
                   {story.industries.map((industry, index) => {
-                    const icons = [Store, Wrench, Truck];
+                    const icons = [Truck, Store, Factory, PackageCheck, Wrench];
                     const Icon = icons[index];
                     return (
                       <span key={industry} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
