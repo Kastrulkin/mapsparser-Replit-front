@@ -116,20 +116,20 @@ const Footer = () => {
   };
 
   return (
-    <footer className="bg-card border-t border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <footer className="border-t border-white/[0.08] bg-slate-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
         <div className="flex flex-col md:flex-row justify-between items-start gap-8">
           <div className="max-w-md">
-            <h3 className="text-2xl font-bold text-foreground mb-4">{t.footer.title}</h3>
-            <p className="text-muted-foreground mb-6 max-w-md">
+            <h3 className="mb-4 text-2xl font-bold text-white">{t.footer.title}</h3>
+            <p className="mb-6 max-w-md text-pretty leading-7 text-slate-400">
               {descriptions[language]}
             </p>
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Heart className="w-4 h-4 mr-1.5 text-primary animate-pulse flex-shrink-0" />
+            <div className="flex items-center text-sm text-slate-500">
+              <Heart className="mr-1.5 h-4 w-4 flex-shrink-0 text-orange-400" />
               <span className="flex items-baseline gap-0.5 min-h-[1.5em]">
                 {prefix}
                 <span
-                  className="inline-block text-primary font-semibold transition-[opacity,transform,filter] duration-400 ease-out"
+                  className="inline-block font-semibold text-orange-400 transition-[opacity,transform,filter] duration-300 ease-out"
                   style={{
                     opacity: isExiting ? 0 : 1,
                     transform: isExiting ? "translateY(-8px)" : "translateY(0)",
@@ -144,17 +144,17 @@ const Footer = () => {
 
           <div className="ml-auto grid gap-8 sm:grid-cols-2">
             <div>
-              <h4 className="font-semibold text-foreground mb-4 md:text-right">{t.footer.company}</h4>
+              <h4 className="mb-4 font-semibold text-white md:text-right">{t.footer.company}</h4>
               <ul className="space-y-2 md:text-right">
                 {footerLinks.company.map((link) => (
                   <li key={link.name}>
-                    <a href={link.href} className="text-muted-foreground hover:text-foreground transition-colors">
+                    <a href={link.href} className="inline-flex min-h-10 items-center text-slate-400 transition-colors hover:text-white">
                       {link.name}
                     </a>
                   </li>
                 ))}
                 <li>
-                  <a href="mailto:info@localos.pro" className="text-muted-foreground hover:text-foreground transition-colors">
+                  <a href="mailto:info@localos.pro" className="inline-flex min-h-10 items-center text-slate-400 transition-colors hover:text-white">
                     info@localos.pro
                   </a>
                 </li>
@@ -162,11 +162,11 @@ const Footer = () => {
             </div>
 
             <div>
-              <h4 className="font-semibold text-foreground mb-4 md:text-right">Материалы</h4>
+              <h4 className="mb-4 font-semibold text-white md:text-right">Материалы</h4>
               <ul className="space-y-2 md:text-right">
                 {footerLinks.materials.map((link) => (
                   <li key={link.name}>
-                    <a href={link.href} className="text-muted-foreground hover:text-foreground transition-colors">
+                    <a href={link.href} className="inline-flex min-h-10 items-center text-slate-400 transition-colors hover:text-white">
                       {link.name}
                     </a>
                   </li>
@@ -176,8 +176,8 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-border">
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+        <div className="mt-12 border-t border-white/[0.08] pt-8">
+          <div className="mt-2 text-center text-sm text-slate-500">
             {t.footer.copyright}
           </div>
         </div>

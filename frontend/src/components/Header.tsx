@@ -84,32 +84,32 @@ const Header = () => {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${isScrolled
-        ? "bg-background/80 backdrop-blur-md border-b border-border shadow-sm"
-        : "bg-transparent border-transparent"
+      className={`sticky top-0 z-50 border-b backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-200 ${isScrolled
+        ? "border-black/5 bg-[#f7f7f5]/92 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+        : "border-transparent bg-[#f7f7f5]/72"
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-4">
+        <div className="flex min-h-[4.5rem] justify-between items-center py-2.5">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center hover:opacity-80 transition-opacity" style={{ textDecoration: 'none' }}>
+              <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex min-h-11 items-center rounded-lg pr-2 transition-opacity hover:opacity-75" style={{ textDecoration: 'none' }}>
                 <img
                   src={logo}
                   alt="Local OS"
-                  className="h-12 w-auto"
+                  className="h-10 w-auto"
                 />
               </Link>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center space-x-10">
+          <nav className="hidden items-center gap-8 lg:flex">
             {navigation.map((item) => (
               item.href === '/#agents' ? (
                 <Link
                   key={item.name}
                   to={{ pathname: "/", hash: "#agents" }}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
                   onClick={() => {
                     // Ничего не делаем, обработка теперь на главной через useEffect
                   }}
@@ -120,7 +120,7 @@ const Header = () => {
                 <Link
                   key={item.name}
                   to={{ pathname: "/about", hash: "#pricing" }}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
                   onClick={(e) => {
                     // Если уже на странице /about, прокручиваем сразу
                     if (location.pathname === '/about') {
@@ -140,22 +140,22 @@ const Header = () => {
                 <a
                   key={item.name}
                   href={item.href}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
                 >
                   {item.name}
                 </a>
               )
             ))}
             <div className="group relative">
-              <button className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground" type="button">
+              <button className="flex min-h-11 items-center gap-1 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950" type="button">
                 Материалы
-                <ChevronDown className="h-4 w-4 transition group-hover:rotate-180" />
+                <ChevronDown className="h-4 w-4 transition-transform group-hover:rotate-180" />
               </button>
-              <div className="invisible absolute left-1/2 top-full w-72 -translate-x-1/2 pt-4 opacity-0 transition group-hover:visible group-hover:opacity-100">
-                <div className="rounded-2xl border border-orange-100 bg-white p-2 shadow-2xl shadow-orange-500/10">
+              <div className="invisible absolute left-1/2 top-full w-72 -translate-x-1/2 pt-3 opacity-0 transition-[opacity,visibility] group-hover:visible group-hover:opacity-100">
+                <div className="rounded-2xl bg-white p-2 shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_45px_rgba(15,23,42,0.12)]">
                   {materialsNavigation.map((item) => (
                     <Link
-                      className="block rounded-xl px-4 py-3 transition hover:bg-orange-50"
+                      className="block rounded-xl px-4 py-3 transition-colors hover:bg-orange-50"
                       key={item.href}
                       to={item.href}
                     >
@@ -168,28 +168,30 @@ const Header = () => {
             </div>
           </nav>
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden items-center gap-3 lg:flex">
             <LanguageSwitcher />
-            <Link to="/login">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-              >
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="flex min-h-10 items-center gap-2 rounded-xl bg-white/60 transition-[background-color,scale] active:scale-[0.96]"
+            >
+              <Link to="/login">
                 <LogIn className="w-4 h-4" />
                 <span>{t.header.login}</span>
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button className="btn-iridescent">{t.header.tryFree}</Button>
-            </Link>
+              </Link>
+            </Button>
+            <Button asChild className="min-h-10 rounded-xl px-4 shadow-[0_8px_22px_rgba(249,115,22,0.18)] transition-[box-shadow,scale] active:scale-[0.96]">
+              <Link to="/login">{t.header.tryFree}</Link>
+            </Button>
           </div>
 
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <Button
               aria-label={isMenuOpen ? (language === 'ru' ? 'Закрыть меню' : 'Close menu') : (language === 'ru' ? 'Открыть меню' : 'Open menu')}
               variant="ghost"
               size="icon"
+              className="min-h-11 min-w-11 rounded-xl transition-[background-color,scale] active:scale-[0.96]"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -198,7 +200,7 @@ const Header = () => {
         </div>
 
         {isMenuOpen && (
-          <div className="md:hidden bg-background border-b border-border absolute left-0 right-0 shadow-lg">
+          <div className="absolute left-0 right-0 border-b border-black/5 bg-[#f7f7f5] shadow-[0_18px_45px_rgba(15,23,42,0.12)] lg:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => (
                 item.href === '/#agents' ? (
@@ -263,19 +265,20 @@ const Header = () => {
                 <div className="px-3 py-2">
                   <LanguageSwitcher />
                 </div>
-                <Link to="/login" className="w-full block mx-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                  >
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="mx-3 w-[calc(100%-1.5rem)] justify-start"
+                >
+                  <Link to="/login" onClick={() => setIsMenuOpen(false)}>
                     <LogIn className="w-4 h-4 mr-2" />
                     {t.header.login}
-                  </Button>
-                </Link>
-                <Link to="/login" className="w-full block">
-                  <Button className="w-full justify-start mx-3 btn-iridescent">{t.header.tryFree}</Button>
-                </Link>
+                  </Link>
+                </Button>
+                <Button asChild className="mx-3 w-[calc(100%-1.5rem)] justify-start btn-iridescent">
+                  <Link to="/login" onClick={() => setIsMenuOpen(false)}>{t.header.tryFree}</Link>
+                </Button>
               </div>
             </div>
           </div>

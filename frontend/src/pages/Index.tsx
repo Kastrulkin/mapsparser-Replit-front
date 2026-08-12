@@ -4,10 +4,12 @@ import {
   ArrowUpRight,
   BarChart3,
   Building2,
+  CalendarClock,
   Check,
-  ChevronRight,
+  CircleCheck,
   CircleDollarSign,
   ClipboardCheck,
+  Clock3,
   Eye,
   FileCheck2,
   Handshake,
@@ -48,6 +50,18 @@ type NetworkQuestionSet = {
   intro: string;
   sourceNote: string;
   questions: NetworkQuestion[];
+};
+
+type ProductPreviewCopy = {
+  eyebrow: string;
+  title: string;
+  active: string;
+  items: Array<{
+    title: string;
+    detail: string;
+    status: string;
+  }>;
+  ownerNote: string;
 };
 
 type LandingCopy = {
@@ -347,6 +361,119 @@ const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
   },
 };
 
+const productPreviewByLanguage: Record<Language, ProductPreviewCopy> = {
+  ru: {
+    eyebrow: "Сегодня в LocalOS",
+    title: "Работа идёт без напоминаний",
+    active: "Система работает",
+    items: [
+      { title: "Карточки на картах", detail: "Проверены услуги, цены и отзывы", status: "Проверено" },
+      { title: "Отзывы без ответа", detail: "Черновики собраны в очередь", status: "Подготовлено" },
+      { title: "Публикация на неделю", detail: "Текст готов к вашему решению", status: "Подтвердить" },
+    ],
+    ownerNote: "Вы подключаетесь только там, где нужно решение.",
+  },
+  en: {
+    eyebrow: "Today in LocalOS",
+    title: "Work continues without reminders",
+    active: "System running",
+    items: [
+      { title: "Map listings", detail: "Services, prices, and reviews checked", status: "Checked" },
+      { title: "Unanswered reviews", detail: "Drafts added to the queue", status: "Prepared" },
+      { title: "Weekly post", detail: "Copy is ready for your decision", status: "Approve" },
+    ],
+    ownerNote: "You step in only when a decision is needed.",
+  },
+  fr: {
+    eyebrow: "Aujourd’hui dans LocalOS",
+    title: "Le travail avance sans rappel",
+    active: "Système actif",
+    items: [
+      { title: "Fiches sur les cartes", detail: "Services, prix et avis vérifiés", status: "Vérifié" },
+      { title: "Avis sans réponse", detail: "Brouillons ajoutés à la file", status: "Préparé" },
+      { title: "Publication de la semaine", detail: "Texte prêt pour votre décision", status: "Approuver" },
+    ],
+    ownerNote: "Vous intervenez uniquement lorsqu’une décision est nécessaire.",
+  },
+  es: {
+    eyebrow: "Hoy en LocalOS",
+    title: "El trabajo continúa sin recordatorios",
+    active: "Sistema activo",
+    items: [
+      { title: "Fichas en mapas", detail: "Servicios, precios y reseñas revisados", status: "Revisado" },
+      { title: "Reseñas sin respuesta", detail: "Borradores añadidos a la cola", status: "Preparado" },
+      { title: "Publicación semanal", detail: "Texto listo para tu decisión", status: "Aprobar" },
+    ],
+    ownerNote: "Solo intervienes cuando hace falta una decisión.",
+  },
+  el: {
+    eyebrow: "Σήμερα στο LocalOS",
+    title: "Η δουλειά προχωρά χωρίς υπενθυμίσεις",
+    active: "Το σύστημα λειτουργεί",
+    items: [
+      { title: "Καταχωρίσεις στους χάρτες", detail: "Ελέγχθηκαν υπηρεσίες, τιμές και κριτικές", status: "Ελέγχθηκε" },
+      { title: "Κριτικές χωρίς απάντηση", detail: "Τα προσχέδια μπήκαν στη σειρά", status: "Έτοιμο" },
+      { title: "Εβδομαδιαία δημοσίευση", detail: "Το κείμενο περιμένει την απόφασή σας", status: "Έγκριση" },
+    ],
+    ownerNote: "Συμμετέχετε μόνο όταν χρειάζεται απόφαση.",
+  },
+  de: {
+    eyebrow: "Heute in LocalOS",
+    title: "Die Arbeit läuft ohne Erinnerungen weiter",
+    active: "System läuft",
+    items: [
+      { title: "Karteneinträge", detail: "Leistungen, Preise und Bewertungen geprüft", status: "Geprüft" },
+      { title: "Unbeantwortete Bewertungen", detail: "Entwürfe zur Warteschlange hinzugefügt", status: "Vorbereitet" },
+      { title: "Wochenbeitrag", detail: "Text wartet auf Ihre Entscheidung", status: "Freigeben" },
+    ],
+    ownerNote: "Sie greifen nur ein, wenn eine Entscheidung nötig ist.",
+  },
+  th: {
+    eyebrow: "วันนี้ใน LocalOS",
+    title: "งานเดินหน้าต่อโดยไม่ต้องคอยเตือน",
+    active: "ระบบกำลังทำงาน",
+    items: [
+      { title: "ข้อมูลบนแผนที่", detail: "ตรวจบริการ ราคา และรีวิวแล้ว", status: "ตรวจแล้ว" },
+      { title: "รีวิวที่ยังไม่ได้ตอบ", detail: "เตรียมร่างไว้ในคิวแล้ว", status: "เตรียมแล้ว" },
+      { title: "โพสต์ประจำสัปดาห์", detail: "ข้อความพร้อมให้คุณตัดสินใจ", status: "อนุมัติ" },
+    ],
+    ownerNote: "คุณเข้ามาเฉพาะเมื่อจำเป็นต้องตัดสินใจ",
+  },
+  ar: {
+    eyebrow: "اليوم في LocalOS",
+    title: "يستمر العمل من دون تذكير",
+    active: "النظام يعمل",
+    items: [
+      { title: "بطاقات الخرائط", detail: "تم فحص الخدمات والأسعار والمراجعات", status: "تم الفحص" },
+      { title: "مراجعات بلا رد", detail: "أضيفت المسودات إلى قائمة الانتظار", status: "جاهز" },
+      { title: "منشور الأسبوع", detail: "النص جاهز لقرارك", status: "موافقة" },
+    ],
+    ownerNote: "تتدخل فقط عندما يلزم اتخاذ قرار.",
+  },
+  ha: {
+    eyebrow: "Yau a LocalOS",
+    title: "Aiki yana ci gaba ba tare da tunatarwa ba",
+    active: "Tsarin yana aiki",
+    items: [
+      { title: "Bayanan taswira", detail: "An duba ayyuka, farashi da ra’ayoyi", status: "An duba" },
+      { title: "Ra’ayoyin da ba a amsa ba", detail: "An shirya rubutun amsa", status: "An shirya" },
+      { title: "Rubutun mako", detail: "Rubutun yana jiran shawarar ku", status: "Amince" },
+    ],
+    ownerNote: "Kuna shiga ne kawai idan ana buƙatar shawara.",
+  },
+  tr: {
+    eyebrow: "Bugün LocalOS’ta",
+    title: "İş, hatırlatma olmadan ilerliyor",
+    active: "Sistem çalışıyor",
+    items: [
+      { title: "Harita kayıtları", detail: "Hizmetler, fiyatlar ve yorumlar kontrol edildi", status: "Kontrol edildi" },
+      { title: "Yanıtsız yorumlar", detail: "Taslaklar sıraya eklendi", status: "Hazırlandı" },
+      { title: "Haftalık gönderi", detail: "Metin kararınızı bekliyor", status: "Onayla" },
+    ],
+    ownerNote: "Yalnızca karar gerektiğinde devreye girersiniz.",
+  },
+};
+
 const copyForLanguage = (language: Language): LandingCopy => {
   switch (language) {
     case "ru":
@@ -378,6 +505,7 @@ const Index = () => {
   const location = useLocation();
   const copy = copyForLanguage(language);
   const networkQuestions = networkQuestionsByLanguage[language];
+  const productPreview = productPreviewByLanguage[language];
 
   useEffect(() => {
     if (!["#agents", "#cta", "#hero-form"].includes(location.hash)) return;
@@ -394,7 +522,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-white text-slate-950">
+    <div className="min-h-screen overflow-hidden bg-[#f7f7f5] text-slate-950 selection:bg-orange-200 selection:text-slate-950">
       <SeoMeta
         description={copy.metaDescription}
         image="/images/articles/pochemu-predprinimateli-vygorayut-cover.png"
@@ -403,40 +531,85 @@ const Index = () => {
       />
 
       <main>
-        <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,146,60,0.18),_transparent_42%),linear-gradient(to_bottom_right,#fff7ed,#ffffff_48%,#fffbeb)] px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
-          <div className="absolute -right-24 top-16 -z-10 h-80 w-80 rounded-full bg-orange-200/30 blur-3xl" aria-hidden="true" />
-          <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)] lg:gap-16">
-            <div>
-              <div className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-orange-700 shadow-[0_8px_30px_rgba(249,115,22,0.10)] ring-1 ring-black/5 backdrop-blur">
+        <section className="relative isolate px-4 pb-12 pt-12 sm:px-6 sm:pb-16 sm:pt-16 lg:px-8 lg:pb-20 lg:pt-20">
+          <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[44rem] bg-[radial-gradient(circle_at_18%_10%,rgba(249,115,22,0.14),transparent_32%),radial-gradient(circle_at_82%_18%,rgba(251,191,36,0.10),transparent_28%)]" aria-hidden="true" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 -z-20 h-[44rem] bg-[linear-gradient(to_right,rgba(15,23,42,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.035)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_88%)]" aria-hidden="true" />
+          <div className="mx-auto grid max-w-7xl items-start gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(440px,1.05fr)] lg:gap-16">
+            <div className="pt-4 lg:sticky lg:top-28 lg:pt-10">
+              <div className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white/75 px-4 py-2 text-sm font-semibold text-orange-700 shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur">
                 <Sparkles className="h-4 w-4 text-orange-500" aria-hidden="true" />
                 {copy.eyebrow}
               </div>
-              <h1 className="mt-7 max-w-4xl text-4xl font-bold leading-[1.06] tracking-[-0.04em] text-slate-950 sm:text-5xl lg:text-6xl">
+              <h1 className="mt-7 max-w-3xl text-balance text-[2.75rem] font-bold leading-[0.98] tracking-[-0.055em] text-slate-950 sm:text-6xl lg:text-[4.75rem]">
                 {copy.title}
               </h1>
-              <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-600 sm:text-xl">{copy.intro}</p>
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-                <Button asChild className="h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base shadow-lg shadow-orange-500/20" size="lg">
-                  <Link to={{ pathname: "/", hash: "#agents" }}>
-                    {copy.seeTasks}
-                    <ArrowRight className="h-5 w-5" aria-hidden="true" />
-                  </Link>
-                </Button>
-                <Button className="h-auto min-h-12 whitespace-normal rounded-xl bg-white px-6 py-3 text-base" onClick={scrollToAudit} size="lg" variant="outline">
+              <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">{copy.intro}</p>
+              <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                <Button className="h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[box-shadow,scale] active:scale-[0.96]" onClick={scrollToAudit} size="lg">
                   {copy.freeAudit}
+                  <ArrowRight className="h-5 w-5" aria-hidden="true" />
                 </Button>
+                <Link className="group inline-flex min-h-11 items-center gap-2 px-1 text-base font-semibold text-slate-700 transition-colors hover:text-orange-700" to={{ pathname: "/", hash: "#agents" }}>
+                  {copy.seeTasks}
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="mt-10 flex items-start gap-3 border-l-2 border-orange-300 pl-4 text-sm leading-6 text-slate-600">
+                <Users className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" aria-hidden="true" />
+                <p className="max-w-xl">{copy.scale}</p>
               </div>
             </div>
 
-            <div className="rounded-[2rem] bg-white/90 p-3 shadow-[0_30px_80px_rgba(15,23,42,0.14)] ring-1 ring-black/5 backdrop-blur">
-              <div className="rounded-[1.25rem] bg-slate-950 p-6 text-white sm:p-8">
-                <div className="mb-7 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500 shadow-lg shadow-orange-950/30">
-                  <MapPinned className="h-6 w-6" aria-hidden="true" />
+            <div className="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_24px_70px_rgba(15,23,42,0.12)]">
+              <div className="bg-slate-950 p-5 text-white sm:p-7">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-orange-400">{productPreview.eyebrow}</p>
+                    <h2 className="mt-2 text-balance text-2xl font-bold tracking-[-0.025em] sm:text-3xl">{productPreview.title}</h2>
+                  </div>
+                  <div className="inline-flex min-h-9 items-center gap-2 rounded-full bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-300 shadow-[inset_0_0_0_1px_rgba(110,231,183,0.16)]">
+                    <span className="relative flex h-2 w-2" aria-hidden="true">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                    </span>
+                    {productPreview.active}
+                  </div>
                 </div>
-                <h2 className="text-2xl font-bold tracking-tight">{copy.formTitle}</h2>
-                <p className="mt-3 leading-7 text-slate-300">{copy.formDescription}</p>
+                <div className="mt-7 overflow-hidden rounded-2xl bg-white/[0.055] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+                  {productPreview.items.map((item, index) => {
+                    const Icon = index === 0 ? CircleCheck : index === 1 ? Clock3 : CalendarClock;
+                    return (
+                      <div className={`grid gap-3 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center ${index > 0 ? "border-t border-white/[0.08]" : ""}`} key={item.title}>
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${index === 2 ? "bg-orange-400/12 text-orange-300" : "bg-emerald-400/10 text-emerald-300"}`}>
+                          <Icon className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <div>
+                          <h3 className="text-pretty text-sm font-semibold text-white sm:text-base">{item.title}</h3>
+                          <p className="mt-1 text-pretty text-xs leading-5 text-slate-400 sm:text-sm">{item.detail}</p>
+                        </div>
+                        <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${index === 2 ? "bg-orange-400/12 text-orange-300" : "bg-white/[0.06] text-slate-300"}`}>{item.status}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-5 flex items-center gap-2 text-pretty text-sm leading-6 text-slate-300">
+                  <Eye className="h-4 w-4 shrink-0 text-orange-400" aria-hidden="true" />
+                  {productPreview.ownerNote}
+                </p>
+              </div>
+
+              <div className="p-5 sm:p-7">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+                    <MapPinned className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{copy.formTitle}</h2>
+                    <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{copy.formDescription}</p>
+                  </div>
+                </div>
                 <form
-                  className="mt-7 space-y-4"
+                  className="mt-6 grid gap-4"
                   id="hero-form"
                   onSubmit={async (event) => {
                     event.preventDefault();
@@ -480,14 +653,14 @@ const Index = () => {
                   }}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-slate-200">{copy.emailLabel}</span>
-                    <input className="min-h-12 w-full rounded-xl border-0 bg-white px-4 text-slate-950 outline-none ring-1 ring-white/20 transition-[box-shadow] placeholder:text-slate-400 focus:ring-4 focus:ring-orange-400/30" name="email" placeholder={copy.emailPlaceholder} required type="email" />
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">{copy.emailLabel}</span>
+                    <input className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-slate-950 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100" name="email" placeholder={copy.emailPlaceholder} required type="email" />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-slate-200">{copy.mapsLabel}</span>
-                    <input className="min-h-12 w-full rounded-xl border-0 bg-white px-4 text-slate-950 outline-none ring-1 ring-white/20 transition-[box-shadow] placeholder:text-slate-400 focus:ring-4 focus:ring-orange-400/30" name="yandexUrl" placeholder={copy.mapsPlaceholder} required type="url" />
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">{copy.mapsLabel}</span>
+                    <input className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-slate-950 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100" name="yandexUrl" placeholder={copy.mapsPlaceholder} required type="url" />
                   </label>
-                  <Button className="min-h-12 w-full rounded-xl text-base shadow-lg shadow-orange-950/30" disabled={isSubmitting} type="submit">
+                  <Button className="min-h-12 w-full rounded-xl text-base transition-[box-shadow,scale] active:scale-[0.96]" disabled={isSubmitting} type="submit">
                     {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowRight className="h-5 w-5" aria-hidden="true" />}
                     {isSubmitting ? copy.submitting : copy.submit}
                   </Button>
@@ -497,157 +670,187 @@ const Index = () => {
           </div>
         </section>
 
-        <section className="bg-slate-950 px-4 py-6 text-white sm:px-6 lg:px-8" aria-label={copy.scale}>
-          <div className="mx-auto flex max-w-7xl items-center justify-center gap-3 text-center text-base font-semibold sm:text-lg">
-            <Users className="h-5 w-5 shrink-0 text-orange-400" aria-hidden="true" />
-            <p>{copy.scale}</p>
-          </div>
-        </section>
-
-        <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
-            <div>
-              <span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-600">01</span>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{copy.problemTitle}</h2>
+        <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[1.75rem] bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_16px_45px_rgba(15,23,42,0.06)] lg:grid-cols-[0.82fr_1.18fr]">
+            <div className="relative overflow-hidden bg-slate-950 p-7 text-white sm:p-10 lg:p-12">
+              <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-orange-500/15 blur-3xl" aria-hidden="true" />
+              <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-400">01</span>
+              <h2 className="mt-5 max-w-xl text-balance text-3xl font-bold tracking-[-0.035em] sm:text-4xl lg:text-5xl">{copy.problemTitle}</h2>
+              <div className="mt-10 hidden items-center gap-3 text-sm text-slate-400 lg:flex">
+                <span className="h-px w-10 bg-orange-400" aria-hidden="true" />
+                LocalOS
+              </div>
             </div>
-            <div className="space-y-5 text-lg leading-8 text-slate-600">
+            <div className="grid gap-px bg-slate-200/70 sm:grid-cols-2">
               {copy.problemParagraphs.map((paragraph, index) => (
-                <p className={index === copy.problemParagraphs.length - 1 ? "font-semibold text-slate-950" : ""} key={paragraph}>{paragraph}</p>
+                <div className={`bg-white p-7 sm:p-8 ${index === copy.problemParagraphs.length - 1 ? "sm:col-span-2 sm:grid sm:grid-cols-[auto_1fr] sm:items-start sm:gap-5" : ""}`} key={paragraph}>
+                  <span className={`mb-5 flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold tabular-nums ${index === copy.problemParagraphs.length - 1 ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-500"}`}>0{index + 1}</span>
+                  <p className={`text-pretty leading-7 ${index === copy.problemParagraphs.length - 1 ? "text-lg font-semibold text-slate-950 sm:pt-1" : "text-base text-slate-600"}`}>{paragraph}</p>
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="bg-orange-50/70 px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+        <section className="bg-[#ece9e2] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
-            <div className="max-w-4xl">
-              <span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-600">02</span>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{copy.networkTitle}</h2>
-              <div className="mt-7 grid gap-5 text-lg leading-8 text-slate-600 md:grid-cols-2">
+            <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-end lg:gap-16">
+              <div>
+                <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">02</span>
+                <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] text-slate-950 sm:text-4xl lg:text-5xl">{copy.networkTitle}</h2>
+              </div>
+              <div className="grid gap-5 text-pretty text-base leading-7 text-slate-600 sm:grid-cols-2">
                 {copy.networkParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               </div>
             </div>
-            <div className="mt-10 max-w-5xl">
-              <p className="max-w-4xl text-pretty text-lg font-semibold leading-8 text-slate-950">{networkQuestions.intro}</p>
-              <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-                {networkQuestions.questions.map((question) => (
-                  <li key={question.href}>
-                    <a
-                      aria-label={`${question.text} — ${networkQuestions.sourceNote}`}
-                      className="group flex h-full min-h-14 items-center justify-between gap-4 rounded-2xl bg-white/80 px-5 py-3.5 text-base font-semibold leading-6 text-slate-950 shadow-[0_10px_30px_rgba(15,23,42,0.06)] ring-1 ring-black/5 transition-[box-shadow,transform,background-color] hover:bg-white hover:shadow-[0_14px_36px_rgba(15,23,42,0.1)] active:scale-[0.96]"
-                      href={question.href}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <span className="text-pretty">«{question.text}»</span>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-orange-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-3 text-sm leading-6 text-slate-500">{networkQuestions.sourceNote}</p>
-            </div>
-            <div className="mt-12 grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
-              {copy.networkLabels.map((label, index) => {
-                const Icon = index === 0 ? Building2 : index === 1 ? ShieldCheck : Network;
-                return (
-                  <div className="contents" key={label}>
-                    <div className="flex min-h-44 flex-col justify-between rounded-2xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
-                      <Icon className="h-8 w-8 text-orange-500" aria-hidden="true" />
-                      <p className="mt-8 text-lg font-bold text-slate-950">{label}</p>
-                    </div>
-                    {index < copy.networkLabels.length - 1 ? (
-                      <ChevronRight className="mx-auto hidden h-6 w-6 self-center text-orange-400 md:block" aria-hidden="true" />
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-6 flex gap-3 rounded-2xl bg-slate-950 px-5 py-4 text-sm leading-6 text-slate-200 shadow-lg sm:items-center">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-orange-400 sm:mt-0" aria-hidden="true" />
-              <p>{copy.networkPrivacy}</p>
+
+            <div className="mt-12 grid overflow-hidden rounded-[1.75rem] bg-slate-950 shadow-[0_24px_70px_rgba(15,23,42,0.16)] lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="p-6 text-white sm:p-8 lg:p-10">
+                <p className="max-w-2xl text-pretty text-lg font-semibold leading-8 text-slate-100">{networkQuestions.intro}</p>
+                <ul className="mt-7 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  {networkQuestions.questions.map((question) => (
+                    <li key={question.href}>
+                      <a
+                        aria-label={`${question.text} — ${networkQuestions.sourceNote}`}
+                        className="group flex h-full min-h-14 items-center justify-between gap-4 rounded-xl bg-white/[0.055] px-4 py-3 text-sm font-semibold leading-6 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-[background-color,box-shadow,scale] hover:bg-white/[0.09] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)] active:scale-[0.96]"
+                        href={question.href}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <span className="text-pretty">«{question.text}»</span>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-orange-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-pretty text-xs leading-5 text-slate-500">{networkQuestions.sourceNote}</p>
+              </div>
+
+              <div className="bg-white p-6 sm:p-8 lg:p-10">
+                <ol className="relative">
+                  <span className="absolute bottom-8 left-[1.15rem] top-8 w-px bg-slate-200" aria-hidden="true" />
+                  {copy.networkLabels.map((label, index) => {
+                    const Icon = index === 0 ? Building2 : index === 1 ? ShieldCheck : Network;
+                    return (
+                      <li className={`relative grid grid-cols-[2.4rem_1fr] gap-4 ${index > 0 ? "mt-7" : ""}`} key={label}>
+                        <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-xl ${index === copy.networkLabels.length - 1 ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600"}`}>
+                          <Icon className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <div className="pt-1">
+                          <span className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400 tabular-nums">0{index + 1}</span>
+                          <p className="mt-1 text-pretty text-lg font-bold leading-7 text-slate-950">{label}</p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <div className="mt-9 flex gap-3 border-t border-slate-200 pt-6 text-sm leading-6 text-slate-600">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" aria-hidden="true" />
+                  <p className="text-pretty">{copy.networkPrivacy}</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="scroll-mt-24 px-4 py-20 sm:px-6 lg:px-8 lg:py-28" id="agents">
+        <section className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24" id="agents">
           <div className="mx-auto max-w-7xl">
-            <div className="max-w-3xl">
-              <span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-600">{copy.tasksEyebrow}</span>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{copy.tasksTitle}</h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600">{copy.tasksIntro}</p>
+            <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr] lg:items-end lg:gap-16">
+              <div>
+                <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">{copy.tasksEyebrow}</span>
+                <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.tasksTitle}</h2>
+              </div>
+              <p className="max-w-2xl text-pretty text-lg leading-8 text-slate-600 lg:justify-self-end">{copy.tasksIntro}</p>
             </div>
-            <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-6">
+            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-6">
               {copy.tasks.map((task, index) => {
                 const Icon = taskIcons[index];
                 return (
-                  <article className={`rounded-2xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-black/5 ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} key={task.title}>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
+                  <article className={`group relative overflow-hidden rounded-2xl p-6 shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] transition-[box-shadow,transform] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_42px_rgba(15,23,42,0.09)] ${index === 0 ? "bg-orange-500 text-white" : "bg-white text-slate-950"} ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} key={task.title}>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${index === 0 ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"}`}>
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <span className={`text-sm font-bold tabular-nums ${index === 0 ? "text-orange-100" : "text-slate-300"}`}>0{index + 1}</span>
                     </div>
-                    <h3 className="mt-6 text-xl font-bold leading-7">{task.title}</h3>
-                    <p className="mt-3 leading-7 text-slate-600">{task.description}</p>
+                    <h3 className="mt-8 text-balance text-xl font-bold leading-7">{task.title}</h3>
+                    <p className={`mt-3 text-pretty leading-7 ${index === 0 ? "text-orange-50" : "text-slate-600"}`}>{task.description}</p>
                   </article>
                 );
               })}
             </div>
-            <div className="mt-6 flex gap-3 rounded-2xl bg-orange-50 px-5 py-4 text-sm leading-6 text-slate-700 ring-1 ring-orange-100">
+            <div className="mt-6 flex max-w-4xl gap-3 border-l-2 border-orange-400 py-1 pl-4 text-sm leading-6 text-slate-600">
               <Check className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" aria-hidden="true" />
-              <p>{copy.retentionNote}</p>
+              <p className="text-pretty">{copy.retentionNote}</p>
             </div>
           </div>
         </section>
 
-        <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
-          <div className="mx-auto max-w-7xl">
-            <div className="max-w-4xl">
-              <span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-400">{copy.workEyebrow}</span>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{copy.workTitle}</h2>
-              <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">{copy.workIntro}</p>
+        <section className="relative overflow-hidden bg-slate-950 px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <div className="pointer-events-none absolute -left-32 top-1/3 h-80 w-80 rounded-full bg-orange-500/10 blur-3xl" aria-hidden="true" />
+          <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:gap-20">
+            <div className="lg:sticky lg:top-28 lg:self-start">
+              <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-400">{copy.workEyebrow}</span>
+              <h2 className="mt-5 max-w-xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.workTitle}</h2>
+              <p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-slate-300">{copy.workIntro}</p>
+              <div className="mt-9 rounded-2xl bg-orange-500/10 p-5 shadow-[inset_0_0_0_1px_rgba(251,146,60,0.18)]">
+                <p className="text-pretty text-sm font-semibold leading-6 text-orange-100">{copy.workSummary}</p>
+              </div>
             </div>
-            <ol className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+
+            <ol className="overflow-hidden rounded-[1.5rem] bg-white/[0.045] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
               {copy.steps.map((step, index) => {
                 const Icon = stepIcons[index];
                 return (
-                  <li className="rounded-2xl bg-white/[0.06] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" key={step.title}>
-                    <div className="flex items-center justify-between">
-                      <Icon className="h-6 w-6 text-orange-400" aria-hidden="true" />
-                      <span className="tabular-nums text-sm font-bold text-slate-500">0{index + 1}</span>
+                  <li className={`group grid gap-4 p-5 transition-[background-color] hover:bg-white/[0.035] sm:grid-cols-[3rem_1fr_auto] sm:items-start sm:p-6 ${index > 0 ? "border-t border-white/[0.08]" : ""}`} key={step.title}>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${index === copy.steps.length - 1 ? "bg-orange-500 text-white" : "bg-white/[0.07] text-orange-300"}`}>
+                      <Icon className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <h3 className="mt-7 text-lg font-bold leading-6">{step.title}</h3>
-                    <p className="mt-3 text-sm leading-6 text-slate-300">{step.description}</p>
+                    <div>
+                      <h3 className="text-pretty text-lg font-bold leading-7 text-white">{step.title}</h3>
+                      <p className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-slate-400 sm:text-base">{step.description}</p>
+                    </div>
+                    <span className="tabular-nums text-sm font-bold text-slate-600">0{index + 1}</span>
                   </li>
                 );
               })}
             </ol>
-            <p className="mt-8 max-w-4xl rounded-2xl bg-orange-500 px-6 py-5 text-lg font-semibold leading-8 text-white shadow-xl shadow-orange-950/30">{copy.workSummary}</p>
           </div>
         </section>
 
-        <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+        <section className="bg-white px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
-            <div className="max-w-3xl">
-              <span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-600">{copy.casesEyebrow}</span>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{copy.casesTitle}</h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600">{copy.casesIntro}</p>
+            <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
+              <div>
+                <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">{copy.casesEyebrow}</span>
+                <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.casesTitle}</h2>
+              </div>
+              <p className="max-w-2xl text-pretty text-lg leading-8 text-slate-600 lg:justify-self-end">{copy.casesIntro}</p>
             </div>
-            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+            <div className="mt-10 grid gap-5 lg:grid-cols-3">
               {publishedCases.slice(0, 3).map((caseItem) => (
-                <article className="flex h-full flex-col rounded-2xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-black/5" key={caseItem.slug}>
-                  <div className="flex flex-wrap content-start gap-2 lg:min-h-28 lg:flex-col lg:flex-nowrap lg:items-start">
+                <article className="group flex h-full flex-col overflow-hidden rounded-2xl bg-[#f7f7f5] shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] transition-[box-shadow,transform] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_42px_rgba(15,23,42,0.09)]" key={caseItem.slug}>
+                  <div className="p-6 pb-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-orange-700">{copy.casesEyebrow}</span>
+                      <ArrowUpRight className="h-5 w-5 text-slate-300 transition-[color,transform] group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-orange-600" aria-hidden="true" />
+                    </div>
+                    <h3 className="mt-5 min-h-16 text-balance text-2xl font-bold leading-8 text-slate-950">{caseItem.title}</h3>
+                  </div>
+                  <div className="grid grid-cols-1 gap-px bg-slate-200/80 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                     {caseItem.metrics.map((metric) => (
-                      <span className="rounded-full bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700" key={metric.label}>
-                        <span className="tabular-nums">{metric.value}</span> {metric.label}
-                      </span>
+                      <div className="bg-white px-4 py-3" key={metric.label}>
+                        <strong className="block text-lg font-bold text-orange-600 tabular-nums">{metric.value}</strong>
+                        <span className="mt-0.5 block text-pretty text-xs leading-5 text-slate-500">{metric.label}</span>
+                      </div>
                     ))}
                   </div>
-                  <h3 className="mt-6 text-balance text-2xl font-bold leading-8 lg:min-h-16">{caseItem.title}</h3>
-                  <dl className="mt-6 flex-1 space-y-5 text-sm leading-6">
+                  <dl className="flex flex-1 flex-col p-6 pt-5 text-sm leading-6">
                     <div className="lg:min-h-[8.5rem]">
                       <dt className="font-bold uppercase tracking-[0.1em] text-slate-400">{copy.situation}</dt>
                       <dd className="mt-1 text-pretty text-slate-600">{caseItem.situation}</dd>
                     </div>
-                    <div className="lg:min-h-[10.5rem]">
+                    <div className="mt-5 lg:min-h-[10rem]">
                       <dt className="font-bold uppercase tracking-[0.1em] text-slate-400">{copy.workDone}</dt>
                       <dd className="mt-2">
                         <ul className="space-y-2 text-slate-600">
@@ -655,45 +858,45 @@ const Index = () => {
                         </ul>
                       </dd>
                     </div>
-                    <div>
+                    <div className="mt-5 border-t border-slate-200 pt-5">
                       <dt className="font-bold uppercase tracking-[0.1em] text-slate-400">{copy.result}</dt>
-                      <dd className="mt-1 text-pretty text-slate-600">{caseItem.result}</dd>
+                      <dd className="mt-1 text-pretty font-semibold text-slate-800">{caseItem.result}</dd>
                     </div>
                   </dl>
-                  <Link className="mt-7 inline-flex min-h-12 items-start text-pretty font-semibold leading-6 text-orange-600 transition-colors hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2" to={`/cases/${caseItem.slug}`}>
-                    {caseItem.title}
-                    <ArrowRight className="ml-2 mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <Link className="mx-6 mb-6 mt-auto inline-flex min-h-11 items-center gap-2 text-pretty font-semibold leading-6 text-orange-600 transition-colors hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2" to={`/cases/${caseItem.slug}`}>
+                    {caseItem.title}<ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
                   </Link>
                 </article>
               ))}
             </div>
-            <Button asChild className="mt-8 min-h-12 rounded-xl px-6" variant="outline">
+            <Button asChild className="mt-8 min-h-12 rounded-xl px-6 transition-[box-shadow,scale] active:scale-[0.96]" variant="outline">
               <Link to="/cases">{copy.allCases}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </Button>
           </div>
         </section>
 
-        <section className="bg-orange-50 px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-7 rounded-[2rem] bg-white p-7 shadow-[0_24px_70px_rgba(15,23,42,0.10)] ring-1 ring-black/5 sm:p-10 lg:flex-row lg:items-center">
+        <section className="bg-white px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
+          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-7 rounded-[1.75rem] bg-[#ece9e2] p-7 sm:p-10 lg:flex-row lg:items-center lg:p-12">
             <div className="max-w-3xl">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{copy.auditTitle}</h2>
-              <p className="mt-4 text-lg leading-8 text-slate-600">{copy.auditText}</p>
+              <h2 className="text-balance text-3xl font-bold tracking-[-0.035em] sm:text-4xl">{copy.auditTitle}</h2>
+              <p className="mt-4 text-pretty text-lg leading-8 text-slate-600">{copy.auditText}</p>
             </div>
-            <Button className="min-h-12 shrink-0 rounded-xl px-6" onClick={scrollToAudit} size="lg">
+            <Button className="min-h-12 shrink-0 rounded-xl px-6 shadow-[0_12px_30px_rgba(249,115,22,0.20)] transition-[box-shadow,scale] active:scale-[0.96]" onClick={scrollToAudit} size="lg">
               {copy.submit}<ArrowRight className="h-5 w-5" aria-hidden="true" />
             </Button>
           </div>
         </section>
 
-        <section className="bg-orange-500 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28" id="cta">
-          <div className="mx-auto max-w-5xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{copy.finalTitle}</h2>
-            <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-orange-50 sm:text-xl">{copy.finalText}</p>
+        <section className="relative overflow-hidden bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28" id="cta">
+          <div className="pointer-events-none absolute left-1/2 top-0 h-96 w-96 -translate-x-1/2 rounded-full bg-orange-500/14 blur-3xl" aria-hidden="true" />
+          <div className="relative mx-auto max-w-5xl text-center">
+            <h2 className="text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-6xl">{copy.finalTitle}</h2>
+            <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">{copy.finalText}</p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild className="min-h-12 rounded-xl bg-slate-950 px-7 text-base text-white hover:bg-slate-800" size="lg">
+              <Button asChild className="min-h-12 rounded-xl bg-orange-500 px-7 text-base text-white shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[background-color,box-shadow,scale] hover:bg-orange-600 active:scale-[0.96]" size="lg">
                 <Link to="/login">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
               </Button>
-              <Button asChild className="min-h-12 rounded-xl border-white/60 bg-white px-7 text-base text-slate-950 hover:bg-orange-50 hover:text-slate-950" size="lg" variant="outline">
+              <Button asChild className="min-h-12 rounded-xl border-white/15 bg-white/[0.06] px-7 text-base text-white transition-[background-color,scale] hover:bg-white/[0.12] hover:text-white active:scale-[0.96]" size="lg" variant="outline">
                 <Link to="/contact">{copy.talkExpert}</Link>
               </Button>
             </div>
