@@ -12,7 +12,6 @@ import {
   Clock3,
   Eye,
   FileCheck2,
-  Handshake,
   Layers3,
   Loader2,
   MapPinned,
@@ -145,15 +144,15 @@ const ruCopy: LandingCopy = {
   networkSummary: "Похожие задачи повторяются в тысячах компаний. LocalOS проверяет найденные решения и сохраняет то, что можно использовать снова.",
   networkPrivacy: "Данные компаний и клиентов остаются закрытыми. Другим бизнесам доступны только общие правила и обезличенные способы работы.",
   networkLabels: ["Один бизнес решает знакомую задачу", "LocalOS проверяет, что сработало", "Другие используют готовый способ"],
-  tasksEyebrow: "Работа LocalOS",
-  tasksTitle: "Что больше не нужно держать на себе",
-  tasksIntro: "Пять задач, которые обычно возвращаются к владельцу.",
+  tasksEyebrow: "Боли владельцев",
+  tasksTitle: "Знакомо? Вот что берёт на себя LocalOS",
+  tasksIntro: "Пять повторяющихся болей из сообщений владельцев — и конкретный ответ на каждую.",
   tasks: [
-    { title: "Следить, находят ли вас клиенты", description: "LocalOS проверяет карточки на картах, услуги, цены, фотографии, публикации и отзывы. Показывает, что мешает клиенту выбрать компанию, и готовит исправления." },
-    { title: "Искать клиентов только через рекламу", description: "LocalOS находит подходящие бизнесы рядом, готовит предложения о сотрудничестве и ведёт историю контактов. Внешние сообщения отправляются только после подтверждения." },
-    { title: "Прерывать день из-за каждого отзыва и публикации", description: "LocalOS собирает отзывы без ответа, готовит черновики и поддерживает очередь публикаций. Владельцу остаётся проверить важное и разрешить отправку." },
-    { title: "Разбираться в услугах и ценах вслепую", description: "LocalOS показывает, какие услуги продаются, как меняются средний чек и загрузка, где меню запутывает клиента и какие предложения стоит проверить." },
-    { title: "Собирать картину бизнеса вручную", description: "LocalOS сводит выполненную работу, финансовые показатели и задачи, требующие внимания. Владелец видит, что произошло и какое решение нужно принять сегодня." },
+    { title: "Клиентов мало. Реклама идёт, а запись нестабильна", description: "LocalOS проверяет, как бизнес виден на картах, готовит исправления и ищет локальные партнёрства. Это даёт каналы привлечения помимо платной рекламы." },
+    { title: "День забит, а тут отзыв. И снова нечего публиковать", description: "LocalOS собирает отзывы без ответа, готовит черновики и поддерживает очередь публикаций. Владелец проверяет важное и разрешает отправку." },
+    { title: "Работы много, а средний чек всё равно маленький", description: "LocalOS показывает, какие услуги продаются, как меняются средний чек и загрузка. Помогает выбрать гипотезу и проверить её на цифрах." },
+    { title: "Если не я, то никто. Стоит отвлечься — всё останавливается", description: "LocalOS превращает повторяющуюся работу в понятные сценарии. Владелец утверждает правила, скрипт выполняет задачу, а на экран выносятся только решения." },
+    { title: "Клиенты есть, все заняты, а в конце месяца остаются копейки", description: "LocalOS сводит выручку, расходы, средний чек и загрузку. Показывает, где результат расходится с ожиданиями и какой вопрос нужно разобрать первым." },
   ],
   retentionNote: "При подключении клиентских данных LocalOS также может находить клиентов, которые давно не возвращались, и готовить предложения для повторного визита.",
   workEyebrow: "Порядок работы",
@@ -212,15 +211,15 @@ const enCopy: LandingCopy = {
   networkSummary: "The same problems repeat across local businesses. LocalOS checks the solutions that worked and keeps what can be used again.",
   networkPrivacy: "Company and customer data is never passed to other businesses. Only reviewed rules and anonymised ways of working are shared.",
   networkLabels: ["One business finds a solution", "LocalOS reviews the practice", "Others do not start from zero"],
-  tasksEyebrow: "Work handled by LocalOS",
-  tasksTitle: "What you no longer need to carry alone",
-  tasksIntro: "Five jobs that usually find their way back to the owner.",
+  tasksEyebrow: "Owner pain points",
+  tasksTitle: "Sound familiar? Here is what LocalOS takes on",
+  tasksIntro: "Five recurring pain points in owners' messages — and a concrete response to each one.",
   tasks: [
-    { title: "Check whether customers can find you", description: "LocalOS checks map listings, services, prices, photos, posts, and reviews. It shows what gets in the way of a customer's choice and prepares the fixes." },
-    { title: "Rely on advertising as the only source of customers", description: "LocalOS finds relevant nearby businesses, prepares partnership proposals, and keeps the contact history. External messages are sent only after approval." },
-    { title: "Interrupt the day for every review and post", description: "LocalOS collects unanswered reviews, prepares drafts, and maintains the publishing queue. The owner reviews what matters and approves publication." },
-    { title: "Guess what to do with services and prices", description: "LocalOS shows which services sell, how average spend and capacity change, where the menu confuses customers, and which offers are worth testing." },
-    { title: "Assemble the business picture by hand", description: "LocalOS brings together completed work, financial indicators, and items that need attention. The owner sees what happened and what decision is needed today." },
+    { title: "Customers are scarce. Ads are running, but bookings remain uneven", description: "LocalOS checks how the business appears on maps, prepares corrections, and finds local partnership opportunities. That creates acquisition channels beyond paid advertising." },
+    { title: "The day is full, then a review arrives — and there is still nothing to post", description: "LocalOS collects unanswered reviews, prepares drafts, and maintains the publishing queue. The owner reviews what matters and approves sending." },
+    { title: "There is plenty of work, but the average ticket is still low", description: "LocalOS shows which services sell and how average spend and capacity change. It helps select a hypothesis and check it against the numbers." },
+    { title: "If I do not do it, nobody will. The moment I step away, work stops", description: "LocalOS turns recurring work into clear procedures. The owner approves the rules, a script performs the task, and only decisions return to the owner." },
+    { title: "Customers are there and everyone is busy, but little is left at month-end", description: "LocalOS brings revenue, expenses, average spend, and capacity together. It shows where results differ from expectations and what question should be examined first." },
   ],
   retentionNote: "When customer data is connected, LocalOS can also identify customers who have not returned and prepare an offer for a repeat visit.",
   workEyebrow: "How the work is handled",
@@ -249,7 +248,7 @@ const enCopy: LandingCopy = {
   talkExpert: "Talk to an expert",
 };
 
-const taskIcons = [MapPinned, Handshake, MessageSquareText, CircleDollarSign, BarChart3];
+const taskIcons = [MapPinned, MessageSquareText, CircleDollarSign, ClipboardCheck, BarChart3];
 const stepIcons = [Building2, Eye, Layers3, ClipboardCheck, FileCheck2];
 
 const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
@@ -758,15 +757,24 @@ const Index = () => {
               {copy.tasks.map((task, index) => {
                 const Icon = taskIcons[index];
                 return (
-                  <article className={`group relative overflow-hidden rounded-2xl p-6 shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] transition-[box-shadow,transform] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_42px_rgba(15,23,42,0.09)] ${index === 0 ? "bg-orange-500 text-white" : "bg-white text-slate-950"} ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} key={task.title}>
+                  <article className={`group relative flex flex-col overflow-hidden rounded-2xl bg-white p-6 text-slate-950 shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] transition-[box-shadow,transform] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_42px_rgba(15,23,42,0.09)] ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} key={task.title}>
                     <div className="flex items-center justify-between gap-4">
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${index === 0 ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"}`}>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                         <Icon className="h-5 w-5" aria-hidden="true" />
                       </div>
-                      <span className={`text-sm font-bold tabular-nums ${index === 0 ? "text-orange-100" : "text-slate-300"}`}>0{index + 1}</span>
+                      <span className="text-sm font-bold text-slate-300 tabular-nums">0{index + 1}</span>
                     </div>
-                    <h3 className="mt-8 text-balance text-xl font-bold leading-7">{task.title}</h3>
-                    <p className={`mt-3 text-pretty leading-7 ${index === 0 ? "text-orange-50" : "text-slate-600"}`}>{task.description}</p>
+                    <div className="mt-7 flex items-start gap-3">
+                      <span className="font-serif text-4xl leading-7 text-orange-500" aria-hidden="true">“</span>
+                      <h3 className="text-pretty text-xl font-bold leading-7">{task.title}</h3>
+                    </div>
+                    <div className="mt-7 flex flex-1 flex-col rounded-xl bg-orange-50 p-5 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.10)]">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-orange-700">
+                        <CircleCheck className="h-4 w-4" aria-hidden="true" />
+                        LocalOS
+                      </div>
+                      <p className="mt-3 text-pretty leading-7 text-slate-700">{task.description}</p>
+                    </div>
                   </article>
                 );
               })}
