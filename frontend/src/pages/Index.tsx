@@ -498,7 +498,7 @@ const Index = () => {
             <div className="mt-12 grid gap-6 lg:grid-cols-3">
               {publishedCases.slice(0, 3).map((caseItem) => (
                 <article className="flex h-full flex-col rounded-2xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-black/5" key={caseItem.slug}>
-                  <div className="flex flex-wrap content-start gap-2 lg:min-h-28">
+                  <div className="flex flex-wrap content-start gap-2 lg:min-h-28 lg:flex-col lg:flex-nowrap lg:items-start">
                     {caseItem.metrics.map((metric) => (
                       <span className="rounded-full bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700" key={metric.label}>
                         <span className="tabular-nums">{metric.value}</span> {metric.label}
