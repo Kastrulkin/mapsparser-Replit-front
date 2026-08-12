@@ -331,10 +331,10 @@ def attach_public_audit_link(text: str, candidate: dict[str, Any]) -> str:
     ):
         return text
     paragraphs = text.split("\n\n")
-    if _text(candidate.get("evidence_kind")) == "active_social_activity":
+    if _text(candidate.get("evidence_kind")) in {"active_social_activity", "active_map_news"}:
         audit_paragraph = (
-            "Помимо этого, мы ещё собрали аудит по вашей карточке на картах. "
-            f"Сможете поправить сами: {audit_url}"
+            "Помимо этого, мы подготовили аудит карточки с конкретными изменениями. "
+            f"Их можно внедрить самостоятельно или поручить нам: {audit_url}"
         )
     else:
         audit_paragraph = (
@@ -361,6 +361,17 @@ def _render_outreach_template_body(
 
     if key == "active_social_multichannel_content_v1":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
+        if _text(candidate.get("evidence_kind")) == "active_map_news":
+            return (
+                f"Здравствуйте! Я {identity}.\n\n"
+                f"{observation}\n\n"
+                "Владельцы часто говорят, что на посты не хватает времени: одну тему "
+                "приходится переделывать для каждой площадки. Публикации помогают рассказывать об услугах "
+                "и привлекать клиентов онлайн.\n\n"
+                "LocalOS подготовит готовые тексты для Telegram, VK и Яндекс Карт. "
+                "Сотруднику останется подтвердить и опубликовать их.\n\n"
+                f"Подготовить для {recipient} пример контент-плана на неделю?"
+            )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"

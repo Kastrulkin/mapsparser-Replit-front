@@ -29,7 +29,11 @@ from services.outreach_campaign_service import (
     _strategy_dimensions,
     resolve_sender_mode,
 )
-from services.outreach_template_service import select_outreach_template
+from services.outreach_template_service import (
+    _render_outreach_template_body,
+    attach_public_audit_link,
+    select_outreach_template,
+)
 
 
 def test_recent_research_history_keeps_latest_contract_and_older_public_signals():
@@ -2351,6 +2355,20 @@ def test_current_map_news_is_a_supported_content_activity_signal():
     }
     selected = select_outreach_template("signal", candidate)
     assert selected["key"] == "active_social_multichannel_content_v1"
+    body = _render_outreach_template_body(selected, candidate)
+    assert "Владельцы часто говорят, что на посты не хватает времени" in body
+    assert "LocalOS подготовит готовые тексты" in body
+    assert body.endswith("Подготовить для Эсма пример контент-плана на неделю?")
+    with_audit = attach_public_audit_link(
+        body,
+        {
+            **candidate,
+            "include_public_audit_link": True,
+            "public_audit_url": "https://localos.pro/esma",
+        },
+    )
+    assert "аудит карточки с конкретными изменениями" in with_audit
+    assert "внедрить самостоятельно или поручить нам" in with_audit
 
 
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():
