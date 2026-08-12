@@ -2033,7 +2033,9 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = -1
         elif kind == "service_compatibility":
             rank = 0
-        elif beauty_sales and kind in {"active_social_activity", "telegram_post", "social_post"}:
+        elif beauty_sales and kind == "active_social_activity":
+            rank = 0
+        elif beauty_sales and kind in {"telegram_post", "social_post"}:
             rank = 1
         elif kind == "map_rating":
             rank = 1

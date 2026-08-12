@@ -2283,6 +2283,38 @@ def test_recent_official_telegram_activity_remains_usable_without_exact_count():
     assert "5" not in activity["fact"]
 
 
+def test_official_activity_summary_ranks_before_individual_social_posts_for_beauty():
+    ledger = build_evidence_ledger(
+        {
+            "workstream_type": "localos_sales",
+            "category": "Клиника косметологии",
+            "lead_name": "NK",
+            "research": {
+                "signals_json": [
+                    {
+                        "evidence_id": "post-1",
+                        "kind": "telegram_post",
+                        "observed_fact": "В Telegram вышел пост о процедуре.",
+                        "source_url": "https://t.me/example/1",
+                        "observed_at": "2026-08-10T09:00:00Z",
+                        "freshness": "current_snapshot",
+                        "confidence": 0.95,
+                    }
+                ]
+            },
+            "official_social_activity": {
+                "official": True,
+                "count_verified": False,
+                "posts_30d": 1,
+                "source_url": "https://t.me/example",
+                "last_post_at": "2026-08-10T10:00:00Z",
+            },
+        }
+    )
+
+    assert ledger[0]["id"] == "official-social-activity-recent"
+
+
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():
     touches = [
         {
