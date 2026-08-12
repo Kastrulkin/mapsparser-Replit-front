@@ -101,6 +101,7 @@ from services.sales_room_audit_offer_service import (
 )
 
 from api.prospecting.shared import admin_prospecting_bp
+from api.prospecting.partner_discovery import _should_use_lead_name_for_match
 
 class AuditQualityError(ValueError):
     def __init__(self, quality: dict[str, Any]):

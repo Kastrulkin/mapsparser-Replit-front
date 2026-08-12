@@ -26,6 +26,7 @@ from src.core.card_audit import (
     _lead_snapshot_business_id,
     build_lead_card_preview_snapshot,
 )
+from src.api.prospecting import lead_parsing
 from scripts.backfill_partnership_match_artifacts import (
     _build_prerequisite_assessment,
     _has_verified_category_evidence,
@@ -215,6 +216,11 @@ def test_audit_does_not_publish_unversioned_lead_metrics_as_current(monkeypatch)
     assert audit["parse_context"]["facts_verified"] is False
     assert audit["current_state"]["rating"] is None
     assert audit["current_state"]["reviews_count"] is None
+
+
+def test_lead_parser_has_conservative_name_match_guard() -> None:
+    assert lead_parsing._should_use_lead_name_for_match("Эстем") is True
+    assert lead_parsing._should_use_lead_name_for_match("Компания") is False
 
 
 def test_yandex_audit_does_not_treat_missing_business_description_as_a_gap(monkeypatch) -> None:
