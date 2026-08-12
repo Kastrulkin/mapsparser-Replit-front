@@ -1843,7 +1843,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "id": "current-map-service-catalog",
             "kind": "service_catalog",
             "fact": (
-                f"В карточке {_text(context.get('lead_name'))} на Яндекс Картах "
+                f"В карточке компании {_text(context.get('lead_name'))} на Яндекс Картах "
                 f"{_russian_visible_service_count(map_services_count)}."
             ),
             "status": "observed",

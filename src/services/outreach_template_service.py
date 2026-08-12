@@ -378,7 +378,7 @@ def _render_outreach_template_body(
                 "и привлекать клиентов онлайн.\n\n"
                 "LocalOS подготовит тексты для Telegram, VK и Яндекс Карт. "
                 "Сотруднику останется подтвердить и опубликовать их.\n\n"
-                f"Подготовить для {recipient} пример контент-плана на неделю?"
+                "Подготовить пример контент-плана на неделю?"
             )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
@@ -393,7 +393,7 @@ def _render_outreach_template_body(
         rating_text = (f"{rating:.1f}" if rating is not None else "").replace(".", ",")
         return (
             f"Здравствуйте! Я {identity}.\n\n"
-            f"В карточке {recipient} сейчас рейтинг {rating_text} на Яндекс Картах. "
+            f"Рейтинг карточки {recipient} на Яндекс Картах сейчас {rating_text}. "
             "С таким рейтингом карточка может терять клиентов из карт.\n\n"
             "LocalOS помогает исправить ситуацию: отслеживает отзывы, готовит ответы и подсказывает, "
             "что изменить в карточке. Для одного салона красоты мы с нуля привлекли 10 клиентов с карт.\n\n"
@@ -455,7 +455,7 @@ def _render_outreach_template_body(
     if key == "map_content_gap_v4":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
         if "нет новостей" in observation.lower() and "яндекс картах" not in observation.lower():
-            observation = f"В карточке {recipient} на Яндекс Картах нет новостей."
+            observation = f"В карточке компании {recipient} на Яндекс Картах нет новостей."
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
@@ -472,19 +472,11 @@ def _render_outreach_template_body(
             flags=re.IGNORECASE,
         )
         if counts:
-            recipient_genitive = _RECIPIENT_GENITIVE_OVERRIDES.get(recipient)
-            if recipient_genitive:
-                observation = (
-                    f"Вижу, что в карточке {recipient_genitive} на Яндекс Картах есть "
-                    f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
-                    f"только у {counts.group(2)}."
-                )
-            else:
-                observation = (
-                    f"Вижу, что в карточке компании {recipient} на Яндекс Картах есть "
-                    f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
-                    f"для {counts.group(2)}."
-                )
+            observation = (
+                f"Вижу, что в карточке компании {recipient} на Яндекс Картах есть "
+                f"{counts.group(1)} {_service_word(int(counts.group(1)))}, но цена указана "
+                f"только у {counts.group(2)}."
+            )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"

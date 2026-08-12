@@ -103,7 +103,7 @@ def test_current_map_service_catalog_is_evidence_without_overstating_total_catal
 
     catalog = next(item for item in evidence if item["id"] == "current-map-service-catalog")
     assert catalog["kind"] == "service_catalog"
-    assert catalog["fact"] == "В карточке Эстем на Яндекс Картах видны 10 услуг."
+    assert catalog["fact"] == "В карточке компании Эстем на Яндекс Картах видны 10 услуг."
     assert "всего" not in catalog["fact"].lower()
 
 
@@ -2359,7 +2359,7 @@ def test_current_map_news_is_a_supported_content_activity_signal():
     body = _render_outreach_template_body(selected, candidate)
     assert "Часто на посты не хватает времени: надо собраться и написать пост" in body
     assert "LocalOS подготовит тексты" in body
-    assert body.endswith("Подготовить для Эсма пример контент-плана на неделю?")
+    assert body.endswith("Подготовить пример контент-плана на неделю?")
     with_audit = attach_public_audit_link(
         body,
         {
@@ -2388,7 +2388,7 @@ def test_map_news_content_plan_branch_requires_channel_in_candidate_contract():
     with_channel = _render_outreach_template_body(selection, {**candidate, "channel": "email"})
 
     assert "Подготовить для Проформа пример контент-плана на неделю?" not in without_channel
-    assert with_channel.endswith("Подготовить для Проформа пример контент-плана на неделю?")
+    assert with_channel.endswith("Подготовить пример контент-плана на неделю?")
 
 
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():

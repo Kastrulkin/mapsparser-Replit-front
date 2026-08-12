@@ -90,8 +90,8 @@ def test_low_rating_template_is_selected_and_uses_approved_owner_copy():
     text = render_outreach_template(selection, candidate)
 
     assert selection["key"] == "weak_map_rating_beauty_v1"
-    assert "рейтинг 2,5" in text
-    assert "В карточке Padrina_studio сейчас рейтинг 2,5" in text
+    assert "сейчас 2,5" in text
+    assert "Рейтинг карточки Padrina_studio на Яндекс Картах сейчас 2,5" in text
     assert "мы с нуля привлекли 10 клиентов с карт" in text
     assert "от 1200 рублей в месяц" in text
     assert text.count("?") == 1
@@ -239,7 +239,7 @@ def test_map_price_gap_names_yandex_maps_and_follows_sales_flow():
 
     assert selection["key"] == "map_service_price_coverage_v3"
     assert (
-        "Вижу, что в карточке Кожно-венерологического диспансера № 7 на Яндекс Картах "
+        "Вижу, что в карточке компании Кожно-венерологический диспансер № 7 на Яндекс Картах "
         "есть 27 услуг, но цена указана только у 3."
     ) in text
     assert "может недополучать обращения с карт" in text
@@ -274,7 +274,7 @@ def test_news_gap_template_offers_client_acquisition_instead_of_time_saving():
     text = render_outreach_template(selection, candidate)
 
     assert selection["key"] == "map_content_gap_v4"
-    assert "В карточке Анни на Яндекс Картах нет новостей." in text
+    assert "В карточке компании Анни на Яндекс Картах нет новостей." in text
     assert "возможно, вы просто не успеваете" in text.lower()
     assert "сэкономить время на публикациях" in text
     assert text.count("?") == 1
@@ -325,7 +325,7 @@ def test_selected_template_rejects_copy_without_owner_pain_language():
     selection = select_outreach_template("content_operations", candidate)
     selected = {**candidate, "outreach_template_key": selection["key"]}
     generic = (
-        "В карточке Анни на Яндекс Картах нет новостей. "
+        "В карточке компании Анни на Яндекс Картах нет новостей. "
         "LocalOS подготовит черновики новостей. Показать пример?"
     )
 

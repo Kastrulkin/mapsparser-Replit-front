@@ -219,7 +219,7 @@ def test_last_touch_is_a_standalone_new_angle_without_sequence_closing_language(
     message = _message_for_angle("crm_content", candidate, None, [])
     lowered = message.lower()
 
-    assert "Актуальна ли для М32 задача увеличивать средний чек?" in growth_message
+    assert "Актуальна ли задача увеличивать средний чек?" in growth_message
     assert "без увеличения количества записей" not in growth_message.lower()
     assert "Я Александр Демьянов, основатель LocalOS" in growth_message
     assert "Я Александр Демьянов, основатель LocalOS" in message
