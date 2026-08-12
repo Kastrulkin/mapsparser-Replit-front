@@ -99,6 +99,14 @@
       "updatedAt": "2026-05-18",
       "articleTitle": "Почему предприниматели выгорают"
     },
+    "/articles/compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz": {
+      "title": "Compiled AI: ИИ думает один раз, скрипт работает тысячи раз — LocalOS",
+      "description": "Что такое Compiled AI: как ИИ создаёт проверяемый сценарий, программа выполняет его без повторных вызовов модели, а владелец сохраняет контроль.",
+      "ogType": "article",
+      "publishedAt": "2026-08-12",
+      "updatedAt": "2026-08-12",
+      "articleTitle": "Compiled AI: почему ИИ должен думать один раз, а работать тысячи раз"
+    },
     "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus": {
       "title": "Почему полная запись не равно прибыль — LocalOS",
       "description": "Почему полная запись в салоне красоты не означает прибыль: экономика услуг, скидки, повторные визиты, выручка за час кресла и управленческие KPI.",
