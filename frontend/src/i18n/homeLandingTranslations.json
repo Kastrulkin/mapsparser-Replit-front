@@ -1,0 +1,818 @@
+{
+  "fr": {
+    "metaTitle": "LocalOS – un travail moins routinier pour les propriétaires d'entreprises locales",
+    "metaDescription": "LocalOS vérifie les listes et les avis, prépare le contenu, analyse les services et les numéros et gère le travail récurrent. Le propriétaire intervient lorsqu'une décision est nécessaire.",
+    "eyebrow": "LocalOS pour les entreprises locales",
+    "title": "Votre entreprise a besoin de vous pour prendre des décisions, pas pour un travail de routine",
+    "intro": "LocalOS surveille les propriétaires d'œuvres qui gardent habituellement en tête : les listes, les avis, le contenu, les services, les numéros et les partenariats. Le système gère les tâches récurrentes. Vous intervenez lorsque quelque chose nécessite un choix, un examen ou une approbation.",
+    "seeTasks": "Découvrez ce que LocalOS peut prendre en charge",
+    "freeAudit": "Obtenez un audit gratuit",
+    "formTitle": "Commencez par un audit des annonces",
+    "formDescription": "Découvrez comment les clients trouvent votre entreprise et ce qui doit être corrigé en premier.",
+    "emailLabel": "Courriel",
+    "emailPlaceholder": "vous@exemple.com",
+    "mapsLabel": "Lien vers la fiche d'entreprise",
+    "mapsPlaceholder": "Créez un lien vers votre entreprise sur des cartes",
+    "submit": "Obtenez l'audit",
+    "submitting": "Envoi…",
+    "success": "Merci. Votre demande a été reçue.",
+    "error": "Nous n'avons pas pu envoyer votre demande. Veuillez réessayer.",
+    "scale": "LocalOS fonctionne déjà dans plus de 240 sites de petites entreprises, des entreprises indépendantes aux réseaux.",
+    "problemTitle": "Si tout s'arrête sans vous, vous êtes toujours au travail une fois la journée de travail terminée",
+    "problemParagraphs": [
+      "Répondre à un avis. Vérifiez une annonce. Planifiez une publication. Mettre à jour les prix. Regardez les chiffres. Chaque tâche est petite, mais ensemble, elles ne laissent pas au propriétaire le temps de travailler sur l'entreprise elle-même.",
+      "Les nouveaux logiciels suppriment rarement cette charge. Cela donne généralement au propriétaire un endroit supplémentaire à ouvrir et à surveiller.",
+      "LocalOS transforme le travail récurrent en tâches planifiées, les termine et montre au propriétaire uniquement ce qui nécessite une décision."
+    ],
+    "networkTitle": "Vous pouvez avoir un seul emplacement. Votre expérience peut fonctionner comme celle d'un réseau",
+    "networkParagraphs": [
+      "Un réseau ne résout pas le même problème de A à Z dans chaque branche. Une fois qu’une méthode fonctionne, elle est vérifiée et réutilisée.",
+      "LocalOS apporte cette approche aux entreprises indépendantes. Nous collectons les pratiques de travail, les révisons et les transformons en procédures réutilisables. La prochaine entreprise ne démarre pas avec une page blanche."
+    ],
+    "networkPrivacy": "Les données de l'entreprise et des clients ne sont jamais transmises à d'autres entreprises. Seules les règles révisées et les méthodes de travail anonymisées sont partagées.",
+    "networkLabels": [
+      "Une entreprise trouve une solution",
+      "LocalOS revoit la pratique",
+      "D'autres ne partent pas de zéro"
+    ],
+    "tasksEyebrow": "Travail géré par LocalOS",
+    "tasksTitle": "Ce que vous n'avez plus besoin de transporter seul",
+    "tasksIntro": "Cinq emplois qui reviennent généralement au propriétaire.",
+    "tasks": [
+      {
+        "title": "Vérifiez si les clients peuvent vous trouver",
+        "description": "LocalOS vérifie les listes de cartes, les services, les prix, les photos, les publications et les avis. Il montre ce qui fait obstacle au choix du client et prépare les correctifs."
+      },
+      {
+        "title": "Comptez sur la publicité comme seule source de clients",
+        "description": "LocalOS trouve les entreprises à proximité pertinentes, prépare des propositions de partenariat et conserve l'historique des contacts. Les messages externes ne sont envoyés qu'après approbation."
+      },
+      {
+        "title": "Interrompre la journée pour chaque avis et publication",
+        "description": "LocalOS collecte les avis restés sans réponse, prépare les brouillons et gère la file d'attente de publication. Le propriétaire examine ce qui compte et approuve la publication."
+      },
+      {
+        "title": "Devinez quoi faire des services et des prix",
+        "description": "LocalOS montre quels services se vendent, comment les dépenses moyennes et la capacité changent, où le menu déroute les clients et quelles offres valent la peine d'être testées."
+      },
+      {
+        "title": "Assemblez l’image de l’entreprise à la main",
+        "description": "LocalOS rassemble les travaux terminés, les indicateurs financiers et les éléments nécessitant une attention particulière. Le propriétaire voit ce qui s'est passé et quelle décision est nécessaire aujourd'hui."
+      }
+    ],
+    "retentionNote": "Lorsque les données clients sont connectées, LocalOS peut également identifier les clients qui ne sont pas revenus et préparer une offre pour une nouvelle visite.",
+    "workEyebrow": "Comment le travail est géré",
+    "workTitle": "Le système fait le travail. Le propriétaire prend les décisions",
+    "workIntro": "LocalOS libère le travail récurrent du propriétaire sans lui enlever des décisions importantes.",
+    "steps": [
+      {
+        "title": "Connectez l'entreprise",
+        "description": "LocalOS accède uniquement aux données que vous choisissez : annonces, avis, services, indicateurs financiers et canaux connectés."
+      },
+      {
+        "title": "Trouvez un travail qui peut quitter le bureau du propriétaire",
+        "description": "Le système sépare un problème ponctuel d'une tâche qui doit être exécutée régulièrement."
+      },
+      {
+        "title": "Exécuter une procédure révisée",
+        "description": "LocalOS vérifie les données, prépare le matériel et exécute les actions autorisées dans les délais."
+      },
+      {
+        "title": "Montrer ce qui nécessite une décision",
+        "description": "Les publications, messages, modifications groupées et autres actions externes importantes attendent l'approbation du propriétaire."
+      },
+      {
+        "title": "Conserver le résultat",
+        "description": "Lorsqu’une méthode de travail s’avère utile, elle peut être répétée dans l’entreprise et utilisée comme pratique anonymisée pour d’autres entreprises."
+      }
+    ],
+    "workSummary": "L’IA est utilisée pour l’analyse et la préparation. Le travail récurrent suit des règles claires. Le propriétaire garde le contrôle.",
+    "casesEyebrow": "Études de cas",
+    "casesTitle": "Ce que les propriétaires ont déjà retiré de leur assiette",
+    "casesIntro": "La situation de départ, le travail réalisé et ce qui a changé sur une période déterminée.",
+    "situation": "Avant",
+    "workDone": "Travaux terminés",
+    "result": "Ce qui a changé",
+    "allCases": "Voir toutes les études de cas",
+    "auditTitle": "Retirez d’abord une tâche de votre assiette",
+    "auditText": "Nous vérifierons la fiche de votre entreprise et montrerons ce qui empêche les clients de vous trouver et de vous choisir. Vous obtiendrez une première action concrète, sans long rapport ni conseil générique.",
+    "finalTitle": "Arrêtez d'être la personne sans qui rien ne se passe",
+    "finalText": "Donnez du travail récurrent à LocalOS. Gardez les décisions qui ont réellement besoin du propriétaire.",
+    "tryFree": "Essayez gratuitement",
+    "talkExpert": "Parlez à un expert"
+  },
+  "es": {
+    "metaTitle": "LocalOS: trabajo menos rutinario para los propietarios de empresas locales",
+    "metaDescription": "LocalOS verifica listados y reseñas, prepara contenido, analiza servicios y números y maneja el trabajo recurrente. El propietario interviene cuando es necesario tomar una decisión.",
+    "eyebrow": "LocalOS para empresas locales",
+    "title": "Su empresa lo necesita para tomar decisiones, no para el trabajo rutinario",
+    "intro": "LocalOS observa el trabajo que los propietarios suelen tener en la cabeza: listados, reseñas, contenido, servicios, números y asociaciones. El sistema maneja tareas recurrentes. Intervienes cuando algo necesita una elección, una revisión o aprobación.",
+    "seeTasks": "Vea lo que LocalOS puede asumir",
+    "freeAudit": "Obtenga una auditoría gratuita",
+    "formTitle": "Comience con una auditoría de listados",
+    "formDescription": "Vea cómo los clientes encuentran su negocio y qué se debe solucionar primero.",
+    "emailLabel": "Correo electrónico",
+    "emailPlaceholder": "tu@ejemplo.com",
+    "mapsLabel": "Enlace de listado de empresas",
+    "mapsPlaceholder": "Enlace a su negocio en mapas",
+    "submit": "Obtener la auditoría",
+    "submitting": "Enviando…",
+    "success": "Gracias. Su solicitud ha sido recibida.",
+    "error": "No pudimos enviar su solicitud. Por favor inténtalo de nuevo.",
+    "scale": "LocalOS ya funciona en más de 240 ubicaciones de pequeñas empresas, desde empresas independientes hasta redes.",
+    "problemTitle": "Si todo se para sin ti, sigues en el trabajo una vez finalizada la jornada laboral.",
+    "problemParagraphs": [
+      "Responder a una reseña. Consulta un listado. Planifica una publicación. Actualizar precios. Mira los números. Cada tarea es pequeña, pero juntas no dejan al propietario tiempo para trabajar en el negocio en sí.",
+      "El software nuevo rara vez elimina esta carga. Por lo general, le da al propietario un lugar más para abrir y monitorear.",
+      "LocalOS convierte el trabajo recurrente en tareas programadas, las completa y muestra al propietario solo lo que necesita una decisión."
+    ],
+    "networkTitle": "Es posible que tenga una ubicación. Tu experiencia puede funcionar como la de una red.",
+    "networkParagraphs": [
+      "Una red no resuelve el mismo problema desde cero en todas las sucursales. Una vez que un método funciona, se verifica y se utiliza nuevamente.",
+      "LocalOS lleva ese enfoque a las empresas independientes. Recopilamos prácticas laborales, las revisamos y las convertimos en procedimientos reutilizables. La próxima empresa no empieza con una página en blanco."
+    ],
+    "networkPrivacy": "Los datos de la empresa y de los clientes nunca se transmiten a otras empresas. Solo se comparten las reglas revisadas y las formas de trabajo anónimas.",
+    "networkLabels": [
+      "Una empresa encuentra una solución",
+      "LocalOS revisa la práctica",
+      "Otros no empiezan de cero"
+    ],
+    "tasksEyebrow": "Trabajo manejado por LocalOS",
+    "tasksTitle": "Lo que ya no necesitas cargar solo",
+    "tasksIntro": "Cinco trabajos que normalmente regresan al propietario.",
+    "tasks": [
+      {
+        "title": "Comprueba si los clientes pueden encontrarte",
+        "description": "LocalOS verifica listados de mapas, servicios, precios, fotos, publicaciones y reseñas. Muestra lo que se interpone en la elección del cliente y prepara las soluciones."
+      },
+      {
+        "title": "Confíe en la publicidad como única fuente de clientes",
+        "description": "LocalOS encuentra empresas cercanas relevantes, prepara propuestas de asociación y mantiene el historial de contactos. Los mensajes externos se envían sólo después de la aprobación."
+      },
+      {
+        "title": "Interrumpa el día para cada revisión y publicación.",
+        "description": "LocalOS recopila reseñas sin respuesta, prepara borradores y mantiene la cola de publicación. El propietario revisa lo importante y aprueba la publicación."
+      },
+      {
+        "title": "Adivina qué hacer con los servicios y precios.",
+        "description": "LocalOS muestra qué servicios se venden, cómo cambian el gasto promedio y la capacidad, dónde el menú confunde a los clientes y qué ofertas vale la pena probar."
+      },
+      {
+        "title": "Montar el cuadro empresarial a mano.",
+        "description": "LocalOS reúne trabajo completado, indicadores financieros y elementos que necesitan atención. El propietario ve lo que pasó y qué decisión se necesita hoy."
+      }
+    ],
+    "retentionNote": "Cuando se conectan los datos del cliente, LocalOS también puede identificar a los clientes que no han regresado y preparar una oferta para una nueva visita.",
+    "workEyebrow": "Cómo se maneja el trabajo",
+    "workTitle": "El sistema hace el trabajo. El dueño toma las decisiones.",
+    "workIntro": "LocalOS elimina el trabajo recurrente del propietario sin quitarle decisiones importantes.",
+    "steps": [
+      {
+        "title": "Conecta el negocio",
+        "description": "LocalOS accede solo a los datos que usted elija: listados, reseñas, servicios, indicadores financieros y canales conectados."
+      },
+      {
+        "title": "Encuentre trabajo que pueda salir del escritorio del propietario",
+        "description": "El sistema separa un problema puntual de una tarea que debe ejecutarse periódicamente."
+      },
+      {
+        "title": "Ejecutar un procedimiento revisado",
+        "description": "LocalOS verifica datos, prepara materiales y ejecuta acciones permitidas según lo programado."
+      },
+      {
+        "title": "Mostrar lo que necesita una decisión",
+        "description": "Las publicaciones, mensajes, cambios masivos y otras acciones externas importantes esperan la aprobación del propietario."
+      },
+      {
+        "title": "mantener el resultado",
+        "description": "Cuando una forma de trabajar resulta útil, puede repetirse en el negocio y utilizarse como práctica anónima para otras empresas."
+      }
+    ],
+    "workSummary": "La IA se utiliza para el análisis y la preparación. El trabajo recurrente sigue reglas claras. El dueño mantiene el control.",
+    "casesEyebrow": "Estudios de caso",
+    "casesTitle": "Lo que los propietarios ya se han quitado del plato",
+    "casesIntro": "La situación inicial, el trabajo completado y lo que cambió durante un período determinado.",
+    "situation": "antes",
+    "workDone": "Trabajo completado",
+    "result": "que cambio",
+    "allCases": "Ver todos los estudios de caso",
+    "auditTitle": "Primero, quita una tarea de tu plato",
+    "auditText": "Revisaremos la lista de su empresa y mostraremos qué interfiere con que los clientes lo encuentren y lo elijan. Obtendrá una primera acción concreta, sin largos informes ni consejos genéricos.",
+    "finalTitle": "Deja de ser la persona sin la cual no pasa nada",
+    "finalText": "Dar trabajo recurrente a LocalOS. Mantenga las decisiones que realmente necesita el propietario.",
+    "tryFree": "Pruébalo gratis",
+    "talkExpert": "Habla con un experto"
+  },
+  "el": {
+    "metaTitle": "LocalOS — λιγότερο συνηθισμένη εργασία για ιδιοκτήτες τοπικών επιχειρήσεων",
+    "metaDescription": "Το LocalOS ελέγχει καταχωρίσεις και αξιολογεί, προετοιμάζει περιεχόμενο, αναλύει υπηρεσίες και αριθμούς και χειρίζεται επαναλαμβανόμενες εργασίες. Ο ιδιοκτήτης παρεμβαίνει όταν απαιτείται απόφαση.",
+    "eyebrow": "LocalOS για τοπικές επιχειρήσεις",
+    "title": "Η επιχείρησή σας σας χρειάζεται για αποφάσεις και όχι για εργασίες ρουτίνας",
+    "intro": "Το LocalOS παρακολουθεί τους ιδιοκτήτες εργασίας που συνήθως κρατούν στο μυαλό τους: καταχωρίσεις, κριτικές, περιεχόμενο, υπηρεσίες, αριθμούς και συνεργασίες. Το σύστημα χειρίζεται επαναλαμβανόμενες εργασίες. Μπαίνεις όταν κάτι χρειάζεται επιλογή, αναθεώρηση ή έγκριση.",
+    "seeTasks": "Δείτε τι μπορεί να αναλάβει το LocalOS",
+    "freeAudit": "Λάβετε δωρεάν έλεγχο",
+    "formTitle": "Ξεκινήστε με έναν έλεγχο καταχωρίσεων",
+    "formDescription": "Δείτε πώς βρίσκουν οι πελάτες την επιχείρησή σας και τι πρέπει να διορθώσετε πρώτα.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "mapsLabel": "Σύνδεσμος καταχώρισης επιχειρήσεων",
+    "mapsPlaceholder": "Σύνδεση με την επιχείρησή σας στους χάρτες",
+    "submit": "Πάρτε τον έλεγχο",
+    "submitting": "Αποστολή…",
+    "success": "Ευχαριστώ. Το αίτημά σας έχει ληφθεί.",
+    "error": "Δεν μπορέσαμε να στείλουμε το αίτημά σας. Δοκιμάστε ξανά.",
+    "scale": "Το LocalOS λειτουργεί ήδη σε περισσότερες από 240 τοποθεσίες μικρών επιχειρήσεων, από ανεξάρτητες εταιρείες έως δίκτυα.",
+    "problemTitle": "Αν όλα σταματήσουν χωρίς εσένα, είσαι ακόμα στη δουλειά μετά το τέλος της εργάσιμης ημέρας",
+    "problemParagraphs": [
+      "Απαντήστε σε μια κριτική. Ελέγξτε μια καταχώριση. Προγραμματίστε μια ανάρτηση. Ενημέρωση τιμών. Δείτε τους αριθμούς. Κάθε εργασία είναι μικρή, αλλά μαζί δεν αφήνουν στον ιδιοκτήτη χρόνο να εργαστεί στην ίδια την επιχείρηση.",
+      "Το νέο λογισμικό σπάνια αφαιρεί αυτό το φορτίο. Συνήθως δίνει στον ιδιοκτήτη ένα ακόμη μέρος για να ανοίξει και να παρακολουθήσει.",
+      "Το LocalOS μετατρέπει την επαναλαμβανόμενη εργασία σε προγραμματισμένες εργασίες, τις ολοκληρώνει και δείχνει στον κάτοχο μόνο ό,τι χρειάζεται απόφαση."
+    ],
+    "networkTitle": "Μπορεί να έχετε μία τοποθεσία. Η εμπειρία σας μπορεί να λειτουργήσει σαν δικτύου",
+    "networkParagraphs": [
+      "Ένα δίκτυο δεν λύνει το ίδιο πρόβλημα από την αρχή σε κάθε κλάδο. Μόλις λειτουργήσει μια μέθοδος, ελέγχεται και χρησιμοποιείται ξανά.",
+      "Το LocalOS φέρνει αυτή την προσέγγιση σε ανεξάρτητες επιχειρήσεις. Συλλέγουμε πρακτικές εργασίας, τις αναθεωρούμε και τις μετατρέπουμε σε επαναχρησιμοποιήσιμες διαδικασίες. Η επόμενη εταιρεία δεν ξεκινά με κενή σελίδα."
+    ],
+    "networkPrivacy": "Τα δεδομένα της εταιρείας και των πελατών δεν διαβιβάζονται ποτέ σε άλλες επιχειρήσεις. Κοινοποιούνται μόνο οι αναθεωρημένοι κανόνες και οι ανώνυμοι τρόποι εργασίας.",
+    "networkLabels": [
+      "Μια επιχείρηση βρίσκει λύση",
+      "Το LocalOS εξετάζει την πρακτική",
+      "Άλλοι δεν ξεκινούν από το μηδέν"
+    ],
+    "tasksEyebrow": "Εργασία που χειρίζεται το LocalOS",
+    "tasksTitle": "Αυτό που δεν χρειάζεται πλέον να κουβαλάς μόνος σου",
+    "tasksIntro": "Πέντε δουλειές που συνήθως βρίσκουν τον δρόμο τους πίσω στον ιδιοκτήτη.",
+    "tasks": [
+      {
+        "title": "Ελέγξτε εάν οι πελάτες μπορούν να σας βρουν",
+        "description": "Το LocalOS ελέγχει καταχωρίσεις χαρτών, υπηρεσίες, τιμές, φωτογραφίες, δημοσιεύσεις και κριτικές. Δείχνει τι εμποδίζει την επιλογή ενός πελάτη και προετοιμάζει τις επιδιορθώσεις."
+      },
+      {
+        "title": "Βασιστείτε στη διαφήμιση ως τη μοναδική πηγή πελατών",
+        "description": "Το LocalOS βρίσκει σχετικές κοντινές επιχειρήσεις, προετοιμάζει προτάσεις συνεργασίας και διατηρεί το ιστορικό επαφών. Τα εξωτερικά μηνύματα αποστέλλονται μόνο μετά από έγκριση."
+      },
+      {
+        "title": "Διακόπτετε την ημέρα για κάθε κριτική και ανάρτηση",
+        "description": "Το LocalOS συλλέγει αναπάντητες κριτικές, προετοιμάζει προσχέδια και διατηρεί την ουρά δημοσίευσης. Ο ιδιοκτήτης εξετάζει ό,τι έχει σημασία και εγκρίνει τη δημοσίευση."
+      },
+      {
+        "title": "Μαντέψτε τι να κάνετε με τις υπηρεσίες και τις τιμές",
+        "description": "Το LocalOS δείχνει ποιες υπηρεσίες πωλούν, πώς αλλάζει η μέση δαπάνη και η χωρητικότητα, πού το μενού μπερδεύει τους πελάτες και ποιες προσφορές αξίζει να δοκιμαστούν."
+      },
+      {
+        "title": "Συναρμολογήστε την εικόνα της επιχείρησης με το χέρι",
+        "description": "Το LocalOS συγκεντρώνει ολοκληρωμένες εργασίες, οικονομικούς δείκτες και στοιχεία που χρειάζονται προσοχή. Ο ιδιοκτήτης βλέπει τι συνέβη και ποια απόφαση χρειάζεται σήμερα."
+      }
+    ],
+    "retentionNote": "Όταν είναι συνδεδεμένα τα δεδομένα πελατών, το LocalOS μπορεί επίσης να εντοπίσει πελάτες που δεν έχουν επιστρέψει και να προετοιμάσει μια προσφορά για επαναλαμβανόμενη επίσκεψη.",
+    "workEyebrow": "Πώς χειρίζεται το έργο",
+    "workTitle": "Το σύστημα κάνει τη δουλειά. Ο ιδιοκτήτης παίρνει τις αποφάσεις",
+    "workIntro": "Το LocalOS αφαιρεί την επαναλαμβανόμενη εργασία από το πιάτο του ιδιοκτήτη χωρίς να του αφαιρεί σημαντικές αποφάσεις.",
+    "steps": [
+      {
+        "title": "Συνδέστε την επιχείρηση",
+        "description": "Το LocalOS έχει πρόσβαση μόνο στα δεδομένα που επιλέγετε: καταχωρίσεις, κριτικές, υπηρεσίες, οικονομικούς δείκτες και συνδεδεμένα κανάλια."
+      },
+      {
+        "title": "Βρείτε εργασία που μπορεί να φύγει από το γραφείο του ιδιοκτήτη",
+        "description": "Το σύστημα διαχωρίζει ένα μεμονωμένο πρόβλημα από μια εργασία που πρέπει να εκτελείται τακτικά."
+      },
+      {
+        "title": "Εκτελέστε μια αναθεωρημένη διαδικασία",
+        "description": "Το LocalOS ελέγχει δεδομένα, προετοιμάζει υλικό και εκτελεί επιτρεπόμενες ενέργειες εντός χρονοδιαγράμματος."
+      },
+      {
+        "title": "Δείξτε τι χρειάζεται απόφαση",
+        "description": "Αναρτήσεις, μηνύματα, μαζικές αλλαγές και άλλες σημαντικές εξωτερικές ενέργειες περιμένουν την έγκριση του κατόχου."
+      },
+      {
+        "title": "Κρατήστε το αποτέλεσμα",
+        "description": "Όταν ένας τρόπος εργασίας αποδεικνύεται χρήσιμος, μπορεί να επαναληφθεί στην επιχείρηση και να χρησιμοποιηθεί ως ανώνυμη πρακτική για άλλες εταιρείες."
+      }
+    ],
+    "workSummary": "Το AI χρησιμοποιείται για ανάλυση και προετοιμασία. Η επαναλαμβανόμενη εργασία ακολουθεί σαφείς κανόνες. Ο ιδιοκτήτης διατηρεί τον έλεγχο.",
+    "casesEyebrow": "Μελέτες περιπτώσεων",
+    "casesTitle": "Αυτό που οι ιδιοκτήτες έχουν ήδη βγάλει τα πιάτα τους",
+    "casesIntro": "Η αρχική κατάσταση, το έργο που ολοκληρώθηκε και τι άλλαξε σε μια καθορισμένη περίοδο.",
+    "situation": "Πριν",
+    "workDone": "Οι εργασίες ολοκληρώθηκαν",
+    "result": "Τι άλλαξε",
+    "allCases": "Δείτε όλες τις περιπτωσιολογικές μελέτες",
+    "auditTitle": "Βγάλτε πρώτα μια εργασία από το πιάτο σας",
+    "auditText": "Θα ελέγξουμε την καταχώριση της επιχείρησής σας και θα δείξουμε τι εμποδίζει τους πελάτες να σας βρουν και να σας επιλέξουν. Θα λάβετε μια συγκεκριμένη πρώτη ενέργεια, χωρίς μακρά αναφορά ή γενικές συμβουλές.",
+    "finalTitle": "Σταμάτα να είσαι το άτομο χωρίς το οποίο δεν γίνεται τίποτα",
+    "finalText": "Δώστε επαναλαμβανόμενη εργασία στο LocalOS. Κρατήστε τις αποφάσεις που πραγματικά χρειάζονται τον ιδιοκτήτη.",
+    "tryFree": "Δοκιμάστε δωρεάν",
+    "talkExpert": "Μιλήστε με έναν ειδικό"
+  },
+  "de": {
+    "metaTitle": "LocalOS – weniger Routinearbeit für lokale Geschäftsinhaber",
+    "metaDescription": "LocalOS prüft Einträge und Bewertungen, bereitet Inhalte auf, analysiert Dienste und Nummern und erledigt wiederkehrende Arbeiten. Der Eigentümer greift ein, wenn eine Entscheidung erforderlich ist.",
+    "eyebrow": "LocalOS für lokale Unternehmen",
+    "title": "Ihr Unternehmen braucht Sie für Entscheidungen, nicht für Routinearbeiten",
+    "intro": "LocalOS überwacht die Werke, die Eigentümer normalerweise im Kopf behalten: Einträge, Rezensionen, Inhalte, Dienste, Zahlen und Partnerschaften. Das System übernimmt wiederkehrende Aufgaben. Sie greifen ein, wenn etwas eine Auswahl, eine Überprüfung oder Genehmigung erfordert.",
+    "seeTasks": "Sehen Sie, was LocalOS übernehmen kann",
+    "freeAudit": "Holen Sie sich ein kostenloses Audit",
+    "formTitle": "Beginnen Sie mit einer Auflistungsprüfung",
+    "formDescription": "Sehen Sie, wie Kunden Ihr Unternehmen finden und was zuerst behoben werden sollte.",
+    "emailLabel": "E-Mail",
+    "emailPlaceholder": "you@example.com",
+    "mapsLabel": "Link zum Brancheneintrag",
+    "mapsPlaceholder": "Verlinken Sie Ihr Unternehmen auf Karten",
+    "submit": "Holen Sie sich das Audit",
+    "submitting": "Senden…",
+    "success": "Vielen Dank. Ihre Anfrage ist eingegangen.",
+    "error": "Wir konnten Ihre Anfrage nicht senden. Bitte versuchen Sie es erneut.",
+    "scale": "LocalOS funktioniert bereits an mehr als 240 Standorten kleiner Unternehmen, von unabhängigen Unternehmen bis hin zu Netzwerken.",
+    "problemTitle": "Wenn ohne Sie alles aufhört, sind Sie auch nach Feierabend noch bei der Arbeit",
+    "problemParagraphs": [
+      "Auf eine Bewertung antworten. Überprüfen Sie einen Eintrag. Planen Sie einen Beitrag. Preise aktualisieren. Schauen Sie sich die Zahlen an. Jede Aufgabe ist klein, aber zusammengenommen lässt sie dem Eigentümer keine Zeit, sich um das Geschäft selbst zu kümmern.",
+      "Neue Software beseitigt diese Last selten. Normalerweise gibt es dem Besitzer einen weiteren Ort zum Öffnen und Überwachen.",
+      "LocalOS wandelt wiederkehrende Arbeiten in geplante Aufgaben um, erledigt sie und zeigt dem Eigentümer nur die Dinge an, die eine Entscheidung erfordern."
+    ],
+    "networkTitle": "Möglicherweise haben Sie einen Standort. Ihre Erfahrung kann wie die eines Netzwerks funktionieren",
+    "networkParagraphs": [
+      "Ein Netzwerk löst nicht in jeder Branche das gleiche Problem von Grund auf. Sobald eine Methode funktioniert, wird sie überprüft und erneut verwendet.",
+      "LocalOS bringt diesen Ansatz auf unabhängige Unternehmen. Wir sammeln Arbeitspraktiken, überprüfen sie und verwandeln sie in wiederverwendbare Verfahren. Das nächste Unternehmen beginnt nicht mit einer leeren Seite."
+    ],
+    "networkPrivacy": "Unternehmens- und Kundendaten werden niemals an andere Unternehmen weitergegeben. Es werden nur überprüfte Regeln und anonymisierte Arbeitsweisen geteilt.",
+    "networkLabels": [
+      "Ein Unternehmen findet eine Lösung",
+      "LocalOS überprüft die Praxis",
+      "Andere fangen nicht bei Null an"
+    ],
+    "tasksEyebrow": "Die Arbeit wird von LocalOS übernommen",
+    "tasksTitle": "Was Sie nicht mehr alleine tragen müssen",
+    "tasksIntro": "Fünf Jobs, die normalerweise ihren Weg zurück zum Eigentümer finden.",
+    "tasks": [
+      {
+        "title": "Prüfen Sie, ob Kunden Sie finden können",
+        "description": "LocalOS prüft Karteneinträge, Dienste, Preise, Fotos, Beiträge und Bewertungen. Es zeigt, was der Wahl eines Kunden im Wege steht, und bereitet die Korrekturen vor."
+      },
+      {
+        "title": "Verlassen Sie sich auf Werbung als einzige Kundenquelle",
+        "description": "LocalOS findet relevante Unternehmen in der Nähe, bereitet Partnerschaftsvorschläge vor und speichert den Kontaktverlauf. Externe Nachrichten werden erst nach Genehmigung versendet."
+      },
+      {
+        "title": "Unterbrechen Sie den Tag für jede Rezension und jeden Beitrag",
+        "description": "LocalOS sammelt unbeantwortete Bewertungen, bereitet Entwürfe vor und verwaltet die Veröffentlichungswarteschlange. Der Eigentümer prüft, worauf es ankommt, und genehmigt die Veröffentlichung."
+      },
+      {
+        "title": "Überlegen Sie, was Sie mit Dienstleistungen und Preisen tun sollen",
+        "description": "LocalOS zeigt, welche Dienste sich verkaufen, wie sich durchschnittliche Ausgaben und Kapazitäten ändern, wo die Speisekarte Kunden verwirrt und welche Angebote einen Test wert sind."
+      },
+      {
+        "title": "Stellen Sie das Geschäftsbild von Hand zusammen",
+        "description": "LocalOS vereint abgeschlossene Arbeiten, Finanzindikatoren und Punkte, die Aufmerksamkeit erfordern. Der Eigentümer sieht, was passiert ist und welche Entscheidung heute erforderlich ist."
+      }
+    ],
+    "retentionNote": "Durch die Verknüpfung von Kundendaten kann LocalOS auch Kunden identifizieren, die nicht zurückgekehrt sind, und ein Angebot für einen erneuten Besuch erstellen.",
+    "workEyebrow": "Wie die Arbeit abgewickelt wird",
+    "workTitle": "Das System erledigt die Arbeit. Der Eigentümer trifft die Entscheidungen",
+    "workIntro": "LocalOS nimmt dem Besitzer wiederkehrende Arbeit ab, ohne ihm wichtige Entscheidungen abzunehmen.",
+    "steps": [
+      {
+        "title": "Verbinden Sie das Unternehmen",
+        "description": "LocalOS greift nur auf die von Ihnen ausgewählten Daten zu: Einträge, Bewertungen, Dienste, Finanzkennzahlen und verbundene Kanäle."
+      },
+      {
+        "title": "Finden Sie Arbeiten, die den Schreibtisch des Eigentümers verlassen können",
+        "description": "Das System trennt ein einmaliges Problem von einer Aufgabe, die regelmäßig ausgeführt werden muss."
+      },
+      {
+        "title": "Führen Sie ein überprüftes Verfahren aus",
+        "description": "LocalOS prüft Daten, bereitet Materialien vor und führt zulässige Aktionen termingerecht aus."
+      },
+      {
+        "title": "Zeigen Sie, was einer Entscheidung bedarf",
+        "description": "Beiträge, Nachrichten, Massenänderungen und andere wichtige externe Aktionen warten auf die Genehmigung des Eigentümers."
+      },
+      {
+        "title": "Behalten Sie das Ergebnis",
+        "description": "Wenn sich eine Arbeitsweise als nützlich erweist, kann sie im Unternehmen wiederholt und als anonymisierte Praxis für andere Unternehmen genutzt werden."
+      }
+    ],
+    "workSummary": "Zur Analyse und Vorbereitung wird KI eingesetzt. Wiederkehrende Arbeiten folgen klaren Regeln. Der Eigentümer behält die Kontrolle.",
+    "casesEyebrow": "Fallstudien",
+    "casesTitle": "Was Besitzer bereits von ihren Tellern genommen haben",
+    "casesIntro": "Die Ausgangssituation, die abgeschlossene Arbeit und was sich im angegebenen Zeitraum geändert hat.",
+    "situation": "Vorher",
+    "workDone": "Arbeit abgeschlossen",
+    "result": "Was hat sich geändert?",
+    "allCases": "Alle Fallstudien ansehen",
+    "auditTitle": "Nehmen Sie sich zunächst eine Aufgabe von Ihrem Teller",
+    "auditText": "Wir prüfen Ihren Brancheneintrag und zeigen, was Kunden davon abhält, Sie zu finden und sich für Sie zu entscheiden. Sie erhalten eine konkrete erste Maßnahme, ohne einen langen Bericht oder allgemeine Ratschläge.",
+    "finalTitle": "Hören Sie auf, die Person zu sein, ohne die nichts geht",
+    "finalText": "Geben Sie LocalOS wiederkehrende Arbeit. Behalten Sie die Entscheidungen bei, die der Eigentümer wirklich braucht.",
+    "tryFree": "Kostenlos testen",
+    "talkExpert": "Sprechen Sie mit einem Experten"
+  },
+  "th": {
+    "metaTitle": "LocalOS — งานประจำน้อยลงสำหรับเจ้าของธุรกิจในท้องถิ่น",
+    "metaDescription": "LocalOS ตรวจสอบรายการและบทวิจารณ์ เตรียมเนื้อหา วิเคราะห์บริการและหมายเลข และจัดการงานที่เกิดซ้ำ เจ้าของจะเข้ามาเมื่อจำเป็นต้องตัดสินใจ",
+    "eyebrow": "LocalOS สำหรับธุรกิจในท้องถิ่น",
+    "title": "ธุรกิจของคุณต้องการคุณในการตัดสินใจ ไม่ใช่งานประจำ",
+    "intro": "LocalOS เฝ้าดูเจ้าของผลงานที่มักจะเก็บไว้ในหัว: รายการ บทวิจารณ์ เนื้อหา บริการ หมายเลข และพันธมิตร ระบบจะจัดการกับงานที่เกิดซ้ำ คุณก้าวเข้ามาเมื่อบางสิ่งจำเป็นต้องมีตัวเลือก การตรวจสอบ หรือการอนุมัติ",
+    "seeTasks": "ดูว่า LocalOS สามารถเข้ามาแทนที่อะไรได้บ้าง",
+    "freeAudit": "รับการตรวจสอบฟรี",
+    "formTitle": "เริ่มต้นด้วยการตรวจสอบรายการ",
+    "formDescription": "ดูว่าลูกค้าค้นพบธุรกิจของคุณได้อย่างไร และสิ่งใดควรแก้ไขก่อน",
+    "emailLabel": "อีเมล",
+    "emailPlaceholder": "you@example.com",
+    "mapsLabel": "ลิงค์รายชื่อธุรกิจ",
+    "mapsPlaceholder": "เชื่อมโยงไปยังธุรกิจของคุณบนแผนที่",
+    "submit": "รับการตรวจสอบ",
+    "submitting": "กำลังส่ง...",
+    "success": "ขอบคุณ. ได้รับคำขอของคุณแล้ว",
+    "error": "เราไม่สามารถส่งคำขอของคุณได้ โปรดลองอีกครั้ง",
+    "scale": "LocalOS ใช้งานได้แล้วในสถานที่ตั้งของธุรกิจขนาดเล็กมากกว่า 240 แห่ง ตั้งแต่บริษัทอิสระไปจนถึงเครือข่าย",
+    "problemTitle": "หากทุกอย่างหยุดลงโดยไม่มีคุณ คุณจะยังอยู่ที่ทำงานหลังจากสิ้นสุดวันทำงาน",
+    "problemParagraphs": [
+      "ตอบกลับรีวิว ตรวจสอบรายการ วางแผนการโพสต์ อัพเดทราคาครับ. ดูตัวเลขสิ แต่ละงานมีขนาดเล็ก แต่เมื่อรวมกันแล้วทำให้เจ้าของไม่มีเวลามาทำธุรกิจของตัวเอง",
+      "ซอฟต์แวร์ใหม่ไม่ค่อยลบภาระนี้ออก โดยปกติแล้วจะทำให้เจ้าของมีสถานที่อีกหนึ่งแห่งในการเปิดและตรวจสอบ",
+      "LocalOS เปลี่ยนงานที่เกิดซ้ำให้เป็นงานที่กำหนดเวลาไว้ ทำให้เสร็จ และแสดงเฉพาะสิ่งที่จำเป็นต้องตัดสินใจให้เจ้าของเห็น"
+    ],
+    "networkTitle": "คุณอาจมีสถานที่แห่งเดียว ประสบการณ์ของคุณสามารถทำงานได้เหมือนกับเครือข่าย",
+    "networkParagraphs": [
+      "เครือข่ายไม่สามารถแก้ไขปัญหาเดียวกันตั้งแต่เริ่มต้นในทุกสาขา เมื่อวิธีการหนึ่งได้ผล จะมีการตรวจสอบและใช้อีกครั้ง",
+      "LocalOS นำแนวทางดังกล่าวมาสู่ธุรกิจอิสระ เรารวบรวมแนวทางปฏิบัติในการทำงาน ทบทวน และเปลี่ยนให้เป็นขั้นตอนที่สามารถนำมาใช้ซ้ำได้ บริษัทถัดไปไม่ได้เริ่มต้นด้วยหน้าว่าง"
+    ],
+    "networkPrivacy": "ข้อมูลบริษัทและลูกค้าจะไม่ส่งต่อไปยังธุรกิจอื่น จะมีการแชร์เฉพาะกฎที่ได้รับการตรวจสอบและวิธีการทำงานที่ไม่เปิดเผยชื่อเท่านั้น",
+    "networkLabels": [
+      "ธุรกิจแห่งหนึ่งพบวิธีแก้ปัญหา",
+      "LocalOS ทบทวนแนวทางปฏิบัติ",
+      "คนอื่นไม่ได้เริ่มจากศูนย์"
+    ],
+    "tasksEyebrow": "งานที่จัดการโดย LocalOS",
+    "tasksTitle": "สิ่งที่คุณไม่จำเป็นต้องพกติดตัวอีกต่อไป",
+    "tasksIntro": "ห้าอาชีพที่มักจะหาทางกลับไปหาเจ้าของ",
+    "tasks": [
+      {
+        "title": "ตรวจสอบว่าลูกค้าสามารถหาคุณเจอหรือไม่",
+        "description": "LocalOS ตรวจสอบรายการแผนที่ บริการ ราคา รูปภาพ โพสต์ และบทวิจารณ์ โดยจะแสดงสิ่งที่ขัดขวางทางเลือกของลูกค้าและเตรียมการแก้ไข"
+      },
+      {
+        "title": "อาศัยการโฆษณาเป็นแหล่งเดียวของลูกค้า",
+        "description": "LocalOS ค้นหาธุรกิจใกล้เคียงที่เกี่ยวข้อง เตรียมข้อเสนอความร่วมมือ และเก็บประวัติการติดต่อ ข้อความภายนอกจะถูกส่งหลังจากได้รับการอนุมัติแล้วเท่านั้น"
+      },
+      {
+        "title": "ขัดจังหวะวันทุกครั้งสำหรับการตรวจสอบและการโพสต์",
+        "description": "LocalOS รวบรวมบทวิจารณ์ที่ไม่ได้รับคำตอบ เตรียมฉบับร่าง และรักษาคิวการเผยแพร่ เจ้าของจะตรวจสอบสิ่งที่สำคัญและอนุมัติการตีพิมพ์"
+      },
+      {
+        "title": "เดาว่าจะทำอย่างไรกับบริการและราคา",
+        "description": "LocalOS แสดงให้เห็นว่าบริการใดบ้างที่ขายได้ การใช้จ่ายโดยเฉลี่ยและความจุเปลี่ยนแปลงไปเพียงใด เมนูนี้สร้างความสับสนให้กับลูกค้า และข้อเสนอใดที่ควรค่าแก่การทดสอบ"
+      },
+      {
+        "title": "ประกอบภาพธุรกิจด้วยมือ",
+        "description": "LocalOS รวบรวมงานที่เสร็จสมบูรณ์ ตัวชี้วัดทางการเงิน และรายการที่ต้องดำเนินการ เจ้าของเห็นว่าเกิดอะไรขึ้นและจำเป็นต้องตัดสินใจอะไรในวันนี้"
+      }
+    ],
+    "retentionNote": "เมื่อเชื่อมต่อข้อมูลลูกค้าแล้ว LocalOS ยังสามารถระบุลูกค้าที่ยังไม่กลับมา และเตรียมข้อเสนอสำหรับการเยี่ยมชมซ้ำ",
+    "workEyebrow": "มีการจัดการงานอย่างไร",
+    "workTitle": "ระบบทำงานได้ เจ้าของเป็นผู้ตัดสินใจ",
+    "workIntro": "LocalOS กำจัดงานที่เกิดซ้ำให้เจ้าของโดยไม่ต้องตัดสินใจที่สำคัญไปจากพวกเขา",
+    "steps": [
+      {
+        "title": "เชื่อมต่อธุรกิจ",
+        "description": "LocalOS เข้าถึงเฉพาะข้อมูลที่คุณเลือก: รายการ บทวิจารณ์ บริการ ตัวชี้วัดทางการเงิน และช่องทางที่เชื่อมต่อ"
+      },
+      {
+        "title": "หางานที่สามารถออกจากโต๊ะของเจ้าของได้",
+        "description": "ระบบจะแยกปัญหาที่เกิดขึ้นครั้งเดียวออกจากงานที่จำเป็นต้องดำเนินการเป็นประจำ"
+      },
+      {
+        "title": "ดำเนินการตามขั้นตอนที่ได้รับการตรวจสอบแล้ว",
+        "description": "LocalOS ตรวจสอบข้อมูล เตรียมเอกสาร และดำเนินการที่ได้รับอนุญาตตามกำหนดเวลา"
+      },
+      {
+        "title": "แสดงสิ่งที่จำเป็นต้องตัดสินใจ",
+        "description": "โพสต์ ข้อความ การเปลี่ยนแปลงจำนวนมาก และการดำเนินการภายนอกที่สำคัญอื่นๆ รอการอนุมัติจากเจ้าของ"
+      },
+      {
+        "title": "เก็บผลไว้",
+        "description": "เมื่อวิธีการทำงานพิสูจน์แล้วว่ามีประโยชน์ ก็สามารถนำมาใช้ซ้ำในธุรกิจและใช้เป็นแนวทางปฏิบัติที่ไม่เปิดเผยชื่อสำหรับบริษัทอื่นๆ ได้"
+      }
+    ],
+    "workSummary": "AI ใช้สำหรับการวิเคราะห์และจัดเตรียม งานที่เกิดซ้ำเป็นไปตามกฎเกณฑ์ที่ชัดเจน เจ้าของอยู่ในการควบคุม",
+    "casesEyebrow": "กรณีศึกษา",
+    "casesTitle": "สิ่งที่เจ้าของได้ถอดจานออกไปแล้ว",
+    "casesIntro": "สถานการณ์การเริ่มต้น งานเสร็จสิ้น และสิ่งที่เปลี่ยนแปลงไปในช่วงเวลาที่กำหนด",
+    "situation": "ก่อน",
+    "workDone": "งานเสร็จแล้ว",
+    "result": "สิ่งที่เปลี่ยนแปลงไป",
+    "allCases": "ดูกรณีศึกษาทั้งหมด",
+    "auditTitle": "เอางานหนึ่งงานออกจากจานของคุณก่อน",
+    "auditText": "เราจะตรวจสอบรายชื่อธุรกิจของคุณและแสดงสิ่งที่ขัดขวางให้ลูกค้าค้นหาและเลือกคุณ คุณจะได้รับการดำเนินการขั้นแรกอย่างเป็นรูปธรรม โดยไม่ต้องมีรายงานที่ยาวหรือคำแนะนำทั่วไป",
+    "finalTitle": "หยุดเป็นคนที่ไม่มีสิ่งใดเกิดขึ้น",
+    "finalText": "มอบงานที่เกิดซ้ำให้กับ LocalOS เก็บการตัดสินใจที่ต้องการเจ้าของอย่างแท้จริง",
+    "tryFree": "ลองฟรี",
+    "talkExpert": "พูดคุยกับผู้เชี่ยวชาญ"
+  },
+  "ar": {
+    "metaTitle": "LocalOS — عمل روتيني أقل لأصحاب الأعمال المحليين",
+    "metaDescription": "يقوم LocalOS بفحص القوائم ومراجعتها، وإعداد المحتوى، وتحليل الخدمات والأرقام، والتعامل مع العمل المتكرر. يتدخل المالك عند الحاجة إلى اتخاذ قرار.",
+    "eyebrow": "LocalOS للشركات المحلية",
+    "title": "عملك يحتاج إليك لاتخاذ القرارات، وليس العمل الروتيني",
+    "intro": "يراقب LocalOS أصحاب العمل عادةً ما يحتفظون به في رؤوسهم: القوائم والمراجعات والمحتوى والخدمات والأرقام والشراكات. يتعامل النظام مع المهام المتكررة. أنت تتدخل عندما يحتاج شيء ما إلى اختيار أو مراجعة أو موافقة.",
+    "seeTasks": "تعرف على ما يمكن أن يتولى LocalOS المسؤولية عنه",
+    "freeAudit": "احصل على تدقيق مجاني",
+    "formTitle": "ابدأ بتدقيق القوائم",
+    "formDescription": "تعرف على كيفية عثور العملاء على نشاطك التجاري وما الذي يجب إصلاحه أولاً.",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "you@example.com",
+    "mapsLabel": "رابط قائمة الأعمال",
+    "mapsPlaceholder": "اربط عملك على الخرائط",
+    "submit": "احصل على التدقيق",
+    "submitting": "جارٍ الإرسال...",
+    "success": "شكرا لك. لقد تم استلام طلبك.",
+    "error": "لم نتمكن من إرسال طلبك. يرجى المحاولة مرة أخرى.",
+    "scale": "يعمل LocalOS بالفعل عبر أكثر من 240 موقعًا للأعمال الصغيرة، بدءًا من الشركات المستقلة وحتى الشبكات.",
+    "problemTitle": "إذا توقف كل شيء بدونك، فأنت لا تزال في العمل بعد انتهاء يوم العمل",
+    "problemParagraphs": [
+      "الرد على المراجعة. تحقق من القائمة. خطط لمنشور. تحديث الأسعار. انظر إلى الأرقام. كل مهمة صغيرة، لكنها معًا لا تترك للمالك وقتًا للعمل في الشركة نفسها.",
+      "نادرًا ما يزيل البرنامج الجديد هذا الحمل. عادةً ما يمنح المالك مكانًا آخر للفتح والمراقبة.",
+      "يقوم LocalOS بتحويل العمل المتكرر إلى مهام مجدولة، ويكملها، ويعرض للمالك فقط ما يحتاج إلى قرار."
+    ],
+    "networkTitle": "قد يكون لديك موقع واحد. يمكن أن تعمل تجربتك مثل تجربة الشبكة",
+    "networkParagraphs": [
+      "الشبكة لا تحل نفس المشكلة من الصفر في كل فرع. بمجرد نجاح الطريقة، يتم فحصها واستخدامها مرة أخرى.",
+      "يقدم LocalOS هذا النهج للشركات المستقلة. نقوم بجمع ممارسات العمل ومراجعتها وتحويلها إلى إجراءات قابلة لإعادة الاستخدام. الشركة التالية لا تبدأ بصفحة فارغة."
+    ],
+    "networkPrivacy": "لا يتم أبدًا نقل بيانات الشركة والعملاء إلى شركات أخرى. تتم مشاركة القواعد التي تمت مراجعتها وطرق العمل المجهولة فقط.",
+    "networkLabels": [
+      "إحدى الشركات تجد الحل",
+      "يقوم LocalOS بمراجعة هذه الممارسة",
+      "والبعض الآخر لا يبدأ من الصفر"
+    ],
+    "tasksEyebrow": "يتم التعامل مع العمل بواسطة LocalOS",
+    "tasksTitle": "ما لم تعد بحاجة إلى حمله بمفردك",
+    "tasksIntro": "خمس وظائف عادة ما تجد طريقها إلى المالك.",
+    "tasks": [
+      {
+        "title": "تحقق مما إذا كان بإمكان العملاء العثور عليك",
+        "description": "يتحقق LocalOS من قوائم الخرائط والخدمات والأسعار والصور والمشاركات والمراجعات. فهو يوضح ما يعيق اختيار العميل ويعد الإصلاحات."
+      },
+      {
+        "title": "الاعتماد على الإعلانات باعتبارها المصدر الوحيد للعملاء",
+        "description": "يقوم LocalOS بالبحث عن الشركات القريبة ذات الصلة، وإعداد مقترحات الشراكة، والاحتفاظ بسجل جهات الاتصال. ولا يتم إرسال الرسائل الخارجية إلا بعد الموافقة عليها."
+      },
+      {
+        "title": "مقاطعة اليوم لكل مراجعة ونشر",
+        "description": "يقوم LocalOS بجمع المراجعات التي لم يتم الرد عليها، وإعداد المسودات، والاحتفاظ بقائمة انتظار النشر. يراجع المالك ما يهم ويوافق على النشر."
+      },
+      {
+        "title": "تخمين ما يجب القيام به مع الخدمات والأسعار",
+        "description": "يُظهر LocalOS الخدمات التي يتم بيعها، ومدى تغير متوسط الإنفاق والقدرة، وأين تربك القائمة العملاء، وما هي العروض التي تستحق الاختبار."
+      },
+      {
+        "title": "قم بتجميع صورة العمل يدويًا",
+        "description": "يجمع LocalOS بين العمل المكتمل والمؤشرات المالية والعناصر التي تحتاج إلى الاهتمام. يرى المالك ما حدث وما هو القرار المطلوب اليوم."
+      }
+    ],
+    "retentionNote": "عند اتصال بيانات العميل، يمكن لـ LocalOS أيضًا تحديد العملاء الذين لم يعودوا وإعداد عرض لزيارة متكررة.",
+    "workEyebrow": "كيف يتم التعامل مع العمل",
+    "workTitle": "النظام يقوم بالعمل. المالك يتخذ القرارات",
+    "workIntro": "يأخذ LocalOS العمل المتكرر من على عاتق المالك دون اتخاذ قرارات مهمة منه.",
+    "steps": [
+      {
+        "title": "ربط الأعمال",
+        "description": "يصل LocalOS إلى البيانات التي تختارها فقط: القوائم والمراجعات والخدمات والمؤشرات المالية والقنوات المتصلة."
+      },
+      {
+        "title": "ابحث عن عمل يمكن أن يترك مكتب المالك",
+        "description": "يقوم النظام بفصل المشكلة لمرة واحدة عن المهمة التي يجب تشغيلها بانتظام."
+      },
+      {
+        "title": "تشغيل إجراء تمت مراجعته",
+        "description": "يقوم LocalOS بفحص البيانات، وإعداد المواد، وتنفيذ الإجراءات المسموح بها في الموعد المحدد."
+      },
+      {
+        "title": "أظهر ما يحتاج إلى قرار",
+        "description": "تنتظر المنشورات والرسائل والتغييرات المجمعة والإجراءات الخارجية المهمة الأخرى موافقة المالك."
+      },
+      {
+        "title": "احتفظ بالنتيجة",
+        "description": "عندما تكون طريقة العمل مفيدة، يمكن تكرارها في العمل واستخدامها كممارسة مجهولة المصدر لشركات أخرى."
+      }
+    ],
+    "workSummary": "يستخدم الذكاء الاصطناعي للتحليل والتحضير. العمل المتكرر يتبع قواعد واضحة. يبقى المالك في السيطرة.",
+    "casesEyebrow": "دراسات الحالة",
+    "casesTitle": "ما أخذه أصحابه بالفعل من لوحاتهم",
+    "casesIntro": "حالة البداية والعمل المكتمل وما تغير خلال فترة محددة.",
+    "situation": "قبل",
+    "workDone": "اكتمل العمل",
+    "result": "ما تغير",
+    "allCases": "عرض جميع دراسات الحالة",
+    "auditTitle": "خذ مهمة واحدة من طبقك أولاً",
+    "auditText": "سوف نتحقق من قائمة أعمالك ونعرض ما يعيق العملاء عن العثور عليك واختيارهم. سوف تحصل على إجراء أولي ملموس، بدون تقرير طويل أو نصيحة عامة.",
+    "finalTitle": "توقف عن كونك الشخص الذي بدونه لا يحدث شيء",
+    "finalText": "إعطاء العمل المتكرر إلى LocalOS. احتفظ بالقرارات التي تحتاج صاحبها حقًا.",
+    "tryFree": "حاول مجانا",
+    "talkExpert": "التحدث إلى خبير"
+  },
+  "tr": {
+    "metaTitle": "LocalOS — yerel işletme sahipleri için daha az rutin iş",
+    "metaDescription": "LocalOS, listeleri ve incelemeleri kontrol eder, içerik hazırlar, hizmetleri ve sayıları analiz eder ve yinelenen işleri yönetir. Bir karara ihtiyaç duyulduğunda mal sahibi devreye girer.",
+    "eyebrow": "Yerel işletmeler için LocalOS",
+    "title": "İşletmenizin rutin işler için değil, kararlar için size ihtiyacı var",
+    "intro": "LocalOS, iş sahiplerinin genellikle akıllarında tuttuğu şeyleri izler: listeler, incelemeler, içerik, hizmetler, sayılar ve ortaklıklar. Sistem yinelenen görevleri yerine getirir. Bir şeyin seçime, incelemeye veya onaya ihtiyacı olduğunda devreye girersiniz.",
+    "seeTasks": "LocalOS'un neleri devralabileceğini görün",
+    "freeAudit": "Ücretsiz denetim alın",
+    "formTitle": "Listeleme denetimiyle başlayın",
+    "formDescription": "Müşterilerin işletmenizi nasıl bulduğunu ve öncelikle nelerin düzeltilmesi gerektiğini görün.",
+    "emailLabel": "E-posta",
+    "emailPlaceholder": "sen@example.com",
+    "mapsLabel": "İşletme girişi bağlantısı",
+    "mapsPlaceholder": "Haritalarda işletmenize bağlantı verin",
+    "submit": "Denetimi alın",
+    "submitting": "Gönderiliyor…",
+    "success": "Teşekkür ederim. Talebiniz alındı.",
+    "error": "İsteğinizi gönderemedik. Lütfen tekrar deneyin.",
+    "scale": "LocalOS halihazırda bağımsız şirketlerden ağlara kadar 240'tan fazla küçük işletme lokasyonunda çalışmaktadır.",
+    "problemTitle": "Sen olmadan her şey durursa, iş günü bittikten sonra hala iştesindir",
+    "problemParagraphs": [
+      "Bir incelemeyi yanıtlayın. Bir listeyi kontrol edin. Bir gönderi planlayın. Fiyatları güncelleyin. Rakamlara bakın. Her görev küçüktür, ancak hepsi birlikte, sahibine iş üzerinde çalışacak zaman bırakmaz.",
+      "Yeni yazılım bu yükü nadiren ortadan kaldırır. Genellikle sahibine açıp izleyebileceği bir yer daha verir.",
+      "LocalOS yinelenen işleri zamanlanmış görevlere dönüştürür, tamamlar ve sahibine yalnızca karar verilmesi gereken şeyleri gösterir."
+    ],
+    "networkTitle": "Tek bir konumunuz olabilir. Deneyiminiz bir ağdaki gibi çalışabilir",
+    "networkParagraphs": [
+      "Bir network her şubede aynı sorunu sıfırdan çözmez. Bir yöntem işe yaradığında kontrol edilir ve tekrar kullanılır.",
+      "LocalOS bu yaklaşımı bağımsız işletmelere getiriyor. Çalışma uygulamalarını topluyor, inceliyor ve yeniden kullanılabilir prosedürlere dönüştürüyoruz. Bir sonraki şirket boş bir sayfayla başlamıyor."
+    ],
+    "networkPrivacy": "Şirket ve müşteri verileri asla başka işletmelere aktarılmaz. Yalnızca gözden geçirilmiş kurallar ve anonimleştirilmiş çalışma yöntemleri paylaşılmaktadır.",
+    "networkLabels": [
+      "Bir işletme çözüm buluyor",
+      "LocalOS uygulamayı inceliyor",
+      "Diğerleri sıfırdan başlamıyor"
+    ],
+    "tasksEyebrow": "LocalOS tarafından yürütülen işler",
+    "tasksTitle": "Artık yalnız taşımanıza gerek olmayan şeyler",
+    "tasksIntro": "Genellikle sahibine geri dönen beş iş.",
+    "tasks": [
+      {
+        "title": "Müşterilerin sizi bulup bulamayacağını kontrol edin",
+        "description": "LocalOS harita listelerini, hizmetleri, fiyatları, fotoğrafları, gönderileri ve incelemeleri kontrol eder. Müşterinin tercihine nelerin engel olduğunu gösterir ve düzeltmeleri hazırlar."
+      },
+      {
+        "title": "Müşterilerin tek kaynağı olarak reklamlara güvenin",
+        "description": "LocalOS yakındaki ilgili işletmeleri bulur, ortaklık teklifleri hazırlar ve iletişim geçmişini tutar. Harici mesajlar yalnızca onaylandıktan sonra gönderilir."
+      },
+      {
+        "title": "Her inceleme ve gönderi için günü kesintiye uğratın",
+        "description": "LocalOS, yanıtlanmayan incelemeleri toplar, taslaklar hazırlar ve yayın kuyruğunu korur. Sahibi önemli olanı inceler ve yayınlanmasını onaylar."
+      },
+      {
+        "title": "Hizmetler ve fiyatlar konusunda ne yapacağınızı tahmin edin",
+        "description": "LocalOS hangi hizmetlerin satıldığını, ortalama harcamanın ve kapasitenin nasıl değiştiğini, menünün müşterilerin kafasını karıştırdığı yerleri ve hangi tekliflerin test edilmeye değer olduğunu gösterir."
+      },
+      {
+        "title": "İş resmini elle birleştirin",
+        "description": "LocalOS, tamamlanan çalışmaları, finansal göstergeleri ve dikkat edilmesi gereken öğeleri bir araya getirir. Sahibi bugün ne olduğunu ve hangi karara ihtiyaç duyulduğunu görüyor."
+      }
+    ],
+    "retentionNote": "LocalOS, müşteri verileri bağlandığında geri dönmeyen müşterileri de tespit ederek tekrar ziyaret için teklif hazırlayabilir.",
+    "workEyebrow": "İşin nasıl ele alındığı",
+    "workTitle": "Sistem işi yapıyor. Kararları sahibi verir",
+    "workIntro": "LocalOS, önemli kararları sahibinin elinden almadan yinelenen işleri sahibinin tabağından alır.",
+    "steps": [
+      {
+        "title": "İşletmeyi bağlayın",
+        "description": "LocalOS yalnızca seçtiğiniz verilere erişir: listeler, incelemeler, hizmetler, finansal göstergeler ve bağlı kanallar."
+      },
+      {
+        "title": "Sahibinin masasından ayrılabilecek iş bulun",
+        "description": "Sistem, tek seferlik bir sorunu düzenli olarak yürütülmesi gereken bir görevden ayırır."
+      },
+      {
+        "title": "Gözden geçirilmiş bir prosedürü çalıştırın",
+        "description": "LocalOS verileri kontrol eder, materyalleri hazırlar ve izin verilen eylemleri planlandığı şekilde yürütür."
+      },
+      {
+        "title": "Neyin karara ihtiyacı olduğunu gösterin",
+        "description": "Gönderiler, mesajlar, toplu değişiklikler ve diğer önemli harici işlemler, sahibinin onayını bekler."
+      },
+      {
+        "title": "Sonucu sakla",
+        "description": "Bir çalışma şekli faydalı olduğu kanıtlandığında, işletme içinde tekrarlanabilir ve diğer şirketler için anonimleştirilmiş bir uygulama olarak kullanılabilir."
+      }
+    ],
+    "workSummary": "Yapay zeka analiz ve hazırlık için kullanılır. Tekrarlanan işler açık kurallara tabidir. Sahibi kontrolde kalır.",
+    "casesEyebrow": "Vaka çalışmaları",
+    "casesTitle": "Sahipler zaten tabaklarını çıkardılar",
+    "casesIntro": "Başlangıç durumu, tamamlanan iş ve belirli bir süre içinde nelerin değiştiği.",
+    "situation": "önce",
+    "workDone": "İş tamamlandı",
+    "result": "Ne değişti",
+    "allCases": "Tüm vaka çalışmalarını görüntüleyin",
+    "auditTitle": "Öncelikle tabağınızdan bir görevi kaldırın",
+    "auditText": "İşletme girişinizi kontrol edeceğiz ve müşterilerin sizi bulmasına ve seçmesine nelerin engel olduğunu göstereceğiz. Uzun bir rapora veya genel tavsiyeye gerek kalmadan somut bir ilk eylem alacaksınız.",
+    "finalTitle": "Onsuz hiçbir şeyin olmayacağı kişi olmayı bırak",
+    "finalText": "LocalOS'a yinelenen işler verin. Sahibinin gerçekten ihtiyaç duyduğu kararları saklayın.",
+    "tryFree": "Ücretsiz deneyin",
+    "talkExpert": "Bir uzmanla konuşun"
+  },
+  "ha": {
+    "metaTitle": "LocalOS - ƙarancin aikin yau da kullun ga masu kasuwancin gida",
+    "metaDescription": "LocalOS yana duba jeri da bita, yana shirya abun ciki, yana nazarin ayyuka da lambobi, kuma yana ɗaukar aiki mai maimaitawa. Mai shi yana shiga lokacin da ake buƙatar yanke shawara.",
+    "eyebrow": "LocalOS don kasuwancin gida",
+    "title": "Kasuwancin ku yana buƙatar ku don yanke shawara, ba aikin yau da kullun ba",
+    "intro": "LocalOS yana kallon masu aikin yawanci suna riƙe da kawunansu: jeri, bita, abun ciki, ayyuka, lambobi, da haɗin gwiwa. Tsarin yana ɗaukar ayyuka masu maimaitawa. Kuna shiga lokacin da wani abu ke buƙatar zaɓi, bita, ko yarda.",
+    "seeTasks": "Duba abin da LocalOS zai iya ɗauka",
+    "freeAudit": "Samun duba kyauta",
+    "formTitle": "Fara da duba jeri",
+    "formDescription": "Dubi yadda abokan ciniki ke samun kasuwancin ku da abin da ya kamata a fara gyarawa.",
+    "emailLabel": "Imel",
+    "emailPlaceholder": "ka@example.com",
+    "mapsLabel": "Haɗin lissafin kasuwanci",
+    "mapsPlaceholder": "Haɗin kai zuwa kasuwancin ku akan taswira",
+    "submit": "A samu tantancewa",
+    "submitting": "Ana aikawa…",
+    "success": "Na gode. An karɓi buƙatarku.",
+    "error": "Ba mu iya aika bukatar ku ba. Da fatan za a sake gwadawa.",
+    "scale": "LocalOS ya riga ya yi aiki a sama da ƙananan wuraren kasuwanci 240, daga kamfanoni masu zaman kansu zuwa cibiyoyin sadarwa.",
+    "problemTitle": "Idan komai ya tsaya ba tare da ku ba, har yanzu kuna kan aiki bayan ƙarshen ranar aiki",
+    "problemParagraphs": [
+      "Amsa ga bita. Duba jeri. Shirya post. Sabunta farashin. Dubi lambobin. Kowane ɗawainiya kaɗan ne, amma tare suna barin mai shi ba lokaci don yin aiki a kan kasuwancin kanta.",
+      "Sabbin software da wuya ke cire wannan kaya. Yawancin lokaci yana ba mai shi ƙarin wuri guda don buɗewa da saka idanu.",
+      "LocalOS yana juya aiki mai maimaitawa zuwa ayyukan da aka tsara, yana kammala su, kuma yana nuna wa mai shi kawai abin da ke buƙatar yanke shawara."
+    ],
+    "networkTitle": "Kuna iya samun wuri ɗaya. Kwarewar ku na iya aiki kamar ta hanyar sadarwa",
+    "networkParagraphs": [
+      "Cibiyar sadarwa ba ta magance matsala iri ɗaya daga karce a kowane reshe. Da zarar hanya ta yi aiki, ana duba ta kuma a sake amfani da ita.",
+      "LocalOS yana kawo wannan hanyar zuwa kasuwancin masu zaman kansu. Muna tattara ayyukan aiki, mu sake duba su, kuma mu juya su cikin hanyoyin da za a sake amfani da su. Kamfanin na gaba baya farawa da shafi mara komai."
+    ],
+    "networkPrivacy": "Ba a taɓa mika bayanan kamfani da abokin ciniki ga wasu kasuwancin ba. Dokokin da aka duba kawai da hanyoyin aiki da ba a san su ba ana raba su.",
+    "networkLabels": [
+      "Kasuwanci ɗaya yana samun mafita",
+      "LocalOS yana duba aikin",
+      "Wasu kuma ba sa farawa daga sifili"
+    ],
+    "tasksEyebrow": "Aiki na LocalOS",
+    "tasksTitle": "Abin da ba ku buƙatar ɗauka shi kaɗai",
+    "tasksIntro": "Ayyuka biyar waɗanda yawanci ke samun hanyar komawa ga mai shi.",
+    "tasks": [
+      {
+        "title": "Bincika ko abokan ciniki za su iya samun ku",
+        "description": "LocalOS yana duba jerin taswira, ayyuka, farashi, hotuna, posts, da sake dubawa. Yana nuna abin da ke kawo cikas ga zaɓin abokin ciniki kuma yana shirya gyare-gyare."
+      },
+      {
+        "title": "Dogara kan talla a matsayin kawai tushen abokan ciniki",
+        "description": "LocalOS yana nemo kasuwancin da ke kusa, yana shirya shawarwarin haɗin gwiwa, kuma yana adana tarihin tuntuɓar. Ana aika saƙonnin waje ne kawai bayan amincewa."
+      },
+      {
+        "title": "Katse ranar don kowane bita da aikawa",
+        "description": "LocalOS yana tattara bita-da-kullin da ba a amsa ba, yana shirya daftarin aiki, kuma yana kiyaye layin bugawa. Mai shi yana duba abin da ke da mahimmanci kuma ya amince da bugawa."
+      },
+      {
+        "title": "Yi tsammani abin da za a yi da ayyuka da farashi",
+        "description": "LocalOS yana nuna waɗanne sabis ɗin ke siyarwa, yadda matsakaicin kashe kuɗi da ƙarfin aiki ke canzawa, inda menu ya rikitar da abokan ciniki, kuma waɗanne tayin sun cancanci gwaji."
+      },
+      {
+        "title": "Haɗa hoton kasuwancin da hannu",
+        "description": "LocalOS yana haɗa kammala aikin, alamun kuɗi, da abubuwan da ke buƙatar kulawa. Maigidan ya ga abin da ya faru da kuma shawarar da ake bukata a yau."
+      }
+    ],
+    "retentionNote": "Lokacin da aka haɗa bayanan abokin ciniki, LocalOS kuma na iya gano abokan cinikin da ba su dawo ba da shirya tayin don maimaita ziyarar.",
+    "workEyebrow": "Yadda ake sarrafa aikin",
+    "workTitle": "Tsarin yana aiki. Mai shi yana yanke shawara",
+    "workIntro": "LocalOS yana ɗaukar maimaita aiki daga farantin mai shi ba tare da ɗaukar mahimman yanke shawara daga gare su ba.",
+    "steps": [
+      {
+        "title": "Haɗa kasuwancin",
+        "description": "LocalOS yana samun dama ga bayanan da kuka zaɓa kawai: jeri, bita, ayyuka, alamun kuɗi, da tashoshi masu alaƙa."
+      },
+      {
+        "title": "Nemo aikin da zai iya barin teburin mai shi",
+        "description": "Tsarin yana raba matsala guda ɗaya daga aikin da ke buƙatar gudana akai-akai."
+      },
+      {
+        "title": "Gudanar da tsarin da aka duba",
+        "description": "LocalOS yana duba bayanai, yana shirya kayan, kuma yana gudanar da ayyuka masu izini akan jadawalin."
+      },
+      {
+        "title": "Nuna abin da ke buƙatar yanke shawara",
+        "description": "Saƙonni, saƙonni, manyan canje-canje, da sauran mahimman ayyuka na waje suna jiran amincewar mai shi."
+      },
+      {
+        "title": "Rike sakamakon",
+        "description": "Lokacin da hanyar aiki ta tabbatar da amfani, ana iya maimaita shi a cikin kasuwancin kuma a yi amfani da shi azaman al'adar da ba a san su ba ga wasu kamfanoni."
+      }
+    ],
+    "workSummary": "Ana amfani da AI don bincike da shiri. Aiki mai maimaitawa yana bin ƙa'idodi bayyanannu. Mai shi ya tsaya cikin iko.",
+    "casesEyebrow": "Nazarin harka",
+    "casesTitle": "Abin da masu shi suka riga sun cire farantin su",
+    "casesIntro": "Halin farawa, aikin da aka kammala, da abin da ya canza a cikin lokacin da aka bayyana.",
+    "situation": "Kafin",
+    "workDone": "An kammala aikin",
+    "result": "Me ya canza",
+    "allCases": "Duba duk nazarin yanayin",
+    "auditTitle": "Cire ɗawainiya ɗaya daga farantin ku tukuna",
+    "auditText": "Za mu bincika jerin kasuwancin ku kuma mu nuna abin da ke kawo cikas ga abokan cinikin neman ku da zabar ku. Za ku sami aikin farko na kankare guda ɗaya, ba tare da dogon rahoto ko shawara ba.",
+    "finalTitle": "Ka daina zama mutumin da babu abin da ke faruwa ba tare da shi ba",
+    "finalText": "Ba da aiki mai maimaitawa ga LocalOS. Ci gaba da yanke shawara waɗanda suke buƙatar mai shi da gaske.",
+    "tryFree": "Gwada kyauta",
+    "talkExpert": "Yi magana da gwani"
+  }
+}

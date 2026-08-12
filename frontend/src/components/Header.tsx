@@ -3,7 +3,7 @@ import { ChevronDown, LogIn, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { newAuth } from "../lib/auth_new";
-import { useLanguage } from "../i18n/LanguageContext";
+import { Language, useLanguage } from "../i18n/LanguageContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import logo from "@/assets/images/logo.png"; // Импортируем логотип
 
@@ -12,7 +12,7 @@ const Header = () => {
   const [isAuth, setIsAuth] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // ЛК отключён: всегда скрываем элементы аутентификации
   // Скрываем Header на странице Dashboard (там свой хедер)
@@ -51,9 +51,22 @@ const Header = () => {
     }
   };
 
+  const publicNavigationCopy: Record<Language, { how: string; about: string }> = {
+    ru: { how: 'Как работает LocalOS', about: 'О LocalOS' },
+    en: { how: 'How LocalOS works', about: 'About LocalOS' },
+    fr: { how: 'Comment fonctionne LocalOS', about: 'À propos de LocalOS' },
+    es: { how: 'Cómo funciona LocalOS', about: 'Sobre LocalOS' },
+    el: { how: 'Πώς λειτουργεί το LocalOS', about: 'Σχετικά με το LocalOS' },
+    de: { how: 'So funktioniert LocalOS', about: 'Über LocalOS' },
+    th: { how: 'LocalOS ทำงานอย่างไร', about: 'เกี่ยวกับ LocalOS' },
+    ar: { how: 'كيف يعمل LocalOS', about: 'عن LocalOS' },
+    ha: { how: 'Yadda LocalOS ke aiki', about: 'Game da LocalOS' },
+    tr: { how: 'LocalOS nasıl çalışır', about: 'LocalOS hakkında' },
+  };
+
   const navigation = [
-    { name: t.header.whatWeDo, href: '/#agents' },
-    { name: t.header.whoWeAre, href: '/about' },
+    { name: publicNavigationCopy[language].how, href: '/#agents' },
+    { name: publicNavigationCopy[language].about, href: '/about' },
     { name: t.header.prices, href: '/about#pricing' },
   ];
 
@@ -71,7 +84,7 @@ const Header = () => {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-all duration-300 ${isScrolled
+      className={`sticky top-0 z-50 transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${isScrolled
         ? "bg-background/80 backdrop-blur-md border-b border-border shadow-sm"
         : "bg-transparent border-transparent"
         }`}
@@ -174,6 +187,7 @@ const Header = () => {
 
           <div className="md:hidden">
             <Button
+              aria-label={isMenuOpen ? (language === 'ru' ? 'Закрыть меню' : 'Close menu') : (language === 'ru' ? 'Открыть меню' : 'Open menu')}
               variant="ghost"
               size="icon"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -193,7 +207,7 @@ const Header = () => {
                     to={{ pathname: "/", hash: "#agents" }}
                     className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => {
-                      // Ничего не делаем, обработка теперь на главной через useEffect
+                      setIsMenuOpen(false);
                     }}
                   >
                     {item.name}

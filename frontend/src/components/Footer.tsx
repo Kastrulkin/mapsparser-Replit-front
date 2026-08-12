@@ -52,6 +52,30 @@ const Footer = () => {
   const prefix = t.footer.madeWithLovePrefix ?? (isRu ? "Сделано с любовью для " : "Made with love for ");
   const [index, setIndex] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
+  const descriptions: Record<Language, string> = {
+    ru: "LocalOS берёт на себя регулярную работу по привлечению клиентов, репутации, услугам и контролю бизнеса.",
+    en: "LocalOS handles recurring work across customer acquisition, reputation, services, and business control.",
+    fr: "LocalOS prend en charge le travail récurrent lié à l'acquisition de clients, à la réputation, aux services et au suivi de l'activité.",
+    es: "LocalOS se encarga del trabajo recurrente de captación de clientes, reputación, servicios y control del negocio.",
+    el: "Το LocalOS αναλαμβάνει τις επαναλαμβανόμενες εργασίες για πελάτες, φήμη, υπηρεσίες και έλεγχο της επιχείρησης.",
+    de: "LocalOS übernimmt wiederkehrende Aufgaben rund um Kundengewinnung, Reputation, Leistungen und Unternehmenssteuerung.",
+    th: "LocalOS รับช่วงงานประจำด้านการหาลูกค้า ชื่อเสียง บริการ และการควบคุมธุรกิจ",
+    ar: "يتولى LocalOS العمل المتكرر في استقطاب العملاء والسمعة والخدمات ومتابعة العمل.",
+    ha: "LocalOS yana gudanar da ayyukan da ake maimaitawa na samo kwastomomi, suna, ayyuka da kula da kasuwanci.",
+    tr: "LocalOS müşteri kazanımı, itibar, hizmetler ve işletme kontrolündeki tekrarlanan işleri üstlenir.",
+  };
+  const aboutLabels: Record<Language, string> = {
+    ru: "О LocalOS",
+    en: "About LocalOS",
+    fr: "À propos de LocalOS",
+    es: "Sobre LocalOS",
+    el: "Σχετικά με το LocalOS",
+    de: "Über LocalOS",
+    th: "เกี่ยวกับ LocalOS",
+    ar: "عن LocalOS",
+    ha: "Game da LocalOS",
+    tr: "LocalOS hakkında",
+  };
 
   useEffect(() => {
     setIndex(0);
@@ -80,7 +104,7 @@ const Footer = () => {
 
   const footerLinks = {
     company: [
-      { name: t.footer.whoWeAre, href: '/about' },
+      { name: aboutLabels[language], href: '/about' },
       { name: t.footer.contacts, href: '/contact' },
       { name: t.footer.requisites ?? (isRu ? 'Реквизиты' : 'Requisites'), href: '/requisites' },
     ],
@@ -98,14 +122,14 @@ const Footer = () => {
           <div className="max-w-md">
             <h3 className="text-2xl font-bold text-foreground mb-4">{t.footer.title}</h3>
             <p className="text-muted-foreground mb-6 max-w-md">
-              {t.footer.description}
+              {descriptions[language]}
             </p>
             <div className="flex items-center text-sm text-muted-foreground">
               <Heart className="w-4 h-4 mr-1.5 text-primary animate-pulse flex-shrink-0" />
               <span className="flex items-baseline gap-0.5 min-h-[1.5em]">
                 {prefix}
                 <span
-                  className="inline-block text-primary font-semibold transition-all duration-400 ease-out"
+                  className="inline-block text-primary font-semibold transition-[opacity,transform,filter] duration-400 ease-out"
                   style={{
                     opacity: isExiting ? 0 : 1,
                     transform: isExiting ? "translateY(-8px)" : "translateY(0)",
