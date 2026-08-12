@@ -2372,6 +2372,25 @@ def test_current_map_news_is_a_supported_content_activity_signal():
     assert "внедрить самостоятельно или поручить нам" in with_audit
 
 
+def test_map_news_content_plan_branch_requires_channel_in_candidate_contract():
+    candidate = {
+        "evidence_kind": "active_map_news",
+        "observed_fact": "В карточке Проформа на Яндекс Картах выходят новости.",
+        "source_url": "https://yandex.ru/maps/org/123",
+        "freshness": "current_snapshot",
+        "evidence_status": "observed",
+        "recipient": "Проформа",
+        "category": "Клиника косметологии",
+        "signal_combo": "active_social_multichannel_content",
+    }
+    selection = select_outreach_template("signal", candidate)
+    without_channel = _render_outreach_template_body(selection, candidate)
+    with_channel = _render_outreach_template_body(selection, {**candidate, "channel": "email"})
+
+    assert "Подготовить для Проформа пример контент-плана на неделю?" not in without_channel
+    assert with_channel.endswith("Подготовить для Проформа пример контент-плана на неделю?")
+
+
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():
     touches = [
         {

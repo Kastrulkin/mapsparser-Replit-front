@@ -3690,6 +3690,7 @@ def build_preview(
                 "observed_at": crm_evidence.get("observed_at"),
                 "evidence_status": crm_evidence.get("status") or "observed",
             }
+        candidate = {**candidate, "channel": requested_channel}
         template_selection = select_outreach_template(
             angle,
             candidate,
