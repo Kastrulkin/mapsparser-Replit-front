@@ -365,7 +365,7 @@ def test_normalize_public_audit_builds_medical_summary_from_trust_and_patient_qu
     normalized = normalize_public_audit_page_json(page_json)
     summary = normalized["audit"]["summary_text"]
 
-    assert summary.startswith("У карточки «Евромедсервис» есть база доверия")
+    assert summary.startswith("У «Евромедсервис» есть база доверия")
     assert "рейтинг 4,5" in summary
     assert "95 отзывов" in summary
     assert "запросы пациентов" in summary
@@ -399,6 +399,29 @@ def test_normalize_public_audit_keeps_business_name_in_grammatical_summary() -> 
 
     assert summary.startswith("У «Волшебной мили» не видно свежих обновлений.")
     assert "У «Волшебная миля»" not in summary
+
+
+def test_normalize_public_audit_declines_single_word_russian_business_name() -> None:
+    page_json = _sample_page_json()
+    page_json["name"] = "Проформа"
+    page_json["audit"]["business_name"] = "Проформа"
+    page_json["audit"]["audit_profile"] = "beauty"
+    page_json["audit"]["issue_blocks"] = [
+        {
+            "id": "reviews_marketing_underused",
+            "title": "Отзывы есть, но их сильные темы не используются",
+            "fix": "Добавить короткий блок про косметология, массаж.",
+        }
+    ]
+    page_json["audit"]["top_3_issues"] = page_json["audit"]["issue_blocks"]
+    page_json["audit"]["search_intents_to_target"] = ["косметология", "массаж"]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    summary = normalized["audit"]["summary_text"]
+
+    assert summary.startswith("У «Проформы» отзывы есть")
+    assert "направлений - косметология, массаж" in summary
+    assert "про косметология" not in summary
 
 
 def test_normalize_public_audit_rewrites_abstract_new_traffic_copy() -> None:

@@ -87,6 +87,19 @@ PROFILE_ACTOR_DATIVE = {
 def _business_name_after_u(business_name: str) -> str:
     """Return a grammatical Russian subject after «у» without guessing complex brands."""
     words = re.split(r"\s+", str(business_name or "").strip())
+    if len(words) == 1 and re.fullmatch(r"[А-Яа-яЁё-]+", words[0]):
+        noun = words[0]
+        noun_lower = noun.lower()
+        if noun_lower.endswith("ия"):
+            noun = noun[:-2] + "ии"
+        elif noun_lower.endswith("я"):
+            noun = noun[:-1] + "и"
+        elif noun_lower.endswith("а"):
+            ending = "и" if noun_lower[-2:-1] in "гкхжчшщц" else "ы"
+            noun = noun[:-1] + ending
+        else:
+            return f"«{business_name}»"
+        return f"«{noun}»"
     if len(words) == 2 and all(re.fullmatch(r"[А-Яа-яЁё-]+", word) for word in words):
         adjective, noun = words
         if adjective.lower().endswith("ая"):
@@ -801,13 +814,13 @@ def _editorial_next_action(audit: dict[str, Any], issue_fix: str) -> str:
         return retail_variants[variant]
     if focus:
         variants = (
-            f"показать {'в описании' if description_applicable else 'в карточке'} {focus}: что выбрать, кому подходит и как {words['action']}",
-            f"выделить {focus} и добавить короткую причину для {words['choice']}",
-            f"собрать {focus} в понятный блок: результат, цена или ориентир, следующий шаг",
-            f"{'переписать описание вокруг' if description_applicable else 'собрать в карточке'} {focus}, чтобы клиент быстрее дошёл до {words['next']}",
-            f"показать, что здесь главное: {focus}, и чем эта точка удобнее конкурентов",
-            f"разделить {focus} по сценариям: для кого, какой результат, что делать дальше",
-            f"добавить короткий блок про {focus}: отличие, ориентир по выбору и следующий шаг",
+            f"показать {'в описании' if description_applicable else 'в карточке'} основные направления - {focus}: что выбрать, кому подходит и как {words['action']}",
+            f"выделить направления - {focus} - и добавить короткую причину для {words['choice']}",
+            f"собрать направления в понятный блок: {focus}; указать результат, цену или ориентир и следующий шаг",
+            f"{'переписать описание вокруг направлений' if description_applicable else 'собрать направления в карточке'} - {focus}, чтобы клиент быстрее дошёл до {words['next']}",
+            f"показать основные направления - {focus} - и объяснить, чем эта точка удобнее конкурентов",
+            f"разделить направления - {focus} - по сценариям: для кого, какой результат, что делать дальше",
+            f"добавить короткий блок о направлениях - {focus}: отличие, ориентир по выбору и следующий шаг",
         )
         return variants[variant]
     if normalized_fix:

@@ -489,6 +489,8 @@ def test_non_medical_issue_blocks_do_not_use_strong_description_water() -> None:
         unanswered_reviews_count=0,
         focus_terms=["маникюр", "педикюр", "косметология"],
     )
+    category_issue = next(item for item in beauty_issues if item.get("id") == "category_positioning_gap")
+    assert "находил нужный раздел: маникюр, педикюр, косметология" in category_issue["fix"]
     wellness_issues = _build_wellness_issue_blocks(
         business_name="Body Lab",
         city="Колпино",
