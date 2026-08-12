@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  ArrowUpRight,
   BarChart3,
   Building2,
   Check,
@@ -36,6 +37,17 @@ type TaskCard = {
 type WorkStep = {
   title: string;
   description: string;
+};
+
+type NetworkQuestion = {
+  text: string;
+  href: string;
+};
+
+type NetworkQuestionSet = {
+  intro: string;
+  sourceNote: string;
+  questions: NetworkQuestion[];
 };
 
 type LandingCopy = {
@@ -232,6 +244,109 @@ const enCopy: LandingCopy = {
 const taskIcons = [MapPinned, Handshake, MessageSquareText, CircleDollarSign, BarChart3];
 const stepIcons = [Building2, Eye, Layers3, ClipboardCheck, FileCheck2];
 
+const networkQuestionsByLanguage: Record<Language, NetworkQuestionSet> = {
+  ru: {
+    intro: "Эти вопросы владельцы снова и снова задают друг другу в рабочих чатах. Задачи повторяются — значит, найденное решение можно проверить, сохранить и использовать снова.",
+    sourceNote: "Реальные вопросы из открытых отраслевых чатов. Ссылки ведут к исходным сообщениям.",
+    questions: [
+      { text: "Как вообще себе искать клиентов?", href: "https://t.me/beutyrussia/2486" },
+      { text: "Как вы реагируете на такие отзывы?", href: "https://t.me/beutyrussia/2499" },
+      { text: "Как работать с потерянными клиентами?", href: "https://t.me/salon_fm/2654" },
+      { text: "Как часто вы повышаете прайс и какая цена у вас сейчас?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  en: {
+    intro: "Owners ask one another these questions again and again in their work chats. The problems repeat, so a useful solution can be reviewed, saved, and used again.",
+    sourceNote: "Real questions from public industry chats. Links open the original Russian messages.",
+    questions: [
+      { text: "How do you find customers in the first place?", href: "https://t.me/beutyrussia/2486" },
+      { text: "How do you respond to reviews like these?", href: "https://t.me/beutyrussia/2499" },
+      { text: "How do you work with customers who stopped coming?", href: "https://t.me/salon_fm/2654" },
+      { text: "How often do you raise prices, and what do you charge now?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  fr: {
+    intro: "Les propriétaires se posent régulièrement les mêmes questions dans leurs groupes de travail. Les problèmes se répètent : une solution utile peut donc être vérifiée, conservée et réutilisée.",
+    sourceNote: "Questions réelles issues de groupes professionnels publics. Les liens ouvrent les messages russes d’origine.",
+    questions: [
+      { text: "Comment trouver ses premiers clients ?", href: "https://t.me/beutyrussia/2486" },
+      { text: "Comment réagissez-vous à ce type d’avis ?", href: "https://t.me/beutyrussia/2499" },
+      { text: "Comment travailler avec les clients qui ne reviennent plus ?", href: "https://t.me/salon_fm/2654" },
+      { text: "À quelle fréquence augmentez-vous vos prix ?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  es: {
+    intro: "Los propietarios se hacen estas preguntas una y otra vez en sus grupos de trabajo. Los problemas se repiten, así que una solución útil puede revisarse, guardarse y volver a utilizarse.",
+    sourceNote: "Preguntas reales de chats públicos del sector. Los enlaces abren los mensajes originales en ruso.",
+    questions: [
+      { text: "¿Cómo encontrar clientes desde el principio?", href: "https://t.me/beutyrussia/2486" },
+      { text: "¿Cómo respondes a reseñas como estas?", href: "https://t.me/beutyrussia/2499" },
+      { text: "¿Cómo trabajar con clientes que dejaron de venir?", href: "https://t.me/salon_fm/2654" },
+      { text: "¿Con qué frecuencia subes los precios?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  el: {
+    intro: "Οι ιδιοκτήτες κάνουν ξανά και ξανά αυτές τις ερωτήσεις στις επαγγελματικές συνομιλίες τους. Τα προβλήματα επαναλαμβάνονται, άρα μια χρήσιμη λύση μπορεί να ελεγχθεί, να αποθηκευτεί και να χρησιμοποιηθεί ξανά.",
+    sourceNote: "Πραγματικές ερωτήσεις από δημόσιες επαγγελματικές συνομιλίες. Οι σύνδεσμοι ανοίγουν τα αρχικά ρωσικά μηνύματα.",
+    questions: [
+      { text: "Πώς βρίσκετε πελάτες από την αρχή;", href: "https://t.me/beutyrussia/2486" },
+      { text: "Πώς απαντάτε σε τέτοιες κριτικές;", href: "https://t.me/beutyrussia/2499" },
+      { text: "Πώς προσεγγίζετε πελάτες που σταμάτησαν να έρχονται;", href: "https://t.me/salon_fm/2654" },
+      { text: "Πόσο συχνά αυξάνετε τις τιμές σας;", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  de: {
+    intro: "In ihren Arbeitschats stellen Inhaber einander immer wieder dieselben Fragen. Die Aufgaben wiederholen sich – deshalb lässt sich eine hilfreiche Lösung prüfen, speichern und erneut einsetzen.",
+    sourceNote: "Echte Fragen aus öffentlichen Branchenchats. Die Links öffnen die russischen Originalbeiträge.",
+    questions: [
+      { text: "Wie findet man überhaupt neue Kunden?", href: "https://t.me/beutyrussia/2486" },
+      { text: "Wie reagieren Sie auf solche Bewertungen?", href: "https://t.me/beutyrussia/2499" },
+      { text: "Wie gewinnt man Kunden zurück, die nicht mehr kommen?", href: "https://t.me/salon_fm/2654" },
+      { text: "Wie oft erhöhen Sie Ihre Preise?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  th: {
+    intro: "เจ้าของธุรกิจถามคำถามเหล่านี้ซ้ำ ๆ ในกลุ่มสนทนาเรื่องงาน ปัญหาเดิมเกิดขึ้นกับหลายคน จึงสามารถตรวจสอบ เก็บ และนำวิธีที่ได้ผลกลับมาใช้ได้อีก",
+    sourceNote: "คำถามจริงจากกลุ่มสนทนาสาธารณะในอุตสาหกรรม ลิงก์จะเปิดข้อความต้นฉบับภาษารัสเซีย",
+    questions: [
+      { text: "เริ่มหาลูกค้าได้อย่างไร?", href: "https://t.me/beutyrussia/2486" },
+      { text: "คุณตอบรีวิวแบบนี้อย่างไร?", href: "https://t.me/beutyrussia/2499" },
+      { text: "จะดูแลลูกค้าที่เลิกมาใช้บริการอย่างไร?", href: "https://t.me/salon_fm/2654" },
+      { text: "คุณปรับราคาบ่อยแค่ไหน?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  ar: {
+    intro: "يطرح أصحاب الأعمال هذه الأسئلة على بعضهم مرارًا في محادثات العمل. تتكرر المشكلات، لذلك يمكن مراجعة الحل المفيد وحفظه واستخدامه مرة أخرى.",
+    sourceNote: "أسئلة حقيقية من محادثات عامة متخصصة. تفتح الروابط الرسائل الروسية الأصلية.",
+    questions: [
+      { text: "كيف تجد العملاء من الأساس؟", href: "https://t.me/beutyrussia/2486" },
+      { text: "كيف ترد على مراجعات كهذه؟", href: "https://t.me/beutyrussia/2499" },
+      { text: "كيف تتعامل مع العملاء الذين توقفوا عن العودة؟", href: "https://t.me/salon_fm/2654" },
+      { text: "كم مرة ترفع أسعارك؟", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  ha: {
+    intro: "Masu kasuwanci suna maimaita waɗannan tambayoyi a tattaunawar aikinsu. Matsalolin suna dawowa, don haka ana iya bincika mafita mai amfani, a adana ta, sannan a sake amfani da ita.",
+    sourceNote: "Tambayoyi na gaske daga tattaunawar sana’a ta jama’a. Hanyoyin suna buɗe saƙonnin asali na Rashanci.",
+    questions: [
+      { text: "Ta yaya ake fara samun kwastomomi?", href: "https://t.me/beutyrussia/2486" },
+      { text: "Ta yaya kuke amsa irin waɗannan ra’ayoyi?", href: "https://t.me/beutyrussia/2499" },
+      { text: "Ta yaya ake dawo da kwastomomin da suka daina zuwa?", href: "https://t.me/salon_fm/2654" },
+      { text: "Sau nawa kuke ƙara farashi?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+  tr: {
+    intro: "İşletme sahipleri çalışma sohbetlerinde bu soruları tekrar tekrar birbirlerine soruyor. Sorunlar tekrarlandığı için yararlı bir çözüm incelenebilir, saklanabilir ve yeniden kullanılabilir.",
+    sourceNote: "Herkese açık sektör sohbetlerinden gerçek sorular. Bağlantılar Rusça özgün mesajları açar.",
+    questions: [
+      { text: "En başta müşteri nasıl bulunur?", href: "https://t.me/beutyrussia/2486" },
+      { text: "Böyle yorumlara nasıl yanıt veriyorsunuz?", href: "https://t.me/beutyrussia/2499" },
+      { text: "Artık gelmeyen müşterilerle nasıl çalışılır?", href: "https://t.me/salon_fm/2654" },
+      { text: "Fiyatlarınızı ne sıklıkla artırıyorsunuz?", href: "https://t.me/beutyrussia/2702" },
+    ],
+  },
+};
+
 const copyForLanguage = (language: Language): LandingCopy => {
   switch (language) {
     case "ru":
@@ -262,6 +377,7 @@ const Index = () => {
   const { language } = useLanguage();
   const location = useLocation();
   const copy = copyForLanguage(language);
+  const networkQuestions = networkQuestionsByLanguage[language];
 
   useEffect(() => {
     if (!["#agents", "#cta", "#hero-form"].includes(location.hash)) return;
@@ -410,6 +526,26 @@ const Index = () => {
               <div className="mt-7 grid gap-5 text-lg leading-8 text-slate-600 md:grid-cols-2">
                 {copy.networkParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               </div>
+            </div>
+            <div className="mt-10 max-w-5xl">
+              <p className="max-w-4xl text-pretty text-lg font-semibold leading-8 text-slate-950">{networkQuestions.intro}</p>
+              <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+                {networkQuestions.questions.map((question) => (
+                  <li key={question.href}>
+                    <a
+                      aria-label={`${question.text} — ${networkQuestions.sourceNote}`}
+                      className="group flex h-full min-h-14 items-center justify-between gap-4 rounded-2xl bg-white/80 px-5 py-3.5 text-base font-semibold leading-6 text-slate-950 shadow-[0_10px_30px_rgba(15,23,42,0.06)] ring-1 ring-black/5 transition-[box-shadow,transform,background-color] hover:bg-white hover:shadow-[0_14px_36px_rgba(15,23,42,0.1)] active:scale-[0.96]"
+                      href={question.href}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <span className="text-pretty">«{question.text}»</span>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-orange-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-sm leading-6 text-slate-500">{networkQuestions.sourceNote}</p>
             </div>
             <div className="mt-12 grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
               {copy.networkLabels.map((label, index) => {
