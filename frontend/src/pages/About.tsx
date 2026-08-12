@@ -24,8 +24,6 @@ type AboutStoryCopy = {
   chapterTwoText: string;
   chapterThreeTitle: string;
   chapterThreeText: string;
-  chapterFourTitle: string;
-  chapterFourText: string;
   industries: string[];
   channelEyebrow: string;
   channelTitle: string;
@@ -45,14 +43,12 @@ const getAboutStoryCopy = (language: Language): AboutStoryCopy => {
       storyEyebrow: "Почему мы сделали LocalOS",
       storyTitle: "15 лет в бизнесе и автоматизации",
       storyIntro: "Мы работали в транспорте, ритейле, производстве, логистике и услугах.",
-      chapterOneTitle: "Работали с бизнесом разного масштаба",
-      chapterOneText: "Мы автоматизировали процессы малого бизнеса в транспорте, ритейле, производстве, логистике и услугах. Для крупной компании внедрили схему, которая экономила несколько миллионов долларов в год. Один из наших транспортных проектов вырос с нуля до работы в 40 странах и прошёл через два больших кризиса.",
-      chapterTwoTitle: "И сами столкнулись с проблемой владельца",
-      chapterTwoText: "По мере роста проектов каждый из нас столкнулся с одной и той же проблемой: всё больше работы возвращалось к нам — клиенты, сотрудники, цифры, срочные вопросы. Проще было сделать самим, чем объяснить, передать и потом проверить. Бизнес рос, а свободного времени становилось меньше.",
-      chapterThreeTitle: "Сначала освободили от операционки себя",
-      chapterThreeText: "Мы научились собирать удалённые команды и выстраивать их работу, автоматизировали продажи, отчётность, поиск перевозчиков и обработку заказов. Ежедневная работа перестала требовать постоянного участия основателя. А затем мы увидели: владельцы в других отраслях решают те же задачи, которые мы уже решили для себя.",
-      chapterFourTitle: "LocalOS вырос из этого опыта",
-      chapterFourText: "Это программная версия систем, которые мы годами строили для собственных компаний. ИИ помогает описать и проверить процесс, владелец утверждает правила, а повторяющуюся работу выполняет сценарий. Найденный способ можно сохранить и использовать снова, чтобы следующему бизнесу не начинать с нуля.",
+      chapterOneTitle: "Мы знаем эту проблему изнутри",
+      chapterOneText: "15 лет мы строили и автоматизировали бизнес в транспорте, ритейле, производстве, логистике и услугах. Работали и с небольшими компаниями, и с крупными предприятиями. Один из транспортных проектов вырос с нуля до работы в 40 странах. Для крупной компании мы внедрили схему, которая экономила несколько миллионов долларов в год.\n\nНо по мере роста собственных проектов каждый из нас столкнулся с одной и той же проблемой: всё больше работы возвращалось к владельцу. Клиенты, сотрудники, цифры, срочные вопросы. Проще было сделать самому, чем объяснить, передать и потом проверить.",
+      chapterTwoTitle: "Сначала мы решили эту проблему для себя",
+      chapterTwoText: "Научились собирать удалённые команды, описывать процессы и автоматизировать повторяющуюся работу. Постепенно бизнес перестал требовать постоянного участия владельца. Тогда мы увидели, что предприниматели в других отраслях решают те же задачи, которые мы уже решили для себя.",
+      chapterThreeTitle: "Так появился LocalOS",
+      chapterThreeText: "Это программная версия систем, которые мы годами строили для собственных компаний. ИИ помогает описать и проверить процесс, владелец утверждает правила, а повторяющуюся работу выполняет сценарий. Найденный способ можно сохранить и использовать снова, чтобы следующему бизнесу не начинать с нуля.",
       industries: ["Транспорт", "Ритейл", "Производство", "Логистика", "Услуги"],
       channelEyebrow: "Дневник команды",
       channelTitle: "Покупай мою шаверму",
@@ -71,14 +67,12 @@ const getAboutStoryCopy = (language: Language): AboutStoryCopy => {
     storyEyebrow: "Why we built LocalOS",
     storyTitle: "15 years in business and automation",
     storyIntro: "We worked across transport, retail, manufacturing, logistics, and services.",
-    chapterOneTitle: "We worked with businesses of different sizes",
-    chapterOneText: "We automated small-business processes in transport, retail, manufacturing, logistics, and services. For a large company, we implemented a model that saved several million dollars a year. One of our transport projects grew from zero to operating in 40 countries and made it through two major crises.",
-    chapterTwoTitle: "Then we ran into the owner's problem ourselves",
-    chapterTwoText: "As our projects grew, each of us ran into the same problem: more work kept coming back to us — customers, staff, numbers, and urgent issues. Doing it ourselves felt easier than explaining, delegating, and checking. The businesses grew while our free time disappeared.",
-    chapterThreeTitle: "First, we freed ourselves from daily operations",
-    chapterThreeText: "We learned how to build remote teams and organize their work, then automated sales, reporting, carrier sourcing, and order processing. Day-to-day work stopped depending on the founder's constant involvement. Then we saw that owners in other industries were facing the same tasks we had already solved for ourselves.",
-    chapterFourTitle: "LocalOS grew out of that experience",
-    chapterFourText: "It is the software version of the operating systems we spent years building for our own companies. AI helps describe and test a process, the owner approves the rules, and a procedure handles the recurring work. A proven method can be saved and reused so the next business does not start from zero.",
+    chapterOneTitle: "We know this problem from the inside",
+    chapterOneText: "For 15 years, we built and automated businesses in transport, retail, manufacturing, logistics, and services. We worked with both small companies and large enterprises. One transport project grew from zero to operating in 40 countries. For a large company, we implemented a model that saved several million dollars a year.\n\nBut as our own projects grew, each of us ran into the same problem: more work kept coming back to the owner. Customers, staff, numbers, urgent issues. Doing it ourselves felt easier than explaining, delegating, and checking.",
+    chapterTwoTitle: "First, we solved the problem for ourselves",
+    chapterTwoText: "We learned how to build remote teams, document processes, and automate recurring work. Gradually, the businesses stopped requiring the owner's constant involvement. Then we saw that entrepreneurs in other industries were facing the same tasks we had already solved for ourselves.",
+    chapterThreeTitle: "That is how LocalOS began",
+    chapterThreeText: "It is the software version of the operating systems we spent years building for our own companies. AI helps describe and test a process, the owner approves the rules, and a procedure handles the recurring work. A proven method can be saved and reused so the next business does not start from zero.",
     industries: ["Transport", "Retail", "Manufacturing", "Logistics", "Services"],
     channelEyebrow: "Team journal",
     channelTitle: "Покупай мою шаверму",
@@ -241,14 +235,17 @@ const About = () => {
                   [story.chapterOneTitle, story.chapterOneText],
                   [story.chapterTwoTitle, story.chapterTwoText],
                   [story.chapterThreeTitle, story.chapterThreeText],
-                  [story.chapterFourTitle, story.chapterFourText],
                 ].map(([title, text], index) => (
                   <li key={title} className="relative pb-14 pl-8 last:pb-0 sm:pl-12">
                     <span className="absolute -left-4 top-0 grid h-8 w-8 place-items-center rounded-full border-4 border-white bg-slate-950 text-[10px] font-semibold tracking-wider text-white">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <h3 className="text-balance text-2xl font-semibold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h3>
-                    <p className="mt-4 max-w-3xl text-pretty text-base leading-8 text-slate-600 sm:text-lg">{text}</p>
+                    <div className="mt-4 max-w-3xl space-y-4">
+                      {text.split("\n\n").map((paragraph) => (
+                        <p className="text-pretty text-base leading-8 text-slate-600 sm:text-lg" key={paragraph}>{paragraph}</p>
+                      ))}
+                    </div>
                   </li>
                 ))}
               </ol>
