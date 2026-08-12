@@ -2264,6 +2264,25 @@ def test_incomplete_telegram_snapshot_cannot_create_exact_30d_count():
     assert all(item["id"] != "official-social-activity-30d" for item in ledger)
 
 
+def test_recent_official_telegram_activity_remains_usable_without_exact_count():
+    ledger = build_evidence_ledger(
+        {
+            "research": {},
+            "official_social_activity": {
+                "official": True,
+                "count_verified": False,
+                "posts_30d": 5,
+                "source_url": "https://t.me/example",
+                "last_post_at": "2026-08-10T10:00:00Z",
+            },
+        }
+    )
+
+    activity = next(item for item in ledger if item["id"] == "official-social-activity-recent")
+    assert activity["fact"] == "Вижу, вы ведёте соцсети: в Telegram есть свежие публикации."
+    assert "5" not in activity["fact"]
+
+
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():
     touches = [
         {

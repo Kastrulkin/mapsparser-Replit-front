@@ -1797,6 +1797,28 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "source_type": "official_telegram_activity",
             "signal_combo": "active_social_multichannel_content",
         })
+    elif (
+        social_activity.get("official") is True
+        and posts_30d > 0
+        and _text(social_activity.get("source_url"))
+        and _text(social_activity.get("last_post_at"))
+    ):
+        # A partial or still-syncing archive proves recent activity when it
+        # contains a dated official post, but it cannot support an exact count.
+        ledger.append({
+            "id": "official-social-activity-recent",
+            "kind": "active_social_activity",
+            "fact": "Вижу, вы ведёте соцсети: в Telegram есть свежие публикации.",
+            "status": "observed",
+            "source_url": social_activity.get("source_url"),
+            "observed_at": social_activity.get("last_post_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.9,
+            "hypothesis": None,
+            "relevance": "Публикации для нескольких площадок приходится адаптировать отдельно.",
+            "source_type": "official_telegram_activity",
+            "signal_combo": "active_social_multichannel_content",
+        })
     map_services_count = int(context.get("map_services_count") or 0)
     if 0 < map_services_count <= 100 and _text(context.get("source_url")):
         ledger.append({
