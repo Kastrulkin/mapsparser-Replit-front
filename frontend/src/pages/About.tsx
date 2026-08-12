@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Target, Lightbulb, Award, Heart, Globe } from "lucide-react";
 import Footer from "@/components/Footer";
+import SeoMeta from "@/components/SeoMeta";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useLanguage } from "@/i18n/LanguageContext";
@@ -95,6 +95,13 @@ const About = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoMeta
+        description={isRu
+          ? "LocalOS берёт на себя регулярную работу локального бизнеса. ИИ готовит сценарий, скрипт выполняет задачу, а владелец сохраняет контроль."
+          : "LocalOS handles recurring work for local businesses. AI prepares the procedure, a script performs the task, and the owner stays in control."}
+        path="/about"
+        title={isRu ? "О LocalOS — меньше рутины для владельца" : "About LocalOS — less routine work for owners"}
+      />
 
       {/* Hero Section */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
@@ -166,10 +173,10 @@ const About = () => {
       {/* Results Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="bg-white rounded-3xl p-16 shadow-2xl shadow-orange-500/10 border-2 border-orange-200">
+          <div className="bg-white rounded-3xl p-8 sm:p-12 lg:p-16 shadow-2xl shadow-orange-500/10 border-2 border-orange-200">
             <h2 className="text-4xl font-bold text-gray-900 mb-8">{t.about.resultsTitle}</h2>
-            <div className="text-7xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-6">{t.about.resultsPercent}</div>
-            <p className="text-2xl text-gray-700 leading-relaxed">
+            {t.about.resultsPercent ? <div className="text-7xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-6">{t.about.resultsPercent}</div> : null}
+            <p className="text-xl sm:text-2xl text-gray-700 leading-relaxed text-pretty">
               {t.about.resultsText}
             </p>
           </div>
@@ -189,13 +196,13 @@ const About = () => {
 
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Option 1 */}
-            <Card className="group p-10 bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
+            <Card className="group min-w-0 p-6 sm:p-10 bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0">
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex min-w-0 items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
                     <span className="text-white font-bold text-xl">1</span>
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option1Title}</h3>
+                  <h3 className="min-w-0 text-2xl font-bold text-gray-900 text-balance">{t.about.option1Title}</h3>
                 </div>
                 <div className="space-y-4 text-gray-600 mb-8">
                   <div className="flex items-start gap-3">
@@ -217,7 +224,7 @@ const About = () => {
                 </div>
                 <Button
                   size="lg"
-                  className="mt-2 text-lg px-10 py-6 btn-iridescent"
+                  className="mt-2 w-full whitespace-normal px-4 py-6 text-base sm:px-10 sm:text-lg btn-iridescent"
                   onClick={() => {
                     window.location.href = '/#hero-form';
                   }}
@@ -228,13 +235,13 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="group p-10 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl">
+            <Card className="group min-w-0 p-6 sm:p-10 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0">
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex min-w-0 items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
                     <span className="text-white font-bold text-xl">2</span>
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option2Title}</h3>
+                  <h3 className="min-w-0 text-2xl font-bold text-gray-900 text-balance">{t.about.option2Title}</h3>
                 </div>
                 <div className="space-y-4 text-gray-700 mb-8">
                   <div className="flex items-start gap-3">
@@ -257,7 +264,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-10 py-6 btn-iridescent mt-2"
+                  className="mt-2 w-full whitespace-normal px-4 py-6 text-base sm:px-10 sm:text-lg btn-iridescent"
                   onClick={() => {
                     navigate('/contact');
                   }}
