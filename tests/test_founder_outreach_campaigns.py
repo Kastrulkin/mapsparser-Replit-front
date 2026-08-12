@@ -2357,7 +2357,7 @@ def test_current_map_news_is_a_supported_content_activity_signal():
     selected = select_outreach_template("signal", candidate)
     assert selected["key"] == "active_social_multichannel_content_v1"
     body = _render_outreach_template_body(selected, candidate)
-    assert "Владельцы часто говорят, что на посты не хватает времени" in body
+    assert "Часто на посты не хватает времени: надо собраться и написать пост" in body
     assert "LocalOS подготовит готовые тексты" in body
     assert body.endswith("Подготовить для Эсма пример контент-плана на неделю?")
     with_audit = attach_public_audit_link(
