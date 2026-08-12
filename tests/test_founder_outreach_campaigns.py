@@ -2352,6 +2352,7 @@ def test_current_map_news_is_a_supported_content_activity_signal():
         "recipient": "Эсма",
         "category": "Клиника косметологии",
         "signal_combo": signal["signal_combo"],
+        "channel": "email",
     }
     selected = select_outreach_template("signal", candidate)
     assert selected["key"] == "active_social_multichannel_content_v1"

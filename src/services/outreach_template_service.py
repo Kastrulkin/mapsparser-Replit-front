@@ -361,7 +361,10 @@ def _render_outreach_template_body(
 
     if key == "active_social_multichannel_content_v1":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
-        if _text(candidate.get("evidence_kind")) == "active_map_news":
+        if (
+            _text(candidate.get("evidence_kind")) == "active_map_news"
+            and _text(candidate.get("channel")) == "email"
+        ):
             return (
                 f"Здравствуйте! Я {identity}.\n\n"
                 f"{observation}\n\n"
@@ -544,6 +547,13 @@ def template_owner_pain_matches(
     key = _text(selection.get("key"))
     if not key:
         return True
-    markers = tuple(_TEMPLATE_BY_KEY[key].get("pain_markers") or ())
+    if (
+        key == "active_social_multichannel_content_v1"
+        and _text(candidate.get("evidence_kind")) == "active_map_news"
+        and _text(candidate.get("channel")) == "email"
+    ):
+        markers = ("на посты не хватает времени", "приходится переделывать")
+    else:
+        markers = tuple(_TEMPLATE_BY_KEY[key].get("pain_markers") or ())
     normalized = _text(text).lower()
     return bool(markers and all(_text(marker).lower() in normalized for marker in markers))
