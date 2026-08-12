@@ -206,7 +206,7 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
         if not _is_beauty_or_medical(candidate):
             reasons.append("beauty_segment_required")
     elif template_key == "active_social_multichannel_content_v1":
-        if evidence_kind != "active_social_activity":
+        if evidence_kind not in {"active_social_activity", "active_map_news"}:
             reasons.append("current_official_social_activity_required")
     elif template_key == "crm_completed_service_content_v2":
         if not _crm_provider(candidate):

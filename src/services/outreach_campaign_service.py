@@ -1768,6 +1768,24 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
                 "source_type": "public_audit_current_state",
                 "signal_combo": "map_content_gap",
             })
+        else:
+            ledger.append({
+                "id": "current-map-news-activity",
+                "kind": "active_map_news",
+                "fact": (
+                    f"Вижу, вы ведёте карточку {_text(context.get('lead_name'))} "
+                    "на Яндекс Картах: там опубликованы новости."
+                ),
+                "status": "observed",
+                "source_url": context.get("source_url"),
+                "observed_at": audit_observed_at,
+                "freshness": "current_snapshot",
+                "confidence": 0.95,
+                "hypothesis": None,
+                "relevance": "Один материал для нескольких площадок приходится адаптировать отдельно.",
+                "source_type": "public_audit_current_state",
+                "signal_combo": "active_social_multichannel_content",
+            })
     social_activity = (
         context.get("official_social_activity")
         if isinstance(context.get("official_social_activity"), dict)
@@ -2033,7 +2051,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             rank = -1
         elif kind == "service_compatibility":
             rank = 0
-        elif beauty_sales and kind == "active_social_activity":
+        elif beauty_sales and kind in {"active_social_activity", "active_map_news"}:
             rank = 0
         elif beauty_sales and kind in {"telegram_post", "social_post"}:
             rank = 1

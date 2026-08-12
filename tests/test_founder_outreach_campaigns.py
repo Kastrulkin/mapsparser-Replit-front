@@ -29,6 +29,7 @@ from services.outreach_campaign_service import (
     _strategy_dimensions,
     resolve_sender_mode,
 )
+from services.outreach_template_service import select_outreach_template
 
 
 def test_recent_research_history_keeps_latest_contract_and_older_public_signals():
@@ -2313,6 +2314,43 @@ def test_official_activity_summary_ranks_before_individual_social_posts_for_beau
     )
 
     assert ledger[0]["id"] == "official-social-activity-recent"
+
+
+def test_current_map_news_is_a_supported_content_activity_signal():
+    ledger = build_evidence_ledger(
+        {
+            "workstream_type": "localos_sales",
+            "category": "Клиника косметологии",
+            "lead_name": "Эсма",
+            "source_url": "https://yandex.ru/maps/org/123",
+            "public_audit_page_json": {
+                "audit": {
+                    "current_state": {"news_count": 10},
+                    "parse_context": {
+                        "facts_verified": True,
+                        "last_parse_status": "completed",
+                        "last_parse_at": "2026-08-12T09:00:00Z",
+                    },
+                }
+            },
+        }
+    )
+
+    signal = ledger[0]
+    assert signal["kind"] == "active_map_news"
+    assert "опубликованы новости" in signal["fact"]
+    candidate = {
+        "evidence_kind": signal["kind"],
+        "observed_fact": signal["fact"],
+        "source_url": signal["source_url"],
+        "freshness": signal["freshness"],
+        "evidence_status": signal["status"],
+        "recipient": "Эсма",
+        "category": "Клиника косметологии",
+        "signal_combo": signal["signal_combo"],
+    }
+    selected = select_outreach_template("signal", candidate)
+    assert selected["key"] == "active_social_multichannel_content_v1"
 
 
 def test_campaign_quality_gate_is_conservative_and_exposes_every_criterion():
