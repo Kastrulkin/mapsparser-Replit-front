@@ -145,14 +145,14 @@ const ruCopy: LandingCopy = {
   networkPrivacy: "Данные компаний и клиентов остаются закрытыми. Другим бизнесам доступны только общие правила и обезличенные способы работы.",
   networkLabels: ["Один бизнес решает знакомую задачу", "LocalOS проверяет, что сработало", "Другие используют готовый способ"],
   tasksEyebrow: "Боли владельцев",
-  tasksTitle: "Знакомо? Вот что берёт на себя LocalOS",
-  tasksIntro: "Пять повторяющихся болей из сообщений владельцев — и конкретный ответ на каждую.",
+  tasksTitle: "Знакомо? LocalOS берёт это на себя",
+  tasksIntro: "Пять ситуаций из рабочих чатов владельцев. Для каждой — конкретная работа LocalOS.",
   tasks: [
-    { title: "Клиентов мало. Реклама идёт, а запись нестабильна", description: "LocalOS проверяет, как бизнес виден на картах, готовит исправления и ищет локальные партнёрства. Это даёт каналы привлечения помимо платной рекламы." },
-    { title: "День забит, а тут отзыв. И снова нечего публиковать", description: "LocalOS собирает отзывы без ответа, готовит черновики и поддерживает очередь публикаций. Владелец проверяет важное и разрешает отправку." },
-    { title: "Работы много, а средний чек всё равно маленький", description: "LocalOS показывает, какие услуги продаются, как меняются средний чек и загрузка. Помогает выбрать гипотезу и проверить её на цифрах." },
-    { title: "Если не я, то никто. Стоит отвлечься — всё останавливается", description: "LocalOS превращает повторяющуюся работу в понятные сценарии. Владелец утверждает правила, скрипт выполняет задачу, а на экран выносятся только решения." },
-    { title: "Клиенты есть, все заняты, а в конце месяца остаются копейки", description: "LocalOS сводит выручку, расходы, средний чек и загрузку. Показывает, где результат расходится с ожиданиями и какой вопрос нужно разобрать первым." },
+    { title: "Реклама идёт, а стабильной записи всё равно нет", description: "LocalOS проверяет карточки на картах: услуги, цены, фото, публикации и отзывы. Готовит исправления и предложения местным партнёрам. Внешние сообщения — только после вашего подтверждения." },
+    { title: "День забит. Отзыв ждёт ответа, а публиковать снова нечего", description: "LocalOS собирает отзывы без ответа, готовит черновики и планирует публикации. Вы проверяете важное и подтверждаете отправку." },
+    { title: "Работы много, а средний чек всё равно маленький", description: "LocalOS показывает, какие услуги продаются, как меняются средний чек и загрузка. Готовит план допродаж и кросс-продаж для увеличения среднего чека." },
+    { title: "Проще сделать самому, чем объяснять и потом проверять", description: "LocalOS описывает повторяющуюся задачу как сценарий. Вы один раз утверждаете правила, затем скрипт выполняет работу. Если нужно решение, скрипт останавливается." },
+    { title: "Клиенты есть, все заняты, а в конце месяца остаются копейки", description: "LocalOS сводит выручку, расходы, средний чек и загрузку. Вы видите динамику показателей и решаете, что проверить первым: цены, загрузку или расходы." },
   ],
   retentionNote: "При подключении клиентских данных LocalOS также может находить клиентов, которые давно не возвращались, и готовить предложения для повторного визита.",
   workEyebrow: "Порядок работы",
@@ -212,14 +212,14 @@ const enCopy: LandingCopy = {
   networkPrivacy: "Company and customer data is never passed to other businesses. Only reviewed rules and anonymised ways of working are shared.",
   networkLabels: ["One business finds a solution", "LocalOS reviews the practice", "Others do not start from zero"],
   tasksEyebrow: "Owner pain points",
-  tasksTitle: "Sound familiar? Here is what LocalOS takes on",
-  tasksIntro: "Five recurring pain points in owners' messages — and a concrete response to each one.",
+  tasksTitle: "Sound familiar? LocalOS takes this work on",
+  tasksIntro: "Five situations from business owners' working chats. Each one is paired with the work LocalOS handles.",
   tasks: [
-    { title: "Customers are scarce. Ads are running, but bookings remain uneven", description: "LocalOS checks how the business appears on maps, prepares corrections, and finds local partnership opportunities. That creates acquisition channels beyond paid advertising." },
-    { title: "The day is full, then a review arrives — and there is still nothing to post", description: "LocalOS collects unanswered reviews, prepares drafts, and maintains the publishing queue. The owner reviews what matters and approves sending." },
-    { title: "There is plenty of work, but the average ticket is still low", description: "LocalOS shows which services sell and how average spend and capacity change. It helps select a hypothesis and check it against the numbers." },
-    { title: "If I do not do it, nobody will. The moment I step away, work stops", description: "LocalOS turns recurring work into clear procedures. The owner approves the rules, a script performs the task, and only decisions return to the owner." },
-    { title: "Customers are there and everyone is busy, but little is left at month-end", description: "LocalOS brings revenue, expenses, average spend, and capacity together. It shows where results differ from expectations and what question should be examined first." },
+    { title: "Ads are running, but bookings are still uneven", description: "LocalOS checks map listings, including services, prices, photos, posts, and reviews. It prepares corrections and proposals for local partners. External messages are sent only after your approval." },
+    { title: "The day is full. A review needs an answer, and there is still nothing to post", description: "LocalOS collects unanswered reviews, prepares drafts, and schedules posts. You review what matters and approve sending." },
+    { title: "There is plenty of work, but the average ticket is still low", description: "LocalOS shows which services sell and how average spend and capacity change. It prepares an upsell and cross-sell plan designed to increase the average ticket." },
+    { title: "It is easier to do it myself than explain it and check it later", description: "LocalOS turns a recurring task into a procedure. You approve the rules once, then a script performs the work. If a decision is needed, the script stops." },
+    { title: "Customers are there and everyone is busy, but little is left at month-end", description: "LocalOS brings revenue, expenses, average spend, and capacity together. You see how the numbers change and decide what to check first: pricing, capacity, or costs." },
   ],
   retentionNote: "When customer data is connected, LocalOS can also identify customers who have not returned and prepare an offer for a repeat visit.",
   workEyebrow: "How the work is handled",
@@ -746,29 +746,29 @@ const Index = () => {
 
         <section className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24" id="agents">
           <div className="mx-auto max-w-7xl">
-            <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr] lg:items-end lg:gap-16">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(22rem,0.62fr)] lg:items-end lg:gap-20">
               <div>
                 <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">{copy.tasksEyebrow}</span>
                 <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.tasksTitle}</h2>
               </div>
               <p className="max-w-2xl text-pretty text-lg leading-8 text-slate-600 lg:justify-self-end">{copy.tasksIntro}</p>
             </div>
-            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-6">
               {copy.tasks.map((task, index) => {
                 const Icon = taskIcons[index];
                 return (
-                  <article className={`group relative flex flex-col overflow-hidden rounded-2xl bg-white p-6 text-slate-950 shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] transition-[box-shadow,transform] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_42px_rgba(15,23,42,0.09)] ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} key={task.title}>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                        <Icon className="h-5 w-5" aria-hidden="true" />
+                  <article className={`relative flex flex-col overflow-hidden rounded-[1.25rem] bg-white text-slate-950 shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] ${index < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} key={task.title}>
+                    <div className="flex flex-1 flex-col p-6 sm:p-7">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                          <Icon className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <span className="text-sm font-bold text-slate-300 tabular-nums">0{index + 1}</span>
                       </div>
-                      <span className="text-sm font-bold text-slate-300 tabular-nums">0{index + 1}</span>
+                      <div className="mt-6 h-0.5 w-8 rounded-full bg-orange-500" aria-hidden="true" />
+                      <h3 className="mt-5 text-pretty text-xl font-bold leading-7">{task.title}</h3>
                     </div>
-                    <div className="mt-7 flex items-start gap-3">
-                      <span className="font-serif text-4xl leading-7 text-orange-500" aria-hidden="true">“</span>
-                      <h3 className="text-pretty text-xl font-bold leading-7">{task.title}</h3>
-                    </div>
-                    <div className="mt-7 flex flex-1 flex-col rounded-xl bg-orange-50 p-5 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.10)]">
+                    <div className="border-t border-orange-100 bg-[#fffaf5] p-6 sm:p-7">
                       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-orange-700">
                         <CircleCheck className="h-4 w-4" aria-hidden="true" />
                         LocalOS
