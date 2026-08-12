@@ -86,7 +86,7 @@ type LandingCopy = {
   problemTitle: string;
   problemParagraphs: string[];
   networkTitle: string;
-  networkParagraphs: string[];
+  networkSummary: string;
   networkPrivacy: string;
   networkLabels: string[];
   tasksEyebrow: string;
@@ -142,10 +142,7 @@ const ruCopy: LandingCopy = {
     "LocalOS снимает повторяющиеся задачи с владельца. Чтобы бизнес продолжал работать, даже когда вы не держите в голове каждый следующий шаг.",
   ],
   networkTitle: "У вас одна точка. Опыт — как у сети",
-  networkParagraphs: [
-    "У локальных компаний много похожих задач: как оформить услуги, ответить на сложный отзыв, вернуть клиентов или понять, на какие цифры смотреть. Обычно в такой ситуации хочется спросить владельца, который уже с этим разобрался.",
-    "LocalOS собирает такой опыт. Если способ работы дал результат, мы проверяем его, отделяем полезное от случайного и превращаем в готовый сценарий. Следующему владельцу не приходится искать решение с нуля.",
-  ],
+  networkSummary: "Похожие задачи повторяются в тысячах компаний. LocalOS проверяет найденные решения и сохраняет то, что можно использовать снова.",
   networkPrivacy: "Данные компаний и клиентов остаются закрытыми. Другим бизнесам доступны только общие правила и обезличенные способы работы.",
   networkLabels: ["Один бизнес решает знакомую задачу", "LocalOS проверяет, что сработало", "Другие используют готовый способ"],
   tasksEyebrow: "Работа LocalOS",
@@ -212,10 +209,7 @@ const enCopy: LandingCopy = {
     "LocalOS turns recurring work into scheduled tasks, completes them, and shows the owner only what needs a decision.",
   ],
   networkTitle: "You may have one location. Your experience can work like a network's",
-  networkParagraphs: [
-    "A network does not solve the same problem from scratch in every branch. Once a method works, it is checked and used again.",
-    "LocalOS brings that approach to independent businesses. We collect working practices, review them, and turn them into reusable procedures. The next company does not start with a blank page.",
-  ],
+  networkSummary: "The same problems repeat across local businesses. LocalOS checks the solutions that worked and keeps what can be used again.",
   networkPrivacy: "Company and customer data is never passed to other businesses. Only reviewed rules and anonymised ways of working are shared.",
   networkLabels: ["One business finds a solution", "LocalOS reviews the practice", "Others do not start from zero"],
   tasksEyebrow: "Work handled by LocalOS",
@@ -694,14 +688,12 @@ const Index = () => {
 
         <section className="bg-[#ece9e2] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
-            <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-end lg:gap-16">
+            <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.62fr)] lg:items-end lg:gap-20">
               <div>
                 <span className="text-sm font-bold uppercase tracking-[0.18em] text-orange-700">02</span>
                 <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] text-slate-950 sm:text-4xl lg:text-5xl">{copy.networkTitle}</h2>
               </div>
-              <div className="grid gap-5 text-pretty text-base leading-7 text-slate-600 sm:grid-cols-2">
-                {copy.networkParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-              </div>
+              <p className="max-w-xl border-l-2 border-orange-500 pl-5 text-pretty text-lg leading-8 text-slate-600">{copy.networkSummary}</p>
             </div>
 
             <div className="mt-12 grid overflow-hidden rounded-[1.75rem] bg-slate-950 shadow-[0_24px_70px_rgba(15,23,42,0.16)] lg:grid-cols-[1.05fr_0.95fr]">
