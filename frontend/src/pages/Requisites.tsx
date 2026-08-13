@@ -1,7 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Footer from "@/components/Footer";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { Navigate } from "react-router-dom";
 
 const Requisites = () => {
+  const { language } = useLanguage();
+
+  if (language !== "ru") {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

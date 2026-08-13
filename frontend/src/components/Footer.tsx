@@ -107,7 +107,7 @@ const Footer = () => {
     company: [
       { name: aboutLabels[language], href: '/about' },
       { name: t.footer.contacts, href: '/contact' },
-      { name: t.footer.requisites ?? (isRu ? 'Реквизиты' : 'Requisites'), href: '/requisites' },
+      ...(isRu ? [{ name: t.footer.requisites ?? 'Реквизиты', href: '/requisites' }] : []),
     ],
     materials: [
       { name: contentCopy[language].navigation.articles.name, href: "/articles" },
