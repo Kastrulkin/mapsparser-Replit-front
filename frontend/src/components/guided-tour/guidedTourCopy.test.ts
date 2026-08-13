@@ -10,7 +10,7 @@ describe('guided tour localization', () => {
     const steps = guidedTourStepsForLanguage(language);
 
     expect(steps).toHaveLength(GUIDED_TOUR_STEP_LAYOUTS.length);
-    expect(copy.welcome.capabilities).toHaveLength(7);
+    expect(copy.welcome.capabilities).toHaveLength(6);
     expect(copy.entry.pageTitle.trim()).not.toBe('');
     expect(copy.banner.notice.trim()).not.toBe('');
     expect(steps.every((step) => step.chapterTitle.trim() && step.title.trim() && step.body.trim())).toBe(true);
@@ -27,7 +27,7 @@ describe('guided tour localization', () => {
       title: expect.any(String),
       body: expect.any(String),
     });
-    ['agents-signals', 'agents-today', 'agents-employees', 'agents-control'].forEach((key) => {
+    ['agents-signals', 'agents-today', 'agents-employees', 'agents-control', 'agents-run', 'agents-review', 'agents-history'].forEach((key) => {
       expect(stepEntries.find(([stepKey]) => stepKey === key)?.[1]).toMatchObject({
         title: expect.any(String),
         body: expect.any(String),
@@ -61,8 +61,8 @@ describe('guided tour localization', () => {
 
     expect(text).not.toMatch(vaguePhrases);
     expect(steps.find((step) => step.key === 'partnership-candidates')).toMatchObject({
-      title: 'Готовое предложение для «Ромашки»',
-      body: 'В карточке видно, что предложить партнёру, как с ним связаться и что делать после согласования.',
+      title: 'Что уже обсудили с «Ромашкой»',
+      body: 'Здесь видно, что предложили компании, как планировали связаться и что нужно сделать дальше.',
     });
   });
 
