@@ -370,7 +370,8 @@ def founder_led_localos_text(
     )
     signal_combo = clean_copy(candidate.get("signal_combo"))
     composite_localos_signal = signal_combo in FOUNDER_LED_SIGNAL_COMBOS
-    if not segment and not composite_localos_signal:
+    has_selected_template = bool(clean_copy(candidate.get("outreach_template_key")))
+    if not segment and not composite_localos_signal and not has_selected_template:
         return None
 
     sender = clean_copy(candidate.get("sender"))

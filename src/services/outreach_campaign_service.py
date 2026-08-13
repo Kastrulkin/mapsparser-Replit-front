@@ -2954,7 +2954,7 @@ def _quality_gate(
         or contains(candidate.get("founder_proof"))
     )
     checks = {
-        "removal": contains(candidate.get("recipient")) and (
+        "removal": selected_template_copy or contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
             or grounded_observation
             or approved_case_present
@@ -2968,7 +2968,7 @@ def _quality_gate(
                 or _text(angle) in {
                     "founder_story", "proof", "audit_step", "phone_handoff",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
-                    "crm_growth", "crm_content",
+                    "crm_growth", "crm_content", "reviews_content",
                 }
             )
             and (
@@ -3010,7 +3010,7 @@ def _quality_gate(
                 and _text(angle) in {
                     "founder_story", "proof", "audit_step", "phone_handoff",
                     "content_operations", "average_ticket", "reviews_service", "integrated_system", "founder_origin",
-                    "crm_growth", "crm_content",
+                    "crm_growth", "crm_content", "reviews_content",
                 }
                 and (founder_context_present or selected_candidate_link)
             )

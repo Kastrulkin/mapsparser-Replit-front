@@ -35,10 +35,10 @@ def _candidate(**overrides):
     return candidate
 
 
-def test_library_contains_nine_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v7"
-    assert len(OUTREACH_TEMPLATES) == 9
-    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 9
+def test_library_contains_ten_versioned_owner_templates():
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v8"
+    assert len(OUTREACH_TEMPLATES) == 10
+    assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 10
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
     assert all(item.get("owner_language") for item in OUTREACH_TEMPLATES)
 
@@ -132,6 +132,74 @@ def test_active_social_template_uses_time_pain_and_concrete_multichannel_result(
     assert text.endswith("Вам было бы интересно сэкономить время на ведении площадок?")
     assert text.count("?") == 1
     assert "—" not in text
+
+
+def test_reviews_content_template_uses_current_count_and_owner_time_pain():
+    candidate = _candidate(
+        recipient="Проформа",
+        observed_fact="На Яндекс Картах у вас опубликовано 42 отзыва.",
+        evidence_kind="map_reviews",
+    )
+
+    selection = select_outreach_template("reviews_content", candidate)
+    text = render_outreach_template(selection, candidate)
+
+    assert selection["key"] == "reviews_to_content_plan_v1"
+    assert "На поиск тем и написание постов тоже уходит время" in text
+    assert "контент-план и тексты для Telegram, VK и Яндекс Карт" in text
+    assert "На Яндекс Картах у вас опубликовано 42 отзыва" in text
+    assert text.endswith("Показать три темы из этих отзывов?")
+    assert text.count("?") == 1
+    assert "—" not in text
+    assert template_owner_pain_matches(text, "reviews_content", candidate) is True
+
+
+def test_reviews_content_template_is_used_for_non_beauty_local_business():
+    candidate = _candidate(
+        recipient="Дыши на 100%",
+        recipient_category="Фитнес-клуб",
+        recipient_segment="local_business",
+        observed_fact="На Яндекс Картах у вас опубликовано 60 отзывов.",
+        evidence_kind="map_reviews",
+        outreach_template_key="reviews_to_content_plan_v1",
+        outreach_template_version=1,
+        trust_statement="Подтверждённый опыт LocalOS",
+        next_step="Показать три темы из этих отзывов?",
+    )
+
+    message = _format_channel_outreach_message(
+        _message_for_angle("reviews_content", candidate, None, []),
+        channel="email",
+        sender_mode="localos",
+    )
+    gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="reviews_content",
+    )
+
+    assert "На Яндекс Картах у вас опубликовано 60 отзывов" in message
+    assert message.endswith("--\nАлександр\nоснователь ЛокалОС")
+    assert gate["passed"] is True
+    assert gate["total_score"] == 18
+
+
+def test_reviews_content_template_rejects_missing_or_zero_review_count():
+    missing = _candidate(
+        observed_fact="На Яндекс Картах есть отзывы.",
+        evidence_kind="map_reviews",
+    )
+    zero = _candidate(
+        observed_fact="На Яндекс Картах опубликовано 0 отзывов.",
+        evidence_kind="map_reviews",
+    )
+
+    assert select_outreach_template("reviews_content", missing)["status"] == "individual_copy_required"
+    assert select_outreach_template("reviews_content", zero)["status"] == "individual_copy_required"
 
 
 def test_public_audit_link_is_added_only_for_explicit_first_touch():
@@ -374,6 +442,10 @@ def test_all_templates_pass_current_quality_gate_on_supported_evidence():
         ("reviews_service", _candidate(
             observed_fact="В карточке есть свежий отзыв без ответа компании.",
             evidence_kind="review_signal",
+        )),
+        ("reviews_content", _candidate(
+            observed_fact="На Яндекс Картах у вас опубликовано 42 отзыва.",
+            evidence_kind="map_reviews",
         )),
         ("content_operations", _candidate(
             observed_fact="В карточке нет новостей.",

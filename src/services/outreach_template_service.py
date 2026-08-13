@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v7"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v8"
 
 OUTREACH_TEMPLATES = (
     {
@@ -90,6 +90,17 @@ OUTREACH_TEMPLATES = (
         "owner_language": "День забит, а тут приходит новый отзыв.",
         "pain_markers": ("день забит", "приходит новый отзыв"),
         "required_evidence": ("current_unanswered_review",),
+        "question_policy": "single_cta",
+    },
+    {
+        "key": "reviews_to_content_plan_v1",
+        "label": "Отзывы как готовые темы для контента",
+        "version": 1,
+        "angles": ("reviews_content",),
+        "pain_key": "operations_and_burnout",
+        "owner_language": "На поиск идей и написание постов не хватает времени.",
+        "pain_markers": ("на поиск тем и написание постов тоже уходит время",),
+        "required_evidence": ("current_map_review_count",),
         "question_policy": "single_cta",
     },
     {
@@ -238,6 +249,11 @@ def _matches(template_key: str, angle: str, candidate: dict[str, Any]) -> tuple[
             "отзыв" in fact and "без ответ" in fact
         ):
             reasons.append("unanswered_review_required")
+    elif template_key == "reviews_to_content_plan_v1":
+        fact = _text(candidate.get("observed_fact")).lower()
+        count = re.search(r"(?:опубликовано|есть)\s+(\d+)\s+отзыв", fact)
+        if evidence_kind != "map_reviews" or not count or int(count.group(1)) < 1:
+            reasons.append("current_map_review_count_required")
     elif template_key == "map_content_gap_v4":
         fact = _text(candidate.get("observed_fact")).lower()
         if signal_combo not in {
@@ -451,6 +467,21 @@ def _render_outreach_template_body(
             "День забит, а тут приходит новый отзыв - отвечать снова владельцу или сотруднику.\n\n"
             "LocalOS отслеживает новые отзывы, группирует темы и готовит черновики ответов. Сотруднику остаётся проверить и опубликовать ответ.\n\n"
             "Вам было бы интересно сэкономить время на работе с отзывами?"
+        )
+    if key == "reviews_to_content_plan_v1":
+        observed = _text(candidate.get("observed_fact"))
+        count = re.search(r"(?:опубликовано|есть)\s+(\d+)\s+(отзыв(?:а|ов)?)", observed, flags=re.IGNORECASE)
+        if not count:
+            return None
+        observation = observed.rstrip(" .") + "."
+        return (
+            f"Здравствуйте! Я {identity}.\n\n"
+            f"{observation}\n\n"
+            "На поиск тем и написание постов тоже уходит время. При этом в отзывах уже есть вопросы, "
+            "впечатления и темы, о которых можно рассказывать клиентам.\n\n"
+            "LocalOS соберёт повторяющиеся темы и подготовит по ним контент-план и тексты для Telegram, "
+            "VK и Яндекс Карт. Сотруднику останется подтвердить и опубликовать их.\n\n"
+            "Показать три темы из этих отзывов?"
         )
     if key == "map_content_gap_v4":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
