@@ -18,17 +18,21 @@ import { Textarea } from '@/components/ui/textarea';
 import type { GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getFinancePageCopy } from '@/i18n/financePageCopy';
 
-const crmStatusLabel = (status?: string) => {
-  if (status === 'reviewing') return 'изучаем подключение';
-  if (status === 'planned') return 'запланировано';
-  if (status === 'connected') return 'подключено';
-  if (status === 'closed') return 'закрыто';
-  if (status === 'declined') return 'пока не поддерживается';
-  return 'запрос получен';
+const crmStatusLabel = (status: string | undefined, labels: ReturnType<typeof getFinancePageCopy>['status']) => {
+  if (status === 'reviewing') return labels.reviewing;
+  if (status === 'planned') return labels.planned;
+  if (status === 'connected') return labels.connected;
+  if (status === 'closed') return labels.closed;
+  if (status === 'declined') return labels.declined;
+  return labels.received;
 };
 
 export const FinancePage = () => {
+  const { language } = useLanguage();
+  const copy = getFinancePageCopy(language);
   const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
   const [searchParams] = useSearchParams();
   const [dataHealth, setDataHealth] = useState<GrowthDataHealth | null>(null);
@@ -87,8 +91,8 @@ export const FinancePage = () => {
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Финансы"
-        description="Короткий обзор денег, загрузки и ближайшего управленческого шага."
+        title={copy.title}
+        description={copy.description}
         icon={Wallet}
       />
 
@@ -101,42 +105,40 @@ export const FinancePage = () => {
             <FinanceThresholdsPanel currentBusinessId={currentBusinessId} />
             <FinanceImportPanel currentBusinessId={currentBusinessId} />
             <DashboardSection
-              title="Как подготовить выгрузку из CRM"
-              description="Выберите нужный период, выгрузите CSV или Excel и загрузите файл выше. LocalOS попробует узнать колонки; перед импортом вы сможете проверить и поправить соответствия."
+              title={copy.prepareTitle}
+              description={copy.prepareDescription}
             >
               <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-3">
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />1. Выберите период и выгрузите отчёт из CRM.</div>
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />2. Проверьте, как LocalOS понял колонки и строки.</div>
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />3. Подтвердите импорт только после проверки.</div>
+                {copy.steps.map((step) => <div key={step} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><FileSpreadsheet className="mb-2 h-4 w-4 text-slate-500" />{step}</div>)}
               </div>
               <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200"><MessageCircle className="h-5 w-5" /></span>
                     <div>
-                      <div className="font-semibold text-slate-950">Нужно прямое подключение к CRM?</div>
-                      <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Файл можно загрузить без подключения. Если нужна автоматическая синхронизация, отправьте название вашей CRM.</p>
+                      <div className="font-semibold text-slate-950">{copy.connectionTitle}</div>
+                      <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">{copy.connectionDescription}</p>
                     </div>
                   </div>
                   {crmRequestState !== 'success' ? (
                     <Button type="button" variant="outline" className="min-h-11 shrink-0 transition-transform active:scale-[0.96]" onClick={() => setCrmRequestOpen((value) => !value)}>
-                      Заказать подключение
+                      {copy.requestConnection}
                     </Button>
                   ) : null}
                 </div>
                 {crmRequestState === 'success' ? (
-                  <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-700" role="status"><CheckCircle2 className="h-4 w-4" />Запрос сохранён. Мы сообщим о вариантах подключения.</div>
+                  <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-700" role="status"><CheckCircle2 className="h-4 w-4" />{copy.saved}</div>
                 ) : crmLatest ? (
-                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status"><CheckCircle2 className="h-4 w-4 text-slate-500" /><span><strong>{crmLatest.crm_name}</strong> · {crmStatusLabel(crmLatest.status)}</span></div>
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700" role="status"><CheckCircle2 className="h-4 w-4 text-slate-500" /><span><strong>{crmLatest.crm_name}</strong> · {crmStatusLabel(crmLatest.status, copy.status)}</span></div>
                 ) : crmRequestOpen ? (
                   <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4">
-                    <Input value={crmName} onChange={(event) => setCrmName(event.target.value)} placeholder="Например, МойСклад или Altegio" aria-label="Название CRM" />
-                    <Input value={crmUrl} onChange={(event) => setCrmUrl(event.target.value)} placeholder="Ссылка на CRM — необязательно" aria-label="Ссылка на CRM" inputMode="url" />
-                    <Input value={crmContact} onChange={(event) => setCrmContact(event.target.value)} placeholder="Telegram, email или телефон — необязательно" aria-label="Контакт для связи" />
-                    <Textarea value={crmNote} onChange={(event) => setCrmNote(event.target.value)} placeholder="Какие данные важно загружать: выручка, средний чек, загрузка…" aria-label="Комментарий к CRM" />
-                    {crmRequestState === 'error' ? <p className="text-sm text-rose-700" role="alert">Не удалось сохранить запрос. Повторите ещё раз.</p> : null}
+                    <Input value={crmName} onChange={(event) => setCrmName(event.target.value)} placeholder={copy.crmName} aria-label={copy.crmName} />
+                    <Input value={crmUrl} onChange={(event) => setCrmUrl(event.target.value)} placeholder={copy.crmUrl} aria-label={copy.crmUrl} inputMode="url" />
+                    <Input value={crmContact} onChange={(event) => setCrmContact(event.target.value)} placeholder={copy.contact} aria-label={copy.contact} />
+                    <Textarea value={crmNote} onChange={(event) => setCrmNote(event.target.value)} placeholder={copy.note} aria-label={copy.note} />
+                    {crmRequestState === 'error' ? <p className="text-sm text-rose-700" role="alert">{copy.saveError}</p> : null}
                     <Button type="button" className="min-h-11 justify-self-start gap-2 transition-transform active:scale-[0.96]" disabled={!crmName.trim() || crmRequestState === 'pending'} onClick={() => void submitCrmRequest()}>
-                      <Send className="h-4 w-4" />{crmRequestState === 'pending' ? 'Сохраняем…' : 'Отправить запрос'}
+                      <Send className="h-4 w-4" />{crmRequestState === 'pending' ? copy.saving : copy.send}
                     </Button>
                   </div>
                 ) : null}
@@ -149,8 +151,8 @@ export const FinancePage = () => {
             <FinancialMetrics currentBusinessId={currentBusinessId} />
             <ROICalculator />
             <DashboardSection
-              title="Журнал операций"
-              description="Все транзакции по текущему бизнесу в одном месте."
+              title={copy.journal}
+              description={copy.journalDescription}
             >
               <TransactionTable currentBusinessId={currentBusinessId} />
             </DashboardSection>

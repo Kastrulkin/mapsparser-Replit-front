@@ -41,6 +41,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
 import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getFinanceWorkspaceCopy } from '@/i18n/financeWorkspaceCopy';
 
 type KpiValue = number | string | null | undefined;
 
@@ -128,7 +130,7 @@ type FinancePeriod = {
 };
 
 const rub = (value: KpiValue) => {
-  if (value == null) return 'н/д';
+  if (value == null) return '—';
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
@@ -137,17 +139,17 @@ const rub = (value: KpiValue) => {
 };
 
 const numberValue = (value: KpiValue) => {
-  if (value == null) return 'н/д';
+  if (value == null) return '—';
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(Number(value));
 };
 
 const percent = (value: KpiValue) => {
-  if (value == null) return 'н/д';
+  if (value == null) return '—';
   return `${numberValue(value)}%`;
 };
 
 const formatFinanceTableCell = (key: string, value: KpiValue | string) => {
-  if (value == null || value === '') return 'н/д';
+  if (value == null || value === '') return '—';
   if (key === 'status') {
     const labels: Record<string, string> = {
       star: 'Лидер',
@@ -252,6 +254,8 @@ const getMonthPeriod = (value: string): FinancePeriod => {
 };
 
 export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusinessId, setupTools, legacyTools, dataHealth, initialTab = 'overview' }) => {
+  const { language } = useLanguage();
+  const copy = getFinanceWorkspaceCopy(language);
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -612,12 +616,12 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
       <section id="finance-tabs" className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <Tabs value={activeFinanceTab} onValueChange={setActiveFinanceTab}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:grid-cols-6">
-            <TabsTrigger value="overview">Обзор</TabsTrigger>
-            <TabsTrigger value="data">Ввести</TabsTrigger>
-            <TabsTrigger value="services">Услуги</TabsTrigger>
-            <TabsTrigger value="team">Команда</TabsTrigger>
-            <TabsTrigger value="workplaces">Рабочие места</TabsTrigger>
-            <TabsTrigger value="settings">Импорт</TabsTrigger>
+            <TabsTrigger value="overview">{copy.tabs[0]}</TabsTrigger>
+            <TabsTrigger value="data">{copy.tabs[1]}</TabsTrigger>
+            <TabsTrigger value="services">{copy.tabs[2]}</TabsTrigger>
+            <TabsTrigger value="team">{copy.tabs[3]}</TabsTrigger>
+            <TabsTrigger value="workplaces">{copy.tabs[4]}</TabsTrigger>
+            <TabsTrigger value="settings">{copy.tabs[5]}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-5 pt-5">
@@ -643,26 +647,26 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             <ImpactPanel impact={impact} />
             <div id="finance-next-action">
               <DashboardSection
-                title="Ближайший шаг"
-                description="Здесь — только короткая подсказка. Полный план действий и отметки выполнения находятся в «Прогрессе»."
+                title={copy.nextTitle}
+                description={copy.nextDescription}
               >
                 {nextRecommendation ? (
                   <div className="flex flex-col gap-4 rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">Сейчас важнее всего</div>
-                      <div className="mt-2 text-balance font-semibold text-slate-950">{nextRecommendation.title}</div>
-                      <p className="mt-1 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{nextRecommendation.text}</p>
+                      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">{copy.priority}</div>
+                      <div className="mt-2 text-balance font-semibold text-slate-950">{language === 'ru' ? nextRecommendation.title : copy.priorityTitle}</div>
+                      <p className="mt-1 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{language === 'ru' ? nextRecommendation.text : copy.priorityText}</p>
                     </div>
                     <Button asChild className="min-h-11 shrink-0 gap-2 transition-transform active:scale-[0.96]">
                       <Link to="/dashboard/progress">
-                        Перейти к действиям
+                        {copy.goToActions}
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                     </Button>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900 shadow-[0_0_0_1px_rgba(16,185,129,0.18)]">
-                    Срочных финансовых действий нет. Общий прогресс бизнеса и следующие шаги доступны во вкладке «Прогресс».
+                    {copy.noUrgent}
                   </div>
                 )}
               </DashboardSection>
@@ -1147,6 +1151,8 @@ const FinanceHeader: React.FC<{
   loading: boolean;
   disabled: boolean;
 }> = ({ period, periodPreset, actualPeriod, quality, onPeriodPresetChange, onPeriodChange, onRefresh, loading, disabled }) => {
+  const { language } = useLanguage();
+  const copy = getFinanceWorkspaceCopy(language);
   const missing = quality?.missing || [];
   const isAllTime = periodPreset === 'all_time';
   const showCustomDates = periodPreset === 'custom';
@@ -1156,19 +1162,19 @@ const FinanceHeader: React.FC<{
   return (
     <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 xl:flex-row xl:items-center xl:justify-between">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-slate-500">Период</span>
+        <span className="text-sm font-medium text-slate-500">{copy.period}</span>
         <Select value={periodPreset} onValueChange={onPeriodPresetChange}>
           <SelectTrigger className="h-9 w-[160px] bg-white">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="last_30_days">30 дней</SelectItem>
-            <SelectItem value="last_3_months">3 месяца</SelectItem>
-            <SelectItem value="current_month">Текущий месяц</SelectItem>
-            <SelectItem value="previous_month">Прошлый месяц</SelectItem>
-            <SelectItem value="last_year">Год</SelectItem>
-            <SelectItem value="all_time">Всё время</SelectItem>
-            <SelectItem value="custom">Свой период</SelectItem>
+            <SelectItem value="last_30_days">{copy.presets[0]}</SelectItem>
+            <SelectItem value="last_3_months">{copy.presets[1]}</SelectItem>
+            <SelectItem value="current_month">{copy.presets[2]}</SelectItem>
+            <SelectItem value="previous_month">{copy.presets[3]}</SelectItem>
+            <SelectItem value="last_year">{copy.presets[4]}</SelectItem>
+            <SelectItem value="all_time">{copy.presets[5]}</SelectItem>
+            <SelectItem value="custom">{copy.presets[6]}</SelectItem>
           </SelectContent>
         </Select>
         {showCustomDates ? (
@@ -1190,18 +1196,18 @@ const FinanceHeader: React.FC<{
           </>
         ) : null}
         <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-          {isAllTime ? 'Всё время' : formatPeriodLabel(displayedPeriod)}
+          {isAllTime ? copy.presets[5] : formatPeriodLabel(displayedPeriod)}
         </span>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-          Качество: {quality ? `${quality.score}/100` : 'н/д'}
+          {copy.quality}: {quality ? `${quality.score}/100` : '—'}
         </span>
         <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">
-          {missing.length > 0 ? shortMissingLabel(missing) : 'готово к анализу'}
+          {missing.length > 0 && language === 'ru' ? shortMissingLabel(missing) : copy.ready}
         </span>
       </div>
       <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading || disabled} className="gap-2">
         <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
-        Обновить
+        {copy.refresh}
       </Button>
     </div>
   );
@@ -1213,29 +1219,31 @@ const FinanceKpiGrid: React.FC<{
   explanations: Record<string, string>;
   impact: FinanceImpact | null;
 }> = ({ kpis, statuses, explanations, impact }) => {
+  const { language } = useLanguage();
+  const copy = getFinanceWorkspaceCopy(language);
   const revenueDelta = getFinanceImpactDelta(impact, 'revenue');
   const cards = [
     {
-      label: 'Прибыль',
+      label: copy.profit,
       value: kpis.operating_profit,
       display: metricDisplay(kpis.operating_profit, rub),
-      hint: kpis.operating_margin != null ? `Маржа ${percent(kpis.operating_margin)}` : 'Не хватает расходов',
+      hint: kpis.operating_margin != null ? `${copy.margin} ${percent(kpis.operating_margin)}` : copy.missingExpenses,
       status: statuses.operating_margin,
       icon: Calculator,
     },
     {
-      label: 'Загрузка',
+      label: copy.occupancy,
       value: kpis.workplace_occupancy,
       display: metricDisplay(kpis.workplace_occupancy, percent),
-      hint: kpis.idle_workplace_hours != null ? `Простой ${numberValue(kpis.idle_workplace_hours)} ч` : 'Нет часов рабочих мест',
+      hint: kpis.idle_workplace_hours != null ? `${copy.idle} ${numberValue(kpis.idle_workplace_hours)} ${copy.hours}` : copy.noWorkplaceHours,
       status: statuses.workplace_occupancy,
       icon: Gauge,
     },
     {
-      label: 'Повторная запись',
+      label: copy.rebooking,
       value: kpis.rebooking_rate,
       display: metricDisplay(kpis.rebooking_rate, percent),
-      hint: explanations.rebooking_rate ? 'Нужны записи клиентов' : 'Следующий визит',
+      hint: explanations.rebooking_rate ? copy.recordsNeeded : copy.nextVisit,
       status: statuses.rebooking_rate,
       icon: RefreshCw,
     },
@@ -1246,15 +1254,15 @@ const FinanceKpiGrid: React.FC<{
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Выручка</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.revenue}</div>
             <div className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              {kpis.revenue == null ? 'Нет данных' : rub(kpis.revenue)}
+              {kpis.revenue == null ? copy.noData : rub(kpis.revenue)}
             </div>
           </div>
           <CircleDollarSign className="h-5 w-5 text-slate-400" />
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          <span>Средний чек: {kpis.average_ticket != null ? rub(kpis.average_ticket) : 'н/д'}</span>
+          <span>{copy.averageTicket}: {kpis.average_ticket != null ? rub(kpis.average_ticket) : '—'}</span>
           {revenueDelta ? (
             <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', revenueDelta.tone)}>
               {revenueDelta.label}
@@ -1296,6 +1304,8 @@ const FinanceRevenueChart: React.FC<{
   months: number;
   onChangeMonths: (months: number) => void;
 }> = ({ history, months, onChangeMonths }) => {
+  const { language } = useLanguage();
+  const copy = getFinanceWorkspaceCopy(language);
   const trendData = history
     .map((item) => ({
       label: item.label,
@@ -1308,13 +1318,13 @@ const FinanceRevenueChart: React.FC<{
     <Card className="border-slate-200/80 shadow-sm">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle className="text-base">Динамика выручки</CardTitle>
-          <div className="mt-1 text-sm text-slate-500">Помесячная динамика по выбранным данным.</div>
+          <CardTitle className="text-base">{copy.chartTitle}</CardTitle>
+          <div className="mt-1 text-sm text-slate-500">{copy.chartDescription}</div>
         </div>
         <div className="flex gap-1">
           {[3, 6, 12].map((item) => (
             <Button key={item} size="sm" variant={months === item ? 'default' : 'outline'} onClick={() => onChangeMonths(item)}>
-              {item} мес.
+              {item} {copy.months}
             </Button>
           ))}
         </div>
@@ -1332,13 +1342,13 @@ const FinanceRevenueChart: React.FC<{
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}к`} />
-              <Tooltip formatter={(value) => [tooltipMoney(value), 'Выручка']} />
+              <Tooltip formatter={(value) => [tooltipMoney(value), copy.revenue]} />
               <Area type="monotone" dataKey="revenue" stroke="#0f172a" fill="url(#financeHeroRevenueGradient)" strokeWidth={2} connectNulls />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
           <div className="flex h-[260px] items-center justify-center rounded-2xl bg-slate-50 px-5 text-center text-sm leading-6 text-slate-500">
-            График появится после ввода или импорта выручки.
+            {copy.chartEmpty}
           </div>
         )}
       </CardContent>
@@ -1351,39 +1361,41 @@ const FinanceAttentionCards: React.FC<{
   kpis: Record<string, KpiValue>;
   onOpenPlan: () => void;
 }> = ({ recommendations, kpis, onOpenPlan }) => {
+  const { language } = useLanguage();
+  const copy = getFinanceWorkspaceCopy(language);
   const findRecommendation = (markers: string[]) => recommendations.find((item) => {
     const value = `${item.code} ${item.target_metric} ${item.title} ${item.text}`.toLowerCase();
     return markers.some((marker) => value.includes(marker));
   });
   const attention = [
     {
-      title: 'Неявки',
+      title: copy.noShows,
       value: percent(kpis.no_show_rate),
-      problem: findRecommendation(['no_show', 'неяв'])?.title || 'Потери из-за несостоявшихся визитов',
-      impact: 'Окна заняты в расписании, но не приносят деньги.',
+      problem: language === 'ru' ? (findRecommendation(['no_show', 'неяв'])?.title || copy.noShowsProblem) : copy.noShowsProblem,
+      impact: copy.noShowsImpact,
     },
     {
-      title: 'Повторная запись',
+      title: copy.rebooking,
       value: percent(kpis.rebooking_rate),
-      problem: findRecommendation(['rebooking', 'повтор'])?.title || 'Клиенты уходят без следующего визита',
-      impact: 'Будущая выручка не закрепляется заранее.',
+      problem: language === 'ru' ? (findRecommendation(['rebooking', 'повтор'])?.title || copy.rebookingProblem) : copy.rebookingProblem,
+      impact: copy.rebookingImpact,
     },
     {
-      title: 'Загрузка рабочих мест',
+      title: copy.occupancy,
       value: percent(kpis.workplace_occupancy),
-      problem: findRecommendation(['workplace', 'occupancy', 'загруз'])?.title || 'Часть рабочих часов может простаивать',
-      impact: 'Кресла и кабинеты есть, но часть времени не монетизируется.',
+      problem: language === 'ru' ? (findRecommendation(['workplace', 'occupancy', 'загруз'])?.title || copy.occupancyProblem) : copy.occupancyProblem,
+      impact: copy.occupancyImpact,
     },
   ];
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-950">На что смотреть в первую очередь</div>
-          <div className="mt-1 text-sm text-slate-500">Три показателя, которые быстрее всего влияют на деньги.</div>
+          <div className="text-sm font-semibold text-slate-950">{copy.attentionTitle}</div>
+          <div className="mt-1 text-sm text-slate-500">{copy.attentionDescription}</div>
         </div>
         <Button variant="outline" size="sm" onClick={onOpenPlan}>
-          Действия
+          {copy.actions}
         </Button>
       </div>
       <div className="mt-4 divide-y divide-slate-100">
@@ -1398,7 +1410,7 @@ const FinanceAttentionCards: React.FC<{
               <div className="mt-0.5 text-slate-500">{item.impact}</div>
             </div>
             <Button variant="ghost" size="sm" className="justify-start md:justify-center" onClick={onOpenPlan}>
-              Открыть
+              {copy.open}
             </Button>
           </div>
         ))}
@@ -1794,6 +1806,8 @@ const formatMetric = (metric: string, value: KpiValue) => {
 
 const ImpactPanel: React.FC<{ impact: FinanceImpact | null }> = ({ impact }) => {
   const [open, setOpen] = useState(false);
+  const { language } = useLanguage();
+  const copy = getFinanceWorkspaceCopy(language);
   const completedCount = impact?.completed_actions_count || 0;
 
   return (
@@ -1801,17 +1815,17 @@ const ImpactPanel: React.FC<{ impact: FinanceImpact | null }> = ({ impact }) => 
       <Card className="border-slate-200/80 shadow-sm">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="text-base">Что изменилось после действий</CardTitle>
+            <CardTitle className="text-base">{copy.impactTitle}</CardTitle>
             <div className="mt-1 text-sm text-slate-500">
               {impact
-                ? `Отмечено действий: ${completedCount}. Сравниваем с предыдущим таким же периодом.`
-                : 'Сравнение появится после данных за два периода и отмеченных действий.'}
+                ? copy.impactWithData.replace('{count}', String(completedCount))
+                : copy.impactEmpty}
             </div>
           </div>
           <CollapsibleTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2" disabled={!impact}>
               <ChevronDown className={cn('h-4 w-4 transition-transform', open ? 'rotate-180' : '')} />
-              {open ? 'Скрыть' : 'Показать'}
+              {open ? copy.hide : copy.show}
             </Button>
           </CollapsibleTrigger>
         </CardHeader>
@@ -1824,7 +1838,7 @@ const ImpactPanel: React.FC<{ impact: FinanceImpact | null }> = ({ impact }) => 
                     <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{metricLabels[item.metric] || item.metric}</div>
                     <div className="mt-1 font-semibold text-slate-950">{formatMetric(item.metric, item.current)}</div>
                     <div className={cn('mt-1 text-xs', item.direction === 'up' ? 'text-emerald-700' : item.direction === 'down' ? 'text-rose-700' : 'text-slate-500')}>
-                      {item.delta == null ? 'нет сравнения' : `${item.direction === 'up' ? '+' : ''}${formatMetric(item.metric, item.delta)}`}
+                      {item.delta == null ? copy.noComparison : `${item.direction === 'up' ? '+' : ''}${formatMetric(item.metric, item.delta)}`}
                     </div>
                   </div>
                 ))}

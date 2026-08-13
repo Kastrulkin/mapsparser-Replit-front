@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X, FlaskConical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { chatDateLocale, getChatsWorkspaceCopy } from '@/i18n/chatsWorkspaceCopy';
 import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
 
 interface Conversation {
@@ -61,7 +62,8 @@ export const ChatsPage: React.FC = () => {
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>('dialogs');
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const copy = getChatsWorkspaceCopy(language);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -342,11 +344,11 @@ export const ChatsPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Разделы чатов">
+      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1" role="tablist" aria-label={copy.tabsLabel}>
         {[
-          { id: 'dialogs', label: 'Диалоги' },
-          { id: 'agent', label: 'Песочница агента' },
-          { id: 'outreach', label: 'Аутрич-песочница' },
+          { id: 'dialogs', label: copy.dialogs },
+          { id: 'agent', label: copy.agentSandbox },
+          { id: 'outreach', label: copy.outreachSandbox },
         ].map((item) => (
           <button
             key={item.id}
@@ -376,7 +378,7 @@ export const ChatsPage: React.FC = () => {
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
       {/* Левая панель: Агенты */}
       <div className="w-full shrink-0 bg-white rounded-lg border border-gray-200 p-4 lg:w-64">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.chats.agents.title}</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{copy.agents}</h2>
         <div className="space-y-2">
           {agents.map((agent) => (
             <button
@@ -393,9 +395,9 @@ export const ChatsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4" />
                 <div className="flex-1">
-                  <div className="font-medium">{agent.name}</div>
+                  <div className="font-medium">{agent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent}</div>
                   <div className="text-xs text-gray-500">
-                    {agent.type === 'marketing' ? t.dashboard.chats.agents.marketing : t.dashboard.chats.agents.booking}
+                    {agent.type === 'marketing' ? copy.marketingAgent : copy.bookingAgent}
                   </div>
                 </div>
               </div>
@@ -408,14 +410,14 @@ export const ChatsPage: React.FC = () => {
       <div className={`w-full shrink-0 bg-white rounded-lg border border-gray-200 flex-col lg:w-80 ${isSandbox ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedAgent ? `${t.dashboard.chats.list.title}: ${selectedAgent.name}` : t.dashboard.chats.list.title}
+            {selectedAgent ? `${copy.chats}: ${selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent}` : copy.chats}
           </h2>
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2">
             {conversations.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
-                {t.dashboard.chats.list.empty}
+                {copy.noChats}
               </div>
             ) : (
               conversations.map((conv) => (
@@ -433,7 +435,7 @@ export const ChatsPage: React.FC = () => {
                         {conv.client_name || conv.client_phone}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {new Date(conv.last_message_at).toLocaleString('ru-RU')}
+                        {new Date(conv.last_message_at).toLocaleString(chatDateLocale[language])}
                       </div>
                     </div>
                     {conv.is_agent_paused === 1 && (
@@ -454,23 +456,23 @@ export const ChatsPage: React.FC = () => {
             <div className="p-4 border-b border-gray-200 flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-purple-500" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.chats.sandbox.title}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{copy.sandboxTitle}</h3>
                 <div className="text-sm text-gray-500">
-                  {t.dashboard.chats.sandbox.subtitle}: {selectedAgent?.name || t.dashboard.chats.sandbox.noAgent}
+                  {copy.sandboxSubtitle}: {selectedAgent ? (selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent) : copy.noAgent}
                 </div>
               </div>
             </div>
 
             <div className="mx-4 mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              <div className="font-medium">Dry-run режим</div>
-              <div>Из песочницы не выполняется реальная отправка клиентам в Telegram/WhatsApp/Email.</div>
+              <div className="font-medium">{copy.dryRunTitle}</div>
+              <div>{copy.dryRunDescription}</div>
             </div>
 
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
                 {sandboxMessages.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
-                    {t.dashboard.chats.sandbox.empty}
+                    {copy.sandboxEmpty}
                   </div>
                 ) : (
                   sandboxMessages.map((msg, idx) => (
@@ -492,7 +494,7 @@ export const ChatsPage: React.FC = () => {
                             <Bot className="w-4 h-4" />
                           )}
                           <span className="text-xs font-medium">
-                            {msg.role === 'user' ? t.dashboard.chats.sandbox.user : t.dashboard.chats.sandbox.agent}
+                            {msg.role === 'user' ? copy.user : copy.agent}
                           </span>
                         </div>
                         <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
@@ -523,7 +525,7 @@ export const ChatsPage: React.FC = () => {
                     <div className="bg-gray-100 rounded-lg p-3">
                       <div className="flex items-center gap-2">
                         <Bot className="w-4 h-4" />
-                        <span className="text-xs font-medium">{t.dashboard.chats.sandbox.agentTyping}</span>
+                        <span className="text-xs font-medium">{copy.agentTyping}</span>
                       </div>
                     </div>
                   </div>
@@ -543,7 +545,7 @@ export const ChatsPage: React.FC = () => {
                       handleSandboxSend();
                     }
                   }}
-                  placeholder={t.dashboard.chats.sandbox.placeholder}
+                  placeholder={copy.sandboxPlaceholder}
                   disabled={sandboxLoading || !selectedAgentId}
                 />
                 <Button
@@ -555,7 +557,7 @@ export const ChatsPage: React.FC = () => {
               </div>
               {!selectedAgentId && (
                 <div className="text-xs text-orange-600 mt-2">
-                  {t.dashboard.chats.sandbox.noAgent}
+                  {copy.noAgent}
                 </div>
               )}
             </div>
@@ -628,7 +630,7 @@ export const ChatsPage: React.FC = () => {
                       </div>
                       <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(msg.created_at).toLocaleString('ru-RU')}
+                        {new Date(msg.created_at).toLocaleString(chatDateLocale[language])}
                       </div>
                     </div>
                   </div>
@@ -667,7 +669,7 @@ export const ChatsPage: React.FC = () => {
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            {selectedAgentId ? t.dashboard.chats.messages.selectChat : t.dashboard.chats.messages.selectAgent}
+            {copy.selectWorkspace}
           </div>
         )}
       </div>
