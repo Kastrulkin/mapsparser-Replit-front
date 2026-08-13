@@ -15,7 +15,7 @@ export const documents: DocumentContent[] = [
     seoTitle: "Чек-лист аудита карточки компании — LocalOS",
     seoDescription:
       "Прикладной чек-лист для проверки карточки локального бизнеса: категории, услуги, фото, отзывы, цены и действия клиента.",
-    downloadUrl: "#download-soon",
+    downloadable: true,
     draft: false,
     inside: [
       "проверка категорий и услуг",

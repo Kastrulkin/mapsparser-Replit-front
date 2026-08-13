@@ -1,10 +1,11 @@
-import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Download, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Download, Loader2, Sparkles } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import Footer from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { ContentSection, RelatedLink } from "@/content/contentTypes";
 import { formatContentDate } from "./contentSeo";
 import { useLanguage } from "@/i18n/LanguageContext";
@@ -57,7 +58,8 @@ type RelatedMaterialsProps = {
 };
 
 type DownloadBlockProps = {
-  href: string;
+  available: boolean;
+  materialSlug: string;
 };
 
 type SectionRendererProps = {
@@ -317,17 +319,141 @@ export const BottomCta = () => {
   </section>;
 };
 
-export const DownloadBlock = ({ href }: DownloadBlockProps) => (
-  <div className="mt-10 rounded-3xl border border-orange-200 bg-orange-50 p-6">
-    <h2 className="text-2xl font-bold text-gray-950">Скачать материал</h2>
-    <p className="mt-3 text-gray-700">
-      Файловое хранилище для материалов можно подключить следующим этапом. Пока кнопка оставлена как место под скачивание.
-    </p>
-    <Button asChild className="mt-5 bg-orange-500 hover:bg-orange-600">
-      <a href={href}>
-        <Download className="mr-2 h-4 w-4" />
-        Скачать скоро
-      </a>
-    </Button>
-  </div>
-);
+export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) => {
+  const { language } = useLanguage();
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [companySite, setCompanySite] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [downloadUrl, setDownloadUrl] = useState("");
+
+  if (!available) {
+    return (
+      <section className="mt-10 rounded-3xl bg-orange-50 p-6 shadow-[0_0_0_1px_rgba(249,115,22,0.24),0_10px_30px_rgba(249,115,22,0.06)] sm:p-8">
+        <h2 className="text-balance text-2xl font-bold text-gray-950">Скачать материал</h2>
+        <p className="mt-3 text-pretty text-gray-700">Материал готовится. Мы добавим файл на эту страницу.</p>
+      </section>
+    );
+  }
+
+  const startDownload = (url: string) => {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/public/material-downloads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          material_slug: materialSlug,
+          personal_data_consent: consent,
+          source_language: language,
+          company_site: companySite,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.download_url) {
+        throw new Error(payload.message || "Не удалось подготовить скачивание. Попробуйте ещё раз.");
+      }
+
+      setDownloadUrl(payload.download_url);
+      startDownload(payload.download_url);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Не удалось подготовить скачивание. Попробуйте ещё раз.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="mt-10 overflow-hidden rounded-3xl bg-orange-50 p-6 shadow-[0_0_0_1px_rgba(249,115,22,0.24),0_10px_30px_rgba(249,115,22,0.08)] sm:p-8">
+      <div className="grid gap-7 md:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)] md:items-start">
+        <div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white shadow-[0_8px_20px_rgba(249,115,22,0.22)]">
+            <Download className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <h2 className="mt-5 text-balance text-2xl font-bold text-gray-950 sm:text-3xl">Скачать чек-лист</h2>
+          <p className="mt-3 max-w-lg text-pretty leading-7 text-gray-700">
+            PDF с проверками карточки компании. Укажите email и подтвердите согласие — скачивание начнётся сразу.
+          </p>
+          <p className="mt-4 text-sm text-gray-500">Без подписки на рассылку. Email нужен для получения материала.</p>
+        </div>
+
+        <form className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_2px_4px_rgba(0,0,0,0.04)] sm:p-5" onSubmit={handleSubmit}>
+          <label className="block text-sm font-semibold text-gray-950" htmlFor={`material-email-${materialSlug}`}>
+            Email
+          </label>
+          <Input
+            autoComplete="email"
+            className="mt-2 min-h-11 rounded-xl border-gray-200 bg-white focus-visible:ring-orange-500"
+            id={`material-email-${materialSlug}`}
+            inputMode="email"
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="name@company.ru"
+            required
+            type="email"
+            value={email}
+          />
+          <input
+            aria-hidden="true"
+            autoComplete="off"
+            className="absolute h-px w-px overflow-hidden opacity-0"
+            name="company_site"
+            onChange={(event) => setCompanySite(event.target.value)}
+            tabIndex={-1}
+            value={companySite}
+          />
+
+          <label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-2 text-sm leading-5 text-gray-600 transition-[background-color] duration-150 hover:bg-orange-50/80">
+            <input
+              checked={consent}
+              className="mt-0.5 h-5 w-5 flex-shrink-0 rounded border-gray-300 accent-orange-500"
+              onChange={(event) => setConsent(event.target.checked)}
+              required
+              type="checkbox"
+            />
+            <span>
+              Я согласен на обработку персональных данных и принимаю{" "}
+              <Link className="font-semibold text-orange-700 underline underline-offset-2 hover:text-orange-800" target="_blank" to="/privacy">
+                политику обработки персональных данных
+              </Link>
+            </span>
+          </label>
+
+          {error ? <p aria-live="polite" className="mt-3 text-pretty text-sm font-medium text-red-600" role="alert">{error}</p> : null}
+          {downloadUrl && !error ? (
+            <p aria-live="polite" className="mt-3 flex items-center gap-2 text-pretty text-sm font-medium text-emerald-700">
+              <Check className="h-4 w-4" aria-hidden="true" />
+              Скачивание началось. Если файл не открылся, нажмите кнопку ещё раз.
+            </p>
+          ) : null}
+
+          <Button
+            className="mt-4 min-h-11 w-full bg-orange-500 pl-4 pr-3.5 transition-[background-color,scale] duration-150 hover:bg-orange-600 active:scale-[0.96]"
+            disabled={isSubmitting || !consent || !email.trim()}
+            onClick={downloadUrl && !error ? (event) => {
+              event.preventDefault();
+              startDownload(downloadUrl);
+            } : undefined}
+            type="submit"
+          >
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}
+            {isSubmitting ? "Подготавливаем файл…" : downloadUrl && !error ? "Скачать ещё раз" : "Получить чек-лист"}
+          </Button>
+        </form>
+      </div>
+    </section>
+  );
+};

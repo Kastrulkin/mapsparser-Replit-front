@@ -144,6 +144,7 @@ from api.company_registry_api import company_registry_bp
 from api.telegram_opportunity_radar_api import telegram_opportunity_radar_bp
 from api.telegram_research_api import telegram_research_bp
 from api.outreach_campaign_api import outreach_campaign_bp
+from api.material_downloads_api import material_downloads_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
@@ -327,6 +328,7 @@ app.register_blueprint(company_registry_bp)
 app.register_blueprint(telegram_opportunity_radar_bp)
 app.register_blueprint(telegram_research_bp)
 app.register_blueprint(outreach_campaign_bp)
+app.register_blueprint(material_downloads_bp)
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:

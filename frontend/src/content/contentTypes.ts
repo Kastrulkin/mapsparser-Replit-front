@@ -50,6 +50,7 @@ export type DocumentContent = {
   seoDescription: string;
   fileUrl?: string;
   downloadUrl?: string;
+  downloadable?: boolean;
   draft: boolean;
   inside: string[];
   body: ContentSection[];

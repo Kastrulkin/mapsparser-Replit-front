@@ -71,7 +71,7 @@ const DocumentDetailPage = () => {
             </ul>
           </section>
           <SectionRenderer sections={documentItem.body} />
-          <DownloadBlock href={documentItem.downloadUrl ?? documentItem.fileUrl ?? "#download-soon"} />
+          <DownloadBlock available={Boolean(documentItem.downloadable)} materialSlug={documentItem.slug} />
           <RelatedMaterials items={documentItem.related} />
           <BottomCta />
         </article>
