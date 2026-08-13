@@ -1,8 +1,10 @@
 import type { ArticleContent } from "./contentTypes";
+import { videoArticles } from "./videoArticles";
 
 export const articleCategories = ["Карты", "Отзывы", "Клиенты", "Кафе", "Финансы", "Бизнес"];
 
 export const articles: ArticleContent[] = [
+  ...videoArticles,
   {
     title: "Compiled AI: почему ИИ должен думать один раз, а работать тысячи раз",
     slug: "compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
@@ -11,7 +13,7 @@ export const articles: ArticleContent[] = [
     category: "Бизнес",
     tags: ["Compiled AI", "автоматизация", "ИИ", "бизнес-процессы", "LocalOS"],
     publishedAt: "2026-08-12",
-    updatedAt: "2026-08-12",
+    updatedAt: "2026-08-13",
     seoTitle: "Compiled AI: ИИ думает один раз, скрипт работает тысячи раз — LocalOS",
     seoDescription:
       "Что такое Compiled AI: как ИИ создаёт проверяемый сценарий, программа выполняет его без повторных вызовов модели, а владелец сохраняет контроль.",
@@ -39,11 +41,11 @@ export const articles: ArticleContent[] = [
       {
         title: "Исследование Compiled AI",
         body:
-          "6 апреля 2026 года авторы из XY.AI Labs, Stanford University School of Medicine, Cornell University и Brigham and Women’s Hospital / Harvard Medical School представили препринт «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation». Они предложили отделить момент, когда ИИ создаёт рабочую логику, от её дальнейшего выполнения.",
+          "6 апреля 2026 года авторы из XY.AI Labs, Stanford University School of Medicine, Cornell University и Brigham and Women’s Hospital / Harvard Medical School представили препринт «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation». 31 июля они опубликовали вторую версию: в ней точнее описан гибридный режим, где детерминированный план управляет процессом, а модель может вызываться только для заранее ограниченных смысловых подзадач.",
         bodyLinks: [
           {
             text: "Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation",
-            href: "https://arxiv.org/abs/2604.05150v1",
+            href: "https://arxiv.org/abs/2604.05150v2",
           },
         ],
       },
@@ -60,7 +62,8 @@ export const articles: ArticleContent[] = [
       {
         title: "Три обязательных свойства",
         items: [
-          "модель вызывается во время создания процесса, а не при каждой операции",
+          "модель не управляет процессом во время выполнения: порядок шагов заранее скомпилирован",
+          "узкий вызов модели допустим только для зарегистрированной смысловой подзадачи с фиксированными входом, выходом и fallback",
           "готовый процесс выполняется детерминированно, как обычный программный код",
           "до запуска процесс проходит многоэтапную проверку",
         ],
@@ -91,7 +94,7 @@ export const articles: ArticleContent[] = [
         bodyLinks: [
           {
             text: "весь контур валидации",
-            href: "https://arxiv.org/html/2604.05150v1",
+            href: "https://arxiv.org/html/2604.05150v2",
           },
         ],
       },
@@ -116,7 +119,7 @@ export const articles: ArticleContent[] = [
           "Второй эксперимент проводился на 5 680 счетах поставщиков. Документы отличались по структуре, качеству распознавания и расположению информации. Простые правила работали быстро, но правильно извлекли только 20,3% ключевой информации. Для понимания названий компаний, сумм и неоднозначных полей всё ещё требовалась языковая модель.",
       },
       {
-        title: "Гибридный вариант Code Factory",
+        title: "Гибридный вариант Code Foundry",
         body:
           "Авторы сохранили общую последовательность действий скомпилированной и предсказуемой, но разрешили узкие обращения к модели на сложных этапах. Такой вариант показал те же 80,0% точности при извлечении ключевых полей, что и прямое обращение к модели, а при распознавании строк товаров достиг 80,4% — лучшего результата среди сравниваемых вариантов.",
       },
@@ -190,11 +193,11 @@ export const articles: ArticleContent[] = [
       {
         title: "Источник",
         body:
-          "Материал основан на первой версии препринта «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation», опубликованной 6 апреля 2026 года.",
+          "Материал обновлён по второй версии препринта «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation», опубликованной 31 июля 2026 года. Вторая версия не меняет основной принцип, но уточняет границу runtime: LLM исключена из контура управления, при этом разрешены ограниченные модельные вызовы внутри заранее скомпилированных шагов.",
         bodyLinks: [
           {
-            text: "первой версии препринта «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation»",
-            href: "https://arxiv.org/abs/2604.05150v1",
+            text: "второй версии препринта «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation»",
+            href: "https://arxiv.org/abs/2604.05150v2",
           },
         ],
       },

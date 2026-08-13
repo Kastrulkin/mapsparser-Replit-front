@@ -30,6 +30,10 @@ export type ArticleContent = {
   statsImageAlt?: string;
   schemeImage?: string;
   schemeImageAlt?: string;
+  video?: {
+    youtubeId: string;
+    title: string;
+  };
   seoTitle: string;
   seoDescription: string;
   draft: boolean;

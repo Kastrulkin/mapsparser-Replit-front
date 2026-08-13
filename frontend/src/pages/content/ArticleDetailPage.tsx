@@ -41,6 +41,25 @@ const renderInlineArticleVisual = (article: ArticleContent, sectionIndex: number
   return null;
 };
 
+const ArticleVideo = ({ video }: { video: NonNullable<ArticleContent["video"]> }) => (
+  <section aria-labelledby="article-video-title" className="mb-12">
+    <h2 className="mb-4 text-balance text-2xl font-semibold tracking-tight" id="article-video-title">
+      Видео по теме
+    </h2>
+    <div className="aspect-video overflow-hidden rounded-[20px] border border-black/10 bg-black dark:border-white/10">
+      <iframe
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        className="h-full w-full"
+        loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
+        src={`https://www.youtube-nocookie.com/embed/${video.youtubeId}`}
+        title={video.title}
+      />
+    </div>
+  </section>
+);
+
 const ArticleDetailPage = () => {
   const { slug } = useParams();
   const { language } = useLanguage();
@@ -78,6 +97,15 @@ const ArticleDetailPage = () => {
       { name: contentCopy[language].navigation.articles.name, path: "/articles" },
       { name: article.title, path: `/articles/${article.slug}` },
     ]),
+    ...(article.video ? [{
+      "@context": "https://schema.org",
+      "@type": "VideoObject",
+      name: article.video.title,
+      description: article.excerpt,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${article.video.youtubeId}`,
+      contentUrl: `https://www.youtube.com/watch?v=${article.video.youtubeId}`,
+      thumbnailUrl: `https://i.ytimg.com/vi/${article.video.youtubeId}/hqdefault.jpg`,
+    }] : []),
   ];
 
   const otherArticles = articles
@@ -122,6 +150,7 @@ const ArticleDetailPage = () => {
               width="1536"
             />
           ) : null}
+          {article.video ? <ArticleVideo video={article.video} /> : null}
           <SectionRenderer
             renderAfterSection={(section) => renderInlineArticleVisual(article, article.body.indexOf(section))}
             sections={article.body}
