@@ -743,6 +743,9 @@ def test_agent_template_catalog_is_separate_and_exposes_four_certification_gates
         assert len(template["fixtures"]) == 9
         assert template["certification_evidence"]["certification_decision"] == "pilot_evidence_required"
         assert template["workflow_dsl"]["runtime"]["planner_required"] is False
+        assert set(template["localized_content"]) == {"en", "tr"}
+        assert template["localized_content"]["en"]["name"]
+        assert template["localized_content"]["tr"]["business_result"]
 
 
 def test_regular_agent_list_hides_seeded_account_examples():
@@ -1384,6 +1387,7 @@ def test_version_payload_preserves_visual_editor_runtime_settings():
             "execution_mode": "scheduled",
             "trigger": "schedule.daily",
             "schedule_json": {"time": "09:30", "timezone": "Europe/Moscow"},
+            "runtime_config_json": {"google_sheets": {"sheet_name": "Leads v2"}},
             "limits_json": {"daily_cap": 10},
             "required_integration_bindings_json": [
                 {"key": "sheet", "provider": "google_sheets", "required": True}
@@ -1394,6 +1398,7 @@ def test_version_payload_preserves_visual_editor_runtime_settings():
     assert payload["execution_mode"] == "scheduled"
     assert payload["trigger"] == "schedule.daily"
     assert payload["schedule"] == {"time": "09:30", "timezone": "Europe/Moscow"}
+    assert payload["runtime_config"] == {"google_sheets": {"sheet_name": "Leads v2"}}
     assert payload["limits"] == {"daily_cap": 10}
     assert payload["required_integration_bindings"][0]["provider"] == "google_sheets"
 
@@ -1506,3 +1511,113 @@ def test_visual_editor_saves_schedule_as_candidate_without_mutating_blueprint(mo
     assert inserted["trigger"] == "schedule.daily"
     assert inserted["schedule"] == {"time": "09:30", "timezone": "Europe/Moscow"}
     assert database.conn.committed is True
+
+
+def test_active_version_runtime_config_has_priority_over_blueprint_metadata():
+    from services.agent_trigger_runtime import _custom_process_defaults
+
+    blueprint = {
+        "metadata_json": {
+            "custom_process": {
+                "google_sheets": {"integration_id": "old", "spreadsheet_id": "old-sheet", "sheet_name": "Old"}
+            }
+        }
+    }
+    active_version = {
+        "runtime_config_json": {
+            "google_sheets": {"integration_id": "active", "spreadsheet_id": "active-sheet", "sheet_name": "Active"}
+        },
+        "output_schema_json": {},
+    }
+
+    assert _custom_process_defaults(blueprint, active_version) == {
+        "integration_id": "active",
+        "spreadsheet_id": "active-sheet",
+        "sheet_name": "Active",
+    }
+
+
+def test_template_certification_requires_full_evidence_bundle():
+    from services.agent_template_catalog import get_agent_template
+    from services.agent_template_certification import empty_certification_evidence, evaluate_template_certification
+
+    result = evaluate_template_certification(get_agent_template("daily_owner_digest"), empty_certification_evidence())
+
+    assert result["certified"] is False
+    assert result["status"] == "beta"
+    assert set(result["blockers"]) == {"technical", "fixtures", "security", "execution", "accuracy", "production"}
+
+
+def test_template_certification_accepts_only_threshold_complete_evidence():
+    from services.agent_template_catalog import get_agent_template
+    from services.agent_template_certification import REQUIRED_FIXTURES, evaluate_template_certification
+
+    evidence = {
+        "fixtures": [{"key": key, "status": "passed"} for key in REQUIRED_FIXTURES],
+        "preview_runs": [
+            {
+                "status": "completed",
+                "provider_write_performed": False,
+                "external_dispatch_performed": False,
+                "duplicate_side_effect": False,
+            }
+            for _ in range(10)
+        ],
+        "production_runs": [{"status": "completed", "result_correct": True} for _ in range(5)],
+        "pilot_feedback": [
+            {"business_id": business_id, "useful": True}
+            for business_id in ("pilot-1", "pilot-2", "pilot-3")
+        ],
+        "security": {
+            "prompt_injection_blocked": True,
+            "approval_bypass_blocked": True,
+            "sensitive_data_leak_blocked": True,
+        },
+        "version_pins": {"prompt_version": "prompt-1", "approval_policy_hash": "sha256:test"},
+        "golden_score": 0.95,
+        "support_export_passed": True,
+        "rollback_test_passed": True,
+        "canary_days": 7,
+        "canary_incident_free": True,
+    }
+
+    result = evaluate_template_certification(get_agent_template("daily_owner_digest"), evidence)
+
+    assert result["certified"] is True
+    assert result["status"] == "certified"
+    assert result["blockers"] == []
+
+
+def test_template_certification_rejects_preview_side_effects():
+    from services.agent_template_catalog import get_agent_template
+    from services.agent_template_certification import REQUIRED_FIXTURES, evaluate_template_certification
+
+    unsafe_preview = {
+        "status": "completed",
+        "provider_write_performed": True,
+        "external_dispatch_performed": False,
+        "duplicate_side_effect": False,
+    }
+    evidence = {
+        "fixtures": [{"key": key, "status": "passed"} for key in REQUIRED_FIXTURES],
+        "preview_runs": [unsafe_preview for _ in range(10)],
+        "production_runs": [{"status": "completed", "result_correct": True} for _ in range(5)],
+        "pilot_feedback": [{"business_id": f"pilot-{index}", "useful": True} for index in range(3)],
+        "security": {
+            "prompt_injection_blocked": True,
+            "approval_bypass_blocked": True,
+            "sensitive_data_leak_blocked": True,
+        },
+        "version_pins": {"prompt_version": "prompt-1", "approval_policy_hash": "sha256:test"},
+        "golden_score": 1.0,
+        "support_export_passed": True,
+        "rollback_test_passed": True,
+        "canary_days": 7,
+        "canary_incident_free": True,
+    }
+
+    result = evaluate_template_certification(get_agent_template("daily_owner_digest"), evidence)
+
+    assert result["certified"] is False
+    assert result["counts"]["safe_preview_runs"] == 0
+    assert "execution" in result["blockers"]

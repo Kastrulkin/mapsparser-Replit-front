@@ -104,6 +104,11 @@ def build_version_payload_from_row(version: Dict[str, Any]) -> Dict[str, Any]:
             if "schedule_json" in version
             else None
         ),
+        "runtime_config": (
+            _copy_json_value(parse_json_field(version.get("runtime_config_json"), {}), {})
+            if "runtime_config_json" in version
+            else None
+        ),
         "limits": (
             _copy_json_value(parse_json_field(version.get("limits_json"), {}), {})
             if "limits_json" in version
@@ -131,6 +136,7 @@ def build_agent_version_diff(from_version: Dict[str, Any] | None, to_version: Di
         ("trigger", "Способ запуска"),
         ("execution_mode", "Режим работы"),
         ("schedule", "Расписание"),
+        ("runtime_config", "Параметры источников"),
         ("limits", "Лимиты"),
         ("required_integration_bindings", "Источники данных"),
     ]

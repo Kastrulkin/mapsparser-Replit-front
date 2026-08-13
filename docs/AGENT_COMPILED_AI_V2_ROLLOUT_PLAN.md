@@ -83,6 +83,12 @@ Sheets.
 - требовать preview и явное включение перед production run;
 - дать rollback на последнюю проверенную версию.
 
+Настройки запуска, расписания, лимитов, обязательных подключений и runtime
+configuration хранятся в `agent_blueprint_versions`. Сохранение из React Flow
+создаёт candidate-версию; планировщик и runner читают эти поля только из active
+version. При активации снимок синхронизируется в legacy metadata для обратной
+совместимости.
+
 ## Проверка внедрения
 
 | Контур | Проверка | Условие приёмки |
@@ -93,7 +99,8 @@ Sheets.
 | Безопасность | Negative fixtures | Внешние sends/writes останавливаются на approval |
 | Viewer | Frontend build и browser pass | Граф совпадает с линейным сценарием, доступен на desktop/mobile |
 | Версии | Candidate/active regression | Редактирование не меняет рабочую версию до подтверждения |
-| Пилот | Evidence bundle | Минимум 3 запуска на шаблон, отзыв владельца, дефекты и решение owner |
+| Пилот | Evidence bundle | 10 безопасных preview, 5 production runs, ≥90% accuracy, отзывы минимум 3 бизнесов, support export и rollback |
+| Canary | Наблюдение после включения | 7 дней без инцидента до статуса certified |
 | Rollout | Метрики | success rate, intervention rate, time-to-first-value и rollback rate видимы |
 
 ## Решение о готовности
@@ -113,5 +120,6 @@ production-capable в узком контуре, каталог и visual author
 scripts/test_agent_template_catalog.sh
 scripts/test_compiled_validation_fixtures.sh
 scripts/test_agent_graph_roundtrip.sh
+scripts/test_agent_template_certification.sh
 npm --prefix frontend run build
 ```

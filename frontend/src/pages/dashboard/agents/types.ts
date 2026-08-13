@@ -472,6 +472,7 @@ export type AgentTemplate = {
   certification_status: 'draft' | 'testing' | 'beta' | 'certified' | 'deprecated' | 'gap';
   approval_policy?: Record<string, unknown>;
   limits?: Record<string, unknown>;
+  localized_content?: Record<string, { name: string; business_result: string }>;
 };
 
 export type AgentExecutionContractStep = {

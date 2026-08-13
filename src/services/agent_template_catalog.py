@@ -129,6 +129,50 @@ TEMPLATE_DEFINITIONS: List[Dict[str, Any]] = [
 ]
 
 
+TEMPLATE_LOCALIZED_CONTENT: Dict[str, Dict[str, Dict[str, str]]] = {
+    "daily_owner_digest": {
+        "en": {"name": "Daily owner digest", "business_result": "The owner starts the day with one short list of exceptions and decisions."},
+        "tr": {"name": "İşletme sahibi için günlük özet", "business_result": "İşletme sahibi güne istisnaları ve kararları gösteren tek bir kısa listeyle başlar."},
+    },
+    "negative_review_reply": {
+        "en": {"name": "Negative-review reply drafts", "business_result": "The manager receives ready-to-review replies and publishes only after approval."},
+        "tr": {"name": "Olumsuz yorum yanıt taslakları", "business_result": "Yönetici incelemeye hazır yanıtlar alır; yayınlama yalnızca onaydan sonra yapılır."},
+    },
+    "service_seo_cleanup": {
+        "en": {"name": "Service SEO check", "business_result": "The owner gets a prioritized list of weak names, duplicates, and missing descriptions."},
+        "tr": {"name": "Hizmet SEO kontrolü", "business_result": "İşletme sahibi zayıf adlar, tekrarlar ve eksik açıklamalar için öncelikli bir liste alır."},
+    },
+    "card_posts_from_signals": {
+        "en": {"name": "Posts from business signals", "business_result": "The content manager receives three drafts grounded in real business data."},
+        "tr": {"name": "İşletme sinyallerinden gönderiler", "business_result": "İçerik yöneticisi gerçek işletme verilerine dayalı üç taslak alır."},
+    },
+    "tomorrow_bookings_check": {
+        "en": {"name": "Tomorrow's bookings check", "business_result": "The administrator sees missing prepayments and cancellation risks in advance."},
+        "tr": {"name": "Yarının rezervasyonlarını kontrol et", "business_result": "Yönetici eksik ön ödemeleri ve iptal risklerini önceden görür."},
+    },
+    "google_sheets_business_result": {
+        "en": {"name": "Business result from Google Sheets", "business_result": "The owner receives a normalized digest of new rows and exceptions."},
+        "tr": {"name": "Google E-Tablolar'dan işletme sonucu", "business_result": "Sorumlu kişi yeni satırların ve istisnaların normalleştirilmiş özetini alır."},
+    },
+    "partnership_outreach_draft": {
+        "en": {"name": "Partnership proposal draft", "business_result": "The manager gets qualified partners and personalized first-contact drafts."},
+        "tr": {"name": "İş ortaklığı teklifi taslağı", "business_result": "Yönetici uygun iş ortaklarını ve kişiselleştirilmiş ilk temas taslaklarını alır."},
+    },
+    "competitor_website_monitor": {
+        "en": {"name": "Competitor website monitor", "business_result": "The owner sees only meaningful price, promotion, or menu changes."},
+        "tr": {"name": "Rakip web sitesi takibi", "business_result": "İşletme sahibi yalnızca önemli fiyat, kampanya veya menü değişikliklerini görür."},
+    },
+    "faq_miner": {
+        "en": {"name": "FAQ from customer conversations", "business_result": "The team receives grouped recurring questions and new answer drafts."},
+        "tr": {"name": "Müşteri görüşmelerinden SSS", "business_result": "Ekip tekrarlanan soruların gruplarını ve yeni yanıt taslaklarını alır."},
+    },
+    "finance_import_assistant": {
+        "en": {"name": "Expense import preparation", "business_result": "Finance receives reviewable category suggestions before transactions are applied."},
+        "tr": {"name": "Gider içe aktarma hazırlığı", "business_result": "Finans ekibi işlemler uygulanmadan önce incelenebilir kategori önerileri alır."},
+    },
+}
+
+
 def build_agent_template_catalog() -> List[Dict[str, Any]]:
     return [_build_template_manifest(definition) for definition in TEMPLATE_DEFINITIONS]
 
@@ -162,8 +206,9 @@ def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
     compiled_valid = bool(compiled_candidate and compiled_candidate.get("validation", {}).get("valid"))
     schema_gate = bool(validation.get("valid")) and compiled_valid
     security_gate = (
-        version_payload.get("side_effects_performed") is False
+        version_payload.get("side_effects_performed") is not True
         and version_payload.get("limits", {}).get("autonomous_external_write_allowed") is not True
+        and version_payload.get("limits", {}).get("autonomous_localos_write_allowed") is not True
     )
     fixture_keys = [
         "valid_input",
@@ -187,6 +232,7 @@ def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
         "version": definition["version"],
         "name": definition["name"],
         "business_result": definition["business_result"],
+        "localized_content": TEMPLATE_LOCALIZED_CONTENT.get(str(definition["key"]), {}),
         "vertical": definition["vertical"],
         "trigger": version_payload.get("trigger") or "manual.run",
         "inputs_schema": version_payload.get("inputs_schema") or {},

@@ -159,6 +159,21 @@ def use_agent_template(template_key: str):
                 "template_certification_status": definition.get("certification_status") or "draft",
             }
         )
+        version_payload = dict(version_payload)
+        version_payload["execution_mode"] = str(metadata.get("execution_mode") or "manual")
+        version_payload["runtime_config"] = (
+            metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        )
+        version_payload["schedule"] = (
+            version_payload["runtime_config"].get("schedule")
+            if isinstance(version_payload["runtime_config"].get("schedule"), dict)
+            else {}
+        )
+        version_payload["required_integration_bindings"] = (
+            metadata.get("required_integration_bindings")
+            if isinstance(metadata.get("required_integration_bindings"), list)
+            else version_payload.get("required_integration_bindings") or []
+        )
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -2106,12 +2121,20 @@ def _apply_custom_process_to_version_payload(version_payload: dict, custom_proce
     limits = payload.get("limits") if isinstance(payload.get("limits"), dict) else {}
     limits["daily_append_cap"] = daily_append_cap
     payload["limits"] = limits
+    payload["runtime_config"] = dict(custom_process)
+    payload["trigger"] = str(custom_process.get("trigger") or payload.get("trigger") or "manual.run")
+    schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
+    payload["schedule"] = schedule
+    payload["execution_mode"] = "scheduled" if payload["trigger"] == "schedule.daily" else str(payload.get("execution_mode") or "manual")
     return payload
 
 
-def _build_custom_process_preview_input(blueprint: dict, payload: dict) -> dict:
+def _build_custom_process_preview_input(blueprint: dict, payload: dict, version: dict | None = None) -> dict:
     metadata = _blueprint_metadata(blueprint)
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    version_payload = build_version_payload_from_row(version or {}) if version else {}
+    custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else {}
+    if not custom_process:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     google_sheets = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
     source_event_id = f"preview-{uuid.uuid4()}"
     message_text = str(payload.get("message_text") or "Новая заявка из preview").strip() or "Новая заявка из preview"
@@ -2159,12 +2182,14 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
     metadata = _blueprint_metadata(blueprint)
     user_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
     preview = metadata.get("agent_builder_preview") if isinstance(metadata.get("agent_builder_preview"), dict) else {}
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    version_payload = build_version_payload_from_row(version or {}) if version else {}
+    custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else {}
+    if not custom_process:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     required_bindings = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
     if not required_bindings and version:
         version_payload = build_version_payload_from_row(version)
         required_bindings = version_payload.get("required_integration_bindings") if isinstance(version_payload.get("required_integration_bindings"), list) else []
-    version_payload = build_version_payload_from_row(version or {}) if version else {}
     capability_allowlist = version_payload.get("capability_allowlist") if isinstance(version_payload.get("capability_allowlist"), list) else []
     steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
     trigger_event_id = str(user_input.get("trigger_event_id") or f"preview-{uuid.uuid4()}")
@@ -2919,7 +2944,11 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
     metadata["active_version_updated_at"] = event["created_at"]
     metadata["version_events"] = events[-50:]
     version_payload = build_version_payload_from_row(version)
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    custom_process = version_payload.get("runtime_config") if isinstance(version_payload.get("runtime_config"), dict) else None
+    if custom_process is None:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    else:
+        custom_process = dict(custom_process)
     custom_process["trigger"] = str(version_payload.get("trigger") or "manual.run")
     schedule = version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {}
     if custom_process["trigger"] == "schedule.daily" and schedule:
@@ -3014,12 +3043,12 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
         INSERT INTO agent_blueprint_versions (
             id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
             persona_agent_id, capability_allowlist_json, approval_policy_json,
-            output_schema_json, execution_mode, trigger, schedule_json, limits_json,
+            output_schema_json, execution_mode, trigger, schedule_json, runtime_config_json, limits_json,
             required_integration_bindings_json, created_by_user_id
         )
         VALUES (
             %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb,
-            %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s
+            %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s
         )
         """,
         (
@@ -3036,6 +3065,7 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
             str(payload.get("execution_mode") or ("scheduled" if payload.get("trigger") == "schedule.daily" else "manual")).strip(),
             str(payload.get("trigger") or "manual.run").strip(),
             json.dumps(payload.get("schedule") if isinstance(payload.get("schedule"), dict) else {}, ensure_ascii=False),
+            json.dumps(payload.get("runtime_config") if isinstance(payload.get("runtime_config"), dict) else {}, ensure_ascii=False),
             json.dumps(payload.get("limits") if isinstance(payload.get("limits"), dict) else {}, ensure_ascii=False),
             json.dumps(
                 payload.get("required_integration_bindings")
@@ -3541,6 +3571,17 @@ def create_agent_blueprint_draft():
         metadata["builder_selected_connection_bindings"] = selected_bindings
         metadata["builder_selected_provider_routes"] = selected_provider_routes
         metadata["builder_provider_routes_accepted"] = bool(payload.get("accepted_provider_routes"))
+        version_payload = dict(version_payload)
+        version_payload["execution_mode"] = str(metadata.get("execution_mode") or "manual")
+        version_payload["runtime_config"] = dict(custom_process)
+        version_payload["schedule"] = (
+            custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
+        )
+        version_payload["required_integration_bindings"] = (
+            metadata.get("required_integration_bindings")
+            if isinstance(metadata.get("required_integration_bindings"), list)
+            else version_payload.get("required_integration_bindings") or []
+        )
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -5270,7 +5311,6 @@ def save_agent_blueprint_custom_process(blueprint_id: str):
         compiled_process["last_edited_by_user_id"] = _user_id(user_data)
         compiled_process["last_edited_at"] = _utc_now_text()
         metadata["compiled_process"] = compiled_process
-        _save_blueprint_metadata(cursor, blueprint_id, metadata)
         latest_version = _load_latest_blueprint_version(cursor, blueprint_id)
         version = None
         if latest_version:
@@ -5278,13 +5318,12 @@ def save_agent_blueprint_custom_process(blueprint_id: str):
             version_payload = _apply_custom_process_to_version_payload(version_payload, custom_process)
             version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         db.conn.commit()
-        refreshed = _load_blueprint(cursor, blueprint_id)
         activation_gate = (
             _build_activation_gate_summary(
                 cursor,
-                blueprint=refreshed or blueprint,
+                blueprint=blueprint,
                 active_version=version,
-                metadata=_blueprint_metadata(refreshed or blueprint),
+                metadata=metadata,
             )
             if version
             else {}
@@ -5446,7 +5485,7 @@ def preview_agent_blueprint_custom_process(blueprint_id: str):
         version_id = str((candidate_version or {}).get("id") or "").strip()
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
-        preview_input = _build_custom_process_preview_input(blueprint, payload)
+        preview_input = _build_custom_process_preview_input(blueprint, payload, candidate_version)
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         result = runner.start_run(version_id, preview_input, user_data)
         db.conn.commit()

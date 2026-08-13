@@ -553,6 +553,7 @@ export const AgentBlueprintsView = ({ scope }) => {
 
       {currentBusinessId ? (
         <AgentTemplateGallery
+          language={language}
           templates={agentTemplates}
           loading={templatesLoading}
           usingTemplateKey={usingTemplateKey}

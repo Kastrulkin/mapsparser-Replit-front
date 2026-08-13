@@ -724,7 +724,9 @@ def _scheduled_version_beta_gate(version: Dict[str, Any]) -> Dict[str, Any]:
 
 def _custom_process_defaults(blueprint: Dict[str, Any], version: Dict[str, Any]) -> Dict[str, Any]:
     metadata = _metadata(blueprint)
-    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    custom_process = parse_json_field(version.get("runtime_config_json"), {}) if "runtime_config_json" in version else {}
+    if not isinstance(custom_process, dict) or not custom_process:
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     sheet = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
     payload = parse_json_field(version.get("output_schema_json"), {})
     defaults = {

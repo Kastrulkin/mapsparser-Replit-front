@@ -841,14 +841,17 @@ async def run_smoke(url, screenshot):
     try:
         page = await browser.new_page(viewport={"width": 1180, "height": 820}, device_scale_factor=1)
         console_errors = []
+        failed_requests = []
         page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+        page.on("requestfailed", lambda request: failed_requests.append(f"{request.method} {request.url}: {request.failure}"))
         await page.route("**/api/**", _handle_mock_api)
         await page.add_init_script(
             "localStorage.setItem('auth_token','mock-token');"
             "localStorage.setItem('selectedBusinessId','biz-1');"
             "localStorage.setItem('dashboard_sidebar_collapsed','true');"
+            "localStorage.setItem('language','ru');"
         )
-        await page.goto(url, wait_until="domcontentloaded")
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(2500)
         body = await page.locator("body").inner_text(timeout=10000)
 
@@ -960,6 +963,8 @@ async def run_smoke(url, screenshot):
 
         if console_errors:
             leaked.append(f"console errors: {console_errors[:2]}")
+        if failed_requests:
+            leaked.append(f"failed requests: {failed_requests[:3]}")
 
         if screenshot:
             path = Path(screenshot)
