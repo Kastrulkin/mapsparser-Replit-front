@@ -1,6 +1,6 @@
 from services.community_pulse_sources import is_default_industry_source, source_industry_key
 from services.knowledge_graph_service import normalize_source_categories
-from services.operator_mobile_today import _pulse_overview
+from services.operator_mobile_today import _is_business_pulse_material, _pulse_overview, _topic_hint
 
 
 def test_beauty_public_editorial_source_is_available_by_default():
@@ -85,6 +85,33 @@ def test_admin_categories_define_industry_and_audience_safely():
     assert is_default_industry_source(customer_channel, {"beauty"}) is False
 
 
+def test_b2c_provenance_wins_over_an_accidental_community_role():
+    sources = [
+        {
+            "title": "Клиника красоты",
+            "source_role": "community",
+            "metadata_json": {"industry_key": "beauty", "audience": "b2c"},
+        },
+        {
+            "title": "Канал салона",
+            "source_role": "community",
+            "metadata_json": {"industry_key": "beauty", "corpus_tag": "telegram_b2c_beauty"},
+        },
+        {
+            "title": "Новости студии",
+            "source_role": "community",
+            "metadata_json": {"industry_key": "beauty", "source_owner_type": "owned_business_channel"},
+        },
+        {
+            "title": "Медицинский центр",
+            "source_role": "community",
+            "metadata_json": {"industry_key": "beauty", "discovery_origin": "map_parse"},
+        },
+    ]
+
+    assert all(is_default_industry_source(source, {"beauty"}) is False for source in sources)
+
+
 def test_source_categories_are_normalized_and_deduplicated():
     categories = normalize_source_categories([" Beauty ", "бьюти", "Чаты", "Для владельцев", "bad/category"])
 
@@ -120,3 +147,22 @@ def test_industry_overview_shows_ranked_source_highlights_when_no_topic_cluster_
     assert pulse[0]["title"] == "Как меняется спрос на окрашивание летом"
     assert pulse[0]["source_url"] == "https://t.me/salon/2"
     assert len(pulse[0]["provenance"]) == 1
+
+
+def test_pulse_relevance_rejects_lifestyle_chatter_and_customer_content():
+    snow = {"message_text": "Зимой плохо чистили снег. Каждая клиентка рассказывала, что трудно дошла."}
+    customer_post = {"message_text": "Почему после бассейна стопы сухие и как наносить крем."}
+    operations = {"message_text": "Сотрудник должен понимать границы решений, иначе страдает управление салоном."}
+
+    assert _is_business_pulse_material(snow) is False
+    assert _is_business_pulse_material(customer_post) is False
+    assert _is_business_pulse_material(operations) is True
+
+
+def test_topic_title_is_not_cut_in_the_middle_of_a_word():
+    title = _topic_hint({
+        "message_text": "Книг для индустрии красоты почти нет, а современных бизнес-книг для построения устойчивой компании ещё меньше. Продолжение.",
+    })
+
+    assert title.endswith("…")
+    assert not title.endswith("постр…")

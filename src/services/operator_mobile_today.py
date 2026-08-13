@@ -410,12 +410,34 @@ def _tokens(value: str) -> set[str]:
     }
 
 
+PULSE_STRONG_BUSINESS_MARKERS = (
+    "администратор", "аренд", "бизнес", "выруч", "график", "загруз", "закуп",
+    "запис", "зарплат", "карт", "клиентская база", "кпи", "лояльност",
+    "маркетинг", "маркиров", "налог", "найм", "оборудован", "перезапис",
+    "поставщик", "прибыл", "продаж", "расход", "рейтинг", "себестоим",
+    "сотрудник", "соцсет", "средний чек", "управлен", "crm", "2гис", "яндекс",
+)
+
+
+def _is_business_pulse_material(item: dict[str, Any]) -> bool:
+    text = re.sub(r"\s+", " ", str(item.get("message_text") or "")).lower()
+    return any(marker in text for marker in PULSE_STRONG_BUSINESS_MARKERS)
+
+
+def _short_topic(value: Any, limit: int = 90) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    shortened = cleaned[: limit + 1].rsplit(" ", 1)[0].rstrip(" ,.;:—–-")
+    return f"{shortened}…" if shortened else f"{cleaned[:limit].rstrip()}…"
+
+
 def _topic_hint(item: dict[str, Any]) -> str:
     raw = _parse_json(item.get("raw_payload_json"))
     for key in ("topic", "topic_title", "theme", "summary_title"):
         value = str(raw.get(key) or "").strip()
         if value:
-            return value[:90]
+            return _short_topic(value)
     reason = str(item.get("reason") or "").strip()
     if ":" in reason:
         markers = reason.split(":", 1)[1].split(",")
@@ -425,7 +447,7 @@ def _topic_hint(item: dict[str, Any]) -> str:
     for fragment in re.split(r"[\n.!?]+", text):
         cleaned = re.sub(r"\s+", " ", fragment).strip(" —–-:;·•\t")
         if len(cleaned) >= 16 and re.search(r"[a-zа-яё]{4,}", cleaned.lower()):
-            return cleaned[:90]
+            return _short_topic(cleaned)
     terms = sorted(_tokens(text))
     return " ".join(terms[:3]).capitalize() if terms else "Обсуждение предпринимателей"
 
@@ -654,7 +676,8 @@ def _load_community_pulse(cursor: Any, scope: dict[str, Any], cutoff: datetime) 
         )
         rows.extend(_row(cursor, value) for value in cursor.fetchall() or [])
     knowledge_rows, industry_keys = _knowledge_pulse_rows(cursor, scope, cutoff)
-    rows.extend(knowledge_rows)
+    relevant_knowledge_rows = [item for item in knowledge_rows if _is_business_pulse_material(item)]
+    rows.extend(relevant_knowledge_rows)
     unique_rows = []
     seen = set()
     for item in rows:
@@ -664,7 +687,7 @@ def _load_community_pulse(cursor: Any, scope: dict[str, Any], cutoff: datetime) 
         seen.add(key)
         unique_rows.append(item)
     clustered = _cluster_pulse(unique_rows)
-    return clustered or _pulse_overview(knowledge_rows, industry_keys)
+    return clustered or _pulse_overview(relevant_knowledge_rows, industry_keys)
 
 
 def _load_completed_results(
