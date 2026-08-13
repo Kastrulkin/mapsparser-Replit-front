@@ -768,6 +768,7 @@ def social_posts_bulk_mark_manual_published():
             post_ids,
             provider_post_url=str(data.get("provider_post_url") or "").strip(),
             provider_post_id=str(data.get("provider_post_id") or "").strip(),
+            content_confirmed=data.get("content_confirmed") is True,
         )
         return jsonify({"success": True, **payload})
     except PermissionError:
@@ -793,6 +794,7 @@ def social_posts_mark_manual_published(post_id: str):
             post_id,
             provider_post_url=str(data.get("provider_post_url") or "").strip(),
             provider_post_id=str(data.get("provider_post_id") or "").strip(),
+            content_confirmed=data.get("content_confirmed") is True,
         )
         return jsonify({"success": True, "post": post})
     except PermissionError:

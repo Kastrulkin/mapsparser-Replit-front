@@ -686,7 +686,7 @@ export const createCoreActions = (scope) => {
     }
   };
 
-  const markSocialPostPublished = async (post: SocialPost) => {
+  const markSocialPostPublished = async (post: SocialPost, contentConfirmed = false) => {
     setSocialBusyAction(`manual:${post.id}`);
     setError('');
     setActionSummary(null);
@@ -697,6 +697,7 @@ export const createCoreActions = (scope) => {
         body: JSON.stringify({
           provider_post_url: String(refs.url || '').trim(),
           provider_post_id: String(refs.id || '').trim(),
+          content_confirmed: contentConfirmed,
         }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);

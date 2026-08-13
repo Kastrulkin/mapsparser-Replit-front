@@ -1506,12 +1506,42 @@ def test_mark_manual_published_allows_manual_or_supervised_only(monkeypatch):
         },
     )
 
-    post = mark_manual_published("user-1", "post-1", provider_post_url="https://maps.example/post-1")
+    post = mark_manual_published(
+        "user-1",
+        "post-1",
+        provider_post_url="https://maps.example/post-1",
+        content_confirmed=True,
+    )
 
     assert post["status"] == "published"
     assert post["provider_post_url"] == "https://maps.example/post-1"
     assert post["metadata_json"]["published_source"] == "manual_confirmation"
+    assert post["metadata_json"]["manual_confirmation"]["content_confirmed"] is True
     assert FakeManualPublishedDB.last_conn.committed is True
+
+
+def test_mark_manual_published_requires_content_confirmation(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeManualPublishedDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "google_business",
+            "status": "needs_manual_publish",
+            "platform_text": "Prepared Google Business post text",
+            "metadata_json": {},
+        },
+    )
+
+    with pytest.raises(ValueError, match="текст и медиа"):
+        mark_manual_published("user-1", "post-1", provider_post_url="https://business.google.com/profile")
+
+    assert FakeManualPublishedDB.last_conn.updated_row == {}
+    assert FakeManualPublishedDB.last_conn.committed is False
+    assert FakeManualPublishedDB.last_conn.rolled_back is True
 
 
 def test_mark_manual_published_rejects_approved_api_post(monkeypatch):

@@ -171,7 +171,7 @@ export const createSocialActions = (scope) => {
     });
   };
 
-  const markSelectedSocialPostsPublished = async () => {
+  const markSelectedSocialPostsPublished = async (contentConfirmed = false) => {
     if (!selectedSocialCanMarkPublished.length) return;
     setBulkBusyAction('selected-social-manual');
     setError('');
@@ -179,7 +179,10 @@ export const createSocialActions = (scope) => {
     try {
       await newAuth.makeRequest('/social-posts/bulk-mark-manual-published', {
         method: 'POST',
-        body: JSON.stringify({ post_ids: selectedSocialCanMarkPublished.map((post) => post.id) }),
+        body: JSON.stringify({
+          post_ids: selectedSocialCanMarkPublished.map((post) => post.id),
+          content_confirmed: contentConfirmed,
+        }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       setActionSummary({

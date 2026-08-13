@@ -738,6 +738,7 @@ function ContentWorkspace() {
     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [manualContentConfirmed, setManualContentConfirmed] = useState<Record<string, boolean>>({});
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
@@ -1586,7 +1587,10 @@ function ContentWorkspace() {
     try {
       await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-manual-published`, {
         method: 'POST',
-        body: JSON.stringify({ provider_post_url: providerPostUrl.trim() }),
+        body: JSON.stringify({
+          provider_post_url: providerPostUrl.trim(),
+          content_confirmed: Boolean(manualContentConfirmed[post.id]),
+        }),
       });
       await loadSocialPosts(currentPlan.id);
       setActionMessage(`${platformShortLabel(post)}: публикация отмечена размещённой.`);
@@ -2888,6 +2892,19 @@ function ContentWorkspace() {
                                   ) : null}
                                   {['needs_manual_publish', 'needs_supervised_publish'].includes(String(post.status || '').toLowerCase()) ? (
                                     <div className="mt-3 flex flex-wrap gap-2">
+                                      <label className="flex w-full cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={Boolean(manualContentConfirmed[post.id])}
+                                          onChange={(event) => setManualContentConfirmed((prev) => ({
+                                            ...prev,
+                                            [post.id]: event.target.checked,
+                                          }))}
+                                          disabled={Boolean(busyAction)}
+                                          className="mt-0.5 h-4 w-4 shrink-0"
+                                        />
+                                        <span>Проверил на площадке: текст и выбранные фото отображаются правильно.</span>
+                                      </label>
                                       {placementTargetUrl(post) ? (
                                         <a href={placementTargetUrl(post)} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl bg-white px-3 text-xs font-semibold text-sky-700 ring-1 ring-slate-200 hover:bg-sky-50">
                                           Открыть размещение
@@ -2908,7 +2925,7 @@ function ContentWorkspace() {
                                           </Button>
                                         </>
                                       ) : null}
-                                      <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
+                                      <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction) || !manualContentConfirmed[post.id]} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
                                         Отметить размещённым
                                       </Button>
                                     </div>

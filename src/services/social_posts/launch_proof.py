@@ -1454,7 +1454,13 @@ def rehearse_social_posts_publish(user_id: str, post_ids: list[str]) -> dict[str
     finally:
         db.close()
 
-def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "", provider_post_id: str = "") -> dict[str, Any]:
+def mark_manual_published(
+    user_id: str,
+    post_id: str,
+    provider_post_url: str = "",
+    provider_post_id: str = "",
+    content_confirmed: bool = False,
+) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -1463,8 +1469,16 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
         status = str(post.get("status") or "").strip()
         if status not in {"needs_supervised_publish", "needs_manual_publish"}:
             raise ValueError("Ручная отметка публикации доступна только для ручного или контролируемого размещения")
+        if not content_confirmed:
+            raise ValueError("Проверьте, что текст и медиа отображаются на площадке, и подтвердите размещение")
+        confirmed_at = datetime.now(timezone.utc)
         metadata = _json_dict(post.get("metadata_json"))
         metadata["published_source"] = "manual_confirmation"
+        metadata["manual_confirmation"] = {
+            "content_confirmed": True,
+            "confirmed_at": confirmed_at.isoformat(),
+            "confirmed_by": str(user_id or "").strip(),
+        }
         cursor.execute(
             """
             UPDATE social_posts
@@ -1478,7 +1492,7 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
             WHERE id = %s
             RETURNING *
             """,
-            (datetime.now(timezone.utc), provider_post_url, provider_post_id, _json_dumps(metadata), post_id),
+            (confirmed_at, provider_post_url, provider_post_id, _json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         _record_knowledge_publish_event(cursor, updated, user_id, "manual_confirmation")
@@ -1599,12 +1613,21 @@ def mark_manual_published_posts(
     post_ids: list[str],
     provider_post_url: str = "",
     provider_post_id: str = "",
+    content_confirmed: bool = False,
 ) -> dict[str, Any]:
     posts: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
     for post_id in _normalize_ids(post_ids):
         try:
-            posts.append(mark_manual_published(user_id, post_id, provider_post_url, provider_post_id))
+            posts.append(
+                mark_manual_published(
+                    user_id,
+                    post_id,
+                    provider_post_url,
+                    provider_post_id,
+                    content_confirmed,
+                )
+            )
         except Exception:
             failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
     return {
