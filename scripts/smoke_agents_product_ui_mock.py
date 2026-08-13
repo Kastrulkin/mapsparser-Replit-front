@@ -154,6 +154,37 @@ async def _handle_mock_api(route):
         })
         return
 
+    if path == "/agent-templates":
+        await _fulfill(route, {
+            "success": True,
+            "count": 2,
+            "templates": [
+                {
+                    "key": "daily_owner_digest",
+                    "version": "1.0.0",
+                    "name": "Ежедневная сводка владельцу",
+                    "business_result": "К началу дня владелец видит один короткий список отклонений и задач.",
+                    "vertical": "operations",
+                    "trigger": "schedule.daily",
+                    "required_connections": [],
+                    "risk_level": "low",
+                    "certification_status": "beta",
+                },
+                {
+                    "key": "partnership_outreach_draft",
+                    "version": "1.0.0",
+                    "name": "Черновик партнёрского предложения",
+                    "business_result": "Менеджер получает персональные черновики первого контакта.",
+                    "vertical": "partnerships",
+                    "trigger": "manual.run",
+                    "required_connections": [],
+                    "risk_level": "high",
+                    "certification_status": "draft",
+                },
+            ],
+        })
+        return
+
     if path == "/agent-blueprints/legacy-migration-plan":
         await _fulfill(route, {"migration_plan": {"legacy_agents": [], "business_settings": {"fields": {}}}})
         return
@@ -822,6 +853,9 @@ async def run_smoke(url, screenshot):
         required = [
             "Мои агенты",
             "Создать агента",
+            "Готовые практики",
+            "Ежедневная сводка владельцу",
+            "Просмотр бесплатный и ничего не создаёт",
             "Сегодня",
             "Требует внимания",
             "Агенты",
