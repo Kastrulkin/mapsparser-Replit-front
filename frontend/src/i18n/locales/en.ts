@@ -220,6 +220,7 @@ export const en = {
     option2Point4: "LocalOS records the result and shows where a decision is needed",
     option2Button: "Discuss a task",
     pricingTitle: "Terms",
+    pricingSubtitle: "Choose how much recurring work you want to hand over",
     pricingStarterTitle: "Maps",
     pricingStarterPrice: "$15 / month",
     pricingStarterTagline: "Maps work, you focus on clients",

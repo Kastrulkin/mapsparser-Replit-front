@@ -5,88 +5,16 @@ import SeoMeta from "@/components/SeoMeta";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, Truck, Wrench } from "lucide-react";
-import { useLanguage, type Language } from "@/i18n/LanguageContext";
+import { useLanguage } from "@/i18n/LanguageContext";
 import { newAuth } from "@/lib/auth_new";
-
-type AboutStoryCopy = {
-  eyebrow: string;
-  title: string;
-  intro: string;
-  workdayValue: string;
-  workdayText: string;
-  workdayNote: string;
-  storyEyebrow: string;
-  storyTitle: string;
-  storyIntro: string;
-  chapterOneTitle: string;
-  chapterOneText: string;
-  chapterTwoTitle: string;
-  chapterTwoText: string;
-  chapterThreeTitle: string;
-  chapterThreeText: string;
-  industries: string[];
-  channelEyebrow: string;
-  channelTitle: string;
-  channelText: string;
-  channelButton: string;
-};
-
-const getAboutStoryCopy = (language: Language): AboutStoryCopy => {
-  if (language === "ru") {
-    return {
-      eyebrow: "Команда LocalOS",
-      title: "Мы начинали бизнес, чтобы стать свободнее",
-      intro: "Но по мере роста свободы становилось меньше. Утром — цифры и сотрудники. Днём — клиенты и срочные вопросы. Вечером — то, что не успели. Выключить телефон или уехать на неделю казалось рискованным.",
-      workdayValue: "14 часов",
-      workdayText: "может длиться день владельца, когда всё важное проходит через него",
-      workdayNote: "Нам знаком этот режим изнутри.",
-      storyEyebrow: "Почему мы сделали LocalOS",
-      storyTitle: "15 лет в бизнесе и автоматизации",
-      storyIntro: "Мы работали в транспорте, ритейле, производстве, логистике и услугах.",
-      chapterOneTitle: "Мы знаем эту проблему изнутри",
-      chapterOneText: "15 лет мы строили и автоматизировали бизнес в транспорте, ритейле, производстве, логистике и услугах. Работали и с небольшими компаниями, и с крупными предприятиями. Один из транспортных проектов вырос с нуля до работы в 40 странах. Для крупной компании мы внедрили схему, которая экономила несколько миллионов долларов в год.\n\nНо по мере роста собственных проектов каждый из нас столкнулся с одной и той же проблемой: всё больше работы возвращалось к владельцу. Клиенты, сотрудники, цифры, срочные вопросы. Проще было сделать самому, чем объяснить, передать и потом проверить.",
-      chapterTwoTitle: "Сначала мы решили эту проблему для себя",
-      chapterTwoText: "Научились собирать удалённые команды, описывать процессы и автоматизировать повторяющуюся работу. За 15 лет мы не раз встречали одни и те же задачи в компаниях разных отраслей — и находили способы их решать. Этот опыт лёг в основу LocalOS.",
-      chapterThreeTitle: "Так появился LocalOS",
-      chapterThreeText: "Мы превратили накопленные решения в готовые цифровые сценарии. Теперь предприниматель может использовать опыт многих компаний, не проходя весь путь самостоятельно. ИИ помогает описать задачу и подготовить сценарий, владелец утверждает правила, а повторяющуюся работу выполняет скрипт.",
-      industries: ["Транспорт", "Ритейл", "Производство", "Логистика", "Услуги"],
-      channelEyebrow: "Дневник команды",
-      channelTitle: "Покупай мою шаверму",
-      channelText: "Пишем о реальном предпринимательстве: выгорании, операционке, учёте, автоматизации и идеях, из которых растёт LocalOS. Показываем рабочие заметки, ошибки и выводы.",
-      channelButton: "Читать в Telegram",
-    };
-  }
-
-  return {
-    eyebrow: "The LocalOS team",
-    title: "We started businesses to become more free",
-    intro: "Growth brought the opposite. Mornings were for numbers and staff, days for customers and urgent issues, evenings for everything left unfinished. Switching off the phone or leaving for a week felt risky.",
-    workdayValue: "14 hours",
-    workdayText: "is how long an owner's day can last when every important task comes back to them",
-    workdayNote: "We know this routine from the inside.",
-    storyEyebrow: "Why we built LocalOS",
-    storyTitle: "15 years in business and automation",
-    storyIntro: "We worked across transport, retail, manufacturing, logistics, and services.",
-    chapterOneTitle: "We know this problem from the inside",
-    chapterOneText: "For 15 years, we built and automated businesses in transport, retail, manufacturing, logistics, and services. We worked with both small companies and large enterprises. One transport project grew from zero to operating in 40 countries. For a large company, we implemented a model that saved several million dollars a year.\n\nBut as our own projects grew, each of us ran into the same problem: more work kept coming back to the owner. Customers, staff, numbers, urgent issues. Doing it ourselves felt easier than explaining, delegating, and checking.",
-    chapterTwoTitle: "First, we solved the problem for ourselves",
-    chapterTwoText: "We learned how to build remote teams, document processes, and automate recurring work. Over 15 years, we encountered the same tasks across companies in different industries and found ways to solve them. That experience became the foundation for LocalOS.",
-    chapterThreeTitle: "That is how LocalOS began",
-    chapterThreeText: "We turned the solutions we had accumulated into ready-to-use digital procedures. An owner can now benefit from the experience of many companies without having to repeat the entire journey. AI helps define the task and prepare the procedure, the owner approves the rules, and a script performs the recurring work.",
-    industries: ["Transport", "Retail", "Manufacturing", "Logistics", "Services"],
-    channelEyebrow: "Team journal",
-    channelTitle: "Покупай мою шаверму",
-    channelText: "We write about entrepreneurship as it is: burnout, operations, accounting, automation, and the ideas behind LocalOS. Expect working notes, mistakes, and conclusions.",
-    channelButton: "Read on Telegram",
-  };
-};
+import { aboutStoryCopy } from "@/content/aboutStoryCopy";
 
 const About = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language } = useLanguage();
   const isRu = language === "ru";
-  const story = getAboutStoryCopy(language);
+  const story = aboutStoryCopy[language];
 
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
@@ -171,11 +99,9 @@ const About = () => {
   return (
     <div className="min-h-screen bg-background">
       <SeoMeta
-        description={isRu
-          ? "История команды LocalOS: 15 лет в бизнесе и автоматизации транспорта, ритейла, производства, логистики и услуг."
-          : "The LocalOS team story: 15 years in business and automation across transport, retail, manufacturing, logistics, and services."}
+        description={story.metaDescription}
         path="/about"
-        title={isRu ? "О команде LocalOS — 15 лет автоматизации бизнеса" : "About the LocalOS team — 15 years of business automation"}
+        title={story.metaTitle}
       />
 
       <section className="relative overflow-hidden border-b border-white/10 bg-slate-950 px-4 py-20 text-white sm:px-6 sm:py-24 lg:px-8 lg:py-32">
@@ -313,7 +239,7 @@ const About = () => {
 
             {/* Option 0 - 5000 ₽/месяц */}
             <Card className="group p-8 flex flex-col h-full bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
+              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">{story.popular}</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Профессиональный" : t.about.pricingOption0Title}

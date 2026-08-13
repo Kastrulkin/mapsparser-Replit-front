@@ -196,6 +196,7 @@ export const de = {
     option2Point4: "Sie sehen Ergebnisse ab dem ersten Monat — neue Kunden, Wachstum des durchschnittlichen Rechnungsbetrags, wiederholte Besuche",
     option2Button: "Experten kontaktieren",
     pricingTitle: "Bedingungen",
+    pricingSubtitle: "Wählen Sie, wie viel wiederkehrende Arbeit Sie abgeben möchten",
     pricingStarterTitle: "Starter",
     pricingStarterPrice: "$15 / Monat",
     pricingStarterPoint1: "Verbinden Sie sich mit dem professionellen Local-Netzwerk",
@@ -230,8 +231,8 @@ export const de = {
     pricingOption2Point4: "Geschäftsprozessoptimierung",
     pricingOption2Point5: "Dedizierter Manager",
     pricingOption2Note: "Verfügbar nach 3 Monaten Abonnement oder auf Empfehlung",
-    finalTitle: "Wir helfen nicht nur — wir lassen Ihr Geschäft wachsen",
-    finalText: "Kontaktieren Sie uns — und lassen Sie Kunden von selbst kommen.",
+    finalTitle: "Behalten Sie die Entscheidungen, die den Inhaber wirklich brauchen",
+    finalText: "Übergeben Sie wiederkehrende Arbeit an LocalOS. Beginnen Sie mit einer Aufgabe, die Sie nicht länger im Kopf behalten möchten.",
     contactUs: "Kontaktieren Sie Uns",
     getConsultation: "Beratung Erhalten"
   },

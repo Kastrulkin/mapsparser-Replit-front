@@ -210,6 +210,7 @@ export const tr = {
     option2Point4: "İlk aydan itibaren sonucu görürsünüz — yeni müşteriler, sepet artışı, geri dönüşler",
     option2Button: "Uzmanla iletişime geç",
     pricingTitle: "Koşullar",
+    pricingSubtitle: "Devretmek istediğiniz tekrarlanan iş miktarını seçin",
     pricingStarterTitle: "Haritalar",
     pricingStarterPrice: "$15 / ay",
     pricingStarterTagline: "Haritalar çalışır, siz müşterilere odaklanırsınız",
@@ -249,8 +250,8 @@ export const tr = {
     pricingOption2Point4: "İş süreçlerinin optimizasyonu",
     pricingOption2Point5: "Size özel yönetici",
     pricingOption2Note: "Aboneliğin 3. ayından sonra veya tavsiye ile kullanılabilir",
-    finalTitle: "Sadece yardımcı olmuyoruz — işletmenizi büyütüyoruz",
-    finalText: "Bizimle iletişime geçin — müşteriler size kendiliğinden gelmeye başlasın.",
+    finalTitle: "Gerçekten işletme sahibini gerektiren kararları kendinize bırakın",
+    finalText: "Tekrarlanan işleri LocalOS'a devredin. Aklınızda tutmak istemediğiniz tek bir görevle başlayın.",
     contactUs: "Bize Ulaşın",
     getConsultation: "Danışmanlık Alın"
   },
