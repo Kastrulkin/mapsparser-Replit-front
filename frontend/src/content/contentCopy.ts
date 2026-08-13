@@ -99,15 +99,15 @@ export const contentCopy: Record<Language, ContentCopy> = {
     shared: { readMore: "Leer más", related: "También te puede interesar", ctaTitle: "¿Quieres saber qué trabajo puedes delegar en LocalOS?", ctaDescription: "Empieza con una auditoría gratuita de tu ficha. Te mostraremos qué impide que los clientes te encuentren y te elijan.", audit: "Obtener auditoría gratuita", discuss: "Hablar de la implementación", loading: "Cargando artículo…" },
   },
   el: {
-    materials: "Υλικό",
+    materials: "Πόροι",
     navigation: {
-      articles: { name: "Άρθρα", description: "Χάρτες, κριτικές και λειτουργία τοπικής επιχείρησης" },
-      documents: { name: "Έγγραφα", description: "Λίστες ελέγχου, πρότυπα και πίνακες" },
-      cases: { name: "Μελέτες περίπτωσης", description: "Τι έχουν ήδη βελτιώσει άλλοι ιδιοκτήτες" },
-      documentation: { name: "Τεκμηρίωση", description: "LocalOS για χρήστες, API και πράκτορες AI" },
+      articles: { name: "Άρθρα", description: "Χάρτες, κριτικές και καθημερινή λειτουργία μιας τοπικής επιχείρησης" },
+      documents: { name: "Εργαλεία", description: "Λίστες ελέγχου, πρότυπα και πίνακες εργασίας" },
+      cases: { name: "Παραδείγματα", description: "Πραγματικές αλλαγές σε τοπικές επιχειρήσεις" },
+      documentation: { name: "Τεκμηρίωση", description: "LocalOS για χρήστες, API και πράκτορες τεχνητής νοημοσύνης" },
     },
-    articles: { eyebrow: "Υλικό LocalOS", title: "Άρθρα για την επιχείρηση, τους πελάτες και την ανάπτυξη", description: "Πρακτικοί οδηγοί για χάρτες, κριτικές, πελάτες, οικονομικά και την καθημερινή εργασία του ιδιοκτήτη.", latest: "Τελευταία άρθρα", chooseTopic: "Επιλέξτε θέμα και ξεκινήστε από τον πιο χρήσιμο οδηγό.", all: "Όλα", back: "Πίσω στα άρθρα", seoTitle: "Άρθρα για ιδιοκτήτες τοπικών επιχειρήσεων — LocalOS", seoDescription: "Άρθρα του LocalOS για χάρτες, κριτικές, πελάτες, οικονομικά και αυτοματοποίηση επαναλαμβανόμενων εργασιών." },
-    shared: { readMore: "Διαβάστε περισσότερα", related: "Διαβάστε επίσης", ctaTitle: "Θέλετε να δείτε ποιες εργασίες μπορείτε να αναθέσετε στο LocalOS;", ctaDescription: "Ξεκινήστε με δωρεάν έλεγχο της καταχώρισής σας. Θα δείξουμε τι εμποδίζει τους πελάτες να σας βρουν και να σας επιλέξουν.", audit: "Δωρεάν έλεγχος", discuss: "Συζήτηση εφαρμογής", loading: "Φόρτωση άρθρου…" },
+    articles: { eyebrow: "Πόροι LocalOS", title: "Άρθρα για την επιχείρηση, τους πελάτες και την ανάπτυξη", description: "Πρακτικοί οδηγοί για το επαγγελματικό προφίλ στους χάρτες, τις κριτικές, τους πελάτες, τα οικονομικά και την καθημερινή εργασία του ιδιοκτήτη.", latest: "Νέα άρθρα", chooseTopic: "Επιλέξτε θέμα και ξεκινήστε από τον οδηγό που σας είναι πιο χρήσιμος.", all: "Όλα", back: "Επιστροφή στα άρθρα", seoTitle: "Άρθρα για ιδιοκτήτες τοπικών επιχειρήσεων — LocalOS", seoDescription: "Άρθρα του LocalOS για χάρτες, κριτικές, πελάτες, οικονομικά και αυτοματοποίηση επαναλαμβανόμενων εργασιών." },
+    shared: { readMore: "Διαβάστε περισσότερα", related: "Δείτε επίσης", ctaTitle: "Θέλετε να δείτε ποιες εργασίες μπορείτε να αναθέσετε στο LocalOS;", ctaDescription: "Ξεκινήστε με δωρεάν έλεγχο του επαγγελματικού σας προφίλ. Θα σας δείξουμε τι δυσκολεύει τους πελάτες να σας βρουν και να σας επιλέξουν.", audit: "Δωρεάν έλεγχος", discuss: "Συζητήστε την εφαρμογή", loading: "Το άρθρο φορτώνεται…" },
   },
   de: {
     materials: "Wissen",

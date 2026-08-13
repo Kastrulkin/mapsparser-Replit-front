@@ -64,7 +64,7 @@ const analyticsModuleLabels: Record<Language, Record<string, string>> = {
   en: { sales: 'Sales and average sale', services: 'Services and upsells', capacity: 'Team capacity' },
   fr: { sales: 'Ventes et panier moyen', services: 'Services et ventes additionnelles', capacity: 'Charge de l’équipe' },
   es: { sales: 'Ventas y ticket medio', services: 'Servicios y ventas adicionales', capacity: 'Ocupación del equipo' },
-  el: { sales: 'Πωλήσεις και μέση απόδειξη', services: 'Υπηρεσίες και πρόσθετες πωλήσεις', capacity: 'Φόρτος ομάδας' },
+  el: { sales: 'Πωλήσεις και μέση αξία συναλλαγής', services: 'Υπηρεσίες και πρόσθετες πωλήσεις', capacity: 'Φόρτος ομάδας' },
   de: { sales: 'Umsatz und Durchschnittsbon', services: 'Leistungen und Zusatzverkäufe', capacity: 'Teamauslastung' },
   th: { sales: 'ยอดขายและยอดเฉลี่ย', services: 'บริการและการขายเพิ่ม', capacity: 'ความหนาแน่นของทีม' },
   ar: { sales: 'المبيعات ومتوسط الفاتورة', services: 'الخدمات والمبيعات الإضافية', capacity: 'إشغال الفريق' },

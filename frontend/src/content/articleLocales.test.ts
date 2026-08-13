@@ -39,4 +39,11 @@ describe("article translations", () => {
       expect(copy.articles.title).not.toMatch(cyrillic);
     });
   });
+
+  it("keeps the Greek article metadata complete and free of known broken machine-translation fragments", () => {
+    const serialized = JSON.stringify(el);
+
+    expect(el.every((article) => typeof article.seoDescription === "string" && article.seoDescription.length > 0)).toBe(true);
+    expect(serialized).not.toMatch(/seoDeπρόγραμμαion|πρόγραμμαs|εντολήs|μέση απόδειξη|συνεχής άγχος|Γεμάτη καταχώριση|μικρά studios|full-time|audit καταχώρισης|food photography|marketing budget|ζωντανή landing|πλαίσιο πλοήγησης/);
+  });
 });
