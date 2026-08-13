@@ -49,8 +49,8 @@ describe('TodayMobileV2', () => {
       />,
     );
 
-    expect(screen.getByText('Главное по сети')).toBeInTheDocument();
-    expect(screen.getByText('Сводка сети')).toBeVisible();
+    expect(screen.getByText('Что сделать сейчас')).toBeInTheDocument();
+    expect(screen.getByText('Данные по точкам')).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: /Север/ }));
     expect(openTarget).toHaveBeenCalledWith('cards', { kind: 'business', id: 'business-2' });
   });

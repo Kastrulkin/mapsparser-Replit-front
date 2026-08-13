@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 
 from services.community_pulse_sources import (
@@ -24,6 +24,15 @@ TOPIC_STOPWORDS = {
     "очень", "пока", "после", "почему", "при", "про", "свой", "так", "также", "только",
     "уже", "чтобы", "этого", "этой", "это", "business", "localos", "telegram",
 }
+
+STORY_FACT_CONTENT_TYPES = {
+    "story", "child_story", "author_story", "brand_story", "family_tradition",
+    "case", "before_after", "photo_report", "review_social_proof",
+}
+STORY_FACTS_QUESTION = (
+    "Опишите реальную историю: что было в начале, что произошло и что изменилось. "
+    "Имя можно не указывать."
+)
 
 
 def _row(cursor: Any, value: Any) -> dict[str, Any]:
@@ -62,6 +71,20 @@ def _parse_json(value: Any) -> dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+
+def _requires_story_facts(item: dict[str, Any], metadata: dict[str, Any]) -> bool:
+    stored_brief = metadata.get("content_brief_v1") if isinstance(metadata.get("content_brief_v1"), dict) else {}
+    if stored_brief.get("requires_story_facts") is True:
+        return True
+    content_type = str(item.get("content_type") or "").strip().lower()
+    if content_type in STORY_FACT_CONTENT_TYPES:
+        return True
+    description = " ".join(
+        str(item.get(field) or "").strip().lower()
+        for field in ("theme", "goal", "source_kind", "source_ref")
+    )
+    return any(marker in description for marker in ("истори", "кейс", "до/после", "до и после", "фотоотчёт"))
 
 
 def _table_exists(cursor: Any, table_name: str) -> bool:
@@ -112,11 +135,10 @@ def select_daily_focus(
     summary: dict[str, Any],
     progress: dict[str, Any] | None,
     scope: dict[str, Any],
+    content_action: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     attention = summary.get("primary_action") if isinstance(summary.get("primary_action"), dict) else None
     growth = progress.get("focus_action") if isinstance(progress, dict) and isinstance(progress.get("focus_action"), dict) else None
-    kind = str(scope.get("kind") or "business")
-
     attention_score = 0
     if attention:
         severity = str(attention.get("severity") or "low").lower()
@@ -144,27 +166,120 @@ def select_daily_focus(
             "source": "operator",
         }
 
-    if kind == "platform" or not growth or attention_score >= growth_score:
-        selected_attention = attention_focus()
-        if selected_attention:
-            return selected_attention
-    if not growth:
+    candidates: list[dict[str, Any]] = []
+    selected_attention = attention_focus()
+    if selected_attention:
+        candidates.append(selected_attention)
+    if isinstance(content_action, dict):
+        candidates.append(content_action)
+    if growth:
+        expected_outcome = str(growth.get("expected_outcome") or "Появится следующий подтверждённый результат.")
+        candidates.append({
+            "id": f"growth:{_screen_from_url(growth.get('cta_url'))}",
+            "title": str(growth.get("title") or "Продолжайте рост бизнеса"),
+            "reason": str(growth.get("reason") or "LocalOS выбрал следующий практический шаг."),
+            "expected_outcome": expected_outcome,
+            "expected_result": expected_outcome,
+            "cta_label": str(growth.get("cta_label") or "Продолжить"),
+            "screen": _screen_from_url(growth.get("cta_url")),
+            "priority": growth_score,
+            "estimated_effect": growth.get("estimated_effect"),
+            "target_scope": growth.get("target_scope"),
+            "affected_business_ids": growth.get("affected_business_ids") or [],
+            "source": "growth",
+        })
+    if not candidates:
         return None
-    expected_outcome = str(growth.get("expected_outcome") or "Появится следующий подтверждённый результат.")
-    return {
-        "id": f"growth:{_screen_from_url(growth.get('cta_url'))}",
-        "title": str(growth.get("title") or "Продолжайте рост бизнеса"),
-        "reason": str(growth.get("reason") or "LocalOS выбрал следующий практический шаг."),
-        "expected_outcome": expected_outcome,
-        "expected_result": expected_outcome,
-        "cta_label": str(growth.get("cta_label") or "Продолжить"),
-        "screen": _screen_from_url(growth.get("cta_url")),
-        "priority": growth_score,
-        "estimated_effect": growth.get("estimated_effect"),
-        "target_scope": growth.get("target_scope"),
-        "affected_business_ids": growth.get("affected_business_ids") or [],
-        "source": "growth",
-    }
+    return max(candidates, key=lambda item: int(item.get("priority") or 0))
+
+
+def _as_date(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value or "").strip()[:10])
+    except ValueError:
+        return None
+
+
+def _short_ru_date(value: date) -> str:
+    months = (
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    )
+    return f"{value.day} {months[value.month - 1]}"
+
+
+def _load_story_facts_action(
+    cursor: Any,
+    scope: dict[str, Any],
+    observed_at: datetime,
+) -> dict[str, Any] | None:
+    try:
+        if not _table_exists(cursor, "contentplanitems") or not _table_exists(cursor, "contentplans"):
+            return None
+        platform, business_ids = _business_filter(scope)
+        today = observed_at.astimezone(timezone.utc).date()
+        cursor.execute(
+            """
+            SELECT i.id, i.plan_id, i.business_id, b.name AS business_name,
+                   i.scheduled_for, i.content_type, i.theme, i.goal,
+                   i.source_kind, i.source_ref, i.metadata_json, i.status
+            FROM contentplanitems i
+            JOIN contentplans p ON p.id = i.plan_id
+            LEFT JOIN businesses b ON b.id = i.business_id
+            WHERE (%s OR i.business_id = ANY(%s))
+              AND COALESCE(p.plan_status, '') <> 'archived'
+              AND COALESCE(i.status, 'planned') NOT IN ('published', 'archived')
+              AND i.scheduled_for BETWEEN %s AND %s
+            ORDER BY i.scheduled_for ASC, i.updated_at DESC
+            LIMIT 100
+            """,
+            (platform, business_ids, today - timedelta(days=3), today + timedelta(days=14)),
+        )
+        missing: list[dict[str, Any]] = []
+        for value in cursor.fetchall() or []:
+            item = _row(cursor, value)
+            metadata = _parse_json(item.get("metadata_json"))
+            answers = metadata.get("brief_answers") if isinstance(metadata.get("brief_answers"), dict) else {}
+            if not _requires_story_facts(item, metadata) or str(answers.get("story_facts") or "").strip():
+                continue
+            scheduled_for = _as_date(item.get("scheduled_for"))
+            if not scheduled_for:
+                continue
+            missing.append({**item, "scheduled_for": scheduled_for})
+        if not missing:
+            return None
+
+        item = missing[0]
+        scheduled_for = item["scheduled_for"]
+        priority = 125 if scheduled_for <= today else (115 if scheduled_for <= today + timedelta(days=7) else 95)
+        theme = str(item.get("theme") or "ближайшей публикации").strip()
+        business_id = str(item.get("business_id") or "")
+        return {
+            "id": f"content_story_facts:{item.get('id')}",
+            "title": "Добавьте факты для истории",
+            "reason": (
+                f"Для «{theme}» на {_short_ru_date(scheduled_for)} не хватает реального эпизода. "
+                "LocalOS не будет придумывать героя или результат."
+            ),
+            "expected_outcome": "После фактов LocalOS подготовит достоверный текст истории.",
+            "expected_result": "После фактов LocalOS подготовит достоверный текст истории.",
+            "cta_label": "Добавить факты",
+            "screen": "content",
+            "priority": priority,
+            "count": len(missing),
+            "item_id": str(item.get("id") or ""),
+            "plan_id": str(item.get("plan_id") or ""),
+            "question": STORY_FACTS_QUESTION,
+            "target_scope": {"kind": "business", "id": business_id},
+            "affected_business_ids": [business_id] if business_id else [],
+            "source": "content",
+        }
+    except Exception:
+        return None
 
 
 def _load_progress(scope: dict[str, Any], loader: Callable[[str], dict[str, Any]]) -> dict[str, Any] | None:
@@ -796,7 +911,8 @@ def build_mobile_today(
     cutoff = observed_at.astimezone(timezone.utc) - timedelta(hours=24)
     summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
     progress = _load_progress(scope, growth_loader)
-    focus = select_daily_focus(summary, progress, scope)
+    content_action = _load_story_facts_action(cursor, scope, observed_at)
+    focus = select_daily_focus(summary, progress, scope, content_action)
     return {
         "scope": scope,
         "as_of": observed_at.astimezone(timezone.utc).isoformat(),
@@ -830,7 +946,9 @@ def build_mobile_progress(
 ) -> dict[str, Any]:
     summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
     progress = _load_progress(scope, growth_loader)
-    focus = select_daily_focus(summary, progress, scope)
+    observed_at = datetime.now(timezone.utc)
+    content_action = _load_story_facts_action(cursor, scope, observed_at)
+    focus = select_daily_focus(summary, progress, scope, content_action)
     if not isinstance(progress, dict):
         return {
             "scope": scope,

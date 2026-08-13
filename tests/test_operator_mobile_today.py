@@ -41,6 +41,7 @@ def test_today_and_progress_use_the_same_focus(monkeypatch):
     monkeypatch.setattr(mobile_today, "_load_changes", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_story_facts_action", lambda *_args: None)
     scope = {"kind": "business", "id": "business-1", "business_ids": ["business-1"]}
 
     today = mobile_today.build_mobile_today(object(), scope=scope, user_id="user-1", growth_loader=lambda _business_id: _growth())
@@ -68,6 +69,7 @@ def test_network_today_and_progress_expose_same_location_contract(monkeypatch):
     monkeypatch.setattr(mobile_today, "_load_changes", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_story_facts_action", lambda *_args: None)
     scope = {"kind": "network", "id": "n-1", "business_ids": ["b-1", "b-2"]}
 
     today = mobile_today.build_mobile_today(object(), scope=scope, user_id="u-1", growth_loader=lambda _id: growth)
@@ -86,6 +88,7 @@ def test_today_uses_exact_rolling_24_hour_window(monkeypatch):
     monkeypatch.setattr(mobile_today, "_load_changes", lambda _cursor, _scope, cutoff: observed_cutoffs.append(cutoff) or [])
     monkeypatch.setattr(mobile_today, "_load_community_pulse", lambda *_args: [])
     monkeypatch.setattr(mobile_today, "_load_completed_results", lambda *_args: [])
+    monkeypatch.setattr(mobile_today, "_load_story_facts_action", lambda *_args: None)
     now = datetime(2026, 7, 27, 9, 30, tzinfo=timezone.utc)
 
     payload = mobile_today.build_mobile_today(
@@ -216,3 +219,63 @@ def test_blocking_operator_focus_wins_over_growth_recommendation():
     assert focus["source"] == "operator"
     assert focus["target_scope"] == {"kind": "business", "id": "b-2"}
     assert focus["affected_business_ids"] == ["b-2"]
+
+
+def test_story_facts_focus_wins_over_regular_growth_recommendation():
+    content_action = {
+        "id": "content_story_facts:item-1",
+        "title": "Добавьте факты для истории",
+        "priority": 115,
+        "screen": "content",
+        "source": "content",
+    }
+
+    focus = mobile_today.select_daily_focus(
+        {"primary_action": None},
+        _growth(priority=80),
+        {"kind": "business"},
+        content_action,
+    )
+
+    assert focus == content_action
+
+
+def test_critical_operator_focus_stays_above_story_facts():
+    content_action = {
+        "id": "content_story_facts:item-1",
+        "title": "Добавьте факты для истории",
+        "priority": 125,
+        "screen": "content",
+        "source": "content",
+    }
+
+    focus = mobile_today.select_daily_focus(
+        {
+            "primary_action": {
+                "id": "cards_failed",
+                "title": "Восстановить обновление карточки",
+                "severity": "critical",
+                "count": 1,
+            }
+        },
+        _growth(priority=80),
+        {"kind": "business"},
+        content_action,
+    )
+
+    assert focus["source"] == "operator"
+
+
+def test_story_facts_requirement_recognizes_story_plan_items():
+    assert mobile_today._requires_story_facts(
+        {"content_type": "story", "theme": "История ученика"},
+        {},
+    )
+    assert mobile_today._requires_story_facts(
+        {"content_type": "news", "theme": "Как изменилась история клиента"},
+        {},
+    )
+    assert not mobile_today._requires_story_facts(
+        {"content_type": "faq", "theme": "Как подготовиться к занятию"},
+        {},
+    )

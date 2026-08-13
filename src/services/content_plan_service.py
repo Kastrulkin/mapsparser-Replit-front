@@ -2036,32 +2036,32 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
                 "network_location" if item_location_scope else str(plan.get("scope_type") or ""),
                 item_location_scope or item_business_id,
             )
-            items.append(
-                {
-                    "id": str(_row_get(row, "id", 0, "") or "").strip(),
-                    "business_id": item_business_id,
-                    "scheduled_for": _row_get(row, "scheduled_for", 2),
-                    "content_type": str(_row_get(row, "content_type", 3, "") or "").strip(),
-                    "theme": str(_row_get(row, "theme", 4, "") or "").strip(),
-                    "goal": str(_row_get(row, "goal", 5, "") or "").strip(),
-                    "source_kind": str(_row_get(row, "source_kind", 6, "") or "").strip(),
-                    "source_ref": str(_row_get(row, "source_ref", 7, "") or "").strip(),
-                    "seo_keyword": str(_row_get(row, "seo_keyword", 8, "") or "").strip(),
-                    "service_id": str(_row_get(row, "service_id", 9, "") or "").strip(),
-                    "transaction_id": str(_row_get(row, "transaction_id", 10, "") or "").strip(),
-                    "seo_views": int(_row_get(row, "seo_views", 11, 0) or 0),
-                    "location_scope": item_location_scope,
-                    "location_label": str(location_meta.get("scope_target_label") or "").strip(),
-                    "location_city": str(location_meta.get("scope_target_city") or "").strip(),
-                    "location_address": str(location_meta.get("scope_target_address") or "").strip(),
-                    "draft_text": str(_row_get(row, "draft_text", 13, "") or "").strip(),
-                    "status": str(_row_get(row, "status", 14, "") or "").strip(),
-                    "usernews_id": str(_row_get(row, "usernews_id", 15, "") or "").strip(),
-                    "metadata_json": _json_value(_row_get(row, "metadata_json", 16, {}), {}),
-                    "created_at": _row_get(row, "created_at", 17),
-                    "updated_at": _row_get(row, "updated_at", 18),
-                }
-            )
+            item_payload = {
+                "id": str(_row_get(row, "id", 0, "") or "").strip(),
+                "business_id": item_business_id,
+                "scheduled_for": _row_get(row, "scheduled_for", 2),
+                "content_type": str(_row_get(row, "content_type", 3, "") or "").strip(),
+                "theme": str(_row_get(row, "theme", 4, "") or "").strip(),
+                "goal": str(_row_get(row, "goal", 5, "") or "").strip(),
+                "source_kind": str(_row_get(row, "source_kind", 6, "") or "").strip(),
+                "source_ref": str(_row_get(row, "source_ref", 7, "") or "").strip(),
+                "seo_keyword": str(_row_get(row, "seo_keyword", 8, "") or "").strip(),
+                "service_id": str(_row_get(row, "service_id", 9, "") or "").strip(),
+                "transaction_id": str(_row_get(row, "transaction_id", 10, "") or "").strip(),
+                "seo_views": int(_row_get(row, "seo_views", 11, 0) or 0),
+                "location_scope": item_location_scope,
+                "location_label": str(location_meta.get("scope_target_label") or "").strip(),
+                "location_city": str(location_meta.get("scope_target_city") or "").strip(),
+                "location_address": str(location_meta.get("scope_target_address") or "").strip(),
+                "draft_text": str(_row_get(row, "draft_text", 13, "") or "").strip(),
+                "status": str(_row_get(row, "status", 14, "") or "").strip(),
+                "usernews_id": str(_row_get(row, "usernews_id", 15, "") or "").strip(),
+                "metadata_json": _json_value(_row_get(row, "metadata_json", 16, {}), {}),
+                "created_at": _row_get(row, "created_at", 17),
+                "updated_at": _row_get(row, "updated_at", 18),
+            }
+            item_payload["metadata_json"] = _annotate_story_facts_requirement(item_payload)
+            items.append(item_payload)
         target_meta = _resolve_scope_target_meta(
             cursor,
             str(plan.get("business_id") or ""),
@@ -4094,6 +4094,33 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
     return text
 
 
+def _format_long_generated_paragraphs(text: str, target_length: int = 220) -> str:
+    normalized = str(text or "").strip()
+    if len(normalized) <= 260 or "\n\n" in normalized:
+        return normalized
+
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", normalized)
+        if sentence.strip()
+    ]
+    if len(sentences) < 2:
+        return normalized
+
+    paragraphs: list[str] = []
+    current = ""
+    for sentence in sentences:
+        combined = f"{current} {sentence}".strip()
+        if current and len(combined) > target_length:
+            paragraphs.append(current)
+            current = sentence
+        else:
+            current = combined
+    if current:
+        paragraphs.append(current)
+    return "\n\n".join(paragraphs) if len(paragraphs) >= 2 else normalized
+
+
 def _public_business_name(business_name: str) -> str:
     name = str(business_name or "").strip()
     return re.sub(r"\s*\([^()]*\)\s*$", "", name).strip() or name
@@ -4200,6 +4227,57 @@ def _clean_brief_answer(value: Any, limit: int = 800) -> str:
     return " ".join(str(value or "").strip().split())[:limit]
 
 
+STORY_FACT_REQUIRED_OBJECTIVES = {
+    "story",
+    "child_story",
+    "author_story",
+    "brand_story",
+    "family_tradition",
+    "case",
+    "before_after",
+    "photo_report",
+    "review_social_proof",
+}
+STORY_FACTS_QUESTION = (
+    "Опишите реальную историю: что было в начале, что произошло и что изменилось. "
+    "Имя можно не указывать."
+)
+
+
+def _story_fact_objective(item: dict[str, Any]) -> str:
+    content_type = _clean_brief_answer(item.get("content_type"), 80).lower()
+    if content_type in STORY_FACT_REQUIRED_OBJECTIVES:
+        return content_type
+    objective = _normalize_publication_objective(item)
+    return objective if objective in STORY_FACT_REQUIRED_OBJECTIVES else ""
+
+
+def _annotate_story_facts_requirement(item: dict[str, Any]) -> dict[str, Any]:
+    metadata = _item_metadata(item)
+    answers = metadata.get("brief_answers") if isinstance(metadata.get("brief_answers"), dict) else {}
+    if not _story_fact_objective(item) or _clean_brief_answer(answers.get("story_facts"), 1200):
+        return metadata
+
+    stored_brief = metadata.get("content_brief_v1") if isinstance(metadata.get("content_brief_v1"), dict) else {}
+    missing_fields = [
+        "story_facts",
+        *(field for field in stored_brief.get("missing_fields") or [] if field != "story_facts"),
+    ][:3]
+    questions = [STORY_FACTS_QUESTION]
+    stored_questions = stored_brief.get("questions") if isinstance(stored_brief.get("questions"), list) else []
+    questions.extend(question for question in stored_questions if question != STORY_FACTS_QUESTION)
+    metadata["content_brief_v1"] = {
+        **stored_brief,
+        "schema": "content_brief_v1",
+        "complete": False,
+        "requires_story_facts": True,
+        "missing_fields": missing_fields,
+        "questions": questions[: len(missing_fields)],
+    }
+    metadata["generation_source"] = "needs_context"
+    return metadata
+
+
 def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
     metadata = _item_metadata(item)
     answers = metadata.get("brief_answers") if isinstance(metadata.get("brief_answers"), dict) else {}
@@ -4213,10 +4291,14 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
     if not event and source_kind not in {"seo_keyword", "audit_signal", "search", "seasonal"}:
         event = source_ref or theme
     detail_answer = _clean_brief_answer(answers.get("confirmed_details") or answers.get("details") or "", 1000)
+    story_facts = _clean_brief_answer(answers.get("story_facts"), 1200)
+    story_objective = _story_fact_objective(item)
     relevant_services = _relevant_service_names_for_item(facts.get("services"), item, limit=3)
     details: list[str] = []
     if detail_answer:
         details.append(detail_answer)
+    if story_facts:
+        details.append(story_facts)
     if source_ref and source_ref != event and source_kind not in {"seo_keyword", "audit_signal", "search"}:
         details.append(source_ref)
     if content_type in {"service", "service_intro"} and relevant_services:
@@ -4228,6 +4310,8 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
         sources.append({"id": "source_ref", "type": source_kind or "plan", "label": "Источник темы", "fact": source_ref})
     if detail_answer:
         sources.append({"id": "owner_detail", "type": "owner", "label": "Добавлено владельцем", "fact": detail_answer})
+    if story_facts:
+        sources.append({"id": "story_facts", "type": "owner", "label": "Факты истории", "fact": story_facts})
     source_answer = _clean_brief_answer(answers.get("source"), 500)
     if source_answer:
         sources.append({"id": "owner_source", "type": "owner", "label": "Источник владельца", "fact": source_answer})
@@ -4241,6 +4325,8 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
     has_date = bool(CONTENT_BRIEF_DATE_RE.search(date_blob)) or bool(_clean_brief_answer(answers.get("date_status"), 120))
     is_search_only = source_kind in {"seo_keyword", "audit_signal", "search"} and not _clean_brief_answer(answers.get("infopovod"))
     missing: list[str] = []
+    if story_objective and not story_facts:
+        missing.append("story_facts")
     if not event or is_search_only:
         missing.append("infopovod")
     if not details:
@@ -4254,6 +4340,7 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
         "confirmed_details": "Добавьте одну конкретную деталь: дату, участника, формат или пользу.",
         "date_status": "Когда это состоится? Если дата ещё не объявлена, так и напишите.",
         "source": "Откуда взята эта информация: афиша, сайт, услуга или ваш комментарий?",
+        "story_facts": STORY_FACTS_QUESTION,
     }
     unique_missing = list(dict.fromkeys(missing))[:3]
     return {
@@ -4266,6 +4353,8 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
         "target_platforms": answers.get("target_platforms") if isinstance(answers.get("target_platforms"), list) else [],
         "sources": sources[:8],
         "seo_signal": seo_keyword,
+        "requires_story_facts": bool(story_objective),
+        "story_objective": story_objective,
         "complete": not unique_missing,
         "missing_fields": unique_missing,
         "questions": [questions_by_key[key] for key in unique_missing],
@@ -4312,7 +4401,9 @@ def _parse_content_candidates(raw: Any) -> list[dict[str, Any]]:
     for index, item in enumerate(candidates[:3]):
         if not isinstance(item, dict):
             continue
-        candidate_text = _sanitize_generated_news_text(str(item.get("text") or ""))
+        candidate_text = _format_long_generated_paragraphs(
+            _sanitize_generated_news_text(str(item.get("text") or ""))
+        )
         if not candidate_text:
             continue
         result.append(
@@ -4483,6 +4574,18 @@ def _content_generation_v2_prompt(
         f"Пример {index + 1}: {item.get('text')}"
         for index, item in enumerate(voice.get("examples") or [])
     ) or "Примеров пока нет"
+    has_story_facts = any(
+        str(source.get("id") or "") == "story_facts"
+        for source in brief.get("sources") or []
+        if isinstance(source, dict)
+    )
+    story_variant_rule = (
+        "Для человеческой истории используй только эпизод из источника story_facts. "
+        "Не добавляй другое имя, возраст, событие или результат."
+        if has_story_facts
+        else "Источника story_facts нет: не придумывай героя, имя, возраст, эпизод или результат. "
+        "Вместо человеческой истории дай ситуационный вариант без конкретного героя."
+    )
     return (
         "Ты — редактор публикаций локального бизнеса. Создай ровно три содержательно разных варианта на основе только перечисленных фактов.\n"
         f"{_content_plan_language_instruction(language)}\n"
@@ -4498,6 +4601,7 @@ def _content_generation_v2_prompt(
         "- не переноси в готовый текст слова «цель публикации», «бизнес-задача», «в фокусе публикации» или другие внутренние инструкции;\n"
         "- не используй хэштеги, рекламные клише и больше одного восклицательного знака;\n"
         "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"
+        f"- {story_variant_rule}\n"
         "- завершай одним естественным следующим шагом, только если он следует из редакторского брифа.\n"
         "Верни строго JSON: {\"candidates\":[{\"id\":\"variant-1\",\"angle\":\"...\",\"text\":\"...\","
         "\"used_fact_ids\":[\"source_id\"],\"unsupported_facts\":[]}]}\n\n"
@@ -4692,7 +4796,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         try:
             result = analyze_text_with_gigachat(
                 prompt,
-                task_type="news_generation",
+                task_type="content_plan_generation_v2" if generation_v2 else "news_generation",
                 business_id=str(item.get("business_id") or ""),
                 user_id=user_id,
             )

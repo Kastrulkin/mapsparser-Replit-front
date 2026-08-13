@@ -185,7 +185,7 @@ export const TodayMobileV2 = ({
       >
         <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <Sparkles className="h-4 w-4" />
-          {focus ? (isNetwork ? 'Главное по сети' : 'Сейчас важнее всего') : 'Новых задач нет'}
+          {focus ? 'Что сделать сейчас' : 'Новых задач нет'}
         </div>
         <div className="mt-4 flex items-start gap-4">
           <div className="min-w-0 flex-1">
@@ -200,7 +200,7 @@ export const TodayMobileV2 = ({
         </div>
         {focus?.expected_outcome ? (
           <div className="mt-4 rounded-[16px] bg-black/20 px-3 py-2.5 text-pretty text-xs leading-5 text-zinc-400">
-            <b className="text-zinc-200">Результат:</b> {focus.expected_outcome}
+            <b className="text-zinc-200">После этого:</b> {focus.expected_outcome}
           </div>
         ) : null}
         <button
@@ -228,7 +228,7 @@ export const TodayMobileV2 = ({
             <input onFocus={() => track('today_delegate_focus')} value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
             <button aria-label="Отправить поручение" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button>
           </div>
-          <p className="px-1 pt-2 text-pretty text-[11px] leading-4 text-zinc-600">Опишите результат обычными словами. Внешние действия всегда попросят подтверждение.</p>
+          <p className="px-1 pt-2 text-pretty text-[11px] leading-4 text-zinc-600">Опишите результат обычными словами. Перед публикацией, отправкой или оплатой ЛокалОС попросит подтверждение.</p>
         </form>
       </section>
 
@@ -236,7 +236,7 @@ export const TodayMobileV2 = ({
         <motion.section layout className="mt-4 rounded-[22px] bg-sky-400/[0.055] p-4 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold">Сейчас выполняется</h2>
+            <h2 className="text-sm font-semibold">ЛокалОС сейчас</h2>
             <span className="ml-auto h-2 w-2 rounded-full bg-sky-300 motion-safe:animate-pulse" />
           </div>
           <div className="mt-3 space-y-3">
@@ -258,9 +258,9 @@ export const TodayMobileV2 = ({
 
       <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} scopeKind={data?.scope?.kind} analyticsModules={data?.analytics_modules} networkSummary={data?.network_summary} problemLocations={data?.problem_locations} locationBreakdown={data?.location_breakdown} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
 
-      <Section title="За последние 24 часа" subtitle="Только новые факты из подключённых источников.">
+      <Section title="Что изменилось" subtitle="Отзывы, продажи и другие события за последние 24 часа.">
         {changes.length ? changes.slice(0, 3).map((item) => <ActivityRow key={item.id} item={item} icon={Clock3} onClick={() => openTarget(item.screen, item.business_id ? { kind: 'business', id: item.business_id } : undefined)} />) : (
-          <div className="flex min-h-16 items-center gap-3 py-3 text-sm text-zinc-600"><Check className="h-5 w-5 text-emerald-400" />Новых изменений не обнаружено.</div>
+          <div className="flex min-h-16 items-center gap-3 py-3 text-sm text-zinc-600"><Check className="h-5 w-5 text-emerald-400" />За последние сутки ничего нового.</div>
         )}
       </Section>
 
@@ -284,11 +284,11 @@ export const TodayMobileV2 = ({
               </span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-700" />
             </a>
-          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>За сутки не набралось подтверждённой темы. ЛокалОС продолжает следить за отраслью; здесь можно добавить свои источники.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
+          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>За последние сутки заметных обсуждений не было. Можно добавить каналы, за которыми вы хотите следить.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
         </Section>
       ) : null}
 
-      <Section title="ЛокалОС сделал" subtitle="Только завершённые действия с датой и источником.">
+      <Section title="Готово в ЛокалОС" subtitle="Черновики, планы и отчёты, которые уже можно открыть и проверить.">
         {results.length ? (
           <AnimatePresence initial={false}>
             {results.slice(0, 3).map((item) => (
@@ -297,20 +297,20 @@ export const TodayMobileV2 = ({
               </motion.div>
             ))}
           </AnimatePresence>
-        ) : <div className="py-4 text-pretty text-sm leading-6 text-zinc-600">Первый подтверждённый результат появится здесь после завершения работы.</div>}
+        ) : <div className="py-4 text-pretty text-sm leading-6 text-zinc-600">Готовых материалов пока нет.</div>}
       </Section>
 
       {progress ? (
         <section className="mt-7 rounded-[24px] bg-gradient-to-br from-primary/[0.1] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.14)]">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <small className="text-zinc-600">Выполнено по плану</small>
-              <b className="mt-1 block text-lg">Прогресс бизнеса</b>
+              <small className="text-zinc-600">План роста</small>
+              <b className="mt-1 block text-lg">Что уже сделано</b>
             </div>
             <b className="text-2xl tabular-nums text-primary">{progress.percent || 0}%</b>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: `${progress.percent || 0}%` }} transition={spring} /></div>
-          <p className="mt-3 text-pretty text-xs leading-5 text-zinc-500"><span className="tabular-nums">{progress.completed_milestones || 0}</span> из <span className="tabular-nums">{progress.total_milestones || 0}</span> шагов подтверждены реальными данными.</p>
+          <p className="mt-3 text-pretty text-xs leading-5 text-zinc-500">Выполнено <span className="tabular-nums">{progress.completed_milestones || 0}</span> из <span className="tabular-nums">{progress.total_milestones || 0}</span> шагов.</p>
           <button type="button" onClick={() => { track('today_progress_open', 'progress'); openProgress(); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.07] pl-4 pr-3.5 text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform active:scale-[0.96]">Открыть план роста<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : isPlatform ? (

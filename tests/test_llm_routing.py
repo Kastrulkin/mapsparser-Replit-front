@@ -42,14 +42,18 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "review_signal_synthesis",
         "lead_audit_enrichment",
         "knowledge_semantic_analysis",
+        "outreach_corpus_pattern_extract",
     }
     expected_tasks = {
         "review_reply",
         "news_generation",
+        "content_plan_generation_v2",
         "social_post_generation",
         "service_optimization",
         "service_copy_generation",
         "outreach_personalization",
+        "outreach_corpus_pattern_extract",
+        "outreach_corpus_pattern_review",
         "agent_email_draft",
         "agent_review_replies",
         "ai_agent_booking",
@@ -67,6 +71,17 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
     assert set(definitions) == expected_tasks
     assert {key for key, item in definitions.items() if item.primary_provider == "deepseek"} == deepseek_tasks
     assert all(item.primary_provider in {"gigachat", "deepseek"} for item in definitions.values())
+
+
+def test_content_plan_v2_has_strict_three_candidate_json_contract():
+    definition = get_task_definition("content_plan_generation_v2")
+
+    assert definition is not None
+    assert definition.response_kind == "json"
+    assert definition.response_schema["required"] == ["candidates"]
+    candidates = definition.response_schema["properties"]["candidates"]
+    assert candidates["minItems"] == 3
+    assert candidates["maxItems"] == 3
 
 
 def test_finance_sales_recognition_is_registered_as_sensitive_json():

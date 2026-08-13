@@ -10,9 +10,9 @@ describe('GrowthLoopPanel', () => {
     const onOpenImport = vi.fn();
     render(<GrowthLoopPanel dataHealth={{ status: 'stale', age_days: 19 }} growthLoop={{ analytics_level: { label: 'Нужны данные', next_unlock: 'Загрузите свежую сводку.' }, rhythm: { label: 'Ритм формируется', active_weeks: 1 } }} onOpenImport={onOpenImport} />);
 
-    expect(screen.getByText('Данные устарели')).toBeVisible();
-    expect(screen.getByText('Ритм формируется')).toBeVisible();
-    expect(screen.getByText('Нужны данные')).toBeVisible();
+    expect(screen.getByText('Нужна свежая сводка')).toBeVisible();
+    expect(screen.getByText('История собирается')).toBeVisible();
+    expect(screen.getByText('Расчёты нужно обновить')).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: 'Загрузить финансовую сводку' }));
     expect(onOpenImport).toHaveBeenCalledOnce();
   });
@@ -20,14 +20,14 @@ describe('GrowthLoopPanel', () => {
   it('does not add another action once data is fresh', () => {
     render(<GrowthLoopPanel dataHealth={{ status: 'fresh', age_days: 1 }} growthLoop={{ analytics_level: { label: 'Готово к решениям' }, rhythm: { label: 'Регулярный ритм', active_weeks: 4 } }} onOpenImport={vi.fn()} />);
 
-    expect(screen.getByText('Данные свежие')).toBeVisible();
+    expect(screen.getByText('Данные актуальны')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
   });
 
   it('does not duplicate the import action when it is already the main mission', () => {
     render(<GrowthLoopPanel dataHealth={{ status: 'missing' }} showImportAction={false} onOpenImport={vi.fn()} />);
 
-    expect(screen.getByText('Данных пока нет')).toBeVisible();
+    expect(screen.getByText('Сводок пока нет')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
   });
 
@@ -42,11 +42,11 @@ describe('GrowthLoopPanel', () => {
     }));
     render(<GrowthLoopPanel scopeKind="network" dataHealth={{ status: 'missing' }} networkSummary={{ locations_count: 6, problem_locations_count: 6, healthy_locations_count: 0, finance: { total: 6, fresh: 0, due: 0, stale: 5, missing: 1 } }} problemLocations={locations.map((location) => ({ business_id: location.business_id, business_name: location.business_name, data_health_status: location.data_health.status, target_scope: { kind: 'business', id: location.business_id } }))} locationBreakdown={locations} analyticsModules={[{ key: 'sales', label: 'Продажи и средний чек', status: 'available' }, { key: 'services', label: 'Услуги и допродажи', status: 'locked', next_unlock: 'Добавьте данные: услуги и допродажи.' }]} onOpenImport={vi.fn()} onOpenLocation={onOpenLocation} />);
 
-    expect(screen.getByText('Сводка сети')).toBeVisible();
+    expect(screen.getByText('Данные по точкам')).toBeVisible();
     expect(screen.getByText('6 точек')).toBeVisible();
-    expect(screen.getByText('Ритм ещё не начат')).toBeVisible();
+    expect(screen.getAllByText('Добавьте первую недельную сводку.').length).toBeGreaterThan(0);
     expect(screen.getByText('Продажи и средний чек')).toBeVisible();
-    expect(screen.getByText('Обновить')).toBeVisible();
+    expect(screen.getByText('Обновите сводку')).toBeVisible();
     expect(screen.queryByText('Точка 6')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
 

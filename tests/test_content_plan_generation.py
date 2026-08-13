@@ -824,6 +824,141 @@ def test_generate_draft_needs_context_points_to_details_editor(monkeypatch):
     assert fake_db.conn.committed is True
 
 
+def test_generate_draft_v2_uses_json_generation_contract(monkeypatch):
+    fake_db = _FakeDraftDatabase()
+    captured = {}
+    complete_brief = {
+        "event": "4 июля — Комик против ИИ",
+        "confirmed_details": ["Событие пройдёт в культурном центре"],
+        "audience": "Гости культурного центра",
+        "main_idea": "Напомнить о событии",
+        "expected_action": "Открыть карточку события",
+        "sources": [
+            {"id": "event", "label": "Инфоповод", "fact": "4 июля — Комик против ИИ"},
+            {"id": "source_ref", "label": "Источник темы", "fact": "Комик против ИИ"},
+        ],
+        "complete": True,
+        "missing_fields": [],
+        "questions": [],
+    }
+
+    def fake_generate(_prompt, **kwargs):
+        captured.update(kwargs)
+        return json.dumps(
+            {
+                "candidates": [
+                    {
+                        "id": f"variant-{index}",
+                        "angle": "Спокойное напоминание",
+                        "text": (
+                            "4 июля в культурном центре пройдёт встреча «Комик против ИИ». "
+                            "Это повод увидеть живой диалог юмора и технологий.\n\n"
+                            "Подробности и запись доступны в карточке события."
+                        ),
+                        "used_fact_ids": ["event", "source_ref"],
+                        "unsupported_facts": [],
+                    }
+                    for index in range(1, 4)
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: fake_db)
+    monkeypatch.setattr(content_plan_service, "get_business_owner_id", lambda _cursor, _business_id: "user-1")
+    monkeypatch.setattr(content_plan_service, "_load_content_plan_service_facts", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(content_plan_service, "load_active_industry_patterns", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(content_plan_service, "_resolve_scope_target_meta", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(content_plan_service, "_record_content_plan_event", lambda **_kwargs: None)
+    monkeypatch.setattr(content_plan_service, "_content_generation_v2_enabled", lambda: True)
+    monkeypatch.setattr(content_plan_service, "_build_content_brief_v1", lambda *_args, **_kwargs: complete_brief)
+    monkeypatch.setattr(content_plan_service, "load_content_voice_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(content_plan_service, "analyze_text_with_gigachat", fake_generate)
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {"id": "plan-1", "items": []},
+    )
+
+    content_plan_service.generate_draft_for_plan_item("user-1", "item-1", "ru")
+
+    assert captured["task_type"] == "content_plan_generation_v2"
+
+
+def test_generate_draft_v2_repairs_long_single_paragraph_before_quality_gate(monkeypatch):
+    fake_db = _FakeDraftDatabase()
+    complete_brief = {
+        "event": "Научная лаборатория для детей: микромир под микроскопом",
+        "confirmed_details": ["Дети знакомятся с микромиром под микроскопом"],
+        "audience": "Родители детей",
+        "main_idea": "Рассказать о научной лаборатории",
+        "expected_action": "Открыть карточку и узнать подробности",
+        "sources": [
+            {
+                "id": "event",
+                "label": "Инфоповод",
+                "fact": "Научная лаборатория для детей: микромир под микроскопом",
+            }
+        ],
+        "complete": True,
+        "missing_fields": [],
+        "questions": [],
+    }
+    long_single_paragraph = (
+        "На занятии дети знакомятся с микромиром под микроскопом и учатся внимательно рассматривать детали. "
+        "Они сравнивают увиденное, задают вопросы и обсуждают наблюдения вместе с преподавателем. "
+        "Так сложная научная тема становится понятным исследованием, к которому хочется возвращаться. "
+        "Подробности доступны в карточке школы."
+    )
+
+    def fake_generate(_prompt, **_kwargs):
+        return json.dumps(
+            {
+                "candidates": [
+                    {
+                        "id": f"variant-{index}",
+                        "angle": "Спокойное объяснение",
+                        "text": long_single_paragraph,
+                        "used_fact_ids": ["event"],
+                        "unsupported_facts": [],
+                    }
+                    for index in range(1, 4)
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: fake_db)
+    monkeypatch.setattr(content_plan_service, "get_business_owner_id", lambda _cursor, _business_id: "user-1")
+    monkeypatch.setattr(content_plan_service, "_load_content_plan_service_facts", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(content_plan_service, "load_active_industry_patterns", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(content_plan_service, "_resolve_scope_target_meta", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(content_plan_service, "_record_content_plan_event", lambda **_kwargs: None)
+    monkeypatch.setattr(content_plan_service, "_content_generation_v2_enabled", lambda: True)
+    monkeypatch.setattr(content_plan_service, "_build_content_brief_v1", lambda *_args, **_kwargs: complete_brief)
+    monkeypatch.setattr(content_plan_service, "load_content_voice_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(content_plan_service, "analyze_text_with_gigachat", fake_generate)
+    monkeypatch.setattr(content_plan_service, "_looks_like_ice_rink_hallucination", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(content_plan_service, "_content_plan_draft_needs_fallback", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {"id": "plan-1", "items": []},
+    )
+
+    result = content_plan_service.generate_draft_for_plan_item("user-1", "item-1", "ru")
+
+    assert result["generation"]["success"] is True
+    content_item_updates = [
+        (query, params)
+        for query, params in fake_db.conn.cursor_instance.executed
+        if "UPDATE contentplanitems" in str(query) and "draft_text = %s" in str(query)
+    ]
+    assert content_item_updates
+    saved_text = content_item_updates[-1][1][0]
+    assert "\n\n" in saved_text
+
+
 def test_generate_draft_rejects_archived_plan(monkeypatch):
     fake_db = _FakeDraftDatabase()
     fake_db.conn.cursor_instance.plan_status = "archived"

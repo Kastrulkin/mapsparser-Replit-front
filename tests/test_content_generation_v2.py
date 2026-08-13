@@ -1,6 +1,7 @@
 import json
 
 from src.services.content_plan_service import (
+    _annotate_story_facts_requirement,
     _build_content_brief_v1,
     _content_generation_v2_prompt,
     _load_publication_matrix_override,
@@ -55,6 +56,90 @@ def test_owner_event_details_complete_katok_brief():
     assert brief["complete"] is True
     assert brief["missing_fields"] == []
     assert {source["id"] for source in brief["sources"]} >= {"event", "owner_detail", "owner_source"}
+
+
+def test_story_topic_requires_explicit_real_story_facts():
+    brief = _build_content_brief_v1(
+        {
+            "theme": "История ученика: как проекты помогают стать самостоятельнее",
+            "goal": "Показать результат через реальный процесс без гарантированных обещаний.",
+            "content_type": "story",
+            "source_kind": "seasonal",
+            "source_ref": "",
+            "metadata_json": {
+                "brief_answers": {
+                    "infopovod": "История ученика о проектной работе",
+                    "confirmed_details": "Показать результат через реальный процесс",
+                    "source": "Официальный сайт школы",
+                }
+            },
+        },
+        {"description": "Школа проектного обучения", "site_description": "", "services": ""},
+    )
+
+    assert brief["complete"] is False
+    assert brief["requires_story_facts"] is True
+    assert brief["missing_fields"][0] == "story_facts"
+    assert "реальную историю" in brief["questions"][0].lower()
+
+
+def test_story_facts_complete_story_brief():
+    story_facts = (
+        "Ученик сначала боялся презентовать макет, но после двух репетиций "
+        "сам рассказал группе о своём решении."
+    )
+    brief = _build_content_brief_v1(
+        {
+            "theme": "История ученика",
+            "goal": "Показать реальный процесс",
+            "content_type": "story",
+            "source_kind": "owner",
+            "source_ref": "Комментарий педагога",
+            "metadata_json": {
+                "brief_answers": {
+                    "infopovod": "История ученика о проектной работе",
+                    "story_facts": story_facts,
+                    "source": "Комментарий педагога",
+                }
+            },
+        },
+        {"description": "Школа проектного обучения", "site_description": "", "services": ""},
+    )
+
+    assert brief["complete"] is True
+    assert "story_facts" in {source["id"] for source in brief["sources"]}
+    assert story_facts in brief["confirmed_details"]
+
+
+def test_plan_response_highlights_missing_story_facts_before_generation():
+    metadata = _annotate_story_facts_requirement(
+        {
+            "content_type": "story",
+            "theme": "История ученика",
+            "goal": "Показать реальный процесс",
+            "metadata_json": {},
+        }
+    )
+
+    assert metadata["generation_source"] == "needs_context"
+    assert metadata["content_brief_v1"]["missing_fields"][0] == "story_facts"
+    assert metadata["content_brief_v1"]["complete"] is False
+
+
+def test_story_variant_without_story_facts_cannot_invent_a_hero():
+    prompt = _content_generation_v2_prompt(
+        business_facts={"name": "Intellectum School", "description": "Школа"},
+        brief={
+            "event": "Научная лаборатория",
+            "confirmed_details": ["Занятие для детей"],
+            "sources": [{"id": "event", "label": "Тема", "fact": "Научная лаборатория"}],
+        },
+        voice={"preferences": {}, "examples": [], "forbidden_phrases": []},
+        language="ru",
+    )
+
+    assert "не придумывай героя" in prompt
+    assert "ситуационный вариант" in prompt
 
 
 def test_candidates_require_known_fact_ids_and_quality_threshold():

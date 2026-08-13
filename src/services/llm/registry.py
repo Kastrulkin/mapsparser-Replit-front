@@ -145,6 +145,28 @@ OUTREACH_PATTERN_REVIEW_SCHEMA: dict[str, Any] = {
     },
     "required": ["approved", "issues", "safe_message_rules"],
 }
+CONTENT_PLAN_GENERATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "candidates": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "angle": {"type": "string"},
+                    "text": {"type": "string"},
+                    "used_fact_ids": {"type": "array", "items": {"type": "string"}},
+                    "unsupported_facts": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["id", "angle", "text", "used_fact_ids", "unsupported_facts"],
+            },
+        },
+    },
+    "required": ["candidates"],
+}
 
 
 def _task(
@@ -186,6 +208,18 @@ def _task(
 TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "review_reply": _task("review_reply", data_class="pii", prompt_version="review_reply_v1", allow_text_fallback=True, fallback_data_class="business_internal", pipeline_stage="copy"),
     "news_generation": _task("news_generation", data_class="public", prompt_version="news_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
+    "content_plan_generation_v2": _task(
+        "content_plan_generation_v2",
+        data_class="public",
+        response_kind="json",
+        schema=CONTENT_PLAN_GENERATION_SCHEMA,
+        max_tokens=3000,
+        temperature=0.2,
+        timeout=60,
+        prompt_version="content_plan_generation_v2",
+        allow_text_fallback=True,
+        pipeline_stage="copy",
+    ),
     "social_post_generation": _task("social_post_generation", data_class="public", prompt_version="social_post_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_optimization": _task("service_optimization", prompt_version="service_optimization_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "service_copy_generation": _task("service_copy_generation", response_kind="json", allow_text_fallback=True, pipeline_stage="copy"),

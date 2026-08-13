@@ -111,9 +111,9 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
       <section className="rounded-[24px] bg-gradient-to-b from-primary/[0.11] to-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.15)]">
         <div className="flex items-center gap-2 text-xs font-medium text-primary"><Sparkles className="h-4 w-4" />{isNetwork ? 'План роста сети' : 'План роста бизнеса'}</div>
         <h2 className="mt-3 text-balance text-xl font-semibold">{isNetwork ? 'Прогресс по всем точкам' : 'Пять направлений в одном плане'}</h2>
-        <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{isNetwork ? `${data.network_summary?.locations_count || summary.locations_count || 0} точек: видно, где шаги выполнены, а где нужны данные или решение.` : 'Карты, контент, партнёрства, автоматизация и допродажи. Для каждого направления виден фактический прогресс и следующее действие.'}</p>
+        <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{isNetwork ? `${data.network_summary?.locations_count || summary.locations_count || 0} точек: видно, где всё в порядке, а где нужны данные или ваше решение.` : 'Карты, контент, партнёрства, автоматизация и допродажи. Здесь видно, что уже сделано и за что взяться дальше.'}</p>
         <div className="mt-5 flex items-end justify-between gap-4">
-          <div><b className="text-3xl tabular-nums">{summary.completed_milestones || 0}</b><span className="text-lg tabular-nums text-zinc-600"> / {summary.total_milestones || 0}</span><small className="mt-1 block text-zinc-600">шагов подтверждено</small></div>
+          <div><b className="text-3xl tabular-nums">{summary.completed_milestones || 0}</b><span className="text-lg tabular-nums text-zinc-600"> / {summary.total_milestones || 0}</span><small className="mt-1 block text-zinc-600">шагов выполнено</small></div>
           <b className="text-2xl tabular-nums text-primary">{summary.percent || 0}%</b>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><motion.div initial={false} animate={{ width: `${summary.percent || 0}%` }} transition={spring} className="h-full rounded-full bg-primary" /></div>
@@ -125,7 +125,7 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track, trackPr
           <small className="font-semibold uppercase tracking-[0.12em] text-primary">Сейчас важнее всего</small>
           <h3 className="mt-2 text-balance text-lg font-semibold">{focus.title}</h3>
           <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{focus.reason}</p>
-          {focus.expected_outcome ? <div className="mt-3 rounded-[15px] bg-black/20 px-3 py-2.5 text-pretty text-xs leading-5 text-zinc-400"><b className="text-zinc-200">Результат:</b> {focus.expected_outcome}</div> : null}
+          {focus.expected_outcome ? <div className="mt-3 rounded-[15px] bg-black/20 px-3 py-2.5 text-pretty text-xs leading-5 text-zinc-400"><b className="text-zinc-200">После этого:</b> {focus.expected_outcome}</div> : null}
           <button type="button" onClick={() => { track('progress_action_open', focus.screen); trackProduct?.('mission_open', data.growth_loop?.mission_id || focus.id || focus.screen); openTarget(focus.screen, focus.target_scope); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform active:scale-[0.96]">{focus.cta_label || 'Продолжить'}<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : null}
