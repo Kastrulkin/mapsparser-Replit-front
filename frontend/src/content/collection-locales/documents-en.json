@@ -2,12 +2,12 @@
   {
     "title": "Company card audit checklist",
     "slug": "checklist-audita-kartochki-kompanii",
-    "excerpt": "A short list of checks that helps to understand why the card does not receive impressions, calls, and recordings.",
-    "documentType": "New Mp Check Lists",
+    "excerpt": "A short checklist to identify why a business listing is missing views, calls, and bookings.",
+    "documentType": "Checklists",
     "tags": [
       "audit",
       "map",
-      "BIOCAMP"
+      "checklist"
     ],
     "publishedAt": "2026-04-19",
     "updatedAt": "2026-04-19",
@@ -27,7 +27,7 @@
         "body": "Open the business card and go through the items in order. If there is no clear answer to the question, this is an area for improvement."
       },
       {
-        "title": "Quick Checks",
+        "title": "Quick checks",
         "items": [
           "is the basic service clear in the first 10 seconds",
           "are there prices for key services",
@@ -40,7 +40,7 @@
       {
         "title": "Why the competitor is higher on the maps",
         "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
-        "label": "Item"
+        "label": "Article"
       },
       {
         "title": "Free LocalOS audit",
@@ -57,7 +57,7 @@
     "tags": [
       "reviews",
       "reputation",
-      "Scripting language"
+      "templates"
     ],
     "publishedAt": "2026-04-17",
     "updatedAt": "2026-04-17",
@@ -68,12 +68,12 @@
     "inside": [
       "response to a positive review",
       "reply to a short review without text",
-      "complaint Response",
+      "response to a complaint",
       "soft transfer to repeat visit"
     ],
     "body": [
       {
-        "title": "The principal rule:",
+        "title": "The main rule",
         "body": "The template should be a foundation, not a copy-paste. Add one specific detail from the review to make the response look alive."
       },
       {
@@ -90,7 +90,7 @@
       {
         "title": "How reviews affect customer flow",
         "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
-        "label": "Item"
+        "label": "Article"
       },
       {
         "title": "Free LocalOS audit",
@@ -106,7 +106,7 @@
     "documentType": "Tables",
     "tags": [
       "table",
-      "Marketing",
+      "marketing",
       "control"
     ],
     "publishedAt": "2026-04-14",
@@ -140,7 +140,7 @@
       {
         "title": "How to issue a company card",
         "href": "/articles/kak-oformit-kartochku-kompanii",
-        "label": "Item"
+        "label": "Article"
       },
       {
         "title": "Free LocalOS audit",
