@@ -12,17 +12,17 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v8"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v9"
 
 OUTREACH_TEMPLATES = (
     {
         "key": "active_social_multichannel_content_v1",
         "label": "Активные соцсети без повторной ручной работы",
-        "version": 1,
+        "version": 2,
         "angles": ("signal", "content_operations"),
         "pain_key": "operations_and_burnout",
-        "owner_language": "Посты для нескольких площадок отнимают время.",
-        "pain_markers": ("приходится готовить несколько раз", "отнимает время"),
+        "owner_language": "Часто на посты не хватает времени.",
+        "pain_markers": ("на посты не хватает времени", "надо собраться", "переделать тему"),
         "required_evidence": ("current_official_social_activity",),
         "question_policy": "single_cta",
     },
@@ -106,11 +106,11 @@ OUTREACH_TEMPLATES = (
     {
         "key": "map_content_gap_v4",
         "label": "Нет новостей в карточке",
-        "version": 4,
+        "version": 5,
         "angles": ("signal", "content_operations"),
         "pain_key": "operations_and_burnout",
         "owner_language": "Не успеваю готовить посты для всех площадок.",
-        "pain_markers": ("не успеваете", "для каждой площадки отдельно"),
+        "pain_markers": ("не успеваете", "для каждой площадки"),
         "required_evidence": ("current_map_content_gap",),
         "question_policy": "single_cta",
     },
@@ -347,21 +347,10 @@ def attach_public_audit_link(text: str, candidate: dict[str, Any]) -> str:
     ):
         return text
     paragraphs = text.split("\n\n")
-    if _text(candidate.get("evidence_kind")) == "active_map_news":
-        audit_paragraph = (
-            "Помимо этого, мы подготовили аудит карточки с конкретными изменениями. "
-            f"Их можно внедрить самостоятельно или поручить нам: {audit_url}"
-        )
-    elif _text(candidate.get("evidence_kind")) == "active_social_activity":
-        audit_paragraph = (
-            "Помимо этого, мы ещё собрали аудит по вашей карточке на картах. "
-            f"Сможете поправить сами: {audit_url}"
-        )
-    else:
-        audit_paragraph = (
-            "Мы подготовили аудит карточки на картах, "
-            f"сможете поправить сами: {audit_url}"
-        )
+    audit_paragraph = (
+        "Помимо этого, мы подготовили аудит карточки с конкретными изменениями. "
+        f"Их можно внедрить самостоятельно или поручить нам: {audit_url}"
+    )
     if len(paragraphs) < 2:
         return f"{text}\n\n{audit_paragraph}"
     paragraphs.insert(-1, audit_paragraph)
@@ -382,27 +371,15 @@ def _render_outreach_template_body(
 
     if key == "active_social_multichannel_content_v1":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
-        if (
-            _text(candidate.get("evidence_kind")) == "active_map_news"
-            and _text(candidate.get("channel")) == "email"
-        ):
-            return (
-                f"Здравствуйте! Я {identity}.\n\n"
-                f"{observation}\n\n"
-                "Часто на посты не хватает времени: надо собраться и написать пост, одну тему "
-                "приходится переделывать для каждой площадки. А публикации помогают рассказывать об услугах "
-                "и привлекать клиентов онлайн.\n\n"
-                "LocalOS подготовит тексты для Telegram, VK и Яндекс Карт. "
-                "Сотруднику останется подтвердить и опубликовать их.\n\n"
-                "Подготовить пример контент-плана на неделю?"
-            )
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
-            "Посты для нескольких площадок приходится готовить несколько раз, а это отнимает время.\n\n"
-            "LocalOS подготовит отдельные черновики для Telegram, VK и Яндекс Карт. "
-            "Сотруднику останется проверить и опубликовать текст.\n\n"
-            "Вам было бы интересно сэкономить время на ведении площадок?"
+            "Часто на посты не хватает времени: надо собраться, написать пост и переделать тему "
+            "для каждой площадки. Публикации помогают рассказывать об услугах "
+            "и привлекать клиентов онлайн.\n\n"
+            "LocalOS подготовит тексты для Telegram, VK и Яндекс Карт. "
+            "Сотруднику останется подтвердить и опубликовать их.\n\n"
+            "Подготовить пример контент-плана на неделю?"
         )
     if key == "weak_map_rating_beauty_v1":
         rating = _rating(candidate)
@@ -490,10 +467,11 @@ def _render_outreach_template_body(
         return (
             f"Здравствуйте! Я {identity}.\n\n"
             f"{observation}\n\n"
-            "Возможно, вы просто не успеваете готовить новости для каждой площадки отдельно.\n\n"
-            "LocalOS подготовит отдельные черновики новостей для Telegram, VK и Яндекс Карт. "
-            "Сотруднику останется проверить и опубликовать текст.\n\n"
-            "Вам было бы интересно сэкономить время на публикациях?"
+            "Возможно, вы просто не успеваете готовить публикации для каждой площадки. "
+            "При этом новости помогают рассказывать об услугах и привлекать клиентов онлайн.\n\n"
+            "LocalOS подготовит тексты новостей для Telegram, VK и Яндекс Карт. "
+            "Сотруднику останется подтвердить и опубликовать их.\n\n"
+            "Вам было бы интересно привлекать больше клиентов онлайн?"
         )
     if key == "map_service_price_coverage_v3":
         observation = _text(candidate.get("observed_fact")).rstrip(" .") + "."
@@ -575,13 +553,6 @@ def template_owner_pain_matches(
     key = _text(selection.get("key"))
     if not key:
         return True
-    if (
-        key == "active_social_multichannel_content_v1"
-        and _text(candidate.get("evidence_kind")) == "active_map_news"
-        and _text(candidate.get("channel")) == "email"
-    ):
-        markers = ("на посты не хватает времени", "надо собраться и написать пост", "приходится переделывать")
-    else:
-        markers = tuple(_TEMPLATE_BY_KEY[key].get("pain_markers") or ())
+    markers = tuple(_TEMPLATE_BY_KEY[key].get("pain_markers") or ())
     normalized = _text(text).lower()
     return bool(markers and all(_text(marker).lower() in normalized for marker in markers))

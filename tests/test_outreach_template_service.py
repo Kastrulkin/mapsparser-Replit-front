@@ -36,7 +36,7 @@ def _candidate(**overrides):
 
 
 def test_library_contains_ten_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v8"
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v9"
     assert len(OUTREACH_TEMPLATES) == 10
     assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 10
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)
@@ -126,10 +126,11 @@ def test_active_social_template_uses_time_pain_and_concrete_multichannel_result(
     text = render_outreach_template(selection, candidate)
 
     assert selection["key"] == "active_social_multichannel_content_v1"
-    assert "приходится готовить несколько раз" in text
-    assert "это отнимает время" in text
+    assert "на посты не хватает времени" in text
+    assert "надо собраться, написать пост и переделать тему" in text
     assert "Telegram, VK и Яндекс Карт" in text
-    assert text.endswith("Вам было бы интересно сэкономить время на ведении площадок?")
+    assert "LocalOS подготовит тексты" in text
+    assert text.endswith("Подготовить пример контент-плана на неделю?")
     assert text.count("?") == 1
     assert "—" not in text
 
@@ -211,7 +212,8 @@ def test_public_audit_link_is_added_only_for_explicit_first_touch():
     text = render_outreach_template(selection, candidate)
 
     assert (
-        "Мы подготовили аудит карточки на картах, сможете поправить сами: "
+        "Помимо этого, мы подготовили аудит карточки с конкретными изменениями. "
+        "Их можно внедрить самостоятельно или поручить нам: "
         "https://localos.pro/padrina-studio"
     ) in text
     assert text.endswith("Вам может быть это интересно?")
@@ -238,8 +240,8 @@ def test_social_content_touch_introduces_map_audit_as_an_additional_result():
     text = render_outreach_template(selection, candidate)
 
     assert (
-        "Помимо этого, мы ещё собрали аудит по вашей карточке на картах. "
-        "Сможете поправить сами: https://localos.pro/example"
+        "Помимо этого, мы подготовили аудит карточки с конкретными изменениями. "
+        "Их можно внедрить самостоятельно или поручить нам: https://localos.pro/example"
     ) in text
     assert text.count("?") == 1
 
@@ -314,7 +316,7 @@ def test_map_price_gap_names_yandex_maps_and_follows_sales_flow():
     assert "LocalOS поможет исправить карточку" in text
     assert "мы с нуля привлекли 10 клиентов с карт" in text
     assert "Стоимость - от 1200 рублей в месяц" in text
-    assert "сможете поправить сами" in text
+    assert "Их можно внедрить самостоятельно или поручить нам" in text
     assert text.endswith("Вам может быть это интересно?")
     assert text.count("?") == 1
     assert "—" not in text
@@ -344,7 +346,7 @@ def test_news_gap_template_offers_client_acquisition_instead_of_time_saving():
     assert selection["key"] == "map_content_gap_v4"
     assert "В карточке компании Анни на Яндекс Картах нет новостей." in text
     assert "возможно, вы просто не успеваете" in text.lower()
-    assert "сэкономить время на публикациях" in text
+    assert "привлекать больше клиентов онлайн" in text
     assert text.count("?") == 1
 
 
