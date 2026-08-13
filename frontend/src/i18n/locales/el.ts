@@ -18,7 +18,7 @@ export const el = {
     whatWeDo: "Τι Κάνουμε?",
     whoWeAre: "Ποιοί Είμαστε?",
     prices: "Τιμές",
-    tryFree: "Δοκιμή Δωρεάν"
+    tryFree: "Δείτε το Demo"
   },
 
   // Footer

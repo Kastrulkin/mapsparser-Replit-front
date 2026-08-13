@@ -177,7 +177,7 @@ const ruCopy: LandingCopy = {
   auditText: "Мы проверим карточку вашего бизнеса и покажем, что мешает клиентам найти и выбрать вас. Вы получите конкретное первое действие без большого отчёта и общих советов.",
   finalTitle: "Перестаньте быть человеком, без которого ничего не происходит",
   finalText: "Передайте LocalOS регулярную работу. Оставьте себе решения, которые действительно требуют владельца.",
-  tryFree: "Попробовать бесплатно",
+  tryFree: "Посмотреть демо",
   talkExpert: "Обсудить с экспертом",
 };
 
@@ -244,7 +244,7 @@ const enCopy: LandingCopy = {
   auditText: "We will check your business listing and show what gets in the way of customers finding and choosing you. You will get one concrete first action, without a long report or generic advice.",
   finalTitle: "Stop being the person without whom nothing happens",
   finalText: "Give recurring work to LocalOS. Keep the decisions that genuinely need the owner.",
-  tryFree: "Try for free",
+  tryFree: "View demo",
   talkExpert: "Talk to an expert",
 };
 
@@ -917,7 +917,7 @@ const Index = () => {
             <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">{copy.finalText}</p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild className="min-h-12 rounded-xl bg-orange-500 px-7 text-base text-white shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[background-color,box-shadow,scale] hover:bg-orange-600 active:scale-[0.96]" size="lg">
-                <Link to="/login">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
+                <Link to="/demo">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
               </Button>
               <Button asChild className="min-h-12 rounded-xl border-white/15 bg-white/[0.06] px-7 text-base text-white transition-[background-color,scale] hover:bg-white/[0.12] hover:text-white active:scale-[0.96]" size="lg" variant="outline">
                 <Link to="/contact">{copy.talkExpert}</Link>

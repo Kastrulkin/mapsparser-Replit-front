@@ -27,7 +27,7 @@ export const en = {
     whatWeDo: "What We Do?",
     whoWeAre: "Who We Are?",
     prices: "Prices",
-    tryFree: "Try Free",
+    tryFree: "View Demo",
     login: "Log In"
   },
 

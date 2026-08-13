@@ -55,6 +55,8 @@ describe('guided tour localization', () => {
   });
 
   it('uses concrete Russian copy instead of abstract product language', () => {
+    expect(guidedTourCopyForLanguage('ru').banner.createAccount).toBe('Подключить свой бизнес');
+
     const steps = guidedTourStepsForLanguage('ru');
     const text = steps.map((step) => `${step.title} ${step.body}`).join(' ');
     const vaguePhrases = /хранит контекст|ведутся по этапам|картина бизнеса|практический результат|следующий результат|рабочий экран|история сохраняет факты|решение остаётся за вами/i;

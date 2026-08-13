@@ -17,7 +17,7 @@ export const ha = {
     whatWeDo: "Me muke yi?",
     whoWeAre: "Su waye mu?",
     prices: "Farashi",
-    tryFree: "Gwada kyauta"
+    tryFree: "Duba demo"
   },
   footer: {
     title: "Local OS",

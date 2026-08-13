@@ -17,7 +17,7 @@ export const ar = {
     whatWeDo: "ماذا نفعل؟",
     whoWeAre: "من نحن؟",
     prices: "الأسعار",
-    tryFree: "جرّب مجانًا"
+    tryFree: "عرض النسخة التجريبية"
   },
   footer: {
     title: "Local OS",

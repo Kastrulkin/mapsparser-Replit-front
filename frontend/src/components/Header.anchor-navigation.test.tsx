@@ -16,7 +16,7 @@ vi.mock('../i18n/LanguageContext', () => ({
       header: {
         prices: 'Цены',
         login: 'Вход',
-        tryFree: 'Попробовать бесплатно',
+        tryFree: 'Посмотреть демо',
       },
     },
   }),
@@ -27,6 +27,17 @@ vi.mock('./LanguageSwitcher', () => ({
 }));
 
 describe('Header agents navigation', () => {
+  it('keeps login separate from the interactive demo', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Header />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByRole('link', { name: 'Вход' })[0]).toHaveAttribute('href', '/login');
+    expect(screen.getAllByRole('link', { name: 'Посмотреть демо' })[0]).toHaveAttribute('href', '/demo');
+  });
+
   it('leaves the cross-page agents link to the browser instead of React Router', () => {
     render(
       <MemoryRouter initialEntries={['/docs']}>

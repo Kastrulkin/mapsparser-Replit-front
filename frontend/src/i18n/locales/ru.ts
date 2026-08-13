@@ -27,7 +27,7 @@ export const ru = {
     whatWeDo: "Что мы делаем?",
     whoWeAre: "Кто мы?",
     prices: "Цены",
-    tryFree: "Попробовать бесплатно",
+    tryFree: "Посмотреть демо",
     login: "Вход"
   },
 

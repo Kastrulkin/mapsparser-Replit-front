@@ -690,7 +690,7 @@ export function DemoModeBanner() {
     <div className="border-b border-orange-200 bg-orange-50 px-4 py-2 text-orange-950">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 text-sm">
         <span className="font-medium">{copy.banner.notice}</span>
-        <button type="button" onClick={register} className={cn('min-h-10 rounded-md px-3 text-sm font-semibold text-orange-900', 'hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500')}>
+        <button type="button" onClick={register} className={cn('min-h-10 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm', 'transition-[background-color,box-shadow,transform] hover:bg-orange-700 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2')}>
           {copy.banner.createAccount}
         </button>
       </div>

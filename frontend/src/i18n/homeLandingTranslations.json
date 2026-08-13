@@ -98,7 +98,7 @@
     "auditText": "Nous vérifierons la fiche de votre entreprise et montrerons ce qui empêche les clients de vous trouver et de vous choisir. Vous obtiendrez une première action concrète, sans long rapport ni conseil générique.",
     "finalTitle": "Arrêtez d'être la personne sans qui rien ne se passe",
     "finalText": "Donnez du travail récurrent à LocalOS. Gardez les décisions qui ont réellement besoin du propriétaire.",
-    "tryFree": "Essayez gratuitement",
+    "tryFree": "Voir la démo",
     "talkExpert": "Parlez à un expert"
   },
   "es": {
@@ -200,7 +200,7 @@
     "auditText": "Revisaremos la lista de su empresa y mostraremos qué interfiere con que los clientes lo encuentren y lo elijan. Obtendrá una primera acción concreta, sin largos informes ni consejos genéricos.",
     "finalTitle": "Deja de ser la persona sin la cual no pasa nada",
     "finalText": "Dar trabajo recurrente a LocalOS. Mantenga las decisiones que realmente necesita el propietario.",
-    "tryFree": "Pruébalo gratis",
+    "tryFree": "Ver la demo",
     "talkExpert": "Habla con un experto"
   },
   "el": {
@@ -302,7 +302,7 @@
     "auditText": "Θα ελέγξουμε την καταχώριση της επιχείρησής σας και θα δείξουμε τι εμποδίζει τους πελάτες να σας βρουν και να σας επιλέξουν. Θα λάβετε μια συγκεκριμένη πρώτη ενέργεια, χωρίς μακρά αναφορά ή γενικές συμβουλές.",
     "finalTitle": "Σταμάτα να είσαι το άτομο χωρίς το οποίο δεν γίνεται τίποτα",
     "finalText": "Δώστε επαναλαμβανόμενη εργασία στο LocalOS. Κρατήστε τις αποφάσεις που πραγματικά χρειάζονται τον ιδιοκτήτη.",
-    "tryFree": "Δοκιμάστε δωρεάν",
+    "tryFree": "Δείτε το demo",
     "talkExpert": "Μιλήστε με έναν ειδικό"
   },
   "de": {
@@ -404,7 +404,7 @@
     "auditText": "Wir prüfen Ihren Brancheneintrag und zeigen, was Kunden davon abhält, Sie zu finden und sich für Sie zu entscheiden. Sie erhalten eine konkrete erste Maßnahme, ohne einen langen Bericht oder allgemeine Ratschläge.",
     "finalTitle": "Hören Sie auf, die Person zu sein, ohne die nichts geht",
     "finalText": "Geben Sie LocalOS wiederkehrende Arbeit. Behalten Sie die Entscheidungen bei, die der Eigentümer wirklich braucht.",
-    "tryFree": "Kostenlos testen",
+    "tryFree": "Demo ansehen",
     "talkExpert": "Sprechen Sie mit einem Experten"
   },
   "th": {
@@ -506,7 +506,7 @@
     "auditText": "เราจะตรวจสอบรายชื่อธุรกิจของคุณและแสดงสิ่งที่ขัดขวางให้ลูกค้าค้นหาและเลือกคุณ คุณจะได้รับการดำเนินการขั้นแรกอย่างเป็นรูปธรรม โดยไม่ต้องมีรายงานที่ยาวหรือคำแนะนำทั่วไป",
     "finalTitle": "หยุดเป็นคนที่ไม่มีสิ่งใดเกิดขึ้น",
     "finalText": "มอบงานที่เกิดซ้ำให้กับ LocalOS เก็บการตัดสินใจที่ต้องการเจ้าของอย่างแท้จริง",
-    "tryFree": "ลองฟรี",
+    "tryFree": "ดูเดโม",
     "talkExpert": "พูดคุยกับผู้เชี่ยวชาญ"
   },
   "ar": {
@@ -608,7 +608,7 @@
     "auditText": "سوف نتحقق من قائمة أعمالك ونعرض ما يعيق العملاء عن العثور عليك واختيارهم. سوف تحصل على إجراء أولي ملموس، بدون تقرير طويل أو نصيحة عامة.",
     "finalTitle": "توقف عن كونك الشخص الذي بدونه لا يحدث شيء",
     "finalText": "إعطاء العمل المتكرر إلى LocalOS. احتفظ بالقرارات التي تحتاج صاحبها حقًا.",
-    "tryFree": "حاول مجانا",
+    "tryFree": "عرض النسخة التجريبية",
     "talkExpert": "التحدث إلى خبير"
   },
   "tr": {
@@ -710,7 +710,7 @@
     "auditText": "İşletme girişinizi kontrol edeceğiz ve müşterilerin sizi bulmasına ve seçmesine nelerin engel olduğunu göstereceğiz. Uzun bir rapora veya genel tavsiyeye gerek kalmadan somut bir ilk eylem alacaksınız.",
     "finalTitle": "Onsuz hiçbir şeyin olmayacağı kişi olmayı bırak",
     "finalText": "LocalOS'a yinelenen işler verin. Sahibinin gerçekten ihtiyaç duyduğu kararları saklayın.",
-    "tryFree": "Ücretsiz deneyin",
+    "tryFree": "Demoyu görüntüle",
     "talkExpert": "Bir uzmanla konuşun"
   },
   "ha": {
@@ -812,7 +812,7 @@
     "auditText": "Za mu bincika jerin kasuwancin ku kuma mu nuna abin da ke kawo cikas ga abokan cinikin neman ku da zabar ku. Za ku sami aikin farko na kankare guda ɗaya, ba tare da dogon rahoto ko shawara ba.",
     "finalTitle": "Ka daina zama mutumin da babu abin da ke faruwa ba tare da shi ba",
     "finalText": "Ba da aiki mai maimaitawa ga LocalOS. Ci gaba da yanke shawara waɗanda suke buƙatar mai shi da gaske.",
-    "tryFree": "Gwada kyauta",
+    "tryFree": "Duba demo",
     "talkExpert": "Yi magana da gwani"
   }
 }

@@ -25,7 +25,7 @@ export const tr = {
     whatWeDo: "Ne Yapıyoruz?",
     whoWeAre: "Biz Kimiz?",
     prices: "Fiyatlar",
-    tryFree: "Ücretsiz Dene",
+    tryFree: "Demoyu Görüntüle",
     login: "Giriş Yap"
   },
 

@@ -181,7 +181,7 @@ const Header = () => {
               </Link>
             </Button>
             <Button asChild className="min-h-10 rounded-xl px-4 shadow-[0_8px_22px_rgba(249,115,22,0.18)] transition-[box-shadow,scale] active:scale-[0.96]">
-              <Link to="/login">{t.header.tryFree}</Link>
+              <Link to="/demo">{t.header.tryFree}</Link>
             </Button>
           </div>
 
@@ -276,7 +276,7 @@ const Header = () => {
                   </Link>
                 </Button>
                 <Button asChild className="mx-3 w-[calc(100%-1.5rem)] justify-start btn-iridescent">
-                  <Link to="/login" onClick={() => setIsMenuOpen(false)}>{t.header.tryFree}</Link>
+                  <Link to="/demo" onClick={() => setIsMenuOpen(false)}>{t.header.tryFree}</Link>
                 </Button>
               </div>
             </div>
