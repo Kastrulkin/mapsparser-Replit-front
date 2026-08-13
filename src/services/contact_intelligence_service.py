@@ -585,7 +585,7 @@ def detect_public_booking_crm_observations(
         return []
     context = artifact if isinstance(artifact, dict) else {}
     observations = _map_payload_crm_observations(lead)
-    website = lead.get("website")
+    website = None if _lead_website_identity_mismatched(lead) else lead.get("website")
     for item in lead.get("public_crm_observations") or []:
         if not isinstance(item, dict):
             continue
@@ -817,6 +817,22 @@ def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]],
     return contacts, warnings
 
 
+def _lead_website_identity_mismatched(lead: dict[str, Any]) -> bool:
+    enrich_payload = lead.get("enrich_payload_json")
+    if not isinstance(enrich_payload, dict):
+        enrich_payload = {}
+    website_identity = enrich_payload.get("website_identity")
+    if not isinstance(website_identity, dict):
+        website_identity = {}
+    status = str(
+        lead.get("website_identity_status")
+        or enrich_payload.get("website_identity_status")
+        or website_identity.get("status")
+        or ""
+    ).strip().lower()
+    return status == "mismatch"
+
+
 def legacy_contact_candidates(lead: dict[str, Any]) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
 
@@ -844,7 +860,8 @@ def legacy_contact_candidates(lead: dict[str, Any]) -> list[dict[str, Any]]:
     add("email", lead.get("email"))
     add("telegram", lead.get("telegram_url"))
     add("whatsapp", lead.get("whatsapp_url"))
-    add("website", lead.get("website"), 0.74)
+    if not _lead_website_identity_mismatched(lead):
+        add("website", lead.get("website"), 0.74)
     links = lead.get("messenger_links_json")
     if isinstance(links, list):
         for item in links:
@@ -2694,7 +2711,10 @@ def _hunter_contacts(
     }
     if not allow_paid_enrichment or not enabled or not api_key or not qualification_states.intersection({"qualified", "selected_for_outreach", "converted"}):
         return [], 0
-    website = normalize_contact_value("website", lead.get("website"))
+    website = normalize_contact_value(
+        "website",
+        None if _lead_website_identity_mismatched(lead) else lead.get("website"),
+    )
     domain = urlparse(website).netloc.lower().removeprefix("www.") if website else ""
     if not domain:
         return [], 0
@@ -2849,8 +2869,9 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     contacts = legacy_contact_candidates(lead)
+    eligible_website = None if _lead_website_identity_mismatched(lead) else lead.get("website")
     website_contacts, website_crm_observations, warnings = collect_public_website_intelligence(
-        lead.get("website")
+        eligible_website
     )
     lead["public_crm_observations"] = website_crm_observations
     contacts.extend(website_contacts)
@@ -2858,7 +2879,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     upsert_contact_points(cursor, str(lead["id"]), contacts)
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'verifying', current_phase = 'verifying', updated_at = NOW() WHERE id = %s", (job.get("id"),))
-    verify_contact_points(cursor, str(lead["id"]), lead.get("website"))
+    verify_contact_points(cursor, str(lead["id"]), eligible_website)
     best_contact = _select_best_contact(cursor, workstream)
     hunter_used = 0
     if not best_contact or best_contact.get("owner_type") != "person" or best_contact.get("verification_status") not in VERIFIED_STATUSES:

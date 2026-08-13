@@ -977,6 +977,49 @@ def get_latest_search_job_status():
         print(f"Error getting latest prospecting search job: {e}")
         return jsonify({"error": str(e)}), 500
 
+def _registry_lead_identity_key(lead: dict[str, Any]) -> tuple[str, str] | None:
+    company_location_id = str(lead.get("company_location_id") or "").strip()
+    if company_location_id:
+        return "company_location", company_location_id
+    source_url = str(lead.get("source_url") or "").strip()
+    org_match = re.search(r"/org/(?:[^/?#]+/)?(\d+)(?:[/?#]|$)", source_url)
+    if org_match:
+        return "yandex_org", org_match.group(1)
+    source_external_id = str(lead.get("source_external_id") or "").strip()
+    source = str(lead.get("source") or "").strip().lower()
+    if source_external_id and source:
+        return f"source_external:{source}", source_external_id
+    return None
+
+
+def _registry_canonical_lead_rank(lead: dict[str, Any]) -> tuple[int, int, int, str]:
+    status = str(lead.get("status") or "").strip().lower()
+    pipeline_status = str(lead.get("pipeline_status") or "").strip().lower()
+    contacted = int(
+        status in {"sent", "contacted", "replied", "converted"}
+        or pipeline_status in {"contacted", "replied", "converted"}
+    )
+    sent = int(status == "sent")
+    active = int(pipeline_status not in {"postponed", "deferred", "archived"})
+    return contacted, sent, active, str(lead.get("id") or "")
+
+
+def _deduplicate_registry_leads(leads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected_by_key: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+    passthrough: list[tuple[int, dict[str, Any]]] = []
+    for index, lead in enumerate(leads):
+        identity_key = _registry_lead_identity_key(lead)
+        if identity_key is None:
+            passthrough.append((index, lead))
+            continue
+        current = selected_by_key.get(identity_key)
+        if current is None or _registry_canonical_lead_rank(lead) > _registry_canonical_lead_rank(current[1]):
+            selected_by_key[identity_key] = (index, lead)
+    retained = passthrough + list(selected_by_key.values())
+    retained.sort(key=lambda item: item[0])
+    return [lead for _index, lead in retained]
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/leads", methods=["GET"])
 def get_leads():
     """Get all saved leads."""
@@ -1115,6 +1158,7 @@ def get_leads():
                 lead.pop("messenger_links_json", None)
                 for workstream in lead.get("workstreams") or []:
                     workstream.pop("contact_points", None)
+        normalized = _deduplicate_registry_leads(normalized)
         client_options_by_id = {}
         for lead in normalized:
             for workstream in lead.get("workstreams") or []:

@@ -3390,6 +3390,41 @@ def test_selected_campaign_recipient_wins_over_generic_email_ranking():
     assert availability["email"]["recipient"] == "pr@yesapart.com"
 
 
+def test_angel_cross_entity_confirmed_email_is_not_outreach_eligible():
+    class SenderCursor:
+        def execute(self, _query, _params):
+            return None
+
+        def fetchall(self):
+            return []
+
+    availability = channel_availability(
+        SenderCursor(),
+        {
+            "sender_mode": "localos_for_partner",
+            "client_business_id": "business-1",
+            "source_url": "https://yandex.com/maps/org/angel/1822395799/",
+            "source_external_id": "1822395799",
+            "contacts": [
+                {
+                    "id": "wrong-angel-email",
+                    "contact_type": "email",
+                    "value": "angel_medclinic@mail.ru",
+                    "verification_status": "confirmed_source",
+                    "confidence": 0.99,
+                    "metadata_json": {
+                        "entity_identity_status": "mismatch",
+                        "belongs_to_yandex_org_id": "191046015870",
+                    },
+                },
+            ],
+        },
+    )
+
+    assert availability["email"]["contact_point_id"] is None
+    assert availability["email"]["recipient"] is None
+
+
 def test_single_ready_email_sender_is_selected_when_other_account_needs_permission():
     class SenderCursor:
         def execute(self, _query, _params):

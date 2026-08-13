@@ -1310,7 +1310,37 @@ def _email_recipient_structure_eligible(contact: dict[str, Any]) -> bool:
     return not any(normalized_local.startswith(prefix) for prefix in EMAIL_ROLE_MISMATCH_PREFIXES)
 
 
-def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
+def _contact_entity_identity_eligible(
+    contact: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> bool:
+    metadata = contact.get("metadata_json")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    identity_status = _text(
+        metadata.get("entity_identity_status")
+        or contact.get("entity_identity_status")
+    ).lower()
+    if identity_status == "mismatch":
+        return False
+    expected_external_id = _text((context or {}).get("source_external_id"))
+    contact_external_id = _text(
+        metadata.get("belongs_to_yandex_org_id")
+        or contact.get("belongs_to_yandex_org_id")
+    )
+    return not (
+        expected_external_id
+        and contact_external_id
+        and expected_external_id != contact_external_id
+    )
+
+
+def _recipient_contact_eligible(
+    contact: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> bool:
+    if not _contact_entity_identity_eligible(contact, context):
+        return False
     if _text(contact.get("contact_type")) != "email":
         return True
     if _text(contact.get("verification_status")) not in {"verified", "confirmed_source"}:
@@ -1318,9 +1348,14 @@ def _recipient_contact_eligible(contact: dict[str, Any]) -> bool:
     return _email_recipient_structure_eligible(contact)
 
 
-def _selected_recipient_contact_eligible(contact: dict[str, Any]) -> bool:
+def _selected_recipient_contact_eligible(
+    contact: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> bool:
     """Allow a human-selected, structurally safe email without auto-selecting it."""
-    if _recipient_contact_eligible(contact):
+    if not _contact_entity_identity_eligible(contact, context):
+        return False
+    if _recipient_contact_eligible(contact, context):
         return True
     if _text(contact.get("contact_type")) != "email":
         return False
@@ -2476,7 +2511,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
     eligible_contacts = [
         contact
         for contact in all_contacts
-        if _recipient_contact_eligible(contact)
+        if _recipient_contact_eligible(contact, context)
     ]
     selected_contact_id = _text(context.get("selected_contact_point_id"))
     selected_contact = next(
@@ -2484,7 +2519,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
             contact
             for contact in all_contacts
             if _text(contact.get("id")) == selected_contact_id
-            and _selected_recipient_contact_eligible(contact)
+            and _selected_recipient_contact_eligible(contact, context)
         ),
         None,
     )
@@ -2528,7 +2563,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
                 "value": context.get("email"),
                 "source_url": context.get("source_url"),
             }
-            contact = fallback if _recipient_contact_eligible(fallback) else None
+            contact = fallback if _recipient_contact_eligible(fallback, context) else None
         if channel == "telegram" and not contact and context.get("telegram_url"):
             contact = {"id": None, "value": context.get("telegram_url")}
         if channel == "whatsapp" and not contact and context.get("whatsapp_url"):

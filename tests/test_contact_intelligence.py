@@ -409,6 +409,30 @@ def test_legacy_candidates_keep_all_messenger_links():
     assert {item["contact_type"] for item in contacts} == {"phone", "telegram", "vk", "instagram"}
 
 
+def test_angel_cross_entity_website_is_not_a_contact_source():
+    contacts = legacy_contact_candidates(
+        {
+            "name": "Angel",
+            "address": "Санкт-Петербург, Ленинский проспект, 88",
+            "source_url": "https://yandex.com/maps/org/angel/1822395799/",
+            "website": "https://angel-clinic.ru/",
+            "enrich_payload_json": {
+                "website_identity": {
+                    "status": "mismatch",
+                    "yandex_org_id": "191046015870",
+                    "address": "Санкт-Петербург, Стремянная улица, 20",
+                },
+            },
+        }
+    )
+
+    assert not any(
+        item["contact_type"] == "website"
+        and item["normalized_value"] == "https://angel-clinic.ru"
+        for item in contacts
+    )
+
+
 def test_legacy_candidates_recovers_all_supported_channels_from_nested_map_payload():
     contacts = legacy_contact_candidates({
         "source_url": "https://maps.example/company",
