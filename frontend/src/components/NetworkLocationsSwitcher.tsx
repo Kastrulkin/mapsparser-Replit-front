@@ -117,23 +117,24 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     }
 
     return (
-        <div ref={switcherRef} className="relative">
+        <div ref={switcherRef} className="relative min-w-0 shrink">
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex h-12 w-[clamp(12rem,20vw,17rem)] min-w-0 max-w-full items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 transition-colors hover:bg-gray-50"
             >
-                <MapPin className="w-4 h-4 text-blue-600" />
-                <div className="text-left">
-                    <div className="text-sm font-medium text-gray-900">
+                <MapPin className="h-4 w-4 shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1 text-left">
+                    <div className="truncate text-sm font-medium text-gray-900">
                         {getLocationLabel(selectedLocation)}
                     </div>
                     {getLocationSubtitle(selectedLocation) && (
-                        <div className="text-xs text-gray-500 truncate max-w-[200px]">
+                        <div className="truncate text-xs text-gray-500">
                             {getLocationSubtitle(selectedLocation)}
                         </div>
                     )}
                 </div>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (

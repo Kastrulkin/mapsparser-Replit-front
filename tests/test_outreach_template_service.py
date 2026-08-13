@@ -137,7 +137,7 @@ def test_active_social_template_uses_time_pain_and_concrete_multichannel_result(
 def test_reviews_content_template_uses_current_count_and_owner_time_pain():
     candidate = _candidate(
         recipient="Проформа",
-        observed_fact="На Яндекс Картах у вас опубликовано 42 отзыва.",
+        observed_fact="В карточке Проформа на Яндекс Картах опубликовано 42 отзыва.",
         evidence_kind="map_reviews",
     )
 
@@ -147,7 +147,7 @@ def test_reviews_content_template_uses_current_count_and_owner_time_pain():
     assert selection["key"] == "reviews_to_content_plan_v1"
     assert "На поиск тем и написание постов тоже уходит время" in text
     assert "контент-план и тексты для Telegram, VK и Яндекс Карт" in text
-    assert "На Яндекс Картах у вас опубликовано 42 отзыва" in text
+    assert "В карточке Проформа на Яндекс Картах опубликовано 42 отзыва" in text
     assert text.endswith("Показать три темы из этих отзывов?")
     assert text.count("?") == 1
     assert "—" not in text
@@ -159,7 +159,7 @@ def test_reviews_content_template_is_used_for_non_beauty_local_business():
         recipient="Дыши на 100%",
         recipient_category="Фитнес-клуб",
         recipient_segment="local_business",
-        observed_fact="На Яндекс Картах у вас опубликовано 60 отзывов.",
+        observed_fact="В карточке Дыши на 100% на Яндекс Картах опубликовано 60 отзывов.",
         evidence_kind="map_reviews",
         outreach_template_key="reviews_to_content_plan_v1",
         outreach_template_version=1,
@@ -182,7 +182,7 @@ def test_reviews_content_template_is_used_for_non_beauty_local_business():
         angle="reviews_content",
     )
 
-    assert "На Яндекс Картах у вас опубликовано 60 отзывов" in message
+    assert "В карточке Дыши на 100% на Яндекс Картах опубликовано 60 отзывов" in message
     assert message.endswith("--\nАлександр\nоснователь ЛокалОС")
     assert gate["passed"] is True
     assert gate["total_score"] == 18
@@ -444,7 +444,7 @@ def test_all_templates_pass_current_quality_gate_on_supported_evidence():
             evidence_kind="review_signal",
         )),
         ("reviews_content", _candidate(
-            observed_fact="На Яндекс Картах у вас опубликовано 42 отзыва.",
+            observed_fact="В карточке Padrina_studio на Яндекс Картах опубликовано 42 отзыва.",
             evidence_kind="map_reviews",
         )),
         ("content_operations", _candidate(

@@ -93,9 +93,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     )}>
       <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-4">
         {/* Left Side: Context Switchers */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
           {isSuperadmin && (
-            <div className="flex min-w-0 flex-1 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
+            <div className="flex min-w-0 shrink items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
               <span className="hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 sm:inline-flex">
                 SuperAdmin
               </span>
@@ -114,7 +114,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           )}
 
           {currentBusiness?.network_id && onBusinessChange && (
-            <div data-tour-target="network-switcher">
+            <div className="min-w-0 shrink" data-tour-target="network-switcher">
               <NetworkLocationsSwitcher
                 currentBusinessId={currentBusinessId || undefined}
                 onLocationChange={onBusinessChange}
@@ -130,7 +130,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               }
               onControlScopeChange({ kind: 'business', id: currentBusinessId || currentBusiness.id, name: currentBusiness.name || shellCopy.business });
             }}>
-              <SelectTrigger className="h-11 min-w-[144px] bg-white text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger
+                aria-label={shellCopy.business}
+                className="h-12 w-[10.5rem] min-w-0 shrink-0 rounded-xl bg-white text-sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value={`business:${currentBusinessId || currentBusiness.id}`}>{shellCopy.currentLocation}</SelectItem>
                 <SelectItem value={`network:${currentBusiness.network_id}`}>{currentBusiness.network_name || shellCopy.wholeNetwork}</SelectItem>
