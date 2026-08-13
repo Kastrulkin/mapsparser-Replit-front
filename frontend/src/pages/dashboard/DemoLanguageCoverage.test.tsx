@@ -19,11 +19,11 @@ const localizedCardLanguages = supportedLanguages.filter((language) => language 
 const nonRussianLanguages = supportedLanguages.filter((language) => language !== 'ru');
 
 describe('demo language coverage', () => {
-  it('keeps the language contract aligned with all 38 guided-tour steps', () => {
+  it('keeps the language contract aligned with all 44 guided-tour steps', () => {
     expect(supportedLanguages).toHaveLength(10);
-    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(38);
+    expect(GUIDED_TOUR_STEP_LAYOUTS).toHaveLength(44);
     supportedLanguages.forEach((language) => {
-      expect(guidedTourStepsForLanguage(language)).toHaveLength(38);
+      expect(guidedTourStepsForLanguage(language)).toHaveLength(44);
     });
   });
 
@@ -51,6 +51,7 @@ describe('demo language coverage', () => {
     expect(JSON.stringify(getPartnershipWorkspaceCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getPublicSalesRoomCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
     expect(JSON.stringify(getPublicSalesRoomAuditCopy(language))).not.toMatch(/[А-Яа-яЁё]/);
+    expect(JSON.stringify(guidedTourStepsForLanguage(language))).not.toMatch(/[А-Яа-яЁё]/);
     if (language !== 'en') {
       expect(localized.telegram.pageTitle).not.toBe(english.telegram.pageTitle);
       expect(getContentCalendarCopy(language).contentReady).not.toBe(getContentCalendarCopy('en').contentReady);

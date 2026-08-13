@@ -5,6 +5,40 @@ import { describe, expect, it } from 'vitest';
 import { GUIDED_TOUR_STEPS } from './tourConfig';
 
 describe('guided tour growth tools', () => {
+  it('explains every dashboard menu item on the page it opens', () => {
+    const menuTargets = GUIDED_TOUR_STEPS
+      .filter((step) => step.target?.startsWith('nav-'))
+      .map((step) => step.target);
+
+    expect(menuTargets).toEqual([
+      'nav-today',
+      'nav-operator',
+      'nav-profile',
+      'nav-progress',
+      'nav-finance',
+      'nav-card',
+      'nav-telegram-radar',
+      'nav-average-ticket',
+      'nav-ai-chat-promotion',
+      'nav-content',
+      'nav-agents',
+      'nav-chats',
+      'nav-partnerships',
+      'nav-settings',
+    ]);
+  });
+
+  it('keeps daily priorities on Today and natural-language tasks in Operator', () => {
+    const todayOverview = GUIDED_TOUR_STEPS.find((step) => step.key === 'today-overview');
+    const operatorOverview = GUIDED_TOUR_STEPS.find((step) => step.key === 'operator-overview');
+
+    expect(todayOverview).toMatchObject({ route: '/dashboard/today', target: 'today-overview' });
+    expect(todayOverview?.title).toBe('Что требует вашего решения');
+    expect(operatorOverview).toMatchObject({ route: '/dashboard/operator', target: 'operator-overview' });
+    expect(operatorOverview?.body).toContain('обычной фразой');
+    expect(operatorOverview?.body).not.toContain('устаревшие данные карт');
+  });
+
   it('opens each maps workspace tab and growth tool as a separate step', () => {
     const growthStepKeys = [
       'card-overview',

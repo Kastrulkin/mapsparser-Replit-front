@@ -18,19 +18,23 @@ export type GuidedTourStep = {
 type GuidedTourStepLayout = Omit<GuidedTourStep, 'chapterTitle' | 'title' | 'body'>;
 
 export const GUIDED_TOUR_KEY = 'roga-i-kopyta-v1';
-export const GUIDED_TOUR_VERSION = 4;
+export const GUIDED_TOUR_VERSION = 5;
 
 export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
-  { key: 'welcome', chapter: 'network-pulse', route: '/dashboard/operator' },
+  { key: 'welcome', chapter: 'network-pulse', route: '/dashboard/today' },
+  { key: 'today-nav', chapter: 'network-pulse', route: '/dashboard/today', target: 'nav-today' },
+  { key: 'today-overview', chapter: 'network-pulse', route: '/dashboard/today', target: 'today-overview' },
   { key: 'operator-nav', chapter: 'network-pulse', route: '/dashboard/operator', target: 'nav-operator' },
   { key: 'operator-overview', chapter: 'network-pulse', route: '/dashboard/operator', target: 'operator-overview' },
   { key: 'network-switcher', chapter: 'network-pulse', route: '/dashboard/operator', target: 'network-switcher' },
+  { key: 'profile-nav', chapter: 'network-pulse', route: '/dashboard/profile', target: 'nav-profile' },
   { key: 'progress-nav', chapter: 'network-pulse', route: '/dashboard/progress', target: 'nav-progress' },
   { key: 'progress-overview', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-summary' },
   { key: 'progress-focus-action', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-focus-action' },
   { key: 'progress-areas', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-areas' },
   { key: 'progress-maps', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-area-maps' },
   { key: 'progress-recent-results', chapter: 'network-pulse', route: '/dashboard/progress', target: 'progress-recent-results' },
+  { key: 'finance-nav', chapter: 'network-pulse', route: '/dashboard/finance', target: 'nav-finance' },
   { key: 'card-nav', chapter: 'card-content', route: '/dashboard/progress', target: 'nav-card' },
   { key: 'card-overview', chapter: 'card-content', route: '/dashboard/card', target: 'card-overview' },
   { key: 'card-services', chapter: 'card-content', route: '/dashboard/card?tab=services', target: 'card-tab-services' },
@@ -55,9 +59,11 @@ export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'agents-run', chapter: 'automation', route: '/dashboard/agents', target: 'agents-run' },
   { key: 'agents-review', chapter: 'automation', route: '/dashboard/agents', target: 'agents-review' },
   { key: 'agents-history', chapter: 'automation', route: '/dashboard/agents', target: 'agents-history' },
+  { key: 'chats-nav', chapter: 'automation', route: '/dashboard/chats', target: 'nav-chats' },
   { key: 'partnership-nav', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'nav-partnerships' },
   { key: 'partnership-workspace', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-workspace' },
   { key: 'partnership-candidates', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-candidates' },
+  { key: 'settings-nav', chapter: 'partnership', route: '/dashboard/settings', target: 'nav-settings' },
   { key: 'finish', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', final: true },
 ];
 

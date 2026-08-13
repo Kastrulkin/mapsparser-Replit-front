@@ -150,15 +150,15 @@ export const TodayPage = () => {
   if (!currentBusinessId) return <DashboardEmptyState title="Выберите бизнес" description="После выбора здесь появятся новые события, задачи LocalOS и действие, которое требует вашего решения." />;
 
   if (loading && !overview) {
-    return <div className="space-y-6" aria-busy="true"><DashboardPageHeader eyebrow="LocalOS" title="Сегодня" description="Загружаем новые события и текущие задачи." /><div className="h-44 animate-pulse rounded-3xl bg-slate-100" /><div className="h-72 animate-pulse rounded-3xl bg-slate-100" /></div>;
+    return <div className="space-y-6" aria-busy="true" data-tour-target="today-overview"><DashboardPageHeader eyebrow="LocalOS" title="Сегодня" description="Загружаем новые события и текущие задачи." /><div className="h-44 animate-pulse rounded-3xl bg-slate-100" /><div className="h-72 animate-pulse rounded-3xl bg-slate-100" /></div>;
   }
 
   if (error && !overview) {
-    return <div className="space-y-6"><DashboardPageHeader eyebrow="LocalOS" title="Сегодня" description="Не удалось загрузить события и задачи." /><DashboardEmptyState title="Страница временно недоступна" description="Попробуйте ещё раз. Данные бизнеса не изменились." action={<Button type="button" onClick={load} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className="h-4 w-4" />Повторить</Button>} /></div>;
+    return <div className="space-y-6" data-tour-target="today-overview"><DashboardPageHeader eyebrow="LocalOS" title="Сегодня" description="Не удалось загрузить события и задачи." /><DashboardEmptyState title="Страница временно недоступна" description="Попробуйте ещё раз. Данные бизнеса не изменились." action={<Button type="button" onClick={load} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className="h-4 w-4" />Повторить</Button>} /></div>;
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <div className="mx-auto max-w-6xl space-y-6 pb-10" data-tour-target="today-overview">
       <DashboardPageHeader eyebrow={controlScope?.kind === 'network' ? 'LocalOS · сеть' : 'LocalOS'} title="Сегодня" description="Новые события, задачи LocalOS и действие, которое сейчас важнее всего." icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />Обновить</Button>} />
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

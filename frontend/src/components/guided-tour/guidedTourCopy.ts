@@ -423,6 +423,109 @@ export const supportedGuidedTourLanguages: Language[] = ['ru', 'en', 'fr', 'es',
 
 const copyByLanguage: Record<Language, GuidedTourCopy> = { ru, en, fr, es, el, de, th, ar, ha, tr };
 
+const menuPurposeCopy: Record<Language, Record<string, GuidedTourStepText>> = {
+  ru: {
+    'today-nav': { title: 'Сегодня: с чего начать', body: 'Здесь собраны новые события, незавершённые задачи и одно главное действие. Открывайте этот экран в начале дня.' },
+    'today-overview': { title: 'Что требует вашего решения', body: 'Верхняя карточка показывает самую важную задачу, почему она важна и что изменится после выполнения. Кнопка сразу откроет нужный раздел.' },
+    'operator-nav': { title: 'Поручите задачу своими словами', body: 'Оператор нужен, когда вы уже знаете, чего хотите: например, найти отзывы без ответа или подготовить новость. Не нужно искать нужную кнопку.' },
+    'operator-overview': { title: 'Опишите нужный результат', body: 'Напишите задачу обычной фразой. LocalOS либо подготовит результат, либо уточнит недостающее. Публикации, отправки и изменения во внешних системах останутся на вашем подтверждении.' },
+    'profile-nav': { title: 'Дайте LocalOS контекст о бизнесе', body: 'Проверьте название, тип бизнеса, адрес и контакты. Точный профиль помогает готовить уместные тексты и не путать филиалы.' },
+    'finance-nav': { title: 'Поймите, на чём бизнес зарабатывает', body: 'Загрузите сводку из CRM или таблицу, чтобы увидеть выручку, средний чек, загрузку и потери. LocalOS покажет, где есть запас для роста.' },
+    'chats-nav': { title: 'Не потеряйте диалог с клиентом или партнёром', body: 'Здесь видны подготовленные сообщения, отправки и ответы. Проверяйте текст и получайте подтверждение перед внешней отправкой.' },
+    'settings-nav': { title: 'Настройте работу под свой бизнес', body: 'Подключите источники, выберите права команды и решите, какие действия можно готовить. Опасные и внешние действия требуют явного подтверждения.' },
+  },
+  en: {
+    'today-nav': { title: 'Today: know where to start', body: 'See new events, unfinished work, and one clear priority. Open this page at the start of the day.' },
+    'today-overview': { title: 'See what needs your decision', body: 'The top card explains the most important task, why it matters, and what will change when it is done. Its button opens the right workspace.' },
+    'operator-nav': { title: 'Ask for a result in your own words', body: 'Use Operator when you know the outcome you want, such as finding unanswered reviews or preparing a news draft. You do not need to hunt for the right control.' },
+    'operator-overview': { title: 'Describe the result you need', body: 'Write an ordinary request. LocalOS prepares the result or asks for missing details. Publishing, sending, and external changes still wait for your approval.' },
+    'profile-nav': { title: 'Give LocalOS the right business context', body: 'Check the business name, type, address, and contacts. An accurate profile keeps drafts relevant and locations separate.' },
+    'finance-nav': { title: 'Understand what drives revenue', body: 'Upload a CRM export or spreadsheet to see revenue, average ticket, capacity, and losses. LocalOS highlights where growth is possible.' },
+    'chats-nav': { title: 'Keep every conversation moving', body: 'Review prepared messages, sends, and replies in one place. Check the wording and approve before anything is sent outside LocalOS.' },
+    'settings-nav': { title: 'Set LocalOS up for your business', body: 'Connect sources, choose team access, and define what LocalOS may prepare. Risky and external actions always require explicit approval.' },
+  },
+  fr: {
+    'today-nav': { title: 'Aujourd’hui : savoir par où commencer', body: 'Retrouvez les nouveautés, le travail inachevé et une priorité claire. Ouvrez cette page au début de la journée.' },
+    'today-overview': { title: 'Voyez ce qui attend votre décision', body: 'La carte principale explique la tâche prioritaire, son importance et le résultat attendu. Le bouton ouvre directement le bon espace.' },
+    'operator-nav': { title: 'Demandez un résultat avec vos mots', body: 'Utilisez l’Opérateur quand vous savez ce que vous voulez obtenir, par exemple trouver les avis sans réponse ou préparer une actualité.' },
+    'operator-overview': { title: 'Décrivez le résultat attendu', body: 'Rédigez une demande simple. LocalOS prépare le résultat ou demande les précisions manquantes. Toute publication ou action externe attend votre accord.' },
+    'profile-nav': { title: 'Donnez le bon contexte sur votre entreprise', body: 'Vérifiez le nom, l’activité, l’adresse et les contacts. Un profil exact rend les textes pertinents et évite de mélanger les établissements.' },
+    'finance-nav': { title: 'Comprenez ce qui fait votre chiffre d’affaires', body: 'Importez un export CRM ou un tableau pour voir le chiffre d’affaires, le panier moyen, la charge et les pertes. LocalOS indique les marges de progression.' },
+    'chats-nav': { title: 'Gardez chaque conversation active', body: 'Retrouvez les messages préparés, les envois et les réponses. Relisez le texte et validez avant tout envoi externe.' },
+    'settings-nav': { title: 'Adaptez LocalOS à votre entreprise', body: 'Connectez les sources, réglez les accès de l’équipe et choisissez ce que LocalOS peut préparer. Les actions sensibles exigent toujours votre accord.' },
+  },
+  es: {
+    'today-nav': { title: 'Hoy: sepa por dónde empezar', body: 'Vea novedades, trabajo pendiente y una prioridad clara. Abra esta página al comenzar el día.' },
+    'today-overview': { title: 'Vea qué necesita su decisión', body: 'La tarjeta principal explica la tarea prioritaria, por qué importa y qué cambiará al terminarla. El botón abre el lugar correcto.' },
+    'operator-nav': { title: 'Pida un resultado con sus propias palabras', body: 'Use el Operador cuando sepa qué quiere conseguir, como encontrar reseñas sin respuesta o preparar una noticia.' },
+    'operator-overview': { title: 'Describa el resultado que necesita', body: 'Escriba una petición normal. LocalOS prepara el resultado o pide los datos que faltan. Publicar, enviar y cambiar sistemas externos requiere su aprobación.' },
+    'profile-nav': { title: 'Dé a LocalOS el contexto correcto', body: 'Revise el nombre, el tipo de negocio, la dirección y los contactos. Un perfil preciso mantiene los textos relevantes y separa las sucursales.' },
+    'finance-nav': { title: 'Entienda qué impulsa sus ingresos', body: 'Suba una exportación del CRM o una hoja de cálculo para ver ingresos, ticket medio, ocupación y pérdidas. LocalOS señala dónde puede crecer.' },
+    'chats-nav': { title: 'Mantenga cada conversación en marcha', body: 'Revise mensajes preparados, envíos y respuestas en un solo lugar. Compruebe el texto y apruébelo antes de enviarlo fuera de LocalOS.' },
+    'settings-nav': { title: 'Adapte LocalOS a su negocio', body: 'Conecte fuentes, configure el acceso del equipo y decida qué puede preparar LocalOS. Las acciones externas y de riesgo siempre requieren aprobación.' },
+  },
+  el: {
+    'today-nav': { title: 'Σήμερα: μάθετε από πού να ξεκινήσετε', body: 'Δείτε νέα γεγονότα, εκκρεμή εργασία και μία σαφή προτεραιότητα. Ανοίξτε αυτή τη σελίδα στην αρχή της ημέρας.' },
+    'today-overview': { title: 'Δείτε τι χρειάζεται την απόφασή σας', body: 'Η επάνω κάρτα εξηγεί την πιο σημαντική εργασία, γιατί μετρά και τι θα αλλάξει. Το κουμπί ανοίγει το σωστό σημείο.' },
+    'operator-nav': { title: 'Ζητήστε ένα αποτέλεσμα με δικά σας λόγια', body: 'Χρησιμοποιήστε τον Χειριστή όταν ξέρετε το αποτέλεσμα που θέλετε, όπως αναπάντητες κριτικές ή ένα πρόχειρο νέο.' },
+    'operator-overview': { title: 'Περιγράψτε το αποτέλεσμα', body: 'Γράψτε ένα απλό αίτημα. Το LocalOS ετοιμάζει το αποτέλεσμα ή ζητά διευκρινίσεις. Η δημοσίευση και οι εξωτερικές αλλαγές περιμένουν την έγκρισή σας.' },
+    'profile-nav': { title: 'Δώστε στο LocalOS το σωστό πλαίσιο', body: 'Ελέγξτε όνομα, κλάδο, διεύθυνση και επαφές. Ένα ακριβές προφίλ κρατά τα κείμενα σχετικά και τα υποκαταστήματα ξεχωριστά.' },
+    'finance-nav': { title: 'Κατανοήστε τι οδηγεί τα έσοδα', body: 'Ανεβάστε εξαγωγή CRM ή φύλλο για να δείτε έσοδα, μέση απόδειξη, φόρτο και απώλειες. Το LocalOS δείχνει πού υπάρχει περιθώριο ανάπτυξης.' },
+    'chats-nav': { title: 'Κρατήστε κάθε συζήτηση ενεργή', body: 'Δείτε έτοιμα μηνύματα, αποστολές και απαντήσεις. Ελέγξτε το κείμενο και εγκρίνετε πριν από κάθε εξωτερική αποστολή.' },
+    'settings-nav': { title: 'Προσαρμόστε το LocalOS στην επιχείρησή σας', body: 'Συνδέστε πηγές, ρυθμίστε πρόσβαση ομάδας και ορίστε τι μπορεί να ετοιμάζει το LocalOS. Οι εξωτερικές ενέργειες απαιτούν έγκριση.' },
+  },
+  de: {
+    'today-nav': { title: 'Heute: wissen, womit Sie beginnen', body: 'Öffnen Sie diese Seite am Tagesanfang: neue Ereignisse, offene Arbeit und eine klare Priorität stehen hier zusammen.' },
+    'today-overview': { title: 'Sehen Sie, was Ihre Entscheidung braucht', body: 'Die obere Karte erklärt die wichtigste Aufgabe, ihren Grund und das erwartete Ergebnis. Die Schaltfläche öffnet den richtigen Arbeitsbereich.' },
+    'operator-nav': { title: 'Bitten Sie in eigenen Worten um ein Ergebnis', body: 'Nutzen Sie den Operator, wenn das Ziel klar ist, etwa unbeantwortete Bewertungen zu finden oder eine Nachricht vorzubereiten.' },
+    'operator-overview': { title: 'Beschreiben Sie das gewünschte Ergebnis', body: 'Schreiben Sie eine normale Anfrage. LocalOS bereitet das Ergebnis vor oder fragt nach fehlenden Angaben. Veröffentlichungen und externe Änderungen warten auf Ihre Freigabe.' },
+    'profile-nav': { title: 'Geben Sie LocalOS den richtigen Kontext', body: 'Prüfen Sie Name, Branche, Adresse und Kontakte. Ein korrektes Profil hält Texte relevant und Standorte getrennt.' },
+    'finance-nav': { title: 'Verstehen Sie, was den Umsatz treibt', body: 'Laden Sie einen CRM-Export oder eine Tabelle hoch, um Umsatz, Durchschnittsbon, Auslastung und Verluste zu sehen. LocalOS zeigt Wachstumsspielraum.' },
+    'chats-nav': { title: 'Halten Sie jedes Gespräch am Laufen', body: 'Prüfen Sie vorbereitete Nachrichten, Sendungen und Antworten. Geben Sie den Text frei, bevor er LocalOS verlässt.' },
+    'settings-nav': { title: 'Richten Sie LocalOS für Ihr Unternehmen ein', body: 'Verbinden Sie Quellen, vergeben Sie Teamzugriff und legen Sie fest, was LocalOS vorbereiten darf. Externe und riskante Aktionen brauchen Ihre Freigabe.' },
+  },
+  th: {
+    'today-nav': { title: 'วันนี้: รู้ว่าควรเริ่มตรงไหน', body: 'ดูเหตุการณ์ใหม่ งานที่ยังไม่เสร็จ และสิ่งสำคัญหนึ่งอย่าง เปิดหน้านี้เมื่อเริ่มวัน' },
+    'today-overview': { title: 'ดูว่าอะไรรอการตัดสินใจของคุณ', body: 'การ์ดด้านบนอธิบายงานสำคัญ เหตุผล และผลที่จะได้ ปุ่มจะพาไปยังหน้าที่ถูกต้อง' },
+    'operator-nav': { title: 'ขอผลลัพธ์ด้วยคำของคุณ', body: 'ใช้โอเปอเรเตอร์เมื่อรู้ว่าต้องการอะไร เช่น หารีวิวที่ยังไม่ตอบหรือเตรียมข่าว' },
+    'operator-overview': { title: 'อธิบายผลที่ต้องการ', body: 'เขียนคำขอธรรมดา LocalOS จะเตรียมผลหรือถามข้อมูลที่ขาด การเผยแพร่และการเปลี่ยนภายนอกยังรอการอนุมัติ' },
+    'profile-nav': { title: 'ให้บริบทธุรกิจที่ถูกต้อง', body: 'ตรวจชื่อ ประเภท ที่อยู่ และช่องทางติดต่อ โปรไฟล์ที่แม่นยำทำให้เนื้อหาตรงธุรกิจและไม่ปะปนสาขา' },
+    'finance-nav': { title: 'เข้าใจว่ารายได้มาจากไหน', body: 'อัปโหลดไฟล์ CRM หรือตารางเพื่อดูรายได้ ยอดเฉลี่ย การใช้งาน และการสูญเสีย LocalOS จะชี้โอกาสเติบโต' },
+    'chats-nav': { title: 'ให้ทุกบทสนทนาไปต่อ', body: 'ดูข้อความที่เตรียม การส่ง และคำตอบในที่เดียว ตรวจข้อความและอนุมัติก่อนส่งออก' },
+    'settings-nav': { title: 'ตั้งค่า LocalOS ให้เหมาะกับธุรกิจ', body: 'เชื่อมต่อแหล่งข้อมูล กำหนดสิทธิทีม และเลือกสิ่งที่ LocalOS เตรียมได้ การกระทำภายนอกต้องได้รับอนุมัติ' },
+  },
+  ar: {
+    'today-nav': { title: 'اليوم: اعرف من أين تبدأ', body: 'شاهد الأحداث الجديدة والعمل غير المكتمل وأولوية واضحة. افتح هذه الصفحة في بداية يومك.' },
+    'today-overview': { title: 'شاهد ما ينتظر قرارك', body: 'تشرح البطاقة العلوية المهمة الأهم وسبب أهميتها والنتيجة. يفتح الزر مكان العمل الصحيح.' },
+    'operator-nav': { title: 'اطلب النتيجة بكلماتك', body: 'استخدم المشغل عندما تعرف ما تريد، مثل العثور على مراجعات بلا رد أو إعداد خبر.' },
+    'operator-overview': { title: 'صف النتيجة التي تحتاجها', body: 'اكتب طلبًا عاديًا. يعد LocalOS النتيجة أو يطلب التفاصيل الناقصة. ينتظر النشر والإرسال والتغييرات الخارجية موافقتك.' },
+    'profile-nav': { title: 'امنح LocalOS سياق العمل الصحيح', body: 'راجع الاسم والنشاط والعنوان وجهات الاتصال. يجعل الملف الدقيق النصوص ملائمة ويفصل الفروع.' },
+    'finance-nav': { title: 'افهم ما يحرك الإيرادات', body: 'ارفع ملف CRM أو جدولاً لرؤية الإيراد ومتوسط الفاتورة والإشغال والخسائر. يوضح LocalOS فرص النمو.' },
+    'chats-nav': { title: 'حافظ على استمرار كل محادثة', body: 'راجع الرسائل المعدة والإرسالات والردود. تحقق من النص ووافق قبل أي إرسال خارجي.' },
+    'settings-nav': { title: 'عد LocalOS ليناسب عملك', body: 'اربط المصادر وحدد وصول الفريق وما يمكن لـ LocalOS إعداده. تحتاج الإجراءات الخارجية والحساسة إلى موافقتك.' },
+  },
+  ha: {
+    'today-nav': { title: 'Yau: san inda za a fara', body: 'Duba sabbin abubuwa, aikin da bai kammala ba da fifiko guda. Buɗe wannan shafi a farkon rana.' },
+    'today-overview': { title: 'Ga abin da ke jiran shawararka', body: 'Katin sama yana bayyana aiki mafi muhimmanci, dalilinsa da sakamakonsa. Maballin yana buɗe wurin aikin da ya dace.' },
+    'operator-nav': { title: 'Nemi sakamako da kalmominka', body: 'Yi amfani da Operator idan ka san abin da kake so, kamar nemo sharhin da ba a amsa ba ko shirya labari.' },
+    'operator-overview': { title: 'Bayyana sakamakon da kake buƙata', body: 'Rubuta buƙata a sauƙaƙe. LocalOS zai shirya sakamako ko ya nemi bayanin da ya rage. Wallafawa da canjin waje suna jiran amincewarka.' },
+    'profile-nav': { title: 'Ba LocalOS cikakken bayanin kasuwanci', body: 'Duba suna, fanni, adireshi da hanyoyin sadarwa. Ingantaccen bayani yana sa rubutu ya dace kuma rassan su rabu.' },
+    'finance-nav': { title: 'Fahimci abin da ke kawo kuɗi', body: 'Loda fayil daga CRM ko tebur don ganin kuɗin shiga, matsakaicin ciniki, cika lokaci da asara. LocalOS yana nuna inda za a bunƙasa.' },
+    'chats-nav': { title: 'Ci gaba da kowace tattaunawa', body: 'Duba saƙonnin da aka shirya, aikawa da amsoshi. Tabbatar da rubutu kafin a aika shi waje.' },
+    'settings-nav': { title: 'Daidaita LocalOS da kasuwancinka', body: 'Haɗa tushe, saita damar ƙungiya da abin da LocalOS zai iya shiryawa. Ayyukan waje da masu haɗari suna buƙatar amincewa.' },
+  },
+  tr: {
+    'today-nav': { title: 'Bugün: nereden başlayacağınızı bilin', body: 'Yeni gelişmeleri, yarım kalan işleri ve tek bir önceliği görün. Güne bu sayfayla başlayın.' },
+    'today-overview': { title: 'Kararınızı neyin beklediğini görün', body: 'Üst kart en önemli işi, neden önemli olduğunu ve sonucunu açıklar. Düğme doğru çalışma alanını açar.' },
+    'operator-nav': { title: 'Sonucu kendi sözlerinizle isteyin', body: 'Yanıtsız yorumları bulmak veya haber taslağı hazırlamak gibi istediğiniz sonucu biliyorsanız Operatörü kullanın.' },
+    'operator-overview': { title: 'İhtiyacınız olan sonucu anlatın', body: 'Normal bir istek yazın. LocalOS sonucu hazırlar veya eksik bilgiyi sorar. Yayınlama, gönderme ve dış değişiklikler onayınızı bekler.' },
+    'profile-nav': { title: 'LocalOS’a doğru işletme bağlamını verin', body: 'İşletme adını, türünü, adresini ve iletişim bilgilerini kontrol edin. Doğru profil metinleri uygun, şubeleri ayrı tutar.' },
+    'finance-nav': { title: 'Geliri neyin artırdığını anlayın', body: 'Gelir, ortalama sepet, doluluk ve kayıpları görmek için CRM dosyası veya tablo yükleyin. LocalOS büyüme alanlarını gösterir.' },
+    'chats-nav': { title: 'Her konuşmayı ilerletin', body: 'Hazırlanan mesajları, gönderimleri ve yanıtları tek yerde inceleyin. Dışarı göndermeden önce metni kontrol edip onaylayın.' },
+    'settings-nav': { title: 'LocalOS’u işletmenize göre ayarlayın', body: 'Kaynakları bağlayın, ekip erişimini belirleyin ve LocalOS’un neleri hazırlayabileceğini seçin. Dış ve riskli işlemler onay gerektirir.' },
+  },
+};
+
 type AutomationTourCopy = { chapter: string; nav: GuidedTourStepText; signals: GuidedTourStepText; today: GuidedTourStepText; employees: GuidedTourStepText; control: GuidedTourStepText };
 
 const automationCopy: Record<Language, AutomationTourCopy> = {
@@ -440,8 +543,8 @@ const automationCopy: Record<Language, AutomationTourCopy> = {
 
 const russianTourClarity: Record<string, GuidedTourStepText> = {
   welcome: { title: 'Что вы увидите за 8–10 минут', body: 'Пройдём по карточке бизнеса, отзывам, контент-плану, агентам и партнёрствам. На каждом шаге покажем конкретный экран и действие.' },
-  'operator-nav': { title: 'Поставьте задачу в чате', body: 'Напишите Оператору: «покажи отзывы без ответа», «подготовь новость» или «открой финансовый отчёт». Те же команды можно отправлять через Telegram.' },
-  'operator-overview': { title: 'Что требует внимания сегодня', body: 'Вверху показаны незаконченные новости, устаревшие данные карт и другие задачи выбранного бизнеса. Нажмите на задачу, чтобы открыть нужный раздел.' },
+  'operator-nav': { title: 'Поручите задачу своими словами', body: 'Оператор нужен, когда вы уже знаете, чего хотите: например, найти отзывы без ответа или подготовить новость. Не нужно искать нужную кнопку.' },
+  'operator-overview': { title: 'Опишите нужный результат', body: 'Напишите задачу обычной фразой. LocalOS либо подготовит результат, либо уточнит недостающее. Публикации, отправки и изменения во внешних системах останутся на вашем подтверждении.' },
   'network-switcher': { title: 'Выберите филиал', body: 'Если точек несколько, переключите их здесь. После выбора показатели, рекомендации и действия относятся только к выбранному филиалу.' },
   'progress-nav': { title: 'Что уже сделано и что делать дальше', body: 'Раздел показывает работу по картам, контенту, партнёрствам, агентам и допродажам. Здесь видно выполненные шаги и задачи, которые ещё требуют решения.' },
   'progress-overview': { title: 'Сколько шагов подтверждено данными', body: 'Счётчик учитывает подключённые карты, готовые материалы, партнёрские предложения, результаты агентов и внедрённые допродажи.' },
@@ -486,7 +589,7 @@ export const guidedTourCopyForLanguage = (language: Language): GuidedTourCopy =>
   return {
     ...base,
     chapters: { ...base.chapters, automation: automation.chapter },
-    steps: { ...base.steps, 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.control, 'agents-review': automation.control, 'agents-history': automation.today, ...(language === 'ru' ? russianTourClarity : {}) },
+    steps: { ...base.steps, ...menuPurposeCopy[language], 'content-plan-setup': contentPlan, 'content-plan-preview': contentPlan, 'content-plan-save': contentPlan, 'content-plan-review': contentPlan, 'agents-nav': automation.nav, 'agents-signals': automation.signals, 'agents-today': automation.today, 'agents-employees': automation.employees, 'agents-control': automation.control, 'agents-run': automation.control, 'agents-review': automation.control, 'agents-history': automation.today, ...(language === 'ru' ? russianTourClarity : {}) },
   };
 };
 
