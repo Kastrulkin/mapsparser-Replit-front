@@ -669,7 +669,10 @@ export const ProgressPage = () => {
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">{copy.mapsAndReputation}</div>
               <h2 id="full-audit-title" className="mt-1 text-xl font-semibold text-balance">{copy.fullAudit}</h2>
               <p className="mt-1 text-sm leading-6 text-pretty text-slate-300">
-                {selectedAuditLocation ? `${copy.location}: ${localizedProgressBusinessName(language, selectedAuditLocation.name)}. ` : ''}{copy.auditDescription}
+                {selectedAuditLocation ? (
+                  <span>{copy.location}: {localizedProgressBusinessName(language, selectedAuditLocation.name)}. </span>
+                ) : null}
+                <span>{copy.auditDescription}</span>
               </p>
             </div>
             <div className="flex items-center gap-2">
