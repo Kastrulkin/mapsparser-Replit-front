@@ -37,6 +37,7 @@ SAFE_INTERNAL_DRAFT_CAPABILITIES = {"content_plan.item.create_draft"}
 
 def build_workflow_dsl_document(version_payload: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
     compiled_process = metadata.get("compiled_process") if isinstance(metadata.get("compiled_process"), dict) else {}
+    compiler_contract = metadata.get("compiler_contract") if isinstance(metadata.get("compiler_contract"), dict) else {}
     snapshot_dsl = _snapshot_dsl(metadata)
     required_bindings = (
         version_payload.get("required_integration_bindings")
@@ -74,7 +75,12 @@ def build_workflow_dsl_document(version_payload: Dict[str, Any], metadata: Dict[
         "output_schema": version_payload.get("output_schema") if isinstance(version_payload.get("output_schema"), dict) else {},
         "runtime": {
             "truth": str(compiled_process.get("runtime_truth") or "agent_blueprint_versions.steps_json"),
-            "llm_required": bool((metadata.get("compiler_contract") or {}).get("runtime_llm_required")) if isinstance(metadata.get("compiler_contract"), dict) else False,
+            "planner_required": bool(
+                compiler_contract.get("runtime_planner_required")
+                if "runtime_planner_required" in compiler_contract
+                else compiler_contract.get("runtime_llm_required")
+            ),
+            "model_steps": _runtime_model_steps(version_payload, compiler_contract),
         },
     }
 
@@ -232,6 +238,47 @@ def _clean_string_list(value: Any) -> List[str]:
         cleaned = str(item or "").strip()
         if cleaned:
             result.append(cleaned)
+    return result
+
+
+def _runtime_model_steps(version_payload: Dict[str, Any], compiler_contract: Dict[str, Any]) -> List[Dict[str, str]]:
+    configured = compiler_contract.get("runtime_model_steps")
+    if isinstance(configured, list):
+        result: List[Dict[str, str]] = []
+        for item in configured:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip()
+            if not key:
+                continue
+            result.append(
+                {
+                    "key": key,
+                    "purpose": str(item.get("purpose") or "semantic transformation").strip(),
+                    "input_schema": str(item.get("input_schema") or "fixed").strip(),
+                    "output_schema": str(item.get("output_schema") or "fixed").strip(),
+                    "fallback": str(item.get("fallback") or "human_review").strip(),
+                }
+            )
+        return result
+
+    result = []
+    steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
+    for step in steps:
+        if not isinstance(step, dict) or step.get("bounded_model_call") is not True:
+            continue
+        key = str(step.get("key") or "").strip()
+        if not key:
+            continue
+        result.append(
+            {
+                "key": key,
+                "purpose": str(step.get("model_purpose") or step.get("title") or "semantic transformation").strip(),
+                "input_schema": str(step.get("model_input_schema") or "fixed").strip(),
+                "output_schema": str(step.get("model_output_schema") or "fixed").strip(),
+                "fallback": str(step.get("model_fallback") or "human_review").strip(),
+            }
+        )
     return result
 
 

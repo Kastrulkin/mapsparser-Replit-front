@@ -617,6 +617,8 @@ def test_agent_metrics_summary_reports_compiled_runtime_health():
 
     assert metrics["schema"] == "agent_metrics_summary_v1"
     assert metrics["compiled"]["validation_valid"] is True
+    assert metrics["compiled"]["runtime_planner_required"] is False
+    assert metrics["compiled"]["runtime_model_steps"] == []
     assert metrics["compiled"]["runtime_llm_required"] is False
     assert metrics["versions"]["active_version_number"] == 1
     assert metrics["runs"]["by_status"] == {"completed": 1, "failed": 1}
@@ -671,7 +673,230 @@ def test_existing_agent_templates_publish_compiled_artifact_candidate():
         assert draft["metadata"]["compiled_process"]["schema"] == schema
         assert draft["metadata"]["compiled_artifact_candidate"]["status"] == "validation_passed"
         assert draft["metadata"]["compiled_validation"]["valid"] is True
+        assert draft["metadata"]["compiler_contract"]["runtime_planner_required"] is False
+        assert draft["metadata"]["compiler_contract"]["runtime_model_steps"] == []
         assert draft["metadata"]["compiler_contract"]["runtime_llm_required"] is False
+
+
+def test_compiled_ai_v2_separates_runtime_planner_from_bounded_model_steps():
+    from services.agent_compiled_artifact import build_compiled_artifact_candidate
+
+    version_payload = {
+        "steps": [
+            {
+                "key": "summarize_signals",
+                "type": "artifact",
+                "title": "Summarize signals",
+                "bounded_model_call": True,
+                "model_purpose": "Summarize registered business signals",
+                "model_input_schema": "business_signals_v1",
+                "model_output_schema": "owner_digest_v1",
+                "model_fallback": "human_review",
+            }
+        ],
+        "capability_allowlist": [],
+        "approval_policy": {},
+        "limits": {"autonomous_external_write_allowed": False},
+        "output_schema": {"type": "object"},
+        "side_effects_performed": False,
+    }
+    metadata = {
+        "compiled_process": {"schema": "compiled_digest_v1"},
+        "compiler_contract": {"runtime_planner_required": False},
+    }
+
+    candidate = build_compiled_artifact_candidate(version_payload, metadata)
+
+    assert candidate["runtime_planner_required"] is False
+    assert candidate["runtime_llm_required"] is False
+    assert candidate["runtime_model_steps"] == [
+        {
+            "key": "summarize_signals",
+            "purpose": "Summarize registered business signals",
+            "input_schema": "business_signals_v1",
+            "output_schema": "owner_digest_v1",
+            "fallback": "human_review",
+        }
+    ]
+
+
+def test_agent_template_catalog_is_separate_and_exposes_four_certification_gates():
+    from services.agent_template_catalog import build_agent_template_catalog
+
+    templates = build_agent_template_catalog()
+
+    assert len(templates) == 10
+    assert len([item for item in templates if item["certification_status"] == "beta"]) == 6
+    assert {item["key"] for item in templates} >= {
+        "daily_owner_digest",
+        "negative_review_reply",
+        "service_seo_cleanup",
+        "card_posts_from_signals",
+        "tomorrow_bookings_check",
+        "google_sheets_business_result",
+    }
+    for template in templates:
+        assert set(template["certification_gates"]) == {"security", "schema", "execution", "accuracy"}
+        assert template["certification_gates"]["schema"]["passed"] is True
+        assert template["certification_gates"]["execution"]["passed"] is False
+        assert template["certification_gates"]["accuracy"]["passed"] is False
+        assert len(template["fixtures"]) == 9
+        assert template["certification_evidence"]["certification_decision"] == "pilot_evidence_required"
+        assert template["workflow_dsl"]["runtime"]["planner_required"] is False
+
+
+def test_regular_agent_list_hides_seeded_account_examples():
+    from api.agent_blueprints_api import _without_archived_clause
+
+    regular_clause = _without_archived_clause("WHERE b.business_id = %s")
+    support_clause = _without_archived_clause("WHERE b.business_id = %s", include_account_examples=True)
+
+    assert "is_account_example" in regular_clause
+    assert "is_account_example" not in support_clause
+    assert "b.status <> 'archived'" in regular_clause
+
+
+def test_use_agent_template_is_idempotent_for_business_and_template_version(monkeypatch):
+    from flask import Flask
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.blueprint = None
+            self.result = None
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            values = params or ()
+            if normalized.startswith("select pg_advisory_xact_lock"):
+                self.result = {"locked": True}
+            elif normalized.startswith("select * from agent_blueprints") and "template_key" in normalized:
+                self.result = self.blueprint
+            elif normalized.startswith("insert into agent_blueprints"):
+                metadata = json.loads(values[6])
+                self.blueprint = {
+                    "id": values[0],
+                    "business_id": values[1],
+                    "name": values[2],
+                    "category": values[3],
+                    "description": values[4],
+                    "status": "draft",
+                    "created_by_user_id": values[5],
+                    "metadata_json": metadata,
+                }
+
+        def fetchone(self):
+            return self.result
+
+    class Connection:
+        def __init__(self, cursor):
+            self.cursor_instance = cursor
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+    class Database:
+        def __init__(self, cursor):
+            self.conn = Connection(cursor)
+
+        def close(self):
+            return None
+
+    cursor = Cursor()
+    database = Database(cursor)
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user1"}, None))
+    monkeypatch.setattr(agent_blueprints_api, "_require_business_access", lambda current, business_id, user: (True, None))
+    monkeypatch.setattr(agent_blueprints_api, "_insert_version", lambda current, blueprint_id, payload, user: {"id": "version1"})
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda current, blueprint_id: cursor.blueprint)
+    app = Flask(__name__)
+
+    with app.test_request_context(json={"business_id": "biz1"}, method="POST"):
+        first_response, first_status = agent_blueprints_api.use_agent_template("daily_owner_digest")
+    with app.test_request_context(json={"business_id": "biz1"}, method="POST"):
+        second_response = agent_blueprints_api.use_agent_template("daily_owner_digest")
+
+    assert first_status == 201
+    assert first_response.get_json()["created"] is True
+    assert second_response.get_json()["created"] is False
+    assert first_response.get_json()["blueprint"]["id"] == second_response.get_json()["blueprint"]["id"]
+
+
+def test_draft_template_cannot_be_used_in_self_service(monkeypatch):
+    from flask import Flask
+    from api import agent_blueprints_api
+
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user1"}, None))
+    app = Flask(__name__)
+    with app.test_request_context(json={"business_id": "biz1"}, method="POST"):
+        response, status = agent_blueprints_api.use_agent_template("partnership_outreach_draft")
+
+    assert status == 409
+    assert response.get_json()["code"] == "AGENT_TEMPLATE_NOT_AVAILABLE"
+
+
+def test_workflow_graph_roundtrip_preserves_dsl_step_semantics_and_ignores_positions():
+    from services.agent_template_catalog import build_agent_from_template
+    from services.agent_workflow_dsl import build_workflow_dsl_document
+    from services.agent_workflow_graph import workflow_dsl_to_graph, workflow_graph_to_steps
+
+    bundle = build_agent_from_template("negative_review_reply")
+    draft = bundle["draft"]
+    dsl = build_workflow_dsl_document(draft["version_payload"], draft["metadata"])
+    graph = workflow_dsl_to_graph(dsl)
+    graph["nodes"][0]["position"] = {"x": 999, "y": -40}
+
+    restored_steps = workflow_graph_to_steps(graph)
+
+    assert restored_steps == dsl["steps"]
+
+
+def test_workflow_graph_rejects_unknown_nodes_dangling_edges_and_cycles():
+    from services.agent_workflow_graph import validate_workflow_graph
+
+    graph = {
+        "nodes": [
+            {"id": "a", "kind": "arbitrary_code", "config": {"key": "a", "type": "artifact"}},
+            {"id": "b", "kind": "artifact", "config": {"key": "b", "type": "artifact"}},
+        ],
+        "edges": [
+            {"source": "a", "target": "b"},
+            {"source": "b", "target": "a"},
+            {"source": "b", "target": "missing"},
+        ],
+    }
+
+    validation = validate_workflow_graph(graph)
+
+    assert validation["valid"] is False
+    assert {item["code"] for item in validation["errors"]} >= {
+        "unknown_node_kind",
+        "dangling_edge",
+        "invalid_topology",
+    }
+
+
+def test_workflow_graph_requires_approval_before_protected_action():
+    from services.agent_workflow_graph import validate_workflow_step_approval_order
+
+    protected_action = {
+        "key": "publish",
+        "type": "capability",
+        "requires_approval": True,
+        "required_approval_type": "publish_content",
+    }
+    approval = {"key": "approve", "type": "approval", "approval_type": "publish_content"}
+
+    assert validate_workflow_step_approval_order([approval, protected_action])["valid"] is True
+    invalid = validate_workflow_step_approval_order([protected_action, approval])
+    assert invalid["valid"] is False
+    assert invalid["errors"][0]["code"] == "approval_order_invalid"
 
 
 def test_agent_compiler_uses_gigachat_only_at_design_time(monkeypatch):

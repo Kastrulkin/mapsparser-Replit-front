@@ -19,6 +19,8 @@ from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 from services.agent_builder_billing import charge_agent_creation_credits
 from services.agent_builder_session import build_agent_builder_state, preview_to_setup
 from services.agent_compiled_artifact import validate_compiled_artifact_candidate
+from services.agent_workflow_dsl import build_workflow_dsl_document
+from services.agent_workflow_graph import validate_workflow_graph, validate_workflow_step_approval_order, workflow_dsl_to_graph, workflow_graph_to_steps
 from services.agent_blueprint_workspace import (
     build_agent_version_diff,
     build_blueprint_review,
@@ -46,6 +48,7 @@ from services.agent_provider_registry import (
 )
 from services.agent_integration_preflight import NATIVE_READY_PROVIDERS, build_agent_integration_preflight
 from services.agent_metrics import build_agent_metrics_summary
+from services.agent_template_catalog import build_agent_from_template, build_agent_template_catalog, get_agent_template
 from services.agent_capability_handlers import capability_runtime_contract
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema, validate_agent_run_input
 from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
@@ -61,9 +64,146 @@ from api.agent_builder_api import (
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
 
 
+@agent_blueprints_bp.route("/api/agent-templates", methods=["GET"])
+def list_agent_templates():
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    status_filter = str(request.args.get("status") or "").strip()
+    templates = build_agent_template_catalog()
+    if status_filter:
+        templates = [item for item in templates if item.get("certification_status") == status_filter]
+    return jsonify({"success": True, "templates": templates, "count": len(templates)})
+
+
+@agent_blueprints_bp.route("/api/agent-templates/<template_key>", methods=["GET"])
+def get_agent_template_manifest(template_key: str):
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    template = get_agent_template(template_key)
+    if not template:
+        return _json_error("Template not found", 404, "AGENT_TEMPLATE_NOT_FOUND")
+    return jsonify({"success": True, "template": template})
+
+
+@agent_blueprints_bp.route("/api/agent-templates/<template_key>/use", methods=["POST"])
+def use_agent_template(template_key: str):
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return _json_error("business_id is required", 400, "VALIDATION_ERROR")
+    template_bundle = build_agent_from_template(template_key)
+    if not template_bundle:
+        return _json_error("Template not found", 404, "AGENT_TEMPLATE_NOT_FOUND")
+    definition = template_bundle["definition"]
+    draft = template_bundle["draft"]
+    if definition.get("certification_status") not in {"beta", "certified"}:
+        return _json_error(
+            "Template is not available for self-service yet",
+            409,
+            "AGENT_TEMPLATE_NOT_AVAILABLE",
+        )
+    template_version = str(definition["version"])
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        allowed, access_error = _require_business_access(cursor, business_id, user_data)
+        if not allowed:
+            return access_error
+        lock_key = f"agent-template:{business_id}:{template_key}:{template_version}"
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))
+        cursor.execute(
+            """
+            SELECT *
+            FROM agent_blueprints
+            WHERE business_id = %s
+              AND metadata_json->>'template_key' = %s
+              AND metadata_json->>'template_version' = %s
+              AND status <> 'archived'
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (business_id, template_key, template_version),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            db.conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "created": False,
+                    "blueprint": _normalize_json_row(dict(existing)),
+                    "template_key": template_key,
+                    "template_version": template_version,
+                }
+            )
+        blueprint_id = str(uuid.uuid4())
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata = dict(metadata)
+        version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
+        trigger = str(version_payload.get("trigger") or "manual.run")
+        metadata.update(
+            {
+                "template_key": template_key,
+                "template_version": template_version,
+                "created_from_template": True,
+                "is_account_example": False,
+                "execution_mode": "scheduled" if trigger == "schedule.daily" else "manual",
+                "execution_mode_confirmed_at": _utc_now_text(),
+                "execution_mode_confirmed_by_user_id": _user_id(user_data),
+                "required_connectors": definition.get("required_connections") or [],
+                "template_certification_status": definition.get("certification_status") or "draft",
+            }
+        )
+        cursor.execute(
+            """
+            INSERT INTO agent_blueprints (
+                id, business_id, name, category, description, status, created_by_user_id, metadata_json
+            )
+            VALUES (%s, %s, %s, %s, %s, 'draft', %s, %s::jsonb)
+            """,
+            (
+                blueprint_id,
+                business_id,
+                str(definition["name"]),
+                str(draft.get("category") or "custom"),
+                str(definition["business_result"]),
+                _user_id(user_data),
+                json.dumps(metadata, ensure_ascii=False),
+            ),
+        )
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        db.conn.commit()
+        blueprint = _load_blueprint(cursor, blueprint_id)
+        return jsonify(
+            {
+                "success": True,
+                "created": True,
+                "blueprint": _normalize_json_row(blueprint),
+                "version": version,
+                "template_key": template_key,
+                "template_version": template_version,
+                "next_step": "review_scenario",
+            }
+        ), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _env_enabled(name: str, default: bool = False) -> bool:
     fallback = "true" if default else "false"
     return str(os.getenv(name, fallback)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _truthy_value(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _env_positive_int(name: str, default: int) -> int:
@@ -2803,10 +2943,14 @@ def _require_blueprint_access(cursor, blueprint_id: str, user_data: dict):
     return blueprint, None
 
 
-def _without_archived_clause(where_sql: str) -> str:
+def _without_archived_clause(where_sql: str, include_account_examples: bool = False) -> str:
+    conditions = ["b.status <> 'archived'"]
+    if not include_account_examples:
+        conditions.append("COALESCE(b.metadata_json->>'is_account_example', 'false') <> 'true'")
+    conjunction = " AND ".join(conditions)
     if where_sql.strip():
-        return f"{where_sql} AND b.status <> 'archived'"
-    return "WHERE b.status <> 'archived'"
+        return f"{where_sql} AND {conjunction}"
+    return f"WHERE {conjunction}"
 
 
 def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
@@ -2979,6 +3123,9 @@ def list_agent_blueprints():
     cursor = db.conn.cursor()
     try:
         business_id = str(request.args.get("business_id") or "").strip()
+        include_account_examples = bool(user_data.get("is_superadmin")) and _truthy_value(
+            request.args.get("include_examples")
+        )
         params = []
         where_sql = ""
         if business_id:
@@ -3065,7 +3212,7 @@ def list_agent_blueprints():
                 FROM agent_blueprint_versions
                 WHERE blueprint_id = b.id
             ) vs ON TRUE
-            {_without_archived_clause(where_sql)}
+            {_without_archived_clause(where_sql, include_account_examples)}
             ORDER BY b.created_at DESC
             LIMIT 200
             """,
@@ -3436,6 +3583,121 @@ def apply_agent_blueprint_legacy_migration():
         result = apply_legacy_ai_agent_migration(cursor, business_id, _user_id(user_data))
         db.conn.commit()
         return jsonify({"success": True, "migration": result})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/graph", methods=["GET"])
+def get_agent_blueprint_graph(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        candidate = _resolve_candidate_version(cursor, blueprint)
+        if not candidate:
+            return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
+        version_payload = build_version_payload_from_row(candidate)
+        dsl = build_workflow_dsl_document(version_payload, _blueprint_metadata(blueprint))
+        return jsonify(
+            {
+                "success": True,
+                "blueprint_id": blueprint_id,
+                "version_id": str(candidate.get("id") or ""),
+                "version_number": _version_number(candidate),
+                "graph": workflow_dsl_to_graph(dsl),
+                "editing_contract": {
+                    "mode": "registered_nodes_only",
+                    "active_version_unchanged": True,
+                    "save_creates_candidate_version": True,
+                    "requires_preview_before_activation": True,
+                },
+            }
+        )
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/graph/candidate", methods=["POST"])
+def create_agent_graph_candidate(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    graph = payload.get("graph") if isinstance(payload.get("graph"), dict) else {}
+    graph_validation = validate_workflow_graph(graph)
+    if not graph_validation["valid"]:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Схема содержит недопустимые связи.",
+                "code": "AGENT_GRAPH_INVALID",
+                "validation": graph_validation,
+            }
+        ), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        candidate = _resolve_candidate_version(cursor, blueprint)
+        if not candidate:
+            return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
+        version_payload = build_version_payload_from_row(candidate)
+        original_steps = normalize_steps(version_payload.get("steps"))
+        original_by_key = {
+            str(step.get("key") or step.get("id") or ""): step
+            for step in original_steps
+            if str(step.get("key") or step.get("id") or "").strip()
+        }
+        ordered_graph_steps = workflow_graph_to_steps(graph)
+        ordered_keys = [str(step.get("key") or "") for step in ordered_graph_steps]
+        if set(ordered_keys) != set(original_by_key) or len(ordered_keys) != len(original_by_key):
+            return _json_error(
+                "Добавлять или удалять шаги в этой версии редактора нельзя.",
+                400,
+                "AGENT_GRAPH_NODE_SET_CHANGED",
+            )
+        version_payload["steps"] = [original_by_key[key] for key in ordered_keys]
+        approval_order_validation = validate_workflow_step_approval_order(version_payload["steps"])
+        if not approval_order_validation["valid"]:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Подтверждение должно находиться перед защищённым действием.",
+                    "code": "AGENT_GRAPH_APPROVAL_ORDER_INVALID",
+                    "validation": approval_order_validation,
+                }
+            ), 400
+        compiled_validation = validate_compiled_artifact_candidate(version_payload, _blueprint_metadata(blueprint))
+        if not compiled_validation.get("ready"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Процесс не прошёл backend-проверку.",
+                    "code": "AGENT_GRAPH_COMPILED_VALIDATION_FAILED",
+                    "validation": compiled_validation.get("validation") or {},
+                }
+            ), 400
+        version_payload["change_note"] = "Порядок шагов изменён в визуальном редакторе"
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "candidate_version": version,
+                "active_version_unchanged": True,
+                "next_step": "run_preview",
+            }
+        ), 201
     except Exception:
         db.conn.rollback()
         raise

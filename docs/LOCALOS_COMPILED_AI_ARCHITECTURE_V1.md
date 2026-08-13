@@ -1,14 +1,20 @@
 # LocalOS Compiled AI Architecture v1
 
-Обновлено: 19 июля 2026
-Статус: canonical implementation and rollout contract for LocalOS Compiled AI v1
+Обновлено: 13 августа 2026
+Статус: canonical implementation and rollout contract for LocalOS Compiled AI; v1 schema names are retained for compatibility
 
 ## Цель
 
 LocalOS Compiled AI превращает человеческое описание агента в проверенный
-исполняемый workflow. ИИ может использоваться на этапе проектирования, но
-runtime truth остается deterministic: сохраненная версия blueprint, capability
+исполняемый workflow. ИИ может использоваться на этапе проектирования и в
+зарегистрированных смысловых шагах, но не управляет runtime-планом. Runtime
+truth остается deterministic: сохраненная версия blueprint, capability
 allowlist, approval policy, connector bindings, limits and audit trail.
+
+Контракт следует второй версии препринта Compiled AI от 31 июля 2026 года:
+детерминированный control plane отделён от ограниченных model calls. Схемы DSL
+с суффиксом `v1` не переименованы, потому что это версия формата данных, а не
+ссылка на редакцию исследования.
 
 ## Pipeline
 
@@ -52,12 +58,29 @@ The candidate is stored in blueprint metadata as a control-plane snapshot:
 - `dsl` — normalized workflow DSL;
 - `validation` — current validation result;
 - `runtime_truth` — always the blueprint version row;
-- `runtime_llm_required` — must be false for deterministic compiled workflows;
+- `runtime_planner_required` — must be false: модель не выбирает следующий шаг;
+- `runtime_model_steps` — зарегистрированные ограниченные model calls с фиксированными purpose, input/output schema и fallback;
+- `runtime_llm_required` — legacy alias for `runtime_planner_required`;
 - `activation_gate` — validation + connector preflight requirements.
 
 The candidate is not a second runtime source of truth. Runtime still reads
 `agent_blueprint_versions.steps_json`, `capability_allowlist_json`,
 `approval_policy_json`, `inputs_schema_json` and `output_schema_json`.
+
+## Template catalog and visual graph
+
+`src/services/agent_template_catalog.py` is the product catalog. Reading
+`GET /api/agent-templates` has no side effects. A template becomes a personal
+blueprint only through `POST /api/agent-templates/<key>/use`; the operation is
+serialized per business, template key and template version, so a retry returns
+the existing draft instead of creating a duplicate. Draft templates outside
+the current beta/certified wave cannot be used through self-service.
+
+`src/services/agent_workflow_graph.py` maps DSL steps to visual nodes and back.
+The graph is an authoring projection, not an execution source. Coordinates are
+discarded during graph-to-steps conversion. Unknown node kinds, dangling
+edges, cycles, unreachable nodes and unsupported branches are rejected before
+a candidate version can be produced. Runtime never reads React Flow state.
 
 ## Validation v1
 

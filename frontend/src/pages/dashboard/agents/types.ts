@@ -353,6 +353,14 @@ export type AgentMetricsSummary = {
     error_count?: number;
     warning_count?: number;
     runtime_llm_required?: boolean;
+    runtime_planner_required?: boolean;
+    runtime_model_steps?: Array<{
+      key?: string;
+      purpose?: string;
+      input_schema?: string;
+      output_schema?: string;
+      fallback?: string;
+    }>;
   };
   versions?: {
     total?: number;
@@ -450,6 +458,20 @@ export type AgentBlueprintDetails = {
   metrics?: AgentMetricsSummary;
   activation_gate?: AgentActivationGate;
   execution_contract?: AgentExecutionContract;
+};
+
+export type AgentTemplate = {
+  key: string;
+  version: string;
+  name: string;
+  business_result: string;
+  vertical: string;
+  trigger: string;
+  required_connections: string[];
+  risk_level: 'low' | 'medium' | 'high';
+  certification_status: 'draft' | 'testing' | 'beta' | 'certified' | 'deprecated' | 'gap';
+  approval_policy?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
 };
 
 export type AgentExecutionContractStep = {

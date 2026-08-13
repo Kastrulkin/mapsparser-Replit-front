@@ -600,6 +600,8 @@ def _attach_compiled_metadata(metadata: Dict[str, Any], version_payload: Dict[st
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -1037,6 +1039,8 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -1803,6 +1807,8 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }
@@ -2237,6 +2243,8 @@ def _communications_compilation(request_text: str, preferred_template_key: str =
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",
         "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_planner_required": False,
+        "runtime_model_steps": [],
         "runtime_llm_required": False,
         "runtime_executes_compiled_steps": True,
     }

@@ -14,7 +14,9 @@ def build_compiled_artifact_candidate(version_payload: Dict[str, Any], metadata:
         "status": "validation_passed" if validation.get("valid") else "validation_failed",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "runtime_truth": dsl_document["runtime"]["truth"],
-        "runtime_llm_required": dsl_document["runtime"]["llm_required"],
+        "runtime_planner_required": dsl_document["runtime"]["planner_required"],
+        "runtime_model_steps": dsl_document["runtime"]["model_steps"],
+        "runtime_llm_required": dsl_document["runtime"]["planner_required"],
         "dsl": dsl_document,
         "validation": validation,
         "activation_gate": {
@@ -29,7 +31,7 @@ def validate_compiled_artifact_candidate(version_payload: Dict[str, Any], metada
     candidate = build_compiled_artifact_candidate(version_payload, metadata)
     validation = candidate.get("validation") if isinstance(candidate.get("validation"), dict) else {}
     return {
-        "ready": bool(validation.get("valid")) and candidate.get("runtime_llm_required") is False,
+        "ready": bool(validation.get("valid")) and candidate.get("runtime_planner_required") is False,
         "candidate": candidate,
         "validation": validation,
     }

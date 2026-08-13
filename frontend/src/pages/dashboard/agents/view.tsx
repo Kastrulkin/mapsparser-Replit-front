@@ -445,13 +445,14 @@ import {
   ApprovalPayloadSummary,
   ArtifactItem
 } from './runs';
+import { AgentTemplateGallery } from './template-gallery';
 
 
 export const AgentBlueprintsView = ({ scope }) => {
   const { language } = useLanguage();
   const pageCopy = getAgentsWorkspaceCopy(language);
   const {
-    location, currentBusinessId, blueprints, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails,
+    location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails,
     agentDetailsById, activeRun, setActiveRun, loading, actionLoading, error,
     agentSearch, setAgentSearch, agentRegistryFilter, setAgentRegistryFilter, runAnimation, runStatusFilter,
     setRunStatusFilter, runSource, setRunSource, runCity, setRunCity, runCategory,
@@ -478,7 +479,7 @@ export const AgentBlueprintsView = ({ scope }) => {
     setFeedbackTrigger, feedbackVersionNotice, legacyMigrationPlan, legacyMigrationNotice, recentCreatedAgentName, setRecentCreatedAgentName,
     recentPostCreateHandoff, setRecentPostCreateHandoff, showAdvancedAgentTools, deleteCandidate, setDeleteCandidate, decisionNotice,
     setDecisionNotice, googleAccessJustConnected, selectedBlueprint, pendingApproval, pendingApprovals, selectedPendingApproval,
-    queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints,
+    queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadBlueprintDetails,
     loadRun, startDialogBuilderSession, sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun,
     executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, rebuildScenario, activateVersion, deleteAgent,
     requestDeleteAgent, deleteSelectedAgent, decideApproval, saveAgentSetup, addTextSource, addInternalSource,
@@ -549,6 +550,15 @@ export const AgentBlueprintsView = ({ scope }) => {
           ))}
         </div>
       </section>
+
+      {currentBusinessId ? (
+        <AgentTemplateGallery
+          templates={agentTemplates}
+          loading={templatesLoading}
+          usingTemplateKey={usingTemplateKey}
+          onUse={useAgentTemplate}
+        />
+      ) : null}
 
       <Dialog open={createWizardOpen} onOpenChange={(open) => {
         setCreateWizardOpen(open);
@@ -995,6 +1005,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                     details={blueprintDetails}
                     actionLoading={actionLoading}
                     onRebuildScenario={rebuildScenario}
+                    onGraphCandidateCreated={() => loadBlueprintDetails(selectedBlueprint.id)}
                   />
                 ) : workspaceMode === 'results' ? (
                   <div className="space-y-4">

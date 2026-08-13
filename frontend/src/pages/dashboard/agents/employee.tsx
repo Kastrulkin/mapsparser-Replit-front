@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import {
   Activity,
@@ -264,6 +264,8 @@ import {
   HumanResultView
 } from './runs';
 import { TimezoneSelect } from './timezone-select';
+
+const AgentWorkflowGraph = lazy(() => import('./workflow-graph').then((module) => ({ default: module.AgentWorkflowGraph })));
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'Preflight и preview run',
@@ -1859,11 +1861,13 @@ export const EmployeeAgentScenarioPanel = ({
   details,
   actionLoading,
   onRebuildScenario,
+  onGraphCandidateCreated,
 }: {
   blueprint: AgentBlueprint;
   details: AgentBlueprintDetails | null;
   actionLoading: boolean;
   onRebuildScenario: () => void;
+  onGraphCandidateCreated: () => Promise<void>;
 }) => {
   const contract = details?.execution_contract;
   const working = contract?.candidate || contract?.active;
@@ -1883,6 +1887,57 @@ export const EmployeeAgentScenarioPanel = ({
   const connectionLabels = Object.keys(working?.connections || {}).map((key) => connectorLabel(key));
   const sources = Array.from(new Set([...sourceLabels, ...connectionLabels]));
   const mode = buildAgentUserMode(blueprint, details);
+  const [editingOrder, setEditingOrder] = useState(false);
+  const [orderedSteps, setOrderedSteps] = useState(working?.steps || []);
+  const [graphSaving, setGraphSaving] = useState(false);
+  const [graphError, setGraphError] = useState('');
+  useEffect(() => {
+    setOrderedSteps(working?.steps || []);
+    setEditingOrder(false);
+    setGraphError('');
+  }, [working?.steps, working?.version_id]);
+  const moveScenarioStep = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= orderedSteps.length) return;
+    setOrderedSteps((current) => {
+      const next = [...current];
+      const selected = next[index];
+      next[index] = next[target];
+      next[target] = selected;
+      return next;
+    });
+  };
+  const saveGraphCandidate = async () => {
+    setGraphSaving(true);
+    setGraphError('');
+    try {
+      const nodes = orderedSteps.map((step, index) => ({
+        id: step.key || `step_${index + 1}`,
+        kind: step.step_type === 'approval' ? 'approval' : step.step_type === 'capability' ? 'capability' : 'artifact',
+        title: step.title || `Шаг ${index + 1}`,
+        position: { x: index * 280, y: index % 2 === 0 ? 40 : 150 },
+        config: {
+          key: step.key || `step_${index + 1}`,
+          type: step.step_type || 'artifact',
+          title: step.title || `Шаг ${index + 1}`,
+        },
+      }));
+      const edges = nodes.slice(0, -1).map((node, index) => ({
+        id: `${node.id}:${nodes[index + 1].id}`,
+        source: node.id,
+        target: nodes[index + 1].id,
+      }));
+      await api.post(`/agent-blueprints/${blueprint.id}/graph/candidate`, {
+        graph: { schema: 'localos_agent_workflow_graph_v1', nodes, edges },
+      });
+      await onGraphCandidateCreated();
+      setEditingOrder(false);
+    } catch (requestError) {
+      setGraphError(getRequestErrorMessage(requestError, 'Не удалось проверить новый порядок шагов.'));
+    } finally {
+      setGraphSaving(false);
+    }
+  };
   return (
     <div className="space-y-4 max-w-5xl">
       {contract?.has_unpublished_changes ? (
@@ -1921,16 +1976,42 @@ export const EmployeeAgentScenarioPanel = ({
         {sources.length ? <div className="flex flex-wrap gap-2">{sources.map((source) => <span key={source} className="rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 ring-1 ring-sky-200">{source}</span>)}</div> : <p className="text-sm text-slate-600">Агент использует данные LocalOS и введённые параметры.</p>}
       </EmployeeWorkspaceSection>
       <EmployeeWorkspaceSection title="Как выполняется">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-6 text-slate-600">Схема показывает реальную candidate-версию. Рабочая версия не изменится до теста и включения.</p>
+          <Button type="button" variant="outline" className="min-h-10 shrink-0" onClick={() => setEditingOrder((current) => !current)} disabled={graphSaving || !orderedSteps.length}>
+            {editingOrder ? 'Отменить изменение' : 'Изменить порядок'}
+          </Button>
+        </div>
+        <Suspense fallback={<div className="h-[360px] animate-pulse rounded-3xl bg-slate-100" aria-label="Загружается схема процесса" />}>
+          <AgentWorkflowGraph steps={orderedSteps} />
+        </Suspense>
         <div className="grid gap-2">
-          {(working?.steps || []).map((step, index) => (
+          {orderedSteps.map((step, index) => (
             <div key={step.key || index} className="flex min-h-12 items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
               <span className="text-sm font-medium text-slate-800">{step.title || `Шаг ${index + 1}`}</span>
               {step.requires_approval ? <span className="ml-auto text-xs font-medium text-amber-700">Попросит решение</span> : null}
+              {editingOrder ? (
+                <div className={cn('flex gap-1', step.requires_approval ? '' : 'ml-auto')}>
+                  <Button type="button" size="sm" variant="outline" className="min-h-10 min-w-10 px-2" onClick={() => moveScenarioStep(index, -1)} disabled={index === 0} aria-label={`Поднять шаг ${index + 1}`}>↑</Button>
+                  <Button type="button" size="sm" variant="outline" className="min-h-10 min-w-10 px-2" onClick={() => moveScenarioStep(index, 1)} disabled={index === orderedSteps.length - 1} aria-label={`Опустить шаг ${index + 1}`}>↓</Button>
+                </div>
+              ) : null}
             </div>
           ))}
           {!working?.steps?.length ? <p className="text-sm text-amber-800">Для старой версии нет полного списка шагов. Пересоберите сценарий перед включением.</p> : null}
         </div>
+        {editingOrder ? (
+          <div className="mt-3 rounded-2xl bg-sky-50 p-3 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.18)]">
+            <div className="text-sm font-semibold text-sky-950">Изменения сохранятся как новая версия</div>
+            <p className="mt-1 text-pretty text-sm leading-6 text-sky-800">LocalOS повторно проверит связи, approvals и разрешённые действия. Затем потребуется безопасный тест.</p>
+            {graphError ? <p className="mt-2 text-sm font-medium text-rose-700">{graphError}</p> : null}
+            <Button type="button" className="mt-3 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={saveGraphCandidate} disabled={graphSaving}>
+              {graphSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+              Проверить процесс
+            </Button>
+          </div>
+        ) : null}
       </EmployeeWorkspaceSection>
       <div className="grid gap-4 lg:grid-cols-2">
         <EmployeeWorkspaceSection title="Что получает на вход">

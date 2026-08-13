@@ -7,7 +7,7 @@ import type {
   DashboardContext, AgentBlueprint, AgentRun, AgentServerTodaySummary, AgentBlueprintDetails, AgentLearningLoop,
   AgentSourceCatalogItem, AgentIntegration, AgentExternalAuthOption, AgentIntegrationCatalogItem, AgentIntegrationBindingStatus, AgentProviderRoute,
   AgentConnectionPlan, AgentPostCreateHandoff, AgentReview, AgentBuilderScenario, PersonaAgent, LegacyMigrationPlan,
-  AgentWorkspaceMode, AgentExecutionMode, AgentRegistryFilter, AgentRunAnimation, FeedbackVersionNotice, AgentBuilderSession
+  AgentWorkspaceMode, AgentExecutionMode, AgentRegistryFilter, AgentRunAnimation, FeedbackVersionNotice, AgentBuilderSession, AgentTemplate
 } from './agents/types';
 import {
   getRequestErrorMessage, recordValue, normalizeSpreadsheetInput, normalizePostCreateHandoff, normalizeAgentIntegrationPreflight, normalizeConnectionPlan,
@@ -91,6 +91,9 @@ const AgentBlueprintsWorkspace = () => {
   const location = useLocation();
   const { currentBusinessId, currentBusiness, demoMode } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
+  const [agentTemplates, setAgentTemplates] = useState<AgentTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [usingTemplateKey, setUsingTemplateKey] = useState('');
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [blueprintDetails, setBlueprintDetails] = useState<AgentBlueprintDetails | null>(null);
   const [agentDetailsById, setAgentDetailsById] = useState<Record<string, AgentBlueprintDetails>>({});
@@ -389,6 +392,50 @@ const AgentBlueprintsWorkspace = () => {
   useEffect(() => {
     void loadBlueprints();
   }, [loadBlueprints]);
+
+  const loadAgentTemplates = useCallback(async () => {
+    if (!currentBusinessId || demoMode) {
+      setAgentTemplates([]);
+      return;
+    }
+    setTemplatesLoading(true);
+    try {
+      const response = await api.get('/agent-templates');
+      setAgentTemplates(Array.isArray(response.data?.templates) ? response.data.templates : []);
+    } catch (requestError) {
+      console.error(requestError);
+      setAgentTemplates([]);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [currentBusinessId, demoMode]);
+
+  useEffect(() => {
+    void loadAgentTemplates();
+  }, [loadAgentTemplates]);
+
+  const useAgentTemplate = useCallback(async (template: AgentTemplate) => {
+    if (!currentBusinessId || usingTemplateKey) return;
+    setUsingTemplateKey(template.key);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-templates/${template.key}/use`, { business_id: currentBusinessId });
+      const blueprint = response.data?.blueprint;
+      await loadBlueprints();
+      if (blueprint?.id) {
+        setSelectedBlueprintId(blueprint.id);
+        setWorkspaceMode('scenario');
+      }
+      setDecisionNotice(response.data?.created === false
+        ? 'Этот агент уже был создан. Открыли его текущий сценарий.'
+        : 'Агент подготовлен. Проверьте сценарий и запустите безопасный тест.');
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось использовать готовую практику.'));
+    } finally {
+      setUsingTemplateKey('');
+    }
+  }, [currentBusinessId, loadBlueprints, usingTemplateKey]);
 
   const loadLegacyMigrationPlan = useCallback(async () => {
     if (!currentBusinessId) {
@@ -2217,7 +2264,7 @@ const AgentBlueprintsWorkspace = () => {
   return (
     <AgentBlueprintsView
       scope={{
-      location, currentBusinessId, blueprints, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails, agentDetailsById, activeRun, setActiveRun, loading,
+      location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails, agentDetailsById, activeRun, setActiveRun, loading,
       actionLoading, error, agentSearch, setAgentSearch, agentRegistryFilter, setAgentRegistryFilter, runAnimation, runStatusFilter, setRunStatusFilter, runSource,
       setRunSource, runCity, setRunCity, runCategory, setRunCategory, runLimit, setRunLimit, runParameters, setRunParameters, runParameterErrors,
       setRunParameterErrors, createWizardOpen, setCreateWizardOpen, createWizardStep, setCreateWizardStep, workspaceMode, setWorkspaceMode, availablePersonaAgents, agentPrompt, setAgentPrompt,
@@ -2233,7 +2280,7 @@ const AgentBlueprintsWorkspace = () => {
       setMatonDailyCap, processRowValues, setProcessRowValues, processPreviewMessage, setProcessPreviewMessage, scheduleTime, setScheduleTime, scheduleTimezone, setScheduleTimezone, selectedExecutionMode,
       setSelectedExecutionMode, feedbackText, setFeedbackText, feedbackTrigger, setFeedbackTrigger, feedbackVersionNotice, legacyMigrationPlan, legacyMigrationNotice, recentCreatedAgentName, setRecentCreatedAgentName,
       recentPostCreateHandoff, setRecentPostCreateHandoff, showAdvancedAgentTools, deleteCandidate, setDeleteCandidate, decisionNotice, setDecisionNotice, googleAccessJustConnected, selectedBlueprint, pendingApproval,
-      pendingApprovals, selectedPendingApproval, queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadRun, startDialogBuilderSession,
+      pendingApprovals, selectedPendingApproval, queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadBlueprintDetails, loadRun, startDialogBuilderSession,
       sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun, executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, rebuildScenario, activateVersion, deleteAgent,
       requestDeleteAgent, deleteSelectedAgent, decideApproval, saveAgentSetup, addTextSource, addInternalSource, addInternalSourceByKey, addFileSource, saveSheetIntegration, saveBrowserUseIntegration,
       saveTelegramIntegration, saveWhatsappIntegration, saveMatonIntegration, chooseProviderRoute, attachExistingAgentIntegration, saveCustomProcess, runCustomProcessPreview, applyLegacyMigration, sendRunFeedback, postCreateReadyForRun,

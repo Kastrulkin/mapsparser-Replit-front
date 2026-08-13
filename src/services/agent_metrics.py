@@ -36,7 +36,9 @@ def build_agent_metrics_summary(
             "validation_valid": bool(validation.get("valid")) if validation else False,
             "error_count": len(validation.get("errors") or []) if isinstance(validation.get("errors"), list) else 0,
             "warning_count": len(validation.get("warnings") or []) if isinstance(validation.get("warnings"), list) else 0,
-            "runtime_llm_required": bool(candidate.get("runtime_llm_required")) if candidate else False,
+            "runtime_planner_required": bool(candidate.get("runtime_planner_required")) if candidate else False,
+            "runtime_model_steps": candidate.get("runtime_model_steps") if isinstance(candidate.get("runtime_model_steps"), list) else [],
+            "runtime_llm_required": bool(candidate.get("runtime_planner_required")) if candidate else False,
         },
         "versions": {
             "total": len(versions),
