@@ -214,7 +214,7 @@ def test_progress_pause_round_trip_preserves_completed_steps(monkeypatch):
     row = {
         "id": "progress-id",
         "tour_key": "roga-i-kopyta-v1",
-        "tour_version": 4,
+        "tour_version": 5,
         "status": "paused",
         "chapter_key": "network-pulse",
         "step_key": "network-switcher",
@@ -231,7 +231,7 @@ def test_progress_pause_round_trip_preserves_completed_steps(monkeypatch):
         "/api/guided-tours/roga-i-kopyta-v1/progress",
         headers={"Authorization": "Bearer visitor-a"},
         json={
-            "tour_version": 4,
+            "tour_version": 5,
             "status": "paused",
             "chapter_key": "network-pulse",
             "step_key": "network-switcher",
@@ -250,7 +250,7 @@ def test_progress_accepts_current_frontend_tour_version_for_restart(monkeypatch)
     row = {
         "id": "progress-id",
         "tour_key": "roga-i-kopyta-v1",
-        "tour_version": 4,
+        "tour_version": 5,
         "status": "active",
         "chapter_key": "network-pulse",
         "step_key": "welcome",
@@ -267,7 +267,7 @@ def test_progress_accepts_current_frontend_tour_version_for_restart(monkeypatch)
         "/api/guided-tours/roga-i-kopyta-v1/progress",
         headers={"Authorization": "Bearer visitor-a"},
         json={
-            "tour_version": 4,
+            "tour_version": 5,
             "status": "active",
             "chapter_key": "network-pulse",
             "step_key": "welcome",
@@ -280,12 +280,47 @@ def test_progress_accepts_current_frontend_tour_version_for_restart(monkeypatch)
     assert connection.committed is True
 
 
+def test_progress_accepts_guided_tour_version_used_by_current_frontend(monkeypatch):
+    monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
+    row = {
+        "id": "progress-id",
+        "tour_key": "roga-i-kopyta-v1",
+        "tour_version": 5,
+        "status": "active",
+        "chapter_key": "network-pulse",
+        "step_key": "welcome",
+        "completed_steps_json": [],
+        "started_at": "2026-08-13T11:00:00+00:00",
+        "paused_at": None,
+        "completed_at": None,
+        "updated_at": "2026-08-13T11:00:00+00:00",
+    }
+    connection = FakeConnection(FakeCursor(rows=[row]))
+    monkeypatch.setattr(guided_tour_api, "get_db_connection", lambda: connection)
+
+    response = build_app().test_client().put(
+        "/api/guided-tours/roga-i-kopyta-v1/progress",
+        headers={"Authorization": "Bearer visitor-a"},
+        json={
+            "tour_version": 5,
+            "status": "active",
+            "chapter_key": "network-pulse",
+            "step_key": "welcome",
+            "completed_steps": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["progress"]["tour_version"] == 5
+    assert connection.committed is True
+
+
 def test_progress_upgrades_previous_frontend_tour_version(monkeypatch):
     monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
     row = {
         "id": "progress-id",
         "tour_key": "roga-i-kopyta-v1",
-        "tour_version": 4,
+        "tour_version": 5,
         "status": "active",
         "chapter_key": "network-pulse",
         "step_key": "operator-nav",
@@ -311,8 +346,8 @@ def test_progress_upgrades_previous_frontend_tour_version(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.get_json()["progress"]["tour_version"] == 4
-    assert connection.cursor_value.queries[0][1][4] == 4
+    assert response.get_json()["progress"]["tour_version"] == 5
+    assert connection.cursor_value.queries[0][1][4] == 5
     assert connection.committed is True
 
 
@@ -321,7 +356,7 @@ def test_progress_upgrades_original_frontend_tour_version(monkeypatch):
     row = {
         "id": "progress-id",
         "tour_key": "roga-i-kopyta-v1",
-        "tour_version": 4,
+        "tour_version": 5,
         "status": "active",
         "chapter_key": "network-pulse",
         "step_key": "welcome",
@@ -347,8 +382,8 @@ def test_progress_upgrades_original_frontend_tour_version(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.get_json()["progress"]["tour_version"] == 4
-    assert connection.cursor_value.queries[0][1][4] == 4
+    assert response.get_json()["progress"]["tour_version"] == 5
+    assert connection.cursor_value.queries[0][1][4] == 5
     assert connection.committed is True
 
 
