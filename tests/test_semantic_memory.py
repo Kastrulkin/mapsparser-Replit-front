@@ -89,6 +89,17 @@ def test_rrf_rewards_agreement_without_losing_provenance():
     assert ranked[0]["modes"] == ["vector", "lexical"]
 
 
+def test_rrf_prioritizes_a_business_subscribed_source_for_content_selection():
+    rows = [
+        {"chunk_id": "global", "similarity": 0.9, "source_confidence": 0.8, "subscribed_source": False},
+        {"chunk_id": "chosen", "similarity": 0.89, "source_confidence": 0.8, "subscribed_source": True},
+    ]
+
+    ranked = _rrf(rows, [])
+
+    assert ranked[0]["chunk_id"] == "chosen"
+
+
 def test_schema_and_runtime_use_pgvector_halfvec_and_safety_tables():
     migration = (ROOT / "alembic_migrations/versions/20260722_add_semantic_memory.py").read_text()
     compose = (ROOT / "docker-compose.yml").read_text()

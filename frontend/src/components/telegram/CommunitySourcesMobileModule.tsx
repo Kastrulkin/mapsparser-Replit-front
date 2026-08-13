@@ -142,14 +142,14 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
       const extraTopics = customTopics.split(',').map((item) => item.trim()).filter(Boolean);
       if (businessId === 'preview') {
         setItems((current) => [{ id: `preview-${Date.now()}`, title: url.replace(/^https?:\/\/t\.me\//, '@'), canonical_url: url, sync_status: 'queued', next_sync_at: new Date().toISOString(), documents_count: 0, embeddings_count: 0, topics_json: [...new Set([...topics, ...extraTopics])], schedule_json: { interval_hours: Number(intervalHours) } }, ...current]);
-        setUrl(''); setTopics([]); setCustomTopics(''); setMessage('Источник добавлен. ЛокалОС начал собирать публичные материалы.');
+        setUrl(''); setTopics([]); setCustomTopics(''); setMessage('Источник подключён. ЛокалОС следит за сообщениями, добавляет важное в «Сегодня» и учитывает темы при подготовке публикаций.');
         return;
       }
       const payload = await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources`, {
         method: 'POST', headers: headers(), body: JSON.stringify({ url: url.trim(), topics: [...new Set([...topics, ...extraTopics])], interval_hours: Number(intervalHours) }),
       }).then(read);
       setUrl(''); setTopics([]); setCustomTopics('');
-      setMessage(typeof payload.message === 'string' ? payload.message : 'Источник добавлен. ЛокалОС начал собирать публичные материалы.');
+      setMessage(typeof payload.message === 'string' ? payload.message : 'Источник подключён. ЛокалОС следит за сообщениями, добавляет важное в «Сегодня» и учитывает темы при подготовке публикаций.');
       await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось добавить источник'); }
     finally { setBusy(''); }
@@ -233,7 +233,10 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
       {defaultSourcesCount ? <div className="mb-5 border-b border-white/[0.06] pb-5"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-emerald-400/10 text-emerald-300"><Check className="h-5 w-5" /></span><div className="min-w-0 flex-1"><small className="font-semibold uppercase tracking-[0.12em] text-emerald-300/80">Уже работает</small><h2 className="mt-1 text-balance text-lg font-semibold">{industry?.key === 'beauty' ? 'Бьюти-пульс уже включён' : 'Отраслевой пульс уже включён'}</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">ЛокалОС уже собирает обсуждения из <span className="tabular-nums text-zinc-300">{defaultSourcesCount}</span> проверенных открытых источников и показывает главное на экране «Сегодня».</p></div></div>{industry?.default_sources?.length ? <p className="mt-3 line-clamp-2 text-pretty text-[11px] leading-5 text-zinc-600">Например: {industry.default_sources.map((source) => source.title).filter(Boolean).join(' · ')}</p> : null}</div> : null}
       <span className="grid h-11 w-11 place-items-center rounded-[15px] bg-primary/15 text-primary"><Radio className="h-5 w-5" /></span>
       <h2 className="mt-4 text-balance text-xl font-semibold tracking-[-0.03em]">{defaultSourcesCount ? 'Добавить свои источники' : 'За чем следить?'}</h2>
-      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">Добавьте публичный канал или открытую группу. ЛокалОС добавит важные темы в вашу сводку. Если источник уже есть в общей базе, повторно собирать его не придётся.</p>
+      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">Добавьте публичный канал или открытую группу. ЛокалОС будет следить за сообщениями, показывать важное в «Сегодня» и учитывать темы при подготовке публикаций.</p>
+      <div className="mt-4 grid gap-2 text-xs text-zinc-400">
+        {['Радар следит за новыми сообщениями', 'Главные темы попадают в «Сегодня»', 'Подходящие темы используются для публикаций'].map((label) => <div key={label} className="flex min-h-11 items-center gap-3 rounded-[15px] bg-white/[0.035] px-3 shadow-[0_0_0_1px_rgba(255,255,255,0.055)]"><Check className="h-4 w-4 shrink-0 text-emerald-300" /><span className="text-pretty">{label}</span></div>)}
+      </div>
       <form onSubmit={add} className="mt-5">
         <label className="text-xs font-medium text-zinc-400"><span className="mb-2 block px-1">Ссылка на публичный канал или группу</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://t.me/channel" inputMode="url" autoCapitalize="none" className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
         <details className="mt-3 rounded-[18px] bg-black/15 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
@@ -247,7 +250,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
         </details>
         <button type="submit" disabled={busy === 'add' || !url.trim()} className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96] disabled:opacity-45">{busy === 'add' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}{busy === 'add' ? 'Проверяем доступность…' : 'Начать следить'}</button>
       </form>
-      <p className="mt-3 text-pretty text-[11px] leading-4 text-zinc-600">Сбор публичных материалов и поиск бесплатны. Личные и закрытые чаты не собираются.</p>
+      <p className="mt-3 text-pretty text-[11px] leading-4 text-zinc-600">Сбор публичных материалов и поиск бесплатны. Личные и закрытые чаты не собираются. Команда ЛокалОС получит новый источник и проверит, подходит ли он для общей отраслевой базы.</p>
     </section>
 
     <AnimatePresence initial={false}>{message ? <motion.div initial={{ opacity: 0, y: 6, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0 }} transition={spring} className="flex gap-3 rounded-[18px] bg-emerald-400/10 p-4 text-xs leading-5 text-emerald-100 shadow-[0_0_0_1px_rgba(110,231,183,0.2)]"><motion.span initial={{ scale: 0.25, opacity: 0, filter: 'blur(4px)' }} animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }} transition={spring}><Check className="h-4 w-4" /></motion.span>{message}</motion.div> : null}</AnimatePresence>

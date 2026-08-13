@@ -10,6 +10,7 @@ from psycopg2.extras import Json
 
 CONTENT_URL = "https://localos.pro/dashboard/content"
 OUTREACH_URL = "https://localos.pro/dashboard/bazich?tab=prospecting"
+TELEGRAM_RADAR_URL = "https://localos.pro/dashboard/telegram-radar"
 AUTOMATIC_OUTREACH_CHANNELS = {"telegram", "email", "vk"}
 TERMINAL_CAMPAIGN_STATUSES = {"cancelled", "completed", "stopped", "lost"}
 
@@ -419,6 +420,85 @@ def load_superadmin_telegram_recipients(conn: Any) -> list[str]:
         if telegram_id:
             recipients.append(telegram_id)
     return recipients
+
+
+def collect_pending_community_source_notifications(conn: Any, limit: int = 20) -> list[dict[str, Any]]:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            subscription.business_id,
+            subscription.source_id,
+            subscription.topics_json,
+            subscription.schedule_json,
+            source.title AS source_title,
+            source.canonical_url,
+            business.name AS business_name,
+            COALESCE(NULLIF(BTRIM(actor.name), ''), NULLIF(BTRIM(actor.email), ''), 'Пользователь') AS submitted_by
+        FROM knowledge_source_subscriptions subscription
+        JOIN knowledge_sources source ON source.id = subscription.source_id
+        JOIN businesses business ON business.id = subscription.business_id
+        LEFT JOIN users actor
+          ON actor.id = NULLIF(subscription.schedule_json->>'submitted_by_user_id', '')
+        WHERE subscription.is_active IS TRUE
+          AND source.source_type = 'telegram'
+          AND source.visibility = 'public'
+          AND subscription.schedule_json->>'superadmin_notification_status' = 'pending'
+        ORDER BY subscription.updated_at
+        LIMIT %s
+        """,
+        (max(1, min(int(limit), 100)),),
+    )
+    return [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+
+
+def format_community_source_notification(item: dict[str, Any]) -> str:
+    topics_value = item.get("topics_json")
+    if isinstance(topics_value, str):
+        try:
+            topics_value = json.loads(topics_value)
+        except Exception:
+            topics_value = []
+    topics = [str(value).strip() for value in (topics_value or []) if str(value).strip()]
+    topic_line = f"Темы: {', '.join(topics[:6])}\n" if topics else ""
+    return (
+        "📡 Пользователь добавил источник в Telegram-радар\n\n"
+        f"Бизнес: {_compact_text(item.get('business_name') or 'Без названия', 100)}\n"
+        f"Добавил: {_compact_text(item.get('submitted_by') or 'Пользователь', 100)}\n"
+        f"Источник: {_compact_text(item.get('source_title') or 'Telegram', 120)}\n"
+        f"Ссылка: {str(item.get('canonical_url') or '').strip()}\n"
+        f"{topic_line}\n"
+        "Источник уже подключён к личному Пульсу и подборке тем. Проверьте, подходит ли он для общей отраслевой базы.\n"
+        f"Открыть Telegram-радар: {TELEGRAM_RADAR_URL}"
+    )
+
+
+def mark_community_source_notification_sent(
+    conn: Any,
+    *,
+    business_id: str,
+    source_id: str,
+    telegram_ids: list[str],
+) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE knowledge_source_subscriptions
+        SET schedule_json = COALESCE(schedule_json, '{}'::jsonb) || %s,
+            updated_at = NOW()
+        WHERE business_id = %s AND source_id = %s
+          AND schedule_json->>'superadmin_notification_status' = 'pending'
+        """,
+        (
+            Json({
+                "superadmin_notification_status": "sent",
+                "superadmin_notified_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "superadmin_notified_telegram_ids": telegram_ids,
+            }),
+            business_id,
+            source_id,
+        ),
+    )
 
 
 def collect_pending_outreach_reply_notifications(conn: Any, limit: int = 20) -> list[dict[str, Any]]:

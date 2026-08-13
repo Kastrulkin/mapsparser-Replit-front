@@ -20,6 +20,42 @@ describe('CommunitySourcesMobileModule destructive actions', () => {
     expect(screen.getByText(/^18$/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Добавить свои источники' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Добавленные вами' })).toBeInTheDocument();
+    expect(screen.getByText('Радар следит за новыми сообщениями')).toBeInTheDocument();
+    expect(screen.getByText('Главные темы попадают в «Сегодня»')).toBeInTheDocument();
+    expect(screen.getByText('Подходящие темы используются для публикаций')).toBeInTheDocument();
+  });
+
+  it('connects a public source to the personal pulse and content selection', async () => {
+    let loadedAfterAdd = false;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = String(init?.method || 'GET');
+      if (url === '/api/business/business-1/community-sources' && method === 'POST') {
+        loadedAfterAdd = true;
+        return response({
+          success: true,
+          destinations: ['radar', 'community_pulse', 'content_ideas'],
+          superadmin_notification: 'queued',
+          message: 'Источник подключён. ЛокалОС следит за новыми сообщениями, добавляет важное в «Сегодня» и учитывает темы при подготовке публикаций.',
+        });
+      }
+      if (url === '/api/business/business-1/community-sources' && method === 'GET') {
+        return response({ items: loadedAfterAdd ? [{ id: 'source-1', title: 'Beauty Owners', canonical_url: 'https://t.me/beauty_owners', sync_status: 'queued' }] : [] });
+      }
+      return response({ success: true });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<CommunitySourcesMobileModule businessId="business-1" />);
+    await user.type(await screen.findByPlaceholderText('https://t.me/channel'), 'https://t.me/beauty_owners');
+    await user.click(screen.getByRole('button', { name: 'Начать следить' }));
+
+    expect(await screen.findByText(/Источник подключён/)).toBeInTheDocument();
+    expect(await screen.findByText('Beauty Owners')).toBeInTheDocument();
+    const postCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith('/community-sources') && String(call[1]?.method) === 'POST');
+    expect(postCall).toBeTruthy();
+    expect(JSON.parse(String(postCall?.[1]?.body))).toMatchObject({ url: 'https://t.me/beauty_owners', interval_hours: 24 });
   });
 
   it('previews subscription removal instead of calling DELETE directly', async () => {

@@ -80,9 +80,12 @@ from services.contact_intelligence_service import (
     recover_interrupted_enrichment_jobs,
 )
 from services.superadmin_telegram_notifications import (
+    collect_pending_community_source_notifications,
     collect_pending_outreach_reply_notifications,
+    format_community_source_notification,
     format_outreach_reply_notification,
     load_superadmin_telegram_recipients,
+    mark_community_source_notification_sent,
     mark_outreach_reply_notification_sent,
 )
 from services.founder_content_editorial import (
@@ -135,6 +138,7 @@ _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_OUTREACH_REPLY_SYNC_AT = 0.0
 _OUTREACH_REPLY_SYNC_HEALTHY = True
 _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
+_LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 _LAST_AGENT_RUN_QUEUE_AT = 0.0
@@ -1603,6 +1607,53 @@ def _notify_superadmin_outreach_replies_if_due() -> None:
             except Exception:
                 pass
         print(f"[OUTREACH_REPLY_NOTIFICATION] error: {e}", flush=True)
+    finally:
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+
+def _notify_superadmin_community_sources_if_due() -> None:
+    global _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT
+    now = time.time()
+    interval_sec = max(10, int(os.getenv("COMMUNITY_SOURCE_NOTIFICATION_INTERVAL_SEC", "30")))
+    if now - _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT < interval_sec:
+        return
+    _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = now
+
+    db = None
+    try:
+        db = DatabaseManager()
+        recipients = load_superadmin_telegram_recipients(db.conn)
+        if not recipients:
+            return
+        items = collect_pending_community_source_notifications(db.conn, limit=20)
+        for item in items:
+            message = format_community_source_notification(item)
+            sent_to = [telegram_id for telegram_id in recipients if _send_telegram_plain_message(telegram_id, message)]
+            if len(sent_to) != len(recipients):
+                print(
+                    f"[COMMUNITY_SOURCE_NOTIFICATION] partial send source_id={item.get('source_id')} "
+                    f"sent={len(sent_to)} expected={len(recipients)}",
+                    flush=True,
+                )
+                continue
+            mark_community_source_notification_sent(
+                db.conn,
+                business_id=str(item.get("business_id") or ""),
+                source_id=str(item.get("source_id") or ""),
+                telegram_ids=sent_to,
+            )
+            db.conn.commit()
+    except Exception as error:
+        if db:
+            try:
+                db.conn.rollback()
+            except Exception:
+                pass
+        print(f"[COMMUNITY_SOURCE_NOTIFICATION] error: {error}", flush=True)
     finally:
         if db:
             try:
@@ -6980,6 +7031,7 @@ if __name__ == "__main__":
             _run_knowledge_embeddings_if_due()
             _dispatch_outreach_queue_if_due()
             _notify_superadmin_outreach_replies_if_due()
+            _notify_superadmin_community_sources_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()
             _reconcile_openclaw_billing_if_due()

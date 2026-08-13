@@ -372,3 +372,80 @@ def test_private_message_retention_qualifies_document_metadata_column():
     source = Path("src/services/telegram_research_service.py").read_text(encoding="utf-8")
 
     assert "metadata_json = d.metadata_json - 'reactions'" in source
+
+
+def test_personal_public_source_subscription_queues_admin_notification_and_both_uses():
+    from api.telegram_research_api import _subscribe_public_source
+
+    class Cursor:
+        def __init__(self):
+            self.calls = []
+            self._row = None
+
+        def execute(self, query, params=None):
+            self.calls.append((query, params))
+            self._row = None
+
+        def fetchone(self):
+            return self._row
+
+    cursor = Cursor()
+    created = _subscribe_public_source(
+        cursor,
+        business_id="business-a",
+        source_id="source-a",
+        industry_key="beauty",
+        topics=["Маркетинг"],
+        interval_hours=24,
+        submitted_by_user_id="user-a",
+    )
+
+    assert created is True
+    insert_params = cursor.calls[-1][1]
+    assert insert_params[2].adapted == ["community_pulse", "content_ideas"]
+    assert insert_params[4].adapted["superadmin_notification_status"] == "pending"
+    assert insert_params[4].adapted["submitted_by_user_id"] == "user-a"
+
+
+def test_community_source_notification_is_actionable_and_marks_delivery():
+    from services.superadmin_telegram_notifications import (
+        format_community_source_notification,
+        mark_community_source_notification_sent,
+    )
+
+    message = format_community_source_notification({
+        "business_name": "Органика",
+        "submitted_by": "Алик",
+        "source_title": "Владельцы салонов",
+        "canonical_url": "https://t.me/owners",
+        "topics_json": ["Бьюти", "Управление"],
+    })
+    assert "Органика" in message
+    assert "Алик" in message
+    assert "https://t.me/owners" in message
+    assert "общей отраслевой базы" in message
+
+    class Cursor:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, query, params=None):
+            self.calls.append((query, params))
+
+    class Connection:
+        def __init__(self):
+            self.cursor_value = Cursor()
+
+        def cursor(self):
+            return self.cursor_value
+
+    connection = Connection()
+    mark_community_source_notification_sent(
+        connection,
+        business_id="business-a",
+        source_id="source-a",
+        telegram_ids=["123"],
+    )
+    query, params = connection.cursor_value.calls[-1]
+    assert "superadmin_notification_status" in str(params[0].adapted)
+    assert params[1:] == ("business-a", "source-a")

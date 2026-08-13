@@ -202,7 +202,28 @@ def _subscribe_public_source(
     industry_key: str,
     topics: list[str] | None = None,
     interval_hours: int = 24,
-) -> None:
+    submitted_by_user_id: str = "",
+) -> bool:
+    cursor.execute(
+        """
+        SELECT is_active
+        FROM knowledge_source_subscriptions
+        WHERE business_id = %s AND source_id = %s
+        LIMIT 1
+        """,
+        (business_id, source_id),
+    )
+    existing = cursor.fetchone()
+    was_active = bool(
+        (existing.get("is_active") if hasattr(existing, "get") else existing[0])
+        if existing else False
+    )
+    schedule = {"interval_hours": interval_hours if interval_hours in {6, 12, 24, 72, 168} else 24}
+    if not was_active:
+        schedule.update({
+            "superadmin_notification_status": "pending",
+            "submitted_by_user_id": submitted_by_user_id,
+        })
     cursor.execute(
         """
         INSERT INTO knowledge_source_subscriptions (
@@ -211,7 +232,7 @@ def _subscribe_public_source(
         ON CONFLICT (business_id, source_id) DO UPDATE SET
             purposes_json = EXCLUDED.purposes_json,
             topics_json = EXCLUDED.topics_json,
-            schedule_json = EXCLUDED.schedule_json,
+            schedule_json = knowledge_source_subscriptions.schedule_json || EXCLUDED.schedule_json,
             is_active = TRUE,
             updated_at = NOW()
         """,
@@ -220,9 +241,10 @@ def _subscribe_public_source(
             source_id,
             Json(["community_pulse", "content_ideas"]),
             Json(topics or [industry_key]),
-            Json({"interval_hours": interval_hours if interval_hours in {6, 12, 24, 72, 168} else 24}),
+            Json(schedule),
         ),
     )
+    return not was_active
 
 
 def _save_account(cursor: Any, business_id: str, auth_data: dict[str, Any]) -> str:
@@ -484,7 +506,7 @@ def community_sources(business_id: str):
 
 @telegram_research_bp.post("/api/business/<business_id>/community-sources")
 def add_community_source(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id)
     if error:
         return error
     payload = request.get_json(silent=True) or {}
@@ -541,13 +563,14 @@ def add_community_source(business_id: str):
         )
         topics = [str(item).strip() for item in payload.get("topics", []) if str(item).strip()][:20] if isinstance(payload.get("topics"), list) else []
         interval_hours = int(payload.get("interval_hours") or 24)
-        _subscribe_public_source(
+        notify_superadmin = _subscribe_public_source(
             cursor,
             business_id=business_id,
             source_id=str(source["id"]),
             industry_key=context["industry_key"],
             topics=topics or None,
             interval_hours=interval_hours,
+            submitted_by_user_id=_user_id(user_data),
         )
         cursor.execute("UPDATE knowledge_sources SET status = 'active', sync_status = 'queued', next_sync_at = NOW(), updated_at = NOW() WHERE id = %s", (source["id"],))
         db.conn.commit()
@@ -556,7 +579,11 @@ def add_community_source(business_id: str):
             "source": {"id": str(source["id"]), "title": source.get("title"), "canonical_url": canonical_url, "status": "active", "sync_status": "queued"},
             "reused": str(source.get("created_at") or "") != str(source.get("updated_at") or ""),
             "collection_cost_credits": 0,
-            "message": "Источник добавлен. Публичные сообщения собираются один раз и пополняют общую базу ЛокалОС.",
+            "radar_enabled": True,
+            "content_ideas_enabled": True,
+            "superadmin_notification": "queued" if notify_superadmin else "already_sent",
+            "destinations": ["radar", "community_pulse", "content_ideas"],
+            "message": "Источник подключён. ЛокалОС следит за новыми сообщениями, добавляет важное в «Сегодня» и учитывает темы при подготовке публикаций.",
         })
     except (TypeError, ValueError):
         db.conn.rollback()
@@ -602,7 +629,7 @@ def update_community_source_subscription(business_id: str, source_id: str):
             """
             UPDATE knowledge_source_subscriptions
             SET topics_json = %s,
-                schedule_json = %s,
+                schedule_json = COALESCE(schedule_json, '{}'::jsonb) || %s,
                 updated_at = NOW()
             WHERE business_id = %s AND source_id = %s AND is_active = TRUE
             RETURNING source_id, topics_json, schedule_json
