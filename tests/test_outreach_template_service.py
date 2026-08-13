@@ -112,6 +112,23 @@ def test_zero_rating_sentinel_cannot_select_low_rating_template():
     )
 
 
+def test_low_rating_owner_flow_is_detected_without_machine_wording():
+    candidate = _candidate(recipient="Аломед")
+    selection = select_outreach_template("signal", candidate)
+    text = render_outreach_template(selection, candidate)
+    gate = _quality_gate(
+        _format_channel_outreach_message(text, channel="email", sender_mode="localos"),
+        {**candidate, "outreach_template_key": selection["key"], "outreach_template_version": selection["version"], "trust_statement": "Подтверждённый опыт LocalOS", "next_step": "Вам может быть это интересно?"},
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+    assert gate["passed"] is True, gate
+    assert gate["human_language_review"]["signal_flow_detected"] is True
+
+
 def test_active_social_template_uses_time_pain_and_concrete_multichannel_result():
     candidate = _candidate(
         observed_fact=(

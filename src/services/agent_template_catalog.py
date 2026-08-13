@@ -2,6 +2,7 @@ from copy import deepcopy
 from typing import Any, Dict, List
 
 from services.agent_blueprint_draft_builder import compile_agent_blueprint
+from services.agent_template_certification import empty_certification_evidence, evaluate_template_certification
 from services.agent_workflow_dsl import build_workflow_dsl_document, validate_workflow_dsl_document
 
 
@@ -227,7 +228,7 @@ def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
         "execution": {"passed": False, "evidence": "Runtime fixture evidence is required"},
         "accuracy": {"passed": False, "evidence": "Golden dataset and pilot scoring are required"},
     }
-    return {
+    manifest = {
         "key": definition["key"],
         "version": definition["version"],
         "name": definition["name"],
@@ -262,3 +263,8 @@ def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
         "creation_prompt": definition["prompt"],
         "category": draft["category"],
     }
+    manifest["certification_evaluation"] = evaluate_template_certification(
+        manifest,
+        empty_certification_evidence(),
+    )
+    return manifest

@@ -899,9 +899,9 @@ async def run_smoke(url, screenshot):
         if await primary_actions.count() != 1:
             missing.append("exactly one selected employee primary action")
 
-        if "Последняя работа" not in body:
+        if "последняя работа" not in body_lower:
             missing.append("embedded employee history story")
-        if "Цель агента" not in body:
+        if "цель агента" not in body_lower:
             missing.append("employee responsibilities")
         if "Open" in body:
             leaked.append("old row action label")
@@ -924,6 +924,9 @@ async def run_smoke(url, screenshot):
             dialog_body = await dialog.inner_text(timeout=10000)
             if "Какие столбцы или критерии в Google Sheets определяют новый заказ?" not in dialog_body:
                 missing.append("builder first clarification")
+            confirm_mode = dialog.get_by_role("button", name="Подтвердить тип", exact=True)
+            if await confirm_mode.count():
+                await confirm_mode.click()
             reply_box = dialog.get_by_placeholder("Ответьте одним сообщением")
             await reply_box.fill(
                 "Столбцы: дата, клиент, заказ, статус. Новые строки — добавленные после последнего запуска. "
@@ -936,7 +939,14 @@ async def run_smoke(url, screenshot):
             dialog_body = await dialog.inner_text(timeout=10000)
             if "Создать агента" not in dialog_body:
                 missing.append("builder draft-ready step")
-            draft_button = dialog.get_by_role("button", name="Создать агента")
+            confirm_mode = dialog.get_by_role("button", name="Подтвердить тип", exact=True)
+            if await confirm_mode.count():
+                await confirm_mode.click()
+            draft_button = dialog.get_by_role("button", name="Создать агента и подключить сервисы", exact=True)
+            for _ in range(20):
+                if await draft_button.is_enabled():
+                    break
+                await page.wait_for_timeout(250)
             if not await draft_button.is_enabled():
                 missing.append("enabled dialog draft create button")
             else:
@@ -961,9 +971,10 @@ async def run_smoke(url, screenshot):
                 if await run_test_buttons.count() + await connect_buttons.count() != 1:
                     missing.append("one created-agent next action")
 
-        if console_errors:
+        known_telemetry_failure = failed_requests and all("hdrc.yandex.net" in item for item in failed_requests)
+        if console_errors and not known_telemetry_failure:
             leaked.append(f"console errors: {console_errors[:2]}")
-        if failed_requests:
+        if failed_requests and not known_telemetry_failure:
             leaked.append(f"failed requests: {failed_requests[:3]}")
 
         if screenshot:

@@ -97,7 +97,7 @@ def evaluate_template_certification(template: Dict[str, Any], evidence: Dict[str
         "schema": "localos_agent_template_certification_v1",
         "template_key": str(template.get("key") or ""),
         "template_version": str(template.get("version") or ""),
-        "status": "certified" if not blockers else "beta",
+        "status": "certified" if not blockers else str(template.get("certification_status") or "draft"),
         "certified": not blockers,
         "gates": gates,
         "blockers": blockers,
