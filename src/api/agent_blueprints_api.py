@@ -2987,7 +2987,7 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
         custom_process = dict(custom_process)
     custom_process["trigger"] = str(version_payload.get("trigger") or "manual.run")
     schedule = version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {}
-    if custom_process["trigger"] == "schedule.daily" and schedule:
+    if custom_process["trigger"].startswith("schedule.") and schedule:
         custom_process["schedule"] = schedule
     else:
         custom_process.pop("schedule", None)
@@ -3098,7 +3098,7 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
             json.dumps(payload.get("capability_allowlist") if isinstance(payload.get("capability_allowlist"), list) else [], ensure_ascii=False),
             json.dumps(payload.get("approval_policy") if isinstance(payload.get("approval_policy"), dict) else {}, ensure_ascii=False),
             json.dumps(payload.get("output_schema") if isinstance(payload.get("output_schema"), dict) else {}, ensure_ascii=False),
-            str(payload.get("execution_mode") or ("scheduled" if payload.get("trigger") == "schedule.daily" else "manual")).strip(),
+            str(payload.get("execution_mode") or ("scheduled" if str(payload.get("trigger") or "").startswith("schedule.") else "manual")).strip(),
             str(payload.get("trigger") or "manual.run").strip(),
             json.dumps(payload.get("schedule") if isinstance(payload.get("schedule"), dict) else {}, ensure_ascii=False),
             json.dumps(payload.get("runtime_config") if isinstance(payload.get("runtime_config"), dict) else {}, ensure_ascii=False),

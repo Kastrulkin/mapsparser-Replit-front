@@ -58,6 +58,8 @@ def validate_workflow_graph(graph: Dict[str, Any]) -> Dict[str, Any]:
             errors.append({"code": "missing_node_config", "node_id": node_id, "message": "Node config is required"})
     incoming = {node_id: 0 for node_id in node_ids}
     outgoing: Dict[str, List[str]] = {node_id: [] for node_id in node_ids}
+    if not node_ids:
+        errors.append({"code": "empty_graph", "message": "Graph needs at least one registered step"})
     for edge in edges:
         if not isinstance(edge, dict):
             errors.append({"code": "invalid_edge", "message": "Each graph edge must be an object"})

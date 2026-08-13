@@ -272,7 +272,14 @@ def test_activate_version_marks_blueprint_active_for_trigger_runtime(monkeypatch
 
     cursor = ActivationCursor()
     blueprint = {"id": "bp1", "metadata_json": {"version_events": []}, "status": "draft"}
-    version = {"id": "ver1", "version_number": 1}
+    version = {
+        "id": "ver1",
+        "version_number": 1,
+        "trigger": "schedule.weekly",
+        "execution_mode": "scheduled",
+        "schedule_json": {"weekday": 1, "time": "10:00", "timezone": "Europe/Tallinn"},
+        "required_integration_bindings_json": [],
+    }
     monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda _cursor, _blueprint_id: blueprint)
 
     event = agent_blueprints_api._remember_active_version(
@@ -286,7 +293,56 @@ def test_activate_version_marks_blueprint_active_for_trigger_runtime(monkeypatch
 
     assert event["active_version_id"] == "ver1"
     assert cursor.metadata["active_version_id"] == "ver1"
+    assert cursor.metadata["custom_process"]["trigger"] == "schedule.weekly"
+    assert cursor.metadata["custom_process"]["schedule"]["weekday"] == 1
     assert cursor.status == "active"
+
+
+def test_rollback_recognizes_previously_active_version_and_records_transition(monkeypatch):
+    from api import agent_blueprints_api
+
+    class RollbackCursor:
+        def __init__(self):
+            self.metadata = {}
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            params = params or ()
+            if normalized_query.startswith("update agent_blueprints") and "set metadata_json" in normalized_query:
+                self.metadata = json.loads(params[0])
+                return None
+            if normalized_query.startswith("update agent_blueprints") and "set status = 'active'" in normalized_query:
+                return None
+            raise AssertionError(f"Unhandled rollback SQL: {query}")
+
+    blueprint = {
+        "id": "bp1",
+        "metadata_json": {
+            "active_version_id": "ver2",
+            "active_version_number": 2,
+            "version_events": [{"action": "activated", "active_version_id": "ver1", "active_version_number": 1}],
+        },
+        "status": "active",
+    }
+    previous = {
+        "id": "ver1",
+        "version_number": 1,
+        "trigger": "manual.run",
+        "execution_mode": "manual",
+        "schedule_json": {},
+        "required_integration_bindings_json": [],
+    }
+    cursor = RollbackCursor()
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda current, blueprint_id: blueprint)
+
+    assert agent_blueprints_api._version_was_active_before(blueprint, previous) is True
+    event = agent_blueprints_api._remember_active_version(cursor, blueprint, previous, {"user_id": "user1"}, "rollback", "stable version")
+
+    assert event["action"] == "rollback"
+    assert event["previous_active_version_id"] == "ver2"
+    assert event["active_version_id"] == "ver1"
+    assert cursor.metadata["active_version_id"] == "ver1"
+    assert cursor.metadata["version_events"][-1]["reason"] == "stable version"
 
 
 def test_agent_integration_binding_status_tracks_required_compiled_bindings():

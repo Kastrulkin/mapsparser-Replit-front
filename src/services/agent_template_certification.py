@@ -37,7 +37,11 @@ def evaluate_template_certification(template: Dict[str, Any], evidence: Dict[str
         for item in fixtures
         if isinstance(item, dict)
     }
-    fixtures_passed = all(fixture_status.get(key) == "passed" for key in REQUIRED_FIXTURES)
+    contract_hash = template_certification_contract_hash(template)
+    fixtures_passed = bool(
+        evidence.get("fixture_contract_hash") == contract_hash
+        and all(fixture_status.get(key) == "passed" for key in REQUIRED_FIXTURES)
+    )
     bounded_steps = [
         step
         for step in template.get("workflow_dsl", {}).get("steps", [])
@@ -56,7 +60,7 @@ def evaluate_template_certification(template: Dict[str, Any], evidence: Dict[str
     security_passed = all(
         security.get(key) is True
         for key in ("prompt_injection_blocked", "approval_bypass_blocked", "sensitive_data_leak_blocked")
-    )
+    ) and security.get("contract_hash") == contract_hash
     safe_preview_runs = [
         item
         for item in preview_runs
@@ -131,6 +135,9 @@ def empty_certification_evidence() -> Dict[str, Any]:
         "pilot_feedback": [],
         "security": {},
         "version_pins": {},
+        "fixture_contract_hash": "",
+        "fixture_report": "",
+        "validation_timestamp": "",
         "golden_score": 0.0,
         "support_export_passed": False,
         "rollback_test_passed": False,
@@ -165,3 +172,25 @@ def _integer(value: Any) -> int:
 def _stable_hash(value: Any) -> str:
     serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def template_certification_contract_hash(template: Dict[str, Any]) -> str:
+    workflow = template.get("workflow_dsl") if isinstance(template.get("workflow_dsl"), dict) else {}
+    prompt_versions = []
+    for step in workflow.get("steps") if isinstance(workflow.get("steps"), list) else []:
+        if not isinstance(step, dict) or step.get("bounded_model_call") is not True:
+            continue
+        definition = get_task_definition(str(step.get("model_task_key") or ""))
+        prompt_versions.append(str(definition.prompt_version if definition else ""))
+    return _stable_hash(
+        {
+            "key": str(template.get("key") or ""),
+            "version": str(template.get("version") or ""),
+            "workflow_dsl": workflow,
+            "approval_policy": template.get("approval_policy") or {},
+            "limits": template.get("limits") or {},
+            "output_schema": template.get("output_schema") or {},
+            "golden_results": template.get("golden_results") or [],
+            "prompt_versions": prompt_versions,
+        }
+    )

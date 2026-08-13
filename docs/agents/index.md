@@ -96,6 +96,31 @@ autonomous activation. See
 [Compiled AI Architecture v1](../LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md) for
 the exact runtime and rollout status.
 
+The reproducible local proof commands are:
+
+- `scripts/test_agent_template_catalog.sh` for the independent ten-template
+  catalog and idempotent template-to-blueprint creation;
+- `scripts/test_compiled_validation_fixtures.sh` for all nine required failure
+  and recovery fixtures across the six beta templates plus the shared queue,
+  OAuth, retry and scheduler boundaries;
+- `scripts/test_agent_graph_roundtrip.sh` for lossless DSL/graph conversion and
+  rejection of empty, dangling, branching, unknown and cyclic graphs.
+
+Fixture and security evidence is pinned to a hash of the exact template DSL,
+approval policy, limits, output schema, golden cases and model prompt version.
+Changing any of that contract invalidates the stored local proof instead of
+silently carrying certification forward. Golden cases are present for all six
+beta templates, but a golden score is not recorded until outputs have actually
+been evaluated. Production runs, pilot feedback and canary days remain
+separate evidence and cannot be inferred from local tests.
+`scripts/report_agent_template_pilot_readiness.py` reads run history without
+changing it and reports the exact safe-preview count, completed production
+runs, useful pilot businesses, scheduled UTC dates, duplicate idempotency keys
+and any preview run that appears to have performed an external action. It is a
+collection aid, not an automatic certification decision; correctness review,
+support export, rollback and incident-free canary evidence still require human
+confirmation.
+
 Current production evidence and the gates that must not be declared complete
 early are recorded in [Agents Beta Production Status](../AGENTS_BETA_PRODUCTION_STATUS.md).
 

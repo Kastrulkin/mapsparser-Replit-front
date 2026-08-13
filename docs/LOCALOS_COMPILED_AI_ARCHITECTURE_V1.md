@@ -79,8 +79,9 @@ the current beta/certified wave cannot be used through self-service.
 `src/services/agent_workflow_graph.py` maps DSL steps to visual nodes and back.
 The graph is an authoring projection, not an execution source. Coordinates are
 discarded during graph-to-steps conversion. Unknown node kinds, dangling
-edges, cycles, unreachable nodes and unsupported branches are rejected before
-a candidate version can be produced. Runtime never reads React Flow state.
+edges, empty graphs, cycles, unreachable nodes and unsupported branches are
+rejected before a candidate version can be produced. Runtime never reads React
+Flow state.
 
 ## Validation v1
 

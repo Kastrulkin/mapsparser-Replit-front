@@ -1,29 +1,53 @@
 {
   "schema": "localos_agent_template_certification_evidence_v1",
-  "updated_at": "2026-08-13T23:05:00+03:00",
+  "updated_at": "2026-08-13T23:32:00+03:00",
   "templates": {
     "daily_owner_digest@1.0.0": {
-      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "contract_hash": "a1b2bb08153a7dcf6ecfdf390b7647b2ea645e313184d4d468d0fdec464a752c", "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "fixtures": [{"key": "valid_input", "status": "passed"}, {"key": "empty_input", "status": "passed"}, {"key": "malformed_input", "status": "passed"}, {"key": "missing_connection", "status": "passed"}, {"key": "expired_oauth", "status": "passed"}, {"key": "transient_provider_failure", "status": "passed"}, {"key": "duplicate_idempotency_key", "status": "passed"}, {"key": "worker_restart", "status": "passed"}, {"key": "limit_exceeded", "status": "passed"}],
+      "fixture_contract_hash": "a1b2bb08153a7dcf6ecfdf390b7647b2ea645e313184d4d468d0fdec464a752c",
+      "fixture_report": "scripts/test_compiled_validation_fixtures.sh: 65 passed",
+      "validation_timestamp": "2026-08-13T23:32:00+03:00",
       "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
     },
     "negative_review_reply@1.0.0": {
-      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "contract_hash": "372d8778968c10e720e586b7628ab31dabe41013ebf93c53b0b5413cfb0c1a53", "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "fixtures": [{"key": "valid_input", "status": "passed"}, {"key": "empty_input", "status": "passed"}, {"key": "malformed_input", "status": "passed"}, {"key": "missing_connection", "status": "passed"}, {"key": "expired_oauth", "status": "passed"}, {"key": "transient_provider_failure", "status": "passed"}, {"key": "duplicate_idempotency_key", "status": "passed"}, {"key": "worker_restart", "status": "passed"}, {"key": "limit_exceeded", "status": "passed"}],
+      "fixture_contract_hash": "372d8778968c10e720e586b7628ab31dabe41013ebf93c53b0b5413cfb0c1a53",
+      "fixture_report": "scripts/test_compiled_validation_fixtures.sh: 65 passed",
+      "validation_timestamp": "2026-08-13T23:32:00+03:00",
       "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
     },
     "service_seo_cleanup@1.0.0": {
-      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "contract_hash": "46ed09e56edd640cf1f225b89389c233a57243884cdfda8af0eb34ca669b77fc", "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "fixtures": [{"key": "valid_input", "status": "passed"}, {"key": "empty_input", "status": "passed"}, {"key": "malformed_input", "status": "passed"}, {"key": "missing_connection", "status": "passed"}, {"key": "expired_oauth", "status": "passed"}, {"key": "transient_provider_failure", "status": "passed"}, {"key": "duplicate_idempotency_key", "status": "passed"}, {"key": "worker_restart", "status": "passed"}, {"key": "limit_exceeded", "status": "passed"}],
+      "fixture_contract_hash": "46ed09e56edd640cf1f225b89389c233a57243884cdfda8af0eb34ca669b77fc",
+      "fixture_report": "scripts/test_compiled_validation_fixtures.sh: 65 passed",
+      "validation_timestamp": "2026-08-13T23:32:00+03:00",
       "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
     },
     "card_posts_from_signals@1.0.0": {
-      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "contract_hash": "9c4b1fd00ae1471b4a9a24de7c62fbe6f049c86c980f739f7da5858c436a6bb9", "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "fixtures": [{"key": "valid_input", "status": "passed"}, {"key": "empty_input", "status": "passed"}, {"key": "malformed_input", "status": "passed"}, {"key": "missing_connection", "status": "passed"}, {"key": "expired_oauth", "status": "passed"}, {"key": "transient_provider_failure", "status": "passed"}, {"key": "duplicate_idempotency_key", "status": "passed"}, {"key": "worker_restart", "status": "passed"}, {"key": "limit_exceeded", "status": "passed"}],
+      "fixture_contract_hash": "9c4b1fd00ae1471b4a9a24de7c62fbe6f049c86c980f739f7da5858c436a6bb9",
+      "fixture_report": "scripts/test_compiled_validation_fixtures.sh: 65 passed",
+      "validation_timestamp": "2026-08-13T23:32:00+03:00",
       "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
     },
     "tomorrow_bookings_check@1.0.0": {
-      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "contract_hash": "5444fb408c557ed213dde95fe2f47d0d175e5b020489115078c3e0717f01f65e", "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "fixtures": [{"key": "valid_input", "status": "passed"}, {"key": "empty_input", "status": "passed"}, {"key": "malformed_input", "status": "passed"}, {"key": "missing_connection", "status": "passed"}, {"key": "expired_oauth", "status": "passed"}, {"key": "transient_provider_failure", "status": "passed"}, {"key": "duplicate_idempotency_key", "status": "passed"}, {"key": "worker_restart", "status": "passed"}, {"key": "limit_exceeded", "status": "passed"}],
+      "fixture_contract_hash": "5444fb408c557ed213dde95fe2f47d0d175e5b020489115078c3e0717f01f65e",
+      "fixture_report": "scripts/test_compiled_validation_fixtures.sh: 65 passed",
+      "validation_timestamp": "2026-08-13T23:32:00+03:00",
       "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
     },
     "google_sheets_business_result@1.0.0": {
-      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "contract_hash": "609851cba51437872026b958ef818f7659a4d95979f9a8226cc71c03f14a85f6", "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "fixtures": [{"key": "valid_input", "status": "passed"}, {"key": "empty_input", "status": "passed"}, {"key": "malformed_input", "status": "passed"}, {"key": "missing_connection", "status": "passed"}, {"key": "expired_oauth", "status": "passed"}, {"key": "transient_provider_failure", "status": "passed"}, {"key": "duplicate_idempotency_key", "status": "passed"}, {"key": "worker_restart", "status": "passed"}, {"key": "limit_exceeded", "status": "passed"}],
+      "fixture_contract_hash": "609851cba51437872026b958ef818f7659a4d95979f9a8226cc71c03f14a85f6",
+      "fixture_report": "scripts/test_compiled_validation_fixtures.sh: 65 passed",
+      "validation_timestamp": "2026-08-13T23:32:00+03:00",
       "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
     }
   },

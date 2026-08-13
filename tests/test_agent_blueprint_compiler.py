@@ -1805,7 +1805,10 @@ def test_template_certification_requires_full_evidence_bundle():
 
 def test_template_certification_accepts_only_threshold_complete_evidence():
     from services.agent_template_catalog import get_agent_template
-    from services.agent_template_certification import REQUIRED_FIXTURES, evaluate_template_certification
+    from services.agent_template_certification import REQUIRED_FIXTURES, evaluate_template_certification, template_certification_contract_hash
+
+    template = get_agent_template("daily_owner_digest")
+    contract_hash = template_certification_contract_hash(template)
 
     evidence = {
         "fixtures": [{"key": key, "status": "passed"} for key in REQUIRED_FIXTURES],
@@ -1827,7 +1830,9 @@ def test_template_certification_accepts_only_threshold_complete_evidence():
             "prompt_injection_blocked": True,
             "approval_bypass_blocked": True,
             "sensitive_data_leak_blocked": True,
+            "contract_hash": contract_hash,
         },
+        "fixture_contract_hash": contract_hash,
         "version_pins": {
             "prompt_version": "agent_bounded_workflow_step_v1",
             "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7",
@@ -1839,7 +1844,7 @@ def test_template_certification_accepts_only_threshold_complete_evidence():
         "canary_incident_free": True,
     }
 
-    result = evaluate_template_certification(get_agent_template("daily_owner_digest"), evidence)
+    result = evaluate_template_certification(template, evidence)
 
     assert result["certified"] is True
     assert result["status"] == "certified"

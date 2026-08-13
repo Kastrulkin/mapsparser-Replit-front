@@ -237,6 +237,70 @@ FIRST_WAVE_TEMPLATE_PRESETS: Dict[str, Dict[str, Any]] = {
 }
 
 
+FIRST_WAVE_GOLDEN_CASES: Dict[str, List[Dict[str, Any]]] = {
+    "daily_owner_digest": [
+        {
+            "key": "negative_review_and_finance_exception",
+            "input_fixture": {
+                "reviews": [{"id": "review-1", "rating": 2, "text": "Долго ждал", "response_text": ""}],
+                "finance": [{"id": "finance-1", "transaction_type": "expense", "amount": 12000}],
+            },
+            "expected": {"source_refs_include": ["review-1", "finance-1"], "requires_owner_decision": True},
+        }
+    ],
+    "negative_review_reply": [
+        {
+            "key": "one_unanswered_negative_review",
+            "input_fixture": {"reviews": [{"id": "review-1", "rating": 1, "text": "Не дождался заказа", "response_text": ""}]},
+            "expected": {"drafts_for": ["review-1"], "draft_only": True, "forbidden_claims": ["гарантируем возврат", "уже вернули деньги"]},
+        }
+    ],
+    "service_seo_cleanup": [
+        {
+            "key": "duplicate_and_empty_service_descriptions",
+            "input_fixture": {
+                "services": [
+                    {"id": "service-1", "name": "Стрижка", "description": ""},
+                    {"id": "service-2", "name": "Стрижка", "description": "Коротко"},
+                ]
+            },
+            "expected": {"flag_ids": ["service-1", "service-2"], "localos_write_performed": False},
+        }
+    ],
+    "card_posts_from_signals": [
+        {
+            "key": "three_fact_grounded_post_drafts",
+            "input_fixture": {
+                "services": [{"id": "service-1", "name": "Семейный ужин", "description": "По пятницам"}],
+                "reviews": [{"id": "review-1", "rating": 5, "text": "Удобно приходить с детьми"}],
+            },
+            "expected": {"draft_count": 3, "draft_only": True, "invented_promotions_allowed": False},
+        }
+    ],
+    "tomorrow_bookings_check": [
+        {
+            "key": "booking_without_prepayment",
+            "input_fixture": {
+                "appointments": [{"id": "appointment-1", "date_range": "tomorrow", "status": "confirmed", "prepayment": False}]
+            },
+            "expected": {"flag_ids": ["appointment-1"], "communications_created": False, "personal_data_in_model_prompt": False},
+        }
+    ],
+    "google_sheets_business_result": [
+        {
+            "key": "valid_row_and_incomplete_row",
+            "input_fixture": {
+                "rows": [
+                    {"row_id": "row-1", "name": "Заказ 1", "amount": 1500},
+                    {"row_id": "row-2", "name": "", "amount": ""},
+                ]
+            },
+            "expected": {"accepted_ids": ["row-1"], "exception_ids": ["row-2"], "provider_write_performed": False},
+        }
+    ],
+}
+
+
 def build_agent_template_catalog() -> List[Dict[str, Any]]:
     return [_build_template_manifest(definition) for definition in TEMPLATE_DEFINITIONS]
 
@@ -312,7 +376,7 @@ def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
         "certification_gates": gates,
         "certification_evidence": load_template_certification_evidence(str(definition["key"]), str(definition["version"])),
         "fixtures": [{"key": key, "status": "pending"} for key in fixture_keys],
-        "golden_results": [],
+        "golden_results": deepcopy(FIRST_WAVE_GOLDEN_CASES.get(str(definition["key"]), [])),
         "creation_prompt": definition["prompt"],
         "category": draft["category"],
     }
