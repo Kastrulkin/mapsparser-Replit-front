@@ -2,9 +2,19 @@ from legacy_routes import shared as _shared
 
 globals().update(_shared.runtime_namespace)
 
+
+def _telegram_bind_row_value(row, key, index):
+    if row is None:
+        return None
+    if hasattr(row, "get"):
+        return row.get(key)
+    return row[index]
+
+
 @app.route('/api/telegram/bind/verify', methods=['POST'])
 def verify_telegram_bind_token():
     """Проверка токена привязки (вызывается из бота)"""
+    db = None
     try:
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
@@ -28,19 +38,25 @@ def verify_telegram_bind_token():
             (bind_token,),
         )
         token_row = cursor.fetchone()
-        if token_row:
-            token_id, user_id, business_id_from_token, expires_at, used = token_row
 
         if not token_row:
             db.close()
             return jsonify({"error": "Токен не найден"}), 404
+
+        token_id = _telegram_bind_row_value(token_row, "id", 0)
+        user_id = _telegram_bind_row_value(token_row, "user_id", 1)
+        business_id_from_token = _telegram_bind_row_value(token_row, "business_id", 2)
+        expires_at = _telegram_bind_row_value(token_row, "expires_at", 3)
+        used = _telegram_bind_row_value(token_row, "used", 4)
 
         # Проверяем срок действия
         from datetime import datetime
         expires_dt = expires_at
         if isinstance(expires_at, str):
             expires_dt = datetime.fromisoformat(expires_at)
-        if expires_dt < datetime.now(expires_dt.tzinfo) if getattr(expires_dt, "tzinfo", None) else datetime.now():
+        expires_tz = getattr(expires_dt, "tzinfo", None)
+        current_time = datetime.now(expires_tz) if expires_tz is not None else datetime.now()
+        if expires_dt < current_time:
             db.close()
             return jsonify({"error": "Токен истек"}), 400
 
@@ -92,6 +108,12 @@ def verify_telegram_bind_token():
         }), 200
 
     except Exception as e:
+        if db is not None:
+            try:
+                db.conn.rollback()
+            except Exception:
+                pass
+            db.close()
         print(f"❌ Ошибка проверки токена привязки: {e}")
         return jsonify({"error": str(e)}), 500
 
