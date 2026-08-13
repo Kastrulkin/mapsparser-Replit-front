@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SeoMeta from "@/components/SeoMeta";
-import { articleCategories, publishedArticles } from "@/content/articles";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
+import { useLocalizedArticles } from "@/content/useLocalizedArticles";
 import {
   Breadcrumbs,
   FilterPills,
@@ -10,48 +12,53 @@ import {
 } from "./ContentShared";
 import { makeBreadcrumbSchema } from "./contentSeo";
 
-const allCategory = "Все";
-
 const ArticlesPage = () => {
-  const [activeCategory, setActiveCategory] = useState(allCategory);
+  const { language } = useLanguage();
+  const copy = contentCopy[language].articles;
+  const { articles, isLoading } = useLocalizedArticles(language);
+  const [activeCategory, setActiveCategory] = useState(copy.all);
+
+  useEffect(() => {
+    setActiveCategory(copy.all);
+  }, [copy.all]);
 
   const filteredArticles = useMemo(() => {
-    if (activeCategory === allCategory) {
-      return publishedArticles;
+    if (activeCategory === copy.all) {
+      return articles;
     }
 
-    return publishedArticles.filter((article) => article.category === activeCategory);
-  }, [activeCategory]);
+    return articles.filter((article) => article.category === activeCategory);
+  }, [activeCategory, articles, copy.all]);
 
-  const filters = [allCategory, ...articleCategories];
+  const filters = [copy.all, ...Array.from(new Set(articles.map((article) => article.category)))];
 
   return (
     <PageFrame>
       <SeoMeta
-        description="Статьи LocalOS о картах, отзывах, локальном маркетинге и привлечении клиентов без лишних рекламных затрат."
+        description={copy.seoDescription}
         path="/articles"
         schema={makeBreadcrumbSchema([
           { name: "LocalOS", path: "/" },
-          { name: "Статьи", path: "/articles" },
+          { name: copy.latest, path: "/articles" },
         ])}
-        title="Статьи о локальном маркетинге — LocalOS"
+        title={copy.seoTitle}
       />
       <ListHero
-        description="Разборы для локального бизнеса: как расти в картах, оффлайн, работать с отзывами, получать больше заявок и удерживать клиентов."
-        eyebrow="Материалы LocalOS"
-        title="Статьи о бизнесе, клиентах и росте"
+        description={copy.description}
+        eyebrow={copy.eyebrow}
+        title={copy.title}
       />
       <main className="px-4 py-14 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <Breadcrumbs sectionHref="/articles" sectionTitle="Статьи" />
+          <Breadcrumbs sectionHref="/articles" sectionTitle={contentCopy[language].navigation.articles.name} />
           <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-center">
             <div>
-              <h2 className="text-3xl font-bold text-gray-950">Последние статьи</h2>
-              <p className="mt-2 text-gray-600">Выберите тему и начните с самого практичного материала.</p>
+              <h2 className="text-3xl font-bold text-gray-950">{copy.latest}</h2>
+              <p className="mt-2 text-gray-600">{copy.chooseTopic}</p>
             </div>
             <FilterPills activeValue={activeCategory} onChange={setActiveCategory} values={filters} />
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div aria-busy={isLoading} className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredArticles.map((article) => (
               <MaterialCard
                 date={article.publishedAt}

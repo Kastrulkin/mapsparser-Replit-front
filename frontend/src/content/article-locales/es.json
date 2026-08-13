@@ -1,0 +1,1347 @@
+[
+  {
+    "title": "Compiled AI: por qué la IA debería pensar una vez pero funcionar miles de veces",
+    "slug": "compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
+    "excerpt": "La IA diseña y prueba el escenario de trabajo una vez. Luego, el programa lleva a cabo la tarea de forma rápida, predecible y sin una nueva llamada al modelo en cada paso.",
+    "category": "Negocios",
+    "tags": [
+      "Compiled AI",
+      "automatización",
+      "IA",
+      "procesos de negocio",
+      "LocalOS"
+    ],
+    "publishedAt": "2026-08-12",
+    "updatedAt": "2026-08-12",
+    "seoTitle": "Compiled AI: la IA piensa una vez, el script se ejecuta miles de veces - LocalOS",
+    "seoDescription": "Qué es la IA compilada: cómo la IA crea un script comprobable, el programa lo ejecuta sin llamadas repetidas al modelo y el propietario conserva el control.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Una tarea, una solución",
+        "body": "La mayoría de los sistemas de IA resuelven el mismo problema cada vez que se ejecutan. La IA compilada adopta un enfoque diferente: la IA primero crea y valida un flujo de trabajo, y luego el flujo de trabajo se ejecuta como un programa normal: rápido, predecible y sin hacer referencia constantemente al modelo."
+      },
+      {
+        "title": "El problema de los agentes de IA convencionales",
+        "body": "Imaginemos que una empresa necesita tramitar una nueva revisión, consultar una tarjeta en tarjetas o clasificar una solicitud entrante. Cada vez que se inicia un agente de IA normal, vuelve a recibir instrucciones, analiza la situación, selecciona una acción, genera un resultado y accede a otros servicios."
+      },
+      {
+        "title": "Qué cambia cada vez que lanzas",
+        "items": [
+          "las respuestas pueden diferir incluso con los mismos datos de entrada",
+          "cada ejecución lleva tiempo y consume tokens",
+          "el error puede aparecer mientras se trabaja con un cliente real",
+          "La lógica es más difícil de probar, versionar y verificar por adelantado."
+        ]
+      },
+      {
+        "title": "Investigación de IA compilada",
+        "body": "El 6 de abril de 2026, autores de XY.AI Labs, la Facultad de Medicina de la Universidad de Stanford, la Universidad de Cornell y el Hospital Brigham and Women's/Escuela de Medicina de Harvard presentaron la preimpresión \"IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM\". Propusieron separar el momento en que la IA crea una lógica de trabajo de su posterior ejecución.",
+        "bodyLinks": [
+          {
+            "text": "IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM",
+            "href": "https://arxiv.org/abs/2604.05150v1"
+          }
+        ]
+      },
+      {
+        "title": "idea principal",
+        "body": "Muchos procesos de negocio requieren inteligencia para diseñarse correctamente, pero no requieren nuevas ideas cada vez que se repiten."
+      },
+      {
+        "title": "¿Qué es la IA compilada?",
+        "body": "Un agente de IA común y corriente se puede comparar con un empleado al que cada vez se le asigna una tarea y se le pide que decida de forma independiente cómo completarla. En la IA compilada, un fuerte especialista primero estudia el problema, crea regulaciones detalladas y las prueba en diferentes situaciones. Sólo que en lugar de una instrucción de texto, la IA crea un script de software ejecutable."
+      },
+      {
+        "title": "Tres propiedades requeridas",
+        "items": [
+          "el modelo se llama durante la creación del proceso, no en cada operación",
+          "el proceso terminado se ejecuta de forma determinista, como el código de un programa normal",
+          "Antes de comenzar, el proceso se somete a una verificación de varias etapas."
+        ]
+      },
+      {
+        "title": "El resultado es un artefacto de software.",
+        "body": "La IA crea un artefacto de software en lugar de una respuesta o aviso único. Se puede probar, versionar, validar, comparar y mejorar sin reconstruir todo el proceso."
+      },
+      {
+        "title": "Cómo se crea un proceso",
+        "body": "El sistema recibe una descripción de la tarea: datos de entrada, resultado esperado y restricciones. Luego, la IA crea una pequeña parte de la lógica empresarial dentro de una plantilla preparada previamente. En la arquitectura experimental, dichas funciones se limitaron a aproximadamente 20 a 50 líneas de código para reducir el espacio de error y evitar que el modelo cambiara la infraestructura o la forma en que se accede a los servicios."
+      },
+      {
+        "title": "Cuatro controles antes de empezar",
+        "items": [
+          "Seguridad: búsqueda de vulnerabilidades, fugas de datos, comandos inseguros e instrucciones inyectadas",
+          "Sintaxis: comprobar la ejecutabilidad del código, los tipos de datos y las reglas técnicas",
+          "Ejecución: ejecución en un entorno aislado en casos de prueba y entradas defectuosas",
+          "Precisión: comparación del resultado con respuestas de referencia."
+        ]
+      },
+      {
+        "title": "El error se detecta antes del lanzamiento real.",
+        "body": "Si el guión no pasa la prueba, no se envía a producción. El modelo recibe una descripción del error, corrige la lógica y luego se ejecutan nuevamente las comprobaciones. Sólo un script que ha pasado todo el ciclo de validación se convierte en un programa en funcionamiento.",
+        "bodyLinks": [
+          {
+            "text": "todo el ciclo de validación",
+            "href": "https://arxiv.org/html/2604.05150v1"
+          }
+        ]
+      },
+      {
+        "title": "Lo que mostró el experimento con funciones.",
+        "body": "El primer experimento incluyó 400 tareas en las que el sistema debía seleccionar una función y pasar correctamente los parámetros. La IA compilada preparó guiones de trabajo para el 96% de las tareas. El 4% restante no fue verificado y no fue publicado. Los scripts ya compilados se ejecutaron de manera reproducible: los mismos datos de entrada produjeron el mismo resultado."
+      },
+      {
+        "title": "¿Cuándo da sus frutos la compilación?",
+        "body": "El script requirió 9600 tokens para su creación y la ejecución posterior no consumió ningún token. En condiciones experimentales, los costos fueron iguales a los de la referencia directa al modelo después de aproximadamente 17 operaciones. Con 1000 iteraciones, la IA compilada utilizó 57 veces menos tokens."
+      },
+      {
+        "title": "Velocidad y costo en el experimento.",
+        "body": "El tiempo medio de ejecución fue de 4,5 milisegundos frente a 2004 milisegundos para el acceso directo al modelo de lenguaje, aproximadamente 450 veces más rápido. Según los cálculos de los autores por millón de transacciones por mes, los costos totales fueron de 555 dólares frente a 22.000 dólares. Estas cifras se refieren a las condiciones específicas del estudio e indican un principio de depreciación más que una garantía universal de ahorro."
+      },
+      {
+        "title": "No todo se puede convertir en código normal",
+        "body": "El segundo experimento se realizó en 5.680 cuentas de proveedores. Los documentos diferían en estructura, calidad de reconocimiento y disposición de la información. Las reglas simples funcionaron rápidamente, pero solo extrajeron correctamente el 20,3% de la información clave. Comprender los nombres de las empresas, los importes y los campos ambiguos todavía requería un modelo de lenguaje."
+      },
+      {
+        "title": "Versión híbrida de Code Factory",
+        "body": "Los autores mantuvieron la secuencia general de acciones compilada y predecible, pero permitieron llamadas limitadas al modelo en etapas complejas. Esta opción mostró la misma precisión del 80,0% al extraer campos clave como acceso directo al modelo, y al reconocer cadenas de productos alcanzó el 80,4%, el mejor resultado entre las opciones comparadas."
+      },
+      {
+        "title": "¿Dónde se necesita realmente la IA?",
+        "body": "La IA compilada no debería reemplazar completamente los modelos lingüísticos. Su tarea es determinar dónde se requiere comprensión del lenguaje o nuevo razonamiento, y dónde basta con crear y probar un procedimiento una vez."
+      },
+      {
+        "title": "Cómo se aplica este enfoque en LocalOS",
+        "body": "Una empresa local tiene docenas de tareas repetitivas: responder a reseñas, actualizar información en tarjetas, preparar contenido, verificar que las tarjetas estén completas, encontrar asociaciones, procesar solicitudes y monitorear actividades regulares. En LocalOS, la IA ayuda a generar un script, el propietario lo verifica y la secuencia aprobada ejecuta el script."
+      },
+      {
+        "title": "Ejemplo: trabajar con una nueva reseña",
+        "items": [
+          "LocalOS recibe comentarios y datos seleccionados de la empresa",
+          "Determina el tema, el tono y el nivel de riesgo.",
+          "selecciona un script verificado adecuado",
+          "si es necesario, llama al modelo sólo para preparar el texto",
+          "Comprueba los hechos, la extensión, el tono y el lenguaje prohibido.",
+          "transmite el resultado al propietario o empleado para su confirmación",
+          "después de la confirmación, guarda el resultado y lo transfiere al bucle de publicación compatible"
+        ]
+      },
+      {
+        "title": "La IA no reorganiza el proceso",
+        "body": "El modelo se utiliza cuando es necesario comprender un idioma o preparar un texto. Las comprobaciones, restricciones, confirmaciones y registros de acciones se realizan según reglas predefinidas."
+      },
+      {
+        "title": "De las indicaciones a las prácticas acumuladas",
+        "body": "Una vez que una práctica ha sido validada por humanos y se ha demostrado que es beneficiosa, se puede guardar como una versión del script y utilizarla en empresas similares. El proceso se adapta a la industria, ciudad, marca y situación específica, pero los datos de la empresa no se comparten con otras empresas."
+      },
+      {
+        "title": "Puedes actualizar una etapa separada",
+        "body": "Si el resultado empeora, no es necesario reconstruir todo el sistema. Puede encontrar una etapa débil, actualizarla, ejecutar pruebas nuevamente y lanzar una nueva versión. Así es como LocalOS acumula una biblioteca de procesos comerciales en funcionamiento, en lugar de un conjunto de indicaciones dispares."
+      },
+      {
+        "title": "Donde la IA compilada es especialmente útil",
+        "items": [
+          "el proceso se repite regularmente",
+          "el resultado esperado se puede describir de antemano",
+          "Se conocen los tipos de datos de entrada.",
+          "la tarea debe realizarse de la misma manera",
+          "Necesita control, registro y auditabilidad."
+        ]
+      },
+      {
+        "title": "Donde el enfoque funciona peor",
+        "body": "Las tareas completamente nuevas, raras y creativas son más difíciles de convertir en un escenario determinista. Desarrollar una estrategia, buscar un modelo de negocio y una campaña no estándar requiere flexibilidad del modelo y participación humana."
+      },
+      {
+        "title": "Limitaciones del estudio",
+        "body": "Los experimentos cubrieron dos tipos de problemas: el 4% de los scripts no se pudieron compilar y la calidad del código dependía del modelo y la precisión de la descripción original. Los resultados no se pueden transferir automáticamente a ninguna automatización sin sus propias comprobaciones."
+      },
+      {
+        "title": "La siguiente etapa de la automatización",
+        "body": "La primera etapa de la adopción de la IA brindó a las empresas asistentes universales que responden preguntas y crean contenido. La siguiente etapa es convertir las soluciones encontradas en flujos de trabajo confiables. El modelo ayuda a encontrar una solución, el programa garantiza una ejecución estable, las comprobaciones protegen contra errores y la persona mantiene el control sobre acciones importantes."
+      },
+      {
+        "title": "Principio de sistema operativo local",
+        "body": "La IA encuentra y da forma a las prácticas laborales. El propietario lo comprueba y confirma. El guión convierte la solución en un proceso repetible para la empresa."
+      },
+      {
+        "title": "Fuente",
+        "body": "El material se basa en la primera versión de la preimpresión “AI compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM”, publicada el 6 de abril de 2026.",
+        "bodyLinks": [
+          {
+            "text": "primera versión de la preimpresión \"IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM\"",
+            "href": "https://arxiv.org/abs/2604.05150v1"
+          }
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "¿Por qué los emprendedores se agotan?",
+        "href": "/articles/pochemu-predprinimateli-vygorayut",
+        "label": "Artículo"
+      },
+      {
+        "title": "Acerca de LocalOS",
+        "href": "/about",
+        "label": "LocalOS"
+      },
+      {
+        "title": "Mesa de control de marketing local",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "mesa"
+      }
+    ]
+  },
+  {
+    "title": "¿Por qué los emprendedores se agotan?",
+    "slug": "pochemu-predprinimateli-vygorayut",
+    "excerpt": "El agotamiento de los propietarios a menudo comienza no cuando hay mucho trabajo, sino cuando hay demasiado caos y ningún sistema manejable.",
+    "category": "Negocios",
+    "tags": [
+      "agotamiento",
+      "pequeña empresa",
+      "sistema operativo",
+      "controlabilidad",
+      "KPI"
+    ],
+    "publishedAt": "2026-05-18",
+    "updatedAt": "2026-05-18",
+    "coverImage": "/images/articles/pochemu-predprinimateli-vygorayut-cover.png",
+    "coverAlt": "Empresaria en computadora portátil, alrededor de notificaciones, tareas e indicadores comerciales",
+    "statsImage": "/images/articles/pochemu-predprinimateli-vygorayut-stats.png",
+    "statsImageAlt": "La magnitud del problema: estadísticas sobre el agotamiento empresarial",
+    "schemeImage": "/images/articles/pochemu-predprinimateli-vygorayut-scheme.png",
+    "schemeImageAlt": "Cómo el crecimiento sin un sistema conduce a la sobrecarga y el agotamiento de los propietarios",
+    "seoTitle": "Por qué los emprendedores se agotan - LocalOS",
+    "seoDescription": "Por qué los propietarios de pequeñas empresas se agotan: sobrecarga crónica, gestión manual, caos, déficit de efectivo, crecimiento sin estructura y falta de control.",
+    "draft": false,
+    "body": [
+      {
+        "title": "La sobrecarga crónica se ha convertido en la norma para las pequeñas empresas",
+        "body": "Durante los últimos años, casi todas las conversaciones con el propietario de una pequeña empresa han sonado similar. No importa lo que haga una persona: salón, cafetería, agencia, clínica, servicio o comercio electrónico. Desde fuera, una empresa puede parecer viva: hay clientes, empleados, tareas, tráfico e ingresos. Pero detrás de la pantalla, a menudo se siente la misma condición: una sobrecarga crónica."
+      },
+      {
+        "title": "Cuando todo se ve bien por fuera",
+        "body": "Recientemente tuve una conversación con un empresario, para quien por fuera todo parecía normal. El equipo está trabajando, hay clientes, la caja registradora está funcionando. Pero después de diez minutos quedó claro que la persona estaba en un estado de agotamiento total. No por una crisis, sino por la sensación acumulada de caos."
+      },
+      {
+        "title": "¿Qué constituye el caos?",
+        "items": [
+          "brechas de efectivo",
+          "sistema operativo sin fin",
+          "empleados que necesitan ser monitoreados constantemente",
+          "problemas que surgen todos los días",
+          "incapacidad para desconectar incluso por la noche"
+        ]
+      },
+      {
+        "title": "Descripción muy precisa de la condición.",
+        "body": "En algún momento, el empresario dijo: \"Siempre sucede algo, pero no está nada claro qué es exactamente\". Esta es una descripción precisa del estado de innumerables propietarios de empresas en la actualidad. El problema del agotamiento hace tiempo que dejó de ser una historia privada para los individuos. Se ha convertido en un problema sistémico para las pequeñas empresas."
+      },
+      {
+        "title": "Escala del problema",
+        "body": "Según diversos estudios, entre el 40% y el 70% de los propietarios de pequeñas empresas experimentan signos de agotamiento. En Estados Unidos, el 72% de los empresarios informaron signos de agotamiento emocional después de la pandemia. En el Reino Unido, alrededor del 37%. En Rusia, según estudios realizados entre empresarios, aproximadamente uno de cada dos empresarios sufre agotamiento."
+      },
+      {
+        "title": "No se trata de gente débil",
+        "body": "Lo más importante aquí: no estamos hablando de personas débiles. Por el contrario, las pequeñas empresas casi siempre las construyen personas muy resilientes y dispuestas a trabajar duro. Pero esto es precisamente lo que muchas veces se convierte en una trampa."
+      },
+      {
+        "title": "Los emprendedores realmente trabajan duro",
+        "body": "La investigación de Gallup muestra que casi la mitad de los trabajadores por cuenta propia en los Estados Unidos trabajan más de 44 horas a la semana, y el 26% trabaja más de 60 horas. Según Eurostat, un tercio de los empresarios en Europa trabajan 45 horas o más cada semana. En el Reino Unido, el 20% de los empresarios trabajan hasta 64 horas a la semana."
+      },
+      {
+        "title": "No es sólo la cantidad de trabajo lo que resulta agotador",
+        "body": "No es la gran cantidad de trabajo lo que suele agotar a los empresarios. Lo más duro es la sensación constante de que no se puede abandonar el negocio. Que todo depende de ti. Que cualquier problema finalmente llega al dueño."
+      },
+      {
+        "title": "Al principio parece normal",
+        "body": "Cuando la empresa es pequeña y está al inicio de su andadura, el modo manual parece normal. El emprendedor se vende, se contrata, se gestiona, resuelve él mismo los conflictos y cierra agujeros. Pero entonces el negocio empieza a crecer y se le acaban las fuerzas."
+      },
+      {
+        "title": "El crecimiento sin estructura aumenta el caos",
+        "body": "Aparecen empleados, clientes, nuevos procesos, publicidad, CRM y canales de venta adicionales. Si en este momento no aparece un sistema dentro de la empresa, el caos comienza a crecer más rápido que el propio negocio."
+      },
+      {
+        "title": "La altura por sí sola no reduce el estrés",
+        "body": "Este es un punto importante que mucha gente subestima: el crecimiento en sí mismo no reduce la carga para el propietario. Muy a menudo sucede lo contrario. Cuanto más grande se vuelve una empresa sin un sistema, más control manual comienza a requerir."
+      },
+      {
+        "title": "¿Por qué la gente se agota durante la etapa de crecimiento?",
+        "body": "Muchos empresarios se agotan no durante una crisis, sino durante la etapa de crecimiento. En algún momento, los negocios se convierten en un flujo interminable de decisiones: dinero, empleados, clientes, ventas, conflictos, tareas, plazos, cajas registradoras y sistemas operativos. Todo esto pasa por una sola persona."
+      },
+      {
+        "title": "Las consecuencias económicas también son enormes.",
+        "body": "Según datos estadounidenses, alrededor del 20% de las nuevas empresas cierran en el primer año de funcionamiento. Alrededor del 50% - durante los primeros cinco años. Al décimo año, aproximadamente el 65% de las empresas dejan de existir. Solo en 2023-2024, cerca de 983.000 pequeñas empresas cerraron en Estados Unidos."
+      },
+      {
+        "title": "Las razones formales no muestran el panorama completo",
+        "body": "Formalmente, las razones del cierre suelen parecer problemas de flujo de caja, inflación, aumento de costes o caída de la demanda. Pero el cansancio emocional del propietario casi siempre pasa a formar parte de esta cadena. Un negocio sin control poco a poco empieza a destruir a quien lo gestiona."
+      },
+      {
+        "title": "El alivio a menudo no proviene de los ingresos",
+        "body": "Muchos empresarios comienzan a sentir alivio no después del crecimiento de los ingresos, sino después de la aparición del control. Cuando aparecen cifras claras y análisis transparentes, se vuelve más fácil. Los procesos descritos y la distribución de responsabilidades proporcionan previsibilidad."
+      },
+      {
+        "title": "La principal carga es la falta de control.",
+        "body": "Es la falta de control lo que crea la principal carga emocional. Por lo tanto, las empresas fuertes se construyen cada vez más no en torno al heroísmo del propietario, sino en torno a la coherencia: KPI claros, economía transparente, automatización de rutinas, procesos y análisis personalizados.",
+        "bodyLinks": [
+          {
+            "text": "KPI claros",
+            "href": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
+          }
+        ]
+      },
+      {
+        "title": "El sistema no simplifica los negocios",
+        "body": "La sistematicidad no simplifica los negocios. Pero ella lo hace al menos manejable. Y esta es una de las cosas más subestimadas en las pequeñas empresas: el agotamiento a menudo comienza no cuando hay demasiado trabajo, sino cuando hay demasiado caos."
+      }
+    ],
+    "related": [
+      {
+        "title": "¿Por qué un registro completo no equivale a ganancias?",
+        "href": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "label": "Artículo"
+      },
+      {
+        "title": "Mesa de control de marketing local",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "mesa"
+      },
+      {
+        "title": "Cómo solicitar una tarjeta de empresa",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artículo"
+      }
+    ]
+  },
+  {
+    "title": "¿Por qué un registro completo no equivale a ganancias?",
+    "slug": "pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+    "excerpt": "Una entrada completa no garantiza ganancias. Veamos por qué los profesionales ocupados, los descuentos y el flujo de clientes pueden ocultar una economía de salón débil.",
+    "category": "Finanzas",
+    "tags": [
+      "salón de belleza",
+      "beneficio",
+      "factura promedio",
+      "repetir visitas",
+      "KPI"
+    ],
+    "publishedAt": "2026-05-18",
+    "updatedAt": "2026-05-18",
+    "seoTitle": "Por qué un registro completo no equivale a ganancias - LocalOS",
+    "seoDescription": "Por qué una cita completa en un salón de belleza no supone beneficio: economía de los servicios, descuentos, repetición de visitas, ingresos por hora de sillón y KPIs de gestión.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Cuando tu agenda está llena y todavía no tienes dinero",
+        "body": "A veces, el dueño del salón mira el horario y piensa: todo está empaquetado, los técnicos trabajan sin ventanas, suena el teléfono, vienen los clientes. Pero al final del mes todavía existe la sensación de que por alguna razón no hay dinero."
+      },
+      {
+        "title": "El registro completo no significa un salón rentable",
+        "body": "Éste es uno de los escollos más desagradables del negocio de la belleza. El registro completo no significa un salón rentable. Además, son precisamente estos salones los que a menudo caen en el caos: parece que el negocio está vivo y activo, pero en el interior todo se mantiene en constante tensión."
+      },
+      {
+        "title": "¿Cómo es un salón sin un sistema?",
+        "items": [
+          "estrés constante",
+          "fatiga del equipo",
+          "descuentos infinitos",
+          "control manual",
+          "agotamiento del propietario",
+          "la sensación de que todo se mantiene unido por el esfuerzo"
+        ]
+      },
+      {
+        "title": "Esto no es un accidente",
+        "body": "Así es como se ve una empresa sin un sistema. Hoy en día, el agotamiento empresarial se ha convertido en un gran problema: según varios estudios, entre el 40% y el 70% de los propietarios de pequeñas empresas experimentan signos de agotamiento. En Rusia, aproximadamente uno de cada dos empresarios se enfrenta a esto.",
+        "bodyLinks": [
+          {
+            "text": "agotamiento empresarial",
+            "href": "/articles/pochemu-predprinimateli-vygorayut"
+          }
+        ]
+      },
+      {
+        "title": "El problema no es sólo emocional",
+        "body": "Cuando el propietario apaga incendios todo el tiempo, el negocio deja de desarrollarse como sistema. Comienza a simplemente sobrevivir."
+      },
+      {
+        "title": "Lo que suele mantener al propietario en modo manual.",
+        "items": [
+          "él es el responsable de grabar",
+          "piensa en la publicidad",
+          "cierra problemas de administrador",
+          "tratando de aumentar los ingresos",
+          "lanza acciones caóticas"
+        ]
+      },
+      {
+        "title": "Por qué las pérdidas son difíciles de notar",
+        "body": "La mayoría de los propietarios ni siquiera entienden exactamente dónde están perdiendo dinero. Hay movimiento en el salón, clientes y técnicos están ocupados y parece que todo debería funcionar bien. Pero sin números es imposible ver la imagen real. Si no sabes lo que piensas, no puedes influir en ello."
+      },
+      {
+        "title": "¿Qué tan fuertes crecen los salones?",
+        "items": [
+          "repetir visitas",
+          "retención de clientes",
+          "regrabando",
+          "clara economía de servicios",
+          "control de ganancias",
+          "descarga gestionada",
+          "KPI claros"
+        ]
+      },
+      {
+        "title": "Por qué muchos clientes no significan muchas ganancias",
+        "body": "En el negocio de los salones de belleza es muy fácil confundir actividad con resultados. Por ejemplo, un master puede estar completamente cargado todo el día. Desde fuera parece: genial, la demanda es alta."
+      },
+      {
+        "title": "Cuando un servicio popular va en contra de las ganancias",
+        "items": [
+          "el servicio dura cuatro horas",
+          "requiere materiales costosos",
+          "vendido con descuento",
+          "no trae al cliente de vuelta"
+        ]
+      },
+      {
+        "title": "Empleo sin ingresos normales",
+        "body": "Al final del día, puede resultar que el salón no haya ganado casi nada. Estos servicios suelen parecer populares, pero en realidad sólo crean empleo sin obtener beneficios normales. Hasta que el propietario considere la economía de cada servicio por separado, el negocio seguirá fortaleciendo el modelo débil."
+      },
+      {
+        "title": "Por qué los estudios pequeños a veces ganan más",
+        "body": "Ésta es una de las razones por las que los estudios pequeños a veces ganan más dinero que los grandes salones de belleza a tiempo completo. No se trata del número de clientes. La cuestión es qué tan bien está estructurado el sistema dentro de la empresa."
+      },
+      {
+        "title": "El sistema comienza con números.",
+        "body": "La mayoría de los salones se rigen por la sensación. Parece que el récord se ha hundido: comienza la promoción. Parece que hay pocos clientes: la publicidad está activada. Parece que el maestro es débil: comienzan las quejas. Pero parece que esto no es gestión."
+      },
+      {
+        "title": "Por qué un salón sólido se basa en números",
+        "body": "Un salón sólido siempre se construye en torno a números. No porque al propietario le gusten las mesas, sino porque sólo los números muestran la imagen real del negocio. Una de las métricas más importantes es cuántos clientes se van con su próxima cita ya asignada. Si el cliente se marchaba sin volver a reservar, el salón perdería ingresos futuros.",
+        "bodyLinks": [
+          {
+            "text": "Sólo los números muestran la imagen real del negocio.",
+            "href": "/articles/pochemu-predprinimateli-vygorayut"
+          }
+        ]
+      },
+      {
+        "title": "Ingresos por hora de silla",
+        "body": "Otro indicador importante es cuánto dinero genera una hora de funcionamiento de la silla. La fórmula parece sencilla: ingresos por hora de silla = precio del servicio / duración del servicio en horas. Hay una idea importante detrás de esta fórmula: no todas las horas de trabajo son igualmente beneficiosas para las empresas."
+      },
+      {
+        "title": "La carga y la eficiencia de carga son dos cosas diferentes",
+        "body": "Puedes mantener ocupado a un artesano durante 10 horas y ganar menos de lo que gana otro artesano en 6 horas. Es por eso que los salones fuertes han mirado durante mucho tiempo no solo la carga, sino también la eficiencia de esta carga."
+      },
+      {
+        "title": "Por qué los descuentos casi siempre empeoran las cosas",
+        "body": "Cuando no hay ningún sistema en el salón, casi siempre existe el deseo de estimular el flujo. Esto suele terminar con descuentos. Al principio parece que todo funciona: la grabación cobra vida, hay más clientes, hay movimiento."
+      },
+      {
+        "title": "Consecuencias de los descuentos",
+        "items": [
+          "Los clientes se acostumbran a los precios baratos.",
+          "las ganancias caen",
+          "el equipo está cada vez más cansado",
+          "no hay mas dinero"
+        ]
+      },
+      {
+        "title": "Peligro de vida de acción en acción.",
+        "body": "En algún momento, el salón comienza a vivir de promoción en promoción. Éste es un modelo muy peligroso: destruye el negocio gradualmente."
+      },
+      {
+        "title": "¿En qué se basan los salones fuertes para crecer?",
+        "items": [
+          "repetir visitas",
+          "retención de clientes",
+          "abonos de temporada",
+          "paquetes",
+          "crecimiento promedio de cheques",
+          "servicio de calidad"
+        ]
+      },
+      {
+        "title": "¿Dónde aparece el beneficio estable?",
+        "body": "Los beneficios estables no aparecen donde hay muchos clientes baratos, sino donde el cliente regresa con regularidad."
+      },
+      {
+        "title": "El pensamiento más importante para el propietario.",
+        "body": "En algún momento, es necesario dejar de ver el salón simplemente como un lugar con servicios y empezar a verlo como un sistema."
+      },
+      {
+        "title": "¿Qué debería ser visible en el sistema?",
+        "items": [
+          "beneficio considerado",
+          "Los puntos débiles son visibles.",
+          "pronóstico de ingresos",
+          "la carga está controlada",
+          "se miden las devoluciones de los clientes",
+          "Está claro dónde se pierde el dinero."
+        ]
+      },
+      {
+        "title": "¿Por qué el sistema se convierte en ganancias?",
+        "body": "Sin esto, las empresas siempre vivirán en el caos: ventanas vacías, sobrecargas, descuentos o pánico por la caja registradora. El sistema crea controlabilidad. Y es la controlabilidad la que luego se convierte en beneficio."
+      },
+      {
+        "title": "Conclusión",
+        "body": "La mayoría de los salones pierden dinero no porque no tengan suficientes clientes, sino porque no ven lo que sucede dentro del negocio."
+      },
+      {
+        "title": "Lo que necesitas para empezar a contar.",
+        "items": [
+          "devoluciones de clientes",
+          "entradas repetidas",
+          "margen bruto",
+          "rentabilidad de los servicios",
+          "ingresos por hora de silla",
+          "pérdidas por cancelaciones",
+          "repetir visitas"
+        ]
+      },
+      {
+        "title": "Cuando aparecen los números, aparece el sistema.",
+        "body": "Hasta que el propietario no empiece a contar estos indicadores, no estará realmente gestionando el salón. Simplemente observa el flujo de clientes. Pero tan pronto como aparecen los números, aparece un sistema. Y cuando aparece un sistema, es posible influir en el resultado. Porque si no sabes lo que piensas, no puedes influir en ello."
+      },
+      {
+        "title": "Descarga la tabla de diagnóstico interior",
+        "items": [
+          "KPI clave del salón",
+          "cálculo de la rentabilidad del servicio",
+          "ingresos por hora de silla",
+          "análisis de margen bruto",
+          "tasas de devolución de clientes",
+          "tabla de gestión de propietarios"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Mesa de control de marketing local",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "mesa"
+      },
+      {
+        "title": "Cómo solicitar una tarjeta de empresa",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artículo"
+      },
+      {
+        "title": "Cómo recibió el salón nuevos registros de tarjetas",
+        "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "label": "caso"
+      }
+    ]
+  },
+  {
+    "title": "Los mapas online se han convertido en un canal de venta: por qué ya no basta con estar en el mapa",
+    "slug": "onlain-karty-stali-kanalom-prodazh",
+    "excerpt": "Por qué la tarjeta de presentación en cards ya funciona como la parte inferior del embudo: influye en las llamadas, rutas, citas y selección de clientes directamente dentro de la plataforma.",
+    "category": "Mapas",
+    "tags": [
+      "tarjetas",
+      "marketing local",
+      "conversión",
+      "Mapas Yandex"
+    ],
+    "publishedAt": "2026-04-23",
+    "updatedAt": "2026-04-23",
+    "seoTitle": "Los mapas online se han convertido en un canal de ventas: ¿por qué no basta con que una empresa esté en el mapa? LocalOS",
+    "seoDescription": "Veamos por qué Yandex Maps, 2GIS, Google y Apple ya funcionan como canal de ventas para empresas locales y qué afecta exactamente a las solicitudes, llamadas y visitas.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Los mapas ya no son un libro de referencia, sino una interfaz de selección",
+        "body": "Para las empresas locales, los mapas en línea hace tiempo que dejaron de ser un libro de referencia digital. Aquí el usuario no sólo encuentra una empresa, sino que compara opciones, lee reseñas, mira fotografías, construye una ruta, escribe, llama o concerta una cita. La tarjeta ya no responde a la pregunta de dónde estás, sino a la pregunta de por qué elegirte ahora mismo."
+      },
+      {
+        "title": "¿Por qué afecta el dinero y no la belleza de la presencia?",
+        "body": "Cuando una persona abre una tarjeta de empresa en Maps, suele estar a uno o dos pasos de la acción objetivo. Por tanto, la relevancia de los datos, reseñas, precios, fotografías, botones de acción y velocidad de respuesta no afectan a la imagen, sino a las visitas, llamadas y solicitudes reales."
+      },
+      {
+        "title": "La escala del canal ya es demasiado grande para ignorarla.",
+        "body": "Los mapas se han convertido desde hace mucho tiempo en una interfaz masiva de demanda. Google Maps es utilizado por una audiencia de miles de millones de usuarios, Yandex habla de decenas de millones de personas que buscan bienes y servicios, y 2GIS se ha convertido desde hace mucho tiempo en un ecosistema independiente con una audiencia multimillonaria. Para las empresas locales, esto ya no es una fuente adicional de tráfico, sino uno de los mayores canales de contacto con la demanda."
+      },
+      {
+        "title": "El principal poder de las tarjetas es la intención del usuario.",
+        "body": "Los mapas son poderosos porque interceptan a una persona en el momento en que la solicitud ya está asociada con un lugar y una acción. Cubren simultáneamente la demanda de marca, cuando el usuario ya conoce la empresa, y la nueva demanda, cuando una persona elige entre un dentista, una cafetería, un salón o un servicio de coche cercano. Por tanto, la tarjeta sirve tanto para retener la demanda como para captar nueva."
+      },
+      {
+        "title": "La tarjeta de empresa se ha convertido en un minisite dentro de la plataforma",
+        "items": [
+          "dirección y horario de trabajo",
+          "botones de teléfono, chat y acción",
+          "sitio web, redes sociales y enlaces",
+          "fotos, videos y reseñas",
+          "productos, menú, servicios y precios",
+          "Grabaciones, promociones, publicaciones y eventos."
+        ]
+      },
+      {
+        "title": "Los datos inexactos en los mapas cuestan dinero más rápido que el contenido débil",
+        "body": "Si el número de teléfono es incorrecto, el cliente no podrá comunicarse. Si el horario está desactualizado, llegará a un punto cerrado. Si la dirección se ingresa incorrectamente, la ruta se construirá en la dirección incorrecta. Si la categoría no se selecciona correctamente, la tarjeta no se incluirá en el escenario de selección correspondiente. Las tarjetas no pueden rellenarse una vez y considerarse cerradas: se trata de un trabajo operativo habitual."
+      },
+      {
+        "title": "Las reseñas en las tarjetas ya no son una reputación, sino una conversión.",
+        "body": "Las reseñas se han convertido en parte de la elección misma. La calificación, el número de reseñas recientes y la calidad de las respuestas afectan directamente la probabilidad de una llamada, cita y visita. Por lo tanto, trabajar con reseñas debe percibirse como una gestión de conversión: si la tarjeta genera demanda, pero no inspira confianza, la empresa pierde dinero en la etapa de comparación.",
+        "bodyLinks": [
+          {
+            "text": "Las reseñas se han convertido en parte de la elección misma.",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ]
+      },
+      {
+        "title": "El problema empresarial es que las tarjetas no son una sola plataforma",
+        "body": "En la Federación de Rusia y la CEI, el conjunto básico suele comenzar con Yandex Maps y 2GIS, y para el público internacional o turístico se añaden Google y Apple. Cada plataforma tiene su propia lógica de tarjeta, interfaz, análisis y conjunto de capacidades. En un momento esto ya requiere atención, pero en una red de sucursales se convierte en un sistema operativo independiente."
+      },
+      {
+        "title": "Lo que realmente afecta el resultado en las cartas.",
+        "items": [
+          "ficha completa y precisa: dirección, horarios, categorías, servicios, sitio web, precios y descripción",
+          "revisiones y velocidad de respuesta: factor de confianza y factor de decisión",
+          "Fotos, vídeos, menús, productos y precios: el contenido enriquecido ayuda a tomar decisiones dentro de la tarjeta.",
+          "publicaciones, promociones y eventos: aumenta el atractivo y el CTR de la tarjeta",
+          "Medir acciones, no sólo visualizaciones: llamadas, rutas, conversiones, mensajes y reservas"
+        ]
+      },
+      {
+        "title": "Los mapas son especialmente fuertes donde la demanda está ligada a la geografía.",
+        "body": "Los restaurantes, cafeterías, medicina, belleza, fitness, servicios personales, servicios de automóviles, comercio minorista, ocio y comercio minorista local casi siempre reciben una parte importante de las acciones de las tarjetas. Al mismo tiempo, las tarjetas son más débiles como único canal para negocios puramente en línea y como parte del complejo B2B. Es decir, no se trata de una respuesta universal para todo, sino de una infraestructura de elección para la demanda local."
+      },
+      {
+        "title": "Los métodos grises son cada vez más peligrosos",
+        "body": "Cuando un canal atrae clientes, resulta tentador acelerar los resultados con mejoras, especialmente reseñas. Pero las plataformas bloquean cada vez más reseñas, ediciones y perfiles falsos. Para las empresas, esto significa algo simple: es más confiable y rentable gestionar la calidad de la tarjeta, la experiencia del cliente y la velocidad de respuesta que intentar piratear el sistema.",
+        "bodyLinks": [
+          {
+            "text": "gestionar la calidad de la tarjeta",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "Por qué las empresas necesitan una capa de gestión además de los mapas",
+        "body": "Mientras el negocio tenga un punto, el control manual puede ocultar el caos. Pero tan pronto como aparecen sucursales, una avalancha de reseñas, productos, promociones, cambios de horarios y la necesidad de análisis, el modo manual comienza a fallar. Aquí es donde se necesita una capa de gestión encima de las tarjetas: para ver dónde se pierden las llamadas, qué tarjetas no están llenas, dónde cae la tasa de respuesta y qué acciones realmente producen resultados.",
+        "bodyLinks": [
+          {
+            "text": "el modo manual comienza a fallar",
+            "href": "/articles/pochemu-predprinimateli-vygorayut"
+          }
+        ]
+      },
+      {
+        "title": "Preguntas frecuentes: por qué los mapas no deberían considerarse solo parte del SEO local",
+        "body": "Porque los mapas afectan no sólo a la visibilidad, sino también a acciones específicas del usuario. Dentro de la tarjeta, una persona ya está llamando, haciendo una ruta, escribiendo, visitando un sitio web o concertando una cita. Esto ya no es sólo una tarea de SEO, sino un canal de conversión completo."
+      },
+      {
+        "title": "Preguntas frecuentes: qué plataformas se necesitan para hacer negocios en la Federación de Rusia y la CEI",
+        "body": "En la mayoría de los casos, el mínimo básico es Yandex Maps y 2GIS. Para el público internacional, las zonas turísticas y los segmentos con una alta proporción de iPhone, también vale la pena considerar a Google y Apple."
+      },
+      {
+        "title": "Preguntas frecuentes: qué es más importante: la calificación o que la tarjeta esté completa",
+        "body": "Ambos factores son importantes, pero una calificación alta no ayuda si la tarjeta contiene datos incorrectos o incompletos. El usuario primero debe recibir información precisa y solo entonces confiar."
+      },
+      {
+        "title": "Preguntas frecuentes: qué métricas mirar primero",
+        "body": "Las principales métricas son las acciones más cercanas al dinero: llamadas, rutas, visitas al sitio web, mensajes, reservas y clics en botones. Las vistas son útiles, pero por sí solas no dicen mucho sobre los ingresos."
+      },
+      {
+        "title": "Conclusión",
+        "body": "Los mapas en línea ya no parecen un libro de referencia. Para las empresas locales, este es el canal en el que el usuario selecciona, compara y actúa. Por tanto, los ganadores no son aquellas empresas que simplemente están presentes en las tarjetas, sino aquellas que gestionan sistemáticamente tarjetas, reseñas, contenidos, productos y análisis de acciones. Esta es precisamente la tarea con la que trabaja LocalOS: convertir las tarjetas de un escaparate pasivo en una fuente controlada de llamadas, rutas, solicitudes y ventas."
+      }
+    ],
+    "related": [
+      {
+        "title": "Lista de verificación para la auditoría de tarjetas de empresa",
+        "href": "/documents/checklist-audita-kartochki-kompanii",
+        "label": "Documento"
+      },
+      {
+        "title": "¿Por qué el competidor está más arriba en las cartas?",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Artículo"
+      },
+      {
+        "title": "Cómo recibió el salón nuevos registros de tarjetas",
+        "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "label": "caso"
+      }
+    ]
+  },
+  {
+    "title": "¿Por qué su competidor está más arriba en las cartas?",
+    "slug": "pochemu-konkurent-vyshe-na-kartah",
+    "excerpt": "Por qué una empresa vecina puede tener una puntuación más alta en Yandex Maps y Google Maps, incluso si su calificación es igual o superior.",
+    "category": "Mapas",
+    "tags": [
+      "Mapas Yandex",
+      "SEO local",
+      "tarjeta de empresa"
+    ],
+    "publishedAt": "2026-04-20",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "¿Por qué un competidor está más arriba en los mapas incluso con la misma calificación? - LocalOS",
+    "seoDescription": "Por qué una calificación de 5.0 no garantiza posiciones altas en Yandex Maps y Google Maps: reseñas recientes, respuestas, fotografías, actividad de la tarjeta y señales de comportamiento.",
+    "draft": false,
+    "body": [
+      {
+        "title": "¿Por qué el negocio vecino es más alto?",
+        "body": "Los dueños de negocios locales tienen un problema común. Casi todo el mundo ha abierto al menos una vez Yandex Maps o Google Maps y se ha preguntado: ¿por qué nuestro vecino es más alto que nosotros si también tenemos buenas críticas? A primera vista, todo parece realmente ilógico. Su calificación es 5.0. El competidor tiene 4,9. Tienes un interior precioso. Lo suyo es normal. Pero por alguna razón las solicitudes van hacia él."
+      },
+      {
+        "title": "Los mapas hace tiempo que dejaron de ser un libro de referencia",
+        "body": "En este punto, muchos empiezan a pensar que las tarjetas están manipuladas, que los competidores están inflando las reseñas o que los algoritmos funcionan por casualidad. De hecho, todo suele ser mucho más prosaico. Hace tiempo que Maps dejó de ser sólo un directorio de empresas. Hoy en día es un sistema de clasificación local completo, donde los algoritmos evalúan no sólo la calificación de una empresa, sino también qué tan viva se ve la empresa en general."
+      },
+      {
+        "title": "Una calificación alta ya no garantiza nada",
+        "body": "Hace unos años todo era relativamente sencillo: más estrellas, mayor posición. Hoy los algoritmos funcionan de manera diferente. Un salón condicional con una calificación de 4,8 puede ser consistentemente más alto que un salón con una calificación de 5,0 si su tarjeta parece más activa para el sistema.",
+        "bodyLinks": [
+          {
+            "text": "si su tarjeta parece más activa",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      },
+      {
+        "title": "¿Qué analizan las cartas?",
+        "items": [
+          "¿Con qué frecuencia aparecen nuevas reseñas?",
+          "¿La empresa responde a los clientes?",
+          "¿Las fotos están actualizadas?",
+          "¿Se publica nuevo contenido?",
+          "cómo interactúan los usuarios con la tarjeta",
+          "¿Están construyendo una ruta?",
+          "¿Están llamando?",
+          "¿van a regresar?"
+        ]
+      },
+      {
+        "title": "La cuestión principal del algoritmo.",
+        "body": "Básicamente, los algoritmos intentan responder una pregunta simple: ¿Qué negocio parece más útil y vibrante en este momento? Esta es la razón por la que muchas empresas pierden sus tarjetas incluso antes de empezar a promocionar."
+      },
+      {
+        "title": "Las reseñas nuevas son más importantes que las antiguas",
+        "body": "Una de las cosas más subestimadas de la promoción local es la velocidad a la que se actualizan las reseñas. Muy a menudo una empresa se enorgullece de haber recopilado, por ejemplo, 300 opiniones a lo largo de varios años. Pero si los últimos comentarios nuevos fueron hace seis meses, para los algoritmos ya parece una tarjeta congelada.",
+        "bodyLinks": [
+          {
+            "text": "revisar la velocidad de actualización",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ]
+      },
+      {
+        "title": "El ritmo de las reseñas es tan importante como la cantidad",
+        "body": "Esto es especialmente notable en Yandex Maps. Las empresas que publican nuevas reseñas periódicamente casi siempre obtienen más visibilidad. Incluso si su calificación general es más baja. Además, no sólo es importante la cantidad, sino también el ritmo. Si las reseñas aparecen de forma constante cada semana, los algoritmos lo perciben como una señal: la empresa está activa, los clientes siguen llegando, la empresa está viva."
+      },
+      {
+        "title": "La mayoría de las empresas no trabajan con reseñas.",
+        "body": "Y esto es claramente visible en casi cualquier nicho. La tarjeta se parece a esto: varias fotos antiguas, reseñas sin respuesta, la última publicación fue hace un año, la mitad de la información no se ha actualizado durante meses. Al mismo tiempo, el propietario puede gastar mucho dinero en publicidad al mismo tiempo y preguntarse por qué las tarjetas casi no reciben solicitudes."
+      },
+      {
+        "title": "La tarjeta se ha convertido en un canal clave de confianza",
+        "body": "Para las empresas locales, las tarjetas se han convertido desde hace mucho tiempo en uno de los canales clave de confianza. Especialmente en nichos como salones de belleza, dentistas, fitness, cafeterías y clínicas. La gente no mira el sitio web primero. Miran la tarjeta. Y si parece abandonado, la confianza cae incluso antes de la primera llamada."
+      },
+      {
+        "title": "Las respuestas a las reseñas tienen más impacto del que crees",
+        "body": "Mucha gente percibe que responder a las reseñas es un elemento de cortesía. Esto es mucho más importante para los algoritmos. Cuando una empresa responde rápida y regularmente, las tarjetas ven una comunicación activa con los clientes. Además, las respuestas a la negatividad son especialmente importantes."
+      },
+      {
+        "title": "La velocidad de reacción distingue a las cartas vivas.",
+        "body": "Si una empresa ignora los comentarios negativos durante semanas, envía una mala señal no sólo a las personas, sino también a la propia plataforma. Lo ideal es responder a las reseñas en un plazo de 24 horas. Máximo: dos o tres días. Es la velocidad de reacción lo que a menudo distingue a las cartas vivas de aquellas que pierden visibilidad gradualmente."
+      },
+      {
+        "title": "Las tarjetas aman la actividad.",
+        "body": "Esta es una de las razones por las que una empresa vecina puede recibir más solicitudes incluso con una calificación similar. Porque simplemente mantiene la tarjeta de forma sistemática. Yandex Maps, Google Maps y 2GIS tienen desde hace tiempo mecánicas muy similares a las de las redes sociales: publicaciones, actualizaciones, fotos, respuestas, eventos, promociones."
+      },
+      {
+        "title": "El directorio estático ya no funciona",
+        "body": "La mayoría de las empresas todavía utilizan tarjetas como catálogo estático: complete su perfil una vez y olvídese. Aunque los algoritmos claramente promocionan a quienes actualizan periódicamente. Para una empresa local, se considera normal la actividad al menos varias veces por semana: nuevas fotos, publicaciones, respuestas a clientes, actualizaciones de servicios."
+      },
+      {
+        "title": "Las plataformas quieren mostrar empresas en vivo",
+        "body": "Esto es importante no porque al SEO le guste mucho. Sino porque las plataformas quieren mostrar a los usuarios empresas relevantes y vivas."
+      },
+      {
+        "title": "Las fotos de hoy funcionan casi como reseñas.",
+        "body": "Esto es especialmente notable en la belleza, la medicina, el fitness y la restauración. Una tarjeta con diez fotografías antiguas casi siempre pierde frente a una tarjeta donde regularmente aparece contenido nuevo: interior, equipo, trabajo, proceso, atmósfera.",
+        "bodyLinks": [
+          {
+            "text": "Nuevo contenido aparece regularmente.",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "El usuario toma una decisión en segundos",
+        "body": "El usuario toma una decisión muy rápidamente. A veces, unos segundos de ver una tarjeta son suficientes para que una persona presione llamar o se acerque a un competidor. Los algoritmos ven esto a través de señales de comportamiento: cuánto tiempo pasan en la tarjeta, cuántas personas construyen una ruta, cuántas presionan la llamada."
+      },
+      {
+        "title": "Las tarjetas se convierten en un sistema de confianza",
+        "body": "Y este parece ser el principal cambio de los últimos años. Anteriormente, la promoción local era similar al SEO: palabras clave, categorías, optimización técnica. Hoy en día, las tarjetas evalúan cada vez más el comportamiento de las personas."
+      },
+      {
+        "title": "¿Por qué dos empresas con la misma calificación reciben tráfico diferente?",
+        "body": "Si una tarjeta genera confianza, atrae la atención, genera interacciones y se actualiza periódicamente, gradualmente comenzará a crecer por sí sola. Es por eso que dos empresas con la misma calificación pueden recibir cantidades de tráfico completamente diferentes. Parece una empresa viva con la que se trabaja todos los días. El otro es como un perfil olvidado después del registro."
+      },
+      {
+        "title": "¿Por qué es esto especialmente importante ahora?",
+        "body": "Para las empresas locales, las tarjetas se convierten en lo que solía ser Instagram o un sitio web. Este es el primer lugar donde una persona conoce la empresa. Y en la mayoría de los nichos, la victoria depende cada vez más no del tamaño del presupuesto publicitario, sino de la calidad del trabajo sistémico."
+      },
+      {
+        "title": "¿Qué determina la victoria en las cartas?",
+        "items": [
+          "trabajando con reseñas",
+          "contenido",
+          "velocidad de respuesta",
+          "relevancia de la tarjeta",
+          "comportamiento del usuario"
+        ]
+      },
+      {
+        "title": "Conclusión",
+        "body": "Muchas empresas locales fracasan no por un mal servicio. Y porque su negocio parece muerto para los algoritmos. Incluso si todo funciona bien por dentro."
+      }
+    ],
+    "related": [
+      {
+        "title": "Lista de verificación para la auditoría de tarjetas de empresa",
+        "href": "/documents/checklist-audita-kartochki-kompanii",
+        "label": "Documento"
+      },
+      {
+        "title": "Cómo recibió el salón nuevos registros de tarjetas",
+        "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "label": "caso"
+      }
+    ]
+  },
+  {
+    "title": "Cómo diseñar una tarjeta de empresa para que venda",
+    "slug": "kak-oformit-kartochku-kompanii",
+    "excerpt": "Por qué la tarjeta de empresa en los mapas se convirtió en un minisitio dentro de la plataforma y qué hay que mostrar para que el cliente te elija más rápido.",
+    "category": "Clientes",
+    "tags": [
+      "tarjeta de empresa",
+      "servicios",
+      "precios"
+    ],
+    "publishedAt": "2026-04-18",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "Cómo solicitar una tarjeta de empresa - LocalOS",
+    "seoDescription": "Cómo registrar una tarjeta de empresa en Yandex Maps, Google Maps y 2GIS: categorías, servicios, precios, fotos, reseñas, actividad y acciones rápidas.",
+    "draft": false,
+    "body": [
+      {
+        "title": "La tarjeta se convirtió en la primera etapa de selección.",
+        "body": "El comercio local vive hoy una paradoja muy extraña. Las empresas pueden gastar cientos de miles en publicidad, administrar redes sociales, invertir en un sitio web y, al mismo tiempo, perder clientes directamente dentro de Yandex Maps, Google Maps o 2GIS. Porque para la mayoría de los usuarios, la tarjeta de empresa se ha convertido desde hace mucho tiempo en el primer paso de selección.",
+        "bodyLinks": [
+          {
+            "text": "perder clientes directamente dentro de Yandex Maps, Google Maps o 2GIS",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      },
+      {
+        "title": "La selección local ocurre rápidamente",
+        "body": "Especialmente en el comercio local. Cuando una persona busca un salón, dentista, cafetería o gimnasio cerca de su casa, casi nunca comienza con el sitio web. Él revela las cartas. Y luego todo sucede muy rápido."
+      },
+      {
+        "title": "¿Qué decide una persona en un minuto?",
+        "body": "El usuario abre varias tarjetas seguidas y, literalmente, en un minuto decide a quién llamar o dónde registrarse. Además, en este momento evalúa no solo la calificación."
+      },
+      {
+        "title": "Tres preguntas principales de la tarjeta.",
+        "items": [
+          "¿Qué puedes comprar o pedir aquí?",
+          "¿Se puede confiar en este negocio?",
+          "que fácil es ahora contactar o registrarse"
+        ]
+      },
+      {
+        "title": "Muchas tarjetas no responden a estas preguntas.",
+        "body": "El problema es que una gran cantidad de tarjetas no responden en absoluto a estas preguntas. Muy a menudo, una empresa local parece un antiguo directorio en los mapas: dirección, número de teléfono, un par de fotografías aleatorias y una breve descripción con el espíritu de \"brindamos una amplia gama de servicios de calidad\". Para el usuario está casi vacío."
+      },
+      {
+        "title": "Una tarjeta es un minisitio dentro de la plataforma.",
+        "body": "Hace tiempo que Maps dejó de ser sólo un catálogo de empresas. Hoy en día, una tarjeta es un minisitio dentro de la plataforma. Y la competencia ya no es sólo por los ratings, sino también por la atención."
+      },
+      {
+        "title": "La formalidad pierde ante una herramienta de ventas",
+        "body": "Esto es especialmente evidente en los servicios de belleza y locales. Es posible que dos salones estén en el mismo edificio, tengan calificaciones similares y los mismos precios, pero uno recibirá constantemente más llamadas y citas. Normalmente la diferencia es bastante simple: una empresa emite la tarjeta como herramienta de ventas y la segunda como trámite."
+      },
+      {
+        "title": "Comience con categorías",
+        "body": "Comienza con las cosas más básicas. Por ejemplo, categorías. Muchas empresas todavía eligen algo lo más general posible: “salón de belleza”, “centro médico”, “cafetería”. Aunque los algoritmos de mapas funcionan con mucha más precisión desde hace mucho tiempo. Cuanto mejor explique una tarjeta qué servicios ofrece una empresa, más fácil será para la plataforma entender a quién mostrársela."
+      },
+      {
+        "title": "Los servicios deben estar diseñados específicamente.",
+        "body": "Lo mismo ocurre con los servicios. El usuario casi nunca busca un buen negocio abstracto. Busca una tarea específica: manicura cercana, coloración del cabello, odontopediatría, masajes, cafetería para desayunar. Y si la tarjeta no contiene servicios correctamente diseñados, la empresa comienza a perder incluso antes de ver las reseñas.",
+        "bodyLinks": [
+          {
+            "text": "el negocio comienza a perder incluso antes de ver las reseñas",
+            "href": "/articles/pochemu-konkurent-vyshe-na-kartah"
+          }
+        ]
+      },
+      {
+        "title": "Los precios aumentan la confianza",
+        "body": "Los precios son una historia diferente. Muchos propietarios todavía tienen miedo de indicarlos. Existe la sensación de que es mejor dejarles llamar. Pero en la práctica, la falta de precios casi siempre reduce la confianza. La búsqueda local es una elección rápida: el usuario compara varias empresas al mismo tiempo. Y si un competidor tiene al menos un conocimiento básico del costo de los servicios, pero usted no, algunos clientes se irán simplemente por la transparencia."
+      },
+      {
+        "title": "No necesita una lista de precios completa, necesita pautas",
+        "body": "Esto es especialmente notable en la belleza, la medicina y el servicio. En este caso, no estamos hablando de la necesidad de publicar una lista de precios completa. Pero las posiciones clave y los precios iniciales deberían ser inmediatamente visibles."
+      },
+      {
+        "title": "Las fotos tienen un impacto aún mayor",
+        "body": "Las fotos de hoy tienen un impacto aún mayor. Además, el problema de la mayoría de las tarjetas no es ni siquiera la calidad de las fotografías, sino su aleatoriedad. Muy a menudo el perfil parece una colección de imágenes inconexas: un viejo mostrador de recepción, una oficina vacía, un logo de hace cinco años y varias fotos borrosas."
+      },
+      {
+        "title": "¿Qué busca un usuario en las fotos?",
+        "items": [
+          "¿Qué clase de lugar es este?",
+          "¿Cómo es el ambiente allí?",
+          "quien trabaja allí",
+          "¿Cuánto puedes confiar en este lugar?"
+        ]
+      },
+      {
+        "title": "Mostrar el proceso y el resultado.",
+        "body": "Las tarjetas funcionan especialmente bien cuando se puede ver no sólo el interior, sino también el proceso en sí: el equipo, los detalles del servicio, el trabajo real, la atmósfera, el resultado. En esencia, el usuario quiere probar mentalmente este negocio por sí mismo incluso antes de la llamada."
+      },
+      {
+        "title": "Las buenas cartas parecen vivas",
+        "body": "Por eso las buenas cartas casi siempre parecen vivas. Ésta es otra cosa que mucha gente subestima."
+      },
+      {
+        "title": "Las tarjetas aman la actividad.",
+        "items": [
+          "nuevas fotos",
+          "actualizaciones",
+          "respuestas a reseñas",
+          "servicios actuales",
+          "publicaciones"
+        ]
+      },
+      {
+        "title": "La tarjeta abandonada pierde credibilidad",
+        "body": "Cuando aparece regularmente nueva actividad en una tarjeta, los algoritmos comienzan a percibir que la empresa está viva. Y la mayoría de las empresas actualizan la tarjeta una vez: el día del registro. Después de esto, el perfil permanece inmóvil durante años. Y poco a poco empieza a parecer abandonado no sólo para las personas, sino también para las propias plataformas."
+      },
+      {
+        "title": "Responder a las reseñas es parte de la clasificación y la confianza",
+        "body": "Esto es especialmente notable en las respuestas a las reseñas. Para los propietarios, esto suele parecer una tarea menor. Para los algoritmos, este es un indicador de cuánto interactúa una empresa con los clientes.",
+        "bodyLinks": [
+          {
+            "text": "respuestas a reseñas",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ]
+      },
+      {
+        "title": "La velocidad de reacción es importante",
+        "body": "Cuando una empresa responde rápidamente a las críticas, especialmente a las negativas, la tarjeta empieza a parecer proactiva y manejable. Cuando las opiniones permanecen sin respuesta durante meses, surge la sensación contraria. Lo importante no es sólo la presencia de una respuesta, sino también la velocidad de reacción. En el comercio local, se considera ideal una respuesta en un plazo de 24 horas. Máximo: varios días."
+      },
+      {
+        "title": "Las tarjetas se han convertido en un sistema de confianza",
+        "body": "Porque las tarjetas se han convertido desde hace mucho tiempo en un sistema de confianza. Y este parece ser el principal cambio de los últimos años. Anteriormente, la promoción local se parecía más al SEO técnico: categorías, palabras clave, optimización. Hoy en día, las plataformas miden cada vez más el comportamiento de los usuarios."
+      },
+      {
+        "title": "¿Qué señales ven las plataformas?",
+        "items": [
+          "¿Abren la tarjeta?",
+          "¿miran las fotos?",
+          "¿Leen reseñas?",
+          "¿Presionan \"llamar\"?",
+          "¿Están construyendo una ruta?"
+        ]
+      },
+      {
+        "title": "Una tarjeta fuerte es parte del sistema de ventas.",
+        "body": "Si las personas interactúan activamente con la tarjeta, los algoritmos comienzan a mostrarla con más frecuencia. Por lo tanto, una tarjeta de empresa sólida hoy en día ya no es un diseño de perfil. Esto es parte del sistema de ventas."
+      },
+      {
+        "title": "Conclusión",
+        "body": "Muchas empresas locales pierden frente a la competencia incluso antes del primer contacto con el cliente, simplemente porque su tarjeta no ayuda a la persona a tomar una decisión."
+      }
+    ],
+    "related": [
+      {
+        "title": "Mesa de control de marketing local",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "mesa"
+      },
+      {
+        "title": "Liderar el crecimiento en un estudio de masajes.",
+        "href": "/cases/rost-lidov-v-massazhnoi-studii",
+        "label": "caso"
+      }
+    ]
+  },
+  {
+    "title": "Cómo afectan las reseñas al flujo de clientes",
+    "slug": "kak-otzyvy-vliyayut-na-potok-klientov",
+    "excerpt": "Por qué las reseñas se han convertido en una nueva forma de confianza y afectan directamente a las solicitudes, las posiciones de las tarjetas, la conversión y las visitas repetidas.",
+    "category": "Reseñas",
+    "tags": [
+      "opiniones",
+      "reputación",
+      "repetir clientes"
+    ],
+    "publishedAt": "2026-04-15",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "Cómo afectan las reseñas al flujo de clientes - LocalOS",
+    "seoDescription": "Cómo afectan las reseñas al flujo de clientes comerciales locales: confianza, frescura, respuestas a la negatividad, posiciones de las tarjetas, conversión y visitas repetidas.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Las reseñas ya no son solo estrellas",
+        "body": "Los negocios locales tienen una característica que muchos notan demasiado tarde. Hace tiempo que las reseñas dejaron de ser solo asteriscos junto al nombre de la empresa. Hoy influyen directamente en el flujo de clientes."
+      },
+      {
+        "title": "El comportamiento de la gente ha cambiado.",
+        "body": "Además, no se trata sólo de los algoritmos de Yandex Maps, Google Maps o 2GIS. Por supuesto, a las plataformas les encantan las tarjetas con buenas calificaciones y actividad. Pero el cambio principal se produjo en el comportamiento de la propia gente. Los clientes se han vuelto mucho más cuidadosos a la hora de elegir en quién confiar."
+      },
+      {
+        "title": "Las reseñas se han convertido en una nueva forma de confianza",
+        "body": "Especialmente en el comercio local, donde exteriormente casi todas las empresas tienen el mismo aspecto. Un salón se diferencia poco de otro. Una clínica es de la siguiente. Todos tienen hermosas fotografías, promesas similares y un enfoque individual. Por eso las reseñas se han convertido en una nueva forma de confianza."
+      },
+      {
+        "title": "¿Qué busca una persona en las reseñas?",
+        "items": [
+          "cómo se trata a la gente aquí",
+          "¿Qué tan adecuado es todo?",
+          "cual es la calidad del servicio",
+          "¿No será una experiencia desagradable?"
+        ]
+      },
+      {
+        "title": "La gente lee más que solo calificaciones",
+        "body": "Cuando una persona abre una tarjeta de empresa, intenta comprender no sólo si la calificación es buena. Esto queda muy claro por la forma en que la gente lee las reseñas. Rara vez se fijan únicamente en el número de estrellas. Por lo general, una persona comienza a buscar detalles: cómo se comunican los empleados, si hay algún problema con la grabación, si se imponen los servicios, si está limpio por dentro, qué tan atentos son con los clientes."
+      },
+      {
+        "title": "El usuario prueba el negocio por sí mismo.",
+        "body": "En esencia, el usuario intenta imaginarse a sí mismo dentro de este negocio incluso antes del primer contacto. Es por eso que una revisión detallada en vivo casi siempre funciona mejor que cualquier publicidad."
+      },
+      {
+        "title": "La especificidad inspira confianza",
+        "body": "Cuando una persona escribe: \"El maestro explicó tranquilamente el proceso y le ayudó a elegir la atención sin imposiciones\", esto inspira mucha más confianza que cualquier formulación de marketing al estilo \"El mejor servicio de la ciudad\". Porque los detalles parecen reales."
+      },
+      {
+        "title": "La gente confía más en otras personas.",
+        "body": "Y este parece ser el principal cambio de los últimos años: la gente confía cada vez menos en lo que las empresas dicen sobre sí mismas y cada vez más en lo que otros dicen sobre ellas."
+      },
+      {
+        "title": "Sentimientos comparados en la búsqueda local",
+        "body": "Esto es especialmente notable en la búsqueda local. Muy a menudo, el usuario abre varias tarjetas seguidas a la vez y compara no las empresas, sino las sensaciones que desprenden de ellas. Algunos incluso pueden tener una calificación ligeramente más baja, pero las reseñas parecen animadas, frescas y detalladas. Otra empresa tiene un 5.0 perfecto, pero los últimos comentarios se dejaron hace seis meses y las respuestas de la empresa parecen secas y formuladas.",
+        "bodyLinks": [
+          {
+            "text": "el usuario abre varias tarjetas seguidas a la vez",
+            "href": "/articles/pochemu-konkurent-vyshe-na-kartah"
+          }
+        ]
+      },
+      {
+        "title": "Una tarjeta viva es más confiable",
+        "body": "Y por alguna razón la primera carta inspira más confianza. Porque parece viva."
+      },
+      {
+        "title": "La frescura de las reseñas se ha convertido en un factor importante.",
+        "body": "La actualidad de las reseñas se ha convertido en general en un factor muy importante. Y no sólo para los usuarios, sino también para las propias plataformas. Las tarjetas han analizado durante mucho tiempo no sólo las calificaciones, sino también la actividad en torno a una empresa.",
+        "bodyLinks": [
+          {
+            "text": "Durante mucho tiempo las tarjetas han sido analizadas para algo más que calificaciones.",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      },
+      {
+        "title": "¿Qué ven los algoritmos?",
+        "items": [
+          "la empresa trabaja",
+          "los clientes siguen viniendo",
+          "se dedican a negocios"
+        ]
+      },
+      {
+        "title": "Por qué 4.8 puede ser superior a 5.0",
+        "body": "Si las reseñas aparecen con regularidad, los algoritmos lo perciben como una señal de actividad. Por lo tanto, a veces una empresa con una calificación de 4,8 resulta ser más alta que una empresa con 5,0, simplemente porque tiene un flujo constante de nuevas reseñas y una tarjeta activa."
+      },
+      {
+        "title": "También se leen las respuestas empresariales.",
+        "body": "Pero las respuestas empresariales son aún más interesantes. La mayoría de las empresas no responden a los clientes en absoluto o lo hacen de manera muy formal: \"Gracias por sus comentarios, estaremos encantados de volver a verlo\". El problema es que la gente también lee las respuestas."
+      },
+      {
+        "title": "La actitud de la empresa se desprende de las respuestas.",
+        "body": "Las respuestas muestran muy claramente cuánto le importa realmente a la empresa. Cuando una empresa responde de manera animada, tranquila y directa, crea la sensación de comunicación humana normal. Especialmente cuando se trata de negatividad."
+      },
+      {
+        "title": "La negatividad puede aumentar la confianza",
+        "body": "Paradójicamente, una reseña negativa bien procesada a veces aumenta la confianza más que una docena de calificaciones perfectas seguidas. El usuario ve: los problemas ocurren, pero la empresa no se esconde y sabe responder a ellos con normalidad."
+      },
+      {
+        "title": "Las tarjetas esterilizadas despiertan sospechas",
+        "body": "Pero hoy, por el contrario, las tarjetas perfectamente estériles empiezan a despertar sospechas."
+      },
+      {
+        "title": "Las reseñas afectan más que solo a los nuevos clientes",
+        "body": "Hay una cosa más que mucha gente subestima: las reseñas no sólo sirven para atraer nuevos clientes. También afectan los retornos."
+      },
+      {
+        "title": "La respuesta ayuda a fidelizar al cliente",
+        "body": "Cuando una persona recibe una respuesta atenta, donde la empresa recuerda los detalles de la visita, agradece los detalles y mantiene el contacto, surge la sensación de una relación, y no solo de un servicio prestado."
+      },
+      {
+        "title": "Esto es especialmente importante para las empresas locales.",
+        "body": "Especialmente en belleza, medicina, fitness y servicios, donde la gente regresa no sólo por los resultados, sino también por la sensación de ser recordada y apreciada."
+      },
+      {
+        "title": "Las reseñas se han convertido en parte del sistema de crecimiento.",
+        "body": "Esta es la razón por la que las empresas locales fuertes hace tiempo que dejaron de percibir las reseñas como algo secundario. Hoy ya forma parte del sistema de crecimiento empresarial.",
+        "bodyLinks": [
+          {
+            "text": "parte del sistema de crecimiento empresarial",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "¿A qué afectan las reseñas al mismo tiempo?",
+        "items": [
+          "en confianza",
+          "en el flujo de clientes",
+          "en posición en mapas",
+          "para la conversión",
+          "para visitas repetidas",
+          "sobre cómo se percibe el negocio incluso antes de la primera llamada"
+        ]
+      },
+      {
+        "title": "Conclusión",
+        "body": "Y quizás este haya sido el principal cambio de los últimos años. Anteriormente, las reseñas eran simplemente opiniones de los clientes. Ahora influyen directamente en si vendrá la próxima persona."
+      }
+    ],
+    "related": [
+      {
+        "title": "Revisar plantillas de respuesta",
+        "href": "/documents/shablony-otvetov-na-otzyvy",
+        "label": "Documento"
+      },
+      {
+        "title": "Cómo solicitar una tarjeta de empresa",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artículo"
+      }
+    ]
+  },
+  {
+    "title": "Cómo una cafetería puede conseguir más invitados con las tarjetas",
+    "slug": "kak-kafe-poluchat-gostei-iz-kart",
+    "excerpt": "Qué es importante mostrar en la tarjeta de una cafetería: menú, fotografías de platos, escenarios de selección rápida y reseñas recientes de huéspedes.",
+    "category": "café",
+    "tags": [
+      "café",
+      "tarjetas",
+      "menú"
+    ],
+    "publishedAt": "2026-04-13",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "Cómo una cafetería puede conseguir más invitados con tarjetas - LocalOS",
+    "seoDescription": "Cómo una cafetería puede conseguir más clientes gracias a las tarjetas: una tarjeta de cafetería como primera impresión, un escaparate, una fuente de confianza y la entrada principal a un negocio local.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Punto de competencia inusual",
+        "body": "El café hoy tiene un punto de competencia muy inusual. Antes todo se decidía por la ubicación. Luego - Instagram. Ahora, cada vez más, la elección se realiza entre Yandex Maps, Google Maps y 2GIS."
+      },
+      {
+        "title": "La decisión se toma sorprendentemente rápido",
+        "body": "Además, la decisión se toma con una rapidez sorprendente. Una persona abre varios establecimientos seguidos y, literalmente, en medio minuto comprende dónde irá a desayunar, dónde tomará un café o dónde se reunirá por la noche."
+      },
+      {
+        "title": "La tarjeta fue la primera impresión.",
+        "body": "Por eso la tarjeta de café se ha convertido hoy en día en algo mucho más que una simple dirección en un mapa. Básicamente, ésta es la primera impresión del establecimiento. Y para muchos invitados es lo único.",
+        "bodyLinks": [
+          {
+            "text": "La tarjeta cafetería hoy se ha convertido en algo mucho más",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "La gente busca más fácilmente de lo que parece",
+        "body": "Esto es especialmente notable en las grandes ciudades. Una persona rara vez busca el \"mejor café\". Normalmente todo sucede mucho más sencillo:",
+        "items": [
+          "cafe cerca",
+          "donde desayunar",
+          "buen lugar cerca"
+        ]
+      },
+      {
+        "title": "Comienza la selección visual rápida",
+        "body": "Después de esto, comienza una selección visual muy rápida. El usuario no mira tanto la calificación sino que intenta hacerse una idea del lugar:",
+        "items": [
+          "¿Cómo se ve la comida?",
+          "¿Cuál es la atmósfera dentro?",
+          "¿Está vivo este café?",
+          "¿Te gustaría ir allí ahora mismo?"
+        ]
+      },
+      {
+        "title": "Los invitados se pierden incluso antes del primer contacto.",
+        "body": "Y aquí muchos establecimientos pierden clientes incluso antes del primer contacto. Porque una gran cantidad de tarjetas todavía parecen un viejo libro de referencia:",
+        "items": [
+          "dirección",
+          "telefono",
+          "algunas fotos al azar",
+          "descripción poco clara"
+        ]
+      },
+      {
+        "title": "No hay suficientes antecedentes",
+        "body": "Esto no es suficiente para una persona. Ya está acostumbrado a que a través de una tarjeta pueda entender de antemano casi todo:",
+        "items": [
+          "¿Hay desayuno?",
+          "que tipo de cafe",
+          "cuales son los precios",
+          "¿Es acogedor por dentro?",
+          "¿Es adecuado el lugar de reunión?",
+          "¿Es posible llevarse algo rápidamente?"
+        ]
+      },
+      {
+        "title": "Las cartas funcionan como escaparate",
+        "body": "Curiosamente, en el negocio de la restauración, las tarjetas empezaron a funcionar casi como un escaparate. Y no sólo para los nuevos establecimientos. Incluso en lugares conocidos, el flujo de invitados depende cada vez más de lo \"viva\" que parezca la tarjeta."
+      },
+      {
+        "title": "Una tarjeta viva se nota inmediatamente",
+        "body": "Hay una diferencia muy notable entre los cafés que tratan sistemáticamente con tarjetas y los que alguna vez completaron un perfil y se olvidaron de él. Con el primero, generalmente puedes ver inmediatamente:",
+        "items": [
+          "fotos actuales",
+          "últimas reseñas",
+          "menú en vivo",
+          "respuestas a los invitados",
+          "actualizaciones"
+        ]
+      },
+      {
+        "title": "El abandono se siente inmediatamente.",
+        "body": "El segundo tiene una sensación de abandono. Incluso si todo está bien por dentro."
+      },
+      {
+        "title": "Las fotos juegan un papel particularmente importante",
+        "body": "Las fotografías juegan un papel particularmente importante. En un café la gente elige con la vista. Y a menudo incluso antes de leer reseñas. Y no estamos necesariamente hablando de fotografías de comida caras. La sensación de estar en un lugar real es mucho más importante."
+      },
+      {
+        "title": "¿Qué te ayuda a sentir un lugar?",
+        "body": "Cuando la tarjeta muestra:",
+        "items": [
+          "luz de la mañana",
+          "aterrizaje en vivo",
+          "barista en el trabajo",
+          "platos reales",
+          "detalles interiores",
+          "atmósfera de la noche"
+        ]
+      },
+      {
+        "title": "Un huésped se prueba el café antes de visitarlo.",
+        "body": "A una persona le resulta más fácil imaginarse a sí misma dentro de este espacio. En esencia, el usuario \"prueba\" mentalmente el café incluso antes de visitarlo."
+      },
+      {
+        "title": "El menú funciona más o menos igual.",
+        "body": "El menú funciona prácticamente igual. Muchos establecimientos todavía lo perciben como información técnica. Pero para el huésped, el menú es una forma de comprender rápidamente si el lugar es adecuado para él o no."
+      },
+      {
+        "title": "No se necesita un PDF de veinte páginas.",
+        "body": "Nadie quiere descargar un PDF de veinte páginas. Es importante que la gente vea en unos segundos:",
+        "items": [
+          "¿Hay desayuno?",
+          "¿Los precios son normales?",
+          "que tipo de cafe",
+          "hay postres",
+          "¿Es posible venir a almorzar?"
+        ]
+      },
+      {
+        "title": "Algunas posiciones pueden ser suficientes",
+        "body": "A veces, unas pocas posiciones populares son suficientes para que una persona tome una decisión."
+      },
+      {
+        "title": "Las reseñas tienen un gran impacto",
+        "body": "Las reseñas también tienen una influencia muy fuerte. Además, es interesante que los usuarios no los lean por las valoraciones mismas. Intentan entender el ambiente del lugar:",
+        "bodyLinks": [
+          {
+            "text": "Las reseñas son muy influyentes.",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ],
+        "items": [
+          "¿Es agradable estar allí?",
+          "cómo se comunican los empleados",
+          "¿El servicio ha ido mal?",
+          "¿Qué es lo que realmente vale la pena pedir?"
+        ]
+      },
+      {
+        "title": "Las reseñas detalladas son más sólidas que las breves.",
+        "body": "Es por eso que las reseñas detalladas en vivo funcionan mucho más que los comentarios breves con el espíritu de \"Me gustó todo\". Cuando una persona escribe sobre una experiencia específica (desayuno, ambiente, actitud del personal), comienza a percibirse casi como una recomendación de un amigo."
+      },
+      {
+        "title": "Las respuestas del café también son importantes.",
+        "body": "Las reacciones del café también desempeñan un papel inesperadamente importante. Cuando el establecimiento responde con calma y humanidad, da la sensación de que realmente se preocupan por los huéspedes y el servicio. Pero las plantillas vacías o la falta total de respuesta crean la impresión contraria."
+      },
+      {
+        "title": "Los mapas analizan la actividad.",
+        "body": "Y esto es importante no sólo para las personas. Cards lleva mucho tiempo analizando la actividad en torno a la tarjeta:",
+        "items": [
+          "¿Con qué frecuencia aparecen nuevas reseñas?",
+          "¿Las fotos están actualizadas?",
+          "¿Hay alguna respuesta?",
+          "¿Los usuarios interactúan con la tarjeta?"
+        ]
+      },
+      {
+        "title": "El perfil en vivo se muestra con más frecuencia",
+        "body": "Si un perfil parece estar activo, las plataformas empezarán a mostrarlo con más frecuencia."
+      },
+      {
+        "title": "La promoción se parece cada vez menos a la publicidad.",
+        "body": "Por eso hoy en día la promoción local de los cafés se parece cada vez menos a la publicidad clásica. A menudo los ganadores no son aquellos con el mayor presupuesto de marketing. Y los que ayudan a una persona a tomar una decisión rápidamente: entender el menú, ver el ambiente, sentir confianza en el lugar."
+      },
+      {
+        "title": "Una buena tarjeta reduce la incertidumbre",
+        "body": "Básicamente, una buena tarjeta de café hoy en día hace una cosa muy importante: reduce la incertidumbre. Y en el negocio de la restauración local, esto se convierte directamente en un flujo de invitados."
+      },
+      {
+        "title": "Donde ayuda LocalOS",
+        "body": "LocalOS aquí ayuda no tanto a \"promocionar\" la tarjeta como a verla a través de los ojos del visitante. El sistema muestra qué escenarios de selección faltan, dónde la tarjeta parece débil, qué revisiones vale la pena procesar y qué actualizaciones realmente pueden mejorar la confianza."
+      },
+      {
+        "title": "Las tarjetas se han convertido en la principal puerta de entrada a los negocios",
+        "body": "Porque para los cafés, los mapas hace tiempo que dejaron de ser solo navegación. En muchos casos, esta ya es la entrada principal del negocio.",
+        "bodyLinks": [
+          {
+            "text": "Los mapas hace tiempo que dejaron de ser solo navegación.",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Mesa de control de marketing local",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "mesa"
+      },
+      {
+        "title": "Cómo solicitar una tarjeta de empresa",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artículo"
+      }
+    ]
+  }
+]

@@ -1,6 +1,8 @@
 import { Navigate, useParams } from "react-router-dom";
 import SeoMeta from "@/components/SeoMeta";
-import { findArticleBySlug, publishedArticles } from "@/content/articles";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
+import { useLocalizedArticles } from "@/content/useLocalizedArticles";
 import {
   BottomCta,
   DetailHeader,
@@ -8,13 +10,12 @@ import {
   RelatedMaterials,
   SectionRenderer,
 } from "./ContentShared";
-import type { ArticleContent, ContentSection } from "@/content/contentTypes";
+import type { ArticleContent } from "@/content/contentTypes";
 import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
 
-const STATS_SECTION_TITLE = "Масштаб проблемы";
-const STATS_SECTION_END = "примерно каждый второй владелец бизнеса.";
-const SCHEME_SECTION_TITLE = "Рост без системы усиливает хаос";
-const SCHEME_SECTION_END = "хаос начинает расти быстрее самого бизнеса.";
+const BURNOUT_ARTICLE_SLUG = "pochemu-predprinimateli-vygorayut";
+const STATS_SECTION_INDEX = 4;
+const SCHEME_SECTION_INDEX = 9;
 
 const articleVisualClassName = "mt-6 mb-10 h-auto w-full rounded-[20px]";
 
@@ -28,22 +29,12 @@ const renderArticleVisual = (src: string, alt: string) => (
   />
 );
 
-const renderInlineArticleVisual = (article: ArticleContent, section: ContentSection) => {
-  const body = section.body?.trim();
-
-  if (
-    article.statsImage &&
-    section.title === STATS_SECTION_TITLE &&
-    body?.endsWith(STATS_SECTION_END)
-  ) {
+const renderInlineArticleVisual = (article: ArticleContent, sectionIndex: number) => {
+  if (article.slug === BURNOUT_ARTICLE_SLUG && article.statsImage && sectionIndex === STATS_SECTION_INDEX) {
     return renderArticleVisual(article.statsImage, article.statsImageAlt ?? "");
   }
 
-  if (
-    article.schemeImage &&
-    section.title === SCHEME_SECTION_TITLE &&
-    body?.endsWith(SCHEME_SECTION_END)
-  ) {
+  if (article.slug === BURNOUT_ARTICLE_SLUG && article.schemeImage && sectionIndex === SCHEME_SECTION_INDEX) {
     return renderArticleVisual(article.schemeImage, article.schemeImageAlt ?? "");
   }
 
@@ -52,7 +43,13 @@ const renderInlineArticleVisual = (article: ArticleContent, section: ContentSect
 
 const ArticleDetailPage = () => {
   const { slug } = useParams();
-  const article = findArticleBySlug(slug);
+  const { language } = useLanguage();
+  const { articles, isLoading } = useLocalizedArticles(language);
+  const article = articles.find((item) => item.slug === slug?.trim().replace(/[\\/]+$/g, ""));
+
+  if (isLoading) {
+    return <PageFrame><main className="flex min-h-[55vh] items-center justify-center px-4 text-muted-foreground">{contentCopy[language].shared.loading}</main></PageFrame>;
+  }
 
   if (!article) {
     return <Navigate replace to="/articles" />;
@@ -78,12 +75,12 @@ const ArticleDetailPage = () => {
     },
     makeBreadcrumbSchema([
       { name: "LocalOS", path: "/" },
-      { name: "Статьи", path: "/articles" },
+      { name: contentCopy[language].navigation.articles.name, path: "/articles" },
       { name: article.title, path: `/articles/${article.slug}` },
     ]),
   ];
 
-  const otherArticles = publishedArticles
+  const otherArticles = articles
     .filter((item) => item.slug !== article.slug)
     .slice(0, 2)
     .map((item) => ({
@@ -91,6 +88,9 @@ const ArticleDetailPage = () => {
       href: `/articles/${item.slug}`,
       label: item.category,
     }));
+  const relatedItems = [...article.related, ...otherArticles].filter(
+    (item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index,
+  );
 
   return (
     <PageFrame>
@@ -103,7 +103,7 @@ const ArticleDetailPage = () => {
       />
       <DetailHeader
         backHref="/articles"
-        backLabel="Назад к статьям"
+        backLabel={contentCopy[language].articles.back}
         date={article.publishedAt}
         excerpt={article.excerpt}
         label={article.category}
@@ -123,10 +123,10 @@ const ArticleDetailPage = () => {
             />
           ) : null}
           <SectionRenderer
-            renderAfterSection={(section) => renderInlineArticleVisual(article, section)}
+            renderAfterSection={(section) => renderInlineArticleVisual(article, article.body.indexOf(section))}
             sections={article.body}
           />
-          <RelatedMaterials items={[...article.related, ...otherArticles]} />
+          <RelatedMaterials items={relatedItems} />
           <BottomCta />
         </article>
       </main>

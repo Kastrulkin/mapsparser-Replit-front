@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Heart } from "lucide-react";
 import { Language, useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
 
 const footerIndustryFallbacks: Record<Language, string[]> = {
   ru: [
@@ -109,9 +110,9 @@ const Footer = () => {
       { name: t.footer.requisites ?? (isRu ? 'Реквизиты' : 'Requisites'), href: '/requisites' },
     ],
     materials: [
-      { name: "Статьи", href: "/articles" },
-      { name: "Документы", href: "/documents" },
-      { name: "Кейсы", href: "/cases" },
+      { name: contentCopy[language].navigation.articles.name, href: "/articles" },
+      { name: contentCopy[language].navigation.documents.name, href: "/documents" },
+      { name: contentCopy[language].navigation.cases.name, href: "/cases" },
     ],
   };
 
@@ -162,7 +163,7 @@ const Footer = () => {
             </div>
 
             <div>
-              <h4 className="mb-4 font-semibold text-white md:text-right">Материалы</h4>
+              <h4 className="mb-4 font-semibold text-white md:text-right">{contentCopy[language].materials}</h4>
               <ul className="space-y-2 md:text-right">
                 {footerLinks.materials.map((link) => (
                   <li key={link.name}>

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ContentSection, RelatedLink } from "@/content/contentTypes";
 import { formatContentDate } from "./contentSeo";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
 
 type PageFrameProps = {
   children: ReactNode;
@@ -67,6 +69,7 @@ const inlineLinkClassName = "font-semibold text-orange-600 underline underline-o
 
 const renderLinkedText = (text: string, links: ContentSection["bodyLinks"] = []) => {
   const nodes: ReactNode[] = [];
+  const unresolvedLinks: NonNullable<ContentSection["bodyLinks"]> = [];
   let remaining = text;
   let key = 0;
 
@@ -74,6 +77,7 @@ const renderLinkedText = (text: string, links: ContentSection["bodyLinks"] = [])
     const index = remaining.indexOf(link.text);
 
     if (index < 0) {
+      unresolvedLinks.push(link);
       return;
     }
 
@@ -95,6 +99,16 @@ const renderLinkedText = (text: string, links: ContentSection["bodyLinks"] = [])
   if (remaining) {
     nodes.push(remaining);
   }
+
+  unresolvedLinks.forEach((link) => {
+    nodes.push(" ");
+    nodes.push(
+      <Link className={inlineLinkClassName} key={`${link.href}-fallback-${key}`} to={link.href}>
+        {link.text}
+      </Link>
+    );
+    key += 1;
+  });
 
   return nodes;
 };
@@ -143,8 +157,11 @@ export const FilterPills = ({ values, activeValue, onChange }: FilterPillsProps)
   </div>
 );
 
-export const MaterialCard = ({ href, label, title, excerpt, date, tags, accent = "orange" }: MaterialCardProps) => (
-  <Link className="group block h-full" to={href}>
+export const MaterialCard = ({ href, label, title, excerpt, date, tags, accent = "orange" }: MaterialCardProps) => {
+  const { language } = useLanguage();
+  const copy = contentCopy[language].shared;
+
+  return <Link className="group block h-full" to={href}>
     <Card className="h-full overflow-hidden border-orange-100 bg-white transition duration-300 hover:-translate-y-1 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10">
       <div
         className={`h-2 ${
@@ -158,7 +175,7 @@ export const MaterialCard = ({ href, label, title, excerpt, date, tags, accent =
           </Badge>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarDays className="h-3.5 w-3.5" />
-            {formatContentDate(date)}
+            {formatContentDate(date, language)}
           </span>
         </div>
         <h2 className="text-2xl font-bold leading-tight text-gray-950 transition group-hover:text-orange-600">
@@ -173,13 +190,13 @@ export const MaterialCard = ({ href, label, title, excerpt, date, tags, accent =
           ))}
         </div>
         <div className="mt-6 flex items-center text-sm font-semibold text-orange-600">
-          Читать дальше
+          {copy.readMore}
           <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />
         </div>
       </CardContent>
     </Card>
-  </Link>
-);
+  </Link>;
+};
 
 export const Breadcrumbs = ({ sectionTitle, sectionHref, current }: BreadcrumbsProps) => (
   <nav className="mb-8 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -199,8 +216,10 @@ export const Breadcrumbs = ({ sectionTitle, sectionHref, current }: BreadcrumbsP
   </nav>
 );
 
-export const DetailHeader = ({ backHref, backLabel, label, title, excerpt, date, tags }: DetailHeaderProps) => (
-  <section className="px-4 py-12 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
+export const DetailHeader = ({ backHref, backLabel, label, title, excerpt, date, tags }: DetailHeaderProps) => {
+  const { language } = useLanguage();
+
+  return <section className="px-4 py-12 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
     <div className="mx-auto max-w-4xl">
       <Link className="mb-8 inline-flex items-center text-sm font-semibold text-orange-600 hover:text-orange-700" to={backHref}>
         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -210,7 +229,7 @@ export const DetailHeader = ({ backHref, backLabel, label, title, excerpt, date,
         <Badge className="rounded-full bg-orange-100 px-4 py-1.5 text-orange-700 hover:bg-orange-100">{label}</Badge>
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <CalendarDays className="h-4 w-4" />
-          {formatContentDate(date)}
+          {formatContentDate(date, language)}
         </span>
       </div>
       <h1 className="text-4xl font-bold tracking-tight text-gray-950 sm:text-5xl">{title}</h1>
@@ -223,8 +242,8 @@ export const DetailHeader = ({ backHref, backLabel, label, title, excerpt, date,
         ))}
       </div>
     </div>
-  </section>
-);
+  </section>;
+};
 
 export const SectionRenderer = ({ sections, renderAfterSection }: SectionRendererProps) => (
   <div className="space-y-10">
@@ -253,6 +272,7 @@ export const SectionRenderer = ({ sections, renderAfterSection }: SectionRendere
 );
 
 export const RelatedMaterials = ({ items }: RelatedMaterialsProps) => {
+  const { language } = useLanguage();
   if (items.length === 0) {
     return null;
   }
@@ -261,7 +281,7 @@ export const RelatedMaterials = ({ items }: RelatedMaterialsProps) => {
     <section className="mt-16">
       <div className="mb-6 flex items-center gap-2">
         <Sparkles className="h-5 w-5 text-orange-500" />
-        <h2 className="text-2xl font-bold text-gray-950">Читайте также</h2>
+        <h2 className="text-2xl font-bold text-gray-950">{contentCopy[language].shared.related}</h2>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {items.map((item) => (
@@ -279,22 +299,23 @@ export const RelatedMaterials = ({ items }: RelatedMaterialsProps) => {
   );
 };
 
-export const BottomCta = () => (
-  <section className="mt-16 rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-500 to-amber-500 p-8 text-white shadow-2xl shadow-orange-500/20 sm:p-10">
-    <h2 className="text-3xl font-bold">Хотите понять, где LocalOS даст рост именно вам?</h2>
-    <p className="mt-4 max-w-2xl text-lg text-white/90">
-      Запустите бесплатный аудит карточки: покажем сильные места, слабые сценарии спроса и первые действия без бюджета на рекламу.
-    </p>
+export const BottomCta = () => {
+  const { language } = useLanguage();
+  const copy = contentCopy[language].shared;
+
+  return <section className="mt-16 rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-500 to-amber-500 p-8 text-white shadow-2xl shadow-orange-500/20 sm:p-10">
+    <h2 className="text-3xl font-bold">{copy.ctaTitle}</h2>
+    <p className="mt-4 max-w-2xl text-lg text-white/90">{copy.ctaDescription}</p>
     <div className="mt-7 flex flex-col gap-3 sm:flex-row">
       <Button asChild className="bg-white text-orange-600 hover:bg-orange-50">
-        <Link to="/login">Получить бесплатный аудит</Link>
+        <Link to="/login">{copy.audit}</Link>
       </Button>
       <Button asChild className="border-white bg-white text-orange-700 shadow-sm hover:bg-orange-50 hover:text-orange-800" variant="outline">
-        <Link to="/contact">Обсудить внедрение</Link>
+        <Link to="/contact">{copy.discuss}</Link>
       </Button>
     </div>
-  </section>
-);
+  </section>;
+};
 
 export const DownloadBlock = ({ href }: DownloadBlockProps) => (
   <div className="mt-10 rounded-3xl border border-orange-200 bg-orange-50 p-6">

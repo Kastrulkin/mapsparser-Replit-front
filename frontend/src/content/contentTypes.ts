@@ -20,7 +20,7 @@ export type ArticleContent = {
   title: string;
   slug: string;
   excerpt: string;
-  category: "Карты" | "Отзывы" | "Клиенты" | "Кафе" | "Финансы" | "Бизнес";
+  category: string;
   tags: string[];
   publishedAt: string;
   updatedAt: string;

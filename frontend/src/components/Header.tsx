@@ -6,6 +6,7 @@ import { newAuth } from "../lib/auth_new";
 import { Language, useLanguage } from "../i18n/LanguageContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import logo from "@/assets/images/logo.png"; // Импортируем логотип
+import { contentCopy } from "@/content/contentCopy";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -70,11 +71,12 @@ const Header = () => {
     { name: t.header.prices, href: '/about#pricing' },
   ];
 
+  const materialsCopy = contentCopy[language];
   const materialsNavigation = [
-    { name: "Статьи", href: "/articles", description: "Карты, отзывы и локальный маркетинг" },
-    { name: "Документы", href: "/documents", description: "Чек-листы, шаблоны и таблицы" },
-    { name: "Кейсы", href: "/cases", description: "Рост заявок, отзывов и повторных клиентов" },
-    { name: "Документация", href: "/docs", description: "LocalOS для пользователей, API и ИИ-агентов" },
+    { ...materialsCopy.navigation.articles, href: "/articles" },
+    { ...materialsCopy.navigation.documents, href: "/documents" },
+    { ...materialsCopy.navigation.cases, href: "/cases" },
+    { ...materialsCopy.navigation.documentation, href: "/docs" },
   ];
 
   // Не показываем Header на страницах кабинета (/dashboard...)
@@ -148,7 +150,7 @@ const Header = () => {
             ))}
             <div className="group relative">
               <button className="flex min-h-11 items-center gap-1 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950" type="button">
-                Материалы
+                {materialsCopy.materials}
                 <ChevronDown className="h-4 w-4 transition-transform group-hover:rotate-180" />
               </button>
               <div className="invisible absolute left-1/2 top-full w-72 -translate-x-1/2 pt-3 opacity-0 transition-[opacity,visibility] group-hover:visible group-hover:opacity-100">
@@ -248,7 +250,7 @@ const Header = () => {
               ))}
               <div className="border-t border-border pt-3">
                 <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  Материалы
+                  {materialsCopy.materials}
                 </div>
                 {materialsNavigation.map((item) => (
                   <Link

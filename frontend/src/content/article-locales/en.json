@@ -1,0 +1,1347 @@
+[
+  {
+    "title": "Compiled AI: why AI should think once but work thousands of times",
+    "slug": "compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
+    "excerpt": "AI designs and tests the working scenario once. The task is then carried out by the program - quickly, predictably and without a new call to the model at each step.",
+    "category": "Business",
+    "tags": [
+      "Compiled AI",
+      "automation",
+      "AI",
+      "business processes",
+      "LocalOS"
+    ],
+    "publishedAt": "2026-08-12",
+    "updatedAt": "2026-08-12",
+    "seoTitle": "Compiled AI: AI thinks once, script runs thousands of times - LocalOS",
+    "seoDescription": "What is Compiled AI: How AI creates a testable script, the program executes it without repeated calls to the model, and the owner retains control.",
+    "draft": false,
+    "body": [
+      {
+        "title": "One task - one solution",
+        "body": "Most AI systems re-solve the same problem every time they run. Compiled AI takes a different approach: AI first creates and validates a workflow, and then the workflow runs like a normal program—fast, predictable, and without constantly referring to the model."
+      },
+      {
+        "title": "The problem with conventional AI agents",
+        "body": "Let's imagine that a company needs to process a new review, check a card on cards, or classify an incoming application. Every time a regular AI agent is launched, it again receives instructions, analyzes the situation, selects an action, generates a result, and accesses other services."
+      },
+      {
+        "title": "What changes every time you launch",
+        "items": [
+          "answers may differ even with the same input data",
+          "each execution takes time and consumes tokens",
+          "the error may appear while working with a real client",
+          "logic is more difficult to test, version and check in advance"
+        ]
+      },
+      {
+        "title": "Compiled AI Research",
+        "body": "On April 6, 2026, authors from XY.AI Labs, Stanford University School of Medicine, Cornell University, and Brigham and Women’s Hospital / Harvard Medical School presented the preprint “Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation.” They proposed separating the moment when the AI ​​creates working logic from its further execution.",
+        "bodyLinks": [
+          {
+            "text": "Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation",
+            "href": "https://arxiv.org/abs/2604.05150v1"
+          }
+        ]
+      },
+      {
+        "title": "Main idea",
+        "body": "Many business processes require intelligence to design correctly, but do not require new thinking every time it is repeated."
+      },
+      {
+        "title": "What is Compiled AI",
+        "body": "An ordinary AI agent can be compared to an employee who is given a task every time and asked to independently decide how to complete it. In Compiled AI, a strong specialist first studies the problem, creates detailed regulations and tests them in different situations. Only instead of a text instruction, the AI ​​creates an executable software script."
+      },
+      {
+        "title": "Three required properties",
+        "items": [
+          "the model is called during process creation, not on every operation",
+          "the finished process executes deterministically, like regular program code",
+          "Before starting, the process undergoes a multi-stage verification"
+        ]
+      },
+      {
+        "title": "The result is a software artifact",
+        "body": "AI creates a software artifact instead of a one-time response or prompt. It can be tested, versioned, validated, benchmarked, and improved without rebuilding the entire process."
+      },
+      {
+        "title": "How a process is created",
+        "body": "The system receives a description of the task: input data, expected result and restrictions. The AI ​​then creates a small piece of business logic inside a pre-prepared template. In the experimental architecture, such functions were limited to approximately 20–50 lines of code to narrow the error space and prevent the model from changing the infrastructure or how services are accessed."
+      },
+      {
+        "title": "Four checks before starting",
+        "items": [
+          "Security: search for vulnerabilities, data leaks, unsafe commands and injected instructions",
+          "Syntax: Checking executability of code, data types, and technical rules",
+          "Execution: running in an isolated environment on test cases and faulty inputs",
+          "Accuracy: comparison of the result with reference answers"
+        ]
+      },
+      {
+        "title": "The error is detected before the actual launch",
+        "body": "If the script does not pass the test, it is not sent for production. The model receives a description of the error, corrects the logic, and then the checks are run again. Only a script that has passed the entire validation loop becomes a working program.",
+        "bodyLinks": [
+          {
+            "text": "the entire validation loop",
+            "href": "https://arxiv.org/html/2604.05150v1"
+          }
+        ]
+      },
+      {
+        "title": "What the experiment with functions showed",
+        "body": "The first experiment included 400 tasks in which the system had to select a function and correctly pass the parameters. Compiled AI prepared working scripts for 96% of tasks. The remaining 4% were not verified and were not published. Already compiled scripts ran reproducibly: the same input data produced the same result."
+      },
+      {
+        "title": "When does compilation pay off?",
+        "body": "The script required 9,600 tokens to create, and further execution did not consume any tokens. Under experimental conditions, the costs were equal to direct reference to the model after approximately 17 operations. With 1,000 iterations, Compiled AI used 57 times fewer tokens."
+      },
+      {
+        "title": "Speed and cost in experiment",
+        "body": "The median execution time was 4.5 milliseconds versus 2,004 milliseconds for direct access to the language model—about 450 times faster. Based on the authors' calculations per million transactions per month, total costs were $555 versus $22,000. These figures relate to the specific conditions of the study and indicate a depreciation principle rather than a universal guarantee of savings."
+      },
+      {
+        "title": "Not everything can be turned into regular code",
+        "body": "The second experiment was conducted on 5,680 supplier accounts. The documents differed in structure, quality of recognition, and arrangement of information. The simple rules worked quickly, but only correctly extracted 20.3% of the key information. Understanding company names, amounts, and ambiguous fields still required a language model."
+      },
+      {
+        "title": "Hybrid version of Code Factory",
+        "body": "The authors kept the general sequence of actions compiled and predictable, but allowed narrow calls to the model at complex stages. This option showed the same 80.0% accuracy when extracting key fields as direct access to the model, and when recognizing product strings it reached 80.4% - the best result among the compared options."
+      },
+      {
+        "title": "Where is AI really needed?",
+        "body": "Compiled AI should not completely replace language models. Its task is to determine where understanding of the language or new reasoning is required, and where it is enough to create and test a procedure once."
+      },
+      {
+        "title": "How this approach is applied in LocalOS",
+        "body": "A local business has dozens of repetitive tasks: responding to reviews, updating information on cards, preparing content, checking cards for completeness, finding partnerships, processing requests, and monitoring regular activities. In LocalOS, AI helps generate a script, the owner checks it, and the approved sequence executes the script."
+      },
+      {
+        "title": "Example: working with a new review",
+        "items": [
+          "LocalOS receives feedback and selected company data",
+          "determines the theme, tone and level of risk",
+          "selects a suitable verified script",
+          "if necessary, calls the model only to prepare the text",
+          "checks facts, length, tone and prohibited language",
+          "transmits the result to the owner or employee for confirmation",
+          "after confirmation, saves the result and transfers it to the supported publishing loop"
+        ]
+      },
+      {
+        "title": "AI does not reorganize the process",
+        "body": "The model is used where it is necessary to understand a language or prepare a text. Checks, restrictions, confirmation and action log are performed according to predefined rules."
+      },
+      {
+        "title": "From prompts to accumulated practices",
+        "body": "Once a practice has been validated by humans and shown to be beneficial, it can be saved as a version of the script and used in similar companies. The process is tailored to the industry, city, brand and specific situation, but company data is not shared with other businesses."
+      },
+      {
+        "title": "You can update a separate stage",
+        "body": "If the result worsens, there is no need to rebuild the entire system. You can find a weak stage, update it, run tests again and release a new version. This is how LocalOS accumulates a library of working business processes, rather than a set of disparate prompts."
+      },
+      {
+        "title": "Where Compiled AI is especially useful",
+        "items": [
+          "the process is repeated regularly",
+          "the expected result can be described in advance",
+          "types of input data are known",
+          "the task must be performed in the same way",
+          "need control, logging and auditability"
+        ]
+      },
+      {
+        "title": "Where the approach works worse",
+        "body": "Completely new, rare and creative tasks are more difficult to turn into a deterministic scenario. Developing a strategy, searching for a business model and a non-standard campaign require model flexibility and human participation."
+      },
+      {
+        "title": "Limitations of the Study",
+        "body": "The experiments covered two types of problems, 4% of the scripts failed to compile, and the quality of the code depended on the model and the accuracy of the original description. Results cannot be automatically transferred to any automation without its own checks."
+      },
+      {
+        "title": "The next stage of automation",
+        "body": "The first stage of AI adoption gave businesses universal assistants who answer questions and create content. The next stage is turning the solutions found into reliable workflows. The model helps to find a solution, the program ensures stable execution, checks protect against errors, and the person maintains control over important actions."
+      },
+      {
+        "title": "LocalOS principle",
+        "body": "AI finds and shapes work practices. The owner checks and confirms it. The script turns the solution into a repeatable process for the business."
+      },
+      {
+        "title": "Source",
+        "body": "The material is based on the first version of the preprint “Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation”, published on April 6, 2026.",
+        "bodyLinks": [
+          {
+            "text": "first version of the preprint “Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation”",
+            "href": "https://arxiv.org/abs/2604.05150v1"
+          }
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Why do entrepreneurs burn out?",
+        "href": "/articles/pochemu-predprinimateli-vygorayut",
+        "label": "Article"
+      },
+      {
+        "title": "About LocalOS",
+        "href": "/about",
+        "label": "LocalOS"
+      },
+      {
+        "title": "Local marketing control table",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Table"
+      }
+    ]
+  },
+  {
+    "title": "Why do entrepreneurs burn out?",
+    "slug": "pochemu-predprinimateli-vygorayut",
+    "excerpt": "Owner burnout often begins not where there is a lot of work, but where there is too much chaos and no manageable system.",
+    "category": "Business",
+    "tags": [
+      "burnout",
+      "small business",
+      "operating system",
+      "controllability",
+      "KPI"
+    ],
+    "publishedAt": "2026-05-18",
+    "updatedAt": "2026-05-18",
+    "coverImage": "/images/articles/pochemu-predprinimateli-vygorayut-cover.png",
+    "coverAlt": "Businesswoman at laptop, around notifications, tasks and business indicators",
+    "statsImage": "/images/articles/pochemu-predprinimateli-vygorayut-stats.png",
+    "statsImageAlt": "The scale of the problem: statistics on entrepreneur burnout",
+    "schemeImage": "/images/articles/pochemu-predprinimateli-vygorayut-scheme.png",
+    "schemeImageAlt": "How growth without a system leads to owner overload and burnout",
+    "seoTitle": "Why entrepreneurs burn out - LocalOS",
+    "seoDescription": "Why small business owners burn out: Chronic overload, manual management, chaos, cash gaps, growth without structure and lack of control.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Chronic overload has become the norm for small businesses",
+        "body": "For the past few years, almost every conversation with a small business owner has sounded similar. It doesn’t matter what a person does: salon, coffee shop, agency, clinic, service or e-commerce. From the outside, a business may look alive: there are customers, employees, tasks, traffic and revenue. But behind the screen, the same condition is often felt: chronic overload."
+      },
+      {
+        "title": "When everything looks fine on the outside",
+        "body": "Recently I had a conversation with an entrepreneur, for whom everything seemed normal on the outside. The team is working, there are clients, the cash register is running. But after ten minutes it became clear that the person was in a state of complete burnout. Not because of one crisis, but because of the accumulated feeling of chaos."
+      },
+      {
+        "title": "What makes up chaos?",
+        "items": [
+          "cash gaps",
+          "endless operating system",
+          "employees who need to be constantly monitored",
+          "problems that arise every day",
+          "inability to switch off even in the evening"
+        ]
+      },
+      {
+        "title": "Very accurate description of the condition",
+        "body": "At some point, the entrepreneur said: “We have something going on all the time, but what exactly is not clear at all.” This is an accurate description of the state of countless business owners today. The problem of burnout has long ceased to be a private story for individuals. It has become a systemic problem for small businesses."
+      },
+      {
+        "title": "Scale of the problem",
+        "body": "According to various studies, between 40% and 70% of small business owners experience signs of burnout. In the US, 72% of entrepreneurs reported signs of emotional exhaustion after the pandemic. In the UK - about 37%. In Russia, according to studies of entrepreneurs, approximately every second business owner experiences burnout."
+      },
+      {
+        "title": "It's not about weak people",
+        "body": "The most important thing here: we are not talking about weak people. On the contrary, small businesses are almost always built by people who are highly resilient and willing to work hard. But this is precisely what often becomes a trap."
+      },
+      {
+        "title": "Entrepreneurs really work hard",
+        "body": "Gallup research shows that nearly half of self-employed people in the United States work more than 44 hours a week, and 26% work more than 60 hours. According to Eurostat, a third of entrepreneurs in Europe work 45 hours or more every week. In the UK, 20% of business owners work up to 64 hours a week."
+      },
+      {
+        "title": "It's not just the amount of work that's exhausting",
+        "body": "It's not the sheer amount of work that usually exhausts entrepreneurs. The hardest thing is the constant feeling that the business cannot be let go. That everything rests on you. That any problem ultimately comes to the owner."
+      },
+      {
+        "title": "At first it seems normal",
+        "body": "When the company is small and at the beginning of its journey, manual mode seems normal. The entrepreneur sells himself, hires himself, manages himself, resolves conflicts himself and closes holes himself. But then the business starts to grow, and the strength runs out."
+      },
+      {
+        "title": "Growth without structure increases chaos",
+        "body": "Employees, clients, new processes, advertising, CRM and additional sales channels appear. If at this moment a system does not appear within the company, chaos begins to grow faster than the business itself."
+      },
+      {
+        "title": "Height by itself does not reduce stress",
+        "body": "This is an important point that many people underestimate: growth in itself does not reduce the burden on the owner. Very often the opposite happens. The larger a business becomes without a system, the more manual control it begins to require."
+      },
+      {
+        "title": "Why do people burn out during the growth stage?",
+        "body": "Many entrepreneurs burn out not during a crisis, but during the growth stage. At some point, business turns into an endless stream of decisions: money, employees, clients, sales, conflicts, tasks, deadlines, cash registers and operating systems. All this goes through one person."
+      },
+      {
+        "title": "The economic consequences are also huge.",
+        "body": "According to US data, about 20% of new companies close in the first year of operation. About 50% - during the first five years. By the tenth year, approximately 65% ​​of businesses cease to exist. In 2023-2024 alone, nearly 983,000 small businesses closed in the United States."
+      },
+      {
+        "title": "Formal reasons do not show the whole picture",
+        "body": "Formally, the reasons for closure usually sound like problems with cash flow, inflation, rising costs or declining demand. But the owner's emotional exhaustion almost always becomes part of this chain. A business without control gradually begins to destroy the person who manages it."
+      },
+      {
+        "title": "Relief often comes not from revenue",
+        "body": "Many entrepreneurs begin to feel relief not after revenue growth, but after the emergence of control. When clear numbers and transparent analytics appear, it becomes easier. The described processes and distribution of responsibilities provide predictability."
+      },
+      {
+        "title": "The main burden is lack of controllability",
+        "body": "It is the lack of controllability that creates the main emotional burden. Therefore, strong companies are increasingly being built not around the heroism of the owner, but around consistency: clear KPIs, transparent economics, routine automation, customized processes and analytics.",
+        "bodyLinks": [
+          {
+            "text": "clear KPIs",
+            "href": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
+          }
+        ]
+      },
+      {
+        "title": "The system does not make business simple",
+        "body": "Systematicity does not make business simple. But she makes it at least manageable. And this is one of the most underrated things in small business: burnout often starts not where there is too much work, but where there is too much chaos."
+      }
+    ],
+    "related": [
+      {
+        "title": "Why does a full record not equal profit?",
+        "href": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+        "label": "Article"
+      },
+      {
+        "title": "Local marketing control table",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Table"
+      },
+      {
+        "title": "How to apply for a company card",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Article"
+      }
+    ]
+  },
+  {
+    "title": "Why does a full record not equal profit?",
+    "slug": "pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
+    "excerpt": "A complete entry does not guarantee profit. Let's look at why busy professionals, discounts and customer flow can hide a weak salon economy.",
+    "category": "Finance",
+    "tags": [
+      "beauty salon",
+      "profit",
+      "average bill",
+      "repeat visits",
+      "KPI"
+    ],
+    "publishedAt": "2026-05-18",
+    "updatedAt": "2026-05-18",
+    "seoTitle": "Why a full record does not equal profit - LocalOS",
+    "seoDescription": "Why a full appointment in a beauty salon does not mean profit: economics of services, discounts, repeat visits, revenue per chair hour and management KPIs.",
+    "draft": false,
+    "body": [
+      {
+        "title": "When your schedule is full and you still have no money",
+        "body": "Sometimes the salon owner looks at the schedule and thinks: everything is packed, the technicians are working without windows, the phone is ringing, clients are coming. But at the end of the month there is still a feeling that for some reason there is no money."
+      },
+      {
+        "title": "Full registration does not mean a profitable salon",
+        "body": "This is one of the most unpleasant pitfalls of the beauty business. Full registration does not mean a profitable salon. Moreover, it is precisely such salons that often fall into chaos: it seems that the business is alive and active, but inside everything is kept under constant tension."
+      },
+      {
+        "title": "What does a salon look like without a system?",
+        "items": [
+          "constant stress",
+          "team fatigue",
+          "endless discounts",
+          "manual control",
+          "owner burnout",
+          "the feeling that everything is held together by effort"
+        ]
+      },
+      {
+        "title": "This is not an accident",
+        "body": "This is what a business looks like without a system. Today, entrepreneurial burnout has become a big problem: according to various studies, from 40% to 70% of small business owners experience signs of burnout. In Russia, approximately every second entrepreneur faces this.",
+        "bodyLinks": [
+          {
+            "text": "entrepreneur burnout",
+            "href": "/articles/pochemu-predprinimateli-vygorayut"
+          }
+        ]
+      },
+      {
+        "title": "The problem is not only emotional",
+        "body": "When the owner puts out fires all the time, the business stops developing as a system. He begins to simply survive."
+      },
+      {
+        "title": "What usually keeps the owner in manual mode",
+        "items": [
+          "he is responsible for recording",
+          "thinks about advertising",
+          "closes admin problems",
+          "trying to increase revenue",
+          "launches chaotic actions"
+        ]
+      },
+      {
+        "title": "Why losses are difficult to notice",
+        "body": "Most owners don't even understand where exactly they are losing money. There is movement in the salon, clients and technicians are busy, and it seems that everything should work fine. But without numbers it is impossible to see the real picture. If you don't know what you think, you can't influence it."
+      },
+      {
+        "title": "How strong salons grow",
+        "items": [
+          "repeat visits",
+          "customer retention",
+          "re-recording",
+          "clear service economy",
+          "profit control",
+          "managed download",
+          "clear KPIs"
+        ]
+      },
+      {
+        "title": "Why a lot of clients doesn't mean a lot of profit",
+        "body": "In the salon business, it is very easy to confuse activity with results. For example, a master may be fully loaded all day. From the outside it seems: great, demand is high."
+      },
+      {
+        "title": "When a popular service works against profits",
+        "items": [
+          "the service lasts four hours",
+          "requires expensive materials",
+          "sold at a discount",
+          "does not bring the client back"
+        ]
+      },
+      {
+        "title": "Employment without normal income",
+        "body": "At the end of the day, it may turn out that the salon has earned almost nothing. Such services often look popular, but in reality they only create employment without normal profit. Until the owner considers the economics of each service separately, the business continues to strengthen the weak model."
+      },
+      {
+        "title": "Why small studios sometimes earn more",
+        "body": "This is one of the reasons why small studios sometimes make more money than large full-time salons. It's not about the number of clients. The point is how well the system within the business is structured."
+      },
+      {
+        "title": "The system starts with numbers",
+        "body": "Most salons are run by feel. It seems that the record has sank - the promotion is starting. It seems that there are few customers - advertising is turned on. It seems that the master is weak - complaints begin. But it seems that this is not management."
+      },
+      {
+        "title": "Why a strong salon is built around numbers",
+        "body": "A strong salon is always built around numbers. Not because the owner loves tables, but because only numbers show the real picture of the business. One of the most important metrics is how many customers leave with their next appointment already assigned. If the client left without re-booking, the salon lost future revenue.",
+        "bodyLinks": [
+          {
+            "text": "only numbers show the real picture of business",
+            "href": "/articles/pochemu-predprinimateli-vygorayut"
+          }
+        ]
+      },
+      {
+        "title": "Revenue per chair hour",
+        "body": "Another important indicator is how much money one hour of operation of the chair brings in. The formula looks simple: revenue per chair hour = price of service / duration of service in hours. There is an important idea behind this formula: not all hours of work are equally beneficial for business."
+      },
+      {
+        "title": "Loading and loading efficiency are two different things",
+        "body": "You can keep a craftsman busy for 10 hours and earn less than another craftsman earns in 6 hours. That is why strong salons have long looked not only at loading, but also at the efficiency of this loading."
+      },
+      {
+        "title": "Why discounts almost always make things worse",
+        "body": "When there is no system in the salon, there is almost always a desire to stimulate the flow. This usually ends with discounts. At first it seems that everything is working: the recording comes to life, there are more clients, there is movement."
+      },
+      {
+        "title": "Consequences of discounts",
+        "items": [
+          "customers get used to cheap prices",
+          "profits fall",
+          "the team is getting more tired",
+          "there is no more money"
+        ]
+      },
+      {
+        "title": "Danger of life from action to action",
+        "body": "At some point, the salon begins to live from promotion to promotion. This is a very dangerous model: it destroys business gradually."
+      },
+      {
+        "title": "What do strong salons build on to grow?",
+        "items": [
+          "repeat visits",
+          "customer retention",
+          "season tickets",
+          "packages",
+          "average check growth",
+          "quality service"
+        ]
+      },
+      {
+        "title": "Where does stable profit appear?",
+        "body": "Stable profits appear not where there are many cheap clients, but where the client returns regularly."
+      },
+      {
+        "title": "The most important thought for the owner",
+        "body": "At some point, you need to stop looking at the salon as just a place with services and start looking at it as a system."
+      },
+      {
+        "title": "What should be visible in the system",
+        "items": [
+          "considered profit",
+          "weak points are visible",
+          "revenue forecast",
+          "loading is controlled",
+          "customer returns are measured",
+          "It's clear where money is lost"
+        ]
+      },
+      {
+        "title": "Why does the system turn into profit?",
+        "body": "Without this, business will always live in chaos: either empty windows, or overload, or discounts, or panic over the cash register. The system creates controllability. And it is controllability that then turns into profit."
+      },
+      {
+        "title": "Conclusion",
+        "body": "Most salons lose money not because they don't have enough clients, but because they don't see what's going on inside the business."
+      },
+      {
+        "title": "What you need to start counting",
+        "items": [
+          "customer returns",
+          "repeated entries",
+          "gross margin",
+          "profitability of services",
+          "revenue per hour of chair",
+          "losses on cancellations",
+          "repeat visits"
+        ]
+      },
+      {
+        "title": "When the numbers appear, the system appears",
+        "body": "Until the owner starts counting these indicators, he is not truly managing the salon. He simply watches the flow of customers. But as soon as the numbers appear, a system appears. And when a system appears, it becomes possible to influence the result. Because if you don't know what you think, you can't influence it."
+      },
+      {
+        "title": "Download the interior diagnostic table",
+        "items": [
+          "key salon KPIs",
+          "calculation of service profitability",
+          "revenue per hour of chair",
+          "gross margin analysis",
+          "customer return rates",
+          "owner management table"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Local marketing control table",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Table"
+      },
+      {
+        "title": "How to apply for a company card",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Article"
+      },
+      {
+        "title": "How the salon received new records from cards",
+        "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "label": "Case"
+      }
+    ]
+  },
+  {
+    "title": "Online maps have become a sales channel: why it’s no longer enough just to be on the map",
+    "slug": "onlain-karty-stali-kanalom-prodazh",
+    "excerpt": "Why the business card in cards already works as the bottom of the funnel: influencing calls, routes, appointments and customer selection right inside the platform.",
+    "category": "Maps",
+    "tags": [
+      "cards",
+      "local marketing",
+      "conversion",
+      "Yandex Maps"
+    ],
+    "publishedAt": "2026-04-23",
+    "updatedAt": "2026-04-23",
+    "seoTitle": "Online maps have become a sales channel - why is it not enough for a business to just be on the map | LocalOS",
+    "seoDescription": "Let's look at why Yandex Maps, 2GIS, Google and Apple already work as a sales channel for local businesses and what exactly affects applications, calls and visits.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Maps are no longer a reference book, but a selection interface",
+        "body": "For local businesses, online maps have long ceased to be a digital reference book. The user here doesn’t just find a company, but compares options, reads reviews, looks at photos, builds a route, writes, calls or makes an appointment. The card no longer answers the question of where you are, but the question of why choose you right now."
+      },
+      {
+        "title": "Why does it affect money and not the beauty of presence",
+        "body": "When a person opens a company card in Maps, he is often one or two steps away from the target action. Therefore, the relevance of data, reviews, prices, photos, action buttons and response speed do not affect the image, but real visits, calls and requests."
+      },
+      {
+        "title": "The scale of the channel is already too big to ignore",
+        "body": "Maps have long become a mass interface of demand. Google Maps is used by an audience of billions of users, Yandex speaks of tens of millions of people looking for goods and services, and 2GIS has long grown into an independent ecosystem with a multimillion-dollar audience. For local businesses, this is no longer an additional source of traffic, but one of the largest channels of contact with demand."
+      },
+      {
+        "title": "The main power of cards is user intent.",
+        "body": "Maps are powerful because they intercept a person at the moment when the request is already associated with a place and action. They simultaneously cover branded demand, when the user already knows the company, and new demand, when a person chooses between a nearby dentist, coffee shop, salon or car service. Therefore, the card works both to retain demand and to capture new ones."
+      },
+      {
+        "title": "The company card has become a mini-site within the platform",
+        "items": [
+          "address and work schedule",
+          "phone, chat and action buttons",
+          "website, social networks and links",
+          "photos, videos and reviews",
+          "products, menu, services and prices",
+          "recording, promotions, publications and events"
+        ]
+      },
+      {
+        "title": "Inaccurate data in maps costs money faster than weak content",
+        "body": "If the phone number is incorrect, the client will not get through. If the schedule is out of date, he will arrive at a closed point. If the address is entered incorrectly, the route will be built in the wrong direction. If the category is not selected accurately, the card will not be included in the relevant selection scenario. The cards cannot be filled out once and considered closed: this is regular operational work."
+      },
+      {
+        "title": "Reviews in cards are no longer a reputation, but a conversion",
+        "body": "Reviews have become part of the choice itself. The rating, the number of recent reviews and the quality of answers directly affect the likelihood of a call, appointment and visit. Therefore, working with reviews should be perceived as conversion management: if the card collects demand, but does not inspire confidence, the business loses money at the comparison stage.",
+        "bodyLinks": [
+          {
+            "text": "Reviews have become part of the choice itself",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ]
+      },
+      {
+        "title": "The business problem is that cards are not one platform",
+        "body": "In the Russian Federation and the CIS, the basic set usually starts with Yandex Maps and 2GIS, and for international or tourist audiences Google and Apple are added. Each platform has its own card logic, interface, analytics and set of capabilities. At one point this already requires attention, but at a network of branches it turns into a separate operating system."
+      },
+      {
+        "title": "What really affects the result in cards",
+        "items": [
+          "complete and accurate card: address, hours, categories, services, website, prices and description",
+          "reviews and response speed: trust factor and decision factor",
+          "photos, videos, menus, products and prices: rich content helps make decisions inside the card",
+          "publications, promotions and events: increase the attractiveness and CTR of the card",
+          "Measuring actions, not just views: calls, routes, conversions, messages and bookings"
+        ]
+      },
+      {
+        "title": "Maps are especially strong where demand is tied to geography",
+        "body": "Restaurants, cafes, medicine, beauty, fitness, personal services, car services, retail, leisure and local retail almost always receive a significant share of actions from cards. At the same time, cards are weaker as the only channel for pure online business and part of complex B2B. That is, this is not a universal answer to everything, but an infrastructure of choice for local demand."
+      },
+      {
+        "title": "Gray methods are becoming more and more dangerous",
+        "body": "When a channel brings in customers, it is tempting to speed up the results with boosts, especially reviews. But platforms are increasingly blocking fake reviews, edits and profiles. For business, this means a simple thing: it is more reliable and profitable to manage card quality, customer experience and response speed than to try to hack the system.",
+        "bodyLinks": [
+          {
+            "text": "manage card quality",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "Why businesses need a management layer on top of maps",
+        "body": "As long as the business has one point, chaos can be hidden by manual control. But as soon as branches appear, a flood of reviews, products, promotions, schedule changes and the need for analytics, the manual mode begins to break down. This is where a management layer on top of the cards is needed: to see where calls are lost, which cards are underfilled, where the response rate sags and which actions actually produce results.",
+        "bodyLinks": [
+          {
+            "text": "manual mode starts to break down",
+            "href": "/articles/pochemu-predprinimateli-vygorayut"
+          }
+        ]
+      },
+      {
+        "title": "FAQ: Why maps shouldn't be considered just part of local SEO",
+        "body": "Because maps affect not only visibility, but also specific user actions. Inside the card, a person is already calling, building a route, writing, going to a website or making an appointment. This is no longer just an SEO task, but a full-fledged conversion channel."
+      },
+      {
+        "title": "FAQ: which platforms are required for business in the Russian Federation and the CIS",
+        "body": "In most cases, the basic minimum is Yandex Maps and 2GIS. For international audiences, tourist areas and segments with a high share of iPhones, Google and Apple are also worth considering."
+      },
+      {
+        "title": "FAQ: what is more important - the rating or the completeness of the card",
+        "body": "Both factors are important, but a high rating does not help if the card contains incorrect or incomplete data. The user must first receive accurate information, and only then trust."
+      },
+      {
+        "title": "FAQ: which metrics to look at first",
+        "body": "The main metrics are the actions that are closest to money: calls, routes, website visits, messages, bookings and button clicks. Views are useful, but on their own they don't tell you much about revenue."
+      },
+      {
+        "title": "Conclusion",
+        "body": "Online maps no longer look like a reference book. For local businesses, this is the channel in which the user selects, compares and acts. Therefore, the winners are not those companies that are simply present in the cards, but those that systematically manage cards, reviews, content, products and action analytics. This is precisely the task LocalOS works with - turning cards from a passive storefront into a controlled source of calls, routes, requests and sales."
+      }
+    ],
+    "related": [
+      {
+        "title": "Checklist for company card audit",
+        "href": "/documents/checklist-audita-kartochki-kompanii",
+        "label": "Document"
+      },
+      {
+        "title": "Why is the competitor higher on the cards?",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Article"
+      },
+      {
+        "title": "How the salon received new records from cards",
+        "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "label": "Case"
+      }
+    ]
+  },
+  {
+    "title": "Why is your competitor higher on the cards?",
+    "slug": "pochemu-konkurent-vyshe-na-kartah",
+    "excerpt": "Why a neighboring business may be higher in Yandex Maps and Google Maps, even if your rating is the same or higher.",
+    "category": "Maps",
+    "tags": [
+      "Yandex Maps",
+      "local SEO",
+      "company card"
+    ],
+    "publishedAt": "2026-04-20",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "Why is a competitor higher on the maps even with the same rating - LocalOS",
+    "seoDescription": "Why a 5.0 rating does not guarantee high positions in Yandex Maps and Google Maps: recent reviews, answers, photos, card activity and behavioral signals.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Why is the neighboring business higher?",
+        "body": "Local business owners have one common pain. Almost everyone has at least once opened Yandex Maps or Google Maps and wondered: why is our neighbor taller than us if we also have good reviews? At first glance, everything really looks illogical. Your rating is 5.0. The competitor has 4.9. You have a beautiful interior. His is normal. But for some reason the applications go to him."
+      },
+      {
+        "title": "Maps have long ceased to be a reference book",
+        "body": "At this point, many begin to think that the cards are rigged, that competitors are inflating reviews, or that the algorithms work by chance. In fact, everything is usually much more prosaic. Maps have long ceased to be just a directory of companies. Today it is a full-fledged local ranking system, where algorithms evaluate not only the rating of a business, but also how alive the company looks in general."
+      },
+      {
+        "title": "A high rating no longer guarantees anything",
+        "body": "A few years ago, everything was relatively simple: more stars - higher position. Today algorithms work differently. A conditional salon with a rating of 4.8 can consistently be higher than a salon with a 5.0 rating if its card looks more active for the system.",
+        "bodyLinks": [
+          {
+            "text": "if his card looks more active",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      },
+      {
+        "title": "What do the cards analyze?",
+        "items": [
+          "how often do new reviews appear?",
+          "Is the business responsive to customers?",
+          "are the photos updated?",
+          "is new content being published?",
+          "how users interact with the card",
+          "are they building a route?",
+          "are they calling",
+          "are they coming back?"
+        ]
+      },
+      {
+        "title": "The main question of the algorithm",
+        "body": "Essentially, algorithms are trying to answer a simple question: Which business looks more useful and vibrant right now? This is why many companies lose their cards before they even start promoting."
+      },
+      {
+        "title": "Fresh reviews are more important than old ones",
+        "body": "One of the most underrated things about local promotion is the speed at which reviews are updated. Very often a business is proud of having collected, for example, 300 reviews over several years. But if the last new comments were six months ago, for the algorithms it already looks like a frozen card.",
+        "bodyLinks": [
+          {
+            "text": "review update speed",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ]
+      },
+      {
+        "title": "The rhythm of reviews is as important as the quantity",
+        "body": "This is especially noticeable in Yandex Maps. Companies that regularly have new reviews almost always gain more visibility. Even if their overall rating is lower. Moreover, not only quantity is important, but also rhythm. If reviews appear consistently every week, the algorithms perceive this as a signal: the business is active, customers continue to come, the company is alive."
+      },
+      {
+        "title": "Most businesses don't work with reviews.",
+        "body": "And this is clearly visible in almost any niche. The card looks something like this: several old photos, unanswered reviews, the last post was a year ago, half the information has not been updated for months. At the same time, the owner can simultaneously spend a lot of money on advertising and wonder why the cards receive almost no applications."
+      },
+      {
+        "title": "The card has become a key channel of trust",
+        "body": "For local businesses, cards have long become one of the key channels of trust. Especially in niches like beauty salons, dentists, fitness, cafes and clinics. People don't look at the website first. They look at the card. And if it looks abandoned, trust drops even before the first call."
+      },
+      {
+        "title": "Replies to reviews have more impact than you think",
+        "body": "Many people perceive responding to reviews as an element of politeness. This is much more important for algorithms. When a company responds quickly and regularly, cards see active communication with customers. Moreover, responses to negativity are especially important."
+      },
+      {
+        "title": "Reaction speed distinguishes live cards",
+        "body": "If a business ignores negative comments for weeks, it sends a bad signal not only to people, but also to the platform itself. Ideally, you should respond to reviews within 24 hours. Maximum - two to three days. It is the speed of reaction that often distinguishes live cards from those that gradually lose visibility."
+      },
+      {
+        "title": "Cards love activity",
+        "body": "This is one reason why a neighboring business may receive more applications even with a similar rating. Because he simply maintains the card systematically. Yandex Maps, Google Maps and 2GIS have long had mechanics that are very similar to social networks: publications, updates, photos, replies, events, promotions."
+      },
+      {
+        "title": "Static directory no longer works",
+        "body": "Most companies still use cards as a static catalog: fill out your profile once and forget about it. Although the algorithms clearly promote those who update regularly. For a local business, activity at least several times a week is considered normal: new photos, publications, responses to clients, service updates."
+      },
+      {
+        "title": "Platforms want to show live companies",
+        "body": "This is important not because SEO loves it so much. But because the platforms want to show users relevant and live companies."
+      },
+      {
+        "title": "Photos today work almost like reviews.",
+        "body": "This is especially noticeable in beauty, medicine, fitness and the restaurant business. A card with ten old photographs almost always loses to a card where new content regularly appears: interior, team, work, process, atmosphere.",
+        "bodyLinks": [
+          {
+            "text": "New content appears regularly",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "The user makes a decision in seconds",
+        "body": "The user makes a decision very quickly. Sometimes a few seconds of viewing a card are enough for a person to either press call or go to a competitor. Algorithms see this through behavioral signals: how much time they spend in the card, how many people build a route, how many press the call."
+      },
+      {
+        "title": "Cards become a system of trust",
+        "body": "And this seems to be the main change in recent years. Previously, local promotion was similar to SEO: keywords, categories, technical optimization. Today, cards increasingly evaluate people's behavior."
+      },
+      {
+        "title": "Why do two businesses with the same rating receive different traffic?",
+        "body": "If a card builds trust, holds attention, gets interactions, and is updated regularly, it will gradually begin to grow on its own. This is why two businesses with the same rating can receive completely different amounts of traffic. One looks like a living company that is dealt with every day. The other is like a profile that was forgotten after registration."
+      },
+      {
+        "title": "Why is this especially important now?",
+        "body": "For local businesses, cards become what Instagram or a website used to be. This is the first place where a person gets to know the company. And in most niches, victory now increasingly depends not on the size of the advertising budget, but on the quality of systemic work."
+      },
+      {
+        "title": "What determines victory in cards",
+        "items": [
+          "working with reviews",
+          "content",
+          "response speed",
+          "relevance of the card",
+          "user behavior"
+        ]
+      },
+      {
+        "title": "Conclusion",
+        "body": "Many local companies fail not because of poor service. And because their business looks dead to algorithms. Even if everything works fine inside."
+      }
+    ],
+    "related": [
+      {
+        "title": "Checklist for company card audit",
+        "href": "/documents/checklist-audita-kartochki-kompanii",
+        "label": "Document"
+      },
+      {
+        "title": "How the salon received new records from cards",
+        "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
+        "label": "Case"
+      }
+    ]
+  },
+  {
+    "title": "How to design a company card so that it sells",
+    "slug": "kak-oformit-kartochku-kompanii",
+    "excerpt": "Why the company card in the maps became a mini-site inside the platform and what needs to be shown so that the client chooses you faster.",
+    "category": "Clients",
+    "tags": [
+      "company card",
+      "services",
+      "prices"
+    ],
+    "publishedAt": "2026-04-18",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "How to apply for a company card - LocalOS",
+    "seoDescription": "How to register a company card in Yandex Maps, Google Maps and 2GIS: categories, services, prices, photos, reviews, activity and quick actions.",
+    "draft": false,
+    "body": [
+      {
+        "title": "The card became the first stage of selection",
+        "body": "Local business today has a very strange paradox. Companies can spend hundreds of thousands on advertising, run social networks, invest in a website - and at the same time lose customers right inside Yandex Maps, Google Maps or 2GIS. Because for most users, a company card has long become the first stage of selection.",
+        "bodyLinks": [
+          {
+            "text": "lose customers right inside Yandex Maps, Google Maps or 2GIS",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      },
+      {
+        "title": "Local selection happens quickly",
+        "body": "Especially in local business. When a person is looking for a salon, dentist, coffee shop or fitness center near their home, they almost never start with the website. He reveals the cards. And then everything happens very quickly."
+      },
+      {
+        "title": "What does a person decide in a minute?",
+        "body": "The user opens several cards in a row and literally in a minute decides who to call or where to sign up. Moreover, at this moment he evaluates not only the rating."
+      },
+      {
+        "title": "Three main questions of the card",
+        "items": [
+          "what can you buy or order here?",
+          "can this business be trusted?",
+          "how easy it is now to contact or sign up"
+        ]
+      },
+      {
+        "title": "Many cards do not answer these questions",
+        "body": "The problem is that a huge number of cards do not answer these questions at all. Very often, a local business looks like an old directory on maps: address, phone number, a couple of random photos and a short description in the spirit of “we provide a wide range of quality services.” For the user it is almost empty."
+      },
+      {
+        "title": "A card is a mini-site inside the platform",
+        "body": "Maps have long ceased to be just a catalog of companies. Today, a card is a mini-site inside the platform. And competition there is no longer only for ratings, but also for attention."
+      },
+      {
+        "title": "Formality loses to a sales tool",
+        "body": "This is especially evident in beauty and local services. Two salons may be in the same building, have similar ratings and the same prices, but one will consistently receive more calls and appointments. Usually the difference is quite simple: one business issues the card as a sales tool, and the second as a formality."
+      },
+      {
+        "title": "Start with categories",
+        "body": "It starts with the most basic things. For example, categories. Many companies still choose something as general as possible: “beauty salon”, “medical center”, “cafe”. Although map algorithms have been working much more accurately for a long time. The better a card explains what services a business provides, the easier it is for the platform to understand who to show it to."
+      },
+      {
+        "title": "Services must be specifically designed",
+        "body": "It's the same with services. The user almost never looks for an abstract good business. He is looking for a specific task: manicure nearby, hair coloring, pediatric dentistry, massage, breakfast coffee shop. And if the card does not contain properly designed services, the business begins to lose even before viewing the reviews.",
+        "bodyLinks": [
+          {
+            "text": "business begins to lose even before viewing reviews",
+            "href": "/articles/pochemu-konkurent-vyshe-na-kartah"
+          }
+        ]
+      },
+      {
+        "title": "Prices increase confidence",
+        "body": "Prices are a different story. Many owners are still afraid to indicate them. There is a feeling that it is better to let them call. But in practice, missing prices almost always reduces trust. Local search is a quick choice: the user compares several companies at the same time. And if a competitor has at least a basic understanding of the cost of services, but you do not, some clients will leave simply because of transparency."
+      },
+      {
+        "title": "You don’t need a full price list, you need guidelines",
+        "body": "This is especially noticeable in beauty, medicine and service. In this case, we are not talking about the need to post a full price list. But key positions and starting prices should be immediately visible."
+      },
+      {
+        "title": "Photos have an even stronger impact",
+        "body": "Photos today have an even stronger impact. Moreover, the problem with most cards is not even the quality of the photographs, but their randomness. Very often the profile looks like a collection of disjointed pictures: an old reception desk, an empty office, a logo from five years ago and several blurry photos."
+      },
+      {
+        "title": "What does a user look for in photos?",
+        "items": [
+          "what kind of place is this",
+          "what's the atmosphere like there",
+          "who works there",
+          "How much can you trust this place?"
+        ]
+      },
+      {
+        "title": "Show the process and the result",
+        "body": "Cards work especially well where you can see not just the interior, but the process itself: the team, service details, real work, atmosphere, result. In essence, the user wants to mentally try on this business for themselves even before the call."
+      },
+      {
+        "title": "Good cards look alive",
+        "body": "This is why good cards almost always look alive. This is another thing that many people underestimate."
+      },
+      {
+        "title": "Cards love activity",
+        "items": [
+          "new photos",
+          "updates",
+          "responses to reviews",
+          "current services",
+          "publications"
+        ]
+      },
+      {
+        "title": "Abandoned card loses credibility",
+        "body": "When new activity regularly appears on a card, the algorithms begin to perceive the business as alive. And most companies update the card once - on the day of registration. After this, the profile remains motionless for years. And it is gradually starting to look abandoned not only for people, but also for the platforms themselves."
+      },
+      {
+        "title": "Replying to reviews is part of ranking and trust",
+        "body": "This is especially noticeable in responses to reviews. For owners, this often seems like a minor task. For algorithms, this is an indicator of how much a business interacts with customers.",
+        "bodyLinks": [
+          {
+            "text": "responses to reviews",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ]
+      },
+      {
+        "title": "Reaction speed is important",
+        "body": "When a company quickly responds to reviews, especially negative ones, the card starts to look proactive and manageable. When reviews remain unanswered for months, the opposite feeling arises. It is not only the presence of an answer that is important, but also the speed of reaction. In local business, a response within 24 hours is considered ideal. Maximum - several days."
+      },
+      {
+        "title": "Cards have become a system of trust",
+        "body": "Because cards have long become a system of trust. And this seems to be the main change in recent years. Previously, local promotion was more like technical SEO: categories, keywords, optimization. Today, platforms increasingly measure user behavior."
+      },
+      {
+        "title": "What signals do platforms see?",
+        "items": [
+          "do they open the card?",
+          "do they look at the photos?",
+          "do they read reviews?",
+          "do they press “call”",
+          "are they building a route?"
+        ]
+      },
+      {
+        "title": "A strong card is part of the sales system",
+        "body": "If people actively interact with the card, the algorithms begin to show it more often. Therefore, a strong company card today is no longer a profile design. This is part of the sales system."
+      },
+      {
+        "title": "Conclusion",
+        "body": "Many local businesses lose out to competition even before the first contact with the client - simply because their card does not help the person make a decision."
+      }
+    ],
+    "related": [
+      {
+        "title": "Local marketing control table",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Table"
+      },
+      {
+        "title": "Lead growth in a massage studio",
+        "href": "/cases/rost-lidov-v-massazhnoi-studii",
+        "label": "Case"
+      }
+    ]
+  },
+  {
+    "title": "How reviews affect customer flow",
+    "slug": "kak-otzyvy-vliyayut-na-potok-klientov",
+    "excerpt": "Why reviews have become a new form of trust and directly affect applications, card positions, conversion and repeat visits.",
+    "category": "Reviews",
+    "tags": [
+      "reviews",
+      "reputation",
+      "repeat clients"
+    ],
+    "publishedAt": "2026-04-15",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "How reviews affect customer flow - LocalOS",
+    "seoDescription": "How reviews affect the flow of local business customers: trust, freshness, responses to negativity, card positions, conversion and repeat visits.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Reviews are no longer just stars",
+        "body": "Local business has one feature that many notice too late. Reviews have long ceased to be just asterisks next to the company name. Today they directly influence the flow of customers."
+      },
+      {
+        "title": "People's behavior has changed",
+        "body": "Moreover, it’s not just about the algorithms of Yandex Maps, Google Maps or 2GIS. Of course, platforms love cards with good ratings and activity. But the main change occurred in the behavior of the people themselves. Clients have become much more careful in choosing whom to trust."
+      },
+      {
+        "title": "Reviews have become a new form of trust",
+        "body": "Especially in local business, where outwardly almost all companies look the same. One salon differs little from another. One clinic is from the next one. They all have beautiful photographs, similar promises and an individual approach. This is why reviews have become a new form of trust."
+      },
+      {
+        "title": "What does a person look for in reviews?",
+        "items": [
+          "how people are treated here",
+          "how adequate is everything?",
+          "what is the quality of service",
+          "won't it be an unpleasant experience?"
+        ]
+      },
+      {
+        "title": "People read more than just ratings",
+        "body": "When a person opens a company card, he tries to understand not only whether the rating is good. This is very clear from the way people read reviews. They rarely look only at the number of stars. Usually a person starts looking for details: how employees communicate, are there any problems with recording, are services imposed, is it clean inside, how attentive are they to clients."
+      },
+      {
+        "title": "The user tries on the business for himself",
+        "body": "In essence, the user is trying to imagine himself inside this business even before the first contact. This is why a detailed live review almost always works stronger than any advertising."
+      },
+      {
+        "title": "Specificity inspires trust",
+        "body": "When a person writes: “The master calmly explained the process and helped choose care without imposition,” this inspires much more trust than any marketing formulations in the style of “The best service in the city.” Because the specifics look real."
+      },
+      {
+        "title": "People trust other people more",
+        "body": "And this seems to be the main change in recent years: people trust less and less what business says about itself, and more and more - what others say about it."
+      },
+      {
+        "title": "Feelings compared in local search",
+        "body": "This is especially noticeable in local search. Very often, the user opens several cards in a row at once and compares not the companies, but the sensations from them. Some may even have a slightly lower rating, but the reviews look lively, fresh and detailed. Another company has a perfect 5.0, but the last comments were left six months ago, and the business’s responses look dry and formulaic.",
+        "bodyLinks": [
+          {
+            "text": "the user opens several cards in a row at once",
+            "href": "/articles/pochemu-konkurent-vyshe-na-kartah"
+          }
+        ]
+      },
+      {
+        "title": "A live card is more trustworthy",
+        "body": "And for some reason the first card inspires more confidence. Because she looks alive."
+      },
+      {
+        "title": "The freshness of reviews has become an important factor",
+        "body": "The freshness of reviews has generally become a very important factor. And not only for users, but also for the platforms themselves. Cards have long looked not just at ratings, but at activity around a business.",
+        "bodyLinks": [
+          {
+            "text": "Cards have long been looked at for more than just ratings",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      },
+      {
+        "title": "What do algorithms see?",
+        "items": [
+          "the company works",
+          "clients keep coming",
+          "are engaged in business"
+        ]
+      },
+      {
+        "title": "Why 4.8 can be higher than 5.0",
+        "body": "If reviews appear regularly, the algorithms perceive this as a signal of activity. Therefore, sometimes a company with a rating of 4.8 turns out to be higher than a company with 5.0 - simply because it has a constant flow of new reviews and an active card."
+      },
+      {
+        "title": "Business responses are also read",
+        "body": "But business responses are even more interesting. Most companies either do not respond to customers at all, or do it very formally: “Thank you for your feedback, we will be glad to see you again.” The problem is that people read the answers too."
+      },
+      {
+        "title": "The company's attitude is clear from the responses",
+        "body": "The responses show very clearly how much the company really cares. When a business responds in a lively, calm and to-the-point manner, it creates the feeling of normal human communication. Especially when it comes to negativity."
+      },
+      {
+        "title": "Negativity can increase trust",
+        "body": "Paradoxically, a well-processed negative review sometimes increases trust more than a dozen perfect ratings in a row. The user sees: problems happen, but the company does not hide and knows how to respond to them normally."
+      },
+      {
+        "title": "Sterile cards raise suspicion",
+        "body": "But today, perfectly sterile cards, on the contrary, are beginning to arouse suspicion."
+      },
+      {
+        "title": "Reviews affect more than just new customers",
+        "body": "There is one more thing that many people underestimate: reviews work not only to attract new customers. They also affect returns."
+      },
+      {
+        "title": "The answer helps to retain the client",
+        "body": "When a person receives an attentive response, where the company remembers the details of the visit, thanks for the specifics and maintains contact, there is a feeling of a relationship, and not just a service provided."
+      },
+      {
+        "title": "This is especially important for local businesses",
+        "body": "Especially in beauty, medicine, fitness and service, where people return not only for results, but also for the feeling that they are remembered and appreciated."
+      },
+      {
+        "title": "Reviews have become part of the growth system",
+        "body": "This is why strong local companies have long ceased to perceive reviews as something of secondary importance. Today it is already part of the business growth system.",
+        "bodyLinks": [
+          {
+            "text": "part of the business growth system",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "What do reviews affect at the same time?",
+        "items": [
+          "on trust",
+          "on the flow of clients",
+          "on position in maps",
+          "for conversion",
+          "for repeat visits",
+          "on how the business is perceived even before the first call"
+        ]
+      },
+      {
+        "title": "Conclusion",
+        "body": "And perhaps this has been the main change in recent years. Previously, reviews were simply the opinions of customers. Now they directly influence whether the next person will come at all."
+      }
+    ],
+    "related": [
+      {
+        "title": "Review response templates",
+        "href": "/documents/shablony-otvetov-na-otzyvy",
+        "label": "Document"
+      },
+      {
+        "title": "How to apply for a company card",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Article"
+      }
+    ]
+  },
+  {
+    "title": "How a cafe can get more guests from cards",
+    "slug": "kak-kafe-poluchat-gostei-iz-kart",
+    "excerpt": "What is important to show in a cafe card: menu, photos of dishes, quick selection scenarios and recent guest reviews.",
+    "category": "Cafe",
+    "tags": [
+      "cafe",
+      "cards",
+      "menu"
+    ],
+    "publishedAt": "2026-04-13",
+    "updatedAt": "2026-05-19",
+    "seoTitle": "How a cafe can get more guests from cards - LocalOS",
+    "seoDescription": "How a cafe can get more guests from cards: a cafe card as a first impression, a showcase, a source of trust and the main entrance to a local business.",
+    "draft": false,
+    "body": [
+      {
+        "title": "Unusual point of competition",
+        "body": "The cafe today has a very unusual point of competition. Previously, everything was decided by location. Then - Instagram. Now, increasingly, the choice is made within Yandex Maps, Google Maps and 2GIS."
+      },
+      {
+        "title": "The decision is made surprisingly quickly",
+        "body": "Moreover, the decision is made surprisingly quickly. A person opens several establishments in a row and literally in half a minute understands where he will go for breakfast, where he will get coffee or where he will meet in the evening."
+      },
+      {
+        "title": "The card became the first impression",
+        "body": "That is why the cafe card today has become something much more than just an address on a map. Essentially, this is the first impression of the establishment. And for many guests it is the only thing.",
+        "bodyLinks": [
+          {
+            "text": "The cafe card today has become something much more",
+            "href": "/articles/kak-oformit-kartochku-kompanii"
+          }
+        ]
+      },
+      {
+        "title": "People search easier than it seems",
+        "body": "This is especially noticeable in big cities. A person rarely looks for the “best cafe”. Usually everything happens much simpler:",
+        "items": [
+          "coffee nearby",
+          "where to have breakfast",
+          "good place nearby"
+        ]
+      },
+      {
+        "title": "Rapid visual selection begins",
+        "body": "After this, a very rapid visual selection begins. The user looks not so much at the rating as he tries to get a feel for the place:",
+        "items": [
+          "what does the food look like",
+          "what is the atmosphere inside",
+          "Is this cafe even alive?",
+          "would you like to go there right now?"
+        ]
+      },
+      {
+        "title": "Guests are lost even before the first contact",
+        "body": "And here, many establishments lose guests even before the first contact. Because a huge number of cards still look like an old reference book:",
+        "items": [
+          "address",
+          "phone",
+          "a few random photos",
+          "unclear description"
+        ]
+      },
+      {
+        "title": "There is not enough background information",
+        "body": "This is not enough for a person. He is already accustomed to the fact that through a card he can understand almost everything in advance:",
+        "items": [
+          "is there breakfast",
+          "what kind of coffee",
+          "what are the prices",
+          "Is it cozy inside?",
+          "is the meeting place suitable?",
+          "Is it possible to quickly take something with you?"
+        ]
+      },
+      {
+        "title": "Cards work as a showcase",
+        "body": "Interestingly, in the restaurant business, cards began to work almost like a window display. And not only for new establishments. Even at well-known places, the flow of guests increasingly depends on how “alive” the card looks."
+      },
+      {
+        "title": "A live card is immediately noticeable",
+        "body": "There is a very noticeable difference between cafes that systematically deal with cards, and those who once filled out a profile and forgot about it. With the first, you can usually immediately see:",
+        "items": [
+          "current photos",
+          "latest reviews",
+          "live menu",
+          "answers to guests",
+          "updates"
+        ]
+      },
+      {
+        "title": "The abandonment is felt immediately",
+        "body": "The second has a feeling of abandonment. Even if everything is fine inside."
+      },
+      {
+        "title": "Photos play a particularly important role",
+        "body": "Photographs play a particularly important role. In a cafe, people choose with their eyes. And often even before reading reviews. And we’re not necessarily talking about expensive food photography. The feeling of a real place is much more important."
+      },
+      {
+        "title": "What helps you feel a place?",
+        "body": "When the card shows:",
+        "items": [
+          "morning light",
+          "live landing",
+          "barista at work",
+          "real dishes",
+          "interior details",
+          "atmosphere of the evening"
+        ]
+      },
+      {
+        "title": "Guest tries on the cafe before visiting",
+        "body": "It becomes easier for a person to imagine himself inside this space. In essence, the user mentally “tryes on” the cafe even before the visit."
+      },
+      {
+        "title": "The menu works about the same",
+        "body": "The menu works pretty much the same. Many establishments still perceive it as technical information. But for the guest, the menu is a way to quickly understand whether the place is suitable for him or not."
+      },
+      {
+        "title": "Twenty page PDF is not needed",
+        "body": "Nobody wants to download a twenty page PDF. It is important for people to see in a few seconds:",
+        "items": [
+          "is there breakfast",
+          "Are the prices normal?",
+          "what kind of coffee",
+          "are there desserts",
+          "is it possible to come for lunch"
+        ]
+      },
+      {
+        "title": "A few positions may be enough",
+        "body": "Sometimes a few popular positions are enough for a person to make a decision."
+      },
+      {
+        "title": "Reviews have a huge impact",
+        "body": "Reviews also have a very strong influence. Moreover, it is interesting that users do not read them for the sake of the ratings themselves. They try to understand the mood of the place:",
+        "bodyLinks": [
+          {
+            "text": "Reviews are very influential",
+            "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
+          }
+        ],
+        "items": [
+          "is it nice to be there?",
+          "how employees communicate",
+          "has the service gone bad?",
+          "what is really worth ordering"
+        ]
+      },
+      {
+        "title": "Detailed reviews are stronger than short ones",
+        "body": "This is why live detailed reviews work much stronger than short comments in the spirit of “I liked everything.” When a person writes about a specific experience - breakfast, atmosphere, attitude of the staff - it begins to be perceived almost as a recommendation from a friend."
+      },
+      {
+        "title": "The cafe's answers are also important",
+        "body": "The cafe's responses also play an unexpectedly large role. When the establishment responds calmly and humanly, you get the feeling that they really care about the guests and the service. But empty templates or a complete lack of response create the opposite impression."
+      },
+      {
+        "title": "Maps analyze activity",
+        "body": "And this is important not only for people. Cards have been analyzing activity around the card for a long time:",
+        "items": [
+          "how often do new reviews appear?",
+          "are the photos updated?",
+          "are there any answers",
+          "Do users interact with the card?"
+        ]
+      },
+      {
+        "title": "Live profile is shown more often",
+        "body": "If a profile looks live, platforms will start showing it more often."
+      },
+      {
+        "title": "Promotion is becoming less and less like advertising",
+        "body": "That is why today local promotion of cafes is becoming less and less like classic advertising. Often the winners are not those with the biggest marketing budget. And those who help a person quickly make a decision: understand the menu, see the atmosphere, feel trust in the place."
+      },
+      {
+        "title": "A good card reduces uncertainty",
+        "body": "Essentially, a good cafe card today does one very important thing: it reduces uncertainty. And in the local restaurant business, this directly turns into a flow of guests."
+      },
+      {
+        "title": "Where LocalOS Helps",
+        "body": "LocalOS here helps not so much to “promote” the card as to see it through the eyes of the visitor. The system shows which selection scenarios are missing, where the card looks weak, which reviews are worth processing, and which updates can really improve confidence."
+      },
+      {
+        "title": "Cards have become the main entrance to business",
+        "body": "Because for cafes, maps have long ceased to be just navigation. In many cases, this is already the main entrance to the business.",
+        "bodyLinks": [
+          {
+            "text": "maps have long ceased to be just navigation",
+            "href": "/articles/onlain-karty-stali-kanalom-prodazh"
+          }
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Local marketing control table",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Table"
+      },
+      {
+        "title": "How to apply for a company card",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Article"
+      }
+    ]
+  }
+]
