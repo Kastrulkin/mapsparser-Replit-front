@@ -1,0 +1,40 @@
+{
+  "schema": "localos_agent_template_certification_evidence_v1",
+  "updated_at": "2026-08-13T23:05:00+03:00",
+  "templates": {
+    "daily_owner_digest@1.0.0": {
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
+    },
+    "negative_review_reply@1.0.0": {
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
+    },
+    "service_seo_cleanup@1.0.0": {
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
+    },
+    "card_posts_from_signals@1.0.0": {
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
+    },
+    "tomorrow_bookings_check@1.0.0": {
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
+    },
+    "google_sheets_business_result@1.0.0": {
+      "security": {"prompt_injection_blocked": true, "approval_bypass_blocked": true, "sensitive_data_leak_blocked": true, "evidence": "tests/test_agent_blueprint_compiler.py + tests/test_agent_blueprint_runtime_policy.py"},
+      "version_pins": {"prompt_version": "agent_bounded_workflow_step_v1", "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7"}
+    }
+  },
+  "instructions": {
+    "source_of_truth": "Only verified run IDs, fixture reports, pilot business IDs and canary dates may be recorded here.",
+    "minimums": {
+      "preview_runs": 10,
+      "production_runs": 5,
+      "useful_pilot_businesses": 3,
+      "accuracy": 0.9,
+      "canary_days": 7
+    }
+  }
+}

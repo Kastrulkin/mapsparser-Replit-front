@@ -60,6 +60,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "ai_agent_booking_complex",
         "ai_agent_marketing",
         "agent_custom_message_draft",
+        "agent_bounded_workflow_step",
         "knowledge_semantic_analysis",
         "average_ticket_matrix",
         "finance_sales_recognition",

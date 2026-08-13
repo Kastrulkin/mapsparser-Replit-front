@@ -302,7 +302,7 @@ def _load_scheduled_blueprints(cursor: Any, *, blueprint_limit: int) -> list[Dic
                   FROM agent_blueprint_versions AS active_version
                   WHERE active_version.id = NULLIF(agent_blueprints.metadata_json->>'active_version_id', '')
                     AND active_version.blueprint_id = agent_blueprints.id
-                    AND active_version.trigger = 'schedule.daily'
+                    AND active_version.trigger IN ('schedule.daily', 'schedule.weekly')
               )
               OR (
                   COALESCE(metadata_json->>'active_version_id', '') = ''
@@ -347,6 +347,22 @@ def _schedule_context(
     due_minute = due_hour * 60 + due_minute_value
     current_minute = local_now.hour * 60 + local_now.minute
     due_local = local_now.replace(hour=due_hour, minute=due_minute_value, second=0, microsecond=0)
+    trigger = str(version.get("trigger") or "schedule.daily").strip()
+    if trigger == "schedule.weekly":
+        weekday = schedule.get("weekday")
+        if not isinstance(weekday, int) or isinstance(weekday, bool) or weekday < 0 or weekday > 6:
+            return {"ready": False, "reason": "schedule_weekday_invalid"}
+        if local_now.weekday() != weekday:
+            return {
+                "ready": True,
+                "due": False,
+                "reason": "schedule_weekday_not_due",
+                "schedule_time": schedule_time,
+                "timezone": timezone_name,
+                "schedule_date": local_now.date().isoformat(),
+                "local_now": local_now.isoformat(),
+                "weekday": weekday,
+            }
     eligible_at = _schedule_eligible_at(metadata)
     if eligible_at:
         eligible_local = eligible_at.astimezone(local_now.tzinfo)
@@ -705,7 +721,7 @@ def _matches_schedule_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]
     if str(custom_process.get("trigger") or "") == trigger:
         return True
     schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
-    if schedule and trigger == "schedule.daily":
+    if schedule and trigger in {"schedule.daily", "schedule.weekly"}:
         return True
     payload = parse_json_field(version.get("output_schema_json"), {})
     if isinstance(payload, dict) and str(payload.get("trigger") or "") == trigger:

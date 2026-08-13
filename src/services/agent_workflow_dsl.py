@@ -176,7 +176,7 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
             payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
             category = str(payload.get("category") or "").strip().lower()
             output_format = str(payload.get("format") or "").strip().lower()
-            if category == "reviews" or "reply_draft" in output_format:
+            if (category == "reviews" or "reply_draft" in output_format) and not _goal_asks_for_review_replies(goal):
                 errors.append(
                     _issue(
                         f"steps[{index}].payload.format",
@@ -242,6 +242,25 @@ def _clean_string_list(value: Any) -> List[str]:
 
 
 def _runtime_model_steps(version_payload: Dict[str, Any], compiler_contract: Dict[str, Any]) -> List[Dict[str, str]]:
+    result = []
+    steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
+    for step in steps:
+        if not isinstance(step, dict) or step.get("bounded_model_call") is not True:
+            continue
+        key = str(step.get("key") or "").strip()
+        if not key:
+            continue
+        result.append(
+            {
+                "key": key,
+                "purpose": str(step.get("purpose") or step.get("model_purpose") or step.get("title") or "semantic transformation").strip(),
+                "input_schema": str(step.get("input_schema") or step.get("model_input_schema") or "fixed").strip(),
+                "output_schema": str(step.get("output_schema") or step.get("model_output_schema") or "fixed").strip(),
+                "fallback": str(step.get("fallback") or step.get("model_fallback") or "human_review").strip(),
+            }
+        )
+    if result:
+        return result
     configured = compiler_contract.get("runtime_model_steps")
     if isinstance(configured, list):
         result: List[Dict[str, str]] = []
@@ -262,24 +281,7 @@ def _runtime_model_steps(version_payload: Dict[str, Any], compiler_contract: Dic
             )
         return result
 
-    result = []
-    steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
-    for step in steps:
-        if not isinstance(step, dict) or step.get("bounded_model_call") is not True:
-            continue
-        key = str(step.get("key") or "").strip()
-        if not key:
-            continue
-        result.append(
-            {
-                "key": key,
-                "purpose": str(step.get("model_purpose") or step.get("title") or "semantic transformation").strip(),
-                "input_schema": str(step.get("model_input_schema") or "fixed").strip(),
-                "output_schema": str(step.get("model_output_schema") or "fixed").strip(),
-                "fallback": str(step.get("model_fallback") or "human_review").strip(),
-            }
-        )
-    return result
+    return []
 
 
 def _looks_like_write_capability(capability: str) -> bool:
@@ -305,6 +307,14 @@ def _goal_requires_internal_summary(goal: str) -> bool:
     ]
     reply_markers = ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
     return any(marker in lowered for marker in summary_markers) and not any(marker in lowered for marker in reply_markers)
+
+
+def _goal_asks_for_review_replies(goal: str) -> bool:
+    lowered = goal.lower()
+    return any(
+        marker in lowered
+        for marker in ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
+    )
 
 
 def _goal_requires_internal_content_draft(goal: str) -> bool:

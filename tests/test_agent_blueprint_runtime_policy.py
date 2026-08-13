@@ -1,8 +1,30 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tests.agent_blueprint_fakes import *  # noqa: F403
+
+
+def test_appointments_read_payload_is_bounded_to_tomorrow_in_schedule_timezone():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "inputs_schema_json": {"type": "object", "properties": {}},
+        "steps_json": [],
+        "schedule_json": {"time": "18:00", "timezone": "UTC"},
+    }
+    expected = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+
+    payload = AgentBlueprintRunner(cursor)._build_capability_payload(
+        {"id": "run1", "blueprint_version_id": "ver1", "input_json": {}},
+        {"capability": "appointments.read", "payload": {"date_range": "tomorrow"}},
+    )
+
+    assert payload["from"] == expected
+    assert payload["to"] == expected
+    assert payload["date_range"] == "tomorrow"
 
 
 def test_runner_blocks_custom_agent_start_when_required_external_binding_missing():

@@ -2,7 +2,9 @@ from copy import deepcopy
 from typing import Any, Dict, List
 
 from services.agent_blueprint_draft_builder import compile_agent_blueprint
-from services.agent_template_certification import empty_certification_evidence, evaluate_template_certification
+from services.agent_compiled_artifact import build_compiled_artifact_candidate
+from services.agent_template_certification import evaluate_template_certification
+from services.agent_template_evidence import load_template_certification_evidence
 from services.agent_workflow_dsl import build_workflow_dsl_document, validate_workflow_dsl_document
 
 
@@ -174,6 +176,67 @@ TEMPLATE_LOCALIZED_CONTENT: Dict[str, Dict[str, Dict[str, str]]] = {
 }
 
 
+FIRST_WAVE_TEMPLATE_PRESETS: Dict[str, Dict[str, Any]] = {
+    "daily_owner_digest": {
+        "trigger": "schedule.daily",
+        "schedule": {"time": "09:00", "timezone": "business_timezone"},
+        "sources": ["reviews", "services", "content", "partnerships", "finance"],
+        "model_preset": "owner_digest",
+        "result_format": "owner_digest_v1",
+        "max_items": 25,
+    },
+    "negative_review_reply": {
+        "trigger": "manual.run",
+        "sources": ["external_reviews", "business_profile"],
+        "model_preset": "negative_review_reply_drafts",
+        "result_format": "review_reply_drafts_v1",
+        "max_items": 12,
+    },
+    "service_seo_cleanup": {
+        "trigger": "manual.run",
+        "sources": ["services", "business_profile"],
+        "model_preset": "service_seo_audit",
+        "result_format": "service_seo_audit_v1",
+        "max_items": 100,
+    },
+    "card_posts_from_signals": {
+        "trigger": "schedule.weekly",
+        "schedule": {"weekday": 1, "time": "10:00", "timezone": "business_timezone"},
+        "sources": ["services", "external_reviews", "business_profile", "content"],
+        "model_preset": "card_post_drafts",
+        "result_format": "card_post_drafts_v1",
+        "max_items": 30,
+    },
+    "tomorrow_bookings_check": {
+        "trigger": "schedule.daily",
+        "schedule": {"time": "18:00", "timezone": "business_timezone"},
+        "sources": ["appointments", "business_profile"],
+        "model_preset": "tomorrow_booking_risks",
+        "result_format": "tomorrow_booking_risks_v1",
+        "max_items": 100,
+        "internal_read_capability": "appointments.read",
+    },
+    "google_sheets_business_result": {
+        "trigger": "schedule.daily",
+        "schedule": {"time": "18:00", "timezone": "business_timezone"},
+        "sources": ["google_sheets"],
+        "model_preset": "sheet_business_digest",
+        "result_format": "sheet_business_digest_v1",
+        "max_items": 100,
+        "read_binding": {
+            "key": "google_sheets_read",
+            "provider": "google_sheets",
+            "direction": "external_read",
+            "required": True,
+            "approval_required": False,
+            "required_config": ["spreadsheet_id", "sheet_name"],
+            "default_config": {"sheet_name": "Sheet1"},
+            "capability": "google_sheets.read_rows",
+        },
+    },
+}
+
+
 def build_agent_template_catalog() -> List[Dict[str, Any]]:
     return [_build_template_manifest(definition) for definition in TEMPLATE_DEFINITIONS]
 
@@ -189,7 +252,9 @@ def build_agent_from_template(template_key: str) -> Dict[str, Any]:
     for definition in TEMPLATE_DEFINITIONS:
         if definition["key"] != template_key:
             continue
-        draft = compile_agent_blueprint(str(definition["prompt"]), use_ai=False)
+        draft = _build_first_wave_template_draft(definition)
+        if not draft:
+            draft = compile_agent_blueprint(str(definition["prompt"]), use_ai=False)
         return {
             "definition": deepcopy(definition),
             "draft": draft,
@@ -198,7 +263,7 @@ def build_agent_from_template(template_key: str) -> Dict[str, Any]:
 
 
 def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
-    draft = compile_agent_blueprint(str(definition["prompt"]), use_ai=False)
+    draft = build_agent_from_template(str(definition["key"]))["draft"]
     version_payload = deepcopy(draft["version_payload"])
     metadata = deepcopy(draft["metadata"])
     workflow_dsl = build_workflow_dsl_document(version_payload, metadata)
@@ -245,26 +310,196 @@ def _build_template_manifest(definition: Dict[str, Any]) -> Dict[str, Any]:
         "risk_level": definition["risk_level"],
         "certification_status": definition["certification_status"],
         "certification_gates": gates,
-        "certification_evidence": {
-            "template_version": definition["version"],
-            "validation_timestamp": None,
-            "security_result": gates["security"],
-            "schema_result": gates["schema"],
-            "execution_result": gates["execution"],
-            "accuracy_result": gates["accuracy"],
-            "fixtures_passed": 0,
-            "golden_score": None,
-            "model_and_prompt_versions": [],
-            "approval_policy_hash": None,
-            "certification_decision": "pilot_evidence_required",
-        },
+        "certification_evidence": load_template_certification_evidence(str(definition["key"]), str(definition["version"])),
         "fixtures": [{"key": key, "status": "pending"} for key in fixture_keys],
         "golden_results": [],
         "creation_prompt": definition["prompt"],
         "category": draft["category"],
     }
-    manifest["certification_evaluation"] = evaluate_template_certification(
-        manifest,
-        empty_certification_evidence(),
+    manifest["certification_evaluation"] = evaluate_template_certification(manifest, manifest["certification_evidence"])
+    manifest["certification_evidence"]["certification_decision"] = (
+        "certified" if manifest["certification_evaluation"]["certified"] else "pilot_evidence_required"
     )
     return manifest
+
+
+def _build_first_wave_template_draft(definition: Dict[str, Any]) -> Dict[str, Any]:
+    preset = FIRST_WAVE_TEMPLATE_PRESETS.get(str(definition.get("key") or ""))
+    if not preset:
+        return {}
+    source_step = {
+        "key": "collect_registered_sources",
+        "type": "artifact",
+        "title": "Собрать разрешённые данные",
+        "artifact_type": "agent_input_plan",
+        "payload": {
+            "status": "ready",
+            "sources": deepcopy(preset["sources"]),
+            "source_scope": "registered_business_sources_only",
+            "external_dispatch_performed": False,
+        },
+    }
+    steps = [source_step]
+    bindings = []
+    capabilities = []
+    read_binding = preset.get("read_binding")
+    if isinstance(read_binding, dict):
+        binding = deepcopy(read_binding)
+        binding["trigger"] = preset["trigger"]
+        bindings.append(binding)
+        capabilities.append(str(binding["capability"]))
+        steps = [
+            {
+                "key": "read_google_sheets",
+                "type": "capability",
+                "title": "Прочитать новые строки таблицы",
+                "capability": "google_sheets.read_rows",
+                "requires_approval": False,
+                "payload": {
+                    "integration_binding": "google_sheets_read",
+                    "limit": preset["max_items"],
+                    "provider_write_performed": False,
+                },
+                "provider": "openclaw",
+                "provider_action_ref": "openclaw.google_sheets.read_rows",
+                "provider_policy": "localos_envelope",
+                "provider_risk_class": "read",
+                "provider_approval_class": "none",
+            }
+        ]
+    internal_read_capability = str(preset.get("internal_read_capability") or "").strip()
+    if internal_read_capability:
+        capabilities.append(internal_read_capability)
+        steps = [
+            {
+                "key": "read_tomorrow_appointments",
+                "type": "capability",
+                "title": "Прочитать записи на завтра",
+                "capability": internal_read_capability,
+                "requires_approval": False,
+                "payload": {
+                    "date_range": "tomorrow",
+                    "max_items": preset["max_items"],
+                    "provider_write_performed": False,
+                },
+            }
+        ]
+    model_step = {
+        "key": "prepare_bounded_result",
+        "type": "artifact",
+        "title": "Подготовить результат по фиксированным правилам",
+        "artifact_type": "agent_output_draft",
+        "bounded_model_call": True,
+        "model_task_key": "agent_bounded_workflow_step",
+        "model_preset": preset["model_preset"],
+        "purpose": definition["business_result"],
+        "input_schema": "registered_business_sources_v1",
+        "output_schema": preset["result_format"],
+        "fallback": "deterministic_summary_then_human_review",
+        "payload": {
+            "status": "draft",
+            "category": definition["vertical"],
+            "format": preset["result_format"],
+            "source_step": steps[-1]["key"],
+            "source_scope": deepcopy(preset["sources"]),
+            "max_items": preset["max_items"],
+            "external_dispatch_performed": False,
+            "delivery_state": "internal_only",
+        },
+    }
+    steps.extend(
+        [
+            model_step,
+            {
+                "key": "save_internal_result",
+                "type": "artifact",
+                "title": "Сохранить результат в LocalOS",
+                "artifact_type": "agent_final_result",
+                "payload": {
+                    "status": "saved",
+                    "source_step": "prepare_bounded_result",
+                    "external_dispatch_performed": False,
+                    "delivery_state": "internal_only",
+                },
+            },
+        ]
+    )
+    limits = {
+        "max_items_per_run": preset["max_items"],
+        "max_model_calls_per_run": 1,
+        "autonomous_external_write_allowed": False,
+        "autonomous_localos_write_allowed": False,
+        "duplicate_policy": "idempotency_key_required",
+    }
+    version_payload = {
+        "goal": definition["prompt"],
+        "trigger": preset["trigger"],
+        "execution_mode": "scheduled" if str(preset["trigger"]).startswith("schedule.") else "manual",
+        "schedule": deepcopy(preset.get("schedule") or {}),
+        "mode": "compiled_bounded_result",
+        "inputs_schema": {"type": "object", "properties": {"request": {"type": "string"}}},
+        "steps": steps,
+        "capability_allowlist": capabilities,
+        "approval_policy": {
+            "required_for": [],
+            "external_delivery": "manual_approval_required",
+            "mode": "external_actions_only",
+        },
+        "required_integration_bindings": bindings,
+        "limits": limits,
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "items": {"type": "array"},
+                "exceptions": {"type": "array"},
+                "drafts": {"type": "array"},
+                "source_refs": {"type": "array"},
+            },
+        },
+        "side_effects_performed": False,
+    }
+    metadata = {
+        "builder": "certified_template_registry_v1",
+        "compiler": "agent_compiler_v1",
+        "compiled_workflow_status": "draft",
+        "request_text": definition["prompt"],
+        "draft_category": definition["vertical"],
+        "data_sources": deepcopy(preset["sources"]),
+        "outputs": [preset["result_format"]],
+        "approval_boundaries": ["external_delivery"],
+        "external_delivery": "approval_required",
+        "side_effects": "none",
+        "compiled_process": {
+            "schema": "compiled_bounded_template_workflow_v1",
+            "trigger": preset["trigger"],
+            "runtime_truth": "agent_blueprint_versions.steps_json",
+            "approval_boundary": "external_actions_only",
+        },
+        "compiler_contract": {
+            "llm_usage": "bounded_registered_runtime_step",
+            "runtime_truth": "agent_blueprint_versions.steps_json",
+            "runtime_planner_required": False,
+            "runtime_model_steps": [
+                {
+                    "key": model_step["key"],
+                    "purpose": model_step["purpose"],
+                    "input_schema": model_step["input_schema"],
+                    "output_schema": model_step["output_schema"],
+                    "fallback": model_step["fallback"],
+                    "task_key": model_step["model_task_key"],
+                    "preset": model_step["model_preset"],
+                }
+            ],
+            "runtime_llm_required": False,
+            "runtime_executes_compiled_steps": True,
+        },
+        "required_integration_bindings": bindings,
+    }
+    metadata["compiled_artifact_candidate"] = build_compiled_artifact_candidate(version_payload, metadata)
+    metadata["compiled_validation"] = metadata["compiled_artifact_candidate"]["validation"]
+    return {
+        "category": definition["vertical"],
+        "version_payload": version_payload,
+        "metadata": metadata,
+    }

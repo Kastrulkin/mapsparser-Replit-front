@@ -168,6 +168,18 @@ CONTENT_PLAN_GENERATION_SCHEMA: dict[str, Any] = {
     "required": ["candidates"],
 }
 
+BOUNDED_AGENT_RESULT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "items": {"type": "array"},
+        "exceptions": {"type": "array"},
+        "drafts": {"type": "array"},
+        "source_refs": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["summary", "items", "exceptions", "drafts", "source_refs"],
+}
+
 
 def _task(
     key: str,
@@ -363,6 +375,19 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         timeout=20,
         prompt_version="agent_table_analysis_v1",
         shadow_allowed=True,
+    ),
+    "agent_bounded_workflow_step": _task(
+        "agent_bounded_workflow_step",
+        provider="gigachat",
+        profile="gigachat_pro",
+        data_class="financial_sensitive",
+        response_kind="json",
+        schema=BOUNDED_AGENT_RESULT_SCHEMA,
+        max_tokens=3000,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="agent_bounded_workflow_step_v1",
+        pipeline_stage="analysis",
     ),
     "generic_russian_analysis": _task("generic_russian_analysis"),
 }

@@ -21,6 +21,11 @@ from services.agent_builder_session import build_agent_builder_state, preview_to
 from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 from services.agent_workflow_dsl import build_workflow_dsl_document
 from services.agent_workflow_graph import validate_workflow_graph, validate_workflow_step_approval_order, workflow_dsl_to_graph, workflow_graph_to_steps
+from services.agent_visual_editor_registry import (
+    apply_visual_editor_settings,
+    validate_visual_editor_settings,
+    visual_editor_registry,
+)
 from services.agent_blueprint_workspace import (
     build_agent_version_diff,
     build_blueprint_review,
@@ -152,7 +157,7 @@ def use_agent_template(template_key: str):
                 "template_version": template_version,
                 "created_from_template": True,
                 "is_account_example": False,
-                "execution_mode": "scheduled" if trigger == "schedule.daily" else "manual",
+                "execution_mode": "scheduled" if trigger.startswith("schedule.") else "manual",
                 "execution_mode_confirmed_at": _utc_now_text(),
                 "execution_mode_confirmed_by_user_id": _user_id(user_data),
                 "required_connectors": definition.get("required_connections") or [],
@@ -161,14 +166,19 @@ def use_agent_template(template_key: str):
         )
         version_payload = dict(version_payload)
         version_payload["execution_mode"] = str(metadata.get("execution_mode") or "manual")
-        version_payload["runtime_config"] = (
-            metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-        )
-        version_payload["schedule"] = (
-            version_payload["runtime_config"].get("schedule")
-            if isinstance(version_payload["runtime_config"].get("schedule"), dict)
-            else {}
-        )
+        schedule = version_payload.get("schedule") if isinstance(version_payload.get("schedule"), dict) else {}
+        if str(schedule.get("timezone") or "") == "business_timezone":
+            schedule = dict(schedule)
+            schedule["timezone"] = _template_business_timezone(cursor, business_id)
+            version_payload["schedule"] = schedule
+        runtime_config = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        version_payload["runtime_config"] = dict(runtime_config)
+        if not isinstance(version_payload.get("schedule"), dict):
+            version_payload["schedule"] = (
+                version_payload["runtime_config"].get("schedule")
+                if isinstance(version_payload["runtime_config"].get("schedule"), dict)
+                else {}
+            )
         version_payload["required_integration_bindings"] = (
             metadata.get("required_integration_bindings")
             if isinstance(metadata.get("required_integration_bindings"), list)
@@ -210,6 +220,32 @@ def use_agent_template(template_key: str):
         raise
     finally:
         db.close()
+
+
+def _template_business_timezone(cursor, business_id: str) -> str:
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'businesses'
+              AND column_name = 'timezone'
+        ) AS has_timezone
+        """
+    )
+    row = cursor.fetchone() or {}
+    has_timezone = bool(row.get("has_timezone")) if isinstance(row, dict) else bool(row[0])
+    if not has_timezone:
+        return "Europe/Moscow"
+    cursor.execute("SELECT timezone FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+    business = cursor.fetchone() or {}
+    timezone_name = str(business.get("timezone") or "Europe/Moscow") if isinstance(business, dict) else str(business[0] or "Europe/Moscow")
+    try:
+        ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        return "Europe/Moscow"
+    return timezone_name
 
 
 def _env_enabled(name: str, default: bool = False) -> bool:
@@ -2835,7 +2871,7 @@ def _agent_execution_mode(blueprint: dict, version: dict | None = None) -> str:
         if version_mode in {"one_off", "manual", "scheduled"}:
             return version_mode
     trigger = _agent_version_trigger(blueprint, version)
-    if trigger == "schedule.daily":
+    if trigger.startswith("schedule."):
         return "scheduled"
     explicit = str(metadata.get("execution_mode") or "").strip().lower()
     if explicit == "one_off" and trigger == "manual.run":
@@ -3717,9 +3753,12 @@ def get_agent_blueprint_graph(blueprint_id: str):
             {
                 "key": str(step.get("key") or step.get("id") or ""),
                 "title": _execution_step_title(step),
+                "preset": str(step.get("model_preset") or ""),
+                "task_key": str(step.get("model_task_key") or ""),
             }
             for step in normalize_steps(version_payload.get("steps"))
-            if str(step.get("type") or step.get("step_type") or "").strip().lower() in {"model", "llm", "ai"}
+            if step.get("bounded_model_call") is True
+            or str(step.get("type") or step.get("step_type") or "").strip().lower() in {"model", "llm", "ai"}
         ]
         return jsonify(
             {
@@ -3750,9 +3789,10 @@ def get_agent_blueprint_graph(blueprint_id: str):
                     "active_version_unchanged": True,
                     "save_creates_candidate_version": True,
                     "requires_preview_before_activation": True,
-                    "editable_fields": ["execution_mode", "schedule", "step_order"],
-                    "read_only_fields": ["sources", "ai_steps", "expected_result", "limits"],
+                    "editable_fields": ["trigger", "schedule", "sources", "checks", "bounded_ai", "approval", "result", "limits", "step_order"],
+                    "read_only_fields": ["code", "provider", "capability", "system_fields"],
                 },
+                "editor_registry": visual_editor_registry(),
             }
         )
     finally:
@@ -3767,6 +3807,17 @@ def create_agent_graph_candidate(blueprint_id: str):
     payload = request.get_json(silent=True) or {}
     graph = payload.get("graph") if isinstance(payload.get("graph"), dict) else {}
     settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
+    visual_settings = settings.get("visual_editor") if isinstance(settings.get("visual_editor"), dict) else {}
+    visual_validation = validate_visual_editor_settings(visual_settings) if visual_settings else {"valid": True, "errors": []}
+    if not visual_validation["valid"]:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Настройки содержат незарегистрированные значения.",
+                "code": "AGENT_VISUAL_EDITOR_SETTINGS_INVALID",
+                "validation": visual_validation,
+            }
+        ), 400
     graph_validation = validate_workflow_graph(graph)
     if not graph_validation["valid"]:
         return jsonify(
@@ -3787,22 +3838,29 @@ def create_agent_graph_candidate(blueprint_id: str):
         if not candidate:
             return _json_error("Blueprint has no candidate version", 404, "AGENT_VERSION_NOT_FOUND")
         version_payload = build_version_payload_from_row(candidate)
-        original_steps = normalize_steps(version_payload.get("steps"))
-        original_by_key = {
-            str(step.get("key") or step.get("id") or ""): step
-            for step in original_steps
-            if str(step.get("key") or step.get("id") or "").strip()
-        }
-        ordered_graph_steps = workflow_graph_to_steps(graph)
-        ordered_keys = [str(step.get("key") or "") for step in ordered_graph_steps]
-        if set(ordered_keys) != set(original_by_key) or len(ordered_keys) != len(original_by_key):
-            return _json_error(
-                "Добавлять или удалять шаги в этой версии редактора нельзя.",
-                400,
-                "AGENT_GRAPH_NODE_SET_CHANGED",
-            )
-        version_payload["steps"] = [original_by_key[key] for key in ordered_keys]
-        execution_mode = str(settings.get("execution_mode") or version_payload.get("execution_mode") or "manual").strip().lower()
+        if visual_settings:
+            version_payload = apply_visual_editor_settings(version_payload, visual_settings)
+        else:
+            original_steps = normalize_steps(version_payload.get("steps"))
+            original_by_key = {
+                str(step.get("key") or step.get("id") or ""): step
+                for step in original_steps
+                if str(step.get("key") or step.get("id") or "").strip()
+            }
+            ordered_graph_steps = workflow_graph_to_steps(graph)
+            ordered_keys = [str(step.get("key") or "") for step in ordered_graph_steps]
+            if set(ordered_keys) != set(original_by_key) or len(ordered_keys) != len(original_by_key):
+                return _json_error(
+                    "Добавлять или удалять шаги можно только через зарегистрированные блоки.",
+                    400,
+                    "AGENT_GRAPH_NODE_SET_CHANGED",
+                )
+            version_payload["steps"] = [original_by_key[key] for key in ordered_keys]
+        execution_mode = str(
+            version_payload.get("execution_mode")
+            if visual_settings
+            else settings.get("execution_mode") or version_payload.get("execution_mode") or "manual"
+        ).strip().lower()
         if execution_mode not in {"one_off", "manual", "scheduled"}:
             return _json_error("Выберите допустимый режим запуска.", 400, "AGENT_GRAPH_EXECUTION_MODE_INVALID")
         version_payload["execution_mode"] = execution_mode
@@ -3819,8 +3877,11 @@ def create_agent_graph_candidate(blueprint_id: str):
                 ZoneInfo(timezone_name)
             except ZoneInfoNotFoundError:
                 return _json_error("Укажите корректный часовой пояс.", 400, "AGENT_GRAPH_SCHEDULE_TIMEZONE_INVALID")
-            version_payload["trigger"] = "schedule.daily"
+            if not visual_settings:
+                version_payload["trigger"] = "schedule.daily"
             version_payload["schedule"] = {"time": schedule_time, "timezone": timezone_name}
+            if str(version_payload.get("trigger") or "") == "schedule.weekly":
+                version_payload["schedule"]["weekday"] = 1
         else:
             version_payload["trigger"] = "manual.run"
             version_payload["schedule"] = {}

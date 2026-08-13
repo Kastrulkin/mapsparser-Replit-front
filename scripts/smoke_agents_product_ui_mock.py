@@ -455,7 +455,96 @@ async def _handle_mock_api(route):
             "learning_events": [],
             "version_events": [],
             "legacy_migration": {},
+            "execution_mode": "scheduled",
+            "execution_contract": {
+                "schema": "localos_agent_execution_contract_v1",
+                "original_request": "Каждый вечер проверяй новые строки Google Sheets и готовь внутреннюю сводку.",
+                "execution_mode": "scheduled",
+                "description_complete": True,
+                "has_unpublished_changes": False,
+                "active": {
+                    "role": "active",
+                    "version_id": "ver-sheets-telegram",
+                    "version_number": 1,
+                    "goal": "Проверять новые строки Google Sheets и готовить внутреннюю сводку.",
+                    "execution_mode": "scheduled",
+                    "trigger": "schedule.daily",
+                    "schedule": {"time": "18:00", "timezone": "Europe/Moscow"},
+                    "inputs_schema": {"type": "object", "properties": {}},
+                    "steps": [
+                        {"key": "read_google_sheets", "position": 1, "title": "Прочитать новые строки", "step_type": "capability", "capability": "google_sheets.read_rows"},
+                        {"key": "prepare_bounded_result", "position": 2, "title": "Подготовить сводку", "step_type": "artifact", "artifact_type": "agent_output_draft"},
+                        {"key": "save_internal_result", "position": 3, "title": "Сохранить результат", "step_type": "artifact", "artifact_type": "agent_final_result"},
+                    ],
+                    "sources": [{"key": "google_sheets_read", "provider": "google_sheets"}],
+                    "connections": {},
+                    "expected_result": {"type": "object", "properties": {"summary": {"type": "string"}, "items": {"type": "array"}}},
+                    "limits": {"max_items_per_run": 100, "max_model_calls_per_run": 1},
+                    "approval_boundaries": [],
+                    "validation": {"tested": False, "status": "not_tested"},
+                    "is_active": True,
+                },
+            },
         })
+        return
+
+    if path == "/agent-blueprints/agent-sheets-telegram/graph" and method == "GET":
+        await _fulfill(route, {
+            "success": True,
+            "blueprint_id": "agent-sheets-telegram",
+            "version_id": "ver-sheets-telegram",
+            "graph": {
+                "schema": "localos_agent_workflow_graph_v1",
+                "nodes": [
+                    {"id": "read_google_sheets", "kind": "capability", "config": {"key": "read_google_sheets", "type": "capability", "capability": "google_sheets.read_rows", "payload": {}}},
+                    {"id": "prepare_bounded_result", "kind": "bounded_model_call", "config": {"key": "prepare_bounded_result", "type": "artifact", "bounded_model_call": True, "model_preset": "sheet_business_digest", "payload": {"source_scope": ["google_sheets"]}}},
+                    {"id": "save_internal_result", "kind": "artifact", "config": {"key": "save_internal_result", "type": "artifact"}},
+                ],
+                "edges": [
+                    {"id": "a", "source": "read_google_sheets", "target": "prepare_bounded_result"},
+                    {"id": "b", "source": "prepare_bounded_result", "target": "save_internal_result"},
+                ],
+            },
+            "settings": {"execution_mode": "scheduled", "trigger": "schedule.daily", "schedule": {"time": "18:00", "timezone": "Europe/Moscow"}, "limits": {"max_items_per_run": 100, "max_model_calls_per_run": 1}},
+            "editor_registry": {
+                "triggers": [
+                    {"key": "manual", "title": "По команде", "trigger": "manual.run", "execution_mode": "manual"},
+                    {"key": "daily", "title": "Каждый день", "trigger": "schedule.daily", "execution_mode": "scheduled"},
+                    {"key": "weekly", "title": "Раз в неделю", "trigger": "schedule.weekly", "execution_mode": "scheduled"},
+                ],
+                "sources": [
+                    {"key": "business_profile", "title": "Профиль бизнеса"},
+                    {"key": "reviews", "title": "Отзывы"},
+                    {"key": "services", "title": "Услуги"},
+                    {"key": "google_sheets", "title": "Google Sheets — только чтение"},
+                ],
+                "checks": [
+                    {"key": "required_data", "title": "Остановиться, если данных нет"},
+                    {"key": "deduplicate", "title": "Убрать повторы"},
+                    {"key": "limit_items", "title": "Ограничить объём"},
+                ],
+                "ai_presets": [
+                    {"key": "owner_digest", "title": "Сводка владельцу"},
+                    {"key": "sheet_business_digest", "title": "Сводка строк таблицы"},
+                ],
+                "approvals": [
+                    {"key": "none", "title": "Не требуется для внутреннего результата"},
+                    {"key": "manual_review", "title": "Проверить результат человеком"},
+                ],
+                "results": [
+                    {"key": "internal_result", "title": "Сохранить результат в LocalOS"},
+                    {"key": "review_queue", "title": "Сохранить в очередь проверки"},
+                ],
+                "limits": {
+                    "max_items_per_run": {"title": "Элементов за запуск", "minimum": 1, "maximum": 500, "default": 100},
+                    "max_model_calls_per_run": {"title": "AI-шагов за запуск", "minimum": 1, "maximum": 1, "default": 1},
+                },
+            },
+        })
+        return
+
+    if path == "/agent-blueprints/agent-sheets-telegram/graph/candidate" and method == "POST":
+        await _fulfill(route, {"success": True, "candidate_version": {"id": "ver-sheets-telegram-2", "version_number": 2}, "active_version_unchanged": True, "next_step": "run_preview"})
         return
 
     if path == "/agent-blueprints/agent-sheets-telegram/review":
@@ -966,10 +1055,30 @@ async def run_smoke(url, screenshot):
                     leaked.append("raw payload dump visible in normal agent workspace")
                 if "Агент создан" in created_body:
                     leaked.append("old post-create banner still visible")
-                run_test_buttons = page.get_by_role("button", name="Запустить тест")
-                connect_buttons = page.get_by_role("button", name=re.compile(r"Подключить"))
-                if await run_test_buttons.count() + await connect_buttons.count() != 1:
-                    missing.append("one created-agent next action")
+                scenario_tab = page.get_by_text("Сценарий", exact=True)
+                if await scenario_tab.count() == 0:
+                    missing.append("scenario tab")
+                else:
+                    await scenario_tab.last.click()
+                    await page.wait_for_timeout(700)
+                    configure_process = page.get_by_role("button", name="Настроить процесс", exact=True)
+                    if await configure_process.count() == 0:
+                        missing.append("visual editor entry")
+                    else:
+                        await configure_process.focus()
+                        await page.keyboard.press("Enter")
+                        await page.wait_for_timeout(500)
+                        editor_body = await page.locator("body").inner_text(timeout=10000)
+                        for label in [
+                            "Какие данные использовать",
+                            "Проверки перед AI",
+                            "Как обработать",
+                            "Ручная проверка",
+                            "Куда сохранить",
+                            "Код, произвольные провайдеры",
+                        ]:
+                            if label not in editor_body:
+                                missing.append(f"visual editor: {label}")
 
         known_telemetry_failure = failed_requests and all("hdrc.yandex.net" in item for item in failed_requests)
         if console_errors and not known_telemetry_failure:
@@ -981,6 +1090,13 @@ async def run_smoke(url, screenshot):
             path = Path(screenshot)
             path.parent.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(path), full_page=True)
+            await page.set_viewport_size({"width": 390, "height": 844})
+            await page.wait_for_timeout(300)
+            overflow = await page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            if overflow > 2:
+                leaked.append(f"mobile horizontal overflow: {overflow}px")
+            mobile_path = path.with_name(f"{path.stem}-mobile{path.suffix}")
+            await page.screenshot(path=str(mobile_path), full_page=True)
 
         if missing or leaked:
             print("Agents product UI mock smoke failed")

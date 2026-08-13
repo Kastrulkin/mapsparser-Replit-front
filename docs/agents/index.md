@@ -77,12 +77,22 @@ Current runtime guarantees:
 The product UI uses four user-facing sections: Overview, History, Scenario and
 Settings. Overview owns the single next action and only previews the latest
 result; the complete result belongs to a specific run in History. Scenario is
-the readable projection of the compiled version, not an editable parallel
-workflow.
+the readable and constrained React Flow projection of the compiled version.
+Its property panel can select only server-registered triggers, read sources,
+deterministic checks, bounded AI presets, approval gates, result presets and
+safe limits. Saving creates a candidate `agent_blueprint_versions` row; the
+same DSL remains runtime truth and the active version is unchanged until
+preview and explicit activation.
 
-The certified beta catalog currently allows read, draft and safe internal-draft
-capabilities. Request-only writes can be represented and reviewed, but they do
-not make a workflow eligible for autonomous activation. See
+The beta template catalog currently allows read, draft and safe internal-draft
+capabilities. Beta does not mean certified: each template version remains
+blocked until its evidence record passes fixtures, security, at least ten safe
+previews, five production runs, 90% accuracy, three useful pilot businesses,
+rollback/support export and a seven-day incident-free canary. Evidence lives in
+`config/agent_template_certification_evidence.json` and the release gate is
+`scripts/check_agent_template_certification.py`. Request-only writes can be
+represented and reviewed, but they do not make a workflow eligible for
+autonomous activation. See
 [Compiled AI Architecture v1](../LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md) for
 the exact runtime and rollout status.
 

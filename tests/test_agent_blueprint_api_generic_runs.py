@@ -193,7 +193,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Candidate-версия" in agents_page_source
     assert "Зафиксировать улучшение" in agents_page_source
     assert "auto_activate: false" in agents_page_source
-    assert 'title="Агенты"' in agents_page_source
+    assert "title={pageCopy.title}" in agents_page_source
     assert "Создать копию агента" in agents_page_source
     assert "Запустить ещё раз" in agents_page_source
     assert "Примерно" in agents_page_source
@@ -300,7 +300,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "output: hasStructuredResult" in agents_page_source
     assert "Intl.supportedValuesOf('timeZone')" in agents_page_source
     assert "Найти город или Europe/Paris" in agents_page_source
-    assert agents_page_source.count("<TimezoneSelect") == 3
+    assert agents_page_source.count("<TimezoneSelect") == 4
     assert "Архивировать" in agents_page_source
     assert "primary_action_label" in agents_page_source
     assert "Активировать версию" in agents_page_source
@@ -433,7 +433,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Сохранить и перейти к тесту" in agents_page_source
     assert "LocalOS покажет следующий шаг" in agents_page_source
     assert "GenericRunProgress" in agents_page_source
-    assert 'title="Агенты"' in agents_page_source
+    assert "title={pageCopy.title}" in agents_page_source
     assert "getAgentListStatus" in agents_page_source
     assert "AgentSummaryPill" in agents_page_source
     assert "Последний run" in agents_page_source

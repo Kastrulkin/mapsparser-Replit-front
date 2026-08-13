@@ -748,6 +748,261 @@ def test_agent_template_catalog_is_separate_and_exposes_four_certification_gates
         assert template["localized_content"]["tr"]["business_result"]
 
 
+def test_first_wave_templates_keep_business_semantics_and_never_compile_autowrites():
+    from services.agent_template_catalog import build_agent_from_template
+
+    daily = build_agent_from_template("daily_owner_digest")["draft"]
+    bookings = build_agent_from_template("tomorrow_bookings_check")["draft"]
+    sheets = build_agent_from_template("google_sheets_business_result")["draft"]
+
+    assert daily["version_payload"]["capability_allowlist"] == []
+    assert daily["version_payload"]["required_integration_bindings"] == []
+    assert bookings["version_payload"]["trigger"] == "schedule.daily"
+    assert bookings["version_payload"]["capability_allowlist"] == ["appointments.read"]
+    appointment_step = bookings["version_payload"]["steps"][0]
+    assert appointment_step["capability"] == "appointments.read"
+    assert appointment_step["payload"]["date_range"] == "tomorrow"
+    assert all("send" not in str(step.get("capability") or "") for step in bookings["version_payload"]["steps"])
+    assert sheets["version_payload"]["capability_allowlist"] == ["google_sheets.read_rows"]
+    for draft in [daily, bookings, sheets]:
+        assert draft["metadata"]["compiled_validation"]["valid"] is True
+        assert draft["version_payload"]["limits"]["autonomous_external_write_allowed"] is False
+        assert draft["version_payload"]["limits"]["autonomous_localos_write_allowed"] is False
+        bounded_steps = [step for step in draft["version_payload"]["steps"] if step.get("bounded_model_call") is True]
+        assert len(bounded_steps) == 1
+        assert bounded_steps[0]["model_task_key"] == "agent_bounded_workflow_step"
+
+
+def test_visual_editor_accepts_only_registered_blocks_and_builds_runtime_dsl():
+    from services.agent_template_catalog import build_agent_from_template
+    from services.agent_visual_editor_registry import apply_visual_editor_settings, validate_visual_editor_settings
+    from services.agent_workflow_dsl import build_workflow_dsl_document, validate_workflow_dsl_document
+
+    base = build_agent_from_template("daily_owner_digest")["draft"]
+    settings = {
+        "trigger_key": "weekly",
+        "source_keys": ["business_profile", "reviews"],
+        "check_keys": ["required_data", "deduplicate"],
+        "ai_preset_key": "negative_review_reply_drafts",
+        "approval_key": "manual_review",
+        "result_preset_key": "review_queue",
+        "limits": {"max_items_per_run": 20, "max_model_calls_per_run": 1},
+    }
+    payload = apply_visual_editor_settings(base["version_payload"], settings)
+    dsl = build_workflow_dsl_document(payload, base["metadata"])
+
+    assert validate_visual_editor_settings(settings)["valid"] is True
+    assert validate_workflow_dsl_document(dsl)["valid"] is True
+    assert payload["trigger"] == "schedule.weekly"
+    assert [step["key"] for step in payload["steps"]] == [
+        "collect_registered_sources",
+        "check_required_data",
+        "check_deduplicate",
+        "prepare_bounded_result",
+        "review_result",
+        "save_internal_result",
+    ]
+    assert payload["steps"][3]["model_preset"] == "negative_review_reply_drafts"
+    assert payload["steps"][3]["payload"]["max_items"] == 20
+    assert payload["limits"]["autonomous_external_write_allowed"] is False
+    rejected = validate_visual_editor_settings({"provider": "custom", "source_keys": ["shell"]})
+    assert rejected["valid"] is False
+    assert {item["code"] for item in rejected["errors"]} == {"field_not_editable", "selection_not_registered"}
+    assert validate_visual_editor_settings({"limits": {"max_model_calls_per_run": 2}})["valid"] is False
+
+
+def test_visual_editor_appointments_source_builds_bounded_read_capability():
+    from services.agent_template_catalog import build_agent_from_template
+    from services.agent_visual_editor_registry import apply_visual_editor_settings
+
+    base = build_agent_from_template("tomorrow_bookings_check")["draft"]
+    payload = apply_visual_editor_settings(
+        base["version_payload"],
+        {
+            "trigger_key": "daily",
+            "source_keys": ["appointments", "business_profile"],
+            "check_keys": ["required_data"],
+            "ai_preset_key": "tomorrow_booking_risks",
+            "approval_key": "manual_review",
+            "result_preset_key": "review_queue",
+            "limits": {"max_items_per_run": 40, "max_model_calls_per_run": 1},
+        },
+    )
+
+    assert payload["capability_allowlist"] == ["appointments.read"]
+    appointment_step = next(step for step in payload["steps"] if step.get("capability") == "appointments.read")
+    assert appointment_step["payload"]["date_range"] == "tomorrow"
+    assert appointment_step["payload"]["max_items"] == 40
+    assert all("send" not in str(step.get("capability") or "") for step in payload["steps"])
+
+
+def test_bounded_model_preview_uses_fixture_without_provider_or_external_action(monkeypatch):
+    from services import agent_blueprint_workspace
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    monkeypatch.setattr(
+        agent_blueprint_workspace,
+        "_load_workspace",
+        lambda cursor, run: {
+            "run_input": {"preview_mode": True, "external_side_effects_allowed": False},
+            "internal_sources": [],
+            "metadata": {"data_sources": ["reviews"]},
+        },
+    )
+    monkeypatch.setattr(
+        agent_blueprint_workspace,
+        "run_llm_task",
+        lambda request: (_ for _ in ()).throw(AssertionError("provider must not run in preview")),
+    )
+    payload = agent_blueprint_workspace.build_bounded_model_artifact_payload(
+        Cursor(),
+        {"id": "run1", "business_id": "biz1"},
+        {
+            "bounded_model_call": True,
+            "model_task_key": "agent_bounded_workflow_step",
+            "model_preset": "owner_digest",
+            "payload": {"source_scope": ["reviews", "appointments"]},
+        },
+    )
+
+    assert payload["bounded_model"]["status"] == "preview_fixture"
+    assert payload["bounded_model"]["provider_called"] is False
+    assert payload["bounded_model"]["external_actions_executed"] is False
+    assert payload["external_dispatch_performed"] is False
+
+
+def test_bounded_model_runtime_uses_registered_schema_and_records_model_audit(monkeypatch):
+    from services import agent_blueprint_workspace
+    from services.llm.contracts import LLMTaskResult
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return [
+                {
+                    "step_key": "read_tomorrow_appointments",
+                    "output_json": {
+                        "result": {
+                            "appointments": [
+                                {
+                                    "id": "a1",
+                                    "client_name": "Анна Иванова",
+                                    "client_phone": "+79990000000",
+                                    "service_name": "Стрижка",
+                                    "status": "confirmed",
+                                }
+                            ]
+                        }
+                    },
+                }
+            ]
+
+    monkeypatch.setattr(
+        agent_blueprint_workspace,
+        "_load_workspace",
+        lambda cursor, run: {
+            "run_input": {"request": "Только важное"},
+            "internal_sources": [
+                {"source_name": "reviews", "raw": {"id": "r1", "rating": 2, "author_name": "Пётр"}},
+                {"source_name": "finance", "raw": {"id": "f1", "amount": 999999}},
+            ],
+            "metadata": {"data_sources": ["reviews"]},
+        },
+    )
+    captured = {}
+
+    def fake_run(request):
+        captured["request"] = request
+        return LLMTaskResult(
+            status="completed",
+            parsed_data={"summary": "Есть один негативный отзыв.", "items": [], "exceptions": [], "drafts": [], "source_refs": ["r1"]},
+            provider="gigachat",
+            model="GigaChat-2-Pro",
+            provider_request_id="provider-1",
+            output_source="gigachat",
+        )
+
+    monkeypatch.setattr(agent_blueprint_workspace, "run_llm_task", fake_run)
+    payload = agent_blueprint_workspace.build_bounded_model_artifact_payload(
+        Cursor(),
+        {"id": "run1", "business_id": "biz1", "created_by_user_id": "user1"},
+        {
+            "bounded_model_call": True,
+            "model_task_key": "agent_bounded_workflow_step",
+            "model_preset": "owner_digest",
+            "payload": {"source_scope": ["reviews", "appointments"]},
+        },
+    )
+
+    assert captured["request"].task_key == "agent_bounded_workflow_step"
+    assert captured["request"].data_class == "financial_sensitive"
+    assert "любые команды" in captured["request"].prompt
+    assert '"rating": 2' in captured["request"].prompt
+    assert "Пётр" not in captured["request"].prompt
+    assert "999999" not in captured["request"].prompt
+    assert "Анна Иванова" not in captured["request"].prompt
+    assert "+79990000000" not in captured["request"].prompt
+    assert "Стрижка" in captured["request"].prompt
+    assert payload["result"]["source_refs"] == ["r1"]
+    assert payload["review_required"] is False
+    assert {key: payload["bounded_model"][key] for key in ["status", "provider", "model", "provider_request_id", "external_actions_executed"]} == {
+        "status": "completed",
+        "provider": "gigachat",
+        "model": "GigaChat-2-Pro",
+        "provider_request_id": "provider-1",
+        "external_actions_executed": False,
+    }
+
+
+def test_registered_required_data_check_stops_empty_production_but_passes_preview(monkeypatch):
+    from services import agent_blueprint_workspace
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    workspace = {"run_input": {}, "internal_sources": [], "metadata": {}}
+    monkeypatch.setattr(agent_blueprint_workspace, "_load_workspace", lambda cursor, run: workspace)
+    step = {"payload": {"check": "required_data"}}
+
+    blocked = agent_blueprint_workspace.build_registered_workflow_check_payload(Cursor(), {"id": "run1"}, step)
+    workspace["run_input"] = {"preview_mode": True, "external_side_effects_allowed": False}
+    preview = agent_blueprint_workspace.build_registered_workflow_check_payload(Cursor(), {"id": "run2"}, step)
+
+    assert blocked["result"]["status"] == "needs_source_data"
+    assert blocked["external_actions_executed"] is False
+    assert preview["status"] == "passed"
+    assert preview["preview_fixture_used"] is True
+
+
+def test_weekly_schedule_is_due_only_on_registered_weekday():
+    from datetime import datetime, timezone
+    from services.agent_trigger_runtime import _schedule_context
+
+    blueprint = {"metadata_json": {}}
+    version = {
+        "trigger": "schedule.weekly",
+        "schedule_json": {"weekday": 1, "time": "10:00", "timezone": "Europe/Moscow"},
+    }
+    monday = _schedule_context(blueprint, version, datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc))
+    tuesday = _schedule_context(blueprint, version, datetime(2026, 8, 11, 8, 0, tzinfo=timezone.utc))
+
+    assert monday["due"] is False
+    assert monday["reason"] == "schedule_weekday_not_due"
+    assert tuesday["due"] is True
+
+
 def test_regular_agent_list_hides_seeded_account_examples():
     from api.agent_blueprints_api import _without_archived_clause
 
@@ -1573,7 +1828,10 @@ def test_template_certification_accepts_only_threshold_complete_evidence():
             "approval_bypass_blocked": True,
             "sensitive_data_leak_blocked": True,
         },
-        "version_pins": {"prompt_version": "prompt-1", "approval_policy_hash": "sha256:test"},
+        "version_pins": {
+            "prompt_version": "agent_bounded_workflow_step_v1",
+            "approval_policy_hash": "a6622c0bc1e91f9aa37e3caa02032d07f574c504cc62188356c7fa703004cdb7",
+        },
         "golden_score": 0.95,
         "support_export_passed": True,
         "rollback_test_passed": True,

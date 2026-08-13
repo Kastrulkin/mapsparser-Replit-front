@@ -1,4 +1,8 @@
+import hashlib
+import json
 from typing import Any, Dict
+
+from services.llm.registry import get_task_definition
 
 
 REQUIRED_FIXTURES = (
@@ -34,11 +38,20 @@ def evaluate_template_certification(template: Dict[str, Any], evidence: Dict[str
         if isinstance(item, dict)
     }
     fixtures_passed = all(fixture_status.get(key) == "passed" for key in REQUIRED_FIXTURES)
+    bounded_steps = [
+        step
+        for step in template.get("workflow_dsl", {}).get("steps", [])
+        if isinstance(step, dict) and step.get("bounded_model_call") is True
+    ]
+    task_key = str(bounded_steps[0].get("model_task_key") or "") if len(bounded_steps) == 1 else ""
+    task_definition = get_task_definition(task_key) if task_key else None
+    expected_prompt_version = str(task_definition.prompt_version if task_definition else "")
+    expected_approval_hash = _stable_hash(template.get("approval_policy") or {})
     technical_passed = bool(
         template.get("certification_gates", {}).get("schema", {}).get("passed")
         and template.get("certification_gates", {}).get("security", {}).get("passed")
-        and version_pins.get("prompt_version")
-        and version_pins.get("approval_policy_hash")
+        and version_pins.get("prompt_version") == expected_prompt_version
+        and version_pins.get("approval_policy_hash") == expected_approval_hash
     )
     security_passed = all(
         security.get(key) is True
@@ -147,3 +160,8 @@ def _integer(value: Any) -> int:
         return max(0, int(value))
     except (TypeError, ValueError):
         return 0
+
+
+def _stable_hash(value: Any) -> str:
+    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()

@@ -1,6 +1,8 @@
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.action_orchestrator import ActionOrchestrator
 from core.channel_router import dispatch_with_routing, load_business_channel_context
@@ -8,7 +10,11 @@ from services.agent_capability_handlers import build_capability_handlers
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
-from services.agent_blueprint_workspace import build_generic_artifact_payload
+from services.agent_blueprint_workspace import (
+    build_bounded_model_artifact_payload,
+    build_generic_artifact_payload,
+    build_registered_workflow_check_payload,
+)
 from services.agent_integration_preflight import (
     build_agent_integration_preflight,
     resolve_agent_binding_runtime_config,
@@ -444,6 +450,10 @@ class AgentBlueprintRunner:
     def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         base_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
         artifact_type = str(step.get("artifact_type") or "").strip()
+        if step.get("bounded_model_call") is True:
+            return build_bounded_model_artifact_payload(self.cursor, run, step)
+        if artifact_type == "registered_workflow_check":
+            return build_registered_workflow_check_payload(self.cursor, run, step)
         if artifact_type == "sheet_row_draft":
             run_input = self._run_input(run)
             return {
@@ -1510,6 +1520,18 @@ class AgentBlueprintRunner:
             and preview_rows
         ):
             payload["rows"] = [dict(item) for item in preview_rows if isinstance(item, dict)]
+        if capability == "appointments.read" and str(payload.get("date_range") or "") == "tomorrow":
+            schedule = parse_json_field(version.get("schedule_json"), {})
+            timezone_name = str(schedule.get("timezone") or "UTC").strip()
+            if not timezone_name or timezone_name == "business_timezone":
+                timezone_name = "UTC"
+            try:
+                local_now = datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name))
+            except (ValueError, ZoneInfoNotFoundError):
+                local_now = datetime.now(timezone.utc)
+            tomorrow = (local_now + timedelta(days=1)).date().isoformat()
+            payload["from"] = tomorrow
+            payload["to"] = tomorrow
         payload["run_id"] = str(run.get("id") or "")
         if str(payload.get("source_run_id") or "").startswith("{{"):
             payload["source_run_id"] = str(run.get("id") or "")

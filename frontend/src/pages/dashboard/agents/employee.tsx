@@ -267,6 +267,66 @@ import { TimezoneSelect } from './timezone-select';
 
 const AgentWorkflowGraph = lazy(() => import('./workflow-graph').then((module) => ({ default: module.AgentWorkflowGraph })));
 
+type VisualEditorOption = {
+  key: string;
+  title: string;
+  trigger?: string;
+  execution_mode?: AgentExecutionMode;
+  minimum?: number;
+  maximum?: number;
+  default?: number;
+};
+
+type VisualEditorRegistry = {
+  triggers: VisualEditorOption[];
+  sources: VisualEditorOption[];
+  checks: VisualEditorOption[];
+  ai_presets: VisualEditorOption[];
+  approvals: VisualEditorOption[];
+  results: VisualEditorOption[];
+  limits: Record<string, VisualEditorOption>;
+};
+
+const emptyVisualEditorRegistry: VisualEditorRegistry = {
+  triggers: [], sources: [], checks: [], ai_presets: [], approvals: [], results: [], limits: {},
+};
+
+const visualEditorOptions = (value: unknown): VisualEditorOption[] => (
+  Array.isArray(value)
+    ? value.map(recordValue).filter(Boolean).map((item) => ({
+      key: String(item?.key || ''),
+      title: String(item?.title || item?.key || ''),
+      trigger: item?.trigger ? String(item.trigger) : undefined,
+      execution_mode: ['one_off', 'manual', 'scheduled'].includes(String(item?.execution_mode || ''))
+        ? String(item?.execution_mode) === 'scheduled' ? 'scheduled' : String(item?.execution_mode) === 'one_off' ? 'one_off' : 'manual'
+        : undefined,
+    })).filter((item) => item.key)
+    : []
+);
+
+const normalizeVisualEditorRegistry = (value: unknown): VisualEditorRegistry => {
+  const registry = recordValue(value);
+  const limitRecords = recordValue(registry?.limits) || {};
+  return {
+    triggers: visualEditorOptions(registry?.triggers),
+    sources: visualEditorOptions(registry?.sources),
+    checks: visualEditorOptions(registry?.checks),
+    ai_presets: visualEditorOptions(registry?.ai_presets),
+    approvals: visualEditorOptions(registry?.approvals),
+    results: visualEditorOptions(registry?.results),
+    limits: Object.fromEntries(Object.entries(limitRecords).map(([key, item]) => {
+      const contract = recordValue(item) || {};
+      return [key, {
+        key,
+        title: String(contract.title || key),
+        minimum: Number(contract.minimum || 0),
+        maximum: Number(contract.maximum || 0),
+        default: Number(contract.default || 0),
+      }];
+    })),
+  };
+};
+
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'Preflight и preview run',
   'Тест без отправки',
@@ -1659,7 +1719,7 @@ export const AgentRunParametersPanel = ({
               ) : field.type === 'boolean' ? (
                 <span className="mt-2 flex min-h-10 items-center gap-2">
                   <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(key, event.target.checked)} />
-                  <span>{Boolean(value) ? 'Да' : 'Нет'}</span>
+                  <span>{value ? 'Да' : 'Нет'}</span>
                 </span>
               ) : field.format === 'textarea' || field.type === 'array' ? (
                 <textarea
@@ -1894,6 +1954,16 @@ export const EmployeeAgentScenarioPanel = ({
   const [draftScheduleTimezone, setDraftScheduleTimezone] = useState<string>(working?.schedule?.timezone || 'Europe/Moscow');
   const [graphSaving, setGraphSaving] = useState(false);
   const [graphError, setGraphError] = useState('');
+  const [visualRegistry, setVisualRegistry] = useState<VisualEditorRegistry>(emptyVisualEditorRegistry);
+  const [visualRegistryLoading, setVisualRegistryLoading] = useState(true);
+  const [draftTriggerKey, setDraftTriggerKey] = useState('manual');
+  const [draftSourceKeys, setDraftSourceKeys] = useState<string[]>([]);
+  const [draftCheckKeys, setDraftCheckKeys] = useState<string[]>(['required_data', 'deduplicate', 'limit_items']);
+  const [draftAiPresetKey, setDraftAiPresetKey] = useState('owner_digest');
+  const [draftApprovalKey, setDraftApprovalKey] = useState('none');
+  const [draftResultPresetKey, setDraftResultPresetKey] = useState('internal_result');
+  const [draftMaxItems, setDraftMaxItems] = useState(100);
+  const [draftMaxModelCalls, setDraftMaxModelCalls] = useState(1);
   useEffect(() => {
     setOrderedSteps(working?.steps || []);
     setDraftExecutionMode(working?.execution_mode || details?.execution_mode || 'manual');
@@ -1901,7 +1971,49 @@ export const EmployeeAgentScenarioPanel = ({
     setDraftScheduleTimezone(working?.schedule?.timezone || 'Europe/Moscow');
     setEditingOrder(false);
     setGraphError('');
-  }, [working?.steps, working?.version_id]);
+  }, [details?.execution_mode, working?.execution_mode, working?.schedule?.time, working?.schedule?.timezone, working?.steps, working?.version_id]);
+  useEffect(() => {
+    let active = true;
+    setVisualRegistryLoading(true);
+    api.get(`/agent-blueprints/${blueprint.id}/graph`).then((response) => {
+      if (!active) return;
+      const payload = recordValue(response.data) || {};
+      const registry = normalizeVisualEditorRegistry(payload.editor_registry);
+      setVisualRegistry(registry);
+      const graph = recordValue(payload.graph);
+      const nodes = Array.isArray(graph?.nodes) ? graph.nodes.map(recordValue).filter(Boolean) : [];
+      const configs = nodes.map((node) => recordValue(node?.config)).filter(Boolean);
+      const sourceKeys = new Set<string>();
+      configs.forEach((config) => {
+        const stepPayload = recordValue(config?.payload);
+        const sourceScope = Array.isArray(stepPayload?.sources) ? stepPayload.sources : Array.isArray(stepPayload?.source_scope) ? stepPayload.source_scope : [];
+        sourceScope.forEach((source) => {
+          const match = registry.sources.find((option) => option.key === String(source) || String(source) === 'external_reviews' && option.key === 'reviews');
+          if (match) sourceKeys.add(match.key);
+        });
+        if (String(config?.capability || '') === 'google_sheets.read_rows') sourceKeys.add('google_sheets');
+      });
+      setDraftSourceKeys(Array.from(sourceKeys));
+      const aiConfig = configs.find((config) => Boolean(config?.bounded_model_call));
+      if (aiConfig?.model_preset) setDraftAiPresetKey(String(aiConfig.model_preset));
+      const approvalConfig = configs.find((config) => String(config?.approval_type || '') === 'manual_result_review');
+      setDraftApprovalKey(approvalConfig ? 'manual_review' : 'none');
+      const settings = recordValue(payload.settings) || {};
+      const limits = recordValue(settings.limits) || {};
+      setDraftMaxItems(Number(limits.max_items_per_run || 100));
+      setDraftMaxModelCalls(Number(limits.max_model_calls_per_run || 1));
+      const trigger = String(settings.trigger || working?.trigger || 'manual.run');
+      setDraftTriggerKey(registry.triggers.find((item) => item.trigger === trigger)?.key || (trigger.startsWith('schedule.') ? 'daily' : 'manual'));
+    }).catch(() => {
+      if (active) setGraphError('Не удалось загрузить безопасный каталог блоков. Изменения недоступны.');
+    }).finally(() => {
+      if (active) setVisualRegistryLoading(false);
+    });
+    return () => { active = false; };
+  }, [blueprint.id, working?.trigger, working?.version_id]);
+  const toggleVisualSelection = (key: string, selected: string[], change: (next: string[]) => void) => {
+    change(selected.includes(key) ? selected.filter((item) => item !== key) : [...selected, key]);
+  };
   const moveScenarioStep = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= orderedSteps.length) return;
@@ -1940,6 +2052,18 @@ export const EmployeeAgentScenarioPanel = ({
           schedule: draftExecutionMode === 'scheduled'
             ? { time: draftScheduleTime, timezone: draftScheduleTimezone }
             : {},
+          visual_editor: {
+            trigger_key: draftTriggerKey,
+            source_keys: draftSourceKeys,
+            check_keys: draftCheckKeys,
+            ai_preset_key: draftAiPresetKey,
+            approval_key: draftApprovalKey,
+            result_preset_key: draftResultPresetKey,
+            limits: {
+              max_items_per_run: draftMaxItems,
+              max_model_calls_per_run: draftMaxModelCalls,
+            },
+          },
         },
       });
       await onGraphCandidateCreated();
@@ -2016,7 +2140,58 @@ export const EmployeeAgentScenarioPanel = ({
         {editingOrder ? (
           <div className="mt-3 rounded-2xl bg-sky-50 p-3 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.18)]">
             <div className="text-sm font-semibold text-sky-950">Настройки сохранятся как новая версия</div>
-            <p className="mt-1 text-pretty text-sm leading-6 text-sky-800">Выберите способ запуска и при необходимости переставьте шаги. Рабочий агент не изменится до теста и явного включения.</p>
+            <p className="mt-1 text-pretty text-sm leading-6 text-sky-800">Соберите процесс из разрешённых блоков. Рабочий агент не изменится до теста и явного включения.</p>
+            {visualRegistryLoading ? <p className="mt-3 text-sm text-sky-800">Загружаем разрешённые блоки…</p> : (
+              <div className="mt-3 grid gap-4 rounded-xl bg-white p-3 text-slate-900 ring-1 ring-sky-200">
+                <label className="text-sm font-semibold">
+                  Когда запускать
+                  <select
+                    value={draftTriggerKey}
+                    onChange={(event) => {
+                      const key = event.target.value;
+                      const trigger = visualRegistry.triggers.find((item) => item.key === key);
+                      setDraftTriggerKey(key);
+                      if (trigger?.execution_mode) setDraftExecutionMode(trigger.execution_mode);
+                    }}
+                    className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 font-normal ring-1 ring-slate-200"
+                  >
+                    {visualRegistry.triggers.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
+                  </select>
+                </label>
+                <fieldset>
+                  <legend className="text-sm font-semibold">Какие данные использовать</legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {visualRegistry.sources.map((item) => (
+                      <label key={item.key} className="flex min-h-10 items-center gap-2 rounded-lg bg-slate-50 px-3 text-sm ring-1 ring-slate-200">
+                        <input type="checkbox" checked={draftSourceKeys.includes(item.key)} onChange={() => toggleVisualSelection(item.key, draftSourceKeys, setDraftSourceKeys)} />
+                        {item.title}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend className="text-sm font-semibold">Проверки перед AI</legend>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {visualRegistry.checks.map((item) => (
+                      <label key={item.key} className="flex min-h-10 items-center gap-2 rounded-lg bg-slate-50 px-3 text-sm ring-1 ring-slate-200">
+                        <input type="checkbox" checked={draftCheckKeys.includes(item.key)} onChange={() => toggleVisualSelection(item.key, draftCheckKeys, setDraftCheckKeys)} />
+                        {item.title}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="text-sm font-semibold">Как обработать<select value={draftAiPresetKey} onChange={(event) => setDraftAiPresetKey(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 font-normal ring-1 ring-slate-200">{visualRegistry.ai_presets.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}</select></label>
+                  <label className="text-sm font-semibold">Ручная проверка<select value={draftApprovalKey} onChange={(event) => setDraftApprovalKey(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 font-normal ring-1 ring-slate-200">{visualRegistry.approvals.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}</select></label>
+                  <label className="text-sm font-semibold">Куда сохранить<select value={draftResultPresetKey} onChange={(event) => setDraftResultPresetKey(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 font-normal ring-1 ring-slate-200">{visualRegistry.results.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}</select></label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm font-semibold">Элементов за запуск<input type="number" min={visualRegistry.limits.max_items_per_run?.minimum || 1} max={visualRegistry.limits.max_items_per_run?.maximum || 500} value={draftMaxItems} onChange={(event) => setDraftMaxItems(Number(event.target.value))} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 font-normal ring-1 ring-slate-200" /></label>
+                  <label className="text-sm font-semibold">AI-шагов за запуск<input type="number" min={visualRegistry.limits.max_model_calls_per_run?.minimum || 0} max={visualRegistry.limits.max_model_calls_per_run?.maximum || 3} value={draftMaxModelCalls} onChange={(event) => setDraftMaxModelCalls(Number(event.target.value))} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 font-normal ring-1 ring-slate-200" /></label>
+                </div>
+                <p className="text-xs leading-5 text-slate-500">Код, произвольные провайдеры, новые возможности и автоматическая запись недоступны в этом редакторе.</p>
+              </div>
+            )}
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               {agentExecutionModeOptions.map((option) => (
                 <button
@@ -2046,7 +2221,7 @@ export const EmployeeAgentScenarioPanel = ({
               </div>
             ) : null}
             {graphError ? <p className="mt-2 text-sm font-medium text-rose-700">{graphError}</p> : null}
-            <Button type="button" className="mt-3 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={saveGraphCandidate} disabled={graphSaving || (draftExecutionMode === 'scheduled' && (!draftScheduleTime || !draftScheduleTimezone))}>
+            <Button type="button" className="mt-3 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={saveGraphCandidate} disabled={graphSaving || visualRegistryLoading || !draftSourceKeys.length || !draftAiPresetKey || (draftExecutionMode === 'scheduled' && (!draftScheduleTime || !draftScheduleTimezone))}>
               {graphSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
               Проверить процесс
             </Button>

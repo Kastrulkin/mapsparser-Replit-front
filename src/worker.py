@@ -1813,10 +1813,18 @@ def _dispatch_agent_schedules_if_due() -> None:
     try:
         db = DatabaseManager()
         batch_size = max(1, min(int(os.getenv("AGENT_SCHEDULE_DISPATCH_BUSINESS_LIMIT", "50")), 500))
-        result = dispatch_due_scheduled_agent_blueprints(db.conn.cursor(), business_limit=batch_size)
+        results = [
+            dispatch_due_scheduled_agent_blueprints(db.conn.cursor(), business_limit=batch_size, trigger=trigger)
+            for trigger in ("schedule.daily", "schedule.weekly")
+        ]
         db.conn.commit()
-        dispatched_count = int(result.get("dispatched_count") or 0)
-        skipped_count = int(result.get("skipped_count") or 0)
+        result = {
+            "checked_businesses": max((int(item.get("checked_businesses") or 0) for item in results), default=0),
+            "dispatched_count": sum(int(item.get("dispatched_count") or 0) for item in results),
+            "skipped_count": sum(int(item.get("skipped_count") or 0) for item in results),
+        }
+        dispatched_count = int(result["dispatched_count"])
+        skipped_count = int(result["skipped_count"])
         if dispatched_count > 0 or skipped_count > 0:
             print(
                 "[AGENT_SCHEDULE_DISPATCH] "
