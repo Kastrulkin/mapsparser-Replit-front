@@ -108,16 +108,13 @@ const Header = () => {
           <nav className="hidden items-center gap-8 lg:flex">
             {navigation.map((item) => (
               item.href === '/#agents' ? (
-                <Link
+                <a
                   key={item.name}
-                  to={{ pathname: "/", hash: "#agents" }}
+                  href="/#agents"
                   className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"
-                  onClick={() => {
-                    // Ничего не делаем, обработка теперь на главной через useEffect
-                  }}
                 >
                   {item.name}
-                </Link>
+                </a>
               ) : item.href === '/about#pricing' ? (
                 <Link
                   key={item.name}
@@ -206,16 +203,16 @@ const Header = () => {
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => (
                 item.href === '/#agents' ? (
-                  <Link
+                  <a
                     key={item.name}
-                    to={{ pathname: "/", hash: "#agents" }}
+                    href="/#agents"
                     className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => {
                       setIsMenuOpen(false);
                     }}
                   >
                     {item.name}
-                  </Link>
+                  </a>
                 ) : item.href === '/about#pricing' ? (
                   <Link
                     key={item.name}
