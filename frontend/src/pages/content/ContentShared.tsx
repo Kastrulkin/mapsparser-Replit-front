@@ -321,25 +321,30 @@ export const BottomCta = () => {
 
 export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) => {
   const { language } = useLanguage();
+  const isMarketingTable = materialSlug === "tablica-kontrolya-lokalnogo-marketinga";
   const downloadCopy = language === "ru" ? {
-    title: "Скачать чек-лист",
-    description: "PDF с проверками карточки компании. Укажите email и подтвердите согласие — скачивание начнётся сразу.",
+    title: isMarketingTable ? "Скачать рабочую таблицу" : "Скачать чек-лист",
+    description: isMarketingTable
+      ? "XLSX-таблица для еженедельного контроля карт, отзывов, публикаций, партнёрств и повторных касаний. Укажите email и подтвердите согласие — скачивание начнётся сразу."
+      : "PDF с проверками карточки компании. Укажите email и подтвердите согласие — скачивание начнётся сразу.",
     privacyNote: "Без подписки на рассылку. Email нужен для получения материала.",
     consent: "Я согласен на обработку персональных данных и принимаю",
     policy: "политику обработки персональных данных",
-    submit: "Получить чек-лист",
+    submit: isMarketingTable ? "Получить таблицу" : "Получить чек-лист",
     submitting: "Подготавливаем файл…",
     repeat: "Скачать ещё раз",
     success: "Скачивание началось. Если файл не открылся, нажмите кнопку ещё раз.",
     unavailable: "Материал готовится. Мы добавим файл на эту страницу.",
     error: "Не удалось подготовить скачивание. Попробуйте ещё раз.",
   } : {
-    title: "Download the checklist",
-    description: "A PDF checklist for your business listing. Enter your email and confirm consent to start the download.",
+    title: isMarketingTable ? "Download the working spreadsheet" : "Download the checklist",
+    description: isMarketingTable
+      ? "An XLSX spreadsheet for weekly tracking of maps, reviews, posts, partnerships, and customer follow-ups. Enter your email and confirm consent to start the download."
+      : "A PDF checklist for your business listing. Enter your email and confirm consent to start the download.",
     privacyNote: "No newsletter subscription. Your email is used to provide the material.",
     consent: "I consent to the processing of personal data and accept the",
     policy: "personal data processing policy",
-    submit: "Get the checklist",
+    submit: isMarketingTable ? "Get the spreadsheet" : "Get the checklist",
     submitting: "Preparing the file…",
     repeat: "Download again",
     success: "Your download has started. If the file did not open, use the button again.",

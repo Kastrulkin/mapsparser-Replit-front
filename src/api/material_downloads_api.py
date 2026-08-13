@@ -19,6 +19,15 @@ MATERIAL_DOWNLOADS = {
     "checklist-audita-kartochki-kompanii": {
         "path": Path(__file__).resolve().parents[2] / "output" / "pdf" / "localos-checklist-audita-kartochki.pdf",
         "download_name": "localos-checklist-audita-kartochki.pdf",
+        "mimetype": "application/pdf",
+    },
+    "tablica-kontrolya-lokalnogo-marketinga": {
+        "path": Path(__file__).resolve().parents[2]
+        / "output"
+        / "xlsx"
+        / "localos-tablica-kontrolya-lokalnogo-marketinga.xlsx",
+        "download_name": "localos-tablica-kontrolya-lokalnogo-marketinga.xlsx",
+        "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
 }
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -52,7 +61,7 @@ def request_material_download():
     consent_given = payload.get("personal_data_consent") is True
     consent_version = CONSENT_VERSION
     source_language_raw = str(payload.get("source_language") or "ru").strip().lower()
-    source_language = source_language_raw if source_language_raw in {"ru", "en", "el"} else "ru"
+    source_language = source_language_raw if source_language_raw in {"ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr"} else "ru"
     material = MATERIAL_DOWNLOADS.get(material_slug)
 
     if not email or len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):
@@ -164,7 +173,7 @@ def download_material(token: str):
 
     return send_file(
         material["path"],
-        mimetype="application/pdf",
+        mimetype=material["mimetype"],
         as_attachment=True,
         download_name=material["download_name"],
         max_age=0,

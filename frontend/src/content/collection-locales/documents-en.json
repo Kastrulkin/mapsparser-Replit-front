@@ -113,7 +113,7 @@
     "updatedAt": "2026-04-14",
     "seoTitle": "Local Marketing Control Table — LocalOS",
     "seoDescription": "Table template for regular monitoring of local marketing: maps, reviews, news, partnerships and results.",
-    "downloadUrl": "#download-soon",
+    "downloadable": true,
     "draft": false,
     "inside": [
       "weekly card check",

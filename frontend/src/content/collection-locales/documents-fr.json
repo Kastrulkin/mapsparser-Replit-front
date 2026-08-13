@@ -113,7 +113,7 @@
     "updatedAt": "2026-04-14",
     "seoTitle": "Tableau de contrôle du marketing local — LocalOS",
     "seoDescription": "Modèle de tableau pour le suivi régulier du marketing local : cartes, revues, actualités, partenariats et résultats.",
-    "downloadUrl": "#download-soon",
+    "downloadable": true,
     "draft": false,
     "inside": [
       "vérification hebdomadaire de la carte",

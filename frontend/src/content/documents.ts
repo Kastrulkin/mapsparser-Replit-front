@@ -113,7 +113,7 @@ export const documents: DocumentContent[] = [
     seoTitle: "Таблица контроля локального маркетинга — LocalOS",
     seoDescription:
       "Шаблон таблицы для регулярного контроля локального маркетинга: карты, отзывы, новости, партнёрства и результаты.",
-    downloadUrl: "#download-soon",
+    downloadable: true,
     draft: false,
     inside: [
       "еженедельная проверка карточки",
