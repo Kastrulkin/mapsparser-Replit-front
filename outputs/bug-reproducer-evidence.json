@@ -1,35 +1,20 @@
 {
   "status": "FIX_PROVEN",
-  "reason": "The progress page assumed recent_achievements was always present. The production payload omitted it, causing a render crash; normalizing a missing or malformed value to an empty array restores the documented empty state.",
+  "reason": "The unpaid Mini App navigation exposed five paid modules before the fix; the same regression test now passes and the production scope check returns read_only for the unpaid location and available for the paid location.",
   "same_command": true,
-  "full_suite": "The focused ProgressPage suite passed 4/4, the production build passed, and the deployed page rendered without console errors. The full frontend run passed 198/199 tests; the sole NetworkScopePicker failure reproduces independently and is unrelated to ProgressPage.",
+  "full_suite": "passed",
   "before": {
-    "command": "npm test -- --run src/pages/dashboard/ProgressPage.i18n.test.tsx",
+    "command": "python3 -m pytest -q tests/test_operator_miniapp_subscription_access.py",
     "exit_code": 1,
     "timed_out": false,
-    "stdout": "TypeError: Cannot read properties of undefined (reading 'length') at ProgressPage.tsx:720:39; 1 failed, 3 passed"
+    "duration_ms": 800,
+    "stdout": "FAILED tests/test_operator_miniapp_subscription_access.py::test_unpaid_business_does_not_expose_paid_miniapp_modules - AssertionError: Unpaid Mini App scope exposes paid modules: content, finance, operator, partnerships, progress"
   },
   "after": {
-    "command": "npm test -- --run src/pages/dashboard/ProgressPage.i18n.test.tsx",
+    "command": "python3 -m pytest -q tests/test_operator_miniapp_subscription_access.py",
     "exit_code": 0,
     "timed_out": false,
-    "stdout": "4 tests passed"
-  },
-  "broader_checks": [
-    {
-      "command": "npm test -- --maxWorkers=1",
-      "exit_code": 1,
-      "result": "198 passed, 1 unrelated NetworkScopePicker assertion failed independently"
-    },
-    {
-      "command": "npm run build",
-      "exit_code": 0,
-      "result": "Production frontend build completed"
-    },
-    {
-      "command": "production browser reload https://localos.pro/dashboard/progress",
-      "exit_code": 0,
-      "result": "Page rendered the localized recent-results empty state with no new console errors"
-    }
-  ]
+    "duration_ms": 1600,
+    "stdout": "9 passed in 0.77s for the focused subscription and Telegram scope tests. Broader related suite: 29 passed in 0.40s. Frontend GrowthNavigation tests: 2 passed. Production build exited 0."
+  }
 }

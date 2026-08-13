@@ -26,6 +26,7 @@ type GrowthNavigationProps = {
   navigation: GrowthNavigationEntry[];
   onOpen: (key: string) => void;
   onOpenProgress: () => void;
+  onLocked: (item: GrowthNavigationEntry) => void;
   onRestartTour: () => void;
 };
 
@@ -62,7 +63,9 @@ const utilityTitles: Record<string, string> = {
   diagnostics: 'Контроль системы',
 };
 
-export default function GrowthNavigation({ navigation, onOpen, onOpenProgress, onRestartTour }: GrowthNavigationProps) {
+const isPaymentLocked = (item?: GrowthNavigationEntry) => item?.status === 'read_only' && Boolean(item.reason?.toLowerCase().includes('оплат'));
+
+export default function GrowthNavigation({ navigation, onOpen, onOpenProgress, onLocked, onRestartTour }: GrowthNavigationProps) {
   const visible = new Map(navigation.filter((item) => item.status !== 'hidden').map((item) => [item.key, item]));
   const visibleOutcomes = outcomes.filter((item) => visible.has(item.key) || Boolean(item.secondaryKey && visible.has(item.secondaryKey)));
   const utilities = ['community_sources', 'company', 'companies', 'settings', 'diagnostics']
@@ -76,7 +79,7 @@ export default function GrowthNavigation({ navigation, onOpen, onOpenProgress, o
           <span className="flex items-center gap-2 text-xs font-semibold text-primary"><TrendingUp className="h-4 w-4" />Не знаете, с чего начать?</span>
           <h2 className="mt-3 text-balance text-xl font-semibold">Начните с главной задачи</h2>
           <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Первая задача в плане выбрана по свежести данных, серьёзности проблемы и ожидаемому результату.</p>
-          <button type="button" onClick={onOpenProgress} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform duration-150 ease-out active:scale-[0.96]">Открыть план роста<ChevronRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { const item = visible.get('progress'); if (isPaymentLocked(item) && item) onLocked(item); else onOpenProgress(); }} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary pl-4 pr-3.5 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform duration-150 ease-out active:scale-[0.96]">Открыть план роста<ChevronRight className="h-4 w-4" /></button>
         </section>
       ) : null}
 
@@ -92,12 +95,12 @@ export default function GrowthNavigation({ navigation, onOpen, onOpenProgress, o
             if (!target) return null;
             return (
               <article key={outcome.key} className="overflow-hidden rounded-[22px] bg-white/[0.038] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
-                <button type="button" onClick={() => onOpen(target)} className="flex min-h-[78px] w-full items-center gap-3 px-4 py-3 text-left transition-[background-color,transform] duration-150 active:scale-[0.96]">
+                <button type="button" onClick={() => { if (isPaymentLocked(primary) && primary) onLocked(primary); else onOpen(target); }} className="flex min-h-[78px] w-full items-center gap-3 px-4 py-3 text-left transition-[background-color,transform] duration-150 active:scale-[0.96]">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/[0.12] text-primary"><Icon className="h-5 w-5" /></span>
                   <span className="min-w-0 flex-1"><b className="block text-balance text-sm">{outcome.title}</b><small className="mt-1 block text-pretty leading-4 text-zinc-600">{outcome.description}</small>{primary?.status === 'read_only' && primary.reason ? <small className="mt-1 block text-pretty leading-4 text-amber-300/70">{primary.reason}</small> : null}</span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-zinc-700" />
                 </button>
-                {secondary ? <button type="button" onClick={() => onOpen(secondary.key)} className="flex min-h-11 w-full items-center justify-between border-t border-white/[0.055] px-4 text-left text-xs font-semibold text-zinc-400 transition-[background-color,color,transform] duration-150 active:scale-[0.96]"><span className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-primary" />{outcome.secondaryLabel}</span><ChevronRight className="h-4 w-4 text-zinc-700" /></button> : null}
+                {secondary ? <button type="button" onClick={() => { if (isPaymentLocked(secondary)) onLocked(secondary); else onOpen(secondary.key); }} className="flex min-h-11 w-full items-center justify-between border-t border-white/[0.055] px-4 text-left text-xs font-semibold text-zinc-400 transition-[background-color,color,transform] duration-150 active:scale-[0.96]"><span className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-primary" />{outcome.secondaryLabel}</span><ChevronRight className="h-4 w-4 text-zinc-700" /></button> : null}
               </article>
             );
           })}

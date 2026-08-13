@@ -20,7 +20,7 @@ describe('GrowthNavigation', () => {
     const user = userEvent.setup();
     const open = vi.fn();
     const openProgress = vi.fn();
-    render(<GrowthNavigation navigation={navigation} onOpen={open} onOpenProgress={openProgress} onRestartTour={vi.fn()} />);
+    render(<GrowthNavigation navigation={navigation} onOpen={open} onOpenProgress={openProgress} onLocked={vi.fn()} onRestartTour={vi.fn()} />);
 
     expect(screen.getByText('Больше клиентов из карт')).toBeInTheDocument();
     expect(screen.getByText('Контент без рутины')).toBeInTheDocument();
@@ -30,5 +30,20 @@ describe('GrowthNavigation', () => {
     expect(open).toHaveBeenCalledWith('reviews');
     await user.click(screen.getByRole('button', { name: /Открыть план роста/ }));
     expect(openProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes an unpaid module to the payment gate instead of opening it', async () => {
+    const user = userEvent.setup();
+    const open = vi.fn();
+    const locked = vi.fn();
+    const unpaidNavigation: Parameters<typeof GrowthNavigation>[0]['navigation'] = navigation.map((item) => item.key === 'content'
+      ? { ...item, status: 'read_only', reason: 'Раздел доступен после оплаты тарифа.' }
+      : item);
+
+    render(<GrowthNavigation navigation={unpaidNavigation} onOpen={open} onOpenProgress={vi.fn()} onLocked={locked} onRestartTour={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /Контент без рутины/ }));
+    expect(open).not.toHaveBeenCalled();
+    expect(locked).toHaveBeenCalledWith(expect.objectContaining({ key: 'content', status: 'read_only' }));
   });
 });

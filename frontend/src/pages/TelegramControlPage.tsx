@@ -309,6 +309,7 @@ export const TelegramControlPage = () => {
   const [restoredJob, setRestoredJob] = useState<MobileJob | null>(null);
   const [restoredJobBusy, setRestoredJobBusy] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [paywall, setPaywall] = useState<NavigationItem | null>(null);
   const trackedTodayScope = useRef('');
   const scopeRequestVersion = useRef(0);
   const catalogSearchVersion = useRef(0);
@@ -695,6 +696,14 @@ export const TelegramControlPage = () => {
 
   useEffect(() => {
     if (!bootstrap) return;
+    const requestedScreen = bootstrap.resolved_deep_link?.screen === 'analytics' ? 'finance' : bootstrap.resolved_deep_link?.screen;
+    const requestedEntry = bootstrap.navigation?.find((item) => item.key === requestedScreen);
+    if (requestedEntry?.status === 'read_only' && requestedEntry.reason?.toLowerCase().includes('оплат')) {
+      setPaywall(requestedEntry);
+      setTab('today');
+      setModule('');
+      return;
+    }
     const route = resolveMobileRoute(bootstrap.resolved_deep_link, bootstrap.navigation || []);
     setTab(route.tab);
     setModule(route.module);
@@ -709,10 +718,16 @@ export const TelegramControlPage = () => {
   }, [bootstrap?.selected_scope?.kind, bootstrap?.selected_scope?.id, bootstrap?.resolved_deep_link?.screen]);
 
   const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
+    const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
+    const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
+    if (navigationEntry?.status === 'read_only' && navigationEntry.reason?.toLowerCase().includes('оплат')) {
+      setPaywall(navigationEntry);
+      return;
+    }
     const navigate = () => {
       if (isTab(screen) && screen !== 'more') { setModule(''); setTab(screen); return; }
-      const destination = screen === 'analytics' ? 'finance' : screen;
-      setTab('more'); setModule(destination || 'tasks');
+      const moduleTarget = screen === 'analytics' ? 'finance' : screen;
+      setTab('more'); setModule(moduleTarget || 'tasks');
     };
     if (targetScope?.id && (targetScope.id !== scope?.id || targetScope.kind !== scope?.kind)) {
       void chooseScope(targetScope.kind || 'business', targetScope.id).then((changed) => { if (changed) navigate(); });
@@ -832,8 +847,8 @@ export const TelegramControlPage = () => {
       <MobileShell
         header={<TopBar />}
         error={error}
-        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{showOnboarding ? <MobileOnboarding hasSwitcher={hasSwitcher} networkMode={scope?.kind === 'network' || Boolean(scope?.parent_scope?.id)} onFinish={finishOnboarding} /> : null}</>}
-        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' ? 'more' : tab} setCurrent={(next) => { setModule(''); setTab(next); }} /> : null}
+        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <MobileOnboarding hasSwitcher={hasSwitcher} networkMode={scope?.kind === 'network' || Boolean(scope?.parent_scope?.id)} onFinish={finishOnboarding} /> : null}</>}
+        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' ? 'more' : tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
@@ -844,7 +859,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={openMobileTarget} /> : null}
-            {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} restartTour={() => setShowOnboarding(true)} /> : null}
+            {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
@@ -930,9 +945,11 @@ const ResponseBox = ({ label, text }: { label: string; text: string }) => <div c
 
 const Operator = ({ messages, busy, command, setCommand, ask, openScreen }: { messages: OperatorMessage[]; busy: boolean; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openScreen: (screen: string) => void }) => <Screen title="Оператор" subtitle="Напишите задачу обычными словами. Результат появится здесь или в нужном разделе."><div className="min-h-[42vh] space-y-3">{messages.length ? messages.map((message, index) => <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}><p className="whitespace-pre-wrap">{message.text}</p>{message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 block text-[10px] text-zinc-600">Готово</small> : null}{message.role === 'operator' && message.screen ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Открыть результат</button> : null}</div>) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}{busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}</div><form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary active:scale-[0.96]"><Send className="h-4 w-4" /></button></form></Screen>;
 
-const More = ({ navigation, onOpen, openProgress, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; restartTour: () => void }) => {
+const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен после оплаты"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">{item.label} доступен после оплаты</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href="/dashboard/billing" className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white">Перейти к оплате</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400">Закрыть</button></div></div>;
+
+const More = ({ navigation, onOpen, openProgress, onLocked, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; onLocked: (item: NavigationItem) => void; restartTour: () => void }) => {
   return <Screen title="Развитие" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
-    <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onRestartTour={restartTour} />
+    <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onLocked={onLocked} onRestartTour={restartTour} />
   </Screen>;
 };
 

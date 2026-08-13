@@ -92,8 +92,75 @@ from subscription_manager import get_allowed_content_plan_horizons
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 
 
-def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
+MOBILE_PAID_NAVIGATION_KEYS = {"operator", "progress", "content", "finance", "partnerships", "agents"}
+MOBILE_PAID_MODULES = {"content", "finance", "analytics", "partnerships", "agents"}
+MOBILE_PAID_ACTION_PREFIXES = ("content.", "finance.", "partnerships.", "agents.")
+MOBILE_PAID_TIERS = ("starter", "professional", "concierge", "elite", "promo", "basic", "pro", "enterprise")
+MOBILE_ACTIVE_SUBSCRIPTION_STATUSES = ("active", "trialing")
+MOBILE_PAYMENT_REQUIRED_MESSAGE = "Раздел доступен после оплаты тарифа для выбранной точки."
+
+
+def _inline_scope_automation_allowed(scope: dict) -> bool | None:
+    if "subscription_tier" not in scope and "subscription_status" not in scope:
+        return None
+    tier = str(scope.get("subscription_tier") or "").strip().lower()
+    status = str(scope.get("subscription_status") or "").strip().lower()
+    ends_at = scope.get("subscription_ends_at")
+    expired = False
+    if ends_at:
+        try:
+            parsed = datetime.fromisoformat(str(ends_at).replace("Z", "+00:00"))
+            now = datetime.now(parsed.tzinfo) if parsed.tzinfo else datetime.now()
+            expired = parsed < now
+        except (TypeError, ValueError):
+            expired = False
+    return tier in MOBILE_PAID_TIERS and status in MOBILE_ACTIVE_SUBSCRIPTION_STATUSES and not expired
+
+
+def _scope_automation_allowed(cursor, scope: dict, is_superadmin: bool = False) -> bool:
+    if is_superadmin or scope.get("kind") == "platform":
+        return True
+    business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
+    if not business_ids and scope.get("kind") == "business" and scope.get("id"):
+        business_ids = [str(scope.get("id"))]
+    if not business_ids:
+        return False
+    cursor.execute(
+        """
+        SELECT id,
+               LOWER(COALESCE(subscription_tier, '')) = ANY(%s)
+               AND LOWER(COALESCE(subscription_status, '')) = ANY(%s)
+               AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
+               AS automation_allowed
+        FROM businesses
+        WHERE id = ANY(%s)
+          AND COALESCE(is_active, TRUE) = TRUE
+        """,
+        (list(MOBILE_PAID_TIERS), list(MOBILE_ACTIVE_SUBSCRIPTION_STATUSES), business_ids),
+    )
+    rows = [dict(row) for row in (cursor.fetchall() or [])]
+    return len(rows) == len(business_ids) and all(bool(row.get("automation_allowed")) for row in rows)
+
+
+def _mobile_payment_required_response():
+    return jsonify({
+        "success": False,
+        "error": MOBILE_PAYMENT_REQUIRED_MESSAGE,
+        "payment_required": True,
+        "billing_url": "/dashboard/billing",
+    }), 403
+
+
+def _mobile_navigation(
+    scope: dict,
+    is_superadmin: bool = False,
+    automation_allowed: bool | None = None,
+) -> list[dict]:
     kind = str(scope.get("kind") or "business")
+    if automation_allowed is None:
+        automation_allowed = _inline_scope_automation_allowed(scope)
+    if automation_allowed is None:
+        automation_allowed = True
     agent_runs_available = str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
     items = [
         {"key": "today", "label": "Сегодня", "group": "primary", "status": "available", "available_actions": ["open_focus", "delegate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["today"], "version": 2},
@@ -118,6 +185,12 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         if company_registry_miniapp_enabled:
             items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
+    if not automation_allowed:
+        for item in items:
+            if item.get("key") in MOBILE_PAID_NAVIGATION_KEYS:
+                item["status"] = "read_only"
+                item["reason"] = MOBILE_PAYMENT_REQUIRED_MESSAGE
+                item["available_actions"] = []
     return items
 
 
@@ -435,7 +508,11 @@ def operator_telegram_bootstrap():
                 user_agent="localos-telegram-mini-app",
                 expires_days=1,
             )
-        navigation = _mobile_navigation(selected or {}, bool(user.get("is_superadmin")))
+        navigation = _mobile_navigation(
+            selected or {},
+            bool(user.get("is_superadmin")),
+            _scope_automation_allowed(cursor, selected or {}, bool(user.get("is_superadmin"))),
+        )
         deep_link = resolve_mobile_deep_link(
             cursor,
             scope=selected or {},
@@ -999,6 +1076,9 @@ def operator_chat():
             status_code = 403 if owner_id else 404
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
             return jsonify({"success": False, "error": message_text}), status_code
+        business_scope = {"kind": "business", "id": business_id, "business_ids": [business_id]}
+        if not _scope_automation_allowed(cursor, business_scope, bool(user_data.get("is_superadmin"))):
+            return _mobile_payment_required_response()
 
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         record_operator_event(
@@ -2037,7 +2117,11 @@ def operator_mobile_workspace():
             "filters": {"statuses": ["needs_attention", "in_progress", "completed"]},
             "freshness": summary.get("freshness") or {"status": "live"},
             "summary": summary,
-            "navigation": _mobile_navigation(scope, bool(user_data.get("is_superadmin"))),
+            "navigation": _mobile_navigation(
+                scope,
+                bool(user_data.get("is_superadmin")),
+                _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))),
+            ),
         })
     finally:
         db.close()
@@ -2121,6 +2205,8 @@ def operator_mobile_progress():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        if not _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))):
+            return _mobile_payment_required_response()
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
         if payload.get("status") == "hidden":
@@ -2198,6 +2284,8 @@ def operator_mobile_module(module: str):
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        if module in MOBILE_PAID_MODULES and not _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))):
+            return _mobile_payment_required_response()
         if module == "settings":
             user_id = str(user_data.get("user_id") or user_data.get("id") or "")
             preferences = load_control_preferences(cursor, user_id)
@@ -2914,6 +3002,8 @@ def operator_mobile_action_preview():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         capability = str(payload.get("capability") or payload.get("action_key") or "").strip()
         input_payload = payload.get("input") if isinstance(payload.get("input"), dict) else payload
+        if capability.startswith(MOBILE_PAID_ACTION_PREFIXES) and not _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))):
+            return _mobile_payment_required_response()
         preview = create_mobile_action_preview(
             cursor,
             user_id=user_id,

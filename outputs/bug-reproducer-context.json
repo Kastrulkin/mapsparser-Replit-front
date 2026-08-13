@@ -1,75 +1,96 @@
 {
-  "title": "Remaining owner-only reads reject network employees",
+  "title": "Unpaid Mini App scope exposes paid modules",
   "project": "LocalOS",
-  "generated_at": "2026-08-06",
-  "mode": "prove-fix",
-  "original_report": "After sign-in was repaired, Irina from the Vesyolaya Raschyoska network still received payment and access errors while using the Grand Canyon location on Engels Avenue.",
+  "generated_at": "2026-08-11",
+  "mode": "hunt-and-prove",
+  "original_report": "Verify that Elena can use the Telegram Mini App for Vesyolaya Raschyoska while only the Engels location is paid and the remaining scope stays behind payment gates.",
   "discovery_scope": [
-    "Production 403 logs for the employee and the Engels business",
-    "Content-plan, billing, parse-status, competitor, and external-data read authorization paths",
-    "Canonical direct-business and network membership access helper"
+    "Telegram binding and Mini App bootstrap",
+    "network member scope resolution",
+    "business subscription state",
+    "Mini App navigation and payment-gate behavior"
   ],
-  "candidates": [],
-  "expected": "An active network member can read operational data for an active location in that network without becoming its owner or superadmin.",
-  "actual": "Six read paths rejected the employee because they compared only the subscription user or business owner.",
-  "environment": "Python 3.11 local tests; Docker Compose production at localos.pro",
-  "reproduction": "Six focused tests use a non-owner with active network membership against the real Flask routes and service helpers.",
-  "failure_signal": "HTTP 403 responses, PermissionError, and a false billing-access result instead of successful reads.",
-  "root_cause": "The affected legacy reads implemented owner-only authorization instead of verify_business_access, which already includes active network and direct business memberships.",
-  "fix_summary": "Replaced only the six observed owner-only read decisions with verify_business_access while preserving 404 and unauthorized behavior.",
-  "why_causal": "The helper queries the same active network membership that grants Irina access to the Engels location, so the read decisions now match login and business selection.",
+  "candidates": [
+    {
+      "candidate": "Mini App does not apply the selected location subscription gate",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/operator_api.py:95",
+      "contract": "Only Engels is paid; the web dashboard already gates paid sections for inactive subscriptions.",
+      "trigger": "Open the Mini App in the network scope or select the inactive Dolgoozernaya location.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    }
+  ],
+  "expected": "Paid Mini App modules are read-only for the network and Dolgoozernaya, while Engels remains available.",
+  "actual": "Content, Finance, Operator, Partnerships and Progress were all marked available for the inactive Dolgoozernaya subscription.",
+  "environment": "Local Python 3 with pytest 9; Vite/Vitest frontend; production Docker Compose and PostgreSQL",
+  "reproduction": "A focused unit test passes an inactive trial business scope to the real Mini App navigation builder and checks the paid module statuses.",
+  "failure_signal": "The test listed content, finance, operator, partnerships and progress as exposed.",
+  "root_cause": "Mini App navigation was derived only from scope kind and feature flags. It never evaluated the selected businesses' subscription tier, status or end date, and the frontend treated read-only navigation entries as openable.",
+  "fix_summary": "Added server-side subscription evaluation for business and network scopes, converted paid navigation entries to read-only with a billing reason, blocked paid Mini App routes and actions, and added a mobile payment sheet instead of opening locked modules.",
+  "why_causal": "The subscription decision now directly controls both the navigation status and server route access for the same selected scope.",
   "reproduction_files": [
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_employee_remaining_read_access.py",
-      "line": 65,
-      "summary": "Six active-network-member regressions approved at Gate 1."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_operator_miniapp_subscription_access.py",
+      "line": 1,
+      "summary": "Focused red-to-green subscription regression test approved at Gate 1."
     }
   ],
   "fix_files": [
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/content_plan_service.py",
-      "line": 1542,
-      "summary": "Content-plan listing accepts canonical employee access."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/operator_api.py",
+      "line": 95,
+      "summary": "Scope-aware subscription check and server payment gates."
     },
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/yookassa_integration.py",
-      "line": 571,
-      "summary": "Billing-status reads accept canonical access to the subscription business."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/TelegramControlPage.tsx",
+      "line": 312,
+      "summary": "Mini App payment sheet and guarded navigation."
     },
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/legacy_routes/parsing_networks.py",
-      "line": 946,
-      "summary": "Parse status accepts active business or network membership."
-    },
-    {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/legacy_routes/core_public.py",
-      "line": 1044,
-      "summary": "Manual competitor reads accept canonical employee access."
-    },
-    {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/external_accounts_api.py",
-      "line": 2056,
-      "summary": "External summary and posts reads accept canonical employee access."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/telegram/GrowthNavigation.tsx",
+      "line": 25,
+      "summary": "Routes locked outcome cards to the payment sheet."
     }
   ],
   "checks": [
-    {"name": "Regression test", "status": "passed", "detail": "The same six scenarios changed from red to green."},
-    {"name": "Focused suite", "status": "passed", "detail": "45 relevant tests passed and all five changed modules compiled."},
-    {"name": "Production smoke", "status": "passed", "detail": "The app container is healthy, localhost returns HTTP 200, and the live membership check grants Irina access to the Engels location."}
+    {
+      "name": "Same regression test",
+      "status": "passed",
+      "detail": "Red before and green after."
+    },
+    {
+      "name": "Related backend suite",
+      "status": "passed",
+      "detail": "29 tests passed."
+    },
+    {
+      "name": "Frontend interaction test",
+      "status": "passed",
+      "detail": "2 GrowthNavigation tests passed."
+    },
+    {
+      "name": "Production build",
+      "status": "passed",
+      "detail": "Vite build completed with exit code 0."
+    },
+    {
+      "name": "Production scope verification",
+      "status": "passed",
+      "detail": "Engels available; network and Dolgoozernaya read-only for paid modules."
+    }
   ],
   "reproduce": [
-    "python3 -m pytest -q tests/test_employee_remaining_read_access.py",
-    "python3 -m pytest -q tests/test_employee_remaining_read_access.py tests/test_employee_business_access.py tests/test_network_member_access.py tests/test_login_business_access.py tests/test_auth_email_case_insensitive.py tests/test_content_plan_policy.py tests/test_checkout_payment_providers.py tests/test_external_accounts_routes_contract.py"
+    "python3 -m pytest -q tests/test_operator_miniapp_subscription_access.py",
+    "python3 -m pytest -q tests/test_network_member_access.py tests/test_operator_mobile_today.py tests/test_operator_miniapp_subscription_access.py tests/test_telegram_control_scope.py"
   ],
   "limitations": [
-    "No user session token or password was accessed, so production endpoints were not called by impersonating Irina."
+    "Elena has not yet consumed her one-time Telegram link, so her real Telegram initData was not used during verification."
   ],
   "residual_risks": [
-    "Legacy owner-only endpoints not present in the observed production request set remain outside this patch."
+    "The final real-device check can only be completed after Elena opens the personal link in her Telegram account."
   ],
   "notes": [
-    "Payment and subscription records were not changed.",
-    "Irina remains a network member, not a business owner or superadmin.",
-    "An existing unrelated production change in content_plan_service.py was preserved by applying a minimal patch."
+    "The personal binding token was not consumed during testing.",
+    "Production app and Telegram Mini App page both returned HTTP 200 after deployment."
   ]
 }

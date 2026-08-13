@@ -2,30 +2,43 @@
 
 ## ✅ FIX_PROVEN — Bug reproduced and fix proven
 
-> The progress page assumed recent_achievements was always present. The production payload omitted it, causing a render crash; normalizing a missing or malformed value to an empty array restores the documented empty state.
+> The unpaid Mini App navigation exposed five paid modules before the fix; the same regression test now passes and the production scope check returns read_only for the unpaid location and available for the paid location.
 
 **Project:** LocalOS
-**Bug:** Progress page crashes when recent achievements are omitted
-**Environment:** LocalOS production and Vitest 4.1.10 frontend test environment
+**Bug:** Unpaid Mini App scope exposes paid modules
+**Environment:** Local Python 3 with pytest 9; Vite/Vitest frontend; production Docker Compose and PostgreSQL
 **Generated:** 2026-08-11
+
+## Discovery scope
+
+- Telegram binding and Mini App bootstrap
+- network member scope resolution
+- business subscription state
+- Mini App navigation and payment-gate behavior
+
+## Ranked and tested candidates
+
+| # | Candidate | Contract evidence | Trigger | Location | Confidence | Outcome |
+|---:|---|---|---|---|---|---|
+| 1 | Mini App does not apply the selected location subscription gate | Only Engels is paid; the web dashboard already gates paid sections for inactive subscriptions. | Open the Mini App in the network scope or select the inactive Dolgoozernaya location. | /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/operator_api.py:95 | high | REPRODUCED |
 
 ## Original report
 
-TypeError: Cannot read properties of undefined (reading 'length') on https://localos.pro/dashboard/progress
+Verify that Elena can use the Telegram Mini App for Vesyolaya Raschyoska while only the Engels location is paid and the remaining scope stays behind payment gates.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | The progress page renders its recent-results empty state when the API has no recent achievements. | The page crashed while reading recent_achievements.length from an omitted field. |
+| Observed behavior | Paid Mini App modules are read-only for the network and Dolgoozernaya, while Engels remains available. | Content, Finance, Operator, Partnerships and Progress were all marked available for the inactive Dolgoozernaya subscription. |
 
 ## Minimal reproduction
 
-A focused component test returns an otherwise valid progress overview without recent_achievements.
+A focused unit test passes an inactive trial business scope to the real Mini App navigation builder and checks the paid module statuses.
 
-**Confirming signal:** TypeError at ProgressPage.tsx:720:39, matching the production stack and error boundary.
+**Confirming signal:** The test listed content, finance, operator, partnerships and progress as exposed.
 
 ### Reproduction files approved at Gate 1
 
-- [ProgressPage.i18n.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ProgressPage.i18n.test.tsx:119>) — Regression test approved at Gate 1.
+- [test_operator_miniapp_subscription_access.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_operator_miniapp_subscription_access.py:1>) — Focused red-to-green subscription regression test approved at Gate 1.
 
 ## Red to green evidence
 
@@ -33,62 +46,69 @@ A focused component test returns an otherwise valid progress overview without re
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | — ms | — ms |
+| Duration | 800 ms | 1,600 ms |
 | Same command | — | True |
-| Broader suite | — | The focused ProgressPage suite passed 4/4, the production build passed, and the deployed page rendered without console errors. The full frontend run passed 198/199 tests; the sole NetworkScopePicker failure reproduces independently and is unrelated to ProgressPage. |
+| Broader suite | — | passed |
 
 ### Before — failing evidence
 
 ```text
-TypeError: Cannot read properties of undefined (reading 'length') at ProgressPage.tsx:720:39; 1 failed, 3 passed
+FAILED tests/test_operator_miniapp_subscription_access.py::test_unpaid_business_does_not_expose_paid_miniapp_modules - AssertionError: Unpaid Mini App scope exposes paid modules: content, finance, operator, partnerships, progress
 ```
 
 ### After — fixed evidence
 
 ```text
-4 tests passed
+9 passed in 0.77s for the focused subscription and Telegram scope tests. Broader related suite: 29 passed in 0.40s. Frontend GrowthNavigation tests: 2 passed. Production build exited 0.
 ```
 
 ## Root cause
 
-The runtime API contract permits an omitted recent_achievements field, while the component type and renderer treated it as a mandatory array.
+Mini App navigation was derived only from scope kind and feature flags. It never evaluated the selected businesses' subscription tier, status or end date, and the frontend treated read-only navigation entries as openable.
 
 ## Approved fix
 
-Normalize recent_achievements with Array.isArray before reading length or mapping it.
+Added server-side subscription evaluation for business and network scopes, converted paid navigation entries to read-only with a billing reason, blocked paid Mini App routes and actions, and added a mobile payment sheet instead of opening locked modules.
 
-**Why this is causal:** The normalized collection is used by both the length check and map call that previously crashed.
+**Why this is causal:** The subscription decision now directly controls both the navigation status and server route access for the same selected scope.
 
 ### Production files approved at Gate 2
 
-- [ProgressPage.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ProgressPage.tsx:446>) — Runtime normalization approved at Gate 2.
+- [operator_api.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/operator_api.py:95>) — Scope-aware subscription check and server payment gates.
+- [TelegramControlPage.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/TelegramControlPage.tsx:312>) — Mini App payment sheet and guarded navigation.
+- [GrowthNavigation.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/telegram/GrowthNavigation.tsx:25>) — Routes locked outcome cards to the payment sheet.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Regression test | ✅ passed | The same focused command went from the reported TypeError to 4 passing tests. |
-| Production build | ✅ passed | Vite production build completed successfully. |
-| Production browser verification | ✅ passed | The deployed page renders the Turkish empty state and records no new console errors. |
+| Same regression test | ✅ passed | Red before and green after. |
+| Related backend suite | ✅ passed | 29 tests passed. |
+| Frontend interaction test | ✅ passed | 2 GrowthNavigation tests passed. |
+| Production build | ✅ passed | Vite build completed with exit code 0. |
+| Production scope verification | ✅ passed | Engels available; network and Dolgoozernaya read-only for paid modules. |
 
 ## Reproduce
 
 ```bash
-cd frontend && npm test -- --run src/pages/dashboard/ProgressPage.i18n.test.tsx
+python3 -m pytest -q tests/test_operator_miniapp_subscription_access.py
+```
+```bash
+python3 -m pytest -q tests/test_network_member_access.py tests/test_operator_mobile_today.py tests/test_operator_miniapp_subscription_access.py tests/test_telegram_control_scope.py
 ```
 
 ## Limitations
 
-- The full frontend run has one independent NetworkScopePicker assertion failure that reproduces outside this change.
+- Elena has not yet consumed her one-time Telegram link, so her real Telegram initData was not used during verification.
 
 ## Residual risks
 
-- Other optional fields in the progress payload remain governed by their existing validation and fallbacks.
+- The final real-device check can only be completed after Elena opens the personal link in her Telegram account.
 
 ## Notes
 
-- No API, database, or persisted data changes were made.
-- Fix commit: 218eb8f3.
+- The personal binding token was not consumed during testing.
+- Production app and Telegram Mini App page both returned HTTP 200 after deployment.
 
 ---
 
