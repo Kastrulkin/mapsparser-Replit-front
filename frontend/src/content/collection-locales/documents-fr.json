@@ -1,0 +1,152 @@
+[
+  {
+    "title": "Liste DE vérification DE LA carte D'ENTREPRIS",
+    "slug": "checklist-audita-kartochki-kompanii",
+    "excerpt": "Une courte liste de vérifications qui aide à comprendre pourquoi la carte ne reçoit pas d'impressions, d'appels et d'enregistrements.",
+    "documentType": "Listes de contrôle",
+    "tags": [
+      "visites",
+      "Cartes",
+      "liste de contrôle"
+    ],
+    "publishedAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "seoTitle": "Liste de vérification de la carte d'entreprise — LocalOS",
+    "seoDescription": "Liste de contrôle appliquée pour vérifier la carte de visite locale : catégories, services, photos, commentaires, prix et actions du client.",
+    "downloadable": true,
+    "draft": false,
+    "inside": [
+      "vérification des catégories et services",
+      "score de photo et de confiance",
+      "vérification de révision rapide",
+      "plan d'amélioration minimum de la semaine"
+    ],
+    "body": [
+      {
+        "title": "Comment utiliser",
+        "body": "Ouvrez la carte de visite et parcourez les articles dans l'ordre. S'il n'y a pas de réponse claire à la question, il s'agit d'un domaine à améliorer."
+      },
+      {
+        "title": "Contrôles rapides",
+        "items": [
+          "le service de base est-il clair dans les 10 premières secondes",
+          "existe-t-il des prix pour les services clés",
+          "sont de nouvelles photos du résultat visibles",
+          "y a-t-il des réponses aux commentaires récents"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Pourquoi le concurrent est plus haut sur les cartes",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Art."
+      },
+      {
+        "title": "Audit LocalOS gratuit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  },
+  {
+    "title": "Examiner les modèles de réponse",
+    "slug": "shablony-otvetov-na-otzyvy",
+    "excerpt": "Un ensemble de scénarios de base pour répondre à des commentaires positifs, neutres et stimulants sans bureaucratie.",
+    "documentType": "Modèles",
+    "tags": [
+      "temoignages",
+      "l&apos;image,",
+      "Scripts"
+    ],
+    "publishedAt": "2026-04-17",
+    "updatedAt": "2026-04-17",
+    "seoTitle": "Modèles de réponse aux commentaires — LocalOS",
+    "seoDescription": "Structures prêtes à l'emploi pour répondre aux commentaires des entreprises locales : remerciements, clarification, réenregistrement et travail avec des objections.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "réponse à un avis positif",
+      "répondre à un court commentaire sans texte",
+      "réponse à la plainte",
+      "transfert en douceur pour une visite répétée"
+    ],
+    "body": [
+      {
+        "title": "La règle principale",
+        "body": "Le modèle doit être une base, pas un copier-coller. Ajoutez un détail spécifique de l'évaluation pour donner l'impression que la réponse est vivante."
+      },
+      {
+        "title": "Structure de base",
+        "items": [
+          "remercier le client",
+          "mentionner un service ou une situation spécifique",
+          "montrer brièvement de l'attention",
+          "inviter à revenir"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Comment les commentaires affectent le flux de clients",
+        "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "label": "Art."
+      },
+      {
+        "title": "Audit LocalOS gratuit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  },
+  {
+    "title": "Tableau de contrôle du marketing local",
+    "slug": "tablica-kontrolya-lokalnogo-marketinga",
+    "excerpt": "Structure de contrôle simple : carte, avis, actualités, partenariats et touches répétées.",
+    "documentType": "<g id=\"1\">Liste des tableaux </g>......................................................................................................................",
+    "tags": [
+      "Tableau",
+      "Commercialisation",
+      "contrôle"
+    ],
+    "publishedAt": "2026-04-14",
+    "updatedAt": "2026-04-14",
+    "seoTitle": "Tableau de contrôle du marketing local — LocalOS",
+    "seoDescription": "Modèle de tableau pour le suivi régulier du marketing local : cartes, revues, actualités, partenariats et résultats.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "vérification hebdomadaire de la carte",
+      "statuts de réponse d'examen",
+      "plan d'actualités",
+      "contrôle des partenariats et des résultats"
+    ],
+    "body": [
+      {
+        "title": "Pourquoi vous avez besoin d'une table",
+        "body": "Cela aide à se souvenir des activités régulières. Le marketing local se casse rarement en une journée, mais s'affaisse rapidement si rien n'est mis à jour pendant un mois."
+      },
+      {
+        "title": "Ce qu'il faut suivre",
+        "items": [
+          "date de la dernière mise à jour de la carte",
+          "nombre de nouveaux commentaires et réponses",
+          "sujets des actualités publiées",
+          "contacts et statuts des partenaires"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Comment émettre une carte d'entreprise",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Art."
+      },
+      {
+        "title": "Audit LocalOS gratuit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  }
+]

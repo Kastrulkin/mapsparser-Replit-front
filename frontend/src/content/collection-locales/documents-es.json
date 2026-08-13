@@ -1,0 +1,152 @@
+[
+  {
+    "title": "Lista de verificación para la auditoría de tarjetas de empresa",
+    "slug": "checklist-audita-kartochki-kompanii",
+    "excerpt": "Una breve lista de comprobaciones que le ayudará a comprender por qué su tarjeta no recibe suficientes impresiones, llamadas o entradas.",
+    "documentType": "Listas de verificación",
+    "tags": [
+      "auditoría",
+      "tarjetas",
+      "lista de verificación"
+    ],
+    "publishedAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "seoTitle": "Lista de verificación de auditoría de tarjetas de empresa – LocalOS",
+    "seoDescription": "Lista de verificación de aplicaciones para verificar una tarjeta de presentación local: categorías, servicios, fotos, reseñas, precios y acciones de los clientes.",
+    "downloadable": true,
+    "draft": false,
+    "inside": [
+      "comprobando categorías y servicios",
+      "foto y evaluación de confianza",
+      "revisión rápida",
+      "Plan mínimo de mejora durante una semana."
+    ],
+    "body": [
+      {
+        "title": "como usar",
+        "body": "Abra la tarjeta de presentación y siga los pasos en orden. Si no hay una respuesta clara a un ítem, ésta es un área de mejora."
+      },
+      {
+        "title": "Comprobaciones rápidas",
+        "items": [
+          "¿Está claro el servicio principal en los primeros 10 segundos?",
+          "¿Existen precios para los servicios clave?",
+          "¿Se ven las últimas fotos del resultado?",
+          "¿Hay alguna respuesta a las últimas revisiones?"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "¿Por qué el competidor está más arriba en las cartas?",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Artículo"
+      },
+      {
+        "title": "Auditoría gratuita de LocalOS",
+        "href": "/#hero-form",
+        "label": "Servicio"
+      }
+    ]
+  },
+  {
+    "title": "Revisar plantillas de respuesta",
+    "slug": "shablony-otvetov-na-otzyvy",
+    "excerpt": "Un conjunto de guiones básicos para responder a críticas positivas, neutrales y difíciles sin complicaciones administrativas.",
+    "documentType": "Plantillas",
+    "tags": [
+      "opiniones",
+      "reputación",
+      "guiones"
+    ],
+    "publishedAt": "2026-04-17",
+    "updatedAt": "2026-04-17",
+    "seoTitle": "Revisar plantillas de respuesta - LocalOS",
+    "seoDescription": "Estructuras preparadas para responder a reseñas de empresas locales: agradecimiento, aclaración, reescritura y trabajo con objeciones.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "respuesta a una reseña positiva",
+      "responder a una breve reseña sin texto",
+      "respuesta a la queja",
+      "traslado suave para volver a visitar"
+    ],
+    "body": [
+      {
+        "title": "La regla principal",
+        "body": "La plantilla debe ser una base, no un copiar y pegar. Agregue un detalle específico de la revisión para que la respuesta parezca animada."
+      },
+      {
+        "title": "Estructura básica",
+        "items": [
+          "agradecer al cliente",
+          "mencionar un servicio o situación específica",
+          "mostrar brevemente preocupación",
+          "invitarte a volver"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Cómo afectan las reseñas al flujo de clientes",
+        "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "label": "Artículo"
+      },
+      {
+        "title": "Auditoría gratuita de LocalOS",
+        "href": "/#hero-form",
+        "label": "Servicio"
+      }
+    ]
+  },
+  {
+    "title": "Mesa de control de marketing local",
+    "slug": "tablica-kontrolya-lokalnogo-marketinga",
+    "excerpt": "Estructura de control simple: tarjeta, reseñas, noticias, asociaciones y toques repetidos.",
+    "documentType": "Mesas",
+    "tags": [
+      "mesa",
+      "márketing",
+      "controlar"
+    ],
+    "publishedAt": "2026-04-14",
+    "updatedAt": "2026-04-14",
+    "seoTitle": "Tabla de Control de Marketing Local - LocalOS",
+    "seoDescription": "Plantilla de tabla para el seguimiento periódico del marketing local: mapas, reseñas, noticias, asociaciones y resultados.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "control de tarjeta semanal",
+      "estados de las respuestas a las reseñas",
+      "plan de noticias",
+      "control de alianzas y resultados"
+    ],
+    "body": [
+      {
+        "title": "¿Para qué es la mesa?",
+        "body": "Le ayuda a recordar acciones habituales. El marketing local rara vez falla en un día, pero decae rápidamente si no se actualiza nada durante un mes."
+      },
+      {
+        "title": "Qué rastrear",
+        "items": [
+          "fecha de la última actualización de la tarjeta",
+          "número de nuevas reseñas y respuestas",
+          "temas de noticias publicadas",
+          "contactos y estados de socios"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Cómo solicitar una tarjeta de empresa",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artículo"
+      },
+      {
+        "title": "Auditoría gratuita de LocalOS",
+        "href": "/#hero-form",
+        "label": "Servicio"
+      }
+    ]
+  }
+]

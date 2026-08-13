@@ -1,0 +1,152 @@
+[
+  {
+    "title": "Checkliste für die Firmenkartenprüfung",
+    "slug": "checklist-audita-kartochki-kompanii",
+    "excerpt": "Eine kurze Liste von Prüfungen, die Ihnen hilft zu verstehen, warum Ihre Karte nicht genügend Impressionen, Anrufe oder Einträge erhält.",
+    "documentType": "Checklisten",
+    "tags": [
+      "Prüfung",
+      "Karten",
+      "Checkliste"
+    ],
+    "publishedAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "seoTitle": "Checkliste für die Prüfung von Firmenkarten – LocalOS",
+    "seoDescription": "Bewerbungscheckliste zur Prüfung einer lokalen Visitenkarte: Kategorien, Dienstleistungen, Fotos, Bewertungen, Preise und Kundenaktionen.",
+    "downloadable": true,
+    "draft": false,
+    "inside": [
+      "Überprüfung von Kategorien und Diensten",
+      "Foto- und Vertrauensbewertung",
+      "schnelle Rezensionsprüfung",
+      "Mindestverbesserungsplan für eine Woche"
+    ],
+    "body": [
+      {
+        "title": "Wie zu verwenden",
+        "body": "Öffnen Sie die Visitenkarte und gehen Sie die Schritte der Reihe nach durch. Wenn es zu einem Punkt keine eindeutige Antwort gibt, ist dies ein Bereich mit Verbesserungspotenzial."
+      },
+      {
+        "title": "Schnelle Kontrollen",
+        "items": [
+          "Ist der Hauptdienst in den ersten 10 Sekunden klar?",
+          "Gibt es Preise für Schlüsselleistungen?",
+          "Sind die neuesten Fotos des Ergebnisses sichtbar?",
+          "Gibt es Antworten auf die neuesten Bewertungen?"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Warum steht der Konkurrent höher im Kurs?",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Artikel"
+      },
+      {
+        "title": "Kostenloses LocalOS-Audit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  },
+  {
+    "title": "Überprüfen Sie die Antwortvorlagen",
+    "slug": "shablony-otvetov-na-otzyvy",
+    "excerpt": "Eine Reihe grundlegender Skripte für die Beantwortung positiver, neutraler und schwieriger Bewertungen ohne Bürokram.",
+    "documentType": "Vorlagen",
+    "tags": [
+      "Bewertungen",
+      "Ruf",
+      "Skripte"
+    ],
+    "publishedAt": "2026-04-17",
+    "updatedAt": "2026-04-17",
+    "seoTitle": "Antwortvorlagen überprüfen – LocalOS",
+    "seoDescription": "Vorgefertigte Strukturen für die Beantwortung von Bewertungen lokaler Unternehmen: Dankbarkeit, Klarstellung, Umformulierung und Umgang mit Einwänden.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "Reaktion auf positive Bewertung",
+      "Auf eine kurze Rezension ohne Text antworten",
+      "Reaktion auf die Beschwerde",
+      "Sanfter Transfer zum Gegenbesuch"
+    ],
+    "body": [
+      {
+        "title": "Die Hauptregel",
+        "body": "Die Vorlage sollte eine Grundlage sein, kein Kopieren und Einfügen. Fügen Sie ein bestimmtes Detail aus der Rezension hinzu, um die Reaktion lebendig erscheinen zu lassen."
+      },
+      {
+        "title": "Grundstruktur",
+        "items": [
+          "Danke dem Kunden",
+          "Erwähnen Sie einen bestimmten Dienst oder eine bestimmte Situation",
+          "kurz Besorgnis zeigen",
+          "lade dich wieder ein"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Wie sich Bewertungen auf den Kundenstrom auswirken",
+        "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "label": "Artikel"
+      },
+      {
+        "title": "Kostenloses LocalOS-Audit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  },
+  {
+    "title": "Lokale Marketing-Kontrolltabelle",
+    "slug": "tablica-kontrolya-lokalnogo-marketinga",
+    "excerpt": "Einfache Kontrollstruktur: Karte, Bewertungen, Neuigkeiten, Partnerschaften und wiederholte Berührungen.",
+    "documentType": "Tische",
+    "tags": [
+      "Tisch",
+      "Marketing",
+      "Kontrolle"
+    ],
+    "publishedAt": "2026-04-14",
+    "updatedAt": "2026-04-14",
+    "seoTitle": "Lokale Marketing-Kontrolltabelle – LocalOS",
+    "seoDescription": "Tabellenvorlage zur regelmäßigen Überwachung des lokalen Marketings: Karten, Bewertungen, Neuigkeiten, Partnerschaften und Ergebnisse.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "wöchentlicher Kartencheck",
+      "Status der Antworten auf Bewertungen",
+      "Nachrichtenplan",
+      "Kontrolle von Partnerschaften und Ergebnissen"
+    ],
+    "body": [
+      {
+        "title": "Wozu dient der Tisch?",
+        "body": "Es hilft Ihnen, sich an regelmäßige Aktionen zu erinnern. Lokales Marketing bricht selten an einem Tag zusammen, sondern bricht schnell zusammen, wenn einen Monat lang nichts aktualisiert wird."
+      },
+      {
+        "title": "Was zu verfolgen ist",
+        "items": [
+          "Datum der letzten Kartenaktualisierung",
+          "Anzahl neuer Bewertungen und Antworten",
+          "Themen der veröffentlichten Nachrichten",
+          "Partnerkontakte und Status"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "So beantragen Sie eine Firmenkarte",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artikel"
+      },
+      {
+        "title": "Kostenloses LocalOS-Audit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  }
+]

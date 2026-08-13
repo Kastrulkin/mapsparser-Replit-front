@@ -1,6 +1,9 @@
 import { Navigate, useParams } from "react-router-dom";
 import SeoMeta from "@/components/SeoMeta";
-import { findCaseBySlug } from "@/content/cases";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
+import { collectionCopy } from "@/content/collectionCopy";
+import { useLocalizedCases } from "@/content/useLocalizedCollections";
 import {
   BottomCta,
   DetailHeader,
@@ -12,7 +15,15 @@ import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
 
 const CaseDetailPage = () => {
   const { slug } = useParams();
-  const caseItem = findCaseBySlug(slug);
+  const { language } = useLanguage();
+  const copy = collectionCopy[language];
+  const navigationTitle = contentCopy[language].navigation.cases.name;
+  const { cases, isLoading } = useLocalizedCases(language);
+  const caseItem = cases.find((item) => item.slug === slug?.trim().replace(/[\\/]+$/g, ""));
+
+  if (isLoading) {
+    return <PageFrame><main className="flex min-h-[55vh] items-center justify-center px-4 text-muted-foreground">{contentCopy[language].shared.loading}</main></PageFrame>;
+  }
 
   if (!caseItem) {
     return <Navigate replace to="/cases" />;
@@ -35,7 +46,7 @@ const CaseDetailPage = () => {
     },
     makeBreadcrumbSchema([
       { name: "LocalOS", path: "/" },
-      { name: "Кейсы", path: "/cases" },
+      { name: navigationTitle, path: "/cases" },
       { name: caseItem.title, path: `/cases/${caseItem.slug}` },
     ]),
   ];
@@ -50,7 +61,7 @@ const CaseDetailPage = () => {
       />
       <DetailHeader
         backHref="/cases"
-        backLabel="Назад к кейсам"
+        backLabel={copy.cases.back}
         date={caseItem.publishedAt}
         excerpt={caseItem.excerpt}
         label={caseItem.industry}
@@ -69,11 +80,11 @@ const CaseDetailPage = () => {
           </section>
           <section className="mb-12 grid gap-5">
             <div className="rounded-3xl bg-gray-950 p-6 text-white">
-              <h2 className="text-2xl font-bold">Исходная ситуация</h2>
+              <h2 className="text-2xl font-bold">{copy.cases.situation}</h2>
               <p className="mt-4 text-lg leading-8 text-white/80">{caseItem.situation}</p>
             </div>
             <div className="rounded-3xl border border-orange-100 bg-white p-6">
-              <h2 className="text-2xl font-bold text-gray-950">Что сделали</h2>
+              <h2 className="text-2xl font-bold text-gray-950">{copy.cases.actions}</h2>
               <ul className="mt-5 space-y-3">
                 {caseItem.actions.map((action) => (
                   <li className="flex gap-3 text-lg leading-7 text-gray-700" key={action}>
@@ -84,7 +95,7 @@ const CaseDetailPage = () => {
               </ul>
             </div>
             <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6">
-              <h2 className="text-2xl font-bold text-gray-950">Результат</h2>
+              <h2 className="text-2xl font-bold text-gray-950">{copy.cases.result}</h2>
               <p className="mt-4 text-lg leading-8 text-gray-700">{caseItem.result}</p>
             </div>
           </section>

@@ -1,0 +1,178 @@
+[
+  {
+    "title": "Liderar el crecimiento en un estudio de masajes.",
+    "slug": "rost-lidov-v-massazhnoi-studii",
+    "excerpt": "Cómo un estudio de masajes fortaleció la tarjeta, reseñas y noticias periódicas para recibir más solicitudes de las tarjetas.",
+    "industry": "Negocios locales",
+    "tags": [
+      "masaje",
+      "tarjetas",
+      "lleva"
+    ],
+    "publishedAt": "2026-04-16",
+    "updatedAt": "2026-04-16",
+    "seoTitle": "Liderar el crecimiento en un estudio de masajes - Caso LocalOS",
+    "seoDescription": "Caso de un negocio local: cómo un estudio de masajes fortaleció su tarjeta en mapas, reseñas y contenidos para recibir más solicitudes.",
+    "metrics": [
+      {
+        "label": "Clientes potenciales de tarjetas",
+        "value": "+38%"
+      },
+      {
+        "label": "Respuestas a reseñas",
+        "value": "100%"
+      },
+      {
+        "label": "Periodo",
+        "value": "6 semanas"
+      }
+    ],
+    "draft": false,
+    "situation": "El estudio tenía una buena calificación, pero la tarjeta parecía genérica: había pocos servicios específicos, faltaban fotos del resultado y actualizaciones periódicas.",
+    "actions": [
+      "servicios divididos según escenarios de demanda",
+      "Se agregaron descripciones y precios claros.",
+      "respuestas preparadas a revisiones recientes",
+      "lanzó noticias periódicas sobre procedimientos y promociones"
+    ],
+    "result": "La tarjeta comenzó a responder mejor a solicitudes específicas y el propietario recibió un ritmo claro de actualizaciones sin rutina manual.",
+    "body": [
+      {
+        "title": "¿Qué funcionó más?",
+        "body": "Lo que tuvo mayor impacto fue una combinación de servicios específicos, reseñas recientes y fotografías. Al cliente le resultó más fácil comprender qué procedimiento elegir y en qué se diferencia el estudio."
+      }
+    ],
+    "related": [
+      {
+        "title": "Cómo solicitar una tarjeta de empresa",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Artículo"
+      },
+      {
+        "title": "Lista de verificación para la auditoría de tarjetas de empresa",
+        "href": "/documents/checklist-audita-kartochki-kompanii",
+        "label": "Documento"
+      }
+    ]
+  },
+  {
+    "title": "Cómo recibió el salón nuevos registros de tarjetas",
+    "slug": "kak-salon-poluchil-novye-zapisi-iz-kart",
+    "excerpt": "Caso de salón de belleza: servicios de reenvasado, trabajo con reseñas y un plan de acción claro para la tarjeta.",
+    "industry": "Salones",
+    "tags": [
+      "salón de belleza",
+      "registros",
+      "opiniones"
+    ],
+    "publishedAt": "2026-04-12",
+    "updatedAt": "2026-04-12",
+    "seoTitle": "Cómo el salón recibió nuevos registros de tarjetas - caso LocalOS",
+    "seoDescription": "Caso de un salón de belleza: cómo una tarjeta sobre tarjetas comenzó a ofrecer mejores entradas después de reenvasar servicios, reseñas y fotografías.",
+    "metrics": [
+      {
+        "label": "Nuevas entradas",
+        "value": "+10 por día"
+      },
+      {
+        "label": "Servicios clave",
+        "value": "12"
+      },
+      {
+        "label": "Periodo",
+        "value": "30 dias"
+      }
+    ],
+    "draft": false,
+    "situation": "El salón dependía de clientes habituales y los nuevos clientes con tarjeta llegaban de forma irregular. La tarjeta contenía servicios, pero no constituían una elección clara.",
+    "actions": [
+      "destacó áreas de servicio sólidas",
+      "reescribió la descripción de la tarjeta para la búsqueda",
+      "plantillas recopiladas para responder a reseñas",
+      "Se agregó un plan de contenido para noticias cortas."
+    ],
+    "result": "La tarjeta se ha vuelto más clara para un nuevo cliente: los servicios, la confianza, los precios y el motivo para registrarse aquí son visibles.",
+    "body": [
+      {
+        "title": "Conclusión principal",
+        "body": "Para el salón, no sólo es importante la belleza de la tarjeta, sino también la claridad de la elección. El cliente debe comprender rápidamente qué servicio es el adecuado para él y qué hacer a continuación."
+      }
+    ],
+    "related": [
+      {
+        "title": "¿Por qué el competidor está más arriba en las cartas?",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Artículo"
+      },
+      {
+        "title": "Revisar plantillas de respuesta",
+        "href": "/documents/shablony-otvetov-na-otzyvy",
+        "label": "Documento"
+      }
+    ]
+  },
+  {
+    "title": "Cómo una pequeña cafetería aumentó el flujo de invitados entre semana",
+    "slug": "kak-kafe-usililo-potok-gostei-v-budni",
+    "excerpt": "La cafetería cercana a las oficinas reconstruyó la tarjeta para los escenarios de desayuno, almuerzo y café para llevar y comenzó a incluirse con mayor frecuencia en la elección de los invitados.",
+    "industry": "café",
+    "tags": [
+      "café",
+      "tarjetas",
+      "vida cotidiana"
+    ],
+    "publishedAt": "2026-04-10",
+    "updatedAt": "2026-04-10",
+    "seoTitle": "Café Case: más invitados entre semana - LocalOS",
+    "seoDescription": "Caso de LocalOS para una cafetería: cómo la actualización de la tarjeta, el menú, las fotos y las reseñas ayudó a aumentar el flujo de invitados entre semana.",
+    "metrics": [
+      {
+        "label": "transiciones en la tarjeta",
+        "value": "+240%"
+      },
+      {
+        "label": "llamadas y rutas",
+        "value": "+87%"
+      },
+      {
+        "label": "nuevas reseñas",
+        "value": "18"
+      }
+    ],
+    "draft": false,
+    "situation": "La cafetería se destacó por las solicitudes de la marca, pero captó débilmente la demanda de escenarios cercanos: desayuno, almuerzo de negocios y café para llevar.",
+    "actions": [
+      "dividió la tarjeta en escenarios de visita claros",
+      "Se agregaron fotos de platos y descripciones actualizadas de artículos populares.",
+      "Plantillas preparadas para responder a las opiniones de los huéspedes.",
+      "seguimiento semanal recopilado de las actualizaciones de la tarjeta"
+    ],
+    "result": "La tarjeta quedó más clara para el público de la oficina cercana. Era más probable que los huéspedes planificaran un itinerario, llamaran y dejaran comentarios después de su visita.",
+    "body": [
+      {
+        "title": "Por qué funcionó",
+        "body": "El café ya no parece un simple punto en el mapa. La tarjeta ahora incluye motivos específicos para venir: desayuno antes del trabajo, almuerzo cerca, café para llevar."
+      },
+      {
+        "title": "que se puede repetir",
+        "items": [
+          "mantener menús y fotografías como una unidad de visualización viva",
+          "consultar reseñas y preguntas una vez por semana",
+          "resaltar escenarios mediante los cuales el cliente elige una cafetería cercana"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Cómo una cafetería puede conseguir más invitados con las tarjetas",
+        "href": "/articles/kak-kafe-poluchat-gostei-iz-kart",
+        "label": "Artículo"
+      },
+      {
+        "title": "Mesa de control de marketing local",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Mesa"
+      }
+    ]
+  }
+]

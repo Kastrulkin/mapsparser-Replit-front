@@ -1,0 +1,152 @@
+[
+  {
+    "title": "Company card audit checklist",
+    "slug": "checklist-audita-kartochki-kompanii",
+    "excerpt": "A short list of checks that helps to understand why the card does not receive impressions, calls, and recordings.",
+    "documentType": "New Mp Check Lists",
+    "tags": [
+      "audit",
+      "map",
+      "BIOCAMP"
+    ],
+    "publishedAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "seoTitle": "Company Card Audit Checklist — LocalOS",
+    "seoDescription": "Applied checklist for checking the local business card: categories, services, photos, reviews, prices and customer actions.",
+    "downloadable": true,
+    "draft": false,
+    "inside": [
+      "verification of categories and services",
+      "photo and trust score",
+      "quick review check",
+      "minimum improvement plan for the week"
+    ],
+    "body": [
+      {
+        "title": "How to Use",
+        "body": "Open the business card and go through the items in order. If there is no clear answer to the question, this is an area for improvement."
+      },
+      {
+        "title": "Quick Checks",
+        "items": [
+          "is the basic service clear in the first 10 seconds",
+          "are there prices for key services",
+          "are fresh photos of the result visible",
+          "are there any responses to recent reviews"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "Why the competitor is higher on the maps",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Item"
+      },
+      {
+        "title": "Free LocalOS audit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  },
+  {
+    "title": "Review Reply Templates",
+    "slug": "shablony-otvetov-na-otzyvy",
+    "excerpt": "A set of baseline scenarios for responding to positive, neutral, and challenging feedback without bureaucracy.",
+    "documentType": "Templates",
+    "tags": [
+      "reviews",
+      "reputation",
+      "Scripting language"
+    ],
+    "publishedAt": "2026-04-17",
+    "updatedAt": "2026-04-17",
+    "seoTitle": "Feedback Response Templates — LocalOS",
+    "seoDescription": "Ready-made structures for responding to reviews for local business: thanks, clarification, re-recording and working with objections.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "response to a positive review",
+      "reply to a short review without text",
+      "complaint Response",
+      "soft transfer to repeat visit"
+    ],
+    "body": [
+      {
+        "title": "The principal rule:",
+        "body": "The template should be a foundation, not a copy-paste. Add one specific detail from the review to make the response look alive."
+      },
+      {
+        "title": "Base structure",
+        "items": [
+          "thank the client;",
+          "mention a specific service or situation",
+          "briefly show care",
+          "invite back"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "How reviews affect customer flow",
+        "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov",
+        "label": "Item"
+      },
+      {
+        "title": "Free LocalOS audit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  },
+  {
+    "title": "Local Marketing Control Table",
+    "slug": "tablica-kontrolya-lokalnogo-marketinga",
+    "excerpt": "Simple control structure: card, reviews, news, partnerships and repeat touches.",
+    "documentType": "Tables",
+    "tags": [
+      "table",
+      "Marketing",
+      "control"
+    ],
+    "publishedAt": "2026-04-14",
+    "updatedAt": "2026-04-14",
+    "seoTitle": "Local Marketing Control Table — LocalOS",
+    "seoDescription": "Table template for regular monitoring of local marketing: maps, reviews, news, partnerships and results.",
+    "downloadUrl": "#download-soon",
+    "draft": false,
+    "inside": [
+      "weekly card check",
+      "review response statuses",
+      "news plan",
+      "control of partnerships and results"
+    ],
+    "body": [
+      {
+        "title": "Why you need a table",
+        "body": "It helps to remember regular activities. Local marketing rarely breaks in one day, but sags quickly if nothing is updated for a month."
+      },
+      {
+        "title": "What to track",
+        "items": [
+          "date of last card update",
+          "number of new reviews and responses",
+          "topics of published news",
+          "partner contacts and statuses"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "How to issue a company card",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Item"
+      },
+      {
+        "title": "Free LocalOS audit",
+        "href": "/#hero-form",
+        "label": "Service"
+      }
+    ]
+  }
+]

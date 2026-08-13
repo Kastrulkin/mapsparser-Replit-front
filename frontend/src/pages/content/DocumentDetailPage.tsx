@@ -1,6 +1,9 @@
 import { Navigate, useParams } from "react-router-dom";
 import SeoMeta from "@/components/SeoMeta";
-import { findDocumentBySlug } from "@/content/documents";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
+import { collectionCopy } from "@/content/collectionCopy";
+import { useLocalizedDocuments } from "@/content/useLocalizedCollections";
 import {
   BottomCta,
   DetailHeader,
@@ -13,7 +16,15 @@ import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
 
 const DocumentDetailPage = () => {
   const { slug } = useParams();
-  const documentItem = findDocumentBySlug(slug);
+  const { language } = useLanguage();
+  const copy = collectionCopy[language];
+  const navigationTitle = contentCopy[language].navigation.documents.name;
+  const { documents, isLoading } = useLocalizedDocuments(language);
+  const documentItem = documents.find((item) => item.slug === slug?.trim().replace(/[\\/]+$/g, ""));
+
+  if (isLoading) {
+    return <PageFrame><main className="flex min-h-[55vh] items-center justify-center px-4 text-muted-foreground">{contentCopy[language].shared.loading}</main></PageFrame>;
+  }
 
   if (!documentItem) {
     return <Navigate replace to="/documents" />;
@@ -35,7 +46,7 @@ const DocumentDetailPage = () => {
     },
     makeBreadcrumbSchema([
       { name: "LocalOS", path: "/" },
-      { name: "Документы", path: "/documents" },
+      { name: navigationTitle, path: "/documents" },
       { name: documentItem.title, path: `/documents/${documentItem.slug}` },
     ]),
   ];
@@ -50,7 +61,7 @@ const DocumentDetailPage = () => {
       />
       <DetailHeader
         backHref="/documents"
-        backLabel="Назад к документам"
+        backLabel={copy.documents.back}
         date={documentItem.publishedAt}
         excerpt={documentItem.excerpt}
         label={documentItem.documentType}
@@ -60,7 +71,7 @@ const DocumentDetailPage = () => {
       <main className="px-4 py-14 sm:px-6 lg:px-8">
         <article className="mx-auto max-w-4xl">
           <section className="mb-12 rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-500/5">
-            <h2 className="text-2xl font-bold text-gray-950">Что внутри</h2>
+            <h2 className="text-2xl font-bold text-gray-950">{copy.documents.inside}</h2>
             <ul className="mt-5 space-y-3">
               {documentItem.inside.map((item) => (
                 <li className="flex gap-3 text-lg leading-7 text-gray-700" key={item}>

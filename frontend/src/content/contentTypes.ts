@@ -41,7 +41,7 @@ export type DocumentContent = {
   title: string;
   slug: string;
   excerpt: string;
-  documentType: "Чек-листы" | "Шаблоны" | "Таблицы";
+  documentType: string;
   tags: string[];
   publishedAt: string;
   updatedAt: string;
@@ -66,7 +66,7 @@ export type CaseContent = {
   title: string;
   slug: string;
   excerpt: string;
-  industry: "Салоны" | "Кафе" | "Локальный бизнес";
+  industry: string;
   tags: string[];
   publishedAt: string;
   updatedAt: string;

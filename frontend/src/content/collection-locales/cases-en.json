@@ -1,0 +1,178 @@
+[
+  {
+    "title": "Massage Studio Lead Growth",
+    "slug": "rost-lidov-v-massazhnoi-studii",
+    "excerpt": "How the massage studio strengthened the card, reviews and regular news to receive more applications from the cards.",
+    "industry": "Local business",
+    "tags": [
+      "massage",
+      "map",
+      "lead !"
+    ],
+    "publishedAt": "2026-04-16",
+    "updatedAt": "2026-04-16",
+    "seoTitle": "Lead growth in a massage studio — LocalOS case",
+    "seoDescription": "Case study of the local business: how the massage studio strengthened the card on the maps, reviews and content to receive more applications.",
+    "metrics": [
+      {
+        "label": "Leads from maps",
+        "value": "+38%"
+      },
+      {
+        "label": "Review Responses",
+        "value": "100%"
+      },
+      {
+        "label": "Period",
+        "value": "6 weeks"
+      }
+    ],
+    "draft": false,
+    "situation": "The studio had a good rating, but the card looked general: there were few specific services, there was a lack of photos of the result and regular updates.",
+    "actions": [
+      "divided services according to demand scenarios",
+      "added clear descriptions and prices",
+      "prepared responses to recent reviews",
+      "launched regular news about procedures and promotions"
+    ],
+    "result": "The card began to respond better to specific requests, and the owner received an understandable rhythm of updates without manual routine.",
+    "body": [
+      {
+        "title": "What worked best",
+        "body": "Most of all, we were influenced by a bunch of specific services, recent reviews, and photos. It became easier for the client to understand which procedure to choose and how the studio differs."
+      }
+    ],
+    "related": [
+      {
+        "title": "How to issue a company card",
+        "href": "/articles/kak-oformit-kartochku-kompanii",
+        "label": "Item"
+      },
+      {
+        "title": "Company card audit checklist",
+        "href": "/documents/checklist-audita-kartochki-kompanii",
+        "label": "Document"
+      }
+    ]
+  },
+  {
+    "title": "How the salon received new entries from maps",
+    "slug": "kak-salon-poluchil-novye-zapisi-iz-kart",
+    "excerpt": "Beauty salon case: repacking services, working with reviews and an understandable action plan for the card.",
+    "industry": "Listings",
+    "tags": [
+      "- Beauty salon",
+      "records",
+      "reviews"
+    ],
+    "publishedAt": "2026-04-12",
+    "updatedAt": "2026-04-12",
+    "seoTitle": "How the salon received new entries from maps — LocalOS case",
+    "seoDescription": "Case study of a beauty salon: how a card on the cards began to lead records better after repackaging services, reviews and photos.",
+    "metrics": [
+      {
+        "label": "New Entries",
+        "value": "+10 per day"
+      },
+      {
+        "label": "KEY SERVICES",
+        "value": "12"
+      },
+      {
+        "label": "Period",
+        "value": "30-days"
+      }
+    ],
+    "draft": false,
+    "situation": "The salon depended on repeat customers, and new customers from the cards came irregularly. There were services in the card, but they did not add up to an understandable choice.",
+    "actions": [
+      "identified strong service lines",
+      "rewrote the description of the card for search",
+      "collected feedback response templates",
+      "added a content plan for short news"
+    ],
+    "result": "The card has become clearer for a new client: services, trust, prices and a reason to sign up here are visible.",
+    "body": [
+      {
+        "title": "Takeaway",
+        "body": "For the salon, not only the beauty of the card is important, but also the clarity of choice. The client should quickly understand which service is right for him and what to do next."
+      }
+    ],
+    "related": [
+      {
+        "title": "Why the competitor is higher on the maps",
+        "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
+        "label": "Item"
+      },
+      {
+        "title": "Review Reply Templates",
+        "href": "/documents/shablony-otvetov-na-otzyvy",
+        "label": "Document"
+      }
+    ]
+  },
+  {
+    "title": "How a small cafe increased the flow of guests on weekdays",
+    "slug": "kak-kafe-usililo-potok-gostei-v-budni",
+    "excerpt": "The cafe near the offices rearranged the card for the scenarios of breakfast, lunch and coffee with them and began to fall more often into the choice of guests.",
+    "industry": "Coffee Shops",
+    "tags": [
+      "café",
+      "map",
+      "weekday"
+    ],
+    "publishedAt": "2026-04-10",
+    "updatedAt": "2026-04-10",
+    "seoTitle": "Cafe case study: more guests on weekdays — LocalOS",
+    "seoDescription": "LocalOS case study for cafes: how updating the card, menu, photos and reviews helped to increase the flow of guests on weekdays.",
+    "metrics": [
+      {
+        "label": "transitions in the card",
+        "value": "240%"
+      },
+      {
+        "label": "calls and routes",
+        "value": "+87%"
+      },
+      {
+        "label": "new comments",
+        "value": "18"
+      }
+    ],
+    "draft": false,
+    "situation": "The cafe was noticeable by the branded query, but it poorly collected demand according to the scenarios nearby: breakfast, business lunch and coffee with you.",
+    "actions": [
+      "divided the card into understandable visit scenarios",
+      "added photos of dishes and updated the description of popular items",
+      "created guest review response templates",
+      "collected weekly monitoring of card updates"
+    ],
+    "result": "The card has become clearer for the office audience nearby. Guests were more likely to build a route, call, and leave reviews after their visit.",
+    "body": [
+      {
+        "title": "Why isn’t it working",
+        "body": "The cafe ceased to look like just a dot on the map. The card has specific reasons to enter: breakfast before work, lunch nearby, takeaway coffee."
+      },
+      {
+        "title": "Can Redo",
+        "items": [
+          "maintain menus and photos as a living display unit",
+          "once a week to check reviews and questions",
+          "highlight scenarios in which the customer chooses a nearby cafe"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "title": "How a cafe can get more guests from maps",
+        "href": "/articles/kak-kafe-poluchat-gostei-iz-kart",
+        "label": "Item"
+      },
+      {
+        "title": "Local Marketing Control Table",
+        "href": "/documents/tablica-kontrolya-lokalnogo-marketinga",
+        "label": "Table 2"
+      }
+    ]
+  }
+]

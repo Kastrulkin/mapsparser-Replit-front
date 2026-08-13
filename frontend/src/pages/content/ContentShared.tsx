@@ -321,6 +321,31 @@ export const BottomCta = () => {
 
 export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) => {
   const { language } = useLanguage();
+  const downloadCopy = language === "ru" ? {
+    title: "Скачать чек-лист",
+    description: "PDF с проверками карточки компании. Укажите email и подтвердите согласие — скачивание начнётся сразу.",
+    privacyNote: "Без подписки на рассылку. Email нужен для получения материала.",
+    consent: "Я согласен на обработку персональных данных и принимаю",
+    policy: "политику обработки персональных данных",
+    submit: "Получить чек-лист",
+    submitting: "Подготавливаем файл…",
+    repeat: "Скачать ещё раз",
+    success: "Скачивание началось. Если файл не открылся, нажмите кнопку ещё раз.",
+    unavailable: "Материал готовится. Мы добавим файл на эту страницу.",
+    error: "Не удалось подготовить скачивание. Попробуйте ещё раз.",
+  } : {
+    title: "Download the checklist",
+    description: "A PDF checklist for your business listing. Enter your email and confirm consent to start the download.",
+    privacyNote: "No newsletter subscription. Your email is used to provide the material.",
+    consent: "I consent to the processing of personal data and accept the",
+    policy: "personal data processing policy",
+    submit: "Get the checklist",
+    submitting: "Preparing the file…",
+    repeat: "Download again",
+    success: "Your download has started. If the file did not open, use the button again.",
+    unavailable: "This material is being prepared. We will add the file to this page.",
+    error: "We could not prepare the download. Please try again.",
+  };
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [companySite, setCompanySite] = useState("");
@@ -331,8 +356,8 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
   if (!available) {
     return (
       <section className="mt-10 rounded-3xl bg-orange-50 p-6 shadow-[0_0_0_1px_rgba(249,115,22,0.24),0_10px_30px_rgba(249,115,22,0.06)] sm:p-8">
-        <h2 className="text-balance text-2xl font-bold text-gray-950">Скачать материал</h2>
-        <p className="mt-3 text-pretty text-gray-700">Материал готовится. Мы добавим файл на эту страницу.</p>
+        <h2 className="text-balance text-2xl font-bold text-gray-950">{downloadCopy.title}</h2>
+        <p className="mt-3 text-pretty text-gray-700">{downloadCopy.unavailable}</p>
       </section>
     );
   }
@@ -365,13 +390,13 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.download_url) {
-        throw new Error(payload.message || "Не удалось подготовить скачивание. Попробуйте ещё раз.");
+        throw new Error(payload.message || downloadCopy.error);
       }
 
       setDownloadUrl(payload.download_url);
       startDownload(payload.download_url);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Не удалось подготовить скачивание. Попробуйте ещё раз.");
+      setError(submitError instanceof Error ? submitError.message : downloadCopy.error);
     } finally {
       setIsSubmitting(false);
     }
@@ -384,11 +409,11 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white shadow-[0_8px_20px_rgba(249,115,22,0.22)]">
             <Download className="h-5 w-5" aria-hidden="true" />
           </div>
-          <h2 className="mt-5 text-balance text-2xl font-bold text-gray-950 sm:text-3xl">Скачать чек-лист</h2>
+          <h2 className="mt-5 text-balance text-2xl font-bold text-gray-950 sm:text-3xl">{downloadCopy.title}</h2>
           <p className="mt-3 max-w-lg text-pretty leading-7 text-gray-700">
-            PDF с проверками карточки компании. Укажите email и подтвердите согласие — скачивание начнётся сразу.
+            {downloadCopy.description}
           </p>
-          <p className="mt-4 text-sm text-gray-500">Без подписки на рассылку. Email нужен для получения материала.</p>
+          <p className="mt-4 text-sm text-gray-500">{downloadCopy.privacyNote}</p>
         </div>
 
         <form className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_2px_4px_rgba(0,0,0,0.04)] sm:p-5" onSubmit={handleSubmit}>
@@ -425,9 +450,9 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
               type="checkbox"
             />
             <span>
-              Я согласен на обработку персональных данных и принимаю{" "}
+              {downloadCopy.consent}{" "}
               <Link className="font-semibold text-orange-700 underline underline-offset-2 hover:text-orange-800" target="_blank" to="/privacy">
-                политику обработки персональных данных
+                {downloadCopy.policy}
               </Link>
             </span>
           </label>
@@ -436,7 +461,7 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
           {downloadUrl && !error ? (
             <p aria-live="polite" className="mt-3 flex items-center gap-2 text-pretty text-sm font-medium text-emerald-700">
               <Check className="h-4 w-4" aria-hidden="true" />
-              Скачивание началось. Если файл не открылся, нажмите кнопку ещё раз.
+              {downloadCopy.success}
             </p>
           ) : null}
 
@@ -450,7 +475,7 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
             type="submit"
           >
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}
-            {isSubmitting ? "Подготавливаем файл…" : downloadUrl && !error ? "Скачать ещё раз" : "Получить чек-лист"}
+            {isSubmitting ? downloadCopy.submitting : downloadUrl && !error ? downloadCopy.repeat : downloadCopy.submit}
           </Button>
         </form>
       </div>

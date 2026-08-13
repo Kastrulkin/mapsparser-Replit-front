@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SeoMeta from "@/components/SeoMeta";
-import { documentTypes, publishedDocuments } from "@/content/documents";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { contentCopy } from "@/content/contentCopy";
+import { collectionCopy } from "@/content/collectionCopy";
+import { useLocalizedDocuments } from "@/content/useLocalizedCollections";
 import {
   Breadcrumbs,
   FilterPills,
@@ -10,48 +13,54 @@ import {
 } from "./ContentShared";
 import { makeBreadcrumbSchema } from "./contentSeo";
 
-const allType = "Все";
-
 const DocumentsPage = () => {
-  const [activeType, setActiveType] = useState(allType);
+  const { language } = useLanguage();
+  const copy = collectionCopy[language];
+  const navigationTitle = contentCopy[language].navigation.documents.name;
+  const { documents, isLoading } = useLocalizedDocuments(language);
+  const [activeType, setActiveType] = useState(copy.all);
+
+  useEffect(() => {
+    setActiveType(copy.all);
+  }, [copy.all]);
 
   const filteredDocuments = useMemo(() => {
-    if (activeType === allType) {
-      return publishedDocuments;
+    if (activeType === copy.all) {
+      return documents;
     }
 
-    return publishedDocuments.filter((documentItem) => documentItem.documentType === activeType);
-  }, [activeType]);
+    return documents.filter((documentItem) => documentItem.documentType === activeType);
+  }, [activeType, copy.all, documents]);
 
-  const filters = [allType, ...documentTypes];
+  const filters = [copy.all, ...Array.from(new Set(documents.map((documentItem) => documentItem.documentType)))];
 
   return (
     <PageFrame>
       <SeoMeta
-        description="Прикладные документы LocalOS: чек-листы, шаблоны, таблицы и инструкции для управления локальным маркетингом."
+        description={copy.documents.seoDescription}
         path="/documents"
         schema={makeBreadcrumbSchema([
           { name: "LocalOS", path: "/" },
-          { name: "Документы", path: "/documents" },
+          { name: navigationTitle, path: "/documents" },
         ])}
-        title="Документы для локального маркетинга — LocalOS"
+        title={copy.documents.seoTitle}
       />
       <ListHero
-        description="Готовые материалы, которые можно использовать в работе: чек-листы аудита, шаблоны ответов, таблицы контроля и инструкции."
-        eyebrow="Практические материалы"
-        title="Документы для управления ростом локального бизнеса"
+        description={copy.documents.description}
+        eyebrow={copy.documents.eyebrow}
+        title={copy.documents.title}
       />
       <main className="px-4 py-14 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <Breadcrumbs sectionHref="/documents" sectionTitle="Документы" />
+          <Breadcrumbs sectionHref="/documents" sectionTitle={navigationTitle} />
           <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-center">
             <div>
-              <h2 className="text-3xl font-bold text-gray-950">Библиотека документов</h2>
-              <p className="mt-2 text-gray-600">Не статьи, а рабочие заготовки для команды и собственника.</p>
+              <h2 className="text-3xl font-bold text-gray-950">{copy.documents.library}</h2>
+              <p className="mt-2 text-gray-600">{copy.documents.libraryDescription}</p>
             </div>
             <FilterPills activeValue={activeType} onChange={setActiveType} values={filters} />
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div aria-busy={isLoading} className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredDocuments.map((documentItem) => (
               <MaterialCard
                 accent="amber"
