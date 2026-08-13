@@ -179,6 +179,10 @@ const queryClient = new QueryClient();
 
 const RouteFallback = () => {
   const [takingLong, setTakingLong] = useState(false);
+  const { language } = useLanguage();
+  const fallbackCopy = language === "tr"
+    ? { loading: "Ekran yükleniyor…", slow: "Ekranın yüklenmesi beklenenden uzun sürüyor.", reload: "Sayfayı yenileyin" }
+    : { loading: "Загружаем экран...", slow: "Экран загружается дольше обычного.", reload: "Обновить экран" };
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setTakingLong(true), 5_000);
@@ -195,14 +199,14 @@ const RouteFallback = () => {
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-4 py-12">
       <div className="max-w-sm rounded-lg border border-slate-200 bg-white px-5 py-4 text-center text-sm text-slate-600 shadow-sm">
-        <p>{takingLong ? "Экран загружается дольше обычного." : "Загружаем экран..."}</p>
+        <p>{takingLong ? fallbackCopy.slow : fallbackCopy.loading}</p>
         {takingLong ? (
           <button
             type="button"
             onClick={reloadRoute}
             className="mt-3 min-h-10 rounded-md bg-slate-950 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
-            Обновить экран
+            {fallbackCopy.reload}
           </button>
         ) : null}
       </div>
