@@ -329,9 +329,13 @@ def _create_legacy_persona_blueprint(cursor, business_id: str, agent: dict[str, 
         INSERT INTO agent_blueprint_versions (
             id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
             persona_agent_id, capability_allowlist_json, approval_policy_json,
-            output_schema_json, created_by_user_id
+            output_schema_json, execution_mode, trigger, schedule_json, limits_json,
+            required_integration_bindings_json, created_by_user_id
         )
-        VALUES (%s, %s, 1, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+        VALUES (
+            %s, %s, 1, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb,
+            %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s
+        )
         """,
         (
             version_id,
@@ -343,6 +347,11 @@ def _create_legacy_persona_blueprint(cursor, business_id: str, agent: dict[str, 
             json.dumps(version_payload["capability_allowlist"], ensure_ascii=False),
             json.dumps(version_payload["approval_policy"], ensure_ascii=False),
             json.dumps(version_payload["output_schema"], ensure_ascii=False),
+            str(version_payload.get("execution_mode") or "manual"),
+            str(version_payload.get("trigger") or "manual.run"),
+            json.dumps(version_payload.get("schedule") or {}, ensure_ascii=False),
+            json.dumps(version_payload.get("limits") or {}, ensure_ascii=False),
+            json.dumps(version_payload.get("required_integration_bindings") or [], ensure_ascii=False),
             user_id,
         ),
     )

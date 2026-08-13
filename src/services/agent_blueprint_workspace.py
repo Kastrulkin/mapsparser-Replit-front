@@ -97,6 +97,23 @@ def build_version_payload_from_row(version: Dict[str, Any]) -> Dict[str, Any]:
         "capability_allowlist": _copy_json_value(parse_json_field(version.get("capability_allowlist_json"), []), []),
         "approval_policy": _copy_json_value(parse_json_field(version.get("approval_policy_json"), {}), {}),
         "output_schema": _copy_json_value(parse_json_field(version.get("output_schema_json"), {}), {}),
+        "trigger": _clean_text(version.get("trigger")) if "trigger" in version else "",
+        "execution_mode": _clean_text(version.get("execution_mode")) or "manual",
+        "schedule": (
+            _copy_json_value(parse_json_field(version.get("schedule_json"), {}), {})
+            if "schedule_json" in version
+            else None
+        ),
+        "limits": (
+            _copy_json_value(parse_json_field(version.get("limits_json"), {}), {})
+            if "limits_json" in version
+            else None
+        ),
+        "required_integration_bindings": (
+            _copy_json_value(parse_json_field(version.get("required_integration_bindings_json"), []), [])
+            if "required_integration_bindings_json" in version
+            else None
+        ),
     }
 
 
@@ -111,6 +128,11 @@ def build_agent_version_diff(from_version: Dict[str, Any] | None, to_version: Di
         ("capability_allowlist", "Разрешённые действия"),
         ("approval_policy", "Ручной контроль"),
         ("output_schema", "Формат результата"),
+        ("trigger", "Способ запуска"),
+        ("execution_mode", "Режим работы"),
+        ("schedule", "Расписание"),
+        ("limits", "Лимиты"),
+        ("required_integration_bindings", "Источники данных"),
     ]
     changes = []
     for key, label in fields:

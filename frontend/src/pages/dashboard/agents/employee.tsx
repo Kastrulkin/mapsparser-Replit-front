@@ -1889,10 +1889,16 @@ export const EmployeeAgentScenarioPanel = ({
   const mode = buildAgentUserMode(blueprint, details);
   const [editingOrder, setEditingOrder] = useState(false);
   const [orderedSteps, setOrderedSteps] = useState(working?.steps || []);
+  const [draftExecutionMode, setDraftExecutionMode] = useState<AgentExecutionMode>(working?.execution_mode || details?.execution_mode || 'manual');
+  const [draftScheduleTime, setDraftScheduleTime] = useState<string>(working?.schedule?.time || '09:00');
+  const [draftScheduleTimezone, setDraftScheduleTimezone] = useState<string>(working?.schedule?.timezone || 'Europe/Moscow');
   const [graphSaving, setGraphSaving] = useState(false);
   const [graphError, setGraphError] = useState('');
   useEffect(() => {
     setOrderedSteps(working?.steps || []);
+    setDraftExecutionMode(working?.execution_mode || details?.execution_mode || 'manual');
+    setDraftScheduleTime(working?.schedule?.time || '09:00');
+    setDraftScheduleTimezone(working?.schedule?.timezone || 'Europe/Moscow');
     setEditingOrder(false);
     setGraphError('');
   }, [working?.steps, working?.version_id]);
@@ -1929,6 +1935,12 @@ export const EmployeeAgentScenarioPanel = ({
       }));
       await api.post(`/agent-blueprints/${blueprint.id}/graph/candidate`, {
         graph: { schema: 'localos_agent_workflow_graph_v1', nodes, edges },
+        settings: {
+          execution_mode: draftExecutionMode,
+          schedule: draftExecutionMode === 'scheduled'
+            ? { time: draftScheduleTime, timezone: draftScheduleTimezone }
+            : {},
+        },
       });
       await onGraphCandidateCreated();
       setEditingOrder(false);
@@ -1979,7 +1991,7 @@ export const EmployeeAgentScenarioPanel = ({
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-600">Схема показывает реальную candidate-версию. Рабочая версия не изменится до теста и включения.</p>
           <Button type="button" variant="outline" className="min-h-10 shrink-0" onClick={() => setEditingOrder((current) => !current)} disabled={graphSaving || !orderedSteps.length}>
-            {editingOrder ? 'Отменить изменение' : 'Изменить порядок'}
+            {editingOrder ? 'Отменить изменение' : 'Настроить процесс'}
           </Button>
         </div>
         <Suspense fallback={<div className="h-[360px] animate-pulse rounded-3xl bg-slate-100" aria-label="Загружается схема процесса" />}>
@@ -2003,10 +2015,38 @@ export const EmployeeAgentScenarioPanel = ({
         </div>
         {editingOrder ? (
           <div className="mt-3 rounded-2xl bg-sky-50 p-3 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.18)]">
-            <div className="text-sm font-semibold text-sky-950">Изменения сохранятся как новая версия</div>
-            <p className="mt-1 text-pretty text-sm leading-6 text-sky-800">LocalOS повторно проверит связи, approvals и разрешённые действия. Затем потребуется безопасный тест.</p>
+            <div className="text-sm font-semibold text-sky-950">Настройки сохранятся как новая версия</div>
+            <p className="mt-1 text-pretty text-sm leading-6 text-sky-800">Выберите способ запуска и при необходимости переставьте шаги. Рабочий агент не изменится до теста и явного включения.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {agentExecutionModeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setDraftExecutionMode(option.value)}
+                  className={cn(
+                    'min-h-20 rounded-xl px-3 py-2 text-left shadow-[0_0_0_1px_rgba(14,116,144,0.18)] transition-[background-color,color,transform] active:scale-[0.97]',
+                    draftExecutionMode === option.value ? 'bg-sky-950 text-white' : 'bg-white text-slate-900 hover:bg-sky-100',
+                  )}
+                >
+                  <span className="block text-sm font-semibold">{option.label}</span>
+                  <span className={cn('mt-1 block text-xs leading-5', draftExecutionMode === option.value ? 'text-sky-100' : 'text-slate-500')}>{option.description}</span>
+                </button>
+              ))}
+            </div>
+            {draftExecutionMode === 'scheduled' ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-[10rem_minmax(0,16rem)]">
+                <label className="text-sm font-medium text-sky-950">
+                  Время
+                  <input type="time" value={draftScheduleTime} onChange={(event) => setDraftScheduleTime(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 text-slate-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" />
+                </label>
+                <div className="text-sm font-medium text-sky-950">
+                  Часовой пояс
+                  <TimezoneSelect value={draftScheduleTimezone} onChange={setDraftScheduleTimezone} className="mt-1 bg-white" />
+                </div>
+              </div>
+            ) : null}
             {graphError ? <p className="mt-2 text-sm font-medium text-rose-700">{graphError}</p> : null}
-            <Button type="button" className="mt-3 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={saveGraphCandidate} disabled={graphSaving}>
+            <Button type="button" className="mt-3 min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]" onClick={saveGraphCandidate} disabled={graphSaving || (draftExecutionMode === 'scheduled' && (!draftScheduleTime || !draftScheduleTimezone))}>
               {graphSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
               Проверить процесс
             </Button>

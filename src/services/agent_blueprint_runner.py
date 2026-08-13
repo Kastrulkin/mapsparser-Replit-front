@@ -1525,7 +1525,8 @@ class AgentBlueprintRunner:
         metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
         if not isinstance(metadata, dict):
             return
-        provider = self._binding_provider(metadata, binding_key, str(step.get("capability") or ""))
+        version = self._load_version(str(run.get("blueprint_version_id") or ""))
+        provider = self._binding_provider(metadata, binding_key, str(step.get("capability") or ""), version)
         if not provider:
             return
         # Root-cause category: preflight could resolve a runnable binding from metadata,
@@ -1579,12 +1580,20 @@ class AgentBlueprintRunner:
             result["auth_ref"] = auth_ref
         return result
 
-    def _binding_provider(self, metadata: Dict[str, Any], binding_key: str, capability: str) -> str:
-        required = (
-            metadata.get("required_integration_bindings")
-            if isinstance(metadata.get("required_integration_bindings"), list)
-            else []
-        )
+    def _binding_provider(
+        self,
+        metadata: Dict[str, Any],
+        binding_key: str,
+        capability: str,
+        version: Dict[str, Any] | None = None,
+    ) -> str:
+        required = parse_json_field((version or {}).get("required_integration_bindings_json"), [])
+        if not isinstance(required, list) or not required:
+            required = (
+                metadata.get("required_integration_bindings")
+                if isinstance(metadata.get("required_integration_bindings"), list)
+                else []
+            )
         for item in required:
             if not isinstance(item, dict):
                 continue

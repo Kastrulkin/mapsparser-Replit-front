@@ -1372,3 +1372,137 @@ def test_openclaw_planner_loop_requires_workflow_details_before_draft():
     assert questions["schedule_frequency"]["reason"] == "openclaw_workflow_detail_missing"
     assert questions["post_format"]["reason"] == "openclaw_workflow_detail_missing"
     assert "blocking_workflow_details_before_draft" in result["planner_contract"]["must_return"]
+
+
+def test_version_payload_preserves_visual_editor_runtime_settings():
+    from services.agent_blueprint_workspace import build_version_payload_from_row
+
+    payload = build_version_payload_from_row(
+        {
+            "goal": "Собрать сводку",
+            "steps_json": [],
+            "execution_mode": "scheduled",
+            "trigger": "schedule.daily",
+            "schedule_json": {"time": "09:30", "timezone": "Europe/Moscow"},
+            "limits_json": {"daily_cap": 10},
+            "required_integration_bindings_json": [
+                {"key": "sheet", "provider": "google_sheets", "required": True}
+            ],
+        }
+    )
+
+    assert payload["execution_mode"] == "scheduled"
+    assert payload["trigger"] == "schedule.daily"
+    assert payload["schedule"] == {"time": "09:30", "timezone": "Europe/Moscow"}
+    assert payload["limits"] == {"daily_cap": 10}
+    assert payload["required_integration_bindings"][0]["provider"] == "google_sheets"
+
+
+def test_active_version_trigger_has_priority_over_mutable_blueprint_metadata():
+    from api.agent_blueprints_api import _agent_execution_mode, _agent_version_trigger
+
+    blueprint = {
+        "metadata_json": {
+            "execution_mode": "scheduled",
+            "custom_process": {
+                "trigger": "schedule.daily",
+                "schedule": {"time": "08:00", "timezone": "Europe/Moscow"},
+            },
+        }
+    }
+    active_version = {"execution_mode": "manual", "trigger": "manual.run", "schedule_json": {}}
+
+    assert _agent_version_trigger(blueprint, active_version) == "manual.run"
+    assert _agent_execution_mode(blueprint, active_version) == "manual"
+
+
+def test_visual_editor_saves_schedule_as_candidate_without_mutating_blueprint(monkeypatch):
+    from flask import Flask
+    from api import agent_blueprints_api
+
+    class Cursor:
+        pass
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+            self.committed = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            return None
+
+    class Database:
+        def __init__(self):
+            self.conn = Connection()
+
+        def close(self):
+            return None
+
+    inserted = {}
+    database = Database()
+    candidate = {
+        "id": "candidate-1",
+        "goal": "Собрать сводку",
+        "steps_json": [{"key": "collect", "type": "artifact", "title": "Собрать данные"}],
+        "execution_mode": "manual",
+        "trigger": "manual.run",
+    }
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "_require_blueprint_access",
+        lambda cursor, blueprint_id, user: ({"id": blueprint_id, "metadata_json": {}}, None),
+    )
+    monkeypatch.setattr(agent_blueprints_api, "_resolve_candidate_version", lambda cursor, blueprint: candidate)
+    monkeypatch.setattr(agent_blueprints_api, "validate_workflow_graph", lambda graph: {"valid": True, "errors": []})
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "workflow_graph_to_steps",
+        lambda graph: [{"key": "collect"}],
+    )
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "validate_workflow_step_approval_order",
+        lambda steps: {"valid": True, "errors": []},
+    )
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "validate_compiled_artifact_candidate",
+        lambda version_payload, metadata: {"ready": True, "validation": {"valid": True}},
+    )
+
+    def insert_version(cursor, blueprint_id, payload, user):
+        inserted.update(payload)
+        return {"id": "candidate-2", "version_number": 2}
+
+    monkeypatch.setattr(agent_blueprints_api, "_insert_version", insert_version)
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "_save_blueprint_metadata",
+        lambda *args: (_ for _ in ()).throw(AssertionError("candidate save must not mutate blueprint metadata")),
+    )
+    app = Flask(__name__)
+    request_payload = {
+        "graph": {"schema": "localos_agent_workflow_graph_v1", "nodes": [], "edges": []},
+        "settings": {
+            "execution_mode": "scheduled",
+            "schedule": {"time": "09:30", "timezone": "Europe/Moscow"},
+        },
+    }
+
+    with app.test_request_context(json=request_payload, method="POST"):
+        response, status = agent_blueprints_api.create_agent_graph_candidate("blueprint-1")
+
+    assert status == 201
+    assert response.get_json()["active_version_unchanged"] is True
+    assert inserted["execution_mode"] == "scheduled"
+    assert inserted["trigger"] == "schedule.daily"
+    assert inserted["schedule"] == {"time": "09:30", "timezone": "Europe/Moscow"}
+    assert database.conn.committed is True

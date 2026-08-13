@@ -490,6 +490,7 @@ export type AgentExecutionVersionContract = {
   version_id?: string;
   version_number?: number;
   goal?: string;
+  execution_mode?: AgentExecutionMode;
   trigger?: string;
   schedule?: { time?: string | null; timezone?: string | null; next_run_at?: string | null };
   inputs_schema?: AgentRunInputSchema;
@@ -497,6 +498,7 @@ export type AgentExecutionVersionContract = {
   sources?: unknown[];
   connections?: Record<string, unknown>;
   expected_result?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
   approval_boundaries?: Array<{ step_key?: string; title?: string; approval_type?: string }>;
   validation?: { tested?: boolean; status?: string; last_test?: Record<string, unknown> | null };
   is_active?: boolean;

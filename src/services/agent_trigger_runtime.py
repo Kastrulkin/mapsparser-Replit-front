@@ -296,7 +296,19 @@ def _load_scheduled_blueprints(cursor: Any, *, blueprint_limit: int) -> list[Dic
         SELECT *
         FROM agent_blueprints
         WHERE status = 'active'
-          AND COALESCE(metadata_json->>'execution_mode', '') = 'scheduled'
+          AND (
+              EXISTS (
+                  SELECT 1
+                  FROM agent_blueprint_versions AS active_version
+                  WHERE active_version.id = NULLIF(agent_blueprints.metadata_json->>'active_version_id', '')
+                    AND active_version.blueprint_id = agent_blueprints.id
+                    AND active_version.trigger = 'schedule.daily'
+              )
+              OR (
+                  COALESCE(metadata_json->>'active_version_id', '') = ''
+                  AND COALESCE(metadata_json->>'execution_mode', '') = 'scheduled'
+              )
+          )
         ORDER BY updated_at DESC, created_at DESC
         LIMIT %s
         """,
@@ -312,7 +324,9 @@ def _schedule_context(
 ) -> Dict[str, Any]:
     metadata = _metadata(blueprint)
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
-    schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
+    schedule = parse_json_field(version.get("schedule_json"), {}) if "schedule_json" in version else {}
+    if not isinstance(schedule, dict) or not schedule:
+        schedule = custom_process.get("schedule") if isinstance(custom_process.get("schedule"), dict) else {}
     if not schedule:
         version_output = parse_json_field(version.get("output_schema_json"), {})
         schedule = version_output.get("schedule") if isinstance(version_output, dict) and isinstance(version_output.get("schedule"), dict) else {}
@@ -664,6 +678,8 @@ def _resolve_active_version(cursor: Any, blueprint: Dict[str, Any]) -> Dict[str,
 
 
 def _matches_telegram_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]) -> bool:
+    if "trigger" in version:
+        return str(version.get("trigger") or "").strip() == "telegram.message.received"
     metadata = _metadata(blueprint)
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     if str(custom_process.get("trigger") or "") == "telegram.message.received":
@@ -680,6 +696,8 @@ def _matches_telegram_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]
 
 
 def _matches_schedule_trigger(blueprint: Dict[str, Any], version: Dict[str, Any], trigger: str) -> bool:
+    if "trigger" in version:
+        return str(version.get("trigger") or "").strip() == trigger
     metadata = _metadata(blueprint)
     if str(metadata.get("execution_mode") or "").strip().lower() != "scheduled":
         return False

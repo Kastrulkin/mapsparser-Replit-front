@@ -51,6 +51,8 @@ async def _handle_mock_api(route):
                 "name": "Riderra (Tallinn)",
                 "description": "Demo business",
                 "moderation_status": "active",
+                "subscription_tier": "professional",
+                "subscription_status": "active",
             }],
         })
         return
