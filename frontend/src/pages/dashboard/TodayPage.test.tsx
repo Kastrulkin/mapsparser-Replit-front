@@ -6,6 +6,7 @@ import { newAuth } from '@/lib/auth_new';
 import { TodayPage } from './TodayPage';
 
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));
+vi.mock('@/i18n/LanguageContext', () => ({ useLanguage: () => ({ language: 'ru' }) }));
 
 const ContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1' }} />;
 const NetworkContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1', controlScope: { kind: 'network', id: 'network-1', name: 'Сеть' } }} />;
