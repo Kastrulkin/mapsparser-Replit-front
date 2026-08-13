@@ -18,6 +18,14 @@ const loadArticles = async (language: Language): Promise<ArticleContent[]> => {
   }
 };
 
+export const mergeLocalizedArticles = (localizedArticles: ArticleContent[]) => {
+  const localizedSlugs = new Set(localizedArticles.map((article) => article.slug));
+  return [
+    ...localizedArticles,
+    ...publishedArticles.filter((article) => !localizedSlugs.has(article.slug)),
+  ];
+};
+
 export const useLocalizedArticles = (language: Language) => {
   const [articles, setArticles] = useState<ArticleContent[]>(language === "ru" ? publishedArticles : []);
   const [isLoading, setIsLoading] = useState(language !== "ru");
@@ -29,7 +37,7 @@ export const useLocalizedArticles = (language: Language) => {
 
     void loadArticles(language).then((loaded) => {
       if (active) {
-        setArticles(loaded);
+        setArticles(language === "ru" ? loaded : mergeLocalizedArticles(loaded));
         setIsLoading(false);
       }
     });

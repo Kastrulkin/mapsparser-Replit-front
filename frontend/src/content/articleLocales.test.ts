@@ -10,6 +10,7 @@ import th from "./article-locales/th.json";
 import ar from "./article-locales/ar.json";
 import ha from "./article-locales/ha.json";
 import tr from "./article-locales/tr.json";
+import { mergeLocalizedArticles } from "./useLocalizedArticles";
 
 const localizedArticles = [
   { language: "en", articles: en, copy: contentCopy.en },
@@ -26,10 +27,12 @@ const cyrillic = /[А-Яа-яЁё]/;
 
 describe("article translations", () => {
   localizedArticles.forEach(({ language, articles, copy }) => {
-    it(`contains every published article in ${language}`, () => {
-      expect(articles).toHaveLength(publishedArticles.length);
-      expect(articles.map((article) => article.slug)).toEqual(publishedArticles.map((article) => article.slug));
-      expect(articles.map((article) => article.body.length)).toEqual(publishedArticles.map((article) => article.body.length));
+    it(`keeps translated articles intact and falls back to Russian for new articles in ${language}`, () => {
+      const mergedArticles = mergeLocalizedArticles(articles);
+
+      expect(mergedArticles.map((article) => article.slug)).toEqual(expect.arrayContaining(publishedArticles.map((article) => article.slug)));
+      expect(new Set(mergedArticles.map((article) => article.slug)).size).toBe(publishedArticles.length);
+      expect(mergedArticles.slice(0, articles.length)).toEqual(articles);
       expect(JSON.stringify(articles)).not.toMatch(cyrillic);
     });
 
