@@ -63,7 +63,7 @@
     "updatedAt": "2026-04-17",
     "seoTitle": "Revisar plantillas de respuesta - LocalOS",
     "seoDescription": "Estructuras preparadas para responder a reseñas de empresas locales: agradecimiento, aclaración, reescritura y trabajo con objeciones.",
-    "downloadUrl": "#download-soon",
+    "downloadable": true,
     "draft": false,
     "inside": [
       "respuesta a una reseña positiva",

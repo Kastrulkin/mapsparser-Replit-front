@@ -63,7 +63,7 @@
     "updatedAt": "2026-04-17",
     "seoTitle": "Antwortvorlagen überprüfen – LocalOS",
     "seoDescription": "Vorgefertigte Strukturen für die Beantwortung von Bewertungen lokaler Unternehmen: Dankbarkeit, Klarstellung, Umformulierung und Umgang mit Einwänden.",
-    "downloadUrl": "#download-soon",
+    "downloadable": true,
     "draft": false,
     "inside": [
       "Reaktion auf positive Bewertung",

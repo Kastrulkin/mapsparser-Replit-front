@@ -29,6 +29,14 @@ MATERIAL_DOWNLOADS = {
         "download_name": "localos-tablica-kontrolya-lokalnogo-marketinga.xlsx",
         "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
+    "shablony-otvetov-na-otzyvy": {
+        "path": Path(__file__).resolve().parents[2]
+        / "output"
+        / "docx"
+        / "localos-shablony-otvetov-na-otzyvy.docx",
+        "download_name": "localos-shablony-otvetov-na-otzyvy.docx",
+        "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    },
 }
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 

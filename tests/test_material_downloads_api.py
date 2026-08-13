@@ -129,6 +129,35 @@ def test_signed_download_serves_xlsx_after_consent(monkeypatch, tmp_path):
     assert "localos-tablica-kontrolya-lokalnogo-marketinga.xlsx" in response.headers["Content-Disposition"]
 
 
+def test_signed_download_serves_docx_after_consent(monkeypatch, tmp_path):
+    docx_path = tmp_path / "review-reply-templates.docx"
+    docx_path.write_bytes(b"PK\x03\x04docx")
+    monkeypatch.setitem(
+        material_downloads_api.MATERIAL_DOWNLOADS,
+        "shablony-otvetov-na-otzyvy",
+        {
+            "path": docx_path,
+            "download_name": "localos-shablony-otvetov-na-otzyvy.docx",
+            "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+    )
+    monkeypatch.setenv("MATERIAL_DOWNLOAD_TOKEN_SECRET", "test-material-download-secret")
+    connection = FakeConnection([{"id": "4fef1143-e2ea-40ea-8acd-816a16e1b8a8"}])
+    monkeypatch.setattr(material_downloads_api, "get_db_connection", lambda: connection)
+    token = material_downloads_api._download_serializer().dumps(
+        {"request_id": "4fef1143-e2ea-40ea-8acd-816a16e1b8a8", "material_slug": "shablony-otvetov-na-otzyvy"}
+    )
+
+    response = build_app().test_client().get(f"/api/public/material-downloads/{token}")
+
+    assert response.status_code == 200
+    assert response.data == docx_path.read_bytes()
+    assert response.headers["Content-Type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert "localos-shablony-otvetov-na-otzyvy.docx" in response.headers["Content-Disposition"]
+
+
 def test_signed_download_requires_saved_consent(monkeypatch, tmp_path):
     configure_material(monkeypatch, tmp_path)
     connection = FakeConnection([None])

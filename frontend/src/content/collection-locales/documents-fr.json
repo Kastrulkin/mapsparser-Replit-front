@@ -63,7 +63,7 @@
     "updatedAt": "2026-04-17",
     "seoTitle": "Modèles de réponse aux commentaires — LocalOS",
     "seoDescription": "Structures prêtes à l'emploi pour répondre aux commentaires des entreprises locales : remerciements, clarification, réenregistrement et travail avec des objections.",
-    "downloadUrl": "#download-soon",
+    "downloadable": true,
     "draft": false,
     "inside": [
       "réponse à un avis positif",

@@ -63,7 +63,7 @@
     "updatedAt": "2026-04-17",
     "seoTitle": "Feedback Response Templates — LocalOS",
     "seoDescription": "Ready-made structures for responding to reviews for local business: thanks, clarification, re-recording and working with objections.",
-    "downloadUrl": "#download-soon",
+    "downloadable": true,
     "draft": false,
     "inside": [
       "response to a positive review",

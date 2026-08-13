@@ -64,7 +64,7 @@ export const documents: DocumentContent[] = [
     seoTitle: "Шаблоны ответов на отзывы — LocalOS",
     seoDescription:
       "Готовые структуры ответов на отзывы для локального бизнеса: благодарность, уточнение, повторная запись и работа с возражениями.",
-    downloadUrl: "#download-soon",
+    downloadable: true,
     draft: false,
     inside: [
       "ответ на положительный отзыв",
