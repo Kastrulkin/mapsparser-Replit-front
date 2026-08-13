@@ -852,26 +852,26 @@ async def run_smoke(url, screenshot):
             "localStorage.setItem('language','ru');"
         )
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        await page.wait_for_timeout(2500)
+        await page.get_by_text("Автоматизация задач", exact=True).wait_for(state="visible", timeout=60000)
+        await page.wait_for_timeout(500)
         body = await page.locator("body").inner_text(timeout=10000)
 
         required = [
-            "Мои агенты",
-            "Создать агента",
+            "Автоматизация задач",
+            "Настроить задачу",
             "Готовые практики",
             "Ежедневная сводка владельцу",
             "Просмотр бесплатный и ничего не создаёт",
             "Сегодня",
-            "Требует внимания",
-            "Агенты",
-            "Сотрудники",
-            "Что сотрудник делает",
-            "Текущее состояние",
+            "Нужны действия",
+            "Автоматизированные задачи",
+            "Цель агента",
+            "Готовность процесса",
             "Последняя работа",
             "Следующая работа",
             "Требует вашего внимания",
             "Подтвердить отправку",
-            "Расширенные настройки",
+            "Настройки",
         ]
         body_lower = body.lower()
         missing = [item for item in required if item.lower() not in body_lower]
@@ -899,16 +899,16 @@ async def run_smoke(url, screenshot):
         if await primary_actions.count() != 1:
             missing.append("exactly one selected employee primary action")
 
-        if "Что сотрудник делал раньше" not in body:
+        if "Последняя работа" not in body:
             missing.append("embedded employee history story")
-        if "Прочитать Google-таблицу" not in body and "Подготовить результат для проверки владельцем" not in body:
+        if "Цель агента" not in body:
             missing.append("employee responsibilities")
         if "Open" in body:
             leaked.append("old row action label")
 
-        create_buttons = page.get_by_role("button", name="Создать агента")
+        create_buttons = page.get_by_role("button", name="Настроить задачу")
         if await create_buttons.count() == 0:
-            missing.append("button: Создать агента")
+            missing.append("button: Настроить задачу")
         else:
             await create_buttons.first.click()
             dialog = page.get_by_role("dialog", name="Создать агента")
@@ -946,7 +946,7 @@ async def run_smoke(url, screenshot):
                 created_body_lower = created_body.lower()
                 if "Google Sheets → Telegram" not in created_body:
                     missing.append("created Google Sheets Telegram agent")
-                if "что сотрудник делает" not in created_body_lower or "текущее состояние" not in created_body_lower:
+                if "цель агента" not in created_body_lower or "готовность процесса" not in created_body_lower:
                     missing.append("created agent opened overview")
                 if (
                     "approval_required:" in created_body_lower
