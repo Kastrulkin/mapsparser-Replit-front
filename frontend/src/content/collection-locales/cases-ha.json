@@ -1,0 +1,80 @@
+[
+  {
+    "title": "Yadda ɗakin tausa ya ƙara samun kwastomomi daga taswira",
+    "slug": "rost-lidov-v-massazhnoi-studii",
+    "excerpt": "Ɗakin tausa ya inganta bayanan kasuwancinsa, ra’ayoyi da sabuntawa na yau da kullum domin samun ƙarin tambayoyi daga taswira.",
+    "industry": "Kasuwancin gida",
+    "tags": ["tausa", "taswira", "kwastomomi"],
+    "publishedAt": "2026-04-16",
+    "updatedAt": "2026-04-16",
+    "seoTitle": "Ƙarin kwastomomi ga ɗakin tausa — nazarin LocalOS",
+    "seoDescription": "Nazarin yadda ɗakin tausa ya inganta bayanan taswira, ra’ayoyi da abun ciki domin samun ƙarin kwastomomi.",
+    "metrics": [
+      { "label": "Kwastomomi daga taswira", "value": "+38%" },
+      { "label": "Ra’ayoyin da aka amsa", "value": "100%" },
+      { "label": "Lokaci", "value": "Mako 6" }
+    ],
+    "draft": false,
+    "situation": "Ɗakin yana da kyakkyawan ƙima, amma bayanin kasuwancin ya yi gama-gari: ayyuka ba su bayyana sosai ba, hotunan sakamako ba su isa ba, kuma babu sabuntawa akai-akai.",
+    "actions": ["mun raba ayyuka bisa bukatun kwastomomi", "mun ƙara bayani da farashi masu sauƙin fahimta", "mun shirya amsoshi ga sabbin ra’ayoyi", "mun tsara wallafe-wallafe na ayyuka da tayin musamman"],
+    "result": "Bayanin kasuwancin ya fara dacewa da takamaiman bincike, kuma mai kasuwanci ya samu tsarin sabuntawa mai sauƙi ba tare da aikin hannu kullum ba.",
+    "body": [{ "title": "Abin da ya fi aiki", "body": "Bayyanannun bayanan ayyuka, sabbin ra’ayoyi da hotuna masu dacewa ne suka kawo babban canji. Kwastomomi sun fi saurin fahimtar abin da za su zaɓa da abin da ya bambanta ɗakin." }],
+    "related": [
+      { "title": "Yadda ake tsara bayanan kasuwanci", "href": "/articles/kak-oformit-kartochku-kompanii", "label": "Maqala" },
+      { "title": "Jerin duba bayanan kasuwanci", "href": "/documents/checklist-audita-kartochki-kompanii", "label": "Takarda" }
+    ]
+  },
+  {
+    "title": "Yadda salon kwalliya ya samu sabbin alƙawura 10 a rana daga taswira",
+    "slug": "kak-salon-poluchil-novye-zapisi-iz-kart",
+    "excerpt": "Salon kwalliya ya fayyace ayyukansa, ya tsara amsa ra’ayoyi, sannan ya gina tsari mai amfani ga bayanan kasuwancinsa.",
+    "industry": "Salon kwalliya",
+    "tags": ["salon kwalliya", "alƙawura", "ra’ayoyi"],
+    "publishedAt": "2026-04-12",
+    "updatedAt": "2026-04-12",
+    "seoTitle": "Yadda salon ya samu sabbin alƙawura daga taswira — LocalOS",
+    "seoDescription": "Nazarin yadda bayanai, ayyuka, ra’ayoyi da hotuna masu kyau suka taimaka wa salon samun ƙarin alƙawura daga taswira.",
+    "metrics": [
+      { "label": "Sabbin alƙawura", "value": "+10 a rana" },
+      { "label": "Muhimman ayyuka", "value": "12" },
+      { "label": "Lokaci", "value": "Kwana 30" }
+    ],
+    "draft": false,
+    "situation": "Salon ya dogara da kwastomomin da ke dawowa, yayin da sababbi daga taswira suke zuwa ba bisa tsari ba. Ayyuka suna nan, amma zaɓinsu bai kasance mai sauƙi ba.",
+    "actions": ["mun gano manyan rukunin ayyuka", "mun sake rubuta bayanin kasuwanci domin dacewa da bincike", "mun shirya samfurin amsa ra’ayoyi", "mun ƙara tsarin gajerun wallafe-wallafe"],
+    "result": "Bayanan sun fi sauƙin fahimta ga sabon kwastoma: ana ganin ayyuka, farashi, dalilan amincewa da dalilin zaɓar salon.",
+    "body": [{ "title": "Abin da muka koya", "body": "Kyawun bayanin salon kaɗai bai isa ba; zaɓi dole ya zama mai sauƙi. Kwastoma ya kamata ya gane aikin da ya dace da mataki na gaba cikin sauri." }],
+    "related": [
+      { "title": "Me ya sa abokin hamayya ya fi sama a taswira", "href": "/articles/pochemu-konkurent-vyshe-na-kartah", "label": "Maqala" },
+      { "title": "Samfuran amsa ra’ayoyi", "href": "/documents/shablony-otvetov-na-otzyvy", "label": "Takarda" }
+    ]
+  },
+  {
+    "title": "Yadda ƙaramin gidan kofi ya ƙara yawan baƙi a ranakun aiki",
+    "slug": "kak-kafe-usililo-potok-gostei-v-budni",
+    "excerpt": "Gidan kofi kusa da ofisoshi ya tsara bayanansa bisa karin kumallo, abincin rana da kofi na tafiya, don sauƙaƙa zaɓin masu kusa.",
+    "industry": "Gidajen kofi",
+    "tags": ["gidan kofi", "taswira", "ranakun aiki"],
+    "publishedAt": "2026-04-10",
+    "updatedAt": "2026-04-10",
+    "seoTitle": "Nazarin gidan kofi: ƙarin baƙi a ranakun aiki — LocalOS",
+    "seoDescription": "Nazarin yadda sabunta bayanai, jerin abinci, hotuna da ra’ayoyi ya taimaka wajen ƙara baƙi a ranakun aiki.",
+    "metrics": [
+      { "label": "Ziyarar bayanan kasuwanci", "value": "+240%" },
+      { "label": "Kira da kwatance", "value": "+87%" },
+      { "label": "Sabbin ra’ayoyi", "value": "18" }
+    ],
+    "draft": false,
+    "situation": "Gidan kofi yana bayyana idan an nemi sunansa, amma ba kasafai yake fitowa ga bukatun kusa kamar karin kumallo, abincin rana na aiki ko kofi na tafiya ba.",
+    "actions": ["mun raba bayanan bisa dalilan ziyara", "mun ƙara hotunan abinci tare da sabunta bayanin shahararrun kayayyaki", "mun ƙirƙiri samfurin amsa ra’ayoyin baƙi", "mun kafa dubawa na mako-mako"],
+    "result": "Bayanan sun fi bayyana ga ma’aikatan ofisoshi na kusa. Mutane sun fi neman kwatance, yin kira da rubuta ra’ayi bayan ziyara.",
+    "body": [
+      { "title": "Me ya sa ya yi aiki", "body": "Gidan kofi ya daina zama ɗigo kawai a taswira. Bayanan sun nuna dalilan shigowa: karin kumallo kafin aiki, abincin rana kusa da ofis, da kofi na tafiya." },
+      { "title": "Abin da za a iya maimaitawa", "items": ["riƙe jerin abinci da hotuna a matsayin sabuwar taga ta kasuwanci", "duba ra’ayoyi da tambayoyi sau ɗaya a mako", "bayyana lokutan da kwastoma zai zaɓi gidan kofi na kusa"] }
+    ],
+    "related": [
+      { "title": "Yadda gidan kofi zai samu ƙarin baƙi daga taswira", "href": "/articles/kak-kafe-poluchat-gostei-iz-kart", "label": "Maqala" },
+      { "title": "Teburin kula da tallan gida", "href": "/documents/tablica-kontrolya-lokalnogo-marketinga", "label": "Takarda" }
+    ]
+  }
+]

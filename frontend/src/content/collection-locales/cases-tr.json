@@ -1,0 +1,99 @@
+[
+  {
+    "title": "Masaj stüdyosu haritalardan gelen talepleri nasıl artırdı",
+    "slug": "rost-lidov-v-massazhnoi-studii",
+    "excerpt": "Masaj stüdyosu işletme profilini, yorumları ve düzenli güncellemeleri iyileştirerek haritalardan daha fazla talep aldı.",
+    "industry": "Yerel işletme",
+    "tags": ["masaj", "haritalar", "talepler"],
+    "publishedAt": "2026-04-16",
+    "updatedAt": "2026-04-16",
+    "seoTitle": "Masaj stüdyosunda talep artışı — LocalOS vakası",
+    "seoDescription": "Bir masaj stüdyosunun harita profilini, yorumlarını ve içeriğini geliştirerek daha fazla talep aldığı vaka çalışması.",
+    "metrics": [
+      { "label": "Haritalardan gelen talepler", "value": "+38%" },
+      { "label": "Yanıtlanan yorumlar", "value": "100%" },
+      { "label": "Süre", "value": "6 hafta" }
+    ],
+    "draft": false,
+    "situation": "Stüdyonun puanı iyiydi, ancak işletme profili geneldi: belirgin hizmetler, sonuç fotoğrafları ve düzenli güncellemeler eksikti.",
+    "actions": [
+      "hizmetleri müşteri ihtiyaçlarına göre grupladık",
+      "anlaşılır açıklamalar ve fiyatlar ekledik",
+      "son yorumlar için yanıtlar hazırladık",
+      "işlemler ve kampanyalar hakkında düzenli yayın planı oluşturduk"
+    ],
+    "result": "Profil belirli aramalara daha iyi yanıt vermeye başladı; işletme sahibi de elle takip gerektirmeyen düzenli bir güncelleme akışına kavuştu.",
+    "body": [
+      { "title": "En çok ne işe yaradı", "body": "Açık hizmet açıklamaları, güncel yorumlar ve ilgili fotoğraflar en büyük farkı yarattı. Müşteriler uygun işlemi ve stüdyonun farkını hızla anlayabildi." }
+    ],
+    "related": [
+      { "title": "İşletme profili nasıl hazırlanır", "href": "/articles/kak-oformit-kartochku-kompanii", "label": "Makale" },
+      { "title": "İşletme profili denetim kontrol listesi", "href": "/documents/checklist-audita-kartochki-kompanii", "label": "Belge" }
+    ]
+  },
+  {
+    "title": "Güzellik salonu haritalardan günde 10 yeni randevuya nasıl ulaştı",
+    "slug": "kak-salon-poluchil-novye-zapisi-iz-kart",
+    "excerpt": "Güzellik salonu hizmetlerini sadeleştirdi, yorum yanıtlarını düzenledi ve işletme profili için uygulanabilir bir çalışma planı oluşturdu.",
+    "industry": "Güzellik salonları",
+    "tags": ["güzellik salonu", "randevular", "yorumlar"],
+    "publishedAt": "2026-04-12",
+    "updatedAt": "2026-04-12",
+    "seoTitle": "Salon haritalardan nasıl yeni randevu aldı — LocalOS vakası",
+    "seoDescription": "Daha anlaşılır bir profilin, hizmetlerin, yorumların ve fotoğrafların haritalardan yeni randevu getirdiği güzellik salonu vakası.",
+    "metrics": [
+      { "label": "Yeni randevular", "value": "+10/gün" },
+      { "label": "Öne çıkan hizmetler", "value": "12" },
+      { "label": "Süre", "value": "30 gün" }
+    ],
+    "draft": false,
+    "situation": "Salon tekrar gelen müşterilere bağımlıydı; haritalardan yeni müşteriler düzensiz geliyordu. Hizmetler vardı, ancak seçim yapmak zordu.",
+    "actions": [
+      "güçlü hizmet alanlarını belirledik",
+      "işletme profili açıklamasını arama niyetine göre yeniden yazdık",
+      "yorum yanıt şablonları hazırladık",
+      "kısa yayınlar için içerik planı ekledik"
+    ],
+    "result": "Profil yeni müşteriler için daha anlaşılır oldu: hizmetler, fiyatlar, güven unsurları ve neden bu salonu seçmeleri gerektiği açıkça görülüyor.",
+    "body": [
+      { "title": "Çıkarım", "body": "Bir salon profilinde yalnızca görünüm değil, seçimin kolay olması da önemlidir. Müşteri hangi hizmetin kendisine uygun olduğunu ve sonraki adımı hızla anlamalıdır." }
+    ],
+    "related": [
+      { "title": "Rakibiniz haritalarda neden daha üstte", "href": "/articles/pochemu-konkurent-vyshe-na-kartah", "label": "Makale" },
+      { "title": "Yorum yanıt şablonları", "href": "/documents/shablony-otvetov-na-otzyvy", "label": "Belge" }
+    ]
+  },
+  {
+    "title": "Küçük bir kafe hafta içi müşteri trafiğini nasıl artırdı",
+    "slug": "kak-kafe-usililo-potok-gostei-v-budni",
+    "excerpt": "Ofislerin yanındaki bir kafe profilini kahvaltı, öğle yemeği ve paket kahve ihtiyaçlarına göre düzenleyerek yakındaki müşterilerin seçimini kolaylaştırdı.",
+    "industry": "Kafeler",
+    "tags": ["kafe", "haritalar", "hafta içi"],
+    "publishedAt": "2026-04-10",
+    "updatedAt": "2026-04-10",
+    "seoTitle": "Kafe vakası: hafta içi daha fazla müşteri — LocalOS",
+    "seoDescription": "Profil, menü, fotoğraf ve yorum güncellemelerinin hafta içi müşteri trafiğini artırdığı kafe vaka çalışması.",
+    "metrics": [
+      { "label": "Profil ziyaretleri", "value": "+240%" },
+      { "label": "Aramalar ve yol tarifleri", "value": "+87%" },
+      { "label": "Yeni yorumlar", "value": "18" }
+    ],
+    "draft": false,
+    "situation": "Kafe marka adıyla yapılan aramalarda görünüyordu, ancak kahvaltı, iş yemeği veya paket kahve gibi yakındaki ihtiyaçlarda nadiren çıkıyordu.",
+    "actions": [
+      "profili anlaşılır ziyaret senaryolarına ayırdık",
+      "yemek fotoğrafları ekleyip popüler ürün açıklamalarını güncelledik",
+      "müşteri yorumları için yanıt şablonları oluşturduk",
+      "profil güncellemeleri için haftalık kontrol düzeni kurduk"
+    ],
+    "result": "Profil yakındaki ofis çalışanları için daha anlaşılır oldu. Müşteriler daha sık yol tarifi aldı, aradı ve ziyaret sonrasında yorum bıraktı.",
+    "body": [
+      { "title": "Neden işe yaradı", "body": "Kafe haritadaki sıradan bir nokta olmaktan çıktı. Profilde uğramak için açık nedenler vardı: işe gitmeden kahvaltı, yakında öğle yemeği ve paket kahve." },
+      { "title": "Neler tekrarlanabilir", "items": ["menü ve fotoğrafları güncel bir vitrin gibi yönetmek", "yorumları ve soruları haftada bir kontrol etmek", "müşterinin yakındaki kafeyi seçtiği durumları açıkça göstermek"] }
+    ],
+    "related": [
+      { "title": "Bir kafe haritalardan nasıl daha fazla müşteri alır", "href": "/articles/kak-kafe-poluchat-gostei-iz-kart", "label": "Makale" },
+      { "title": "Yerel pazarlama kontrol tablosu", "href": "/documents/tablica-kontrolya-lokalnogo-marketinga", "label": "Belge" }
+    ]
+  }
+]

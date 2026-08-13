@@ -26,7 +26,7 @@ import { Link, useLocation } from "react-router-dom";
 import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
 import { Button } from "@/components/ui/button";
-import { publishedCases } from "@/content/cases";
+import { useLocalizedCases } from "@/content/useLocalizedCollections";
 import { Language, useLanguage } from "@/i18n/LanguageContext";
 import landingTranslations from "@/i18n/homeLandingTranslations.json";
 
@@ -508,6 +508,7 @@ const copyForLanguage = (language: Language): LandingCopy => {
 const Index = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { language } = useLanguage();
+  const { cases: localizedCases, isLoading: casesLoading } = useLocalizedCases(language);
   const location = useLocation();
   const copy = copyForLanguage(language);
   const networkQuestions = networkQuestionsByLanguage[language];
@@ -846,7 +847,11 @@ const Index = () => {
               <h2 className="mt-5 max-w-3xl text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-5xl">{copy.casesTitle}</h2>
             </div>
             <div className="mt-10 grid gap-5 lg:grid-cols-3">
-              {publishedCases.slice(0, 3).map((caseItem) => (
+              {casesLoading
+                ? Array.from({ length: 3 }, (_, index) => (
+                    <div className="h-[41rem] animate-pulse rounded-2xl bg-slate-100" key={index} aria-hidden="true" />
+                  ))
+                : localizedCases.slice(0, 3).map((caseItem) => (
                 <article className="group flex h-full flex-col overflow-hidden rounded-2xl bg-[#f7f7f5] shadow-[0_0_0_1px_rgba(0,0,0,0.055),0_8px_24px_rgba(15,23,42,0.045)] transition-[box-shadow,transform] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_18px_42px_rgba(15,23,42,0.09)]" key={caseItem.slug}>
                   <div className="p-6 pb-5">
                     <div className="flex items-start justify-between gap-4">
@@ -885,7 +890,7 @@ const Index = () => {
                     {caseItem.title}<ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
                   </Link>
                 </article>
-              ))}
+                  ))}
             </div>
             <Button asChild className="mt-8 min-h-12 rounded-xl px-6 transition-[box-shadow,scale] active:scale-[0.96]" variant="outline">
               <Link to="/cases">{copy.allCases}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>

@@ -27,10 +27,10 @@ const loadCases = async (language: Language): Promise<CaseContent[]> => {
     case "es": return import("./collection-locales/cases-es.json").then((module) => module.default);
     case "el": return import("./collection-locales/cases-el.json").then((module) => module.default);
     case "de": return import("./collection-locales/cases-de.json").then((module) => module.default);
-    case "th": return import("./collection-locales/cases-en.json").then((module) => module.default);
-    case "ar": return import("./collection-locales/cases-en.json").then((module) => module.default);
-    case "ha": return import("./collection-locales/cases-en.json").then((module) => module.default);
-    case "tr": return import("./collection-locales/cases-en.json").then((module) => module.default);
+    case "th": return import("./collection-locales/cases-th.json").then((module) => module.default);
+    case "ar": return import("./collection-locales/cases-ar.json").then((module) => module.default);
+    case "ha": return import("./collection-locales/cases-ha.json").then((module) => module.default);
+    case "tr": return import("./collection-locales/cases-tr.json").then((module) => module.default);
   }
 };
 
