@@ -614,103 +614,104 @@
   },
   "tr": {
     "metaTitle": "LocalOS — yerel işletme sahipleri için daha az rutin iş",
-    "metaDescription": "LocalOS, listeleri ve incelemeleri kontrol eder, içerik hazırlar, hizmetleri ve sayıları analiz eder ve yinelenen işleri yönetir. Bir karara ihtiyaç duyulduğunda mal sahibi devreye girer.",
+    "metaDescription": "LocalOS haritalardaki işletme profillerini ve yorumları kontrol eder, içerik hazırlar, hizmetleri ve temel göstergeleri analiz eder, düzenli işleri yürütür. İşletme sahibi yalnızca karar gerektiğinde devreye girer.",
     "eyebrow": "Yerel işletmeler için LocalOS",
-    "title": "İşletmenizin rutin işler için değil, kararlar için size ihtiyacı var",
-    "intro": "LocalOS, iş sahiplerinin genellikle akıllarında tuttuğu şeyleri izler: listeler, incelemeler, içerik, hizmetler, sayılar ve ortaklıklar. Sistem yinelenen görevleri yerine getirir. Bir şeyin seçime, incelemeye veya onaya ihtiyacı olduğunda devreye girersiniz.",
-    "seeTasks": "LocalOS'un neleri devralabileceğini görün",
-    "freeAudit": "Ücretsiz denetim alın",
-    "formTitle": "Listeleme denetimiyle başlayın",
-    "formDescription": "Müşterilerin işletmenizi nasıl bulduğunu ve öncelikle nelerin düzeltilmesi gerektiğini görün.",
+    "title": "İşletmenizin tamamını aklınızda tutmayın",
+    "intro": "LocalOS haritalardaki işletme profilinizi, yorumları, yayınları, hizmetleri ve temel göstergeleri takip eder. Yapay zekâ iş akışını hazırlar, siz onaylarsınız, ardından program belirlenen kurallara göre uygular. Yalnızca karar gerektiğinde devreye girersiniz.",
+    "seeTasks": "LocalOS'a neleri devredebileceğinizi görün",
+    "freeAudit": "Ücretsiz kontrol alın",
+    "formTitle": "İşletme profilinizin kontrolüyle başlayın",
+    "formDescription": "Müşterilerin işletmenizi nasıl gördüğünü ve önce neyi düzeltmeniz gerektiğini öğrenin.",
     "emailLabel": "E-posta",
-    "emailPlaceholder": "sen@example.com",
-    "mapsLabel": "İşletme girişi bağlantısı",
-    "mapsPlaceholder": "Haritalarda işletmenize bağlantı verin",
-    "submit": "Denetimi alın",
+    "emailPlaceholder": "siz@example.com",
+    "mapsLabel": "İşletme profili bağlantısı",
+    "mapsPlaceholder": "Haritalardaki işletme profilinizin bağlantısını yapıştırın",
+    "submit": "Ücretsiz kontrol isteyin",
     "submitting": "Gönderiliyor…",
-    "success": "Teşekkür ederim. Talebiniz alındı.",
+    "success": "Teşekkürler. Talebinizi aldık.",
     "error": "İsteğinizi gönderemedik. Lütfen tekrar deneyin.",
-    "scale": "LocalOS halihazırda bağımsız şirketlerden ağlara kadar 240'tan fazla küçük işletme lokasyonunda çalışmaktadır.",
-    "problemTitle": "Sen olmadan her şey durursa, iş günü bittikten sonra hala iştesindir",
+    "scale": "LocalOS, bağımsız işletmelerden şubelere sahip markalara kadar 240'tan fazla küçük işletme noktasında kullanılıyor.",
+    "problemTitle": "Her şey size bağlı",
     "problemParagraphs": [
-      "Bir incelemeyi yanıtlayın. Bir listeyi kontrol edin. Bir gönderi planlayın. Fiyatları güncelleyin. Rakamlara bakın. Her görev küçüktür, ancak hepsi birlikte, sahibine iş üzerinde çalışacak zaman bırakmaz.",
-      "Yeni yazılım bu yükü nadiren ortadan kaldırır. Genellikle sahibine açıp izleyebileceği bir yer daha verir.",
-      "LocalOS yinelenen işleri zamanlanmış görevlere dönüştürür, tamamlar ve sahibine yalnızca karar verilmesi gereken şeyleri gösterir."
+      "Sabah rakamlar ve çalışanlar. Gün içinde müşteriler ve acil konular. Akşam ise yetişmeyen işler. Çoğu zaman işi kendiniz yapmak; anlatmaktan, devretmekten ve ardından kontrol etmekten daha kolay gelir.",
+      "Böylece işletme sahibi, kendi işletmesinin en yoğun çalışanına dönüşür. Telefonu kapatsa ya da bir haftalığına uzaklaşsa işlerin duracağını düşünür.",
+      "LocalOS tekrarlanan işleri işletme sahibinin üzerinden alır. Böylece siz her sonraki adımı aklınızda tutmasanız da işler devam eder."
     ],
-    "networkTitle": "Tek bir konumunuz olabilir. Deneyiminiz bir ağdaki gibi çalışabilir",
+    "networkTitle": "Tek bir şubeniz olabilir. Deneyiminiz bir zincir kadar güçlü olabilir",
+    "networkSummary": "Yerel işletmelerin karşılaştığı sorunların çoğu birbirine benzer. LocalOS işe yarayan çözümleri kontrol eder ve yeniden kullanılabilecek olanları saklar.",
     "networkParagraphs": [
-      "Bir network her şubede aynı sorunu sıfırdan çözmez. Bir yöntem işe yaradığında kontrol edilir ve tekrar kullanılır.",
-      "LocalOS bu yaklaşımı bağımsız işletmelere getiriyor. Çalışma uygulamalarını topluyor, inceliyor ve yeniden kullanılabilir prosedürlere dönüştürüyoruz. Bir sonraki şirket boş bir sayfayla başlamıyor."
+      "İşletme sahipleri meslek gruplarında aynı soruları tekrar tekrar soruyor: hizmetler nasıl sunulmalı, zor bir yoruma nasıl cevap verilmeli, müşteriler nasıl geri getirilmeli, hangi rakamlar izlenmeli? Böyle bir durumda daha önce aynı sorunu çözmüş bir tanıdığa danışmak istersiniz.",
+      "LocalOS bu deneyimi toplar. Bir yöntem sonuç verdiğinde onu kontrol eder, işe yarayan kısmı tesadüften ayırır ve uygulanabilir bir iş akışına dönüştürür. Böylece bir sonraki işletme çözümü sıfırdan aramak zorunda kalmaz."
     ],
-    "networkPrivacy": "Şirket ve müşteri verileri asla başka işletmelere aktarılmaz. Yalnızca gözden geçirilmiş kurallar ve anonimleştirilmiş çalışma yöntemleri paylaşılmaktadır.",
+    "networkPrivacy": "İşletme ve müşteri verileri gizli kalır. Diğer işletmelere yalnızca genel kurallar ve anonimleştirilmiş çalışma yöntemleri aktarılır.",
     "networkLabels": [
-      "Bir işletme çözüm buluyor",
-      "LocalOS uygulamayı inceliyor",
-      "Diğerleri sıfırdan başlamıyor"
+      "Bir işletme tanıdık bir sorunu çözüyor",
+      "LocalOS neyin işe yaradığını kontrol ediyor",
+      "Diğerleri hazır bir yöntemle başlıyor"
     ],
-    "tasksEyebrow": "LocalOS tarafından yürütülen işler",
-    "tasksTitle": "Artık yalnız taşımanıza gerek olmayan şeyler",
-    "tasksIntro": "Genellikle sahibine geri dönen beş iş.",
+    "tasksEyebrow": "LocalOS'un üstlendiği işler",
+    "tasksTitle": "Artık tek başınıza üstlenmeniz gerekmeyen işler",
+    "tasksIntro": "Genellikle yeniden işletme sahibine dönen beş görev.",
     "tasks": [
       {
-        "title": "Müşterilerin sizi bulup bulamayacağını kontrol edin",
-        "description": "LocalOS harita listelerini, hizmetleri, fiyatları, fotoğrafları, gönderileri ve incelemeleri kontrol eder. Müşterinin tercihine nelerin engel olduğunu gösterir ve düzeltmeleri hazırlar."
+        "title": "Müşterilerin sizi bulup bulamadığını sürekli kontrol etmek",
+        "description": "LocalOS haritalardaki işletme profilinizi, hizmetleri, fiyatları, fotoğrafları, yayınları ve yorumları kontrol eder. Müşterinin sizi seçmesini zorlaştıran noktaları bulur ve düzeltmeleri hazırlar."
       },
       {
-        "title": "Müşterilerin tek kaynağı olarak reklamlara güvenin",
-        "description": "LocalOS yakındaki ilgili işletmeleri bulur, ortaklık teklifleri hazırlar ve iletişim geçmişini tutar. Harici mesajlar yalnızca onaylandıktan sonra gönderilir."
+        "title": "Müşteriyi yalnızca reklamla bulmaya çalışmak",
+        "description": "LocalOS çevredeki uygun işletmeleri bulur, iş birliği teklifleri hazırlar ve iletişim geçmişini saklar. Dışarıya hiçbir mesaj sizin onayınız olmadan gönderilmez."
       },
       {
-        "title": "Her inceleme ve gönderi için günü kesintiye uğratın",
-        "description": "LocalOS, yanıtlanmayan incelemeleri toplar, taslaklar hazırlar ve yayın kuyruğunu korur. Sahibi önemli olanı inceler ve yayınlanmasını onaylar."
+        "title": "Her yorum ve yayın için işinizi bölmek",
+        "description": "LocalOS yanıtsız yorumları toplar, cevap taslakları hazırlar ve yayın sırasını takip eder. İşletme sahibi yalnızca önemli olanları kontrol eder ve yayını onaylar."
       },
       {
-        "title": "Hizmetler ve fiyatlar konusunda ne yapacağınızı tahmin edin",
-        "description": "LocalOS hangi hizmetlerin satıldığını, ortalama harcamanın ve kapasitenin nasıl değiştiğini, menünün müşterilerin kafasını karıştırdığı yerleri ve hangi tekliflerin test edilmeye değer olduğunu gösterir."
+        "title": "Hizmetler ve fiyatlar hakkında tahminle karar vermek",
+        "description": "LocalOS hangi hizmetlerin satıldığını, ortalama işlem tutarının ve doluluğun nasıl değiştiğini gösterir. Ek satış ve çapraz satış planı hazırlamanıza, ortalama işlem tutarını artıracak teklifleri seçmenize yardımcı olur."
       },
       {
-        "title": "İş resmini elle birleştirin",
-        "description": "LocalOS, tamamlanan çalışmaları, finansal göstergeleri ve dikkat edilmesi gereken öğeleri bir araya getirir. Sahibi bugün ne olduğunu ve hangi karara ihtiyaç duyulduğunu görüyor."
+        "title": "İşletmenin genel durumunu elle toparlamak",
+        "description": "LocalOS tamamlanan işleri, finansal göstergeleri ve dikkat gerektiren konuları tek yerde toplar. İşletme sahibi ne olduğunu ve bugün hangi kararı vermesi gerektiğini görür."
       }
     ],
-    "retentionNote": "LocalOS, müşteri verileri bağlandığında geri dönmeyen müşterileri de tespit ederek tekrar ziyaret için teklif hazırlayabilir.",
-    "workEyebrow": "İşin nasıl ele alındığı",
-    "workTitle": "Sistem işi yapıyor. Kararları sahibi verir",
-    "workIntro": "LocalOS, önemli kararları sahibinin elinden almadan yinelenen işleri sahibinin tabağından alır.",
+    "retentionNote": "Müşteri verileri bağlandığında LocalOS uzun süredir geri gelmeyen müşterileri de bulabilir ve yeni ziyaret için teklif hazırlayabilir.",
+    "workEyebrow": "İş nasıl yürütülür",
+    "workTitle": "Sistem çalışır. Kararı işletme sahibi verir",
+    "workIntro": "LocalOS tekrarlanan işleri üstlenir; önemli kararlar işletme sahibinde kalır.",
     "steps": [
       {
         "title": "İşletmeyi bağlayın",
-        "description": "LocalOS yalnızca seçtiğiniz verilere erişir: listeler, incelemeler, hizmetler, finansal göstergeler ve bağlı kanallar."
+        "description": "LocalOS yalnızca seçtiğiniz verilere erişir: işletme profilleri, yorumlar, hizmetler, finansal göstergeler ve bağlı kanallar."
       },
       {
-        "title": "Sahibinin masasından ayrılabilecek iş bulun",
+        "title": "İşletme sahibinden devralınabilecek işleri buluruz",
         "description": "Sistem, tek seferlik bir sorunu düzenli olarak yürütülmesi gereken bir görevden ayırır."
       },
       {
-        "title": "Gözden geçirilmiş bir prosedürü çalıştırın",
-        "description": "LocalOS verileri kontrol eder, materyalleri hazırlar ve izin verilen eylemleri planlandığı şekilde yürütür."
+        "title": "Onaylanmış iş akışını uygularız",
+        "description": "LocalOS verileri kontrol eder, gerekli materyalleri hazırlar ve izin verilen işlemleri belirlenen programa göre yürütür."
       },
       {
-        "title": "Neyin karara ihtiyacı olduğunu gösterin",
-        "description": "Gönderiler, mesajlar, toplu değişiklikler ve diğer önemli harici işlemler, sahibinin onayını bekler."
+        "title": "Yalnızca karar gerektiren konuları gösteririz",
+        "description": "Yayınlar, mesajlar, toplu değişiklikler ve diğer önemli işlemler işletme sahibinin onayını bekler."
       },
       {
-        "title": "Sonucu sakla",
-        "description": "Bir çalışma şekli faydalı olduğu kanıtlandığında, işletme içinde tekrarlanabilir ve diğer şirketler için anonimleştirilmiş bir uygulama olarak kullanılabilir."
+        "title": "Sonucu kaydederiz",
+        "description": "Bir çalışma yöntemi yarar sağladığında aynı işletmede tekrar kullanılabilir ve anonimleştirilmiş bir uygulama olarak diğer işletmelere aktarılabilir."
       }
     ],
-    "workSummary": "Yapay zeka analiz ve hazırlık için kullanılır. Tekrarlanan işler açık kurallara tabidir. Sahibi kontrolde kalır.",
-    "casesEyebrow": "Vaka çalışmaları",
-    "casesTitle": "Sahipler zaten tabaklarını çıkardılar",
-    "casesIntro": "Başlangıç durumu, tamamlanan iş ve belirli bir süre içinde nelerin değiştiği.",
-    "situation": "önce",
-    "workDone": "İş tamamlandı",
+    "workSummary": "Yapay zekâ görevi açıklar, verileri analiz eder ve uygulanacak programı hazırlar. İşletme sahibi iş akışını kontrol edip onaylar. Ardından görevi yapay zekâ değil, onaylanan kurallara bağlı program yürütür. İş akışında bulunmayan bir durum ortaya çıkarsa program durur ve işletme sahibinden karar ister.",
+    "casesEyebrow": "Uygulama örnekleri",
+    "casesTitle": "İşletme sahiplerinin artık kendilerinin yapmadığı işler",
+    "casesIntro": "",
+    "situation": "Önce",
+    "workDone": "Neler yaptık",
     "result": "Ne değişti",
-    "allCases": "Tüm vaka çalışmalarını görüntüleyin",
-    "auditTitle": "Öncelikle tabağınızdan bir görevi kaldırın",
-    "auditText": "İşletme girişinizi kontrol edeceğiz ve müşterilerin sizi bulmasına ve seçmesine nelerin engel olduğunu göstereceğiz. Uzun bir rapora veya genel tavsiyeye gerek kalmadan somut bir ilk eylem alacaksınız.",
-    "finalTitle": "Onsuz hiçbir şeyin olmayacağı kişi olmayı bırak",
-    "finalText": "LocalOS'a yinelenen işler verin. Sahibinin gerçekten ihtiyaç duyduğu kararları saklayın.",
+    "allCases": "Tüm örnekleri inceleyin",
+    "auditTitle": "İlk adımda bir görevi üzerinizden alın",
+    "auditText": "İşletme profilinizi kontrol edip müşterilerin sizi bulmasını ve seçmesini zorlaştıran noktayı göstereceğiz. Uzun raporlar ve genel tavsiyeler yerine uygulanabilir ilk adımı alacaksınız.",
+    "finalTitle": "Her şeyin kendisine bağlı olduğu kişi olmaktan çıkın",
+    "finalText": "Tekrarlanan işleri LocalOS'a devredin. İşletme sahibini gerçekten gerektiren kararları kendinize bırakın.",
     "tryFree": "Demoyu görüntüle",
     "talkExpert": "Bir uzmanla konuşun"
   },

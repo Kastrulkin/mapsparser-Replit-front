@@ -46,4 +46,11 @@ describe("article translations", () => {
     expect(el.every((article) => typeof article.seoDescription === "string" && article.seoDescription.length > 0)).toBe(true);
     expect(serialized).not.toMatch(/seoDeπρόγραμμαion|πρόγραμμαs|εντολήs|μέση απόδειξη|συνεχής άγχος|Γεμάτη καταχώριση|μικρά studios|full-time|audit καταχώρισης|food photography|marketing budget|ζωντανή landing|πλαίσιο πλοήγησης/);
   });
+
+  it("keeps the Turkish articles natural and free of known machine-translation fragments", () => {
+    const serialized = JSON.stringify(tr);
+
+    expect(tr.every((article) => typeof article.seoDescription === "string" && article.seoDescription.length > 0)).toBe(true);
+    expect(serialized).not.toMatch(/kartlardaki bir kartı|tam bir kayıt|teknisyenler penceresiz|mini bir site|canlı iniş|kurşun büyümesi|Reaksiyon hızı|Kartlar aktiviteyi|puannin|puanlarden|Yorumlarin|incelemeler|inceleme/);
+  });
 });

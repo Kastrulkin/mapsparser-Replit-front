@@ -339,6 +339,22 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
     success: "Скачивание началось. Если файл не открылся, нажмите кнопку ещё раз.",
     unavailable: "Материал готовится. Мы добавим файл на эту страницу.",
     error: "Не удалось подготовить скачивание. Попробуйте ещё раз.",
+  } : language === "tr" ? {
+    title: isMarketingTable ? "Çalışma tablosunu indirin" : isReviewTemplates ? "Yanıt şablonlarını indirin" : "Kontrol listesini indirin",
+    description: isMarketingTable
+      ? "Haritaları, yorumları, yayınları, iş birliklerini ve müşteri takibini haftalık olarak izleyebileceğiniz XLSX tablosu. E-posta adresinizi yazıp onay kutusunu işaretlediğinizde indirme başlar."
+      : isReviewTemplates
+        ? "Olumlu, nötr ve zor yorumlara yanıt vermek için hazırlanmış Word şablonları. E-posta adresinizi yazıp onay kutusunu işaretlediğinizde indirme başlar."
+        : "İşletme Profilinizi kontrol etmek için hazırlanmış PDF listesi. E-posta adresinizi yazıp onay kutusunu işaretlediğinizde indirme başlar.",
+    privacyNote: "Bülten aboneliği yoktur. E-posta adresiniz yalnızca materyali sunmak için kullanılır.",
+    consent: "Kişisel verilerimin işlenmesini kabul ediyor ve",
+    policy: "kişisel verilerin işlenmesi politikasını onaylıyorum",
+    submit: isMarketingTable ? "Tabloyu alın" : isReviewTemplates ? "Şablonları alın" : "Kontrol listesini alın",
+    submitting: "Dosya hazırlanıyor…",
+    repeat: "Tekrar indirin",
+    success: "İndirme başladı. Dosya açılmazsa düğmeye yeniden basın.",
+    unavailable: "Bu materyal hazırlanıyor. Dosyayı tamamlandığında bu sayfaya ekleyeceğiz.",
+    error: "Dosya hazırlanamadı. Lütfen tekrar deneyin.",
   } : {
     title: isMarketingTable ? "Download the working spreadsheet" : isReviewTemplates ? "Download the reply templates" : "Download the checklist",
     description: isMarketingTable
@@ -428,7 +444,7 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
 
         <form className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_2px_4px_rgba(0,0,0,0.04)] sm:p-5" onSubmit={handleSubmit}>
           <label className="block text-sm font-semibold text-gray-950" htmlFor={`material-email-${materialSlug}`}>
-            Email
+            {language === "tr" ? "E-posta" : "Email"}
           </label>
           <Input
             autoComplete="email"
@@ -436,7 +452,7 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
             id={`material-email-${materialSlug}`}
             inputMode="email"
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="name@company.ru"
+            placeholder={language === "tr" ? "ornek@isletme.com" : "name@company.ru"}
             required
             type="email"
             value={email}

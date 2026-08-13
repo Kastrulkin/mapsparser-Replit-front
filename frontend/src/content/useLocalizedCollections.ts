@@ -15,7 +15,7 @@ const loadDocuments = async (language: Language): Promise<DocumentContent[]> => 
     case "th": return import("./collection-locales/documents-en.json").then((module) => module.default);
     case "ar": return import("./collection-locales/documents-en.json").then((module) => module.default);
     case "ha": return import("./collection-locales/documents-en.json").then((module) => module.default);
-    case "tr": return import("./collection-locales/documents-en.json").then((module) => module.default);
+    case "tr": return import("./collection-locales/documents-tr.json").then((module) => module.default);
   }
 };
 

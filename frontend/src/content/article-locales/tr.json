@@ -1,8 +1,8 @@
 [
   {
-    "title": "Compiled AI: neden yapay zeka bir kez düşünüp binlerce kez çalışmalı?",
+    "title": "Compiled AI: Yapay zekâ neden bir kez düşünüp binlerce kez çalışmalı?",
     "slug": "compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz",
-    "excerpt": "Yapay zeka, çalışma senaryosunu bir kez tasarlar ve test eder. Görev daha sonra program tarafından hızlı, tahmin edilebilir bir şekilde ve her adımda modele yeni bir çağrı yapılmadan gerçekleştirilir.",
+    "excerpt": "Yapay zekâ çalışma senaryosunu bir kez tasarlayıp test eder. Ardından görevi program hızlı, öngörülebilir ve modele her adımda yeniden başvurmadan yürütür.",
     "category": "iş",
     "tags": [
       "Compiled AI",
@@ -13,8 +13,8 @@
     ],
     "publishedAt": "2026-08-12",
     "updatedAt": "2026-08-12",
-    "seoTitle": "Compiled AI: Yapay zeka bir kez düşünür, komut dosyası binlerce kez çalışır - LocalOS",
-    "seoDescription": "Derlenmiş Yapay Zeka Nedir: Yapay zekanın test edilebilir bir komut dosyasını nasıl oluşturduğu, programın bunu modele tekrarlanan çağrılar olmadan nasıl yürüttüğü ve sahibin kontrolü elinde tutması.",
+    "seoTitle": "Compiled AI: Yapay zekâ bir kez düşünür, program binlerce kez çalışır — LocalOS",
+    "seoDescription": "Compiled AI yaklaşımında yapay zekâ test edilebilir bir çalışma senaryosu hazırlar, işletme sahibi onaylar, ardından program aynı görevi kurallara uygun biçimde tekrar tekrar yürütür.",
     "draft": false,
     "body": [
       {
@@ -22,8 +22,8 @@
         "body": "Çoğu yapay zeka sistemi her çalıştırıldığında aynı sorunu yeniden çözer. Derlenmiş yapay zeka farklı bir yaklaşım benimser: Yapay zeka önce bir iş akışı oluşturur ve doğrular, ardından iş akışı normal bir program gibi hızlı, öngörülebilir ve sürekli modele başvurmadan çalışır."
       },
       {
-        "title": "Geleneksel AI ajanlarıyla ilgili sorun",
-        "body": "Bir şirketin yeni bir incelemeyi işleme alması, kartlardaki bir kartı kontrol etmesi veya gelen bir başvuruyu sınıflandırması gerektiğini düşünelim. Sıradan bir yapay zeka aracısı her başlatıldığında yeniden talimatlar alır, durumu analiz eder, bir eylem seçer, bir sonuç üretir ve diğer hizmetlere erişir."
+        "title": "Geleneksel yapay zekâ ajanlarındaki sorun",
+        "body": "Bir işletmenin yeni bir yorumu ele alması, haritalardaki İşletme Profilini kontrol etmesi veya gelen bir talebi sınıflandırması gerektiğini düşünelim. Geleneksel bir yapay zekâ ajanı her çalıştırıldığında talimatları yeniden okur, durumu analiz eder, yapacağı işlemi seçer ve diğer hizmetlere erişir."
       },
       {
         "title": "Her başlattığınızda neler değişir?",
@@ -36,10 +36,10 @@
       },
       {
         "title": "Derlenmiş Yapay Zeka Araştırması",
-        "body": "6 Nisan 2026'da, XY.AI Laboratuvarları, Stanford Üniversitesi Tıp Fakültesi, Cornell Üniversitesi ve Brigham ve Kadın Hastanesi/Harvard Tıp Fakültesi'nden yazarlar, \"Derlenmiş Yapay Zeka: Yüksek Lisans Tabanlı İş Akışı Otomasyonu için Deterministik Kod Oluşturma\" ön baskısını sundular. Yapay zekanın çalışma mantığını oluşturduğu anı, daha sonraki yürütülmesinden ayırmayı önerdiler.",
+        "body": "6 Nisan 2026'da XY.AI Labs, Stanford Üniversitesi Tıp Fakültesi, Cornell Üniversitesi ve Brigham and Women's Hospital/Harvard Tıp Fakültesi araştırmacıları, \"Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi\" başlıklı ön baskıyı yayımladı. Araştırmacılar, yapay zekânın çalışma mantığını oluşturduğu aşama ile bu mantığın daha sonra yürütüldüğü aşamayı birbirinden ayırmayı önerdi.",
         "bodyLinks": [
           {
-            "text": "Derlenmiş Yapay Zeka: Yüksek Lisans Tabanlı İş Akışı Otomasyonu için Belirleyici Kod Oluşturma",
+            "text": "Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi",
             "href": "https://arxiv.org/abs/2604.05150v1"
           }
         ]
@@ -61,8 +61,8 @@
         ]
       },
       {
-        "title": "Sonuç, bir yazılım eseridir",
-        "body": "Yapay zeka, tek seferlik yanıt veya istem yerine bir yazılım eseri oluşturur. Tüm süreci yeniden inşa etmeden test edilebilir, sürümlendirilebilir, doğrulanabilir, kıyaslanabilir ve geliştirilebilir."
+        "title": "Ortaya çalışan bir yazılım bileşeni çıkar",
+        "body": "Yapay zekâ, tek kullanımlık bir yanıt ya da istem yerine çalışan bir yazılım bileşeni oluşturur. Bu bileşen, tüm süreci baştan kurmadan test edilebilir, sürümlendirilebilir, doğrulanabilir, karşılaştırılabilir ve geliştirilebilir."
       },
       {
         "title": "Bir süreç nasıl oluşturulur?",
@@ -78,7 +78,7 @@
         ]
       },
       {
-        "title": "Hata fiili başlatmadan önce tespit edilir",
+        "title": "Hata gerçek çalışma başlamadan yakalanır",
         "body": "Senaryo testi geçemezse üretime gönderilmez. Model hatanın açıklamasını alır, mantığı düzeltir ve ardından kontroller yeniden çalıştırılır. Yalnızca doğrulama döngüsünün tamamını geçen bir komut dosyası çalışan bir program haline gelir.",
         "bodyLinks": [
           {
@@ -104,7 +104,7 @@
         "body": "İkinci deney 5.680 tedarikçi hesabı üzerinde gerçekleştirildi. Belgeler yapı, tanınma kalitesi ve bilgilerin düzenlenmesi açısından farklılık gösteriyordu. Basit kurallar hızlı bir şekilde çalıştı ancak önemli bilgilerin yalnızca %20,3'ünü doğru bir şekilde çıkardı. Şirket adlarını, tutarlarını ve belirsiz alanları anlamak hâlâ bir dil modeli gerektiriyordu."
       },
       {
-        "title": "Code Factory'nin hibrit versiyonu",
+        "title": "Code Factory'nin hibrit yaklaşımı",
         "body": "Yazarlar genel eylem sırasını derlenmiş ve öngörülebilir tuttu, ancak karmaşık aşamalarda modele dar çağrılara izin verdi. Bu seçenek, modele doğrudan erişim olarak anahtar alanları çıkarırken aynı %80,0 doğruluğu gösterdi ve ürün dizelerini tanırken %80,4'e ulaştı; bu, karşılaştırılan seçenekler arasında en iyi sonuçtu."
       },
       {
@@ -113,10 +113,10 @@
       },
       {
         "title": "Bu yaklaşım LocalOS'ta nasıl uygulanır?",
-        "body": "Yerel bir işletmenin düzinelerce tekrarlayan görevi vardır: incelemelere yanıt vermek, kartlardaki bilgileri güncellemek, içerik hazırlamak, kartların eksiksiz olup olmadığını kontrol etmek, ortaklıklar bulmak, istekleri işleme koymak ve düzenli etkinlikleri izlemek. LocalOS'ta yapay zeka bir komut dosyası oluşturmaya yardımcı olur, sahibi onu kontrol eder ve onaylanan sıra komut dosyasını yürütür."
+        "body": "Yerel bir işletmede onlarca iş tekrar tekrar yapılır: yorumlara yanıt vermek, haritalardaki bilgileri güncellemek, içerik hazırlamak, profilleri kontrol etmek, iş ortakları bulmak, talepleri işlemek ve sonuçları izlemek. LocalOS'ta yapay zekâ çalışma senaryosunu hazırlar, işletme sahibi kontrol edip onaylar; ardından görevi program yürütür."
       },
       {
-        "title": "Örnek: yeni bir incelemeyle çalışma",
+        "title": "Örnek: yeni bir yorumla çalışma",
         "items": [
           "LocalOS geri bildirim ve seçilen şirket verilerini alır",
           "Riskin temasını, tonunu ve düzeyini belirler",
@@ -132,7 +132,7 @@
         "body": "Model, bir dili anlamanın veya bir metin hazırlamanın gerekli olduğu yerlerde kullanılır. Kontroller, kısıtlamalar, onay ve eylem günlüğü önceden tanımlanmış kurallara göre gerçekleştirilir."
       },
       {
-        "title": "Yönlendirmelerden birikmiş uygulamalara",
+        "title": "Tek seferlik talimattan kalıcı iş akışına",
         "body": "Bir uygulama insanlar tarafından doğrulandıktan ve faydalı olduğu gösterildikten sonra, senaryonun bir versiyonu olarak kaydedilebilir ve benzer şirketlerde kullanılabilir. Süreç sektöre, şehre, markaya ve spesifik duruma göre şekillendirilir ancak şirket verileri diğer işletmelerle paylaşılmaz."
       },
       {
@@ -163,14 +163,14 @@
       },
       {
         "title": "LocalOS ilkesi",
-        "body": "Yapay zeka iş uygulamalarını bulur ve şekillendirir. Sahibi kontrol edip onaylıyor. Senaryo, çözümü iş için tekrarlanabilir bir sürece dönüştürür."
+        "body": "Yapay zekâ çözümü tasarlar ve senaryoyu hazırlar. İşletme sahibi kuralları kontrol edip onaylar. Program, onaylanan görevi aynı kurallarla tekrar tekrar yerine getirir."
       },
       {
         "title": "Kaynak",
-        "body": "Materyal, 6 Nisan 2026'da yayınlanan \"Derlenmiş Yapay Zeka: Yüksek Lisans Tabanlı İş Akışı Otomasyonu için Deterministik Kod Oluşturma\" ön basımının ilk versiyonuna dayanmaktadır.",
+        "body": "Bu yazı, 6 Nisan 2026'da yayımlanan \"Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi\" ön baskısının ilk sürümüne dayanmaktadır.",
         "bodyLinks": [
           {
-            "text": "“Derlenmiş Yapay Zeka: Yüksek Lisans Tabanlı İş Akışı Otomasyonu için Belirleyici Kod Oluşturma” ön baskısının ilk sürümü",
+            "text": "Compiled AI makalesinin ilk sürümü",
             "href": "https://arxiv.org/abs/2604.05150v1"
           }
         ]
@@ -197,12 +197,12 @@
   {
     "title": "Girişimciler neden tükeniyor?",
     "slug": "pochemu-predprinimateli-vygorayut",
-    "excerpt": "Sahip tükenmişliği genellikle çok fazla işin olduğu yerde değil, çok fazla kaosun olduğu ve yönetilebilir bir sistemin olmadığı yerde başlar.",
+    "excerpt": "İşletme sahibinin tükenmişliği çoğu zaman işin çokluğundan değil, her şeyin kendisine dönmesinden ve yönetilebilir bir sistemin olmamasından kaynaklanır.",
     "category": "iş",
     "tags": [
       "tükenmişlik",
       "küçük işletme",
-      "işletim sistemi",
+      "iş süreçleri",
       "kontrol edilebilirlik",
       "KPI"
     ],
@@ -230,7 +230,7 @@
         "title": "Kaosu ne oluşturur?",
         "items": [
           "nakit açığı",
-          "sonsuz işletim sistemi",
+          "bitmeyen operasyon işleri",
           "sürekli izlenmesi gereken çalışanlar",
           "her gün ortaya çıkan sorunlar",
           "akşam bile kapatamama"
@@ -265,7 +265,7 @@
         "body": "Çalışanlar, müşteriler, yeni süreçler, reklamlar, CRM ve ek satış kanalları ortaya çıkıyor. Eğer bu anda şirket içerisinde bir sistem oluşmazsa kaos işin kendisinden daha hızlı büyümeye başlar."
       },
       {
-        "title": "Yükseklik tek başına stresi azaltmaz",
+        "title": "Büyüme tek başına stresi azaltmaz",
         "body": "Bu, birçok insanın hafife aldığı önemli bir noktadır: Büyüme tek başına mal sahibinin yükünü azaltmaz. Çoğu zaman tam tersi olur. Bir işletme sistemsiz büyüdükçe, daha fazla manuel kontrol gerektirmeye başlar."
       },
       {
@@ -286,10 +286,10 @@
       },
       {
         "title": "Asıl yük kontrol edilememektir",
-        "body": "Ana duygusal yükü yaratan şey kontrol edilememe eksikliğidir. Bu nedenle, güçlü şirketler giderek daha fazla sahibinin kahramanlığı etrafında değil, tutarlılık etrafında inşa ediliyor: net KPI'lar, şeffaf ekonomi, rutin otomasyon, özelleştirilmiş süreçler ve analitik.",
+        "body": "Asıl duygusal yükü işin kontrol edilememesi yaratır. Bu yüzden güçlü şirketler, sahibinin sürekli kahramanlık yapması üzerine değil, düzenli işleyen bir sistem üzerine kurulur: net KPI'lar, görünür finansal sonuçlar, rutin işlerin otomasyonu, tanımlı süreçler ve anlaşılır raporlar.",
         "bodyLinks": [
           {
-            "text": "KPI'ları temizle",
+            "text": "net KPI'lar",
             "href": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus"
           }
         ]
@@ -301,7 +301,7 @@
     ],
     "related": [
       {
-        "title": "Neden tam bir kayıt kâra eşit değil?",
+        "title": "Randevu takvimi doluyken salon neden yine de zarar edebilir?",
         "href": "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
         "label": "Makale"
       },
@@ -311,37 +311,37 @@
         "label": "Tablo"
       },
       {
-        "title": "Şirket kartına nasıl başvurulur",
+        "title": "İşletme Profili nasıl hazırlanır?",
         "href": "/articles/kak-oformit-kartochku-kompanii",
         "label": "Makale"
       }
     ]
   },
   {
-    "title": "Neden tam bir kayıt kâra eşit değil?",
+    "title": "Randevu takvimi doluyken salon neden yine de zarar edebilir?",
     "slug": "pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
-    "excerpt": "Tam bir giriş kârı garanti etmez. Meşgul profesyonellerin, indirimlerin ve müşteri akışının zayıf salon ekonomisini neden gizleyebileceğine bakalım.",
+    "excerpt": "Dolu bir randevu takvimi kârı garanti etmez. Yoğun çalışan uzmanların, indirimlerin ve sürekli müşteri akışının salonun zayıf finansal yapısını nasıl gizleyebildiğine bakalım.",
     "category": "Finans",
     "tags": [
       "güzellik salonu",
-      "kar",
-      "ortalama fatura",
+      "kâr",
+      "ortalama işlem tutarı",
       "tekrarlanan ziyaretler",
       "KPI"
     ],
     "publishedAt": "2026-05-18",
     "updatedAt": "2026-05-18",
-    "seoTitle": "Neden tam bir kayıt kâra eşit değil - LocalOS",
+    "seoTitle": "Randevu takvimi doluyken salon neden zarar edebilir? — LocalOS",
     "seoDescription": "Bir güzellik salonunda tam bir randevu neden kâr anlamına gelmiyor: hizmet ekonomisi, indirimler, tekrar ziyaretler, sandalye başına gelir ve yönetim KPI'ları.",
     "draft": false,
     "body": [
       {
         "title": "Programınız dolduğunda ve hala paranız olmadığında",
-        "body": "Bazen salon sahibi programa bakar ve şöyle düşünür: Her şey dolu, teknisyenler penceresiz çalışıyor, telefon çalıyor, müşteriler geliyor. Ancak ayın sonunda hala bir nedenden dolayı paranın olmadığı hissi var."
+        "body": "Bazen salon sahibi randevu takvimine bakar: Saatler dolu, uzmanlar ara vermeden çalışıyor, telefon çalıyor, müşteriler geliyor. Buna rağmen ay sonunda kasada beklenen para kalmıyor."
       },
       {
-        "title": "Tam kayıt karlı bir salon anlamına gelmez",
-        "body": "Bu, güzellik sektörünün en tatsız tuzaklarından biridir. Tam kayıt karlı bir salon anlamına gelmez. Dahası, çoğu zaman kaosa sürüklenen tam da bu tür salonlardır: Görünüşe göre iş canlı ve aktif, ancak içeride her şey sürekli gerilim altında tutuluyor."
+        "title": "Dolu takvim, kârlı salon demek değildir",
+        "body": "Bu, güzellik sektöründeki en yanıltıcı durumlardan biridir. Takvimin dolu olması salonun kârlı olduğu anlamına gelmez. Dışarıdan işler yoğun görünürken ekip içeride sürekli baskı altında çalışabilir ve gelir maliyetleri karşılamayabilir."
       },
       {
         "title": "Sistemsiz bir salon neye benzer?",
@@ -371,16 +371,16 @@
       {
         "title": "Sahibini genellikle manuel modda tutan şey nedir?",
         "items": [
-          "kayıttan sorumludur",
+          "randevuları kendisi takip eder",
           "reklam yapmayı düşünüyor",
           "yönetici sorunlarını kapatır",
-          "geliri artırmaya çalışıyorum",
+          "geliri nasıl artıracağını düşünür",
           "kaotik eylemleri başlatır"
         ]
       },
       {
         "title": "Kayıpların fark edilmesi neden zordur?",
-        "body": "Çoğu sahip, parayı tam olarak nerede kaybettiklerini bile anlamıyor. Salonda bir hareketlenme var, müşteriler ve teknisyenler meşgul ve her şeyin yolunda gitmesi gerekiyor gibi görünüyor. Ancak rakamlar olmadan gerçek resmi görmek mümkün değil. Ne düşündüğünüzü bilmiyorsanız onu etkileyemezsiniz."
+        "body": "Birçok işletme sahibi paranın tam olarak nerede kaybedildiğini göremiyor. Salon hareketli, müşteriler ve uzmanlar meşgul; dışarıdan her şey yolunda görünüyor. Ancak rakamlar olmadan gerçek tabloyu görmek mümkün değil. Ölçmediğiniz bir sonucu yönetemezsiniz."
       },
       {
         "title": "Salonlar ne kadar güçlü büyüyor",
@@ -390,8 +390,8 @@
           "yeniden kayıt",
           "net hizmet ekonomisi",
           "kar kontrolü",
-          "yönetilen indirme",
-          "KPI'ları temizle"
+          "kontrollü doluluk",
+          "net KPI'lar"
         ]
       },
       {
@@ -417,7 +417,7 @@
       },
       {
         "title": "Sistem sayılarla başlar",
-        "body": "Salonların çoğu hissiyatla yönetiliyor. Görünüşe göre rekor kırıldı - promosyon başlıyor. Görünüşe göre çok az müşteri var - reklamlar açık. Görünüşe göre usta zayıf - şikayetler başlıyor. Ama görünen o ki bu yönetim değil."
+        "body": "Birçok salon hâlâ sezgiyle yönetiliyor. Takvim boş görününce kampanya başlatılıyor, müşteri azaldığında reklam açılıyor, sonuç düşünce sorun hemen uzmana bağlanıyor. Oysa yalnızca görünen tabloya göre karar vermek yönetim değildir."
       },
       {
         "title": "Neden güçlü bir salon sayılara dayalıdır?",
@@ -527,12 +527,12 @@
         "label": "Tablo"
       },
       {
-        "title": "Şirket kartına nasıl başvurulur",
+        "title": "İşletme Profili nasıl hazırlanır?",
         "href": "/articles/kak-oformit-kartochku-kompanii",
         "label": "Makale"
       },
       {
-        "title": "Salon kartlardan nasıl yeni kayıtlar aldı?",
+        "title": "Salon haritalardan nasıl yeni randevular aldı?",
         "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
         "label": "Vaka"
       }
@@ -541,13 +541,13 @@
   {
     "title": "Çevrimiçi haritalar bir satış kanalı haline geldi: neden artık sadece harita üzerinde olmak yeterli değil?",
     "slug": "onlain-karty-stali-kanalom-prodazh",
-    "excerpt": "Kartlardaki kartvizit neden zaten dönüşüm hunisinin en alt kısmı olarak çalışıyor: aramaları, rotaları, randevuları ve müşteri seçimini doğrudan platformun içinden etkiliyor.",
+    "excerpt": "İşletme Profili artık müşterinin karar verdiği son adımlardan biri: aramaları, yol tarifi isteklerini, randevuları ve işletme seçimini doğrudan etkiliyor.",
     "category": "Haritalar",
     "tags": [
-      "kartlar",
+      "haritalar",
       "yerel pazarlama",
       "dönüşüm",
-      "Yandex Haritaları"
+      "Yandex Haritalar"
     ],
     "publishedAt": "2026-04-23",
     "updatedAt": "2026-04-23",
@@ -561,62 +561,62 @@
       },
       {
         "title": "Neden varlığın güzelliğini değil de parayı etkiliyor?",
-        "body": "Bir kişi Haritalar'da bir şirket kartını açtığında genellikle hedef eylemden bir veya iki adım uzaktadır. Bu nedenle verilerin alaka düzeyi, incelemeler, fiyatlar, fotoğraflar, işlem düğmeleri ve yanıt hızı görüntüyü değil, gerçek ziyaretleri, çağrıları ve başvuruları etkiler."
+        "body": "Bir kişi haritalarda İşletme Profilini açtığında arama, yol tarifi veya randevu gibi bir işlemden yalnızca bir iki adım uzaktadır. Bu nedenle güncel bilgiler, yorumlar, fiyatlar, fotoğraflar, işlem düğmeleri ve yanıt hızı yalnızca görünümü değil, gerçek ziyaretleri, aramaları ve talepleri etkiler."
       },
       {
         "title": "Kanalın ölçeği zaten göz ardı edilemeyecek kadar büyük",
         "body": "Haritalar uzun zamandır kitlesel bir talep arayüzü haline geldi. Google Haritalar milyarlarca kullanıcıdan oluşan bir kitle tarafından kullanılıyor, Yandex ürün ve hizmet arayan on milyonlarca insandan bahsediyor ve 2GIS uzun süredir multimilyon dolarlık bir kitleye sahip bağımsız bir ekosisteme dönüşüyor. Yerel işletmeler için bu artık ek bir trafik kaynağı değil, taleple iletişimin en büyük kanallarından biridir."
       },
       {
-        "title": "Kartların asıl gücü kullanıcının amacıdır.",
+        "title": "Profillerin asıl gücü kullanıcının amacıdır.",
         "body": "Haritalar güçlüdür çünkü isteğin zaten bir yer ve eylemle ilişkilendirildiği anda bir kişiyi durdururlar. Bunlar, kullanıcının şirketi zaten tanıdığı durumlarda markalı talebi ve kişinin yakındaki bir dişçi, kafe, salon veya araba servisi arasında seçim yaptığı yeni talebi aynı anda karşılıyor. Dolayısıyla kart hem talebi korumak hem de yenilerini yakalamak için çalışıyor."
       },
       {
-        "title": "Şirket kartı platform içerisinde mini bir site haline geldi",
+        "title": "İşletme Profili, platform içindeki vitrininiz oldu",
         "items": [
           "adres ve çalışma programı",
           "telefon, sohbet ve işlem düğmeleri",
           "web sitesi, sosyal ağlar ve bağlantılar",
-          "fotoğraflar, videolar ve incelemeler",
+          "fotoğraflar, videolar ve yorumlar",
           "ürünler, menü, hizmetler ve fiyatlar",
-          "kayıt, promosyonlar, yayınlar ve etkinlikler"
+          "randevu bağlantısı, kampanyalar, yayınlar ve etkinlikler"
         ]
       },
       {
         "title": "Haritalardaki hatalı veriler, zayıf içerikten daha hızlı maliyete neden olur",
-        "body": "Telefon numarası yanlışsa müşteri ulaşamayacaktır. Eğer program güncel değilse kapalı bir noktaya gelecektir. Adresin yanlış girilmesi durumunda güzergah yanlış yönde oluşturulacaktır. Kategori doğru seçilmediği takdirde kart ilgili seçim senaryosuna dahil edilmeyecektir. Kartlar bir kez doldurulup kapatılmış sayılamaz; bu normal bir operasyonel çalışmadır."
+        "body": "Telefon numarası yanlışsa müşteri size ulaşamaz. Çalışma saatleri güncel değilse kapalı olduğunuzda kapıya gelebilir. Adres hatalıysa yol tarifi yanlış yere götürür. Kategori doğru seçilmediyse profil ilgili aramalarda görünmez. İşletme Profili bir kez doldurulup unutulacak bir kayıt değil, düzenli olarak güncellenmesi gereken bir satış kanalıdır."
       },
       {
-        "title": "Kartlardaki incelemeler artık bir itibar değil, bir dönüşümdür",
-        "body": "İncelemeler seçimin bir parçası haline geldi. Derecelendirme, son değerlendirmelerin sayısı ve yanıtların kalitesi, arama, randevu ve ziyaret olasılığını doğrudan etkiler. Bu nedenle, incelemelerle çalışmak dönüşüm yönetimi olarak algılanmalıdır: Kart talep toplarsa ancak güven uyandırmazsa, işletme karşılaştırma aşamasında para kaybeder.",
+        "title": "Haritalardaki yorumlar artık bir itibar değil, bir dönüşümdür",
+        "body": "Yorumlar seçimin bir parçası haline geldi. Puan, son değerlendirmelerin sayısı ve yanıtların kalitesi, arama, randevu ve ziyaret olasılığını doğrudan etkiler. Bu nedenle, yorumlarle çalışmak dönüşüm yönetimi olarak algılanmalıdır: Kart talep toplarsa ancak güven uyandırmazsa, işletme karşılaştırma aşamasında para kaybeder.",
         "bodyLinks": [
           {
-            "text": "İncelemeler seçimin bir parçası haline geldi",
+            "text": "Yorumlar seçimin bir parçası haline geldi",
             "href": "/articles/kak-otzyvy-vliyayut-na-potok-klientov"
           }
         ]
       },
       {
-        "title": "İşletmenin sorunu kartların tek bir platform olmamasıdır",
-        "body": "Rusya Federasyonu ve BDT'de temel set genellikle Yandex Haritalar ve 2GIS ile başlar ve uluslararası veya turist kitleler için Google ve Apple eklenir. Her platformun kendi kart mantığı, arayüzü, analitiği ve yetenekleri vardır. Bir noktada bu zaten dikkat gerektiriyor ancak şube ağında ayrı bir işletim sistemine dönüşüyor."
+        "title": "İşletmenin sorunu profillerin tek bir platform olmamasıdır",
+        "body": "Rusya ve BDT ülkelerinde temel kanal seti genellikle Yandex Haritalar ve 2GIS ile başlar; uluslararası veya turist kitlesi için Google ve Apple da eklenir. Her platformun kendi profil yapısı, arayüzü, analitiği ve imkânları vardır. Tek bir işletmede bile düzenli takip gerekir; şube sayısı arttığında bu iş başlı başına bir sürece dönüşür."
       },
       {
-        "title": "Kartlardaki sonucu gerçekten etkileyen şey nedir?",
+        "title": "Haritalardaki sonucu gerçekten etkileyen şey nedir?",
         "items": [
           "eksiksiz ve doğru kart: adres, çalışma saatleri, kategoriler, hizmetler, web sitesi, fiyatlar ve açıklama",
-          "incelemeler ve yanıt hızı: güven faktörü ve karar faktörü",
-          "fotoğraflar, videolar, menüler, ürünler ve fiyatlar: zengin içerik, kartın içinde karar vermenize yardımcı olur",
-          "yayınlar, promosyonlar ve etkinlikler: kartın çekiciliğini ve TO'sunu artırın",
+          "yorumlar ve yanıt hızı: güven faktörü ve karar faktörü",
+          "fotoğraflar, videolar, menüler, ürünler ve fiyatlar: müşterinin profil içinde karar vermesine yardımcı olur",
+          "yayınlar, kampanyalar ve etkinlikler: profilin güncel ve ilgi çekici görünmesini sağlar",
           "Yalnızca görüntülemeleri değil eylemleri de ölçme: çağrılar, rotalar, dönüşümler, mesajlar ve rezervasyonlar"
         ]
       },
       {
         "title": "Haritalar özellikle talebin coğrafyaya bağlı olduğu durumlarda güçlüdür",
-        "body": "Restoranlar, kafeler, tıp, güzellik, fitness, kişisel hizmetler, araba hizmetleri, perakende, eğlence ve yerel perakende neredeyse her zaman kartlardan önemli bir işlem payı almaktadır. Aynı zamanda kartlar, saf çevrimiçi iş için tek kanal ve karmaşık B2B'nin bir parçası olarak daha zayıftır. Yani bu her şeye evrensel bir cevap değil, yerel talebe göre tercih edilen bir altyapıdır."
+        "body": "Restoranlar, kafeler, sağlık, güzellik, spor, kişisel hizmetler, oto servisleri, mağazalar ve eğlence işletmeleri haritalardan önemli ölçüde müşteri işlemi alabilir. Ancak yalnızca çevrimiçi çalışan işletmelerde veya karmaşık B2B satışlarında etkisi daha sınırlıdır. Haritalar her işletme için tek çözüm değil, yerel talebin güçlü olduğu alanlarda temel kanallardan biridir."
       },
       {
         "title": "Gri yöntemler giderek daha tehlikeli hale geliyor",
-        "body": "Bir kanal müşteri getirdiğinde, özellikle incelemeler olmak üzere artışlarla sonuçları hızlandırmak cazip gelebilir. Ancak platformlar sahte incelemeleri, düzenlemeleri ve profilleri giderek daha fazla engelliyor. İş dünyası için bunun anlamı basit: Kart kalitesini, müşteri deneyimini ve yanıt hızını yönetmek, sistemi hacklemeye çalışmaktan daha güvenilir ve karlı.",
+        "body": "Bir kanal müşteri getirdiğinde, özellikle yorumlar olmak üzere artışlarla sonuçları hızlandırmak cazip gelebilir. Ancak platformlar sahte yorumları, düzenlemeleri ve profilleri giderek daha fazla engelliyor. İş dünyası için bunun anlamı basit: Kart kalitesini, müşteri deneyimini ve yanıt hızını yönetmek, sistemi hacklemeye çalışmaktan daha güvenilir ve karlı.",
         "bodyLinks": [
           {
             "text": "kart kalitesini yönet",
@@ -626,7 +626,7 @@
       },
       {
         "title": "İşletmelerin neden haritaların üzerinde bir yönetim katmanına ihtiyacı var?",
-        "body": "İşletmenin tek bir noktası olduğu sürece kaos manuel kontrolle gizlenebilir. Ancak şubeler ortaya çıktığında, incelemeler, ürünler, promosyonlar, program değişiklikleri ve analiz ihtiyacı ortaya çıktığında, manuel mod bozulmaya başlar. Kartların üzerinde bir yönetim katmanının gerekli olduğu yer burasıdır: Çağrıların nerede kaybolduğunu, hangi kartların yetersiz doldurulduğunu, yanıt oranının nerede düştüğünü ve hangi eylemlerin gerçekten sonuç ürettiğini görmek için.",
+        "body": "İşletmenin tek bir noktası olduğu sürece kaos manuel kontrolle gizlenebilir. Ancak şubeler ortaya çıktığında, yorumlar, ürünler, promosyonlar, program değişiklikleri ve analiz ihtiyacı ortaya çıktığında, manuel mod bozulmaya başlar. Profillerin üzerinde bir yönetim katmanının gerekli olduğu yer burasıdır: Çağrıların nerede kaybolduğunu, hangi profillerin yetersiz doldurulduğunu, yanıt oranının nerede düştüğünü ve hangi eylemlerin gerçekten sonuç ürettiğini görmek için.",
         "bodyLinks": [
           {
             "text": "manuel mod bozulmaya başlar",
@@ -636,15 +636,15 @@
       },
       {
         "title": "SSS: Haritalar neden yerel SEO'nun yalnızca bir parçası olarak görülmemelidir?",
-        "body": "Çünkü haritalar yalnızca görünürlüğü değil aynı zamanda belirli kullanıcı eylemlerini de etkiler. Kartın içinde bir kişi zaten arıyor, rota belirliyor, yazıyor, bir web sitesine gidiyor veya randevu alıyor. Bu artık yalnızca bir SEO görevi değil, tam teşekküllü bir dönüşüm kanalıdır."
+        "body": "Haritalar yalnızca görünürlüğü değil, müşterinin doğrudan yaptığı işlemleri de etkiler. Kullanıcı profilin içinden arama yapar, yol tarifi alır, mesaj gönderir, web sitesine geçer veya randevu oluşturur. Bu nedenle konu yalnızca SEO değil, doğrudan talep üreten bir satış kanalıdır."
       },
       {
         "title": "SSS: Rusya Federasyonu ve BDT'de iş yapmak için hangi platformlar gereklidir?",
         "body": "Çoğu durumda temel minimum değer Yandex Haritalar ve 2GIS'tir. Uluslararası kitleler, turistik bölgeler ve iPhone payının yüksek olduğu segmentler için Google ve Apple da dikkate alınmaya değer."
       },
       {
-        "title": "SSS: hangisi daha önemli - kartın derecelendirmesi veya eksiksizliği",
-        "body": "Her iki faktör de önemlidir, ancak kartın yanlış veya eksik veriler içermesi durumunda yüksek derecelendirmenin faydası olmaz. Kullanıcının önce doğru bilgiyi alması ve ancak o zaman güvenmesi gerekir."
+        "title": "SSS: Puan mı, profilin eksiksizliği mi daha önemli?",
+        "body": "İkisi de önemlidir. Ancak profil yanlış veya eksik bilgiler içeriyorsa yüksek puan tek başına işe yaramaz. Müşteri önce doğru bilgiyi görmeli, ardından işletmeye güvenebilmelidir."
       },
       {
         "title": "SSS: İlk önce hangi metriklere bakılmalı",
@@ -652,36 +652,36 @@
       },
       {
         "title": "Sonuç",
-        "body": "Çevrimiçi haritalar artık bir referans kitabı gibi görünmüyor. Yerel işletmeler için bu, kullanıcının seçim yaptığı, karşılaştırdığı ve işlem yaptığı kanaldır. Bu nedenle, kazananlar sadece kartlarda yer alan şirketler değil, kartları, incelemeleri, içerikleri, ürünleri ve eylem analitiğini sistematik olarak yöneten şirketlerdir. LocalOS'un çalıştığı görev tam olarak budur; kartları pasif bir vitrinden kontrollü bir çağrı, yönlendirme, talep ve satış kaynağına dönüştürmek."
+        "body": "Çevrimiçi haritalar artık yalnızca bir rehber değil; müşterinin karşılaştırma yaptığı, seçim yaptığı ve işletmeyle iletişime geçtiği bir kanal. Bu nedenle yalnızca haritalarda yer almak yetmez. Profilleri, yorumları, içerikleri, ürünleri ve müşteri işlemlerini düzenli yöneten işletmeler öne çıkar. LocalOS, İşletme Profilini pasif bir kayıttan ölçülebilir arama, yol tarifi, talep ve satış kaynağına dönüştürmeye yardımcı olur."
       }
     ],
     "related": [
       {
-        "title": "Şirket kartı denetimi için kontrol listesi",
+        "title": "İşletme Profili denetimi için kontrol listesi",
         "href": "/documents/checklist-audita-kartochki-kompanii",
         "label": "Belge"
       },
       {
-        "title": "Rakip neden kartlarda daha yüksek?",
+        "title": "Rakip neden haritalarda daha yüksek?",
         "href": "/articles/pochemu-konkurent-vyshe-na-kartah",
         "label": "Makale"
       },
       {
-        "title": "Salon kartlardan nasıl yeni kayıtlar aldı?",
+        "title": "Salon haritalardan nasıl yeni kayıtlar aldı?",
         "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
         "label": "Vaka"
       }
     ]
   },
   {
-    "title": "Rakibiniz neden kartlarda daha yüksek?",
+    "title": "Rakibiniz neden haritalarda daha yüksek?",
     "slug": "pochemu-konkurent-vyshe-na-kartah",
-    "excerpt": "Derecelendirmeniz aynı veya daha yüksek olsa bile, komşu bir işletmenin Yandex Haritalar ve Google Haritalar'da neden daha yüksek olabileceği.",
+    "excerpt": "Puanınız aynı ya da daha yüksek olsa bile yakındaki bir işletmenin Yandex Haritalar ve Google Haritalar'da neden sizden üstte görünebildiğini inceleyin.",
     "category": "Haritalar",
     "tags": [
-      "Yandex Haritaları",
+      "Yandex Haritalar",
       "yerel SEO",
-      "şirket kartı"
+      "İşletme Profili"
     ],
     "publishedAt": "2026-04-20",
     "updatedAt": "2026-05-19",
@@ -691,30 +691,30 @@
     "body": [
       {
         "title": "Komşu iş neden daha yüksek?",
-        "body": "Yerel işletme sahiplerinin ortak bir sorunu var. Hemen hemen herkes en az bir kez Yandex Haritalar'ı veya Google Haritalar'ı açmış ve şunu merak etmiştir: Eğer iyi yorumlarımız varsa komşumuz neden bizden daha uzun? İlk bakışta her şey gerçekten mantıksız görünüyor. Puanınız 5.0. Rakibin 4.9'u var. Çok güzel bir iç mekanınız var. Onunki normal. Ancak bazı nedenlerden dolayı başvurular ona gidiyor."
+        "body": "Yerel işletme sahipleri aynı soruyu sık sık soruyor: Yorumlarımız iyi olduğu hâlde yakındaki rakip neden haritalarda bizden üstte? İlk bakışta tablo mantıksız görünebilir. Sizin puanınız 5,0, rakibinki 4,9; mekânınız da daha iyi görünüyor. Buna rağmen talepler rakibe gidiyor."
       },
       {
         "title": "Haritalar uzun zamandır referans kitabı olmaktan çıktı",
-        "body": "Bu noktada birçok kişi kartlarda hile olduğunu, rakiplerin yorumları abarttığını veya algoritmaların tesadüfen çalıştığını düşünmeye başlıyor. Aslında her şey genellikle çok daha sıradandır. Haritalar artık sadece şirketlerin rehberi olmaktan çıktı. Bugün, algoritmaların yalnızca bir işletmenin derecelendirmesini değil aynı zamanda şirketin genel olarak ne kadar canlı göründüğünü de değerlendirdiği, tam teşekküllü bir yerel sıralama sistemidir."
+        "body": "Bu noktada birçok işletme sahibi haritalarda bir hile olduğunu, rakiplerin yorum satın aldığını ya da algoritmaların rastgele çalıştığını düşünüyor. Çoğu zaman açıklama daha basit: Haritalar artık yalnızca bir işletme rehberi değil. Algoritmalar puanın yanında profilin ne kadar güncel ve etkin göründüğünü de değerlendiriyor."
       },
       {
-        "title": "Yüksek bir derecelendirme artık hiçbir şeyi garanti etmiyor",
-        "body": "Birkaç yıl önce her şey nispeten basitti: daha fazla yıldız - daha yüksek konum. Bugün algoritmalar farklı çalışıyor. 4,8 puana sahip bir koşullu salon, eğer kartı sistem için daha aktif görünüyorsa, 5,0 puana sahip bir salondan sürekli olarak daha yüksek olabilir.",
+        "title": "Yüksek bir puan artık hiçbir şeyi garanti etmiyor",
+        "body": "Birkaç yıl önce daha fazla yıldız çoğu zaman daha yüksek sıra demekti. Bugün algoritmalar daha fazla sinyali birlikte değerlendiriyor. Profili daha güncel ve etkin görünen 4,8 puanlı bir salon, 5,0 puanlı bir salonun üzerinde çıkabilir.",
         "bodyLinks": [
           {
-            "text": "kartı daha aktif görünüyorsa",
+            "text": "profil daha etkin görünüyorsa",
             "href": "/articles/onlain-karty-stali-kanalom-prodazh"
           }
         ]
       },
       {
-        "title": "Kartlar neyi analiz ediyor?",
+        "title": "Harita platformları neyi analiz ediyor?",
         "items": [
           "yeni yorumlar ne sıklıkla görünüyor?",
           "İşletme müşterilere duyarlı mı?",
           "fotoğraflar güncellendi mi?",
           "yeni içerik yayınlanıyor mu?",
-          "kullanıcıların kartla nasıl etkileşime girdiği",
+          "kullanıcıların profille nasıl etkileşime girdiği",
           "rota mı inşa ediyorlar?",
           "arıyorlar mı",
           "geri geliyorlar mı?"
@@ -722,11 +722,11 @@
       },
       {
         "title": "Algoritmanın ana sorusu",
-        "body": "Aslında algoritmalar basit bir soruyu yanıtlamaya çalışıyor: Şu anda hangi işletme daha kullanışlı ve canlı görünüyor? Bu nedenle birçok firma tanıtımlara başlamadan kartlarını kaybediyor."
+        "body": "Aslında algoritmalar basit bir soruyu yanıtlamaya çalışıyor: Şu anda hangi işletme daha kullanışlı ve canlı görünüyor? Bu nedenle birçok firma tanıtımlara başlamadan profillerinı kaybediyor."
       },
       {
-        "title": "Yeni incelemeler eskilerden daha önemlidir",
-        "body": "Yerel tanıtımla ilgili en az önemsenen şeylerden biri, incelemelerin güncellenme hızıdır. Çoğu zaman bir işletme, örneğin birkaç yıl içinde 300 yorum toplamış olmaktan gurur duyar. Ancak son yeni yorumlar altı ay önce olsaydı, algoritmalar için durum zaten donmuş bir kart gibi görünüyordu.",
+        "title": "Yeni yorumlar eskilerden daha önemlidir",
+        "body": "Yerel tanıtımla ilgili en az önemsenen şeylerden biri, yorumların güncellenme hızıdır. Çoğu zaman bir işletme, örneğin birkaç yıl içinde 300 yorum toplamış olmaktan gurur duyar. Ancak son yeni yorumlar altı ay önce olsaydı, algoritmalar için durum zaten donmuş bir kart gibi görünüyordu.",
         "bodyLinks": [
           {
             "text": "güncelleme hızını inceleyin",
@@ -735,39 +735,39 @@
         ]
       },
       {
-        "title": "İncelemelerin ritmi, miktar kadar önemlidir",
-        "body": "Bu özellikle Yandex Haritalar'da fark edilir. Düzenli olarak yeni incelemeler alan şirketler neredeyse her zaman daha fazla görünürlük kazanır. Genel derecelendirmeleri daha düşük olsa bile. Üstelik sadece nicelik değil, ritim de önemlidir. İncelemeler her hafta tutarlı bir şekilde görünüyorsa, algoritmalar bunu bir sinyal olarak algılar: işletme aktiftir, müşteriler gelmeye devam eder, şirket hayattadır."
+        "title": "Yorumların düzenli gelmesi, sayısı kadar önemlidir",
+        "body": "Bu özellikle Yandex Haritalar'da fark edilir. Düzenli olarak yeni yorumlar alan şirketler neredeyse her zaman daha fazla görünürlük kazanır. Genel puanları daha düşük olsa bile. Üstelik sadece nicelik değil, ritim de önemlidir. Yorumlar her hafta tutarlı bir şekilde görünüyorsa, algoritmalar bunu bir sinyal olarak algılar: işletme aktiftir, müşteriler gelmeye devam eder, şirket hayattadır."
       },
       {
         "title": "Çoğu işletme yorumlarla çalışmaz.",
-        "body": "Ve bu hemen hemen her nişte açıkça görülebilir. Kart şuna benziyor: birkaç eski fotoğraf, cevaplanmamış incelemeler, son gönderi bir yıl önceydi, bilgilerin yarısı aylardır güncellenmedi. Aynı zamanda, sahibi aynı anda reklama çok para harcayabilir ve kartların neden neredeyse hiç başvuru almadığını merak edebilir."
+        "body": "Ve bu hemen hemen her nişte açıkça görülebilir. Kart şuna benziyor: birkaç eski fotoğraf, cevaplanmamış yorumlar, son gönderi bir yıl önceydi, bilgilerin yarısı aylardır güncellenmedi. Aynı zamanda, sahibi aynı anda reklama çok para harcayabilir ve profillerin neden neredeyse hiç başvuru almadığını merak edebilir."
       },
       {
         "title": "Kart önemli bir güven kanalı haline geldi",
-        "body": "Yerel işletmeler için kartlar uzun zamandır temel güven kanallarından biri haline geldi. Özellikle güzellik salonları, diş hekimleri, fitness, kafeler ve klinikler gibi nişlerde. İnsanlar önce web sitesine bakmıyorlar. Karta bakıyorlar. Ve eğer terk edilmiş gibi görünüyorsa, ilk çağrıdan önce bile güven düşer."
+        "body": "İşletme Profilleri, özellikle güzellik salonları, diş hekimleri, spor merkezleri, kafeler ve klinikler için temel güven kanallarından biri oldu. İnsanlar çoğu zaman önce web sitesine değil, haritalardaki profile bakıyor. Profil terk edilmiş görünüyorsa daha ilk aramadan önce güven azalıyor."
       },
       {
         "title": "Yorumlara verilen yanıtlar düşündüğünüzden daha fazla etkiye sahiptir",
-        "body": "Pek çok kişi yorumlara yanıt vermeyi nezaket unsuru olarak algılıyor. Bu algoritmalar için çok daha önemlidir. Bir şirket hızlı ve düzenli bir şekilde yanıt verdiğinde kartlar müşterilerle aktif iletişim kurar. Üstelik olumsuzluklara verilen tepkiler özellikle önemlidir."
+        "body": "Birçok kişi yorumlara yanıt vermeyi yalnızca nezaket olarak görüyor. Oysa bu, platformlar için işletmenin müşterileriyle iletişim kurduğunu gösteren bir etkinlik sinyalidir. Özellikle olumsuz yorumlara verilen sakin ve hızlı yanıtlar önemlidir."
       },
       {
-        "title": "Reaksiyon hızı canlı kartları diğerlerinden ayırır",
-        "body": "Bir işletme olumsuz yorumları haftalarca görmezden gelirse, bu yalnızca insanlara değil platformun kendisine de kötü bir sinyal gönderir. İdeal olarak yorumlara 24 saat içinde yanıt vermelisiniz. Maksimum - iki ila üç gün. Canlı kartları genellikle yavaş yavaş görünürlüğünü kaybeden kartlardan ayıran şey, tepki hızıdır."
+        "title": "Hızlı yanıt, güncel profilleri diğerlerinden ayırır",
+        "body": "Bir işletme olumsuz yorumları haftalarca yanıtsız bırakırsa hem müşterilere hem de platforma kötü bir sinyal verir. İdeal olan yorumlara 24 saat içinde, en geç iki ya da üç gün içinde yanıt vermektir. Güncel ve yönetilen profilleri diğerlerinden ayıran unsurlardan biri de bu hızdır."
       },
       {
-        "title": "Kartlar aktiviteyi sever",
-        "body": "Komşu bir işletmenin benzer derecelendirmeye sahip olsa bile daha fazla başvuru alabilmesinin bir nedeni de budur. Çünkü kartın bakımını sistemli bir şekilde yapıyor. Yandex Haritalar, Google Haritalar ve 2GIS uzun süredir sosyal ağlara çok benzeyen mekanizmalara sahip: yayınlar, güncellemeler, fotoğraflar, yanıtlar, etkinlikler, promosyonlar."
+        "title": "Harita platformları güncel profilleri öne çıkarır",
+        "body": "Yakındaki bir işletmenin puanı benzer olsa bile daha fazla talep almasının nedenlerinden biri budur: Profilini düzenli olarak güncelliyordur. Yandex Haritalar, Google Haritalar ve 2GIS'te yayınlar, güncellemeler, fotoğraflar, yanıtlar, etkinlikler ve kampanyalar gibi süreklilik gerektiren alanlar bulunur."
       },
       {
         "title": "Statik dizin artık çalışmıyor",
-        "body": "Çoğu şirket kartları hâlâ statik bir katalog olarak kullanıyor: Profilinizi bir kez doldurun ve unutun. Her ne kadar algoritmalar düzenli olarak güncelleme yapanları açıkça teşvik etse de. Yerel bir işletme için haftada en az birkaç kez etkinlik normal kabul edilir: yeni fotoğraflar, yayınlar, müşterilere verilen yanıtlar, hizmet güncellemeleri."
+        "body": "Çoğu işletme profilini hâlâ statik bir kayıt gibi kullanıyor: Bir kez doldurup unutuyor. Oysa platformlar düzenli güncellenen profilleri öne çıkarıyor. Yeni fotoğraflar, yayınlar, müşteri yanıtları ve hizmet güncellemeleri profilin güncel kaldığını gösterir."
       },
       {
-        "title": "Platformlar canlı şirketleri göstermek istiyor",
-        "body": "Bu önemli çünkü SEO onu çok seviyor. Ancak platformlar kullanıcılara alakalı ve canlı şirketleri göstermek istiyor çünkü."
+        "title": "Platformlar güncel işletmeleri göstermek istiyor",
+        "body": "Platformların amacı kullanıcıya güncel, ilgili ve güvenilir işletmeleri göstermek. Bu nedenle profilin düzenli yönetilmesi yalnızca SEO için değil, müşterinin doğru bilgiye ulaşması için de önemlidir."
       },
       {
-        "title": "Günümüzde fotoğraflar neredeyse incelemeler gibi çalışıyor.",
+        "title": "Günümüzde fotoğraflar neredeyse yorumlar gibi çalışıyor.",
         "body": "Bu özellikle güzellik, tıp, fitness ve restoran işlerinde fark edilir. On eski fotoğrafın yer aldığı bir kart, neredeyse her zaman, yeni içeriğin düzenli olarak ortaya çıktığı bir kart karşısında kaybeder: iç mekan, ekip, iş, süreç, atmosfer.",
         "bodyLinks": [
           {
@@ -778,27 +778,27 @@
       },
       {
         "title": "Kullanıcı saniyeler içinde karar verir",
-        "body": "Kullanıcı çok hızlı karar verir. Bazen bir kişinin bir karta birkaç saniye bakması, aramaya basması veya bir rakibe gitmesi için yeterlidir. Algoritmalar bunu davranışsal sinyallerle görüyor: kartta ne kadar zaman harcıyorlar, kaç kişi rota oluşturuyor, kaç kişi çağrıya basıyor."
+        "body": "Kullanıcı çok hızlı karar verir. Profilde geçirdiği birkaç saniye içinde arama yapabilir ya da rakibe geçebilir. Platformlar profilde geçirilen süreyi, yol tarifi isteklerini ve arama düğmesine yapılan tıklamaları davranış sinyali olarak görür."
       },
       {
-        "title": "Kartlar bir güven sistemi haline geliyor",
-        "body": "Ve son yıllardaki ana değişim de bu gibi görünüyor. Önceden yerel tanıtım SEO'ya benziyordu: anahtar kelimeler, kategoriler, teknik optimizasyon. Günümüzde kartlar giderek insanların davranışlarını değerlendiriyor."
+        "title": "İşletme Profilleri bir güven sistemine dönüşüyor",
+        "body": "Son yıllardaki temel değişim bu: Yerel görünürlük artık yalnızca anahtar kelimeler, kategoriler ve teknik optimizasyondan ibaret değil. Harita platformları kullanıcıların profille nasıl etkileşim kurduğunu da değerlendiriyor."
       },
       {
-        "title": "Aynı derecelendirmeye sahip iki işletme neden farklı trafik alıyor?",
-        "body": "Bir kart güven oluşturursa, dikkat çekerse, etkileşim alırsa ve düzenli olarak güncellenirse yavaş yavaş kendi kendine büyümeye başlayacaktır. Bu nedenle aynı derecelendirmeye sahip iki işletme tamamen farklı miktarlarda trafik alabilir. Biri her gün ilgilenilen yaşayan bir şirkete benziyor. Diğeri ise kayıt olduktan sonra unutulan bir profil gibidir."
+        "title": "Aynı puana sahip iki işletme neden farklı trafik alıyor?",
+        "body": "Güven veren, dikkat çeken, etkileşim alan ve düzenli güncellenen bir profil zamanla daha fazla görünürlük kazanabilir. Bu yüzden aynı puana sahip iki işletme farklı miktarda trafik alır: Biri güncel ve yönetiliyor görünür, diğeri ise oluşturulduktan sonra unutulmuş gibidir."
       },
       {
         "title": "Bu neden şimdi özellikle önemli?",
-        "body": "Yerel işletmeler için kartlar, Instagram'ın veya bir web sitesinin eskiden olduğu şey haline geliyor. Burası bir kişinin şirketi tanıdığı ilk yerdir. Ve çoğu nişte zafer artık giderek daha fazla reklam bütçesinin büyüklüğüne değil, sistematik çalışmanın kalitesine bağlı."
+        "body": "İşletme Profili, birçok yerel işletme için müşterinin markayla tanıştığı ilk yer oldu. Bu nedenle sonuç yalnızca reklam bütçesine değil, profilin ne kadar düzenli ve özenli yönetildiğine de bağlı."
       },
       {
-        "title": "Kartlarda zaferi ne belirler?",
+        "title": "Haritalarda zaferi ne belirler?",
         "items": [
-          "incelemelerle çalışmak",
+          "yorumlarle çalışmak",
           "içerik",
           "tepki hızı",
-          "kartın alaka düzeyi",
+          "profil bilgilerinin güncelliği",
           "kullanıcı davranışı"
         ]
       },
@@ -809,53 +809,53 @@
     ],
     "related": [
       {
-        "title": "Şirket kartı denetimi için kontrol listesi",
+        "title": "İşletme Profili denetimi için kontrol listesi",
         "href": "/documents/checklist-audita-kartochki-kompanii",
         "label": "Belge"
       },
       {
-        "title": "Salon kartlardan nasıl yeni kayıtlar aldı?",
+        "title": "Salon haritalardan nasıl yeni randevular aldı?",
         "href": "/cases/kak-salon-poluchil-novye-zapisi-iz-kart",
         "label": "Vaka"
       }
     ]
   },
   {
-    "title": "Satacak şekilde bir şirket kartı nasıl tasarlanır?",
+    "title": "Müşterinin seçim yapmasını kolaylaştıran bir İşletme Profili nasıl hazırlanır?",
     "slug": "kak-oformit-kartochku-kompanii",
-    "excerpt": "Haritalardaki şirket kartı neden platformun içinde mini bir site haline geldi ve müşterinin sizi daha hızlı seçmesi için nelerin gösterilmesi gerekiyor?",
+    "excerpt": "Hizmetleri, fiyatları, fotoğrafları ve yorumları müşterinin karar vermesini kolaylaştıracak biçimde düzenleyin.",
     "category": "Müşteriler",
     "tags": [
-      "şirket kartı",
+      "İşletme Profili",
       "hizmetler",
       "fiyatlar"
     ],
     "publishedAt": "2026-04-18",
     "updatedAt": "2026-05-19",
-    "seoTitle": "Şirket kartına nasıl başvurulur - LocalOS",
-    "seoDescription": "Yandex Haritalar, Google Haritalar ve 2GIS'e şirket kartı nasıl kaydedilir: kategoriler, hizmetler, fiyatlar, fotoğraflar, incelemeler, etkinlik ve hızlı işlemler.",
+    "seoTitle": "Müşterinin seçim yapmasını kolaylaştıran İşletme Profili — LocalOS",
+    "seoDescription": "Yandex Haritalar, Google Haritalar ve 2GIS'te kategorileri, hizmetleri, fiyatları, fotoğrafları ve yorumları müşterinin kararını kolaylaştıracak biçimde düzenleyin.",
     "draft": false,
     "body": [
       {
-        "title": "Kart seçimin ilk aşaması oldu",
-        "body": "Bugün yerel iş dünyasının çok tuhaf bir paradoksu var. Şirketler reklamlara yüzbinlerce dolar harcayabilir, sosyal ağları yönetebilir, bir web sitesine yatırım yapabilir ve aynı zamanda doğrudan Yandex Haritalar, Google Haritalar veya 2GIS içinde müşteri kaybedebilir. Çünkü çoğu kullanıcı için şirket kartı uzun süredir seçimin ilk aşaması haline geldi.",
+        "title": "İşletme Profili seçimin ilk aşaması oldu",
+        "body": "Bugün yerel iş dünyasının çok tuhaf bir paradoksu var. Şirketler reklamlara yüzbinlerce dolar harcayabilir, sosyal ağları yönetebilir, bir web sitesine yatırım yapabilir ve aynı zamanda doğrudan Yandex Haritalar, Google Haritalar veya 2GIS içinde müşteri kaybedebilir. Çünkü çoğu kullanıcı için İşletme Profili uzun süredir seçimin ilk aşaması haline geldi.",
         "bodyLinks": [
           {
-            "text": "Müşterilerinizi doğrudan Yandex Haritalar, Google Haritalar veya 2GIS'te kaybedin",
+            "text": "Müşteriler neden harita platformlarında kaybediliyor?",
             "href": "/articles/onlain-karty-stali-kanalom-prodazh"
           }
         ]
       },
       {
         "title": "Yerel seçim hızla gerçekleşir",
-        "body": "Özellikle yerel işlerde. Bir kişi evinin yakınında bir salon, diş hekimi, kahve dükkanı veya fitness merkezi ararken neredeyse hiçbir zaman web sitesiyle başlamaz. Kartları açıyor. Ve sonra her şey çok hızlı oluyor."
+        "body": "Bu özellikle yerel işletmelerde belirgindir. Bir kişi yakındaki bir salonu, diş hekimini, kafeyi veya spor merkezini ararken çoğu zaman web sitesinden başlamaz; doğrudan haritalardaki profilleri açar ve hızlıca karşılaştırır."
       },
       {
         "title": "Bir insan bir dakika içinde neye karar verir?",
-        "body": "Kullanıcı arka arkaya birkaç kart açar ve kelimenin tam anlamıyla bir dakika içinde kimi arayacağına veya nereye kaydolacağına karar verir. Üstelik şu anda sadece derecelendirmeyi değerlendirmiyor."
+        "body": "Kullanıcı art arda birkaç İşletme Profili açar ve bir dakika içinde kimi arayacağına ya da nereden randevu alacağına karar verir. Üstelik yalnızca puana bakmaz."
       },
       {
-        "title": "Kartın üç ana sorusu",
+        "title": "İşletme Profilinin yanıtlaması gereken üç soru",
         "items": [
           "buradan ne satın alabilir veya sipariş edebilirsiniz?",
           "bu işe güvenilebilir mi?",
@@ -863,16 +863,16 @@
         ]
       },
       {
-        "title": "Birçok kart bu sorulara cevap vermiyor",
+        "title": "Birçok profil bu sorulara cevap vermiyor",
         "body": "Sorun şu ki, çok sayıda kart bu sorulara hiç cevap vermiyor. Yerel bir işletme çoğu zaman haritalardaki eski bir rehbere benzer: adres, telefon numarası, birkaç rastgele fotoğraf ve \"çok çeşitli kaliteli hizmetler sunuyoruz\" ruhuna uygun kısa bir açıklama. Kullanıcı için neredeyse boştur."
       },
       {
-        "title": "Kart, platformun içindeki mini bir sitedir",
-        "body": "Haritalar artık yalnızca şirketlerin kataloğu olmaktan çıktı. Bugün kart, platformun içindeki mini bir sitedir. Ve orada rekabet artık sadece reyting için değil, aynı zamanda ilgi için de var."
+        "title": "İşletme Profili, haritalardaki vitrininizdir",
+        "body": "Haritalar artık yalnızca işletme rehberi değil. İşletme Profili, müşterinin hizmetleri, fiyatları, fotoğrafları ve yorumları tek yerde karşılaştırdığı bir vitrin. Rekabet yalnızca puan için değil, müşterinin dikkatini ve güvenini kazanmak için de yaşanıyor."
       },
       {
         "title": "Resmiyet bir satış aracına yeniliyor",
-        "body": "Bu özellikle güzellik ve yerel hizmetlerde belirgindir. İki salon aynı binada olabilir, benzer derecelendirmelere ve aynı fiyatlara sahip olabilir, ancak biri sürekli olarak daha fazla çağrı ve randevu alacaktır. Genellikle fark oldukça basittir: Bir işletme kartı bir satış aracı olarak, ikincisi ise bir formalite olarak verir."
+        "body": "Bu durum özellikle güzellik ve yerel hizmetlerde belirgindir. Aynı binadaki iki salon benzer puanlara ve fiyatlara sahip olsa da biri sürekli daha fazla arama ve randevu alabilir. Fark çoğu zaman basittir: Biri İşletme Profilini müşteri kazanma aracı olarak kullanır, diğeri yalnızca doldurulması gereken bir kayıt olarak görür."
       },
       {
         "title": "Kategorilerle başlayın",
@@ -880,7 +880,7 @@
       },
       {
         "title": "Hizmetler özel olarak tasarlanmalıdır",
-        "body": "Hizmetlerde de durum aynı. Kullanıcı neredeyse hiçbir zaman soyut iyi bir iş aramaz. Belirli bir görev arıyor: yakınlarda manikür, saç boyama, pediatrik diş hekimliği, masaj, kahvaltı kahve dükkanı. Ve kart uygun şekilde tasarlanmış hizmetler içermiyorsa, işletme incelemeleri görmeden bile kaybetmeye başlar.",
+        "body": "Hizmetlerde de durum aynı. Kullanıcı neredeyse hiçbir zaman soyut iyi bir iş aramaz. Belirli bir görev arıyor: yakınlarda manikür, saç boyama, pediatrik diş hekimliği, masaj, kahvaltı kahve dükkanı. Ve kart uygun şekilde tasarlanmış hizmetler içermiyorsa, işletme yorumları görmeden bile kaybetmeye başlar.",
         "bodyLinks": [
           {
             "text": "yorumlara bakmadan bile işletme kaybetmeye başlıyor",
@@ -898,7 +898,7 @@
       },
       {
         "title": "Fotoğrafların etkisi daha da güçlü",
-        "body": "Günümüzde fotoğrafların etkisi daha da güçlü. Üstelik çoğu kartın sorunu fotoğrafların kalitesi değil, rastgele olmalarıdır. Çoğu zaman profil birbirinden kopuk fotoğraflardan oluşan bir koleksiyona benziyor: eski bir resepsiyon masası, boş bir ofis, beş yıl öncesine ait bir logo ve birkaç bulanık fotoğraf."
+        "body": "Fotoğrafların etkisi giderek artıyor. Birçok profilde sorun yalnızca görüntü kalitesi değil, fotoğrafların rastgele seçilmesi: eski bir resepsiyon, boş bir oda, yıllar önce kullanılan bir logo ve birkaç bulanık kare. Böyle bir koleksiyon müşteriye işletme hakkında net bir fikir vermez."
       },
       {
         "title": "Bir kullanıcı fotoğraflarda ne arar?",
@@ -911,14 +911,14 @@
       },
       {
         "title": "Süreci ve sonucu gösterin",
-        "body": "Özellikle iyi çalışan kartlar yalnızca iç mekanı değil aynı zamanda sürecin kendisini de gösterir: ekip, hizmet ayrıntıları, gerçek çalışma, atmosfer, sonuç. Esasında kullanıcı, aramadan önce bile bu işi zihinsel olarak kendisi için denemek ister."
+        "body": "İyi çalışan profiller yalnızca mekânı değil, hizmetin nasıl verildiğini de gösterir: ekip, süreç, ayrıntılar, atmosfer ve sonuç. Müşteri aramadan önce nasıl bir deneyim yaşayacağını zihninde canlandırmak ister."
       },
       {
-        "title": "İyi kartlar canlı görünüyor",
-        "body": "İyi kartların neredeyse her zaman canlı görünmesinin nedeni budur. Bu, birçok insanın hafife aldığı başka bir şeydir."
+        "title": "İyi profiller güncel görünür",
+        "body": "İyi profillerin neredeyse her zaman canlı görünmesinin nedeni budur. Bu, birçok insanın hafife aldığı başka bir şeydir."
       },
       {
-        "title": "Kartlar aktiviteyi sever",
+        "title": "Güncel profiller daha güvenilir görünür",
         "items": [
           "yeni fotoğraflar",
           "güncellemeler",
@@ -928,12 +928,12 @@
         ]
       },
       {
-        "title": "Terk edilmiş kart güvenilirliğini kaybeder",
-        "body": "Bir kartta düzenli olarak yeni aktivite göründüğünde, algoritmalar işi canlı olarak algılamaya başlar. Ve çoğu şirket, kartı kayıt gününde bir kez günceller. Bundan sonra profil yıllarca hareketsiz kalır. Ve yavaş yavaş sadece insanlar için değil platformlar için de terkedilmiş gibi görünmeye başlıyor."
+        "title": "Terk edilmiş profil güven kaybeder",
+        "body": "Profil düzenli olarak güncellendiğinde platform işletmenin faal olduğunu görür. Birçok şirket ise profili yalnızca oluşturduğu gün doldurur ve yıllarca dokunmaz. Zamanla profil hem müşterilere hem de platformlara terk edilmiş görünmeye başlar."
       },
       {
         "title": "Yorumlara yanıt vermek sıralamanın ve güvenin bir parçasıdır",
-        "body": "Bu özellikle incelemelere verilen yanıtlarda fark edilir. Sahipler için bu genellikle küçük bir görev gibi görünür. Algoritmalar açısından bu, bir işletmenin müşterilerle ne kadar etkileşime girdiğinin bir göstergesidir.",
+        "body": "Bu özellikle yorumlara verilen yanıtlarda fark edilir. Sahipler için bu genellikle küçük bir görev gibi görünür. Algoritmalar açısından bu, bir işletmenin müşterilerle ne kadar etkileşime girdiğinin bir göstergesidir.",
         "bodyLinks": [
           {
             "text": "yorumlara verilen yanıtlar",
@@ -942,17 +942,17 @@
         ]
       },
       {
-        "title": "Reaksiyon hızı önemlidir",
-        "body": "Bir şirket incelemelere, özellikle de olumsuz olanlara hızla yanıt verdiğinde, kart proaktif ve yönetilebilir görünmeye başlar. İncelemeler aylarca cevapsız kalınca tam tersi bir his ortaya çıkıyor. Önemli olan yalnızca bir cevabın varlığı değil, aynı zamanda reaksiyonun hızıdır. Yerel işletmelerde 24 saat içinde yanıt verilmesi ideal kabul edilir. Maksimum - birkaç gün."
+        "title": "Yanıt hızı önemlidir",
+        "body": "Bir işletme yorumlara, özellikle de olumsuz olanlara hızlı yanıt verdiğinde profil güncel ve yönetiliyor görünür. Yorumlar aylarca yanıtsız kaldığında tam tersi bir izlenim oluşur. Yalnızca yanıt vermek değil, ne kadar hızlı yanıt verildiği de önemlidir. Yerel işletmeler için ideal süre 24 saat, kabul edilebilir üst sınır ise birkaç gündür."
       },
       {
-        "title": "Kartlar bir güven sistemi haline geldi",
-        "body": "Çünkü kartlar uzun zamandır bir güven sistemi haline geldi. Ve son yıllardaki ana değişim de bu gibi görünüyor. Önceden, yerel tanıtım daha çok teknik SEO'ya benziyordu: kategoriler, anahtar kelimeler, optimizasyon. Günümüzde platformlar kullanıcı davranışlarını giderek daha fazla ölçüyor."
+        "title": "İşletme Profilleri bir güven sistemine dönüştü",
+        "body": "İşletme Profilleri artık bir güven sistemi. Yerel tanıtım eskiden daha çok kategori, anahtar kelime ve teknik optimizasyonla açıklanırken bugün platformlar kullanıcı davranışlarını da ölçüyor."
       },
       {
         "title": "Platformlar hangi sinyalleri görüyor?",
         "items": [
-          "kartı açıyorlar mı?",
+          "profili açıyorlar mı?",
           "fotoğraflara bakıyorlar mı?",
           "yorumları okuyorlar mı?",
           "“ara”ya basıyorlar mı",
@@ -961,11 +961,11 @@
       },
       {
         "title": "Güçlü bir kart satış sisteminin bir parçasıdır",
-        "body": "İnsanlar kartla aktif olarak etkileşime girerse algoritmalar kartı daha sık göstermeye başlar. Bu nedenle günümüzde güçlü bir şirket kartı artık bir profil tasarımı değildir. Bu satış sisteminin bir parçasıdır."
+        "body": "İnsanlar profille etkin biçimde etkileşime girdiğinde platform onu daha sık gösterebilir. Bu nedenle güçlü bir İşletme Profili yalnızca tasarım işi değil, satış sisteminin bir parçasıdır."
       },
       {
         "title": "Sonuç",
-        "body": "Birçok yerel işletme, müşteriyle ilk temasa geçmeden önce bile rekabeti kaybediyor; çünkü kartları, kişinin karar vermesine yardımcı olmuyor."
+        "body": "Birçok yerel işletme daha müşteriyle ilk temas kurulmadan rekabeti kaybediyor; çünkü profili, müşterinin karar vermesine yardımcı olmuyor."
       }
     ],
     "related": [
@@ -975,16 +975,16 @@
         "label": "Tablo"
       },
       {
-        "title": "Bir masaj stüdyosunda kurşun büyümesi",
+        "title": "Bir masaj stüdyosunda talep artışı",
         "href": "/cases/rost-lidov-v-massazhnoi-studii",
         "label": "Vaka"
       }
     ]
   },
   {
-    "title": "İncelemeler müşteri akışını nasıl etkiler?",
+    "title": "Yorumlar müşteri akışını nasıl etkiler?",
     "slug": "kak-otzyvy-vliyayut-na-potok-klientov",
-    "excerpt": "İncelemeler neden yeni bir güven biçimi haline geldi ve başvuruları, kart konumlarını, dönüşümü ve tekrar ziyaretleri doğrudan etkiliyor?",
+    "excerpt": "Yorumların güveni, haritalardaki görünürlüğü, müşteri taleplerini ve tekrar ziyaretleri nasıl etkilediğini inceleyin.",
     "category": "Yorumlar",
     "tags": [
       "yorumlar",
@@ -993,24 +993,24 @@
     ],
     "publishedAt": "2026-04-15",
     "updatedAt": "2026-05-19",
-    "seoTitle": "İncelemeler müşteri akışını nasıl etkiler - LocalOS",
-    "seoDescription": "İncelemeler yerel ticari müşterilerin akışını nasıl etkiler: güven, tazelik, olumsuzluklara verilen yanıtlar, kart konumları, dönüşüm ve tekrar ziyaretler.",
+    "seoTitle": "Yorumlar müşteri akışını nasıl etkiler - LocalOS",
+    "seoDescription": "Yorumlar yerel ticari müşterilerin akışını nasıl etkiler: güven, tazelik, olumsuzluklara verilen yanıtlar, kart konumları, dönüşüm ve tekrar ziyaretler.",
     "draft": false,
     "body": [
       {
         "title": "Yorumlar artık sadece yıldızlardan ibaret değil",
-        "body": "Yerel işletmelerin birçok kişinin çok geç fark ettiği bir özelliği vardır. İncelemeler artık yalnızca şirket adının yanındaki yıldız işaretleri olmaktan çıktı. Bugün müşteri akışını doğrudan etkiliyorlar."
+        "body": "Yerel işletmelerin birçok kişinin çok geç fark ettiği bir özelliği vardır. Yorumlar artık yalnızca şirket adının yanındaki yıldız işaretleri olmaktan çıktı. Bugün müşteri akışını doğrudan etkiliyorlar."
       },
       {
         "title": "İnsanların davranışları değişti",
-        "body": "Üstelik mesele sadece Yandex Haritalar, Google Haritalar veya 2GIS'in algoritmaları değil. Elbette platformlar iyi derecelendirme ve etkinliğe sahip kartları sever. Ancak asıl değişiklik insanların davranışlarında meydana geldi. Müşteriler kime güveneceklerini seçerken çok daha dikkatli hale geldi."
+        "body": "Konu yalnızca Yandex Haritalar, Google Haritalar veya 2GIS algoritmaları değil. Asıl değişiklik müşteri davranışında: İnsanlar hangi işletmeye güveneceklerini seçerken yorumları ve profilin güncelliğini daha dikkatli inceliyor."
       },
       {
         "title": "Yorumlar yeni bir güven biçimi haline geldi",
-        "body": "Özellikle dışarıdan neredeyse tüm şirketlerin aynı göründüğü yerel işlerde. Bir salon diğerinden çok az farklıdır. Bir klinik diğerinden. Hepsinin güzel fotoğrafları, benzer vaatleri ve bireysel yaklaşımları var. Bu nedenle incelemeler yeni bir güven biçimi haline geldi."
+        "body": "Özellikle dışarıdan neredeyse tüm şirketlerin aynı göründüğü yerel işlerde. Bir salon diğerinden çok az farklıdır. Bir klinik diğerinden. Hepsinin güzel fotoğrafları, benzer vaatleri ve bireysel yaklaşımları var. Bu nedenle yorumlar yeni bir güven biçimi haline geldi."
       },
       {
-        "title": "Bir kişi incelemelerde ne arar?",
+        "title": "Bir kişi yorumlarda ne arar?",
         "items": [
           "burada insanlara nasıl davranılıyor",
           "her şey ne kadar yeterli?",
@@ -1019,12 +1019,12 @@
         ]
       },
       {
-        "title": "İnsanlar derecelendirmelerden fazlasını okuyor",
-        "body": "Bir kişi bir şirket kartını açtığında yalnızca derecelendirmenin iyi olup olmadığını anlamaya çalışmaz. İnsanların yorumları okuma biçiminden bu çok açık bir şekilde anlaşılıyor. Nadiren yalnızca yıldız sayısına bakarlar. Genellikle bir kişi ayrıntıları aramaya başlar: çalışanların nasıl iletişim kurduğu, kayıtta herhangi bir sorun var mı, hizmetlerin zorunlu olup olmadığı, içerisi temiz mi, müşterilere ne kadar özenliler."
+        "title": "İnsanlar puandan fazlasına bakıyor",
+        "body": "Bir kişi İşletme Profilini açtığında yalnızca puanın iyi olup olmadığına bakmaz. Yorumlarda çalışanların nasıl iletişim kurduğunu, randevu sürecinde sorun yaşanıp yaşanmadığını, ek hizmetlerin dayatılıp dayatılmadığını, mekânın temizliğini ve müşteriye gösterilen ilgiyi anlamaya çalışır."
       },
       {
         "title": "Kullanıcı işi kendisi için dener",
-        "body": "Aslında kullanıcı daha ilk temastan önce kendisini bu işin içinde hayal etmeye çalışıyor. Bu nedenle ayrıntılı bir canlı inceleme neredeyse her zaman herhangi bir reklamdan daha güçlü çalışır."
+        "body": "Aslında kullanıcı daha ilk temastan önce kendisini bu işin içinde hayal etmeye çalışıyor. Bu nedenle ayrıntılı bir canlı yorum neredeyse her zaman herhangi bir reklamdan daha güçlü çalışır."
       },
       {
         "title": "Spesifiklik güvene ilham verir",
@@ -1036,10 +1036,10 @@
       },
       {
         "title": "Yerel aramada karşılaştırılan duygular",
-        "body": "Bu özellikle yerel aramada fark edilir. Çoğu zaman, kullanıcı aynı anda birkaç kartı arka arkaya açar ve şirketleri değil, onlardan gelen hisleri karşılaştırır. Hatta bazılarının puanı biraz daha düşük olabilir ancak incelemeler canlı, taze ve ayrıntılı görünüyor. Başka bir şirket mükemmel bir 5.0 puanına sahip, ancak son yorumlar altı ay önce yapılmış ve işletmenin yanıtları kuru ve kalıplaşmış görünüyor.",
+        "body": "Bu durum yerel aramada açıkça görülür. Kullanıcı art arda birkaç profil açar ve yalnızca işletmeleri değil, bıraktıkları izlenimi de karşılaştırır. Bir profilin puanı biraz daha düşük olsa da yorumları güncel ve ayrıntılı olabilir. Diğerinin puanı 5,0'dır ama son yorum altı ay önce yazılmıştır ve işletmenin yanıtları kalıp gibi görünür.",
         "bodyLinks": [
           {
-            "text": "kullanıcı aynı anda birkaç kartı arka arkaya açar",
+            "text": "kullanıcı art arda birkaç İşletme Profili açar",
             "href": "/articles/pochemu-konkurent-vyshe-na-kartah"
           }
         ]
@@ -1049,11 +1049,11 @@
         "body": "Ve bazı nedenlerden dolayı ilk kart daha fazla güven veriyor. Çünkü canlı görünüyor."
       },
       {
-        "title": "İncelemelerin güncelliği önemli bir faktör haline geldi",
-        "body": "İncelemelerin güncelliği genellikle çok önemli bir faktör haline geldi. Ve sadece kullanıcılar için değil, platformların kendileri için de. Kartlar uzun zamandır sadece derecelendirmelere değil aynı zamanda bir işletmenin faaliyetlerine de bakıyor.",
+        "title": "Yorumların güncelliği önemli bir faktör haline geldi",
+        "body": "Yorumların ne kadar güncel olduğu hem kullanıcılar hem de platformlar için önemli. Harita hizmetleri artık yalnızca puana değil, işletmenin ne kadar etkin olduğuna da bakıyor.",
         "bodyLinks": [
           {
-            "text": "Kartlara uzun süredir yalnızca derecelendirmelerden daha fazlası bakılıyor",
+            "text": "Platformlar uzun süredir puandan daha fazlasına bakıyor",
             "href": "/articles/onlain-karty-stali-kanalom-prodazh"
           }
         ]
@@ -1068,7 +1068,7 @@
       },
       {
         "title": "Neden 4.8 5.0'dan yüksek olabilir?",
-        "body": "İncelemeler düzenli olarak görünüyorsa algoritmalar bunu bir etkinlik sinyali olarak algılar. Bu nedenle, bazen 4,8 puana sahip bir şirketin, 5,0 puana sahip bir şirketten daha yüksek olduğu ortaya çıkar - bunun nedeni, sürekli yeni inceleme akışına ve aktif bir karta sahip olmasıdır."
+        "body": "Yorumlar düzenli geliyorsa platform bunu etkinlik sinyali olarak algılar. Bu nedenle 4,8 puanlı bir işletme, sürekli yeni yorum aldığı ve profilini güncel tuttuğu için 5,0 puanlı bir işletmenin üzerinde görünebilir."
       },
       {
         "title": "İş yanıtları da okunur",
@@ -1080,15 +1080,15 @@
       },
       {
         "title": "Olumsuzluk güveni artırabilir",
-        "body": "Paradoksal olarak, iyi işlenmiş bir olumsuz inceleme bazen güveni art arda bir düzine mükemmel derecelendirmeden daha fazla artırır. Kullanıcı şunu görür: sorunlar olur, ancak şirket saklanmaz ve bunlara normal şekilde nasıl yanıt verileceğini bilir."
+        "body": "İyi ele alınmış olumsuz bir yorum bazen art arda gelen kusursuz puanlardan daha fazla güven yaratır. Müşteri sorun çıkabileceğini, ancak işletmenin saklanmadığını ve doğru biçimde yanıt verdiğini görür."
       },
       {
-        "title": "Steril kartlar şüphe uyandırıyor",
-        "body": "Ancak bugün tam tersine tamamen steril kartlar şüphe uyandırmaya başlıyor."
+        "title": "Kusursuz görünen profiller şüphe uyandırabilir",
+        "body": "Hiç olumsuz yorum bulunmayan, bütün yorumları aynı tonda yazılmış profiller bugün müşterilerde şüphe uyandırabiliyor."
       },
       {
         "title": "Yorumlar yeni müşterilerden daha fazlasını etkiler",
-        "body": "Pek çok insanın hafife aldığı bir şey daha var: incelemeler yalnızca yeni müşteriler çekmek için işe yaramıyor. Ayrıca getirileri de etkilerler."
+        "body": "Pek çok insanın hafife aldığı bir şey daha var: yorumlar yalnızca yeni müşteriler çekmek için işe yaramıyor. Ayrıca getirileri de etkilerler."
       },
       {
         "title": "Cevap müşteriyi elde tutmaya yardımcı olur",
@@ -1099,8 +1099,8 @@
         "body": "Özellikle güzellik, tıp, fitness ve hizmet alanlarında, insanların yalnızca sonuçlar için değil, aynı zamanda hatırlandıkları ve takdir edildikleri duygusu için de geri döndükleri alanlar."
       },
       {
-        "title": "İncelemeler büyüme sisteminin bir parçası haline geldi",
-        "body": "Bu nedenle güçlü yerel şirketler, incelemeleri ikincil öneme sahip bir şey olarak algılamayı çoktan bıraktılar. Bugün zaten iş büyüme sisteminin bir parçası.",
+        "title": "Yorumlar büyüme sisteminin bir parçası haline geldi",
+        "body": "Bu nedenle güçlü yerel şirketler, yorumları ikincil öneme sahip bir şey olarak algılamayı çoktan bıraktılar. Bugün zaten iş büyüme sisteminin bir parçası.",
         "bodyLinks": [
           {
             "text": "iş büyüme sisteminin bir parçası",
@@ -1109,7 +1109,7 @@
         ]
       },
       {
-        "title": "İncelemeler aynı zamanda neyi etkiliyor?",
+        "title": "Yorumlar aynı zamanda neyi etkiliyor?",
         "items": [
           "güven üzerine",
           "müşteri akışı hakkında",
@@ -1131,26 +1131,26 @@
         "label": "Belge"
       },
       {
-        "title": "Şirket kartına nasıl başvurulur",
+        "title": "İşletme Profili nasıl hazırlanır?",
         "href": "/articles/kak-oformit-kartochku-kompanii",
         "label": "Makale"
       }
     ]
   },
   {
-    "title": "Bir kafe kartlardan nasıl daha fazla misafir çekebilir?",
+    "title": "Bir kafe haritalardan nasıl daha fazla misafir çekebilir?",
     "slug": "kak-kafe-poluchat-gostei-iz-kart",
-    "excerpt": "Bir kafe kartında neyin gösterilmesi önemlidir: menü, yemeklerin fotoğrafları, hızlı seçim senaryoları ve son konuk değerlendirmeleri.",
+    "excerpt": "Bir kafenin İşletme Profilinde menüyü, yemek fotoğraflarını, ziyaret nedenlerini ve güncel müşteri yorumlarını nasıl göstereceğinizi öğrenin.",
     "category": "Kafe",
     "tags": [
       "kafe",
-      "kartlar",
+      "haritalar",
       "menü"
     ],
     "publishedAt": "2026-04-13",
     "updatedAt": "2026-05-19",
-    "seoTitle": "Bir kafe kartlardan nasıl daha fazla misafir alabilir - LocalOS",
-    "seoDescription": "Bir kafe kartlardan nasıl daha fazla misafir çekebilir: ilk izlenim, vitrin, güven kaynağı ve yerel bir işletmenin ana girişi olarak kafe kartı.",
+    "seoTitle": "Bir kafe haritalardan nasıl daha fazla misafir alabilir - LocalOS",
+    "seoDescription": "Bir kafe haritalardan nasıl daha fazla müşteri kazanır? İşletme Profilini ilk izlenim, dijital vitrin ve güven kaynağı olarak düzenleme rehberi.",
     "draft": false,
     "body": [
       {
@@ -1162,11 +1162,11 @@
         "body": "Üstelik karar şaşırtıcı derecede hızlı veriliyor. Bir kişi arka arkaya birkaç işletme açar ve kelimenin tam anlamıyla yarım dakika içinde kahvaltı için nereye gideceğini, nerede kahve içeceğini veya akşam nerede buluşacağını anlar."
       },
       {
-        "title": "Kart ilk izlenim oldu",
-        "body": "Bu nedenle günümüzde kafe kartı, haritadaki bir adresten çok daha fazlası haline geldi. Aslında bu, kuruluşun ilk izlenimidir. Ve birçok misafir için bu tek şeydir.",
+        "title": "İşletme Profili ilk izlenimi belirliyor",
+        "body": "Bu nedenle bir kafenin İşletme Profili artık haritadaki bir adresten çok daha fazlasıdır. Müşterinin mekânla ilgili ilk izlenimini oluşturur ve çoğu zaman ziyaret kararını belirler.",
         "bodyLinks": [
           {
-            "text": "Bugün kafe kartı çok daha fazlası haline geldi",
+            "text": "Kafenin İşletme Profili neden önemlidir?",
             "href": "/articles/kak-oformit-kartochku-kompanii"
           }
         ]
@@ -1182,7 +1182,7 @@
       },
       {
         "title": "Hızlı görsel seçim başlıyor",
-        "body": "Bundan sonra çok hızlı bir görsel seçim başlıyor. Kullanıcı derecelendirmeye pek bakmaz, ancak yer hakkında fikir sahibi olmaya çalışır:",
+        "body": "Bundan sonra çok hızlı bir görsel seçim başlıyor. Kullanıcı puana pek bakmaz, ancak yer hakkında fikir sahibi olmaya çalışır:",
         "items": [
           "yemek neye benziyor",
           "içerideki atmosfer nasıl",
@@ -1213,15 +1213,15 @@
         ]
       },
       {
-        "title": "Kartlar vitrin görevi görüyor",
-        "body": "İlginç bir şekilde, restoran işinde kartlar neredeyse bir vitrin gibi çalışmaya başladı. Ve sadece yeni kuruluşlar için değil. Tanınmış yerlerde bile misafir akışı giderek kartın ne kadar \"canlı\" göründüğüne bağlı."
+        "title": "İşletme Profili dijital vitrin görevi görüyor",
+        "body": "Restoran sektöründe İşletme Profili artık dijital vitrin gibi çalışıyor. Bu yalnızca yeni açılan yerler için geçerli değil; tanınmış mekânlarda bile müşteri akışı profilin ne kadar güncel ve ilgi çekici göründüğünden etkileniyor."
       },
       {
         "title": "Canlı bir kart hemen fark edilir",
-        "body": "Sistematik olarak kartlarla uğraşan kafelerle, bir zamanlar profil doldurup unutan kafeler arasında çok belirgin bir fark var. İlkiyle genellikle hemen görebilirsiniz:",
+        "body": "Profilini düzenli yöneten kafelerle bir kez doldurup unutanlar arasındaki fark hemen görülür. Düzenli yönetilen profilde şunlar bulunur:",
         "items": [
           "güncel fotoğraflar",
-          "en son incelemeler",
+          "en son yorumlar",
           "canlı menü",
           "misafirlere cevaplar",
           "güncellemeler"
@@ -1240,7 +1240,7 @@
         "body": "Kart gösterildiğinde:",
         "items": [
           "sabah ışığı",
-          "canlı iniş",
+          "dolu masalar ve gerçek misafirler",
           "barista iş başında",
           "gerçek yemekler",
           "iç detaylar",
@@ -1271,8 +1271,8 @@
         "body": "Bazen bir kişinin karar vermesi için birkaç popüler pozisyon yeterlidir."
       },
       {
-        "title": "İncelemelerin büyük etkisi var",
-        "body": "İncelemelerin de çok güçlü bir etkisi var. Üstelik kullanıcıların derecelendirme uğruna bunları okumaması da ilginç. Mekanın ruh halini anlamaya çalışıyorlar:",
+        "title": "Yorumların etkisi büyük",
+        "body": "Yorumlar da seçim üzerinde güçlü bir etkiye sahip. Üstelik kullanıcılar onları yalnızca puanı görmek için okumuyor; mekânın nasıl hissettirdiğini anlamaya çalışıyor:",
         "bodyLinks": [
           {
             "text": "Yorumlar çok etkili",
@@ -1287,8 +1287,8 @@
         ]
       },
       {
-        "title": "Ayrıntılı incelemeler kısa incelemelerden daha güçlüdür",
-        "body": "Bu nedenle canlı ayrıntılı incelemeler, \"Her şeyi beğendim\" ruhuyla kısa yorumlardan çok daha güçlü çalışır. Bir kişi belirli bir deneyim (kahvaltı, atmosfer, personelin tutumu) hakkında yazdığında, bu neredeyse bir arkadaşının tavsiyesi olarak algılanmaya başlar."
+        "title": "Ayrıntılı yorumlar kısa yorumlardan daha güçlüdür",
+        "body": "Bu nedenle canlı ayrıntılı yorumlar, \"Her şeyi beğendim\" ruhuyla kısa yorumlardan çok daha güçlü çalışır. Bir kişi belirli bir deneyim (kahvaltı, atmosfer, personelin tutumu) hakkında yazdığında, bu neredeyse bir arkadaşının tavsiyesi olarak algılanmaya başlar."
       },
       {
         "title": "Kafenin cevapları da önemli",
@@ -1296,12 +1296,12 @@
       },
       {
         "title": "Haritalar etkinliği analiz eder",
-        "body": "Ve bu sadece insanlar için önemli değil. Kartlar uzun süredir kart etrafındaki etkinliği analiz ediyor:",
+        "body": "Bu yalnızca müşteriler için önemli değil. Harita platformları profil çevresindeki etkinliği de analiz ediyor:",
         "items": [
           "yeni yorumlar ne sıklıkla görünüyor?",
           "fotoğraflar güncellendi mi?",
           "herhangi bir cevap var mı",
-          "Kullanıcılar kartla etkileşime giriyor mu?"
+          "Kullanıcılar profille etkileşime giriyor mu?"
         ]
       },
       {
@@ -1314,14 +1314,14 @@
       },
       {
         "title": "İyi bir kart belirsizliği azaltır",
-        "body": "Aslında iyi bir kafe kartı bugün çok önemli bir şey yapıyor: belirsizliği azaltıyor. Yerel restoran işinde ise bu doğrudan misafir akışına dönüşüyor."
+        "body": "İyi hazırlanmış bir kafe profili müşterinin kafasındaki belirsizliği azaltır. Yerel restoran işletmelerinde bu, doğrudan daha fazla ziyaret anlamına gelir."
       },
       {
         "title": "LocalOS Nerede Yardımcı Olur?",
-        "body": "Buradaki LocalOS, kartı ziyaretçinin gözünden görecek kadar \"tanıtmaya\" pek yardımcı olmuyor. Sistem hangi seçim senaryolarının eksik olduğunu, kartın nerede zayıf göründüğünü, hangi incelemelerin işlenmeye değer olduğunu ve hangi güncellemelerin güveni gerçekten artırabileceğini gösterir."
+        "body": "LocalOS, İşletme Profiline müşterinin gözünden bakar. Hangi ziyaret nedenlerinin eksik olduğunu, profilin nerede zayıf kaldığını, hangi yorumların yanıt beklediğini ve hangi güncellemelerin güveni artırabileceğini gösterir."
       },
       {
-        "title": "Kartlar iş dünyasının ana girişi haline geldi",
+        "title": "Haritalar işletmenin ana girişlerinden biri oldu",
         "body": "Çünkü kafeler için haritalar artık sadece navigasyon olmaktan çıktı. Çoğu durumda bu zaten işletmenin ana girişidir.",
         "bodyLinks": [
           {
@@ -1338,7 +1338,7 @@
         "label": "Tablo"
       },
       {
-        "title": "Şirket kartına nasıl başvurulur",
+        "title": "İşletme Profili nasıl hazırlanır?",
         "href": "/articles/kak-oformit-kartochku-kompanii",
         "label": "Makale"
       }

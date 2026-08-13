@@ -157,11 +157,11 @@ export const contentCopy: Record<Language, ContentCopy> = {
     materials: "Kaynaklar",
     navigation: {
       articles: { name: "Makaleler", description: "Haritalar, yorumlar ve yerel işletme yönetimi" },
-      documents: { name: "Belgeler", description: "Kontrol listeleri, şablonlar ve tablolar" },
-      cases: { name: "Vaka çalışmaları", description: "İşletme sahiplerinin halihazırda değiştirdikleri" },
-      documentation: { name: "Dokümantasyon", description: "Kullanıcılar, API'ler ve yapay zekâ ajanları için LocalOS" },
+      documents: { name: "Çalışma araçları", description: "Kontrol listeleri, şablonlar ve tablolar" },
+      cases: { name: "Uygulama örnekleri", description: "İşletme sahiplerinin elde ettiği sonuçlar" },
+      documentation: { name: "Dokümantasyon", description: "Kullanıcılar, API'ler ve yapay zekâ asistanları için LocalOS" },
     },
-    articles: { eyebrow: "LocalOS kaynakları", title: "İşletme, müşteriler ve büyüme hakkında makaleler", description: "Haritalar, yorumlar, müşteriler, finans ve işletme sahibinin günlük işleri üzerine pratik rehberler.", latest: "Son makaleler", chooseTopic: "Bir konu seçin ve en faydalı rehberle başlayın.", all: "Tümü", back: "Makalelere dön", seoTitle: "Yerel işletme sahipleri için makaleler — LocalOS", seoDescription: "Haritalar, yorumlar, müşteriler, finans ve tekrar eden işlerin otomasyonu hakkında LocalOS makaleleri." },
-    shared: { readMore: "Devamını oku", related: "Bunları da okuyun", ctaTitle: "Hangi işleri LocalOS'a devredebileceğinizi görmek ister misiniz?", ctaDescription: "Ücretsiz işletme profili denetimiyle başlayın. Müşterilerin sizi bulmasını ve seçmesini neyin engellediğini gösterelim.", audit: "Ücretsiz denetim alın", discuss: "Kurulumu görüşün", loading: "Makale yükleniyor…" },
+    articles: { eyebrow: "LocalOS kaynakları", title: "İşletme, müşteriler ve büyüme üzerine makaleler", description: "Haritalardaki işletme profilleri, yorumlar, müşteriler, finans ve işletme sahibinin günlük işleri için pratik rehberler.", latest: "Yeni makaleler", chooseTopic: "Konunuzu seçin ve size en faydalı rehberden başlayın.", all: "Tümü", back: "Makalelere dön", seoTitle: "Yerel işletme sahipleri için makaleler — LocalOS", seoDescription: "Haritalar, yorumlar, müşteriler, finans ve tekrarlanan işlerin otomasyonu hakkında LocalOS makaleleri." },
+    shared: { readMore: "Devamını okuyun", related: "Bunlara da göz atın", ctaTitle: "LocalOS'a hangi işleri devredebileceğinizi görmek ister misiniz?", ctaDescription: "Ücretsiz işletme profili kontrolüyle başlayın. Müşterilerin sizi bulmasını ve seçmesini zorlaştıran noktaları gösterelim.", audit: "Ücretsiz kontrol alın", discuss: "Uygulamayı görüşün", loading: "Makale yükleniyor…" },
   },
 };
