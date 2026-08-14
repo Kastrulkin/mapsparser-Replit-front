@@ -40,6 +40,22 @@ def _table_exists(cursor: Any, table_name: str) -> bool:
     return bool(_row_value(cursor.fetchone(), "relation"))
 
 
+def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+              AND column_name = %s
+        ) AS has_column
+        """,
+        (table_name, column_name),
+    )
+    return bool(_row_value(cursor.fetchone(), "has_column"))
+
+
 def _milestone(key: str, label: str, done: bool, achieved_at: Any = None, evidence: str = "") -> dict[str, Any]:
     return {
         "key": key,
