@@ -402,6 +402,26 @@ also count every active reservation for that owner across all businesses; the
 reservation path takes an owner-scoped transaction lock before checking the
 shared balance.
 
+Pilot credits must not be added with an unaudited balance-only update. The
+dry-run-first grant command locks the owner and idempotency key, caps one grant
+at `24` credits, updates `users.credits_balance` and creates a matching positive
+`credit_ledger` entry in the same transaction. Applying it requires both
+`--apply` and the explicit confirmation phrase; the default mode always rolls
+back.
+
+```bash
+PYTHONPATH=src python scripts/grant_compiled_ai_pilot_credits.py \
+  --user-id <owner-uuid> \
+  --credits 24 \
+  --external-id compiled-ai-pilot:<business-key>:first-wave-v1
+```
+
+After explicit approval, repeat the same command with:
+
+```bash
+--apply --confirm APPLY_COMPILED_AI_PILOT_CREDITS
+```
+
 The current evidence ledger remains authoritative after execution:
 
 ```bash
