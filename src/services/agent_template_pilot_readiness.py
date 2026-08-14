@@ -35,7 +35,19 @@ def build_agent_template_pilot_readiness(rows: Iterable[Dict[str, Any]], templat
             for row in completed_production
             if str(row.get("trigger") or "").startswith("schedule.") and str(row.get("completed_utc_date") or "")
         }
-        preview_violations = [str(row.get("run_id") or "") for row in previews if not _preview_is_safe(row)]
+        preview_violations = [str(row.get("run_id") or "") for row in previews if _preview_has_side_effect(row)]
+        failed_previews = [row for row in previews if str(row.get("status") or "") != "completed"]
+        resolved_failed_previews = [
+            row
+            for row in failed_previews
+            if _failed_preview_has_later_safe_retry(row, previews)
+        ]
+        resolved_failed_ids = [str(row.get("run_id") or "") for row in resolved_failed_previews]
+        unresolved_failed_ids = [
+            str(row.get("run_id") or "")
+            for row in failed_previews
+            if row not in resolved_failed_previews
+        ]
         templates.append(
             {
                 "template_key": template_key,
@@ -47,6 +59,9 @@ def build_agent_template_pilot_readiness(rows: Iterable[Dict[str, Any]], templat
                 "useful_pilot_business_ids": sorted(useful_businesses),
                 "scheduled_days": len(scheduled_days),
                 "preview_violation_run_ids": preview_violations,
+                "failed_preview_run_ids": [str(row.get("run_id") or "") for row in failed_previews],
+                "resolved_failed_preview_run_ids": resolved_failed_ids,
+                "unresolved_failed_preview_run_ids": unresolved_failed_ids,
                 "duplicate_idempotency_keys": duplicate_keys,
                 "run_ids": [str(row.get("run_id") or "") for row in template_rows if str(row.get("run_id") or "")],
                 "ready_for_manual_accuracy_review": len(completed_production) >= 5,
@@ -55,6 +70,7 @@ def build_agent_template_pilot_readiness(rows: Iterable[Dict[str, Any]], templat
                     and len(completed_production) >= 5
                     and len(useful_businesses) >= 3
                     and not preview_violations
+                    and not unresolved_failed_ids
                     and not duplicate_keys
                 ),
             }
@@ -64,6 +80,9 @@ def build_agent_template_pilot_readiness(rows: Iterable[Dict[str, Any]], templat
         "read_only": True,
         "templates": templates,
         "preview_violations": sum(len(item["preview_violation_run_ids"]) for item in templates),
+        "failed_previews": sum(len(item["failed_preview_run_ids"]) for item in templates),
+        "resolved_failed_previews": sum(len(item["resolved_failed_preview_run_ids"]) for item in templates),
+        "unresolved_failed_previews": sum(len(item["unresolved_failed_preview_run_ids"]) for item in templates),
         "duplicate_idempotency_keys": sum(len(item["duplicate_idempotency_keys"]) for item in templates),
     }
 
@@ -81,9 +100,36 @@ def _output(row: Dict[str, Any]) -> Dict[str, Any]:
 def _preview_is_safe(row: Dict[str, Any]) -> bool:
     if str(row.get("status") or "") != "completed":
         return False
-    output = _output(row)
-    return bool(
-        output.get("provider_write_performed") is not True
-        and output.get("external_dispatch_performed") is not True
-        and output.get("duplicate_side_effect") is not True
+    return not _preview_has_side_effect(row)
+
+
+def _preview_has_side_effect(row: Dict[str, Any]) -> bool:
+    return _contains_true_side_effect(_output(row))
+
+
+def _contains_true_side_effect(value: Any) -> bool:
+    side_effect_keys = {
+        "provider_write_performed",
+        "external_write_performed",
+        "external_dispatch_performed",
+        "duplicate_side_effect",
+    }
+    if isinstance(value, dict):
+        return any(
+            (key in side_effect_keys and item is True) or _contains_true_side_effect(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_true_side_effect(item) for item in value)
+    return False
+
+
+def _failed_preview_has_later_safe_retry(failed: Dict[str, Any], previews: List[Dict[str, Any]]) -> bool:
+    failed_index = next((index for index, row in enumerate(previews) if row is failed), -1)
+    if failed_index < 0:
+        return False
+    business_id = str(failed.get("business_id") or "")
+    return any(
+        str(row.get("business_id") or "") == business_id and _preview_is_safe(row)
+        for row in previews[failed_index + 1 :]
     )

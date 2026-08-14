@@ -70,3 +70,64 @@ def test_pilot_readiness_surfaces_preview_writes_and_duplicate_keys():
     assert template["preview_violation_run_ids"] == ["preview-unsafe"]
     assert template["duplicate_idempotency_keys"] == ["pilot-1::duplicate"]
     assert template["meets_collection_minimums"] is False
+
+
+def test_pilot_readiness_keeps_failed_preview_history_but_resolves_it_after_safe_retry():
+    from services.agent_template_pilot_readiness import build_agent_template_pilot_readiness
+
+    rows = [
+        {
+            "template_key": "tomorrow_bookings_check",
+            "run_id": "preview-failed",
+            "business_id": "pilot-1",
+            "status": "failed",
+            "idempotency_key": "preview-v1",
+            "input_json": {"preview_mode": True},
+            "output_json": {"external_dispatch_performed": False},
+        },
+        {
+            "template_key": "tomorrow_bookings_check",
+            "run_id": "preview-fixed",
+            "business_id": "pilot-1",
+            "status": "completed",
+            "idempotency_key": "preview-runtime-v2",
+            "input_json": {"preview_mode": True},
+            "output_json": {
+                "nested": {
+                    "external_dispatch_performed": False,
+                    "provider_write_performed": False,
+                }
+            },
+        },
+    ]
+
+    report = build_agent_template_pilot_readiness(rows, ["tomorrow_bookings_check"])
+    template = report["templates"][0]
+
+    assert template["preview_violation_run_ids"] == []
+    assert template["failed_preview_run_ids"] == ["preview-failed"]
+    assert template["resolved_failed_preview_run_ids"] == ["preview-failed"]
+    assert template["unresolved_failed_preview_run_ids"] == []
+    assert report["preview_violations"] == 0
+    assert report["resolved_failed_previews"] == 1
+
+
+def test_pilot_readiness_detects_nested_preview_side_effects():
+    from services.agent_template_pilot_readiness import build_agent_template_pilot_readiness
+
+    rows = [
+        {
+            "template_key": "negative_review_reply",
+            "run_id": "nested-unsafe",
+            "business_id": "pilot-1",
+            "status": "completed",
+            "idempotency_key": "nested-unsafe-key",
+            "input_json": {"preview_mode": True},
+            "output_json": {"artifact": {"provider_write_performed": True}},
+        }
+    ]
+
+    report = build_agent_template_pilot_readiness(rows, ["negative_review_reply"])
+
+    assert report["templates"][0]["preview_violation_run_ids"] == ["nested-unsafe"]
+    assert report["preview_violations"] == 1
