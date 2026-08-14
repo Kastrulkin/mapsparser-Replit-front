@@ -174,7 +174,7 @@ def apply_complete_review_snapshot(
                 %s, TRUE, NOW(), %s,
                 NOW(), NOW()
             )
-            ON CONFLICT (business_id, source, external_review_id) DO UPDATE SET
+            ON CONFLICT (id) DO UPDATE SET
                 rating = EXCLUDED.rating,
                 author_name = EXCLUDED.author_name,
                 author_profile_url = EXCLUDED.author_profile_url,

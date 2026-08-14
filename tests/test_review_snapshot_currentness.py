@@ -52,6 +52,7 @@ def test_complete_snapshot_marks_previous_rows_inactive_and_current_rows_active(
     assert result["without_response"] == 1
     assert "set is_current = false" in cursor.calls[0][0]
     assert sum("is_current = true" in query for query, _params in cursor.calls[1:]) == 2
+    assert all("on conflict (id)" in query for query, _params in cursor.calls[1:])
 
 
 def test_actor_review_normalization_reads_yandex_owner_reply():
