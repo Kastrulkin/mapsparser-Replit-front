@@ -36,11 +36,11 @@
       },
       {
         "title": "Derlenmiş Yapay Zeka Araştırması",
-        "body": "6 Nisan 2026'da XY.AI Labs, Stanford Üniversitesi Tıp Fakültesi, Cornell Üniversitesi ve Brigham and Women's Hospital/Harvard Tıp Fakültesi araştırmacıları, \"Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi\" başlıklı ön baskıyı yayımladı. Araştırmacılar, yapay zekânın çalışma mantığını oluşturduğu aşama ile bu mantığın daha sonra yürütüldüğü aşamayı birbirinden ayırmayı önerdi.",
+        "body": "6 Nisan 2026'da XY.AI Labs, Stanford Üniversitesi Tıp Fakültesi, Cornell Üniversitesi ve Brigham and Women's Hospital/Harvard Tıp Fakültesi araştırmacıları, \"Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi\" başlıklı ön baskıyı yayımladı. 31 Temmuz'da yayımlanan ikinci sürüm hibrit modu daha açık tanımlar: deterministik plan süreci yönetir, model ise yalnızca önceden tanımlanmış ve sınırlandırılmış anlamsal alt görevler için çağrılabilir.",
         "bodyLinks": [
           {
             "text": "Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       },
@@ -55,9 +55,10 @@
       {
         "title": "Gerekli üç özellik",
         "items": [
-          "model her işlemde değil, süreç oluşturma sırasında çağrılır",
+          "model çalışma zamanında süreci yönetmez: adımların sırası önceden derlenir",
+          "sınırlı bir model çağrısına yalnızca sabit girdi, çıktı ve geri dönüşe sahip kayıtlı bir anlamsal alt görev için izin verilir",
           "tamamlanan süreç normal program kodu gibi deterministik olarak yürütülür",
-          "Başlamadan önce süreç çok aşamalı bir doğrulamadan geçer"
+          "başlamadan önce süreç çok aşamalı bir doğrulamadan geçer"
         ]
       },
       {
@@ -83,7 +84,7 @@
         "bodyLinks": [
           {
             "text": "doğrulama döngüsünün tamamı",
-            "href": "https://arxiv.org/html/2604.05150v1"
+            "href": "https://arxiv.org/html/2604.05150v2"
           }
         ]
       },
@@ -167,11 +168,11 @@
       },
       {
         "title": "Kaynak",
-        "body": "Bu yazı, 6 Nisan 2026'da yayımlanan \"Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi\" ön baskısının ilk sürümüne dayanmaktadır.",
+        "body": "Bu yazı, 31 Temmuz 2026'da yayımlanan \"Compiled AI: LLM tabanlı iş akışı otomasyonu için deterministik kod üretimi\" ön baskısının ikinci sürümüne göre güncellendi. İkinci sürüm temel ilkeyi değiştirmiyor, ancak çalışma zamanı sınırını netleştiriyor: LLM süreç yönetiminin dışında kalırken önceden derlenmiş adımlarda sınırlı model çağrılarına izin veriliyor.",
         "bodyLinks": [
           {
-            "text": "Compiled AI makalesinin ilk sürümü",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "text": "Compiled AI makalesinin ikinci sürümü",
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       }

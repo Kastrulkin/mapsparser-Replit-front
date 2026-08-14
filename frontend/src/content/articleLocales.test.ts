@@ -23,6 +23,7 @@ const localizedArticles = [
   { language: "ha", articles: ha, copy: contentCopy.ha },
   { language: "tr", articles: tr, copy: contentCopy.tr },
 ];
+const compiledAiSlug = "compiled-ai-pochemu-ii-dolzhen-dumat-odin-raz";
 const cyrillic = /[А-Яа-яЁё]/;
 
 describe("article translations", () => {
@@ -55,5 +56,22 @@ describe("article translations", () => {
 
     expect(tr.every((article) => typeof article.seoDescription === "string" && article.seoDescription.length > 0)).toBe(true);
     expect(serialized).not.toMatch(/kartlardaki bir kartı|tam bir kayıt|teknisyenler penceresiz|mini bir site|canlı iniş|kurşun büyümesi|Reaksiyon hızı|Kartlar aktiviteyi|puannin|puanlarden|Yorumlarin|incelemeler|inceleme/);
+  });
+
+  it("keeps every Compiled AI article aligned with the v2 runtime boundary", () => {
+    const articleSets = [
+      { language: "ru", articles: publishedArticles },
+      ...localizedArticles.map(({ language, articles }) => ({ language, articles })),
+    ];
+
+    articleSets.forEach(({ language, articles }) => {
+      const article = articles.find((candidate) => candidate.slug === compiledAiSlug);
+      const serialized = JSON.stringify(article);
+
+      expect(article, `missing Compiled AI article in ${language}`).toBeDefined();
+      expect(serialized, `missing v2 source in ${language}`).toContain("2604.05150v2");
+      expect(serialized, `stale v1 source in ${language}`).not.toContain("2604.05150v1");
+      expect(article?.body[6]?.items, `incomplete runtime boundary in ${language}`).toHaveLength(4);
+    });
   });
 });

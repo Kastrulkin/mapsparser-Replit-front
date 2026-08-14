@@ -36,11 +36,11 @@
       },
       {
         "title": "Zusammengestellte KI-Forschung",
-        "body": "Am 6. April 2026 präsentierten Autoren von XY.AI Labs, der Stanford University School of Medicine, der Cornell University und dem Brigham and Women’s Hospital / Harvard Medical School den Vorabdruck „Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation“. Sie schlugen vor, den Moment, in dem die KI eine Arbeitslogik erstellt, von ihrer weiteren Ausführung zu trennen.",
+        "body": "Am 6. April 2026 präsentierten Autoren von XY.AI Labs, der Stanford University School of Medicine, der Cornell University und dem Brigham and Women’s Hospital / Harvard Medical School den Preprint „Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation“. Am 31. Juli veröffentlichten sie Version 2. Sie beschreibt den Hybridmodus genauer: Ein deterministischer Plan steuert den Ablauf, während das Modell nur für vorab definierte, begrenzte semantische Teilaufgaben aufgerufen werden darf.",
         "bodyLinks": [
           {
             "text": "Kompilierte KI: Deterministische Codegenerierung für LLM-basierte Workflow-Automatisierung",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       },
@@ -55,7 +55,8 @@
       {
         "title": "Drei erforderliche Eigenschaften",
         "items": [
-          "Das Modell wird während der Prozesserstellung aufgerufen, nicht bei jedem Vorgang",
+          "Das Modell steuert den Ablauf zur Laufzeit nicht: Die Reihenfolge der Schritte wird vorab kompiliert",
+          "Ein enger Modellaufruf ist nur für eine registrierte semantische Teilaufgabe mit festen Ein- und Ausgaben sowie einem Fallback zulässig",
           "Der fertige Prozess wird wie normaler Programmcode deterministisch ausgeführt",
           "Vor Beginn durchläuft der Prozess eine mehrstufige Verifizierung"
         ]
@@ -83,7 +84,7 @@
         "bodyLinks": [
           {
             "text": "die gesamte Validierungsschleife",
-            "href": "https://arxiv.org/html/2604.05150v1"
+            "href": "https://arxiv.org/html/2604.05150v2"
           }
         ]
       },
@@ -167,11 +168,11 @@
       },
       {
         "title": "Quelle",
-        "body": "Das Material basiert auf der ersten Version des Preprints „Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation“, veröffentlicht am 6. April 2026.",
+        "body": "Das Material wurde anhand von Version 2 des Preprints „Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation“ aktualisiert, die am 31. Juli 2026 veröffentlicht wurde. Version 2 behält das Grundprinzip bei, präzisiert aber die Laufzeitgrenze: Das LLM ist von der Ablaufsteuerung ausgeschlossen, begrenzte Modellaufrufe innerhalb vorab kompilierter Schritte bleiben jedoch möglich.",
         "bodyLinks": [
           {
-            "text": "erste Version des Preprints „Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation“",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "text": "Version 2 des Preprints „Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation“",
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       }

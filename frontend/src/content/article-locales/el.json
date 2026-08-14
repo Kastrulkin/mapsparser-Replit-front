@@ -36,11 +36,11 @@
       },
       {
         "title": "Compiled AI Research",
-        "body": "Στις 6 Απριλίου 2026, ερευνητές από τα XY.AI Labs, Stanford University School of Medicine, Cornell University και Brigham and Women’s Hospital / Harvard Medical School παρουσίασαν την προδημοσίευση «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation». Πρότειναν να διαχωριστεί η στιγμή κατά την οποία η τεχνητή νοημοσύνη δημιουργεί τη λογική της εργασίας από την επαναλαμβανόμενη εκτέλεσή της.",
+        "body": "Στις 6 Απριλίου 2026, ερευνητές από τα XY.AI Labs, Stanford University School of Medicine, Cornell University και Brigham and Women’s Hospital / Harvard Medical School παρουσίασαν την προδημοσίευση «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation». Στις 31 Ιουλίου δημοσίευσαν τη δεύτερη έκδοση, η οποία περιγράφει ακριβέστερα την υβριδική λειτουργία: ένα ντετερμινιστικό σχέδιο ελέγχει τη διαδικασία και το μοντέλο μπορεί να καλείται μόνο για προκαθορισμένες, περιορισμένες σημασιολογικές υποεργασίες.",
         "bodyLinks": [
           {
             "text": "Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       },
@@ -55,8 +55,9 @@
       {
         "title": "Τρεις απαιτούμενες ιδιότητες",
         "items": [
-          "το μοντέλο καλείται κατά τη δημιουργία της διεργασίας, όχι σε κάθε εκτέλεση",
-          "η ολοκληρωμένη διαδικασία εκτελείται με τον ίδιο τρόπο κάθε φορά, όπως κάθε συνηθισμένο πρόγραμμα",
+          "το μοντέλο δεν ελέγχει τη διαδικασία κατά την εκτέλεση: η σειρά των βημάτων μεταγλωττίζεται εκ των προτέρων",
+          "μια περιορισμένη κλήση μοντέλου επιτρέπεται μόνο για καταχωρισμένη σημασιολογική υποεργασία με σταθερή είσοδο, έξοδο και εναλλακτική λύση",
+          "η τελική διαδικασία εκτελείται ντετερμινιστικά, όπως ο κανονικός κώδικας προγράμματος",
           "πριν από την έναρξη, η διαδικασία περνά από ελέγχους σε πολλαπλά επίπεδα"
         ]
       },
@@ -83,7 +84,7 @@
         "bodyLinks": [
           {
             "text": "ολόκληρος ο κύκλος επικύρωσης",
-            "href": "https://arxiv.org/html/2604.05150v1"
+            "href": "https://arxiv.org/html/2604.05150v2"
           }
         ]
       },
@@ -167,11 +168,11 @@
       },
       {
         "title": "Πηγή",
-        "body": "Το άρθρο βασίζεται στην πρώτη έκδοση της προδημοσίευσης «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation», η οποία δημοσιεύτηκε στις 6 Απριλίου 2026.",
+        "body": "Το άρθρο ενημερώθηκε με βάση τη δεύτερη έκδοση της προδημοσίευσης «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation», η οποία δημοσιεύτηκε στις 31 Ιουλίου 2026. Η δεύτερη έκδοση διατηρεί τη βασική αρχή, αλλά διευκρινίζει το όριο εκτέλεσης: το LLM δεν ελέγχει τη διαδικασία, ενώ επιτρέπονται περιορισμένες κλήσεις μοντέλου μέσα σε προκαθορισμένα μεταγλωττισμένα βήματα.",
         "bodyLinks": [
           {
-            "text": "πρώτη έκδοση της προδημοσίευσης «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation»",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "text": "δεύτερη έκδοση της προδημοσίευσης «Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation»",
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       }

@@ -36,11 +36,11 @@
       },
       {
         "title": "Investigación de IA compilada",
-        "body": "El 6 de abril de 2026, autores de XY.AI Labs, la Facultad de Medicina de la Universidad de Stanford, la Universidad de Cornell y el Hospital Brigham and Women's/Escuela de Medicina de Harvard presentaron la preimpresión \"IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM\". Propusieron separar el momento en que la IA crea una lógica de trabajo de su posterior ejecución.",
+        "body": "El 6 de abril de 2026, autores de XY.AI Labs, la Facultad de Medicina de la Universidad de Stanford, la Universidad de Cornell y el Hospital Brigham and Women's/Escuela de Medicina de Harvard presentaron la preimpresión \"IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM\". El 31 de julio publicaron la versión 2, que describe con mayor precisión un modo híbrido: un plan determinista controla el proceso y el modelo solo puede invocarse para subtareas semánticas predefinidas y limitadas.",
         "bodyLinks": [
           {
             "text": "IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       },
@@ -55,9 +55,10 @@
       {
         "title": "Tres propiedades requeridas",
         "items": [
-          "el modelo se llama durante la creación del proceso, no en cada operación",
+          "el modelo no controla el proceso durante la ejecución: el orden de los pasos se compila de antemano",
+          "solo se permite una llamada limitada al modelo para una subtarea semántica registrada con entrada, salida y alternativa fijas",
           "el proceso terminado se ejecuta de forma determinista, como el código de un programa normal",
-          "Antes de comenzar, el proceso se somete a una verificación de varias etapas."
+          "antes de comenzar, el proceso se somete a una verificación de varias etapas"
         ]
       },
       {
@@ -83,7 +84,7 @@
         "bodyLinks": [
           {
             "text": "todo el ciclo de validación",
-            "href": "https://arxiv.org/html/2604.05150v1"
+            "href": "https://arxiv.org/html/2604.05150v2"
           }
         ]
       },
@@ -167,11 +168,11 @@
       },
       {
         "title": "Fuente",
-        "body": "El material se basa en la primera versión de la preimpresión “AI compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM”, publicada el 6 de abril de 2026.",
+        "body": "El material se actualizó con la versión 2 de la preimpresión “IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM”, publicada el 31 de julio de 2026. La versión 2 mantiene el principio central, pero aclara el límite de ejecución: el LLM queda fuera del control del proceso, aunque se permiten llamadas limitadas al modelo dentro de pasos compilados previamente.",
         "bodyLinks": [
           {
-            "text": "primera versión de la preimpresión \"IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM\"",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "text": "versión 2 de la preimpresión \"IA compilada: generación de código determinista para la automatización del flujo de trabajo basada en LLM\"",
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       }

@@ -36,11 +36,11 @@
       },
       {
         "title": "Binciken AI Haɗaɗɗen",
-        "body": "A ranar 6 ga Afrilu, 2026, marubuta daga XY.AI Labs, Makarantar Magunguna ta Jami'ar Stanford, Jami'ar Cornell, da Brigham da Asibitin Mata / Makarantar Kiwon Lafiyar Harvard sun gabatar da preprint \"Haɗaɗɗen AI: Ƙirar Ƙaddara Ƙaddamarwa don Automation-Based Workflow Automation.\" Sun ba da shawarar raba lokacin da AI ta ƙirƙira dabarun aiki daga ƙarin aiwatar da shi.",
+        "body": "A ranar 6 ga Afrilu, 2026, marubuta daga XY.AI Labs, Makarantar Magunguna ta Jami'ar Stanford, Jami'ar Cornell, da Brigham da Asibitin Mata / Makarantar Kiwon Lafiyar Harvard sun gabatar da preprint \"Haɗaɗɗen AI: Ƙirar Ƙaddara Ƙaddamarwa don Automation-Based Workflow Automation.\" A ranar 31 ga Yuli sun wallafa siga ta biyu, wadda ta fi bayyana yanayin haɗaɗɗe: tsari mai ƙayyadadden matakai ne ke sarrafa aikin, kuma ana iya kiran samfurin ne kawai don ƙananan ayyukan ma'ana da aka riga aka ayyana kuma aka iyakance.",
         "bodyLinks": [
           {
             "text": "Haɗaɗɗen AI: Ƙaddamar da Ƙaddamar Code Generation don Automation Gudun Aiki na tushen LLM",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       },
@@ -55,7 +55,8 @@
       {
         "title": "Kaddarorin da ake buƙata guda uku",
         "items": [
-          "Ana kiran samfurin a lokacin ƙirƙirar tsari, ba akan kowane aiki ba",
+          "samfurin ba ya sarrafa aikin a lokacin gudanarwa: ana tsara jerin matakai tun da farko",
+          "ana yarda da iyakantaccen kiran samfurin ne kawai ga ƙaramar aikin ma'ana da aka yi wa rajista tare da tsayayyen shigarwa, fitarwa da madadin",
           "Ƙarshen tsari yana aiwatar da deterministically, kamar lambar shirin na yau da kullum",
           "Kafin farawa, tsarin yana jurewa tabbacin matakai da yawa"
         ]
@@ -83,7 +84,7 @@
         "bodyLinks": [
           {
             "text": "duk madaukin tabbatarwa",
-            "href": "https://arxiv.org/html/2604.05150v1"
+            "href": "https://arxiv.org/html/2604.05150v2"
           }
         ]
       },
@@ -167,11 +168,11 @@
       },
       {
         "title": "Source",
-        "body": "Kayan ya dogara ne akan sigar farko ta preprint “Haɗaɗɗen AI: Ƙaddamarwar Code Generation for Automation-Based Workflow Automation”, wanda aka buga a Afrilu 6, 2026.",
+        "body": "An sabunta kayan bisa siga ta biyu ta preprint “Haɗaɗɗen AI: Ƙaddamarwar Code Generation for Automation-Based Workflow Automation”, wadda aka buga a ranar 31 ga Yuli, 2026. Siga ta biyu ba ta canza babban ka'idar ba, amma ta fayyace iyakar lokacin gudanarwa: LLM ba ya sarrafa aikin, yayin da ake yarda da iyakantattun kiran samfurin a cikin matakan da aka riga aka tsara.",
         "bodyLinks": [
           {
-            "text": "sigar farko ta preprint \"Harfafa AI: Ƙaddamarwar Code Generation for Automation-Based Workflow Automation\"",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "text": "siga ta biyu ta preprint \"Haɗaɗɗen AI: Ƙaddamarwar Code Generation for Automation-Based Workflow Automation\"",
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       }

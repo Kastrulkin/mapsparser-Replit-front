@@ -36,11 +36,11 @@
       },
       {
         "title": "Recherche compilée sur l'IA",
-        "body": "Le 6 avril 2026, des auteurs des laboratoires XY.AI, de la faculté de médecine de l'université de Stanford, de l'université Cornell et du Brigham and Women's Hospital/Harvard Medical School ont présenté la prépublication « Compiled AI : Deterministic Code Generation for LLM-Based Workflow Automation ». Ils ont proposé de séparer le moment où l'IA crée une logique de travail de son exécution ultérieure.",
+        "body": "Le 6 avril 2026, des auteurs des laboratoires XY.AI, de la faculté de médecine de l'université de Stanford, de l'université Cornell et du Brigham and Women's Hospital/Harvard Medical School ont présenté la prépublication « Compiled AI : Deterministic Code Generation for LLM-Based Workflow Automation ». Le 31 juillet, ils ont publié la version 2, qui décrit plus précisément un mode hybride : un plan déterministe contrôle le processus, tandis que le modèle ne peut être appelé que pour des sous-tâches sémantiques prédéfinies et limitées.",
         "bodyLinks": [
           {
             "text": "IA compilée : génération de code déterministe pour l'automatisation des flux de travail basée sur LLM",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       },
@@ -55,9 +55,10 @@
       {
         "title": "Trois propriétés requises",
         "items": [
-          "le modèle est appelé lors de la création du processus, pas à chaque opération",
+          "le modèle ne contrôle pas le processus pendant l'exécution : l'ordre des étapes est compilé à l'avance",
+          "un appel limité au modèle n'est autorisé que pour une sous-tâche sémantique enregistrée avec des entrées, des sorties et une solution de repli fixes",
           "le processus fini s'exécute de manière déterministe, comme le code d'un programme normal",
-          "Avant de démarrer, le processus est soumis à une vérification en plusieurs étapes"
+          "avant de démarrer, le processus est soumis à une vérification en plusieurs étapes"
         ]
       },
       {
@@ -83,7 +84,7 @@
         "bodyLinks": [
           {
             "text": "toute la boucle de validation",
-            "href": "https://arxiv.org/html/2604.05150v1"
+            "href": "https://arxiv.org/html/2604.05150v2"
           }
         ]
       },
@@ -167,11 +168,11 @@
       },
       {
         "title": "Origine",
-        "body": "Le matériel est basé sur la première version de la prépublication « Compiled AI : Deterministic Code Generation for LLM-Based Workflow Automation », publiée le 6 avril 2026.",
+        "body": "Ce contenu a été mis à jour selon la version 2 de la prépublication « Compiled AI : Deterministic Code Generation for LLM-Based Workflow Automation », publiée le 31 juillet 2026. La version 2 conserve le principe central, mais précise la frontière d'exécution : le LLM ne contrôle pas le processus, tandis que des appels limités au modèle restent permis dans des étapes compilées à l'avance.",
         "bodyLinks": [
           {
-            "text": "première version de la prépublication « Compiled AI : Deterministic Code Generation for LLM-Based Workflow Automation »",
-            "href": "https://arxiv.org/abs/2604.05150v1"
+            "text": "version 2 de la prépublication « Compiled AI : Deterministic Code Generation for LLM-Based Workflow Automation »",
+            "href": "https://arxiv.org/abs/2604.05150v2"
           }
         ]
       }
