@@ -110,3 +110,45 @@ def test_pilot_plan_rejects_partial_first_wave():
 
     with pytest.raises(ValueError, match="exactly_6_first_wave_templates_required"):
         build_agent_template_pilot_plan(TEMPLATE_KEYS[:5], BUSINESSES)
+
+
+def test_pilot_runner_pauses_only_active_scheduled_blueprints_after_production():
+    from scripts.run_compiled_ai_template_pilot import _pause_scheduled_pilot_blueprints
+
+    class Cursor:
+        def __init__(self):
+            self.query = ""
+            self.params = ()
+
+        def execute(self, query, params=None):
+            self.query = " ".join(query.split()).lower()
+            self.params = params or ()
+
+        def fetchall(self):
+            return [{"id": "scheduled-1"}, {"id": "scheduled-2"}]
+
+    class Connection:
+        def __init__(self, cursor):
+            self._cursor = cursor
+            self.commits = 0
+
+        def cursor(self):
+            return self._cursor
+
+        def commit(self):
+            self.commits += 1
+
+    class Database:
+        def __init__(self):
+            self.cursor = Cursor()
+            self.conn = Connection(self.cursor)
+
+    db = Database()
+    result = _pause_scheduled_pilot_blueprints(db, ["scheduled-2", "manual-1", "scheduled-1", ""])
+
+    assert result == {"paused_count": 2, "blueprint_ids": ["scheduled-1", "scheduled-2"]}
+    assert db.cursor.params == (["manual-1", "scheduled-1", "scheduled-2"],)
+    assert "blueprint.status = 'active'" in db.cursor.query
+    assert "version.trigger like 'schedule.%%'" in db.cursor.query
+    assert "set status = 'paused'" in db.cursor.query
+    assert db.conn.commits == 1

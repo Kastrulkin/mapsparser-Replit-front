@@ -166,6 +166,11 @@ def main() -> int:
         summary["completed_runs"] = sum(item["completed_runs"] for item in summary["items"])
         summary["failed_runs"] = sum(item["failed_runs"] for item in summary["items"])
         summary["blocked_runs"] = sum(item["blocked_runs"] for item in summary["items"])
+        if args.phase == "production":
+            summary["schedule_pause"] = _pause_scheduled_pilot_blueprints(
+                db,
+                [str(item.get("blueprint_id") or "") for item in summary["items"]],
+            )
         summary["status"] = (
             "completed"
             if summary["completed_runs"] == planned
@@ -313,6 +318,34 @@ def _uses_native_sheets_read(steps: list[dict]) -> bool:
             and not str(step.get("provider_action_ref") or "").strip()
         )
     return False
+
+
+def _pause_scheduled_pilot_blueprints(db: DatabaseManager, blueprint_ids: list[str]) -> dict:
+    selected = sorted({blueprint_id for blueprint_id in blueprint_ids if blueprint_id})
+    if not selected:
+        return {"paused_count": 0, "blueprint_ids": []}
+    cursor = db.conn.cursor()
+    cursor.execute(
+        """
+        UPDATE agent_blueprints blueprint
+        SET status = 'paused',
+            metadata_json = COALESCE(blueprint.metadata_json, '{}'::jsonb) || jsonb_build_object(
+                'pilot_schedule_state', 'paused_after_bounded_pilot',
+                'pilot_schedule_paused_at', NOW()
+            ),
+            updated_at = NOW()
+        FROM agent_blueprint_versions version
+        WHERE blueprint.id = ANY(%s)
+          AND blueprint.status = 'active'
+          AND version.id = blueprint.metadata_json->>'active_version_id'
+          AND version.trigger LIKE 'schedule.%%'
+        RETURNING blueprint.id
+        """,
+        (selected,),
+    )
+    paused = sorted(str(row.get("id") or "") for row in (cursor.fetchall() or []) if row.get("id"))
+    db.conn.commit()
+    return {"paused_count": len(paused), "blueprint_ids": paused}
 
 
 def _post(
