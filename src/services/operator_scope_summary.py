@@ -338,34 +338,81 @@ def _safe_count(cursor: Any, table_name: str, query: str, params: tuple[Any, ...
 
 
 def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
-    cursor.execute("SELECT COUNT(*) AS cnt FROM businesses WHERE COALESCE(is_active, TRUE) = TRUE")
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS cnt
+        FROM (
+            SELECT business.id
+            FROM businesses business
+            WHERE COALESCE(business.is_active, TRUE) = TRUE
+              AND business.entity_group = 'client'
+              AND business.network_id IS NULL
+            UNION
+            SELECT network.id
+            FROM networks network
+            WHERE network.entity_group = 'client'
+        ) client_contexts
+        """
+    )
     businesses_count = int(_row_to_dict(cursor, cursor.fetchone()).get("cnt") or 0)
-    cursor.execute("SELECT COUNT(*) AS cnt FROM networks")
+    cursor.execute("SELECT COUNT(*) AS cnt FROM networks WHERE entity_group = 'client'")
     networks_count = int(_row_to_dict(cursor, cursor.fetchone()).get("cnt") or 0)
     pending_approvals = _safe_count(
         cursor,
         "action_requests",
-        "SELECT COUNT(*) AS cnt FROM action_requests WHERE status = 'pending_human'",
+        """
+        SELECT COUNT(*) AS cnt
+        FROM action_requests request
+        JOIN action_approvals approval ON approval.action_id = request.action_id
+        JOIN businesses business ON business.id = request.tenant_id
+        WHERE request.status = 'pending_human'
+          AND approval.status = 'pending_human'
+          AND approval.expires_at > NOW()
+          AND business.entity_group = 'client'
+        """,
     )
     failed_jobs = _safe_count(
         cursor,
         "parsequeue",
-        "SELECT COUNT(*) AS cnt FROM parsequeue WHERE status IN ('error', 'failed', 'captcha_required')",
+        """
+        SELECT COUNT(*) AS cnt
+        FROM parsequeue queue
+        JOIN businesses business ON business.id = queue.business_id
+        WHERE queue.status IN ('error', 'failed', 'captcha_required')
+          AND business.entity_group = 'client'
+        """,
     )
     failed_businesses = _safe_count(
         cursor,
         "parsequeue",
-        "SELECT COUNT(DISTINCT business_id) AS cnt FROM parsequeue WHERE status IN ('error', 'failed', 'captcha_required') AND business_id IS NOT NULL",
+        """
+        SELECT COUNT(DISTINCT queue.business_id) AS cnt
+        FROM parsequeue queue
+        JOIN businesses business ON business.id = queue.business_id
+        WHERE queue.status IN ('error', 'failed', 'captcha_required')
+          AND business.entity_group = 'client'
+        """,
     )
     outreach_replies = _safe_count(
         cursor,
         "outreach_campaign_touches",
-        "SELECT COUNT(*) AS cnt FROM outreach_campaign_touches WHERE status IN ('replied', 'reply_received', 'needs_attention')",
+        "SELECT COUNT(*) AS cnt FROM outreach_campaign_touches WHERE status IN ('replied', 'reply_received')",
+    )
+    outreach_attention = _safe_count(
+        cursor,
+        "outreach_campaign_touches",
+        "SELECT COUNT(*) AS cnt FROM outreach_campaign_touches WHERE status = 'needs_attention'",
     )
     pending_posts = _safe_count(
         cursor,
         "social_posts",
-        "SELECT COUNT(*) AS cnt FROM social_posts WHERE status IN ('draft', 'needs_review', 'failed')",
+        """
+        SELECT COUNT(*) AS cnt
+        FROM social_posts post
+        JOIN businesses business ON business.id = post.business_id
+        WHERE post.status IN ('draft', 'needs_review', 'failed')
+          AND business.entity_group = 'client'
+        """,
     )
     reviews_unanswered = _safe_count(
         cursor,
@@ -375,6 +422,7 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         FROM externalbusinessreviews review
         JOIN businesses business ON business.id = review.business_id
         WHERE COALESCE(business.is_active, TRUE) = TRUE
+          AND business.entity_group = 'client'
           AND COALESCE(TRIM(review.response_text), '') = ''
         """,
     )
@@ -386,15 +434,17 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         FROM externalbusinessreviews review
         JOIN businesses business ON business.id = review.business_id
         WHERE COALESCE(business.is_active, TRUE) = TRUE
+          AND business.entity_group = 'client'
           AND COALESCE(TRIM(review.response_text), '') = ''
         """,
     )
     metrics = [
-        _metric("businesses_total", "Активных бизнесов", businesses_count, source="businesses", scope="platform"),
-        _metric("networks_total", "Сетей", networks_count, source="networks", scope="platform"),
+        _metric("businesses_total", "Клиентских аккаунтов", businesses_count, source="businesses", scope="platform"),
+        _metric("networks_total", "Клиентских сетей", networks_count, source="networks", scope="platform"),
         _metric("pending_approvals", "Ждут подтверждения", pending_approvals, source="action_requests", scope="platform"),
         _metric("failed_jobs", "Ошибки обновлений", failed_jobs, source="parsequeue", scope="platform"),
         _metric("outreach_replies", "Ответы и внимание в аутриче", outreach_replies, source="outreach_campaign_touches", scope="platform"),
+        _metric("outreach_attention", "Проблемы доставки в аутриче", outreach_attention, source="outreach_campaign_touches", scope="platform"),
         _metric("pending_posts", "Публикации к разбору", pending_posts, source="social_posts", scope="platform"),
         _metric("reviews_unanswered", "Отзывы без ответа", reviews_unanswered, source="externalbusinessreviews", scope="platform"),
     ]
@@ -403,6 +453,7 @@ def _platform_summary(cursor: Any, scope: dict[str, Any]) -> dict[str, Any]:
         ("failed_jobs", "Ошибки обновлений", "Есть failed/captcha задачи, которые нужно разобрать.", failed_jobs),
         ("pending_approvals", "Действия ждут решения", "Операции не выполнятся без ручного подтверждения.", pending_approvals),
         ("outreach_replies", "Ответы в аутриче", "Новые ответы останавливают следующие касания и требуют разбора.", outreach_replies),
+        ("outreach_attention", "Касания требуют разбора", "Это ошибки доставки или истёкшие ручные действия, а не ответы клиентов.", outreach_attention),
         ("pending_posts", "Публикации требуют внимания", "Проверьте черновики и ошибки публикаций.", pending_posts),
         ("reviews_unanswered", "Отзывы без ответа", "Нужно подготовить ответы и проверить их перед публикацией.", reviews_unanswered),
     ):

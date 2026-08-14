@@ -46,7 +46,18 @@ def test_superadmin_business_list_excludes_lead_parser_businesses():
     query = manager.conn.cursor_instance.queries[-1][0]
     assert "NOT EXISTS" in query
     assert "parser_lead.parse_business_id = b.id" in query
-    assert "parser_lead.business_id <> b.id" in query
+    assert "parser_lead.business_id <> b.id" not in query
+
+
+def test_superadmin_business_list_excludes_every_parser_copy_and_shadow_description():
+    manager = _manager_with_parser_scope()
+
+    manager.get_all_businesses()
+
+    query = " ".join(manager.conn.cursor_instance.queries[-1][0].lower().split())
+    assert "parser_lead.parse_business_id = b.id" in query
+    assert "parser_lead.business_id <> b.id" not in query
+    assert "lead shadow business for outreach lead" in query
 
 
 def test_owner_business_lists_exclude_lead_parser_businesses():

@@ -38,7 +38,10 @@ def _json_value(value: Any, fallback: Any) -> Any:
 
 
 def _active_business_clause(alias: str = "b") -> str:
-    return f"COALESCE({alias}.is_active, TRUE) = TRUE"
+    return (
+        f"COALESCE({alias}.is_active, TRUE) = TRUE "
+        f"AND COALESCE({alias}.entity_group, 'lead') IN ('client', 'internal', 'demo')"
+    )
 
 
 def _load_actor(cursor: Any, user_id: str) -> dict[str, Any]:
@@ -56,7 +59,7 @@ def _load_actor(cursor: Any, user_id: str) -> dict[str, Any]:
 
 def _load_networks(cursor: Any, user_id: str, is_superadmin: bool) -> list[dict[str, Any]]:
     membership_join = "" if is_superadmin else "LEFT JOIN network_members nm ON nm.network_id = n.id AND nm.user_id = %s AND nm.status = 'active'"
-    owner_filter = "" if is_superadmin else "WHERE n.owner_id = %s OR nm.user_id IS NOT NULL"
+    owner_filter = "" if is_superadmin else "AND (n.owner_id = %s OR nm.user_id IS NOT NULL)"
     params: tuple[Any, ...] = () if is_superadmin else (user_id, user_id)
     cursor.execute(
         f"""
@@ -68,6 +71,7 @@ def _load_networks(cursor: Any, user_id: str, is_superadmin: bool) -> list[dict[
         FROM networks n
         {membership_join}
         LEFT JOIN businesses b ON b.network_id = n.id
+        WHERE COALESCE(n.entity_group, 'lead') IN ('client', 'demo')
         {owner_filter}
         GROUP BY n.id, n.name, n.owner_id
         ORDER BY n.name
@@ -273,7 +277,22 @@ def list_control_scopes(
     businesses = business_page[:page_size]
     platform = None
     if is_superadmin and not normalized_query:
-        cursor.execute(f"SELECT COUNT(*) AS cnt FROM businesses b WHERE {_active_business_clause('b')}")
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM (
+                SELECT business.id
+                FROM businesses business
+                WHERE COALESCE(business.is_active, TRUE) = TRUE
+                  AND business.entity_group = 'client'
+                  AND business.network_id IS NULL
+                UNION
+                SELECT network.id
+                FROM networks network
+                WHERE network.entity_group = 'client'
+            ) client_contexts
+            """
+        )
         total_businesses = int(_row_to_dict(cursor, cursor.fetchone()).get("cnt") or 0)
         platform = _scope_payload(
             kind="platform",

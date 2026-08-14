@@ -235,7 +235,7 @@ def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
     by_key = {str(item.get("id") or ""): item for item in attention_items}
     ordered = [
         by_key[key]
-        for key in ("outreach_replies", "reviews_unanswered", "pending_approvals", "failed_jobs", "pending_posts")
+        for key in ("outreach_replies", "reviews_unanswered", "pending_approvals", "failed_jobs", "outreach_attention", "pending_posts")
         if key in by_key
     ]
     ordered.extend(item for item in attention_items if item not in ordered)
@@ -278,6 +278,11 @@ def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
             title = f"{rendered_count} {publication_word} требуют проверки"
             description = "Проверьте черновики и ошибки перед размещением."
             icon = "📝"
+        elif key == "outreach_attention":
+            touch_word = _plural_ru(count, "касание", "касания", "касаний")
+            title = f"{rendered_count} {touch_word} в аутриче требуют разбора"
+            description = "Это ошибки доставки или истёкшие ручные действия, а не ответы клиентов."
+            icon = "⚠️"
         else:
             title = str(item.get("title") or "Требуется внимание")
             description = str(item.get("description") or "").strip()
@@ -289,7 +294,7 @@ def format_superadmin_platform_attention(summary: dict[str, Any]) -> str:
     metrics = {str(item.get("key") or ""): item.get("value") for item in (summary.get("metrics") or [])}
     businesses = int(metrics.get("businesses_total") or 0)
     networks = int(metrics.get("networks_total") or 0)
-    lines.extend(["", "Под контролем", f"{businesses:,} активных бизнесов · {networks:,} сетей".replace(",", " ")])
+    lines.extend(["", "Под контролем", f"{businesses:,} клиентских аккаунтов · {networks:,} сетей".replace(",", " ")])
     return "\n".join(lines)
 
 

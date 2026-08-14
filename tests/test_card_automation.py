@@ -319,7 +319,7 @@ def test_superadmin_platform_attention_prioritizes_reply_and_hides_duplicate_met
     assert text.index("Новый ответ в аутриче") < text.index("24 действия ждут подтверждения")
     assert "1 647 заданий обновления завершились с ошибкой" in text
     assert "Затронуто 120 бизнесов" in text
-    assert "1 645 активных бизнесов · 11 сетей" in text
+    assert "1 645 клиентских аккаунтов · 11 сетей" in text
     assert "Данные\n" not in text
 
 
@@ -371,6 +371,47 @@ def test_platform_summary_includes_unanswered_reviews(monkeypatch) -> None:
     review_item = next(item for item in summary["attention_items"] if item["id"] == "reviews_unanswered")
     assert review_item["count"] == 10
     assert review_item["affected_businesses"] == 1
+
+
+def test_platform_summary_counts_only_current_client_contexts_and_actionable_items(monkeypatch) -> None:
+    """Lead parser copies, delivery failures and expired approvals are not platform work."""
+
+    class _PlatformCursor:
+        def __init__(self) -> None:
+            self.query = ""
+
+        def execute(self, query, params=None) -> None:
+            self.query = " ".join(str(query or "").lower().split())
+
+        def fetchone(self):
+            if "from businesses" in self.query:
+                client_only = "entity_group" in self.query and "client" in self.query
+                return {"cnt": 14 if client_only else 1966}
+            if "from networks" in self.query:
+                client_only = "entity_group" in self.query and "client" in self.query
+                return {"cnt": 3 if client_only else 11}
+            return {"cnt": 0}
+
+    def _count(_cursor, table_name, query, params=()):
+        normalized = " ".join(str(query).lower().split())
+        if table_name == "action_requests":
+            return 0 if "action_approvals" in normalized and "expires_at" in normalized else 24
+        if table_name == "outreach_campaign_touches":
+            true_replies_only = "needs_attention" not in normalized
+            return 0 if true_replies_only else 3
+        return 0
+
+    monkeypatch.setattr(operator_scope_summary, "_safe_count", _count)
+    summary = operator_scope_summary._platform_summary(
+        _PlatformCursor(),
+        {"kind": "platform", "id": "platform"},
+    )
+
+    metrics = {item["key"]: item["value"] for item in summary["metrics"]}
+    assert metrics["businesses_total"] == 14
+    assert metrics["networks_total"] == 3
+    assert metrics["pending_approvals"] == 0
+    assert metrics["outreach_replies"] == 0
 
 
 def test_reply_notification_contains_original_touch_reply_and_stop_status():

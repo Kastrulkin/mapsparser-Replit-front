@@ -826,6 +826,7 @@ def _create_shadow_business_for_lead(lead: dict[str, Any], user_id: str) -> dict
             "email": (str(lead.get("email") or "").strip() or None),
             "yandex_url": source_url or None,
             "moderation_status": LEAD_OUTREACH_MODERATION_STATUS,
+            "entity_group": "lead",
             "is_active": True,
         }
         if source_external_id and "yandex_org_id" in columns:

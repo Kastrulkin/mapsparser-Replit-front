@@ -153,9 +153,10 @@ class DatabaseManager:
             moderation_status = str(business.get("moderation_status") or "").strip().lower()
             description = str(business.get("description") or "").strip().lower()
             is_shadow_lead = description.startswith("lead shadow business for outreach lead")
-            is_lead = moderation_status == "lead_outreach" or is_shadow_lead
+            entity_group = str(business.get("entity_group") or "").strip().lower()
+            is_lead = entity_group == "lead" or moderation_status == "lead_outreach" or is_shadow_lead
             business["is_lead_business"] = is_lead
-            business["entity_group"] = "lead" if is_lead else "company"
+            business["entity_group"] = entity_group or ("lead" if is_lead else "client")
         return businesses
     
     # ===== USERS (Пользователи) =====
@@ -1176,7 +1177,7 @@ class DatabaseManager:
             return False
 
     def _lead_parser_business_filter(self, business_ref: str) -> str:
-        """Exclude parser snapshots that belong to another business's lead."""
+        """Exclude every legacy parser snapshot from customer workspaces."""
         if not self._prospectingleads_support_parser_scope():
             return ""
         return f"""
@@ -1184,17 +1185,14 @@ class DatabaseManager:
                 SELECT 1
                 FROM prospectingleads parser_lead
                 WHERE parser_lead.parse_business_id = {business_ref}
-                  AND (
-                      parser_lead.business_id IS NULL
-                      OR parser_lead.business_id <> {business_ref}
-                  )
             )
         """
     
     def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None, 
                        business_type: str = None, address: str = None, working_hours: str = None,
                        phone: str = None, email: str = None, website: str = None, yandex_url: str = None,
-                       city: str = None, country: str = 'US', moderation_status: str = 'pending') -> str:
+                       city: str = None, country: str = 'US', moderation_status: str = 'pending',
+                       entity_group: str = 'client') -> str:
         """Создать новый бизнес"""
         if not owner_id:
             raise ValueError("owner_id обязателен для создания бизнеса")
@@ -1219,6 +1217,7 @@ class DatabaseManager:
                 "city",
                 "country",
                 "moderation_status",
+                "entity_group",
             ]
             requested_values = [
                 business_id,
@@ -1236,6 +1235,7 @@ class DatabaseManager:
                 city,
                 country,
                 moderation_status,
+                entity_group,
             ]
 
             # Получаем список колонок businesses с учётом текущей СУБД/схемы.
@@ -1294,6 +1294,8 @@ class DatabaseManager:
             FROM businesses b
             LEFT JOIN users u ON b.owner_id = u.id
             WHERE (b.is_active = TRUE OR b.is_active IS NULL)
+            AND COALESCE(b.entity_group, 'lead') IN ('client', 'internal', 'demo')
+            AND LOWER(COALESCE(b.description, '')) NOT LIKE 'lead shadow business for outreach lead%%'
             {moderation_filter}
             {lead_parser_filter}
             ORDER BY b.created_at DESC
@@ -1322,6 +1324,8 @@ class DatabaseManager:
             SELECT b.* FROM businesses b
             WHERE b.owner_id = %s
               AND b.is_active = TRUE
+              AND COALESCE(b.entity_group, 'lead') IN ('client', 'internal', 'demo')
+              AND LOWER(COALESCE(b.description, '')) NOT LIKE 'lead shadow business for outreach lead%%'
               {moderation_filter}
               {lead_parser_filter}
             ORDER BY b.created_at DESC
@@ -1343,6 +1347,8 @@ class DatabaseManager:
             SELECT b.* FROM businesses b
             WHERE b.owner_id = %s
               AND (b.is_active = TRUE OR b.is_active IS NULL)
+              AND COALESCE(b.entity_group, 'lead') IN ('client', 'internal', 'demo')
+              AND LOWER(COALESCE(b.description, '')) NOT LIKE 'lead shadow business for outreach lead%%'
               {moderation_filter_direct}
               {lead_parser_filter}
             ORDER BY b.created_at DESC
@@ -1356,6 +1362,8 @@ class DatabaseManager:
             INNER JOIN networks n ON b.network_id = n.id
             WHERE n.owner_id = %s
               AND (b.is_active = TRUE OR b.is_active IS NULL)
+              AND COALESCE(b.entity_group, 'lead') IN ('client', 'internal', 'demo')
+              AND LOWER(COALESCE(b.description, '')) NOT LIKE 'lead shadow business for outreach lead%%'
               {moderation_filter_network}
               {lead_parser_filter}
             ORDER BY b.created_at DESC
@@ -1396,6 +1404,8 @@ class DatabaseManager:
                     OR bm.user_id IS NOT NULL
                   )
               AND (b.is_active = TRUE OR b.is_active IS NULL)
+              AND COALESCE(b.entity_group, 'lead') IN ('client', 'internal', 'demo')
+              AND LOWER(COALESCE(b.description, '')) NOT LIKE 'lead shadow business for outreach lead%%'
               {moderation_filter}
               {lead_parser_filter}
             ORDER BY b.created_at DESC
@@ -1438,8 +1448,8 @@ class DatabaseManager:
         network_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO networks (id, name, owner_id, description, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO networks (id, name, owner_id, description, entity_group, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, 'client', %s, %s)
         """, (network_id, name, owner_id, description, datetime.now().isoformat(), datetime.now().isoformat()))
         self.ensure_network_parent_business(
             network_id=network_id,
@@ -1503,6 +1513,7 @@ class DatabaseManager:
             "address",
             "is_active",
             "ai_agent_language",
+            "entity_group",
         ]
         requested_values = [
             network_id,
@@ -1513,6 +1524,7 @@ class DatabaseManager:
             business_address,
             True,
             "ru",
+            "client",
         ]
 
         fields = []
