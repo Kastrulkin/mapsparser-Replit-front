@@ -100,7 +100,13 @@ def fetch_complete_yandex_reviews(
             "language": "ru",
         }
     )
-    dataset_id = _text(run.get("defaultDatasetId"))
+    if isinstance(run, dict):
+        dataset_id = _text(run.get("defaultDatasetId"))
+    else:
+        dataset_id = _text(getattr(run, "default_dataset_id", None))
+        if not dataset_id:
+            dumped_run = run.model_dump(by_alias=True) if hasattr(run, "model_dump") else {}
+            dataset_id = _text(dumped_run.get("defaultDatasetId"))
     if not dataset_id:
         raise RuntimeError("Yandex reviews actor returned no dataset")
     raw_items = client.dataset(dataset_id).list_items().items

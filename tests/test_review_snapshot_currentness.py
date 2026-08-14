@@ -1,6 +1,7 @@
 from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.yandex_full_reviews_sync import (
     apply_complete_review_snapshot,
+    fetch_complete_yandex_reviews,
     normalize_actor_review,
 )
 
@@ -68,3 +69,32 @@ def test_actor_review_normalization_reads_yandex_owner_reply():
     assert review is not None
     assert review["response_text"] == "Спасибо!"
     assert review["published_at"].isoformat().startswith("2026-08-14T08:00:00")
+
+
+def test_complete_review_fetch_accepts_typed_apify_run(monkeypatch):
+    class TypedRun:
+        default_dataset_id = "dataset-1"
+
+    class Dataset:
+        def list_items(self):
+            return type("Items", (), {"items": []})()
+
+    class Actor:
+        def call(self, **_kwargs):
+            return TypedRun()
+
+    class Client:
+        def __init__(self, _token):
+            pass
+
+        def actor(self, _actor_id):
+            return Actor()
+
+        def dataset(self, dataset_id):
+            assert dataset_id == "dataset-1"
+            return Dataset()
+
+    monkeypatch.setenv("APIFY_TOKEN", "test-token")
+    monkeypatch.setitem(__import__("sys").modules, "apify_client", type("Module", (), {"ApifyClient": Client})())
+
+    assert fetch_complete_yandex_reviews("https://yandex.ru/maps/org/1") == []
