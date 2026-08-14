@@ -53,7 +53,7 @@ def main() -> int:
                 LIMIT 1
             ) feedback ON TRUE
             WHERE blueprint.metadata_json->>'template_key' = ANY(%s)
-            ORDER BY run.created_at ASC
+            ORDER BY COALESCE(run.queued_at, run.started_at, run.updated_at) ASC
             """,
             (selected,),
         )

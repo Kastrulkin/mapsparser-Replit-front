@@ -372,6 +372,47 @@ def test_agent_run_queue_blocks_a_new_key_while_same_blueprint_is_active(monkeyp
     }
 
 
+def test_agent_run_queue_rolls_back_failed_execution_before_scheduling_retry(monkeypatch):
+    from services import agent_run_queue
+
+    class Cursor:
+        def __init__(self):
+            self.queries = []
+            self.result = {"is_superadmin": True}
+
+        def execute(self, query, params=None):
+            self.queries.append(" ".join(query.split()).lower())
+
+        def fetchone(self):
+            result = self.result
+            self.result = None
+            return result
+
+    class Runner:
+        def __init__(self, cursor):
+            self.cursor = cursor
+
+        def execute_queued_run(self, run_id, user_data):
+            raise RuntimeError("temporary connection failure")
+
+    monkeypatch.setattr(agent_run_queue, "AgentBlueprintRunner", Runner)
+    cursor = Cursor()
+
+    result = agent_run_queue.execute_claimed_agent_run(
+        cursor,
+        {"id": "run-1", "created_by_user_id": "user-1", "attempt_count": 1, "max_attempts": 3},
+    )
+
+    assert result["retry_scheduled"] is True
+    assert cursor.queries[:4] == [
+        "select coalesce(is_superadmin, false) as is_superadmin from users where id = %s limit 1",
+        "savepoint agent_run_execution",
+        "rollback to savepoint agent_run_execution",
+        "release savepoint agent_run_execution",
+    ]
+    assert any(query.startswith("update agent_runs") for query in cursor.queries)
+
+
 def test_agent_run_claim_recovers_stale_heartbeat_before_claiming_retry():
     from services.agent_run_queue import claim_next_agent_run
 

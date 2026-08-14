@@ -764,6 +764,9 @@ def test_first_wave_templates_keep_business_semantics_and_never_compile_autowrit
     assert appointment_step["payload"]["date_range"] == "tomorrow"
     assert all("send" not in str(step.get("capability") or "") for step in bookings["version_payload"]["steps"])
     assert sheets["version_payload"]["capability_allowlist"] == ["google_sheets.read_rows"]
+    sheets_read_step = sheets["version_payload"]["steps"][0]
+    assert sheets_read_step["provider"] == "native_localos"
+    assert "provider_action_ref" not in sheets_read_step
     for draft in [daily, bookings, sheets]:
         assert draft["metadata"]["compiled_validation"]["valid"] is True
         assert draft["version_payload"]["limits"]["autonomous_external_write_allowed"] is False
@@ -875,6 +878,35 @@ def test_bounded_model_preview_uses_fixture_without_provider_or_external_action(
     assert payload["bounded_model"]["provider_called"] is False
     assert payload["bounded_model"]["external_actions_executed"] is False
     assert payload["external_dispatch_performed"] is False
+
+
+def test_internal_source_read_rolls_back_its_savepoint_on_schema_mismatch():
+    from services.agent_blueprint_workspace import _safe_select
+
+    class Cursor:
+        def __init__(self):
+            self.queries = []
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            self.queries.append(normalized)
+            if normalized.startswith("select missing_column"):
+                raise RuntimeError("column does not exist")
+
+        def fetchall(self):
+            return []
+
+    cursor = Cursor()
+
+    rows = _safe_select(cursor, "reviews", "SELECT missing_column FROM reviews", ())
+
+    assert rows == []
+    assert cursor.queries == [
+        "savepoint agent_workspace_safe_select",
+        "select missing_column from reviews",
+        "rollback to savepoint agent_workspace_safe_select",
+        "release savepoint agent_workspace_safe_select",
+    ]
 
 
 def test_bounded_model_runtime_uses_registered_schema_and_records_model_audit(monkeypatch):

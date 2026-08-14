@@ -524,20 +524,20 @@ def _load_appointments(cursor: Any, tenant_id: str, payload: Dict[str, Any]) -> 
         filters.append("status = %s")
         params.append(status)
     if date_from:
-        filters.append("booking_date >= %s")
+        filters.append("booking_time::date >= %s::date")
         params.append(date_from)
     if date_to:
-        filters.append("booking_date <= %s")
+        filters.append("booking_time::date <= %s::date")
         params.append(date_to)
     limit = max(1, min(int(payload.get("limit") or 50), 200))
     params.append(limit)
     cursor.execute(
         f"""
         SELECT id, business_id, client_phone, client_name, service_id, service_name,
-               booking_date, booking_time, status, notes, created_at, updated_at
+               booking_time::date AS booking_date, booking_time, status, notes, created_at, updated_at
         FROM Bookings
         WHERE {' AND '.join(filters)}
-        ORDER BY booking_date ASC NULLS LAST, booking_time ASC NULLS LAST, created_at DESC
+        ORDER BY booking_time ASC NULLS LAST, created_at DESC
         LIMIT %s
         """,
         tuple(params),

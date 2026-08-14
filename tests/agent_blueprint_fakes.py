@@ -31,6 +31,8 @@ class FakeCursor:
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
         params = params or ()
+        if normalized_query.startswith(("savepoint ", "rollback to savepoint ", "release savepoint ")):
+            return None
         if normalized_query.startswith("select to_regclass"):
             table_name = params[0]
             self.last_result = {"table_name": table_name if table_name in self.tables else None}

@@ -1701,11 +1701,16 @@ def _hydrate_internal_sources(cursor: Any, business_id: str, sources: List[Dict[
 
 
 def _safe_select(cursor: Any, source_name: str, query: str, params: tuple[Any, ...]) -> List[Dict[str, Any]]:
+    savepoint = "agent_workspace_safe_select"
+    cursor.execute(f"SAVEPOINT {savepoint}")
     try:
         cursor.execute(query, params)
         rows = [dict(row) for row in (cursor.fetchall() or [])]
     except Exception:
+        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        cursor.execute(f"RELEASE SAVEPOINT {savepoint}")
         return []
+    cursor.execute(f"RELEASE SAVEPOINT {savepoint}")
     return [{"source_name": source_name, "summary": _row_summary(row), "raw": row} for row in rows[:MAX_REVIEW_ITEMS]]
 
 

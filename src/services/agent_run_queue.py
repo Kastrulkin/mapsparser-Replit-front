@@ -183,18 +183,29 @@ def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
 
 def execute_claimed_agent_run(cursor: Any, run: dict[str, Any]) -> dict[str, Any]:
     run_id = str(run.get("id") or "")
+    actor_id = str(run.get("created_by_user_id") or "")
+    cursor.execute(
+        "SELECT COALESCE(is_superadmin, FALSE) AS is_superadmin FROM users WHERE id = %s LIMIT 1",
+        (actor_id,),
+    )
+    actor_row = cursor.fetchone() or {}
     user_data = {
-        "user_id": str(run.get("created_by_user_id") or ""),
-        "id": str(run.get("created_by_user_id") or ""),
-        "is_superadmin": False,
+        "user_id": actor_id,
+        "id": actor_id,
+        "is_superadmin": bool(actor_row.get("is_superadmin")),
     }
     runner = AgentBlueprintRunner(cursor)
+    savepoint = "agent_run_execution"
+    cursor.execute(f"SAVEPOINT {savepoint}")
     try:
         result = runner.execute_queued_run(run_id, user_data)
         current = result.get("run") if isinstance(result.get("run"), dict) else runner.load_run(run_id, user_data) or {}
     except Exception as exc:
+        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        cursor.execute(f"RELEASE SAVEPOINT {savepoint}")
         _schedule_agent_run_retry(cursor, run, str(exc))
         return {"success": False, "error": str(exc), "run_id": run_id, "retry_scheduled": True}
+    cursor.execute(f"RELEASE SAVEPOINT {savepoint}")
 
     if str(current.get("status") or "") == "failed" and _is_transient_error(str(current.get("error_text") or "")):
         _schedule_agent_run_retry(cursor, {**run, **current}, str(current.get("error_text") or "temporary agent run failure"))
