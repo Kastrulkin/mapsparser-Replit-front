@@ -72,6 +72,16 @@ def test_owner_business_lists_exclude_lead_parser_businesses():
     assert all("NOT EXISTS" in query for query in network_queries)
 
 
+def test_network_location_list_excludes_discovered_lead_rows():
+    manager = _manager_with_parser_scope()
+
+    manager.get_businesses_by_network("network-1")
+
+    query = " ".join(manager.conn.cursor_instance.queries[-1][0].lower().split())
+    assert "entity_group" in query
+    assert "'client', 'internal', 'demo'" in query
+
+
 def test_partnership_leads_expose_the_client_business_label():
     source = inspect.getsource(partnership_list_leads)
 

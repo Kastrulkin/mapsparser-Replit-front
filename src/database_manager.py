@@ -1597,6 +1597,7 @@ class DatabaseManager:
         cursor.execute("""
             SELECT * FROM businesses
             WHERE network_id = %s
+              AND COALESCE(entity_group, 'lead') IN ('client', 'internal', 'demo')
             ORDER BY created_at DESC
         """, (network_id,))
         rows = cursor.fetchall()
