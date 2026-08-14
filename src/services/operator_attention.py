@@ -178,8 +178,13 @@ def _load_review_counts(cursor: Any, business_id: str, latest_card: dict[str, An
         return fallback
     if not _table_has_column(cursor, "externalbusinessreviews", "response_text"):
         return fallback
+    current_filter = (
+        "AND COALESCE(is_current, TRUE) = TRUE"
+        if _table_has_column(cursor, "externalbusinessreviews", "is_current")
+        else ""
+    )
     cursor.execute(
-        """
+        f"""
         SELECT
             COUNT(*) AS total,
             SUM(CASE WHEN COALESCE(TRIM(response_text), '') != '' THEN 1 ELSE 0 END) AS with_response,
@@ -187,6 +192,7 @@ def _load_review_counts(cursor: Any, business_id: str, latest_card: dict[str, An
             MAX(COALESCE(updated_at, created_at)) AS latest_seen_at
         FROM externalbusinessreviews
         WHERE business_id = %s
+          {current_filter}
         """,
         (business_id,),
     )

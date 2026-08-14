@@ -35,6 +35,20 @@ STORY_FACTS_QUESTION = (
 )
 
 
+def _needs_business_history(story: Any, context: Any) -> bool:
+    story_text = " ".join(str(story or "").split())
+    context_payload = _parse_json(context)
+    completeness = (
+        context_payload.get("profile_completeness")
+        if isinstance(context_payload.get("profile_completeness"), dict)
+        else {}
+    )
+    if completeness.get("ready") is True and len(story_text) >= 80:
+        return False
+    generic_markers = ("представляет", "компания занимается", "мы оказываем услуги")
+    return len(story_text) < 80 or any(marker in story_text.lower() for marker in generic_markers)
+
+
 def _row(cursor: Any, value: Any) -> dict[str, Any]:
     if value is None:
         return {}
@@ -280,6 +294,58 @@ def _load_story_facts_action(
         }
     except Exception:
         return None
+
+
+def _load_business_history_reminders(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
+    if str(scope.get("kind") or "business") == "platform":
+        return []
+    try:
+        if not _table_exists(cursor, "outreach_sender_profiles"):
+            return []
+        business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
+        if not business_ids:
+            return []
+        cursor.execute(
+            """
+            SELECT b.id AS business_id, b.name AS business_name,
+                   p.competence_story, p.outreach_context_json
+            FROM businesses b
+            LEFT JOIN LATERAL (
+                SELECT competence_story, outreach_context_json
+                FROM outreach_sender_profiles
+                WHERE client_business_id = b.id
+                  AND workstream_type = 'client_partnership'
+                  AND is_active = TRUE
+                ORDER BY confirmed_at DESC NULLS LAST, updated_at DESC
+                LIMIT 1
+            ) p ON TRUE
+            WHERE b.id = ANY(%s)
+            ORDER BY b.name
+            """,
+            (business_ids,),
+        )
+        reminders: list[dict[str, Any]] = []
+        for value in cursor.fetchall() or []:
+            item = _row(cursor, value)
+            if not _needs_business_history(item.get("competence_story"), item.get("outreach_context_json")):
+                continue
+            business_id = str(item.get("business_id") or "")
+            reminders.append({
+                "id": f"business-history:{business_id}",
+                "title": "Расскажите о бизнесе",
+                "description": (
+                    "Добавьте историю, факты и примеры. "
+                    "ЛокалОС будет точнее готовить контент и предложения партнёрам."
+                ),
+                "cta_label": "Добавить историю",
+                "screen": "partnerships",
+                "business_id": business_id,
+                "business_name": item.get("business_name"),
+                "target_scope": {"kind": "business", "id": business_id},
+            })
+        return reminders[:5]
+    except Exception:
+        return []
 
 
 def _load_progress(scope: dict[str, Any], loader: Callable[[str], dict[str, Any]]) -> dict[str, Any] | None:
@@ -930,6 +996,7 @@ def build_mobile_today(
         "active_work": _load_active_work(cursor, scope),
         "changes_24h": _load_changes(cursor, scope, cutoff),
         "community_pulse": _load_community_pulse(cursor, scope, cutoff),
+        "profile_reminders": _load_business_history_reminders(cursor, scope),
         "completed_results": _load_completed_results(cursor, scope, progress),
         "progress_summary": _progress_summary(progress),
         "freshness": summary.get("freshness") or {"status": "live"},

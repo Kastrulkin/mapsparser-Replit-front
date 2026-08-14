@@ -1998,6 +1998,7 @@ def get_external_reviews(business_id):
         else:
             review_query += " WHERE r.business_id = %s "
             review_params.append(business_id)
+        review_query += " AND COALESCE(r.is_current, TRUE) = TRUE "
         source_filter_sql = _map_source_filter_sql("r.source", source_filter_raw)
         if source_filter_sql:
             review_query += f" AND {source_filter_sql} "

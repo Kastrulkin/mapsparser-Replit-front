@@ -53,6 +53,16 @@ export type TodayPayload = {
   changes_24h?: TodayActivityItem[];
   community_pulse?: CommunityPulseItem[];
   completed_results?: TodayActivityItem[];
+  profile_reminders?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    cta_label?: string;
+    screen?: string;
+    business_id?: string;
+    business_name?: string;
+    target_scope?: { kind: 'business' | 'network' | 'platform'; id?: string | null };
+  }>;
   progress_summary?: {
     completed_milestones?: number;
     total_milestones?: number;
@@ -171,6 +181,7 @@ export const TodayMobileV2 = ({
   const changes = data?.changes_24h || [];
   const pulse = data?.community_pulse || [];
   const results = data?.completed_results || [];
+  const profileReminders = data?.profile_reminders || [];
   const progress = data?.progress_summary;
   const isPlatform = data?.scope?.kind === 'platform';
   const isNetwork = data?.scope?.kind === 'network';
@@ -257,6 +268,27 @@ export const TodayMobileV2 = ({
       ) : null}
 
       <GrowthLoopPanel growthLoop={data?.growth_loop} dataHealth={data?.data_health} analyticsLevel={data?.analytics_level} rhythm={data?.rhythm} scopeKind={data?.scope?.kind} analyticsModules={data?.analytics_modules} networkSummary={data?.network_summary} problemLocations={data?.problem_locations} locationBreakdown={data?.location_breakdown} showImportAction={!['finance', 'finance_import'].includes(focus?.screen || '')} onOpenImport={() => { trackProduct?.('statistics_flow_opened', 'finance_import'); openFinanceImport?.(); }} onOpenLocation={(businessId, screen) => { trackProduct?.('statistics_flow_opened', businessId); openTarget(screen, { kind: 'business', id: businessId }); }} />
+
+      {profileReminders.length ? (
+        <Section title="Сделайте ЛокалОС точнее" subtitle="Один раз расскажите о бизнесе — дальше эти факты будут использоваться в работе.">
+          {profileReminders.slice(0, 3).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => openTarget(item.screen || 'partnerships', item.target_scope)}
+              className="flex min-h-20 w-full items-start gap-3 py-4 text-left transition-transform active:scale-[0.96]"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-primary/15 text-primary"><Sparkles className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1">
+                <b className="block text-balance text-sm leading-5">{item.title}</b>
+                <small className="mt-1 block text-pretty text-[11px] leading-4 text-zinc-600">{item.description}</small>
+                {item.business_name && isNetwork ? <small className="mt-2 block truncate text-[10px] text-zinc-700">{item.business_name}</small> : null}
+              </span>
+              <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-zinc-700" />
+            </button>
+          ))}
+        </Section>
+      ) : null}
 
       <Section title="Что изменилось" subtitle="Отзывы, продажи и другие события за последние 24 часа.">
         {changes.length ? changes.slice(0, 3).map((item) => <ActivityRow key={item.id} item={item} icon={Clock3} onClick={() => openTarget(item.screen, item.business_id ? { kind: 'business', id: item.business_id } : undefined)} />) : (

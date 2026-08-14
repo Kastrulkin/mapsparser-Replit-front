@@ -76,4 +76,34 @@ describe('TodayMobileV2', () => {
     expect(screen.getByText(/21 сообщение/)).toBeInTheDocument();
     expect(screen.queryByText(/21 сообщений/)).not.toBeInTheDocument();
   });
+
+  it('shows a useful business history reminder and opens the right business', async () => {
+    const openTarget = vi.fn();
+    render(
+      <TodayMobileV2
+        data={{
+          scope: { kind: 'business', id: 'business-1', name: 'Органика' },
+          profile_reminders: [{
+            id: 'business-history:business-1',
+            title: 'Расскажите о бизнесе',
+            description: 'ЛокалОС будет точнее готовить контент и предложения партнёрам.',
+            screen: 'partnerships',
+            target_scope: { kind: 'business', id: 'business-1' },
+          }],
+        }}
+        loading={false}
+        slowLoading={false}
+        command=""
+        setCommand={vi.fn()}
+        ask={vi.fn()}
+        openTarget={openTarget}
+        openProgress={vi.fn()}
+        track={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Сделайте ЛокалОС точнее' })).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: /Расскажите о бизнесе/ }));
+    expect(openTarget).toHaveBeenCalledWith('partnerships', { kind: 'business', id: 'business-1' });
+  });
 });

@@ -279,3 +279,14 @@ def test_story_facts_requirement_recognizes_story_plan_items():
         {"content_type": "faq", "theme": "Как подготовиться к занятию"},
         {},
     )
+
+
+def test_business_history_reminder_skips_complete_profile_and_flags_placeholder():
+    assert not mobile_today._needs_business_history(
+        "Бренд основала Елена после личного опыта мамы троих детей. Команда помогает детям спокойно привыкнуть к стрижке.",
+        {"profile_completeness": {"ready": True}},
+    )
+    assert mobile_today._needs_business_history(
+        "Представляет Органику в партнёрском общении.",
+        {},
+    )

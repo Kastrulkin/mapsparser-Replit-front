@@ -645,13 +645,19 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
             location_row = cursor.fetchone()
             result["attention_location"] = _row_value(location_row, "name")
     if reviews_table:
+        current_filter = (
+            "AND COALESCE(is_current, TRUE) = TRUE"
+            if _table_has_column(cursor, "externalbusinessreviews", "is_current")
+            else ""
+        )
         cursor.execute(
-            """
+            f"""
             SELECT COUNT(*) AS reviews_count,
                    COUNT(*) FILTER (WHERE COALESCE(NULLIF(TRIM(response_text), ''), '') IN ('', '—')) AS unanswered_reviews,
                    MAX(COALESCE(published_at, created_at)) AS latest_at
             FROM externalbusinessreviews
             WHERE business_id::text = ANY(%s)
+              {current_filter}
             """,
             (business_ids,),
         )
@@ -669,6 +675,7 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
                     JOIN businesses b ON b.id::text = r.business_id::text
                     WHERE r.business_id::text = ANY(%s)
                       AND COALESCE(NULLIF(TRIM(r.response_text), ''), '') IN ('', '—')
+                      AND COALESCE(r.is_current, TRUE) = TRUE
                     GROUP BY b.id, b.name
                     ORDER BY COUNT(*) DESC, b.name
                     LIMIT 1
