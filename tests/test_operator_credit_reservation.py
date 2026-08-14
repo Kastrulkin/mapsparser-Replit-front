@@ -22,6 +22,7 @@ class FakeCursor:
         self.ledger_entries = []
         self.reservation_updates = []
         self.stale_release_updates = []
+        self.advisory_locks = []
 
     def execute(self, query, params=None):
         self.last_query = " ".join(str(query or "").lower().split())
@@ -36,6 +37,8 @@ class FakeCursor:
             self.reservation_updates.append(params or ())
             if "status = 'released'" in self.last_query:
                 self.stale_release_updates.append(params or ())
+        if "pg_advisory_xact_lock" in self.last_query:
+            self.advisory_locks.append(params or ())
 
     def fetchone(self):
         query = self.last_query
@@ -82,6 +85,8 @@ def test_credit_reservation_plan_accounts_for_active_reservations() -> None:
     assert plan["available_after_reservations"] == 70
     assert plan["reservation_would_be_created"] is True
     assert plan["side_effects"]["credit_reserved"] is False
+    assert cursor.last_params == ("user-1",)
+    assert "business_id" not in cursor.last_query
 
 
 def test_credit_reservation_plan_blocks_when_unreserved_balance_is_low() -> None:
@@ -132,6 +137,7 @@ def test_reserve_paid_action_credits_records_reservation_when_ready() -> None:
     assert result["side_effects"]["reservation_created"] is True
     assert result["side_effects"]["credit_reserved"] is True
     assert len(cursor.inserted) == 1
+    assert cursor.advisory_locks == [("credit-reservation:user-1",)]
 
 
 def test_reserve_paid_action_credits_uses_idempotency_conflict_clause() -> None:

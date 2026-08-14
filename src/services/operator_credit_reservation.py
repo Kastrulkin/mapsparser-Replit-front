@@ -96,18 +96,17 @@ def _load_user_balance(cursor: Any, user_id: str) -> int | None:
         return None
 
 
-def _load_active_reserved_credits(cursor: Any, *, business_id: str, user_id: str) -> int | None:
+def _load_active_reserved_credits(cursor: Any, *, user_id: str) -> int | None:
     if not _table_exists(cursor, "operatorcreditreservations"):
         return None
     cursor.execute(
         """
         SELECT COALESCE(SUM(reserved_credits - charged_credits - released_credits), 0) reserved_credits
         FROM operatorcreditreservations
-        WHERE business_id = %s
-          AND user_id = %s
+        WHERE user_id = %s
           AND status IN ('reserved')
         """,
-        (business_id, user_id),
+        (user_id,),
     )
     row = _row_to_dict(cursor, cursor.fetchone()) or {}
     try:
@@ -190,7 +189,7 @@ def build_credit_reservation_plan(
 
     table_available = _table_exists(cursor, "operatorcreditreservations")
     balance = _load_user_balance(cursor, user_id)
-    active_reserved = _load_active_reserved_credits(cursor, business_id=business_id, user_id=user_id) if table_available else None
+    active_reserved = _load_active_reserved_credits(cursor, user_id=user_id) if table_available else None
 
     if requested is None:
         blocked.append("estimate_required")
@@ -242,6 +241,10 @@ def reserve_paid_action_credits(
     idempotency_key: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    cursor.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+        (f"credit-reservation:{user_id}",),
+    )
     plan = build_credit_reservation_plan(
         cursor,
         business_id=business_id,

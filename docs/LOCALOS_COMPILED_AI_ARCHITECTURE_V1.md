@@ -370,3 +370,40 @@ Reference provider smoke:
 PYTHONPATH=/app/src BUSINESS_ID=<business_id> \
   python scripts/smoke_google_sheets_reference_agent.py
 ```
+
+First-wave pilot planning is read-only and must run before any cohort or
+credit change. The planner requires exactly six beta templates and three pilot
+businesses, distributes `10` previews and `5` production runs per template,
+and fails closed while a business UUID is missing. Its default ceiling is `72`
+credits: `60` for at most two credits per production run plus a `12`-credit
+retry buffer. It always emits `execution_authorized=false`; the output is a
+plan, not permission to execute it.
+
+```bash
+PYTHONPATH=src python scripts/plan_agent_template_pilot.py \
+  --template daily_owner_digest \
+  --template negative_review_reply \
+  --template service_seo_cleanup \
+  --template card_posts_from_signals \
+  --template tomorrow_bookings_check \
+  --template google_sheets_business_result \
+  --business 'pilot-1|<business-uuid>|Business one' \
+  --business 'pilot-2|<business-uuid>|Business two' \
+  --business 'pilot-3|<business-uuid>|Business three' \
+  --funding 'pilot-1|<owner-uuid>|<available-credits>' \
+  --funding 'pilot-2|<owner-uuid>|<available-credits>' \
+  --funding 'pilot-3|<owner-uuid>|<available-credits>'
+```
+
+Credits are stored on the owner account rather than in separate business
+wallets. The planner groups businesses by owner, counts a shared balance once,
+and reports the exact top-up required for each owner. Runtime reservations must
+also count every active reservation for that owner across all businesses; the
+reservation path takes an owner-scoped transaction lock before checking the
+shared balance.
+
+The current evidence ledger remains authoritative after execution:
+
+```bash
+PYTHONPATH=src python scripts/report_agent_template_pilot_readiness.py
+```
