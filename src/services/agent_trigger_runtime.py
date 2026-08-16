@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from services.agent_canary_budget import evaluate_agent_canary_budget, pause_agent_canary_blueprint
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_runner import AgentBlueprintRunner, parse_json_field
 from services.agent_capability_handlers import capability_runtime_contract
@@ -237,6 +238,29 @@ def dispatch_due_scheduled_agent_blueprints(
     dispatched = []
     skipped = []
     for blueprint in blueprints:
+        canary = evaluate_agent_canary_budget(
+            cursor,
+            blueprint=blueprint,
+            requested_credits=2,
+            now=now,
+        )
+        if canary.get("enabled") and not canary.get("allowed"):
+            reason = str(canary.get("reason") or "canary_blocked")
+            if reason != "not_started":
+                pause_agent_canary_blueprint(
+                    cursor,
+                    blueprint_id=str(blueprint.get("id") or ""),
+                    reason=reason,
+                    now=now,
+                )
+            skipped.append(
+                {
+                    "blueprint_id": str(blueprint.get("id") or ""),
+                    "business_id": str(blueprint.get("business_id") or ""),
+                    "reason": f"canary_{reason}",
+                }
+            )
+            continue
         version = _resolve_active_version(cursor, blueprint)
         if not version or not _matches_schedule_trigger(blueprint, version, trigger):
             continue
@@ -483,9 +507,15 @@ def _dispatch_scheduled_blueprint(
         """,
         (trigger_event_id, business_id, blueprint_id, trigger, json.dumps(event_payload, ensure_ascii=False)),
     )
+    business_owner_id = str(blueprint.get("business_owner_id") or "")
+    if not business_owner_id:
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+        business_row = cursor.fetchone() or {}
+        business_owner_id = str(business_row.get("owner_id") or "")
+    billing_user_id = business_owner_id or str(blueprint.get("created_by_user_id") or "")
     user_data = {
-        "user_id": str(blueprint.get("created_by_user_id") or ""),
-        "id": str(blueprint.get("created_by_user_id") or ""),
+        "user_id": billing_user_id,
+        "id": billing_user_id,
         "is_superadmin": False,
     }
     run_input = {

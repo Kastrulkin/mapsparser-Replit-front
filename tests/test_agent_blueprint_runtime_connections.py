@@ -1519,6 +1519,19 @@ def test_completed_one_off_has_completed_lifecycle():
     assert agent_blueprints_api._agent_lifecycle_state(blueprint) == "completed"
 
 
+def test_paused_agent_has_paused_lifecycle():
+    from api import agent_blueprints_api
+
+    blueprint = {
+        "status": "paused",
+        "last_run_status": "completed",
+        "last_run_input_json": {"preview_mode": False},
+        "metadata_json": {"execution_mode": "scheduled"},
+    }
+
+    assert agent_blueprints_api._agent_lifecycle_state(blueprint) == "paused"
+
+
 def test_activation_gate_requires_safe_preview_run(monkeypatch):
     from api import agent_blueprints_api
 

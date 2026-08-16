@@ -1271,6 +1271,20 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
                 and row.get("metadata_json", {}).get("execution_mode") == "scheduled"
             ][:limit]
             return None
+        if normalized_query.startswith("select owner_id from businesses where id"):
+            business_id = params[0]
+            blueprint = next(
+                (
+                    row
+                    for row in self.tables["agent_blueprints"].values()
+                    if row.get("business_id") == business_id
+                ),
+                {},
+            )
+            self.last_result = {
+                "owner_id": blueprint.get("business_owner_id") or blueprint.get("created_by_user_id")
+            }
+            return None
         if "from agent_blueprints" in normalized_query and "status = 'active'" in normalized_query:
             business_id = params[0]
             self.last_results = [

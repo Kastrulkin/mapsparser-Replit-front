@@ -1042,6 +1042,13 @@ export const buildEmployeeStatus = (
       summary: 'Разовая задача выполнена. Результат сохранён в истории.',
     };
   }
+  if (workspaceState === 'paused') {
+    return {
+      label: 'Пауза',
+      tone: 'slate',
+      summary: 'Автоматические запуски приостановлены.',
+    };
+  }
   if (workspaceState === 'draft') {
     return {
       label: 'Черновик',
@@ -1078,7 +1085,11 @@ export const buildEmployeeWorkspaceState = (
   if (details?.execution_mode_confirmation_required || blueprint.execution_mode_confirmation_required) {
     return 'needs_mode';
   }
-  if ((details?.lifecycle_state || blueprint.lifecycle_state) === 'completed') {
+  const lifecycleState = details?.lifecycle_state || blueprint.lifecycle_state;
+  if (lifecycleState === 'paused' || blueprint.status === 'paused') {
+    return 'paused';
+  }
+  if (lifecycleState === 'completed') {
     return 'completed';
   }
   const gate = details?.activation_gate;
@@ -1195,6 +1206,14 @@ export const buildEmployeePrimaryAction = ({
       targetMode: 'results',
       versionId: details?.active_version_id || details?.candidate_version_id || blueprint.active_version_id || blueprint.latest_version_id || '',
       secondaryAction: 'clone_agent',
+    };
+  }
+  if (state === 'paused') {
+    return {
+      kind: 'view_history',
+      label: 'Открыть последний результат',
+      description: 'Автоматические запуски приостановлены. Последний результат остаётся доступен в истории.',
+      targetMode: 'results',
     };
   }
   if (state === 'blocked_result') {
@@ -1418,7 +1437,9 @@ export const buildEmployeeWorkspaceStory = (
     responsibilities: buildEmployeeResponsibilities(blueprint, details),
     latestWork: buildEmployeeLastActivity(blueprint, details, pendingApproval),
     nextWork: userMode.mode === 'scheduled'
-      ? blueprint.status === 'active'
+      ? state === 'paused'
+        ? 'Автоматические запуски приостановлены'
+        : blueprint.status === 'active'
         ? (details?.next_run_at || blueprint.next_run_at)
           ? `Следующий запуск: ${formatShortDate(details?.next_run_at || blueprint.next_run_at)}`
           : 'Расписание включено, время следующего запуска уточняется'

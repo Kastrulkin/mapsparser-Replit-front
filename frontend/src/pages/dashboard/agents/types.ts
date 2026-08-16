@@ -33,7 +33,7 @@ export type AgentBlueprint = {
   execution_mode?: 'one_off' | 'manual' | 'scheduled';
   execution_mode_source?: 'explicit' | 'legacy_trigger';
   execution_mode_confirmation_required?: boolean;
-  lifecycle_state?: 'draft' | 'needs_setup' | 'ready' | 'active' | 'completed' | 'error';
+  lifecycle_state?: 'draft' | 'needs_setup' | 'ready' | 'active' | 'paused' | 'completed' | 'error';
   last_business_result?: Record<string, unknown> | null;
   next_run_at?: string | null;
   metadata_json?: Record<string, unknown>;
@@ -447,7 +447,7 @@ export type AgentBlueprintDetails = {
   execution_mode?: 'one_off' | 'manual' | 'scheduled';
   execution_mode_source?: 'explicit' | 'legacy_trigger';
   execution_mode_confirmation_required?: boolean;
-  lifecycle_state?: 'draft' | 'needs_setup' | 'ready' | 'active' | 'completed' | 'error';
+  lifecycle_state?: 'draft' | 'needs_setup' | 'ready' | 'active' | 'paused' | 'completed' | 'error';
   last_business_result?: Record<string, unknown> | null;
   next_run_at?: string | null;
   learning_events?: AgentLearningEvent[];
@@ -906,7 +906,7 @@ export type AgentExecutionMode = 'one_off' | 'manual' | 'scheduled';
 
 export type EmployeeNextActionKind = 'approve' | 'connect' | 'confirm_mode' | 'run_test' | 'run_work' | 'run_similar' | 'enable' | 'configure_schedule' | 'open_result' | 'view_history';
 
-export type EmployeeWorkspaceState = 'draft' | 'needs_mode' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'completed' | 'needs_attention' | 'error';
+export type EmployeeWorkspaceState = 'draft' | 'needs_mode' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'paused' | 'completed' | 'needs_attention' | 'error';
 
 export type AgentRegistryFilter = 'all' | 'working' | 'attention' | 'completed';
 

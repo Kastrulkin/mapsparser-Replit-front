@@ -5,6 +5,7 @@ import os
 import uuid
 from typing import Any
 
+from services.agent_canary_budget import evaluate_agent_canary_budget
 from services.agent_blueprint_runner import AgentBlueprintRunner, parse_json_field
 from services.agent_integration_preflight import build_agent_integration_preflight
 from services.agent_run_billing import AGENT_RUN_ESTIMATED_CREDITS, finalize_agent_run_credits, reserve_agent_run_credits
@@ -89,10 +90,23 @@ def enqueue_agent_run(
             "run_id": str(in_progress.get("id") or ""),
         }
 
+    preview = input_payload.get("preview_mode") is True
+    canary = evaluate_agent_canary_budget(
+        cursor,
+        blueprint=blueprint,
+        requested_credits=AGENT_RUN_ESTIMATED_CREDITS,
+    )
+    if not preview and canary.get("enabled") and not canary.get("allowed"):
+        return {
+            "success": False,
+            "code": "AGENT_CANARY_BUDGET_BLOCKED",
+            "error": "agent canary window or credit budget blocked this run",
+            "canary": canary,
+        }
+
     runner = AgentBlueprintRunner(cursor)
     runner._supersede_pending_runs(blueprint_id)
     run_id = str(uuid.uuid4())
-    preview = input_payload.get("preview_mode") is True
     billing = reserve_agent_run_credits(
         cursor,
         business_id=business_id,

@@ -2906,6 +2906,8 @@ def _agent_lifecycle_state(blueprint: dict) -> str:
         and last_run_input.get("preview_mode") is False
     ):
         return "completed"
+    if status == "paused":
+        return "paused"
     if status == "active":
         return "active"
     if last_run_status == "completed" and last_run_input.get("preview_mode") is True:
