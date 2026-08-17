@@ -6,6 +6,7 @@ from src.services.content_plan_service import (
     _content_generation_v2_prompt,
     _load_publication_matrix_override,
     _parse_content_candidates,
+    _rank_business_content_evidence,
     _score_content_candidate,
 )
 from src.services.content_voice_service import _derive_profile
@@ -109,6 +110,59 @@ def test_story_facts_complete_story_brief():
     assert brief["complete"] is True
     assert "story_facts" in {source["id"] for source in brief["sources"]}
     assert story_facts in brief["confirmed_details"]
+
+
+def test_public_review_story_evidence_completes_story_brief():
+    item = {
+        "theme": "История ученика: как школа помогает стать увереннее",
+        "goal": "Показать реальный эпизод",
+        "content_type": "story",
+        "source_kind": "review",
+        "source_ref": "Публичный отзыв",
+        "metadata_json": {},
+    }
+    evidence = _rank_business_content_evidence(
+        [
+            {
+                "id": "review_school_dream",
+                "type": "public_review",
+                "label": "Публичный отзыв",
+                "fact": (
+                    "Ученица привела подругу посмотреть школу. Девочка заглянула в классы, "
+                    "игровую и к полкам с книгами, а потом сказала: «Это же школа мечты»."
+                ),
+            }
+        ],
+        item,
+    )
+    brief = _build_content_brief_v1(item, {"description": "Школа", "services": []}, evidence)
+
+    assert brief["complete"] is True
+    assert brief["story_evidence_source_ids"] == ["review_school_dream"]
+    assert "story_facts" not in brief["missing_fields"]
+
+
+def test_story_candidate_must_use_selected_story_evidence():
+    candidate = {
+        "id": "variant-1",
+        "angle": "Общий совет",
+        "text": "Проекты помогают детям делать самостоятельные шаги и становиться увереннее.",
+        "used_fact_ids": ["event"],
+        "unsupported_facts": [],
+    }
+    scored = _score_content_candidate(
+        candidate,
+        {
+            "story_objective": "story",
+            "story_evidence_source_ids": ["review_school_dream"],
+            "sources": [{"id": "event"}, {"id": "review_school_dream"}],
+            "confirmed_details": ["Есть публичный отзыв"],
+        },
+        {},
+    )
+
+    assert scored["quality_passed"] is False
+    assert any("реальный эпизод" in issue for issue in scored["issues"])
 
 
 def test_plan_response_highlights_missing_story_facts_before_generation():
@@ -378,6 +432,8 @@ def test_generation_prompt_uses_confirmed_business_and_audience_descriptions():
             "examples": [],
         },
         language="ru",
+        publication_objective_context="Цель: показать один реальный результ.",
+        industry_pattern_context="Не описывай инструменты и не обещай отсутствие слёз.",
     )
 
     assert "Культурный центр для жителей района" in prompt
@@ -387,6 +443,8 @@ def test_generation_prompt_uses_confirmed_business_and_audience_descriptions():
     assert "свяжи их в короткий рассказ" in prompt
     assert "не выдавай перечень дат и названий" in prompt
     assert "без знания маркетингового жаргона" in prompt
+    assert "один реальный результ" in prompt
+    assert "не описывай инструменты" in prompt.lower()
 
 
 def test_missing_optional_prompt_does_not_abort_generation_transaction():

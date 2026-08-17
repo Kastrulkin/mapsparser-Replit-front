@@ -2264,6 +2264,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 "event",
                 "confirmed_details",
                 "details",
+                "story_facts",
                 "date_status",
                 "source",
                 "audience",
@@ -4201,6 +4202,159 @@ def _content_plan_knowledge_context(cursor: Any, item: dict[str, Any]) -> tuple[
     }
 
 
+CONTENT_EVIDENCE_TOKEN_RE = re.compile(r"[^\W\d_]{4,}", re.UNICODE)
+CONTENT_STORY_SIGNAL_RE = re.compile(
+    r"\b(?:сначала|потом|затем|после|привел\w*|пришел|пришёл|пришла|"
+    r"увидел\w*|заметил\w*|сказал\w*|начал\w*|стал\w*|изменил\w*|"
+    r"справил\w*|боял\w*|радост\w*|сон|доч\w*|сын\w*|реб[ёе]нок|ученик\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _content_evidence_tokens(value: Any) -> set[str]:
+    return {
+        token.casefold()
+        for token in CONTENT_EVIDENCE_TOKEN_RE.findall(str(value or ""))
+    }
+
+
+def _rank_business_content_evidence(
+    candidates: list[dict[str, Any]],
+    item: dict[str, Any],
+    *,
+    limit: int = 6,
+) -> list[dict[str, Any]]:
+    query_tokens = _content_evidence_tokens(
+        " ".join(
+            [
+                str(item.get("theme") or ""),
+                str(item.get("goal") or ""),
+                str(item.get("source_ref") or ""),
+            ]
+        )
+    )
+    story_objective = bool(_story_fact_objective(item))
+    ranked: list[tuple[int, int, dict[str, Any]]] = []
+    seen: set[str] = set()
+    for index, candidate in enumerate(candidates):
+        fact = _clean_brief_answer(candidate.get("fact"), 1200)
+        normalized = " ".join(fact.casefold().split())
+        dedup_key = re.sub(r"[^\wа-яё]+", "", normalized, flags=re.IGNORECASE)[:900]
+        if len(normalized) < 50 or dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+        overlap = len(query_tokens.intersection(_content_evidence_tokens(fact)))
+        evidence_type = str(candidate.get("type") or "")
+        story_signal = bool(CONTENT_STORY_SIGNAL_RE.search(fact))
+        score = overlap * 12
+        if evidence_type == "public_review":
+            score += 15
+        if story_objective and story_signal:
+            score += 45
+        if story_objective and evidence_type == "public_review":
+            score += 20
+        if 120 <= len(fact) <= 900:
+            score += 6
+        enriched = {
+            **candidate,
+            "fact": fact,
+            "story_evidence": bool(story_signal and evidence_type == "public_review"),
+            "relevance_score": score,
+        }
+        ranked.append((score, -index, enriched))
+    ranked.sort(key=lambda value: (value[0], value[1]), reverse=True)
+    selected = [value[2] for value in ranked[: max(1, min(limit, 8))]]
+    if story_objective:
+        story_candidate = next((value[2] for value in ranked if value[2].get("story_evidence")), None)
+        if story_candidate:
+            selected = [
+                story_candidate,
+                *[value for value in selected if value.get("id") != story_candidate.get("id")],
+            ][:limit]
+    return selected
+
+
+def _load_business_content_evidence(
+    cursor: Any,
+    item: dict[str, Any],
+    *,
+    limit: int = 6,
+) -> list[dict[str, Any]]:
+    business_id = str(item.get("business_id") or "").strip()
+    if not business_id:
+        return []
+    candidates: list[dict[str, Any]] = []
+    review_rows: list[Any] = []
+    cursor.execute("SAVEPOINT content_evidence_reviews")
+    try:
+        cursor.execute(
+            """
+        SELECT id, source, rating, text, published_at
+        FROM externalbusinessreviews
+        WHERE business_id = %s
+          AND COALESCE(is_current, TRUE) = TRUE
+          AND NULLIF(BTRIM(COALESCE(text, '')), '') IS NOT NULL
+        ORDER BY COALESCE(published_at, updated_at, created_at) DESC
+        LIMIT 120
+            """,
+            (business_id,),
+        )
+        fetchall = getattr(cursor, "fetchall", None)
+        review_rows = list(fetchall() or []) if callable(fetchall) else []
+        cursor.execute("RELEASE SAVEPOINT content_evidence_reviews")
+    except Exception:
+        cursor.execute("ROLLBACK TO SAVEPOINT content_evidence_reviews")
+        cursor.execute("RELEASE SAVEPOINT content_evidence_reviews")
+    for row in review_rows:
+        review = _row_to_dict(cursor, row)
+        candidates.append(
+            {
+                "id": f"review_{review.get('id')}",
+                "type": "public_review",
+                "label": "Публичный отзыв",
+                "fact": review.get("text"),
+                "source": str(review.get("source") or ""),
+                "rating": int(review.get("rating") or 0),
+            }
+        )
+    document_rows: list[Any] = []
+    cursor.execute("SAVEPOINT content_evidence_documents")
+    try:
+        cursor.execute(
+            """
+        SELECT id, document_type, title, content_text, permalink, published_at
+        FROM knowledge_documents
+        WHERE business_id = %s
+          AND invalidated_at IS NULL
+          AND sensitivity_class = 'public'
+          AND allowed_uses @> '["client_content"]'::jsonb
+          AND document_type IN ('published_post', 'approved_news')
+          AND NULLIF(BTRIM(COALESCE(content_text, '')), '') IS NOT NULL
+        ORDER BY COALESCE(published_at, updated_at, created_at) DESC
+        LIMIT 120
+            """,
+            (business_id,),
+        )
+        fetchall = getattr(cursor, "fetchall", None)
+        document_rows = list(fetchall() or []) if callable(fetchall) else []
+        cursor.execute("RELEASE SAVEPOINT content_evidence_documents")
+    except Exception:
+        cursor.execute("ROLLBACK TO SAVEPOINT content_evidence_documents")
+        cursor.execute("RELEASE SAVEPOINT content_evidence_documents")
+    for row in document_rows:
+        document = _row_to_dict(cursor, row)
+        candidates.append(
+            {
+                "id": f"document_{document.get('id')}",
+                "type": str(document.get("document_type") or "published_post"),
+                "label": "Прошлая публикация бизнеса",
+                "fact": document.get("content_text"),
+                "permalink": str(document.get("permalink") or ""),
+            }
+        )
+    return _rank_business_content_evidence(candidates, item, limit=limit)
+
+
 CONTENT_BRIEF_DATE_RE = re.compile(
     r"\b(?:[0-3]?\d[./-][01]?\d(?:[./-]20\d{2})?|[0-3]?\d\s+"
     r"(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))\b",
@@ -4278,7 +4432,11 @@ def _annotate_story_facts_requirement(item: dict[str, Any]) -> dict[str, Any]:
     return metadata
 
 
-def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
+def _build_content_brief_v1(
+    item: dict[str, Any],
+    facts: dict[str, Any],
+    evidence_sources: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     metadata = _item_metadata(item)
     answers = metadata.get("brief_answers") if isinstance(metadata.get("brief_answers"), dict) else {}
     theme = _clean_brief_answer(item.get("theme"), 500)
@@ -4293,12 +4451,15 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
     detail_answer = _clean_brief_answer(answers.get("confirmed_details") or answers.get("details") or "", 1000)
     story_facts = _clean_brief_answer(answers.get("story_facts"), 1200)
     story_objective = _story_fact_objective(item)
+    evidence = [dict(source) for source in evidence_sources or [] if isinstance(source, dict)]
+    story_evidence = [source for source in evidence if bool(source.get("story_evidence"))]
     relevant_services = _relevant_service_names_for_item(facts.get("services"), item, limit=3)
     details: list[str] = []
     if detail_answer:
         details.append(detail_answer)
     if story_facts:
         details.append(story_facts)
+    details.extend(_clean_brief_answer(source.get("fact"), 700) for source in evidence[:3])
     if source_ref and source_ref != event and source_kind not in {"seo_keyword", "audit_signal", "search"}:
         details.append(source_ref)
     if content_type in {"service", "service_intro"} and relevant_services:
@@ -4317,6 +4478,7 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
         sources.append({"id": "owner_source", "type": "owner", "label": "Источник владельца", "fact": source_answer})
     if relevant_services and content_type in {"service", "service_intro"}:
         sources.append({"id": "services", "type": "business", "label": "Услуги бизнеса", "fact": ", ".join(relevant_services)})
+    sources.extend(evidence)
     site_fact = _clean_brief_answer(facts.get("site_description") or facts.get("description"), 500)
     if site_fact:
         sources.append({"id": "business_description", "type": "business", "label": "Сайт или карточка", "fact": site_fact})
@@ -4325,7 +4487,7 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
     has_date = bool(CONTENT_BRIEF_DATE_RE.search(date_blob)) or bool(_clean_brief_answer(answers.get("date_status"), 120))
     is_search_only = source_kind in {"seo_keyword", "audit_signal", "search"} and not _clean_brief_answer(answers.get("infopovod"))
     missing: list[str] = []
-    if story_objective and not story_facts:
+    if story_objective and not story_facts and not story_evidence:
         missing.append("story_facts")
     if not event or is_search_only:
         missing.append("infopovod")
@@ -4354,6 +4516,7 @@ def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict
         "sources": sources[:8],
         "seo_signal": seo_keyword,
         "requires_story_facts": bool(story_objective),
+        "story_evidence_source_ids": [str(source.get("id") or "") for source in story_evidence],
         "story_objective": story_objective,
         "complete": not unique_missing,
         "missing_fields": unique_missing,
@@ -4529,6 +4692,9 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
     style_issues.extend(voice_issues)
     style_issues.extend(clarity_issues)
     style_issues.extend(story_issues)
+    story_source_ids = {str(value) for value in brief.get("story_evidence_source_ids") or [] if str(value)}
+    if brief.get("story_objective") and story_source_ids and not used_ids.intersection(story_source_ids):
+        style_issues.append("История не опирается на реальный эпизод из источника")
     score = 0
     if grounded:
         score += 55
@@ -4566,6 +4732,8 @@ def _content_generation_v2_prompt(
     brief: dict[str, Any],
     voice: dict[str, Any],
     language: str,
+    publication_objective_context: str = "",
+    industry_pattern_context: str = "",
 ) -> str:
     voice_preferences = voice.get("preferences") if isinstance(voice.get("preferences"), dict) else {}
     business_description = str(voice_preferences.get("business_description") or "").strip()
@@ -4574,13 +4742,15 @@ def _content_generation_v2_prompt(
         f"Пример {index + 1}: {item.get('text')}"
         for index, item in enumerate(voice.get("examples") or [])
     ) or "Примеров пока нет"
-    has_story_facts = any(
-        str(source.get("id") or "") == "story_facts"
+    story_source_ids = {
+        str(source.get("id") or "")
         for source in brief.get("sources") or []
         if isinstance(source, dict)
-    )
+        and (str(source.get("id") or "") == "story_facts" or bool(source.get("story_evidence")))
+    }
+    has_story_facts = bool(story_source_ids)
     story_variant_rule = (
-        "Для человеческой истории используй только эпизод из источника story_facts. "
+        f"Для человеческой истории используй только эпизод из источников: {', '.join(sorted(story_source_ids))}. "
         "Не добавляй другое имя, возраст, событие или результат."
         if has_story_facts
         else "Источника story_facts нет: не придумывай героя, имя, возраст, эпизод или результат. "
@@ -4606,6 +4776,8 @@ def _content_generation_v2_prompt(
         "Верни строго JSON: {\"candidates\":[{\"id\":\"variant-1\",\"angle\":\"...\",\"text\":\"...\","
         "\"used_fact_ids\":[\"source_id\"],\"unsupported_facts\":[]}]}\n\n"
         f"Факты о бизнесе:\n{_build_content_plan_business_fact_block(business_facts)}\n\n"
+        f"Задача этого типа публикации:\n{publication_objective_context or 'Одна публикация — одна бизнес-задача.'}\n\n"
+        f"Правила ниши:\n{industry_pattern_context or 'Нет дополнительных правил.'}\n\n"
         f"Редакторский бриф:\n{_content_brief_prompt_block(brief)}\n\n"
         f"Подтверждённое описание бизнеса от владельца: {business_description or 'нет дополнительного описания'}\n"
         f"Клиенты бизнеса со слов владельца: {audience_description or 'нет дополнительного описания'}\n"
@@ -4684,7 +4856,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         knowledge_context, knowledge_metadata = _content_plan_knowledge_context(cursor, item)
         knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
         generation_v2 = _content_generation_v2_enabled()
-        content_brief = _build_content_brief_v1(item, business_facts)
+        content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
+        content_brief = _build_content_brief_v1(item, business_facts, content_evidence)
         voice_context = load_content_voice_context(
             cursor,
             user_id=user_id,
@@ -4745,6 +4918,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             brief=content_brief,
             voice=voice_context,
             language=normalized_language,
+            publication_objective_context=publication_objective_context,
+            industry_pattern_context=industry_pattern_context,
         ) if generation_v2 else (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
