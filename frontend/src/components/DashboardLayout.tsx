@@ -18,6 +18,7 @@ type DashboardBusiness = {
   subscription_ends_at?: string | null;
   network_id?: string | null;
   network_name?: string | null;
+  web_tracking_available?: boolean;
 };
 
 export type ControlScope = {
@@ -221,7 +222,12 @@ export const DashboardLayout = () => {
   return (
     <GuidedTourProvider user={user}>
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.06),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#f6f8fc_100%)] text-slate-900">
-      <DashboardSidebar isMobile={false} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)} />
+      <DashboardSidebar
+        isMobile={false}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        webTrackingAvailable={currentBusiness?.web_tracking_available === true}
+      />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
           businesses={businesses}
@@ -276,6 +282,7 @@ export const DashboardLayout = () => {
       <DashboardSidebar
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
+        webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
       </div>
     </GuidedTourProvider>

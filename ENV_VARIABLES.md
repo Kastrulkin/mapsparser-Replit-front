@@ -104,6 +104,32 @@ PROSPECTING_CONTACT_INTELLIGENCE_BATCH_SIZE=1
 ```
 **Назначение:** включает очередь нормализации контактов, сбора публичных evidence и подготовки message brief. `BATCH_SIZE` ограничивает число последовательно обрабатываемых задач за один цикл worker; допустимый диапазон принудительно ограничен значениями от 1 до 20. Параллельная отправка сообщений этим параметром не включается.
 
+### Web tracking — поэтапный rollout
+
+```bash
+RATE_LIMIT_STORAGE_URI=redis://redis:6379/0
+WEB_TRACKING_ENABLED=false
+WEB_TRACKING_CREATE_ENABLED=false
+WEB_TRACKING_INGEST_ENABLED=false
+WEB_TRACKING_ANALYTICS_ENABLED=false
+WEB_TRACKING_BUSINESS_IDS=
+WEB_TRACKING_IP_TRACKER_RATE_LIMIT="120 per minute"
+WEB_TRACKING_GLOBAL_RATE_LIMIT="12000 per minute"
+WEB_TRACKING_IN_PROCESS_RATE_LIMIT=120
+WEB_TRACKING_METRICS_REDIS_URL=redis://redis:6379/0
+WEB_TRACKING_METRICS_PREFIX=localos:web_tracking:ingestion
+WEB_CONCURRENCY=2
+WEB_THREADS=4
+GUNICORN_TIMEOUT=300
+WEB_TRACKING_MAINTENANCE_ENABLED=false
+WEB_TRACKING_MAINTENANCE_DRY_RUN=true
+WEB_TRACKING_MAINTENANCE_INTERVAL_SEC=3600
+WEB_TRACKING_RETENTION_BATCH_SIZE=10000
+VITE_WEB_TRACKING_ENABLED=false
+```
+
+Все switches по умолчанию выключены. `WEB_TRACKING_BUSINESS_IDS` ограничивает beta конкретными business ID. Первый maintenance-запуск выполняется только с `DRY_RUN=true`; реальное удаление raw events разрешается отдельным изменением конфигурации после проверки dry-run и backup. `VITE_WEB_TRACKING_ENABLED` задаётся во время frontend build. Полный контракт: [`docs/WEB_TRACKING_PRODUCTION.md`](docs/WEB_TRACKING_PRODUCTION.md).
+
 ## 🔒 Безопасность
 
 - **Никогда не коммитьте .env файл в git**

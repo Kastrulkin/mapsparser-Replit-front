@@ -50,6 +50,29 @@ def _filter_demo_businesses(businesses, scope_business_id):
     ]
 
 
+def _web_tracking_available_for_business(business_id):
+    enabled = os.getenv("WEB_TRACKING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return False
+    configured = {
+        item.strip()
+        for item in os.getenv("WEB_TRACKING_BUSINESS_IDS", "").split(",")
+        if item.strip()
+    }
+    return not configured or str(business_id or "") in configured
+
+
+def _attach_business_capabilities(businesses):
+    result = []
+    for business in businesses:
+        business_payload = dict(business)
+        business_payload["web_tracking_available"] = _web_tracking_available_for_business(
+            _safe_get(business, "id")
+        )
+        result.append(business_payload)
+    return result
+
+
 @auth_user_bp.route("/api/auth/me", methods=["GET"])
 def get_user_info():
     """Получить информацию о текущем пользователе."""
@@ -83,6 +106,8 @@ def get_user_info():
         scope_business_id = _safe_get(user_data, "scope_business_id")
         if session_kind == "demo":
             businesses = _filter_demo_businesses(businesses, scope_business_id)
+
+        businesses = _attach_business_capabilities(businesses)
 
         if not is_superadmin and len(businesses) == 0:
             db.close()

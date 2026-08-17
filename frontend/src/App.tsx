@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
+import { featureFlags } from "./config/featureFlags";
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
@@ -113,6 +114,11 @@ const TodayPage = lazy(() =>
 const FinancePage = lazy(() =>
   import("./pages/dashboard/FinancePage").then((module) => ({
     default: module.FinancePage,
+  })),
+);
+const WebAnalyticsPage = lazy(() =>
+  import("./pages/dashboard/WebAnalyticsPage").then((module) => ({
+    default: module.WebAnalyticsPage,
   })),
 );
 const AverageTicketPage = lazy(() =>
@@ -284,6 +290,7 @@ const AppShell = () => {
             <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
+            <Route path="web-analytics" element={featureFlags.webTracking ? <WebAnalyticsPage /> : <Navigate to="/dashboard/progress" replace />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />

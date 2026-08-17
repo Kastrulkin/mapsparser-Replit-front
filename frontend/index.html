@@ -98,6 +98,40 @@
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 
+  <script id="localos-public-tracking-consent">
+    (function () {
+      var exactPublicPaths = [
+        '/', '/about', '/contact', '/policy', '/privacy', '/data-deletion', '/requisites'
+      ];
+      var publicPathPrefixes = ['/docs/', '/articles/', '/documents/', '/cases/'];
+
+      function isPublicMarketingPath(pathname) {
+        if (exactPublicPaths.indexOf(pathname) !== -1) return true;
+        if (pathname === '/docs' || pathname === '/articles' || pathname === '/documents' || pathname === '/cases') return true;
+        return publicPathPrefixes.some(function (prefix) { return pathname.indexOf(prefix) === 0; });
+      }
+
+      function syncLocalOSTrackingConsent() {
+        var allowed = isPublicMarketingPath(window.location.pathname || '/');
+        window.localosTrackingConsent = allowed;
+        if (window.LocalOSTracker) window.LocalOSTracker.setConsent(allowed, { emitPageView: false });
+      }
+
+      ['pushState', 'replaceState'].forEach(function (method) {
+        var original = window.history[method];
+        if (!original) return;
+        window.history[method] = function () {
+          var result = original.apply(this, arguments);
+          window.setTimeout(syncLocalOSTrackingConsent, 0);
+          return result;
+        };
+      });
+      window.addEventListener('popstate', syncLocalOSTrackingConsent);
+      syncLocalOSTrackingConsent();
+    })();
+  </script>
+  <script async src="/tracker.js" data-business="pub_localos_x9AUjysD2FMAh6zKu2dq6LO8"></script>
+
   <!-- Yandex.Metrika counter -->
   <script type="text/javascript">
     (function (m, e, t, r, i, k, a) {

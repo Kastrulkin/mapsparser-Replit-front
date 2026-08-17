@@ -15,7 +15,8 @@ import {
   Sparkles,
   Handshake,
   Bot,
-  Radar
+  Radar,
+  BarChart3
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -27,12 +28,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
+import { featureFlags } from '../config/featureFlags';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  webTrackingAvailable?: boolean;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -40,6 +43,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onClose,
   collapsed = false,
   onToggleCollapse,
+  webTrackingAvailable = false,
 }) => {
   const location = useLocation();
   const { t, language } = useLanguage();
@@ -105,6 +109,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/finance',
       tooltip: shellCopy.financeHint,
     },
+    ...(featureFlags.webTracking && webTrackingAvailable ? [{
+        id: 'web-analytics',
+        label: navigationCopy.webAnalytics,
+        icon: BarChart3,
+        path: '/dashboard/web-analytics',
+        tooltip: navigationCopy.webAnalyticsHint,
+      }] : []),
     {
       id: 'chats',
       label: t.dashboard.sidebar.chats,

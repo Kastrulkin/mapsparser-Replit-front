@@ -204,7 +204,48 @@ def test_auth_me_returns_network_member_businesses(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["businesses"][0]["id"] == "business-1"
+    assert response.get_json()["businesses"][0]["web_tracking_available"] is False
     assert calls == ["member-1"]
+
+
+def test_auth_me_exposes_web_tracking_only_for_pilot_business(monkeypatch):
+    class FakeDatabaseManager:
+        def is_superadmin(self, user_id):
+            return False
+
+        def get_businesses_for_user_access(self, user_id):
+            return [
+                {"id": "business-1", "name": "Pilot"},
+                {"id": "business-2", "name": "Control"},
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setenv("WEB_TRACKING_ENABLED", "true")
+    monkeypatch.setenv("WEB_TRACKING_BUSINESS_IDS", "business-1")
+    monkeypatch.setattr(
+        auth_user_api,
+        "verify_session",
+        lambda token: {
+            "user_id": "member-1",
+            "email": "member@example.com",
+            "is_active": True,
+        },
+    )
+    monkeypatch.setattr(auth_user_api, "DatabaseManager", FakeDatabaseManager)
+
+    app = Flask(__name__)
+    app.register_blueprint(auth_user_api.auth_user_bp)
+    response = app.test_client().get(
+        "/api/auth/me",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    businesses = response.get_json()["businesses"]
+    assert businesses[0]["web_tracking_available"] is True
+    assert businesses[1]["web_tracking_available"] is False
 
 
 def test_network_member_migration_has_safe_constraints():

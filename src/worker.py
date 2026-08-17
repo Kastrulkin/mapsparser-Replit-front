@@ -93,6 +93,7 @@ from services.founder_content_editorial import (
     mark_founder_content_delivered,
     prepare_due_founder_content_drafts,
 )
+from services.web_tracking_maintenance import run_web_tracking_maintenance
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -108,6 +109,7 @@ _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
 _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT = 0.0
+_LAST_WEB_TRACKING_MAINTENANCE_AT = 0.0
 _LAST_FOUNDER_CONTENT_AT = 0.0
 
 
@@ -1403,6 +1405,31 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _run_web_tracking_maintenance_if_due() -> None:
+    global _LAST_WEB_TRACKING_MAINTENANCE_AT
+    if not _env_bool("WEB_TRACKING_MAINTENANCE_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("WEB_TRACKING_MAINTENANCE_INTERVAL_SEC", "3600")))
+    if now - _LAST_WEB_TRACKING_MAINTENANCE_AT < interval_sec:
+        return
+    _LAST_WEB_TRACKING_MAINTENANCE_AT = now
+    database = DatabaseManager()
+    try:
+        result = run_web_tracking_maintenance(
+            database.conn.cursor(),
+            dry_run=_env_bool("WEB_TRACKING_MAINTENANCE_DRY_RUN", True),
+            batch_size=max(100, min(int(os.getenv("WEB_TRACKING_RETENTION_BATCH_SIZE", "10000")), 50000)),
+        )
+        database.conn.commit()
+        print(f"[WEB_TRACKING_MAINTENANCE] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception as error:
+        database.conn.rollback()
+        print(f"[WEB_TRACKING_MAINTENANCE] failed={type(error).__name__}", flush=True)
+    finally:
+        database.close()
 
 
 def _run_yookassa_renewals_if_due() -> None:
@@ -7044,6 +7071,7 @@ if __name__ == "__main__":
             _check_openclaw_callback_alerts_if_due()
             _reconcile_openclaw_billing_if_due()
             _run_yookassa_renewals_if_due()
+            _run_web_tracking_maintenance_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)
