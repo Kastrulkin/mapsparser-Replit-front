@@ -11,6 +11,7 @@ from src.services.content_plan_service import (
     _score_content_candidate,
 )
 from src.services.content_voice_service import _derive_profile
+from src.services.llm.registry import get_task_definition
 
 
 def test_seo_only_topic_requires_real_context():
@@ -34,6 +35,13 @@ def test_seo_only_topic_requires_real_context():
     assert brief["complete"] is False
     assert "infopovod" in brief["missing_fields"]
     assert len(brief["questions"]) <= 3
+
+
+def test_content_plan_generation_uses_available_max_profile():
+    definition = get_task_definition("content_plan_generation_v2")
+
+    assert definition is not None
+    assert definition.model_profile == "gigachat_max"
 
 
 def test_owner_event_details_complete_katok_brief():

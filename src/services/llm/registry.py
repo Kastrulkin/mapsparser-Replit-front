@@ -222,6 +222,7 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "news_generation": _task("news_generation", data_class="public", prompt_version="news_generation_v1", allow_text_fallback=True, pipeline_stage="copy"),
     "content_plan_generation_v2": _task(
         "content_plan_generation_v2",
+        profile="gigachat_max",
         data_class="public",
         response_kind="json",
         schema=CONTENT_PLAN_GENERATION_SCHEMA,
