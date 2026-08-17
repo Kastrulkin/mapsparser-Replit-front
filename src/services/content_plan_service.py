@@ -4293,6 +4293,7 @@ def _load_business_content_evidence(
         FROM externalbusinessreviews
         WHERE business_id = %s
           AND COALESCE(is_current, TRUE) = TRUE
+          AND COALESCE(rating, 0) >= 4
           AND NULLIF(BTRIM(COALESCE(text, '')), '') IS NOT NULL
         ORDER BY COALESCE(published_at, updated_at, created_at) DESC
         LIMIT 120

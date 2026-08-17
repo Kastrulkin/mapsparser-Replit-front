@@ -4,6 +4,7 @@ from src.services.content_plan_service import (
     _annotate_story_facts_requirement,
     _build_content_brief_v1,
     _content_generation_v2_prompt,
+    _load_business_content_evidence,
     _load_publication_matrix_override,
     _parse_content_candidates,
     _rank_business_content_evidence,
@@ -140,6 +141,26 @@ def test_public_review_story_evidence_completes_story_brief():
     assert brief["complete"] is True
     assert brief["story_evidence_source_ids"] == ["review_school_dream"]
     assert "story_facts" not in brief["missing_fields"]
+
+
+def test_business_content_evidence_query_excludes_low_rating_reviews():
+    class EvidenceCursor:
+        def __init__(self):
+            self.description = []
+            self.queries = []
+
+        def execute(self, query, params=None):
+            self.queries.append(query)
+
+        def fetchall(self):
+            return []
+
+    cursor = EvidenceCursor()
+
+    _load_business_content_evidence(cursor, {"business_id": "business-1", "theme": "История"})
+
+    review_query = next(query for query in cursor.queries if "externalbusinessreviews" in query)
+    assert "COALESCE(rating, 0) >= 4" in review_query
 
 
 def test_story_candidate_must_use_selected_story_evidence():
