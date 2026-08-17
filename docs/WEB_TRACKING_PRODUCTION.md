@@ -137,6 +137,19 @@ Initial alerts:
 
 Technical proxy/application logs should be retained for no more than 14 days unless an incident requires a documented extension. Access is limited to infrastructure operators. Nginx access logging is disabled specifically for `/api/tracking/events`.
 
+## Current production rollout
+
+Production access is controlled through `WEB_TRACKING_BUSINESS_IDS`; tracker rows and public IDs remain runtime data and are not seeded by migrations. As of 2026-08-17, the approved rollout scope is:
+
+| Business | Business ID | Allowed domains | Collection state |
+|---|---|---|---|
+| Riderra | `edbd961a-273f-4f15-836e-33aacc0aa0e3` | `riderra.com`, `www.riderra.com` | Installed and receiving events |
+| LocalOS platform | `localos-platform-telegram-radar` | `localos.pro`, `www.localos.pro` | Installed on public, unauthenticated pages |
+| Органика | `360b90ef-cf2b-4eb4-acd4-a8524e4600ae` | `organicspb.ru`, `www.organicspb.ru` | Tracker created; site installation pending |
+| Весёлая расчёска (network parent) | `ab26362f-9d63-4025-b721-9a8cb29015ef` | `raschyoska.ru`, `www.raschyoska.ru` | Tracker created; site installation pending |
+
+The Весёлая расчёска tracker belongs only to the network parent. Its child locations must not be added to the allowlist while they share the same website, because separate trackers would split or duplicate network-level analytics. Enabling a business in the allowlist exposes the LocalOS interface but does not authorize or perform changes to the external website; script installation is a separate reviewed deployment.
+
 ## Deployment gate
 
 Before any production schema change, create a PostgreSQL backup. Run every server command from `/opt/seo-app`.
