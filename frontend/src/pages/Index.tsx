@@ -917,7 +917,7 @@ const Index = () => {
             <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">{copy.finalText}</p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild className="min-h-12 rounded-xl bg-orange-500 px-7 text-base text-white shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[background-color,box-shadow,scale] hover:bg-orange-600 active:scale-[0.96]" size="lg">
-                <Link to="/demo">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
+                <a href="/demo" rel="noopener noreferrer" target="_blank">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></a>
               </Button>
               <Button asChild className="min-h-12 rounded-xl border-white/15 bg-white/[0.06] px-7 text-base text-white transition-[background-color,scale] hover:bg-white/[0.12] hover:text-white active:scale-[0.96]" size="lg" variant="outline">
                 <Link to="/contact">{copy.talkExpert}</Link>

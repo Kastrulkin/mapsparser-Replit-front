@@ -35,7 +35,12 @@ describe('Header agents navigation', () => {
     );
 
     expect(screen.getAllByRole('link', { name: 'Вход' })[0]).toHaveAttribute('href', '/login');
-    expect(screen.getAllByRole('link', { name: 'Посмотреть демо' })[0]).toHaveAttribute('href', '/demo');
+    const demoLinks = screen.getAllByRole('link', { name: 'Посмотреть демо' });
+    for (const link of demoLinks) {
+      expect(link).toHaveAttribute('href', '/demo');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
   });
 
   it('leaves the cross-page agents link to the browser instead of React Router', () => {
