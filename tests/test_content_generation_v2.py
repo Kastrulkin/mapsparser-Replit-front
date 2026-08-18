@@ -559,6 +559,33 @@ def test_candidate_with_unconfirmed_scale_is_rejected():
     assert any("тысячи клиентов" in issue for issue in scored["issues"])
 
 
+def test_long_confirmed_story_cannot_collapse_into_advertising_summary():
+    story = (
+        "Елена столкнулась с трудностями при стрижке своих детей. Сын мужественно перенёс стрижку, а дочь "
+        "прижималась к маме и отталкивала руку мастера. Тогда появилась идея места, где стрижка проходит как игра. "
+        "В 2010 году появился бренд, в 2011 открылся первый салон, а в 2012 году бренд вышел за пределы Петербурга."
+    )
+    candidate = {
+        "id": "variant-1",
+        "angle": "История",
+        "text": "Мамина забота стала брендом. Теперь каждая стрижка превращается в праздник.",
+        "used_fact_ids": ["event"],
+        "unsupported_facts": [],
+    }
+    brief = {
+        "sources": [{"id": "event", "fact": story}],
+        "confirmed_details": [story],
+        "story_evidence_source_ids": ["event"],
+        "story_objective": "brand_story",
+    }
+
+    scored = _score_content_candidate(candidate, brief, {})
+
+    assert scored["quality_passed"] is False
+    assert any("слишком короткое резюме" in issue for issue in scored["issues"])
+    assert any("опорные даты" in issue for issue in scored["issues"])
+
+
 def test_voice_profile_is_derived_without_applying_hidden_rules():
     profile = _derive_profile(
         [

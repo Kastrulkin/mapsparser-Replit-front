@@ -4945,6 +4945,28 @@ def _unsupported_candidate_claims(text: str, brief: dict[str, Any]) -> list[str]
     return issues
 
 
+def _confirmed_story_coverage_issues(text: str, brief: dict[str, Any]) -> list[str]:
+    story_source_ids = {str(value) for value in brief.get("story_evidence_source_ids") or [] if str(value)}
+    story_facts = [
+        str(item.get("fact") or "").strip()
+        for item in brief.get("sources") or []
+        if isinstance(item, dict)
+        and str(item.get("id") or "") in story_source_ids
+        and str(item.get("fact") or "").strip()
+    ]
+    longest_story = max(story_facts, key=len, default="")
+    if len(longest_story) < 280:
+        return []
+    issues: list[str] = []
+    if len(text) < 320:
+        issues.append("Большая подтверждённая история свёрнута в слишком короткое резюме")
+    source_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\b", longest_story))
+    text_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\b", text))
+    if len(source_numbers) >= 2 and len(source_numbers.intersection(text_numbers)) < 2:
+        issues.append("Из подтверждённой истории пропали её опорные даты")
+    return issues
+
+
 def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], voice: dict[str, Any]) -> dict[str, Any]:
     text = str(candidate.get("text") or "").strip()
     allowed_ids = {str(item.get("id") or "") for item in brief.get("sources") or []}
@@ -4978,6 +5000,7 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         style_issues.append("В текст попала внутренняя формулировка контент-плана")
     style_issues.extend(f"Рекламное клише: {value}" for value in dict.fromkeys(cliche_hits))
     editorial_issues, voice_issues, clarity_issues, story_issues = _editorial_quality_issues(text, voice)
+    story_issues.extend(_confirmed_story_coverage_issues(text, brief))
     style_issues.extend(editorial_issues)
     style_issues.extend(voice_issues)
     style_issues.extend(clarity_issues)
@@ -5042,7 +5065,8 @@ def _content_generation_v2_prompt(
     has_story_facts = bool(story_source_ids)
     story_variant_rule = (
         f"Для человеческой истории используй только эпизод из источников: {', '.join(sorted(story_source_ids))}. "
-        "Не добавляй другое имя, возраст, событие или результат."
+        "Не добавляй другое имя, возраст, событие или результат. "
+        "Если история подробная, сохрани её дугу: исходную сцену, контраст или трудность, решение и последствие; не сворачивай её в рекламное резюме."
         if has_story_facts
         else "Источника story_facts нет: не придумывай героя, имя, возраст, эпизод или результат. "
         "Вместо человеческой истории дай ситуационный вариант без конкретного героя."
