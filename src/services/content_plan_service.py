@@ -4363,8 +4363,8 @@ def _rank_editorial_pattern_candidates(
         score = source_quality + overlap * 10 + min(len(techniques), 5) * 5
         if source_type == "map_post" and rating >= 4.8:
             strength = "активная точка с высоким рейтингом"
-        elif engagement >= 70 or reactions + replies >= 8:
-            strength = "публикация с заметной реакцией аудитории"
+        elif engagement >= 70 or reactions + replies >= 8 or views >= 1000:
+            strength = "публикация с заметным охватом или реакцией аудитории"
         else:
             strength = "релевантная публикация из разрешённой библиотеки"
         ranked.append(
