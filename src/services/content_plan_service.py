@@ -4419,7 +4419,7 @@ def _load_editorial_pattern_library(
     try:
         cursor.execute(
             """
-            SELECT document.id, document.content_text, document.metadata_json
+            SELECT document.id, document.content_text, document.metadata_json, source.source_role
             FROM knowledge_documents document
             JOIN knowledge_sources source ON source.id = document.source_id
             WHERE document.invalidated_at IS NULL
@@ -4430,7 +4430,14 @@ def _load_editorial_pattern_library(
               AND source.metadata_json->>'telegram_source_type' = 'broadcast_channel'
               AND source.source_role IN ('community', 'expert', 'service', 'salon', 'vendor')
               AND NULLIF(BTRIM(COALESCE(document.content_text, '')), '') IS NOT NULL
-            ORDER BY document.published_at DESC NULLS LAST, document.updated_at DESC
+            ORDER BY
+              CASE
+                WHEN COALESCE(document.metadata_json->>'views', '') ~ '^[0-9]+$'
+                THEN (document.metadata_json->>'views')::BIGINT
+                ELSE 0
+              END DESC,
+              document.published_at DESC NULLS LAST,
+              document.updated_at DESC
             LIMIT 400
             """
         )
@@ -4457,6 +4464,7 @@ def _load_editorial_pattern_library(
                 "reactions_total": metadata.get("reactions_total"),
                 "replies_count": metadata.get("replies_count"),
                 "views": metadata.get("views"),
+                "source_quality": 15 if str(document.get("source_role") or "") in {"expert", "service", "salon"} else 5,
             }
         )
     cursor.execute("SAVEPOINT editorial_patterns_maps")
