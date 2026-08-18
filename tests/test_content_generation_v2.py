@@ -534,6 +534,31 @@ def test_candidate_with_unknown_fact_is_disqualified():
     assert scored["quality_passed"] is False
 
 
+def test_candidate_with_unconfirmed_scale_is_rejected():
+    candidate = {
+        "id": "variant-1",
+        "angle": "История",
+        "text": (
+            "Идея детской парикмахерской появилась после непростой стрижки дочери.\n\n"
+            "Теперь здесь помогают тысячам детей стричься без слёз."
+        ),
+        "used_fact_ids": ["event"],
+        "unsupported_facts": [],
+    }
+    brief = {
+        "sources": [{"id": "event", "fact": "Дочь отказалась стричься, и мама придумала детскую парикмахерскую."}],
+        "confirmed_details": [],
+        "story_evidence_source_ids": ["event"],
+        "story_objective": "brand_story",
+    }
+
+    scored = _score_content_candidate(candidate, brief, {})
+
+    assert scored["grounded"] is False
+    assert scored["quality_passed"] is False
+    assert any("тысячи клиентов" in issue for issue in scored["issues"])
+
+
 def test_voice_profile_is_derived_without_applying_hidden_rules():
     profile = _derive_profile(
         [

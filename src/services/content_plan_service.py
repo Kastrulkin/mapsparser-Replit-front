@@ -4912,11 +4912,45 @@ def _editorial_quality_issues(
     return editorial_issues, voice_issues, clarity_issues, story_issues
 
 
+UNSUPPORTED_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("тысячи клиентов", re.compile(r"\bтысяч\w*\b", re.IGNORECASE)),
+    ("сотни клиентов", re.compile(r"\bсот(?:н\w*|ен)\b", re.IGNORECASE)),
+    ("миллионы клиентов", re.compile(r"\bмиллион\w*\b", re.IGNORECASE)),
+    ("младший или старший герой", re.compile(r"\b(?:младш|старш)\w*\b", re.IGNORECASE)),
+    ("неподтверждённая оценка героя", re.compile(r"\b(?:капризн|сам\w*\s+капризн)\w*\b", re.IGNORECASE)),
+)
+
+
+def _unsupported_candidate_claims(text: str, brief: dict[str, Any]) -> list[str]:
+    source_facts = [
+        str(item.get("fact") or "")
+        for item in brief.get("sources") or []
+        if isinstance(item, dict) and str(item.get("fact") or "").strip()
+    ]
+    factual_text = " ".join(
+        [
+            *source_facts,
+            *(str(value or "") for value in brief.get("confirmed_details") or []),
+        ]
+    ).lower()
+    issues: list[str] = []
+    factual_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\b", factual_text))
+    candidate_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\b", text))
+    if source_facts:
+        for value in sorted(candidate_numbers.difference(factual_numbers)):
+            issues.append(f"Цифра {value} не подтверждена источниками")
+    for label, pattern in UNSUPPORTED_CLAIM_PATTERNS:
+        if pattern.search(text) and not pattern.search(factual_text):
+            issues.append(f"Утверждение «{label}» не подтверждено источниками")
+    return issues
+
+
 def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], voice: dict[str, Any]) -> dict[str, Any]:
     text = str(candidate.get("text") or "").strip()
     allowed_ids = {str(item.get("id") or "") for item in brief.get("sources") or []}
     used_ids = {str(value) for value in candidate.get("used_fact_ids") or []}
     unsupported = [value for value in candidate.get("unsupported_facts") or [] if str(value).strip()]
+    unsupported.extend(_unsupported_candidate_claims(text, brief))
     grounded = bool(used_ids) and used_ids.issubset(allowed_ids) and not unsupported
     forbidden = [str(value).lower() for value in voice.get("forbidden_phrases") or [] if str(value).strip()]
     default_cliches = ["уютное пространство", "профессиональная команда", "идеальный выбор", "ждём вас"]
@@ -5028,6 +5062,7 @@ def _content_generation_v2_prompt(
         "- не переноси в готовый текст слова «цель публикации», «бизнес-задача», «в фокусе публикации» или другие внутренние инструкции;\n"
         "- не используй хэштеги, рекламные клише и больше одного восклицательного знака;\n"
         "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"
+        "- не добавляй масштаб, количество клиентов, возраст, родственную роль, оценку характера или достижение, если этого нет в фактах;\n"
         "- редакционные паттерны ниже описывают только приёмы подачи; не переноси из чужих публикаций факты, героев, названия, цифры или обещания;\n"
         f"- {story_variant_rule}\n"
         "- завершай одним естественным следующим шагом, только если он следует из редакторского брифа.\n"
