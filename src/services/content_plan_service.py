@@ -4209,6 +4209,18 @@ CONTENT_STORY_SIGNAL_RE = re.compile(
     r"справил\w*|боял\w*|радост\w*|сон|доч\w*|сын\w*|реб[ёе]нок|ученик\w*)\b",
     re.IGNORECASE,
 )
+EDITORIAL_TRANSITION_RE = re.compile(
+    r"\b(?:сначала|потом|затем|после этого|в итоге|тогда|со временем|однажды)\b",
+    re.IGNORECASE,
+)
+EDITORIAL_CTA_RE = re.compile(
+    r"\b(?:запиш|выбер|посмотр|узнай|сохран|приход|открой|напиш|остав)\w*\b",
+    re.IGNORECASE,
+)
+EDITORIAL_CONTRAST_RE = re.compile(
+    r"\b(?:раньше|теперь|было|стало|но|зато|вместо)\b",
+    re.IGNORECASE,
+)
 
 
 def _content_evidence_tokens(value: Any) -> set[str]:
@@ -4272,6 +4284,219 @@ def _rank_business_content_evidence(
                 *[value for value in selected if value.get("id") != story_candidate.get("id")],
             ][:limit]
     return selected
+
+
+def _editorial_number(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _editorial_pattern_techniques(text: str) -> list[str]:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return []
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", normalized) if part.strip()]
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    techniques: list[str] = []
+    if len(paragraphs) >= 2:
+        techniques.append("короткие абзацы и визуальные паузы")
+    if EDITORIAL_TRANSITION_RE.search(normalized):
+        techniques.append("сюжетное развитие через последовательность событий")
+    if len(EDITORIAL_TRANSITION_RE.findall(normalized)) >= 2:
+        techniques.append("ясная дуга: исходная ситуация, изменение и результат")
+    if lines and lines[0].endswith("?"):
+        techniques.append("вопросный вход, сразу называющий ситуацию читателя")
+    if any(re.match(r"^(?:[-–—•]|\d+[.)]|[✅☑️])", line) for line in lines):
+        techniques.append("структурированный список для сложной информации")
+    if re.search(r"[«\"].{12,160}[»\"]", normalized):
+        techniques.append("короткая цитата как смысловой центр")
+    if EDITORIAL_CONTRAST_RE.search(normalized):
+        techniques.append("контраст между исходной ситуацией и изменением")
+    if re.search(r"\b\d+[\sа-яё%.,:-]", normalized, flags=re.IGNORECASE):
+        techniques.append("конкретная деталь вместо общего обещания")
+    if EDITORIAL_CTA_RE.search(" ".join(lines[-2:])):
+        techniques.append("один ясный следующий шаг в финале")
+    if 140 <= len(normalized) <= 700:
+        techniques.append("компактный объём без лишнего вступления")
+    return list(dict.fromkeys(techniques))
+
+
+def _rank_editorial_pattern_candidates(
+    candidates: list[dict[str, Any]],
+    item: dict[str, Any],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    query_tokens = _content_evidence_tokens(
+        " ".join(
+            [
+                str(item.get("theme") or ""),
+                str(item.get("goal") or ""),
+                str(item.get("content_type") or ""),
+            ]
+        )
+    )
+    ranked: list[tuple[float, int, dict[str, Any]]] = []
+    for index, candidate in enumerate(candidates):
+        text = str(candidate.get("text") or "").strip()
+        techniques = _editorial_pattern_techniques(text)
+        if len(text) < 80 or not techniques:
+            continue
+        source_type = str(candidate.get("source_type") or "unknown")
+        overlap = len(query_tokens.intersection(_content_evidence_tokens(text)))
+        engagement = _editorial_number(candidate.get("engagement_score"))
+        reactions = _editorial_number(candidate.get("reactions_total"))
+        replies = _editorial_number(candidate.get("replies_count"))
+        views = _editorial_number(candidate.get("views"))
+        rating = _editorial_number(candidate.get("rating"))
+        source_post_count = _editorial_number(candidate.get("source_post_count"))
+        source_quality = _editorial_number(candidate.get("source_quality"))
+        if source_type == "map_post":
+            source_quality += rating * 12 + min(source_post_count, 20)
+            if rating >= 4.8 and source_post_count >= 8:
+                source_quality += 25
+        else:
+            source_quality += min(engagement, 100) * 0.45
+            source_quality += min(reactions * 2 + replies * 3 + views / 250, 45)
+        score = source_quality + overlap * 10 + min(len(techniques), 5) * 5
+        if source_type == "map_post" and rating >= 4.8:
+            strength = "активная точка с высоким рейтингом"
+        elif engagement >= 70 or reactions + replies >= 8:
+            strength = "публикация с заметной реакцией аудитории"
+        else:
+            strength = "релевантная публикация из разрешённой библиотеки"
+        ranked.append(
+            (
+                score,
+                -index,
+                {
+                    "id": str(candidate.get("id") or ""),
+                    "source_type": source_type,
+                    "techniques": techniques,
+                    "score": round(score, 2),
+                    "strength": strength,
+                },
+            )
+        )
+    ranked.sort(key=lambda value: (value[0], value[1]), reverse=True)
+    selected: list[dict[str, Any]] = []
+    seen_signatures: set[tuple[str, ...]] = set()
+    source_counts: dict[str, int] = {}
+    for _score, _index, pattern in ranked:
+        signature = tuple(pattern.get("techniques") or [])
+        source_type = str(pattern.get("source_type") or "unknown")
+        if signature in seen_signatures or source_counts.get(source_type, 0) >= 3:
+            continue
+        seen_signatures.add(signature)
+        source_counts[source_type] = source_counts.get(source_type, 0) + 1
+        selected.append(pattern)
+        if len(selected) >= max(1, min(limit, 8)):
+            break
+    return selected
+
+
+def _format_editorial_pattern_context(patterns: list[dict[str, Any]]) -> str:
+    if not patterns:
+        return "Нет подходящих редакционных паттернов."
+    lines = []
+    for pattern in patterns:
+        techniques = "; ".join(str(value) for value in pattern.get("techniques") or [] if str(value))
+        if techniques:
+            lines.append(f"- {techniques}. Основание отбора: {pattern.get('strength')}.")
+    return "\n".join(lines) or "Нет подходящих редакционных паттернов."
+
+
+def _load_editorial_pattern_library(
+    cursor: Any,
+    item: dict[str, Any],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    cursor.execute("SAVEPOINT editorial_patterns_telegram")
+    try:
+        cursor.execute(
+            """
+            SELECT document.id, document.content_text, document.metadata_json
+            FROM knowledge_documents document
+            JOIN knowledge_sources source ON source.id = document.source_id
+            WHERE document.invalidated_at IS NULL
+              AND document.document_type = 'telegram_message'
+              AND document.sensitivity_class = 'public'
+              AND document.allowed_uses @> '["client_content"]'::jsonb
+              AND source.visibility = 'public'
+              AND source.metadata_json->>'telegram_source_type' = 'broadcast_channel'
+              AND source.source_role IN ('community', 'expert', 'service', 'salon', 'vendor')
+              AND NULLIF(BTRIM(COALESCE(document.content_text, '')), '') IS NOT NULL
+            ORDER BY document.published_at DESC NULLS LAST, document.updated_at DESC
+            LIMIT 400
+            """
+        )
+        rows = list(cursor.fetchall() or [])
+        cursor.execute("RELEASE SAVEPOINT editorial_patterns_telegram")
+    except Exception:
+        cursor.execute("ROLLBACK TO SAVEPOINT editorial_patterns_telegram")
+        cursor.execute("RELEASE SAVEPOINT editorial_patterns_telegram")
+        rows = []
+    for row in rows:
+        document = _row_to_dict(cursor, row)
+        metadata = document.get("metadata_json")
+        if not isinstance(metadata, dict):
+            try:
+                metadata = json.loads(metadata or "{}")
+            except Exception:
+                metadata = {}
+        candidates.append(
+            {
+                "id": f"telegram_{document.get('id')}",
+                "source_type": "telegram_post",
+                "text": document.get("content_text"),
+                "engagement_score": metadata.get("engagement_score"),
+                "reactions_total": metadata.get("reactions_total"),
+                "replies_count": metadata.get("replies_count"),
+                "views": metadata.get("views"),
+            }
+        )
+    cursor.execute("SAVEPOINT editorial_patterns_maps")
+    try:
+        cursor.execute(
+            """
+            WITH source_activity AS (
+                SELECT business_id, COUNT(*) AS source_post_count
+                FROM externalbusinessposts
+                WHERE NULLIF(BTRIM(COALESCE(text, '')), '') IS NOT NULL
+                GROUP BY business_id
+            )
+            SELECT post.id, post.text, business.rating, activity.source_post_count
+            FROM externalbusinessposts post
+            JOIN businesses business ON business.id = post.business_id
+            JOIN source_activity activity ON activity.business_id = post.business_id
+            WHERE NULLIF(BTRIM(COALESCE(post.text, '')), '') IS NOT NULL
+              AND COALESCE(business.rating, 0) >= 4.7
+            ORDER BY business.rating DESC, activity.source_post_count DESC, post.updated_at DESC
+            LIMIT 400
+            """
+        )
+        rows = list(cursor.fetchall() or [])
+        cursor.execute("RELEASE SAVEPOINT editorial_patterns_maps")
+    except Exception:
+        cursor.execute("ROLLBACK TO SAVEPOINT editorial_patterns_maps")
+        cursor.execute("RELEASE SAVEPOINT editorial_patterns_maps")
+        rows = []
+    for row in rows:
+        post = _row_to_dict(cursor, row)
+        candidates.append(
+            {
+                "id": f"map_{post.get('id')}",
+                "source_type": "map_post",
+                "text": post.get("text"),
+                "rating": post.get("rating"),
+                "source_post_count": post.get("source_post_count"),
+            }
+        )
+    return _rank_editorial_pattern_candidates(candidates, item, limit=limit)
 
 
 def _load_business_content_evidence(
@@ -4446,20 +4671,29 @@ def _build_content_brief_v1(
     source_ref = _clean_brief_answer(item.get("source_ref"), 800)
     seo_keyword = _clean_brief_answer(item.get("seo_keyword"), 300)
     content_type = _clean_brief_answer(item.get("content_type"), 80).lower()
-    event = _clean_brief_answer(answers.get("infopovod") or answers.get("event") or "", 500)
+    owner_event = _clean_brief_answer(answers.get("infopovod") or answers.get("event") or "", 12000)
+    event = owner_event
     if not event and source_kind not in {"seo_keyword", "audit_signal", "search", "seasonal"}:
         event = source_ref or theme
-    detail_answer = _clean_brief_answer(answers.get("confirmed_details") or answers.get("details") or "", 1000)
-    story_facts = _clean_brief_answer(answers.get("story_facts"), 1200)
+    detail_answer = _clean_brief_answer(answers.get("confirmed_details") or answers.get("details") or "", 4000)
+    story_facts = _clean_brief_answer(answers.get("story_facts"), 12000)
     story_objective = _story_fact_objective(item)
     evidence = [dict(source) for source in evidence_sources or [] if isinstance(source, dict)]
-    story_evidence = [source for source in evidence if bool(source.get("story_evidence"))]
+    owner_story_confirmed = bool(
+        story_objective
+        and len(owner_event) >= 120
+        and CONTENT_STORY_SIGNAL_RE.search(owner_event)
+    )
+    if owner_story_confirmed:
+        evidence = [source for source in evidence if str(source.get("type") or "") != "public_review"]
     relevant_services = _relevant_service_names_for_item(facts.get("services"), item, limit=3)
     details: list[str] = []
     if detail_answer:
         details.append(detail_answer)
     if story_facts:
         details.append(story_facts)
+    if owner_story_confirmed:
+        details.append(owner_event)
     details.extend(_clean_brief_answer(source.get("fact"), 700) for source in evidence[:3])
     if source_ref and source_ref != event and source_kind not in {"seo_keyword", "audit_signal", "search"}:
         details.append(source_ref)
@@ -4467,7 +4701,15 @@ def _build_content_brief_v1(
         details.extend(relevant_services)
     sources: list[dict[str, Any]] = []
     if event:
-        sources.append({"id": "event", "type": "plan", "label": "Инфоповод", "fact": event})
+        sources.append(
+            {
+                "id": "event",
+                "type": "owner" if owner_event else "plan",
+                "label": "Подтверждённая история владельца" if owner_story_confirmed else "Инфоповод",
+                "fact": event,
+                "story_evidence": owner_story_confirmed,
+            }
+        )
     if source_ref and source_kind not in {"seo_keyword", "audit_signal", "search"}:
         sources.append({"id": "source_ref", "type": source_kind or "plan", "label": "Источник темы", "fact": source_ref})
     if detail_answer:
@@ -4483,12 +4725,17 @@ def _build_content_brief_v1(
     site_fact = _clean_brief_answer(facts.get("site_description") or facts.get("description"), 500)
     if site_fact:
         sources.append({"id": "business_description", "type": "business", "label": "Сайт или карточка", "fact": site_fact})
+    story_evidence = [
+        source
+        for source in sources
+        if bool(source.get("story_evidence")) or str(source.get("id") or "") == "story_facts"
+    ]
     is_event = _normalize_publication_objective(item) in {"announcement", "agenda", "reminder", "photo_report"} or content_type == "event"
     date_blob = " ".join([event, detail_answer, source_ref, theme])
     has_date = bool(CONTENT_BRIEF_DATE_RE.search(date_blob)) or bool(_clean_brief_answer(answers.get("date_status"), 120))
     is_search_only = source_kind in {"seo_keyword", "audit_signal", "search"} and not _clean_brief_answer(answers.get("infopovod"))
     missing: list[str] = []
-    if story_objective and not story_facts and not story_evidence:
+    if story_objective and not story_evidence:
         missing.append("story_facts")
     if not event or is_search_only:
         missing.append("infopovod")
@@ -4735,6 +4982,7 @@ def _content_generation_v2_prompt(
     language: str,
     publication_objective_context: str = "",
     industry_pattern_context: str = "",
+    editorial_pattern_context: str = "",
 ) -> str:
     voice_preferences = voice.get("preferences") if isinstance(voice.get("preferences"), dict) else {}
     business_description = str(voice_preferences.get("business_description") or "").strip()
@@ -4772,6 +5020,7 @@ def _content_generation_v2_prompt(
         "- не переноси в готовый текст слова «цель публикации», «бизнес-задача», «в фокусе публикации» или другие внутренние инструкции;\n"
         "- не используй хэштеги, рекламные клише и больше одного восклицательного знака;\n"
         "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"
+        "- редакционные паттерны ниже описывают только приёмы подачи; не переноси из чужих публикаций факты, героев, названия, цифры или обещания;\n"
         f"- {story_variant_rule}\n"
         "- завершай одним естественным следующим шагом, только если он следует из редакторского брифа.\n"
         "Верни строго JSON: {\"candidates\":[{\"id\":\"variant-1\",\"angle\":\"...\",\"text\":\"...\","
@@ -4779,6 +5028,7 @@ def _content_generation_v2_prompt(
         f"Факты о бизнесе:\n{_build_content_plan_business_fact_block(business_facts)}\n\n"
         f"Задача этого типа публикации:\n{publication_objective_context or 'Одна публикация — одна бизнес-задача.'}\n\n"
         f"Правила ниши:\n{industry_pattern_context or 'Нет дополнительных правил.'}\n\n"
+        f"Редакционные приёмы из сильных публикаций:\n{editorial_pattern_context or 'Нет дополнительных приёмов.'}\n\n"
         f"Редакторский бриф:\n{_content_brief_prompt_block(brief)}\n\n"
         f"Подтверждённое описание бизнеса от владельца: {business_description or 'нет дополнительного описания'}\n"
         f"Клиенты бизнеса со слов владельца: {audience_description or 'нет дополнительного описания'}\n"
@@ -4859,6 +5109,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         generation_v2 = _content_generation_v2_enabled()
         content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
         content_brief = _build_content_brief_v1(item, business_facts, content_evidence)
+        editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5) if generation_v2 else []
+        editorial_pattern_context = _format_editorial_pattern_context(editorial_patterns)
         voice_context = load_content_voice_context(
             cursor,
             user_id=user_id,
@@ -4921,6 +5173,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             language=normalized_language,
             publication_objective_context=publication_objective_context,
             industry_pattern_context=industry_pattern_context,
+            editorial_pattern_context=editorial_pattern_context,
         ) if generation_v2 else (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
@@ -5070,6 +5323,10 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                     "",
                 ),
                 "variants": scored_candidates,
+                "editorial_pattern_version": "editorial-techniques-v1",
+                "editorial_pattern_source_ids": [
+                    str(pattern.get("id") or "") for pattern in editorial_patterns if str(pattern.get("id") or "")
+                ],
             } if generation_v2 else {},
             **knowledge_metadata,
         }

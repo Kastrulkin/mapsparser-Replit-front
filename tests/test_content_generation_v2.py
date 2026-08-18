@@ -4,10 +4,12 @@ from src.services.content_plan_service import (
     _annotate_story_facts_requirement,
     _build_content_brief_v1,
     _content_generation_v2_prompt,
+    _format_editorial_pattern_context,
     _load_business_content_evidence,
     _load_publication_matrix_override,
     _parse_content_candidates,
     _rank_business_content_evidence,
+    _rank_editorial_pattern_candidates,
     _score_content_candidate,
 )
 from src.services.content_voice_service import _derive_profile
@@ -119,6 +121,108 @@ def test_story_facts_complete_story_brief():
     assert brief["complete"] is True
     assert "story_facts" in {source["id"] for source in brief["sources"]}
     assert story_facts in brief["confirmed_details"]
+
+
+def test_confirmed_owner_story_is_preserved_in_full_and_excludes_random_reviews():
+    owner_story = (
+        "Основательница бренда Елена Тарасова придумала детскую парикмахерскую после двух "
+        "разных стрижек своих детей. Сын спокойно перенёс обычный салон, а дочь прижималась "
+        "к маме и отталкивала руку мастера. Тогда Елена решила создать место, где стрижка "
+        "проходит как игра. В 2010 году появился бренд, в 2011 году открылся первый салон, "
+        "а в 2012 году сеть вышла за пределы Санкт-Петербурга. Девиз бренда — «Стрижки — "
+        "играючи!», и он по-прежнему определяет подход к детям и родителям."
+    )
+    unrelated_review = {
+        "id": "review_unrelated",
+        "type": "public_review",
+        "label": "Публичный отзыв",
+        "fact": "Родителю понравилась услуга прокола ушей и внимательное отношение мастера.",
+        "story_evidence": True,
+    }
+
+    brief = _build_content_brief_v1(
+        {
+            "theme": "Как появилась «Весёлая Расчёска»",
+            "goal": "Рассказать историю бренда",
+            "content_type": "brand_story",
+            "source_kind": "owner",
+            "source_ref": "История основательницы",
+            "metadata_json": {"brief_answers": {"infopovod": owner_story, "source": "Владелец бренда"}},
+        },
+        {"description": "Детская парикмахерская", "services": []},
+        [unrelated_review],
+    )
+
+    assert brief["event"] == owner_story
+    assert "event" in brief["story_evidence_source_ids"]
+    assert "review_unrelated" not in {source["id"] for source in brief["sources"]}
+    assert owner_story in brief["confirmed_details"]
+    assert brief["complete"] is True
+
+
+def test_owner_story_prompt_uses_only_confirmed_story_source():
+    prompt = _content_generation_v2_prompt(
+        business_facts={"name": "Весёлая Расчёска", "description": "Детская парикмахерская"},
+        brief={
+            "event": "Дочь основательницы боялась стричься, и из этого появилась идея бренда.",
+            "confirmed_details": ["Первый салон открылся в 2011 году."],
+            "sources": [
+                {
+                    "id": "event",
+                    "label": "История владельца",
+                    "fact": "Дочь основательницы боялась стричься, и из этого появилась идея бренда.",
+                    "story_evidence": True,
+                }
+            ],
+            "story_evidence_source_ids": ["event"],
+            "story_objective": "brand_story",
+        },
+        voice={"preferences": {}, "examples": [], "forbidden_phrases": []},
+        language="ru",
+    )
+
+    assert "используй только эпизод из источников: event" in prompt
+    assert "История владельца" in prompt
+
+
+def test_editorial_patterns_rank_engagement_and_source_quality_without_exposing_foreign_facts():
+    candidates = [
+        {
+            "id": "weak-map",
+            "source_type": "map_post",
+            "text": "Новая услуга уже доступна. Записывайтесь.",
+            "rating": 4.1,
+            "source_post_count": 2,
+        },
+        {
+            "id": "strong-telegram",
+            "source_type": "telegram_post",
+            "text": (
+                "Сначала ребёнок держался за маму.\n\n"
+                "Потом мастер показал инструменты как игру, и знакомство началось без спешки.\n\n"
+                "Выберите спокойное время для первого визита."
+            ),
+            "engagement_score": 92,
+            "reactions_total": 18,
+            "replies_count": 7,
+            "source_quality": 20,
+        },
+        {
+            "id": "strong-map",
+            "source_type": "map_post",
+            "text": "Однажды ребёнок отказался садиться в кресло.\n\nМастер начал со знакомства.\n\nЗапишитесь заранее.",
+            "rating": 5.0,
+            "source_post_count": 16,
+        },
+    ]
+
+    ranked = _rank_editorial_pattern_candidates(candidates, {"theme": "Первая стрижка ребёнка"}, limit=3)
+    context = _format_editorial_pattern_context(ranked)
+
+    assert ranked[0]["id"] in {"strong-telegram", "strong-map"}
+    assert "короткие абзацы" in context.lower()
+    assert "Сначала ребёнок держался за маму" not in context
+    assert "Однажды ребёнок отказался" not in context
 
 
 def test_public_review_story_evidence_completes_story_brief():
