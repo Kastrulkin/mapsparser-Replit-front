@@ -181,6 +181,42 @@ def test_content_plan_item_saves_selected_channels_in_metadata(monkeypatch):
     assert {"selected_channels": ["telegram", "yandex_maps"]} in metadata_payloads
 
 
+def test_content_plan_item_saves_text_and_channels_with_one_metadata_update(monkeypatch):
+    database = install_access_fixture(monkeypatch, allow_member=True)
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {"id": "plan-1", "items": [{"id": "item-1"}]},
+    )
+
+    content_plan_service.update_content_plan_item(
+        "member-1",
+        "item-1",
+        {
+            "draft_text": "Готовый текст",
+            "selected_channels": ["telegram", "vk"],
+        },
+    )
+
+    update_query, update_params = next(
+        (query, params)
+        for query, params in database.cursor_value.executed
+        if query.startswith("update contentplanitems")
+    )
+    assert update_query.count("metadata_json =") == 1
+    metadata_payload = next(
+        json.loads(value)
+        for value in update_params
+        if isinstance(value, str) and value.startswith("{")
+    )
+    assert metadata_payload == {
+        "generation_source": "manual",
+        "generation_error_reason": "",
+        "last_generation_failed_at": "",
+        "selected_channels": ["telegram", "vk"],
+    }
+
+
 def test_content_plan_item_date_updates_prepared_social_posts(monkeypatch):
     database = install_access_fixture(monkeypatch, allow_member=True)
     monkeypatch.setattr(

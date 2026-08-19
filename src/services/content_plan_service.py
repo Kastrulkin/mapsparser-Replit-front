@@ -2230,32 +2230,26 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         if not has_access:
             raise PermissionError("Нет доступа к элементу плана")
 
-        updates = []
-        params: list[Any] = []
+        field_updates: dict[str, Any] = {}
+        metadata_patch: dict[str, Any] = {}
         selected_variant: dict[str, Any] | None = None
         metadata_value = data.get("metadata_json") if isinstance(data.get("metadata_json"), dict) else {}
-        for field in ("scheduled_for", "theme", "goal", "content_type", "seo_keyword", "draft_text"):
+        for field in ("scheduled_for", "theme", "goal", "content_type", "seo_keyword"):
             if field in payload:
-                updates.append(f"{field} = %s")
-                params.append(payload.get(field))
+                field_updates[field] = payload.get(field)
         if "status" in payload:
             next_status = str(payload.get("status") or "").strip()
             if next_status in {"planned", "draft_generated", "edited", "approved", "published", "skipped"}:
-                updates.append("status = %s")
-                params.append(next_status)
+                field_updates["status"] = next_status
         if "draft_text" in payload:
-            updates.append("status = %s")
-            params.append("edited")
-            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
-            params.append(
-                json.dumps(
-                    {
-                        "generation_source": "manual",
-                        "generation_error_reason": "",
-                        "last_generation_failed_at": "",
-                    },
-                    ensure_ascii=False,
-                )
+            field_updates["draft_text"] = payload.get("draft_text")
+            field_updates["status"] = "edited"
+            metadata_patch.update(
+                {
+                    "generation_source": "manual",
+                    "generation_error_reason": "",
+                    "last_generation_failed_at": "",
+                }
             )
         if "brief_answers" in payload:
             incoming_answers = payload.get("brief_answers") if isinstance(payload.get("brief_answers"), dict) else {}
@@ -2277,8 +2271,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 if key in allowed_answer_keys and _clean_brief_answer(value, 1000)
             }
             previous_answers = metadata_value.get("brief_answers") if isinstance(metadata_value.get("brief_answers"), dict) else {}
-            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
-            params.append(json.dumps({"brief_answers": {**previous_answers, **clean_answers}}, ensure_ascii=False))
+            metadata_patch["brief_answers"] = {**previous_answers, **clean_answers}
         if "selected_channels" in payload:
             incoming_channels = payload.get("selected_channels") if isinstance(payload.get("selected_channels"), list) else []
             selected_channels = []
@@ -2286,8 +2279,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 normalized_channel = str(channel or "").strip()
                 if normalized_channel in CONTENT_PLAN_PUBLISHING_CHANNELS and normalized_channel not in selected_channels:
                     selected_channels.append(normalized_channel)
-            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
-            params.append(json.dumps({"selected_channels": selected_channels}, ensure_ascii=False))
+            metadata_patch["selected_channels"] = selected_channels
         if "selected_variant_id" in payload:
             selected_variant_id = str(payload.get("selected_variant_id") or "").strip()
             generation_bundle = metadata_value.get("content_generation_v2") if isinstance(metadata_value.get("content_generation_v2"), dict) else {}
@@ -2304,17 +2296,17 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             )
             if not selected_variant:
                 raise ValueError("Вариант публикации не найден или не прошёл проверку")
-            updates.extend(["draft_text = %s", "status = %s", "metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb"])
-            params.extend(
-                [
-                    str(selected_variant.get("text") or ""),
-                    "edited",
-                    json.dumps(
-                        {"content_generation_v2": {**generation_bundle, "selected_variant_id": selected_variant_id}},
-                        ensure_ascii=False,
-                    ),
-                ]
-            )
+            field_updates["draft_text"] = str(selected_variant.get("text") or "")
+            field_updates["status"] = "edited"
+            metadata_patch["content_generation_v2"] = {
+                **generation_bundle,
+                "selected_variant_id": selected_variant_id,
+            }
+        updates = [f"{field} = %s" for field in field_updates]
+        params: list[Any] = list(field_updates.values())
+        if metadata_patch:
+            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
+            params.append(json.dumps(metadata_patch, ensure_ascii=False))
         if not updates:
             return get_content_plan(user_id, str(data.get("plan_id") or ""))
         updates.append("updated_at = CURRENT_TIMESTAMP")
