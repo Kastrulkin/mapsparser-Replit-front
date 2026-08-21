@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "label": "fixed",
+  "captured_at": "2026-08-21T19:46:43.984329+00:00",
+  "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_employee_remaining_read_access.py",
+    "tests/test_network_member_access.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 1993.457,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": ".....................                                                    [100%]\n21 passed in 1.32s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

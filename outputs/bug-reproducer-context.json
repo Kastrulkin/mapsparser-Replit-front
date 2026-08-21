@@ -1,96 +1,76 @@
 {
-  "title": "Unpaid Mini App scope exposes paid modules",
+  "title": "Network manager cannot read reviews or partnership rooms",
   "project": "LocalOS",
-  "generated_at": "2026-08-11",
-  "mode": "hunt-and-prove",
-  "original_report": "Verify that Elena can use the Telegram Mini App for Vesyolaya Raschyoska while only the Engels location is paid and the remaining scope stays behind payment gates.",
+  "generated_at": "2026-08-21",
+  "mode": "prove-fix",
+  "original_report": "Елена, менеджер сети Весёлая расчёска, должна видеть отзывы и цифровые комнаты точки Энгельса, 154, но получает отказ доступа.",
   "discovery_scope": [
-    "Telegram binding and Mini App bootstrap",
-    "network member scope resolution",
-    "business subscription state",
-    "Mini App navigation and payment-gate behavior"
+    "src/api/external_accounts_api.py",
+    "src/api/prospecting/access_schema.py",
+    "tests/test_employee_remaining_read_access.py",
+    "tests/test_network_member_access.py"
   ],
-  "candidates": [
-    {
-      "candidate": "Mini App does not apply the selected location subscription gate",
-      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/operator_api.py:95",
-      "contract": "Only Engels is paid; the web dashboard already gates paid sections for inactive subscriptions.",
-      "trigger": "Open the Mini App in the network scope or select the inactive Dolgoozernaya location.",
-      "confidence": "high",
-      "outcome": "REPRODUCED"
-    }
-  ],
-  "expected": "Paid Mini App modules are read-only for the network and Dolgoozernaya, while Engels remains available.",
-  "actual": "Content, Finance, Operator, Partnerships and Progress were all marked available for the inactive Dolgoozernaya subscription.",
-  "environment": "Local Python 3 with pytest 9; Vite/Vitest frontend; production Docker Compose and PostgreSQL",
-  "reproduction": "A focused unit test passes an inactive trial business scope to the real Mini App navigation builder and checks the paid module statuses.",
-  "failure_signal": "The test listed content, finance, operator, partnerships and progress as exposed.",
-  "root_cause": "Mini App navigation was derived only from scope kind and feature flags. It never evaluated the selected businesses' subscription tier, status or end date, and the frontend treated read-only navigation entries as openable.",
-  "fix_summary": "Added server-side subscription evaluation for business and network scopes, converted paid navigation entries to read-only with a billing reason, blocked paid Mini App routes and actions, and added a mobile payment sheet instead of opening locked modules.",
-  "why_causal": "The subscription decision now directly controls both the navigation status and server route access for the same selected scope.",
+  "candidates": [],
+  "expected": "Активный участник сети получает тот же read-доступ к отзывам и партнёрскому контуру точки, что и к остальным данным этой точки.",
+  "actual": "Маршрут отзывов возвращал 403, а партнёрский определитель бизнеса возвращал None, потому что оба пути признавали только непосредственного владельца.",
+  "environment": "Local Python/pytest regression suite and Docker/PostgreSQL production at localos.pro",
+  "reproduction": "Два сфокусированных теста используют активное членство в сети и вызывают реальные функции маршрута и определения бизнеса.",
+  "failure_signal": "Два теста падали: отзывы возвращали 403 вместо 200, партнёрский resolver возвращал None вместо business-1.",
+  "root_cause": "Два устаревших условия доступа обходили канонический verify_business_access и проверяли только owner_id/superadmin.",
+  "fix_summary": "Оба пути переведены на канонический verify_business_access без изменения правил для посторонних пользователей.",
+  "why_causal": "Каноническая функция уже учитывает active business_members и network_members и сохранила tenant/demo ограничения.",
   "reproduction_files": [
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_operator_miniapp_subscription_access.py",
-      "line": 1,
-      "summary": "Focused red-to-green subscription regression test approved at Gate 1."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_employee_remaining_read_access.py",
+      "line": 129,
+      "summary": "Регрессия чтения отзывов активным участником сети."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_network_member_access.py",
+      "line": 59,
+      "summary": "Регрессия разрешения партнёрского business scope участнику сети."
     }
   ],
   "fix_files": [
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/operator_api.py",
-      "line": 95,
-      "summary": "Scope-aware subscription check and server payment gates."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/external_accounts_api.py",
+      "line": 1961,
+      "summary": "Чтение отзывов использует каноническую проверку бизнес-доступа."
     },
     {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/TelegramControlPage.tsx",
-      "line": 312,
-      "summary": "Mini App payment sheet and guarded navigation."
-    },
-    {
-      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/telegram/GrowthNavigation.tsx",
-      "line": 25,
-      "summary": "Routes locked outcome cards to the payment sheet."
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/prospecting/access_schema.py",
+      "line": 489,
+      "summary": "Партнёрский scope учитывает активное членство в сети."
     }
   ],
   "checks": [
     {
-      "name": "Same regression test",
+      "name": "Focused red-to-green regression",
       "status": "passed",
-      "detail": "Red before and green after."
+      "detail": "2 failures before; 21 focused tests passed after."
     },
     {
-      "name": "Related backend suite",
+      "name": "Adjacent access and route suite",
       "status": "passed",
-      "detail": "29 tests passed."
+      "detail": "27 tests passed."
     },
     {
-      "name": "Frontend interaction test",
+      "name": "Production role probe",
       "status": "passed",
-      "detail": "2 GrowthNavigation tests passed."
-    },
-    {
-      "name": "Production build",
-      "status": "passed",
-      "detail": "Vite build completed with exit code 0."
-    },
-    {
-      "name": "Production scope verification",
-      "status": "passed",
-      "detail": "Engels available; network and Dolgoozernaya read-only for paid modules."
+      "detail": "Web reviews, services, content, partnerships and Mini App read routes returned 200 for Elena's role."
     }
   ],
   "reproduce": [
-    "python3 -m pytest -q tests/test_operator_miniapp_subscription_access.py",
-    "python3 -m pytest -q tests/test_network_member_access.py tests/test_operator_mobile_today.py tests/test_operator_miniapp_subscription_access.py tests/test_telegram_control_scope.py"
+    "python3 -m pytest -q tests/test_employee_remaining_read_access.py tests/test_network_member_access.py"
   ],
   "limitations": [
-    "Elena has not yet consumed her one-time Telegram link, so her real Telegram initData was not used during verification."
+    "Telegram UI cannot authenticate as Elena until she completes the one-time bind flow from her own Telegram account."
   ],
   "residual_risks": [
-    "The final real-device check can only be completed after Elena opens the personal link in her Telegram account."
+    "Telegram ID remains empty, so the bot and Mini App cannot yet identify Elena despite the corrected backend access."
   ],
   "notes": [
-    "The personal binding token was not consumed during testing.",
-    "Production app and Telegram Mini App page both returned HTTP 200 after deployment."
+    "Production subscription for Engelsa 154 was backed up and activated through 2026-09-15.",
+    "No external messages or publications were sent."
   ]
 }

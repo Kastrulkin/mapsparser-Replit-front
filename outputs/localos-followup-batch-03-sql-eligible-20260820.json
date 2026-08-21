@@ -1,0 +1,1085 @@
+{
+  "eligible_count": 135,
+  "items": [
+    {
+      "name": "Be Beauty",
+      "first_touch_id": "f3bf5d1b-77e6-4074-ab4a-4a24db392cae",
+      "lead_id": "9b444e6c-d113-483a-ad3e-f2633d68c395",
+      "campaign_id": "809f3f58-30cd-4e4b-881b-d068501ee132",
+      "recipient": "bebeautybrz@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Doctor Sos",
+      "first_touch_id": "5b31c9b6-5d3b-4f82-8e84-cbb27b3f4413",
+      "lead_id": "6594974b-34ff-4bd3-89fb-7a2f8f2d5b13",
+      "campaign_id": "f196277d-e3e4-40ba-a9cf-73b9981094ec",
+      "recipient": "79216442256@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Zenmodeca",
+      "first_touch_id": "c97069ab-7360-45c7-a292-d2474e14ae8b",
+      "lead_id": "a2a6562d-9cf9-4122-9c33-67e396b22b8c",
+      "campaign_id": "db3f5cd9-65b0-465f-b1f2-14e52fa8cdb7",
+      "recipient": "zenmodeca@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Ава-мед",
+      "first_touch_id": "2d94915d-4ac3-4f2c-9e1d-68d982715c06",
+      "lead_id": "947d2af5-0e6b-438b-9079-d20813612456",
+      "campaign_id": "2f224c3c-3d22-45eb-9b6b-0ffcacd282c2",
+      "recipient": "admin@ava-med.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "АрсВита",
+      "first_touch_id": "315bc903-1744-4194-875a-0e56bb26aa2e",
+      "lead_id": "d5917ba6-2240-4ce0-8f44-674a9c5cd76e",
+      "campaign_id": "dc43fde8-157f-4004-9f05-de1d157e2cec",
+      "recipient": "cc.spb@arsvita.clinic",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Бьютиплан",
+      "first_touch_id": "9ea3668c-ec37-4d60-8fa6-bf4d79919276",
+      "lead_id": "0c90fea3-d930-4b07-b796-cce8f66e95db",
+      "campaign_id": "b4382bdc-db0d-463b-8afe-f74c8ad3a7d5",
+      "recipient": "adm@bplanclinic.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Бэст Чойс",
+      "first_touch_id": "7015086d-9a00-48a0-adab-ee81f2eb321f",
+      "lead_id": "12be93e2-b547-4a0e-a7d1-8084302bdafb",
+      "campaign_id": "9a56c9f4-51f4-4cb2-a45b-8181b8473175",
+      "recipient": "choicespb@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Гормедцентр",
+      "first_touch_id": "4d5b2fa5-cd1d-4719-8ecf-7e7aa65a07ba",
+      "lead_id": "1c651e60-31e2-4c38-ba89-fa550532848e",
+      "campaign_id": "14d26a4d-02bf-4146-81c3-941946901d69",
+      "recipient": "gormedcentr.msk@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "ДМКлиника",
+      "first_touch_id": "49fbef40-f114-4c0e-adff-460cac6fa5f3",
+      "lead_id": "fe454911-69b0-4ef2-b376-67641e2dbb0b",
+      "campaign_id": "5fb03bb9-74ef-4970-9798-48304cc9372c",
+      "recipient": "info@dmclinicspb.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Косметологический кабинет",
+      "first_touch_id": "a6dd7423-03f1-41f0-bc9b-904b44555697",
+      "lead_id": "8f46b794-b2e7-43dc-845b-9bc58ef25337",
+      "campaign_id": "612ff95f-81f3-420b-b183-c1a747fe4566",
+      "recipient": "89039480300@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Кубик",
+      "first_touch_id": "020a52a8-2bc6-4d2f-96ba-9079e5c56bd4",
+      "lead_id": "6fb04db3-52b4-4981-b2f8-22abb4de9c81",
+      "campaign_id": "351077ea-c47f-4e2f-a339-471780565b24",
+      "recipient": "info@kbkubik.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Лека-Фарм",
+      "first_touch_id": "632be992-484c-4862-9c32-5b319c227d44",
+      "lead_id": "934a603c-92b3-49ff-b157-b636ff38a85f",
+      "campaign_id": "cbad7c57-1e70-4a42-854d-978b66932fd6",
+      "recipient": "lekafarm@bk.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Мастер Зуб",
+      "first_touch_id": "3d4b446f-4bc1-49c6-a779-d13baa8ab83c",
+      "lead_id": "ca5b732f-e380-4001-9f60-9d3027b3b354",
+      "campaign_id": "2286f22c-daff-4970-9dd6-cfb273c20cea",
+      "recipient": "yury.semenchuk@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Медицинский центр МедСервис",
+      "first_touch_id": "404c1efa-9b10-4fe9-9b54-6a76821e1871",
+      "lead_id": "f1e1ed25-3e3b-4dea-b6aa-d94f58a2ff0a",
+      "campaign_id": "4bd36563-44ee-47c0-a55d-27b7e6f237f7",
+      "recipient": "kupchino@express-med-service.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Мисс Магнет",
+      "first_touch_id": "a1126fb8-3b6f-4894-a905-5127d128ba51",
+      "lead_id": "d3d1d0b3-cde9-47ef-8cd1-668c9a8e4b3b",
+      "campaign_id": "e73b53e1-15bc-40bc-885a-6f46924545a4",
+      "recipient": "miss_magnet2020@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Народная",
+      "first_touch_id": "8a90ffc6-efb4-4b56-8c6d-0f0e2fe898b0",
+      "lead_id": "766b3305-9bc5-4b62-bc23-3a908af41874",
+      "campaign_id": "2faff6f8-26fa-4012-a9e1-6fa13bf8bf13",
+      "recipient": "narodstom@gmail.com",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Первая семейная клиника Петербурга",
+      "first_touch_id": "3be83f0b-4e85-4bfe-a29b-e5d0422aa015",
+      "lead_id": "49538d77-aeaa-4640-9ca1-3fffcfc85590",
+      "campaign_id": "c7fc806f-1ebe-4572-8749-181abd90eedc",
+      "recipient": "info@oneclinic.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Персона Lab",
+      "first_touch_id": "ba735c02-6c20-48a2-9588-8d847e9d3651",
+      "lead_id": "e4050ef2-3a96-4fd6-9cc4-7ec51f5e49d4",
+      "campaign_id": "b03d3184-9245-4314-8ad1-7ab7140069c6",
+      "recipient": "lab-30@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Подружки",
+      "first_touch_id": "91b2dc6d-749b-4d21-bf06-9a2b3cf0fcf5",
+      "lead_id": "b0cb8959-c9ef-4c37-8dbd-ab236b3d69b5",
+      "campaign_id": "204ccc17-0249-4bb7-afaf-360410fdecb2",
+      "recipient": "info@podruge.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Прикосновение Светом",
+      "first_touch_id": "31eaa1b7-733e-4e10-8124-7ef4474b9072",
+      "lead_id": "53a3f06f-4257-440c-8563-dd77be2ec947",
+      "campaign_id": "48ad6b7e-baff-41e3-91fa-925b65294625",
+      "recipient": "prikosnovenie.svetom@gmail.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Рант",
+      "first_touch_id": "d4217ddf-7bc1-48db-b75b-338539c94372",
+      "lead_id": "454b305c-f458-4721-a882-3356bfc84b63",
+      "campaign_id": "278f19aa-ee50-47ce-bf0b-7268c73be802",
+      "recipient": "info@rant.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Расчеши",
+      "first_touch_id": "c8ff6063-d6eb-400b-93bb-d6943aa84dfe",
+      "lead_id": "5b4402d9-bfbc-4f10-b907-465d39ec0f1e",
+      "campaign_id": "f5b6b63d-b666-4506-b13e-2aefb22fdaa2",
+      "recipient": "rascheshi@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Ремеди",
+      "first_touch_id": "cc94e1bd-af65-4983-b5f9-d0728c97f47a",
+      "lead_id": "23f3cc68-a744-4030-8363-8bf21e4f6720",
+      "campaign_id": "ebebde28-1ffc-4790-893b-24ece7d7a4c7",
+      "recipient": "info@remedy.skin",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Северо-Западный центр лазерной медицины",
+      "first_touch_id": "cc4630ef-6ee3-4ceb-96a9-9127ac27bba6",
+      "lead_id": "3b9b6b09-81a7-4eee-a1e8-21d9259b9eaa",
+      "campaign_id": "9babf5ef-41e3-4b12-9c09-0ec8b6a9bec6",
+      "recipient": "clms@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Стома",
+      "first_touch_id": "98d2371a-d4f2-4f4e-b8fd-815ab8fe5e58",
+      "lead_id": "9b51195a-6c0e-455d-99bb-15117f20f24e",
+      "campaign_id": "943467b2-41d4-47fa-ae8f-90413a4d3d41",
+      "recipient": "office@stoma-spb.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Стоматолог Пушкин",
+      "first_touch_id": "10124aca-3b17-4258-9aae-0020145abd16",
+      "lead_id": "f1534445-6d3c-4c38-b83d-fcd732c50eec",
+      "campaign_id": "d352cede-1768-40c0-bff9-bdd222987381",
+      "recipient": "stoma_pushkin@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Стоматология Александрова",
+      "first_touch_id": "80b1bd09-c8bd-4eab-8300-dc9df1ff111f",
+      "lead_id": "f0e116aa-b92c-4a9e-b5d6-8b861f2a1ea7",
+      "campaign_id": "801f94c5-49ff-4606-84a2-0c393975d7dc",
+      "recipient": "info@stomal.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Стоматология Комфорта",
+      "first_touch_id": "f70a6e87-3bb2-4875-bee9-db0c62ae0fc2",
+      "lead_id": "1c68c26e-bd20-4129-a3fa-712b487cda60",
+      "campaign_id": "c5e47d12-541e-4ad4-9b69-6af7cef1d9c3",
+      "recipient": "doctor@stomcomforta.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Студия перманентного макияжа Татьяны Астаниной",
+      "first_touch_id": "fca50f88-339c-47ae-b16f-d6e2c92ae5d4",
+      "lead_id": "596e648e-0941-4149-9fd6-40fbb29722c7",
+      "campaign_id": "8cb1e88c-60b7-49a9-8cf6-6a7f0184ce90",
+      "recipient": "admin@piterpm.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Сэт",
+      "first_touch_id": "b1453eef-bac1-4662-9f51-da71aca27a0f",
+      "lead_id": "3ac8c8ab-9592-483e-8f28-4b71eae503a5",
+      "campaign_id": "d4312dd0-d07e-43bb-8a0e-3cd98e3840cc",
+      "recipient": "esteticprolab@yandex.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Так легко",
+      "first_touch_id": "63d9e69c-f047-4785-aa17-f4110e875242",
+      "lead_id": "de52418b-95cd-4c9c-877a-531c423a24a9",
+      "campaign_id": "f87c41e5-686e-442b-9a9e-b293cc3aa903",
+      "recipient": "taklegko.spb@gmail.com",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Таурас-МЕД",
+      "first_touch_id": "a9e814b9-2b9c-490e-b2ac-46d70ad8ee18",
+      "lead_id": "a0a5d722-c9a3-453f-90b7-b7347214ca18",
+      "campaign_id": "73a2b764-7db1-4a33-93e8-a07c75d34703",
+      "recipient": "reception@taurasmed.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "ТвойДок",
+      "first_touch_id": "05c6d205-ebb2-4569-ab79-73f13e742bb0",
+      "lead_id": "55556311-12b8-4bbd-83dc-53561961a511",
+      "campaign_id": "b0f48cc9-c936-422b-8311-2a5a8dbb53ed",
+      "recipient": "tvoidoc.info@ya.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Тектоника",
+      "first_touch_id": "44bd6662-61f0-49d6-951b-0f1c461437fb",
+      "lead_id": "64b82f97-1b2c-40ae-96de-ed2bb9953344",
+      "campaign_id": "5dcf077b-bb9f-4b68-8869-16403f599a40",
+      "recipient": "jenny-petro@yandex.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Точка Касания",
+      "first_touch_id": "ae2adc8c-97d9-49b8-a80a-ff628c0fbeed",
+      "lead_id": "892ca585-8f58-4951-add3-a4328014271f",
+      "campaign_id": "3aa5b3c8-9e39-4010-ae71-8f50e2ab35c6",
+      "recipient": "studia_tochkakasania@rambler.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Тэффи",
+      "first_touch_id": "d7a19ae6-f4e4-4e8e-b754-a9ead89b6d0b",
+      "lead_id": "9db5930b-1500-42fe-9da7-369b092efeba",
+      "campaign_id": "3b28fa93-38d8-461e-a900-0a26ea1bcfe8",
+      "recipient": "teffi@teffi23.ru",
+      "first_angle": "map_content_gap"
+    },
+    {
+      "name": "Улыбка 32",
+      "first_touch_id": "b0f8714b-7872-45c3-ac2c-e407269b4ddd",
+      "lead_id": "0f961202-a007-4077-ba2c-e580d682929c",
+      "campaign_id": "7a8c3ab7-c45f-40b8-a3a9-e5062bc64f9c",
+      "recipient": "info@s32.dental",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Фанмаркет",
+      "first_touch_id": "c6af6bb3-c21f-483f-95ca-f4cf8b949329",
+      "lead_id": "329f9967-8934-46b0-b598-d4aff0ee8c22",
+      "campaign_id": "1713fdc5-3ac5-47cb-bc92-c22292b65e4d",
+      "recipient": "info@funmarket.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Феникс-Мед",
+      "first_touch_id": "6b4320f9-a590-4ff3-bb6b-92a7d633d7d2",
+      "lead_id": "4e5bcb3c-333d-4a15-9e63-46fa024870b0",
+      "campaign_id": "c7dbfa07-e2cb-4ce0-a64f-9ad53162c3a3",
+      "recipient": "fenix-kolpino@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Философия красоты",
+      "first_touch_id": "749c2196-60d4-4740-9209-7c97589d4ca1",
+      "lead_id": "005309e6-6ff8-499f-8dbb-7ad4545ef857",
+      "campaign_id": "d4496581-ae6f-4147-9bfc-43d07dfeb8ef",
+      "recipient": "phob.clinic@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Фрезия",
+      "first_touch_id": "89c36572-7ae8-4f2a-b3e7-2c88dedf9ca2",
+      "lead_id": "70aa1053-73fa-4204-8c6e-aab5cc533d10",
+      "campaign_id": "aba15853-1f52-442a-9784-8280c034169b",
+      "recipient": "freesia.sk@inbox.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Царскосельский центр Красоты и Здоровья",
+      "first_touch_id": "31f60c49-8d3e-49ef-86f7-e0d217fa7b69",
+      "lead_id": "9a5df70d-0ac2-4db9-8bdf-5c1080a38a06",
+      "campaign_id": "ac040f5b-39bf-406a-8faa-a8c99da81767",
+      "recipient": "salon_csckz@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Центр детского досуга Каскад",
+      "first_touch_id": "2aae1667-ce66-409b-8fbd-0abb3bccd47b",
+      "lead_id": "015db2eb-65cd-4274-8fa0-55fc0e9bb538",
+      "campaign_id": "d71ae1f0-c40f-43ee-9d1a-8428989baf73",
+      "recipient": "kaskad.cdd@gmail.com",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Центр семейной медицины Пушкин",
+      "first_touch_id": "7805e1d5-b286-4f1b-ac91-d9b46438b652",
+      "lead_id": "9012afff-b802-4584-825b-d56e8149c594",
+      "campaign_id": "7c1224f3-5924-413a-bfd3-aaddbaa4998c",
+      "recipient": "csmeizs@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Чеховъ",
+      "first_touch_id": "3bff2903-bef0-4cf4-a115-d3f6f4bf95d9",
+      "lead_id": "43802173-c4c1-4b9a-ad5c-eb93e1916739",
+      "campaign_id": "95356699-d6f6-4a27-ae47-51a068e234ff",
+      "recipient": "chekhov@chekhovfamily.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Шаг",
+      "first_touch_id": "b761f16b-d7cb-4f6d-a862-f325b188b61e",
+      "lead_id": "b783aa10-0af9-4ed8-949f-592fdd37976f",
+      "campaign_id": "96431a53-dbd1-41f5-81b1-3093ed6e25b4",
+      "recipient": "novayashkola2021@gmail.com",
+      "first_angle": "map_content_gap"
+    },
+    {
+      "name": "Эон",
+      "first_touch_id": "5dc14231-3729-44a2-8328-a5d8ffa4bb6a",
+      "lead_id": "1ce4bf5f-9ff1-4d2f-998c-aa55c08cefb8",
+      "campaign_id": "652d85d1-f036-4624-a6ad-d817eb10eda9",
+      "recipient": "klinika_life@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Эсма",
+      "first_touch_id": "9322707a-0889-4f7a-946d-6045cd85eb1e",
+      "lead_id": "1aab0396-daaf-4035-8c3e-9837a5c6480d",
+      "campaign_id": "c7e6a5f7-87f6-48f1-af2d-277df577e8b2",
+      "recipient": "ecma-spb@yandex.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Эсте",
+      "first_touch_id": "7048aac4-f578-4a2f-a160-34f59ac3ab1e",
+      "lead_id": "08ffc0f4-e25c-406e-9843-dd76997dfb91",
+      "campaign_id": "0f619a0e-457b-4659-bb15-2e6f5e47cecd",
+      "recipient": "este-plaza@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "ЭстеСоул",
+      "first_touch_id": "19517419-ca86-412b-8da4-c983cf930a44",
+      "lead_id": "dcba6cc1-c3b2-4d40-a302-a4392d2992a8",
+      "campaign_id": "a1f62982-c67c-4cad-b6ce-0148dd8fe57e",
+      "recipient": "estesoul@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Эстетик Life",
+      "first_touch_id": "a5158b9b-5e29-4c13-9275-ba3f009c9350",
+      "lead_id": "b1e0d877-f150-43b9-ac9a-d8079f3c6afa",
+      "campaign_id": "8704d4b7-46e2-4955-8c9a-2909c0ff3d71",
+      "recipient": "estetik.life@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Эстилайн",
+      "first_touch_id": "2a8ad399-ed46-44e2-8e37-5d3cce67afdd",
+      "lead_id": "370d3169-b9ad-49f2-b9fd-796acfe96ecc",
+      "campaign_id": "d5d0f54c-b320-4872-a5b2-25a0f8deba71",
+      "recipient": "estiline@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Юниор",
+      "first_touch_id": "e6332011-7993-459a-b206-a4bcf3434f5d",
+      "lead_id": "73f854ca-0b69-4d84-ad0c-bbb8cd85fff5",
+      "campaign_id": "cb144a02-29b8-4300-846e-77036b9eab2f",
+      "recipient": "info@juniorshop.ru",
+      "first_angle": "weak_map_rating"
+    },
+    {
+      "name": "Я Вижу",
+      "first_touch_id": "68d3eb35-8059-4f8a-899c-7e305ce09b84",
+      "lead_id": "03177cdb-7115-476e-9081-500889259f22",
+      "campaign_id": "55f6e979-14d9-413f-831f-166c4d5ecd13",
+      "recipient": "admin@isee-center.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Chisla",
+      "first_touch_id": "e1e741f5-99e9-4ea8-bc4a-bef99c9c3581",
+      "lead_id": "4f58803a-08af-4289-a676-6dd278fcdb94",
+      "campaign_id": "3cbf9eec-1b60-4da2-9243-d9b6ce33a603",
+      "recipient": "info@chislasport.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "CityHealthSkin",
+      "first_touch_id": "49d658ec-c108-4cde-9366-9c1537c84b62",
+      "lead_id": "479666d6-a7a6-4b97-88ef-a28a23949b79",
+      "campaign_id": "25a0205d-3996-41ed-8849-fb24c1600ac8",
+      "recipient": "cityskin@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Community Clinic",
+      "first_touch_id": "91e9705d-5367-4685-8230-06728d0327c6",
+      "lead_id": "1e4a51bf-3208-4179-ab99-e375d792c929",
+      "campaign_id": "68340850-72b3-49c6-bce6-9a83eb107a97",
+      "recipient": "info@communityclinic.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Everyday Clinic",
+      "first_touch_id": "64ed531f-8e8d-49c1-bb8b-8edc3a6a3c65",
+      "lead_id": "ab497bd9-136f-4712-accc-a94c61bdab5a",
+      "campaign_id": "5ce8c5e2-881f-4da5-b72c-2fd0ebe24c8c",
+      "recipient": "info@everyday.clinic",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Figaro",
+      "first_touch_id": "dee9a456-eac2-4710-bc53-a3e4e63a6b6e",
+      "lead_id": "d007bf62-0be4-4f83-a389-216a4e19749f",
+      "campaign_id": "03cfe95c-2b24-4c36-ba62-8298166aba05",
+      "recipient": "info@shopfigaro.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Fresh Fitness",
+      "first_touch_id": "69eee99c-7f8f-4096-afd0-c14507b6679a",
+      "lead_id": "f10b347c-ba38-42b3-801b-afcf76bbe154",
+      "campaign_id": "bc2dc295-269d-4c53-ad83-21cbfdcda1a9",
+      "recipient": "clubmanager@fitfashion.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Idol. cut",
+      "first_touch_id": "1407b4ee-20b4-4892-a5d6-f88b089935a3",
+      "lead_id": "6b7a610b-df0c-4810-b932-2a0a1479b543",
+      "campaign_id": "31a7a032-7610-4bb3-af67-778e7df5c73a",
+      "recipient": "idol.cut.spb@gmail.com",
+      "first_angle": "signal"
+    },
+    {
+      "name": "ImGelis",
+      "first_touch_id": "173c8067-4e0a-46a5-9932-86ec806f23cb",
+      "lead_id": "634231e6-ac25-41c3-808b-0c60edeb0b92",
+      "campaign_id": "c1db0f6a-35d2-482e-965c-158bfdb8720e",
+      "recipient": "ooo_mega_spb@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Laser Love",
+      "first_touch_id": "311c7933-87b7-4b57-b9eb-a33732674925",
+      "lead_id": "f74feabf-50de-4ed8-8853-2df28fb54048",
+      "campaign_id": "fc64bdc5-c5d6-4e44-9642-2fc02c497806",
+      "recipient": "marketolog@laserlove.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Mezocosma",
+      "first_touch_id": "69cc45a0-51e8-450e-9aac-e9764a0ad4d0",
+      "lead_id": "841ae6a4-6cd1-499f-9e24-3a184edf70e3",
+      "campaign_id": "f1e9b088-91d0-4eaa-a420-de0d02bda2a0",
+      "recipient": "info@mezocosma.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "People's Choice",
+      "first_touch_id": "74f3702c-be57-44b8-909f-bd320e199208",
+      "lead_id": "ca52ed73-f83c-4367-a7ca-a5b4ed306247",
+      "campaign_id": "e49857fe-dc36-4548-a5e9-140bcec31efe",
+      "recipient": "mail@peopleschoice.studio",
+      "first_angle": "content_operations"
+    },
+    {
+      "name": "Ploika",
+      "first_touch_id": "0f840f7c-9748-4902-a294-e3a79bca530c",
+      "lead_id": "feddc0b1-8cc4-4540-b3da-13a32e9fecf5",
+      "campaign_id": "e84d35d5-7a10-4be0-9ce2-bb3db482b8a2",
+      "recipient": "info@ploika.me",
+      "first_angle": "content_operations"
+    },
+    {
+      "name": "Refresh",
+      "first_touch_id": "c48631ce-b9ed-4518-8bbc-7b39eb935125",
+      "lead_id": "30f3c1fa-7f59-4112-a156-719bb96dc939",
+      "campaign_id": "216049e3-12b3-453c-9a7e-738c04837d8e",
+      "recipient": "refresh.clinic@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Академия эстетической медицины",
+      "first_touch_id": "1470ea46-26a2-4701-b546-95b02d21139e",
+      "lead_id": "ed841dcd-32a7-4d40-8e9b-bc03cbb393eb",
+      "campaign_id": "8b57a432-aafe-4203-9963-f77052a488cb",
+      "recipient": "mail@aem-spb.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Асимед",
+      "first_touch_id": "c80a6aeb-3c82-4f7f-84b5-0c9a8a790612",
+      "lead_id": "5e6fcd53-a0b8-4c5e-8342-0db0b8745988",
+      "campaign_id": "07692a77-6e56-4479-b108-7530385d786d",
+      "recipient": "asimed-servis@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Дезир",
+      "first_touch_id": "eac7c297-8ed0-4446-8aeb-14607798d9d6",
+      "lead_id": "3d174406-1030-4510-a686-37a0d5e7014d",
+      "campaign_id": "df36a7e2-a8cb-4bbb-9410-86958479bb3a",
+      "recipient": "dezir-mosk@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Клиника Мити Цедермана",
+      "first_touch_id": "b3e487ac-e2b7-4640-b41c-437367c71eb0",
+      "lead_id": "60d8192c-2922-4e04-a5d7-840895c91b1f",
+      "campaign_id": "18b0f3e9-c244-4f7e-b590-431bdbc4f6fc",
+      "recipient": "hello@cedermanclinic.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Клиника доктора Куприна",
+      "first_touch_id": "06743abe-4da3-4fd5-8d77-6e0a4b20c010",
+      "lead_id": "11a61e58-d6fa-44f1-a7d0-a9b151b74e11",
+      "campaign_id": "651dc365-b565-4199-a1df-1cde1b13a3fe",
+      "recipient": "klinika@plastkl.com",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Культура красоты",
+      "first_touch_id": "fe680b41-7b49-492a-b101-d4eb97e03d07",
+      "lead_id": "06267317-d9de-43a1-b956-078bcb6499bf",
+      "campaign_id": "7998c814-617a-4e72-816f-ca9dc1dfc9fa",
+      "recipient": "9993077@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Лапью",
+      "first_touch_id": "ea8646df-ac81-4972-bee0-1bcb097aab15",
+      "lead_id": "84f5a7f3-8534-4463-90d0-325d6092bf53",
+      "campaign_id": "c0a3e297-1257-4759-995e-1f9a6299aa02",
+      "recipient": "lapeau.clinic@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Лыжный 2",
+      "first_touch_id": "97943ea1-b4d6-4e09-b708-084ada61b5e6",
+      "lead_id": "6b1a7760-78ba-494d-b1d6-38ee3285a0fa",
+      "campaign_id": "1f4c197a-9f73-49f6-938b-0d6dfdd6d519",
+      "recipient": "info@sktemp.ru",
+      "first_angle": "weak_map_rating"
+    },
+    {
+      "name": "МедКлиник",
+      "first_touch_id": "54d0a38c-ec3a-4810-b8f6-92b0d52bd20f",
+      "lead_id": "671e66b0-2d12-4b9c-809d-8a358fdfd44b",
+      "campaign_id": "fd8fd2c2-53c1-4aaa-8974-9e9d2753b97e",
+      "recipient": "mail@medclinic.center",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Медери",
+      "first_touch_id": "cdc53660-3c9f-4548-b6de-b9049b6b9459",
+      "lead_id": "07c7cd04-8c31-4815-9692-e1320b44b68d",
+      "campaign_id": "7a641ef6-25e5-4acc-9f84-f851e8e2ff62",
+      "recipient": "mederispb@yandex.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Медильер",
+      "first_touch_id": "4cefd7ac-d72f-4d68-9ec6-6e4fcb2585e9",
+      "lead_id": "49f9e4c3-0e04-4fc4-bae2-10641a460dd3",
+      "campaign_id": "e1a9e5f6-1060-406b-bd0b-6ad22b718d64",
+      "recipient": "info@medilier.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Медицинский центр Квантум Сатис",
+      "first_touch_id": "9e06e796-6842-4f4d-8d08-92342d1bbaae",
+      "lead_id": "509cd5a0-5b3b-42ec-bebd-3fad2e4d62a0",
+      "campaign_id": "c7c6d2a9-61b2-4693-88c2-89950f9e8558",
+      "recipient": "info@qs-clinic.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Мимимотик",
+      "first_touch_id": "96290a5c-b483-4455-b917-1415d04d8747",
+      "lead_id": "c7d490f0-3207-4653-aa0b-1f6ffecf6d32",
+      "campaign_id": "da9ad429-dd7e-4c9f-984d-6463e1a37599",
+      "recipient": "m.mimimotik@mail.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "МирраМед",
+      "first_touch_id": "9485f2d4-b405-40ea-8679-3ae6947b0fe3",
+      "lead_id": "f21e4fd3-ebbf-4687-bded-fd7ebae9fb24",
+      "campaign_id": "73812a84-416a-4598-91e8-90907b8c253f",
+      "recipient": "info@mirramedspb.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Моменты",
+      "first_touch_id": "9ba7f360-b06f-4cc0-a74b-484b853bc73b",
+      "lead_id": "4d5c70d8-71aa-4127-a1be-558d6acd1b34",
+      "campaign_id": "1fe66c5f-2962-4db0-8b73-a5042f2622b0",
+      "recipient": "moments-clinic@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Нарцисс",
+      "first_touch_id": "4674961e-efdf-426b-b601-2169684613a2",
+      "lead_id": "040433d6-48d8-428a-8dea-3138397a1a72",
+      "campaign_id": "e575a214-da97-43e4-8e3b-0f7834bb5610",
+      "recipient": "info@narciss.beauty",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Парадиз",
+      "first_touch_id": "1f189956-c4e6-4ca8-bc24-4034fe520fe0",
+      "lead_id": "23541773-fed7-4f67-8f63-514f8d48d97a",
+      "campaign_id": "fc22fc9f-35b2-4712-bce1-80f902c0b9a3",
+      "recipient": "office@paradise-tula.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Париж",
+      "first_touch_id": "5e459298-780b-4e0c-9ba2-e34e6f8d6433",
+      "lead_id": "0fada2ee-aba6-47bb-bc3c-d25e583d5671",
+      "campaign_id": "7849e69d-916c-49d1-abb5-6197318093bc",
+      "recipient": "salon_paris22@mail.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Прайм роуз",
+      "first_touch_id": "aa09360f-847e-4bc3-8d13-0e7824593f5c",
+      "lead_id": "3ee2713b-07c4-4edd-8b4a-1f38817f27ee",
+      "campaign_id": "02c0880c-f82b-41ed-bd3f-52df8cf0f7da",
+      "recipient": "information@primerose.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "ПремиумМед",
+      "first_touch_id": "7e85f9f2-80e6-4635-862f-0834912febe2",
+      "lead_id": "afb2b10b-f062-4c0e-ac67-dd7d4bb610bf",
+      "campaign_id": "bd7565f0-1e1e-4a5c-9baa-40ab56bbd613",
+      "recipient": "premiummed.st.petersburg@gmail.com",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Ресурс",
+      "first_touch_id": "7b10c54b-88bf-4692-afc9-37963032059c",
+      "lead_id": "19fe4c1d-8659-4bb9-b672-c841a1cc36ed",
+      "campaign_id": "98a19e64-3c63-44fa-a1c9-1f8ef0b74ff5",
+      "recipient": "reception@ressource.clinic",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Смайл Бутик Клиник",
+      "first_touch_id": "eb625e49-11a2-425a-99a5-cd7b50a78407",
+      "lead_id": "76dc449d-88f6-483f-b8be-3f880349a185",
+      "campaign_id": "e337ee6a-ab04-47d6-b845-e4484f09c23a",
+      "recipient": "info@sb-clinic.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Современные технологии",
+      "first_touch_id": "d831f735-ca03-424d-bf5c-9a06f2c8dcdc",
+      "lead_id": "1be732ae-408c-44b3-9c9c-80527cdcc8f7",
+      "campaign_id": "3307c63c-11c2-4bf8-bea8-0cbd71a4aa89",
+      "recipient": "89184448688@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Солнечный блюз",
+      "first_touch_id": "91da1175-4684-4424-9437-eed1fc314282",
+      "lead_id": "1d6938ef-240b-4830-8e1b-0970628b1fe6",
+      "campaign_id": "630bf7f3-f749-4bad-87fe-5407ab262f7d",
+      "recipient": "sun-blues@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Стоматология Диана Дентал",
+      "first_touch_id": "f8080bcb-d1cd-4561-b182-40ae7b6ef243",
+      "lead_id": "2056d5e6-835d-4220-a923-a62d7560aa92",
+      "campaign_id": "253dd674-4bf7-4b6d-8c46-8e151b6c2dfd",
+      "recipient": "diana-dental@yandex.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Территория Мистики",
+      "first_touch_id": "35b39c27-c821-4207-b391-8bdfb60009df",
+      "lead_id": "8faa2206-18a9-47f4-b6a4-df676118b496",
+      "campaign_id": "ac6fa12a-6c4b-46d6-86ba-1fa1b799139b",
+      "recipient": "info@terrm.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Центр Семейной Медицины",
+      "first_touch_id": "fddbbb6f-61d6-4f75-b1ba-30b3d6e1ddb8",
+      "lead_id": "3a85be9b-81c8-41c7-9621-cc01100e2fdd",
+      "campaign_id": "6574dde9-c8d6-47dd-9104-287aff4784b4",
+      "recipient": "bitukova.ekaterina@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Центр медицинской косметологии Оксаны Волковой",
+      "first_touch_id": "d5d502ae-2cb7-4876-a11b-7748c8d5cd30",
+      "lead_id": "ab0f31f7-cb83-4d22-8657-29f30fd0f2ff",
+      "campaign_id": "7ee6df02-5b33-44ca-abd4-df0aa13e6681",
+      "recipient": "admin@volkovabeauty.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Центр подологии и эстетики",
+      "first_touch_id": "c830a769-6027-488e-a5a8-3b6fdb253d82",
+      "lead_id": "2289873b-c529-4988-80a6-07f634aa2140",
+      "campaign_id": "6c0e04ea-4b63-48c3-9277-87c925b50407",
+      "recipient": "cabinet-podologa@yandex.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Шуваловская школа",
+      "first_touch_id": "4bf1e846-1046-45f4-8b86-a5495eba5f30",
+      "lead_id": "9533d343-c4e2-4340-8f1c-9700ee6a4d2b",
+      "campaign_id": "39211ed3-591f-4f1b-a025-8e06b4e6d79f",
+      "recipient": "school.shuvalovo@yandex.ru",
+      "first_angle": "map_content_gap"
+    },
+    {
+      "name": "Эстетик клуб",
+      "first_touch_id": "2cbd4091-6d0a-41be-82d3-bb26f840e65f",
+      "lead_id": "cac1842f-28cc-4e01-958f-8e83ff39e0eb",
+      "campaign_id": "b9a20946-6c98-4161-8f71-ff9deb0b4297",
+      "recipient": "otvet@estetik.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Я – Актер!",
+      "first_touch_id": "0e383311-8d60-45cd-89ab-70e30e065d6e",
+      "lead_id": "d774490b-4620-4c62-afff-bdbe919ff856",
+      "campaign_id": "8161b6f4-ae20-4917-b3a3-2ad1b7de40d5",
+      "recipient": "d.vaigacheva@i-actor.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Amby",
+      "first_touch_id": "d516bc82-eea1-442d-8a01-b6d16edd6f99",
+      "lead_id": "bc3ac60f-dea6-45fd-a67a-ec0bee282e40",
+      "campaign_id": "0e892835-03de-4e85-b917-7d3da15e08db",
+      "recipient": "info@amby-beauty.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Candela Victory Plaza",
+      "first_touch_id": "18b6660b-a53b-4018-ad31-d2583798b5dc",
+      "lead_id": "d326c290-d142-4764-8f7d-c560bbefb3d3",
+      "campaign_id": "9d253be7-f343-4dd4-a571-f3c34f063827",
+      "recipient": "info@candela-plaza.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Chuesh Still",
+      "first_touch_id": "ceea29cc-0d81-40ce-86db-1cfb1a82bcba",
+      "lead_id": "e96ec1dd-5a1d-4d8b-877a-d2e2917d0ec1",
+      "campaign_id": "f8411580-0afc-4739-b975-239720883d76",
+      "recipient": "chuesh_still@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Cococabinet",
+      "first_touch_id": "35e88883-1260-42dc-808e-5ba7e243cba8",
+      "lead_id": "de9a7fd6-4a72-4091-84fd-6f00054bb1f6",
+      "campaign_id": "01d70aca-ab05-451d-85af-a2cd5c55b215",
+      "recipient": "cococabinet46@gmail.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Esty",
+      "first_touch_id": "056118d8-625a-4fb5-9a70-866289a3613e",
+      "lead_id": "e4fc8524-9691-469d-be82-ee2f06820bfe",
+      "campaign_id": "fcf1fc33-74c8-4f15-bc8c-0c5c1a30a11a",
+      "recipient": "esty.spb@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "GynecoLase",
+      "first_touch_id": "c4f76b89-e74a-47ce-ad44-febb949b3532",
+      "lead_id": "7d2bc860-8811-4a4d-aa45-3cda6d83be50",
+      "campaign_id": "50156174-e5b7-4c41-be41-8036019309e9",
+      "recipient": "spb@gynecolase.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Oval",
+      "first_touch_id": "a720b320-e029-44b0-b91f-9c1e80190f02",
+      "lead_id": "22c8b3f5-d829-482b-98d7-b07e53cc276d",
+      "campaign_id": "10d9fb4a-36ba-4952-945b-e8270981986a",
+      "recipient": "info@ovalface.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Sorry For My Beauty",
+      "first_touch_id": "7c7c7ec2-208c-4a37-8fc2-e8b0f6f9274b",
+      "lead_id": "5546dfaf-5c26-4284-8159-deb69928571e",
+      "campaign_id": "7f839a87-99b5-4581-b4f7-32ca447c7cf9",
+      "recipient": "sorry_for_my_beauty@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Vogue Body Clinic",
+      "first_touch_id": "b8767635-e3ad-4eb2-bd66-503ddd9ffdd2",
+      "lead_id": "35635230-1c42-4300-9657-05ed3054dff3",
+      "campaign_id": "b68621ff-4b22-4c74-b012-155d6fbb0a46",
+      "recipient": "vogueclinicspb@gmail.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Wow Face",
+      "first_touch_id": "615192ca-b374-4dfa-8028-3887751ff9e7",
+      "lead_id": "5f27a0bc-d932-409c-81ec-6947f92b65a1",
+      "campaign_id": "5bf9b40c-b502-4559-b6f5-007931b67148",
+      "recipient": "wowfacespb@gmail.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Анни",
+      "first_touch_id": "d922674a-a7f0-4d87-b974-fa3cd4afff5f",
+      "lead_id": "12bf3dd6-e7ae-4a38-b6f0-4ca7edd6416b",
+      "campaign_id": "fcc962e3-6493-489f-9526-3ef5f6fd78b3",
+      "recipient": "anni-studio@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Денталла",
+      "first_touch_id": "d8a8e167-d840-4a3d-9784-9457a9ac20d3",
+      "lead_id": "0284498c-076c-47d8-bc40-2c64745f4a36",
+      "campaign_id": "0fff2460-46d3-452b-a442-70f29072a962",
+      "recipient": "dentalla@inbox.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "ЕвроМедика",
+      "first_touch_id": "7f34b21a-c451-4e03-a5e7-060224c27d32",
+      "lead_id": "1ea3eef3-9573-4200-837c-8a7202d4cd20",
+      "campaign_id": "03c1e80e-39de-4da9-b4b9-5a5f080998fa",
+      "recipient": "v16@evromedika.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Звёздная",
+      "first_touch_id": "44a6e270-34c0-4c87-8e40-ffde9dc37e2c",
+      "lead_id": "49bd96c9-57c3-48b6-bae8-8deecd750c60",
+      "campaign_id": "b3da608c-b188-4982-bda0-ac6a8ea265d1",
+      "recipient": "client@starsclinic.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Зенит-Чемпионика",
+      "first_touch_id": "bfc509ef-3471-46cd-b89b-64571b54cc0f",
+      "lead_id": "34863eaf-b539-4ba0-a466-dcc789c6a313",
+      "campaign_id": "cd745536-5b1a-4b38-9ad9-f3d3b472df9d",
+      "recipient": "info@championika.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Клиника Доктора Григорьева",
+      "first_touch_id": "d5e8b308-4a23-4d06-952e-084ab35a5a25",
+      "lead_id": "3866b52b-f64c-468d-b5a3-f6cf783d1c31",
+      "campaign_id": "38343f21-30be-4910-90f8-ede938eb8108",
+      "recipient": "clinicadg@yandex.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Космет_А",
+      "first_touch_id": "b85a923d-ddf5-411d-a9d2-a02209c314f4",
+      "lead_id": "33f2b0bf-ec7f-4ea1-af2f-dc559b760e29",
+      "campaign_id": "eafa29ce-b79f-4e9e-a803-eb86b9825d90",
+      "recipient": "kosmeta.spb@mail.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "КосмоБьюти",
+      "first_touch_id": "6708474f-37ce-4fb3-96d8-ebc3b79266b4",
+      "lead_id": "2bb5f518-f36b-4208-adea-a14bc7809692",
+      "campaign_id": "eb795342-44a9-424d-bd3f-26d9e7e6f0eb",
+      "recipient": "cosmobeauty2024@bk.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Лица",
+      "first_touch_id": "268a8c9b-279e-4013-83b6-21be077bf9de",
+      "lead_id": "931bc1f5-a5ef-4209-86a1-ce7cecc1f059",
+      "campaign_id": "c91cc7ca-e055-4199-9811-e21b276b2392",
+      "recipient": "info@capitalgroupcorp.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Минималист",
+      "first_touch_id": "8b0c3305-ba92-442d-9ba3-6eafb4d08eed",
+      "lead_id": "4436f682-b5a6-4337-a1b9-3c12e4f4895b",
+      "campaign_id": "ca57689a-a1b0-41b4-96e1-cecfe824bafe",
+      "recipient": "info@minimalist.clinic",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Основа Красоты",
+      "first_touch_id": "96f150f8-06b1-440b-b4dc-374449a0d1f3",
+      "lead_id": "90e3e6dc-e9f8-4a17-b1b8-25302f514bac",
+      "campaign_id": "d1b41fd7-0dd8-48dc-9233-ec5471d6c5c3",
+      "recipient": "admin@siriusclinic.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Отражение",
+      "first_touch_id": "b6eb5773-e6e7-4f39-9b61-a8b831a765fe",
+      "lead_id": "1265c438-fe5f-4a23-963d-a33ee3942b92",
+      "campaign_id": "d83f940e-f531-4ab5-90e1-4424ec29d332",
+      "recipient": "info@otrazhenie-clinic.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Разноцветные цыплята",
+      "first_touch_id": "53d4dda3-ed7f-4812-8401-1b223b690a4d",
+      "lead_id": "f4021ec4-3c3e-4cb1-b88e-3812a8e2623c",
+      "campaign_id": "17715690-2bcd-4848-aceb-607f53b00407",
+      "recipient": "info@rechcenter.ru",
+      "first_angle": "map_content_gap"
+    },
+    {
+      "name": "СлаймиКо",
+      "first_touch_id": "e6319849-5f15-465d-9418-c5d732235764",
+      "lead_id": "d9d21b12-d9e5-45f2-b29f-989f6377a02c",
+      "campaign_id": "bfadb68f-ab90-478a-8df2-b384ed548716",
+      "recipient": "club@slimeco.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "Смит Медикал",
+      "first_touch_id": "cea981e3-46a0-495c-ab4f-36321126a7e7",
+      "lead_id": "2f6d4c58-3b1b-4393-bc35-69dd4bbb245d",
+      "campaign_id": "f9a3c833-88c6-4041-ab23-872bb4eb3530",
+      "recipient": "spb9881000@gmail.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Тибет",
+      "first_touch_id": "2bf749ef-6dd3-4eaa-ac84-a25e736a1049",
+      "lead_id": "4e7a1c7b-88d2-4ee0-bb9f-4499a0fb5ea8",
+      "campaign_id": "21da3056-329a-4728-bcec-a1e84edbf41e",
+      "recipient": "tibet-info@ya.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Улыбка радуги",
+      "first_touch_id": "5dcb4317-d747-4e67-aca7-77b4d63e616b",
+      "lead_id": "49d2d8e7-7b30-41fe-8f8b-f1a0d2b6d46b",
+      "campaign_id": "c59fb71f-4c17-4c2f-8c83-1344cad72a04",
+      "recipient": "email@r-ulybka.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Шаляпин",
+      "first_touch_id": "7919992b-3524-4978-bc4f-0cdbc41d6c06",
+      "lead_id": "64fd5c9e-42c6-4f39-8510-a11fea4bc10b",
+      "campaign_id": "6871c2c4-2dc0-4642-869c-b48d33ca6e45",
+      "recipient": "gorodskoy@shalyapinspb.ru",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "A3beaute",
+      "first_touch_id": "80cde52d-290c-46c2-9091-4960f7025803",
+      "lead_id": "c41c56ff-2e85-4925-9fb1-f7ff3cab24c4",
+      "campaign_id": "7d9c5709-81f1-4f34-9a58-09290980bc3b",
+      "recipient": "surgery@a3beaute.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Arkadia",
+      "first_touch_id": "9d8c3df3-bd84-444d-bbb5-c022a70d9468",
+      "lead_id": "d1e26d28-dca8-4eb3-9373-bf66b4a49f1d",
+      "campaign_id": "db5d8125-5a56-4ec2-b805-997879e55177",
+      "recipient": "sale@arkadia.spb.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Lion Heart Муайтай Каскад",
+      "first_touch_id": "baf74cee-440e-4b36-949e-888eebf3dd7b",
+      "lead_id": "7daadd89-7586-4eb9-abc4-41c05b88b052",
+      "campaign_id": "c2e7df14-8f7f-4015-a61d-07f0b8833f64",
+      "recipient": "info@lionheartspb.ru",
+      "first_angle": "content_operations"
+    },
+    {
+      "name": "Moonphoto.ru",
+      "first_touch_id": "db5e07ac-fc49-44e5-887d-464fe0be3993",
+      "lead_id": "73ef79a5-d5ab-4fd7-a9fb-410d98bcf048",
+      "campaign_id": "2404f826-4b2a-4fc2-a17c-c2549aef484e",
+      "recipient": "moonservice.spb@gmail.com",
+      "first_angle": "active_map_news"
+    },
+    {
+      "name": "XXI век",
+      "first_touch_id": "b8bbc3b5-2a56-479b-a8d8-6df61afab14c",
+      "lead_id": "1792cb1b-568b-448e-a9dc-0d5d100c3fda",
+      "campaign_id": "9ade4a36-6c5e-4fce-8cd1-bdb8d8fe5020",
+      "recipient": "medinfo@mc21.ru",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "АлексМед",
+      "first_touch_id": "2078423d-6823-4550-adf9-f533c88e0874",
+      "lead_id": "be633091-8f74-4bc0-b5bd-97839dc4411c",
+      "campaign_id": "e3a9386d-6941-4963-9fa9-5aaf74cae6d2",
+      "recipient": "aleksmed.info@gmail.com",
+      "first_angle": "reviews_content"
+    },
+    {
+      "name": "Атрибьют",
+      "first_touch_id": "0d82f1bf-c055-451d-976d-768326f42b5e",
+      "lead_id": "bc6fa187-de01-4605-be8a-a71449a2b6fe",
+      "campaign_id": "fbc82c44-e588-4ddc-9582-8b555e926f9d",
+      "recipient": "cosmo@a3beaute.ru",
+      "first_angle": "signal"
+    },
+    {
+      "name": "Елей",
+      "first_touch_id": "67eab304-2930-404c-a62f-dcce3b9615f0",
+      "lead_id": "a2169f4e-577c-403e-a894-5f858dc60c60",
+      "campaign_id": "d0d6d1f2-db2f-46a2-8208-e38d376bba65",
+      "recipient": "eleykrasa@yandex.ru",
+      "first_angle": "reviews_content"
+    }
+  ]
+}

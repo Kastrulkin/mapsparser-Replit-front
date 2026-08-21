@@ -1,0 +1,29 @@
+{
+  "bridgeVersion": "3.6",
+  "kind": "google-docs-trusted-read-receipt",
+  "status": "complete",
+  "target": {
+    "documentId": "1O5iHE4_Ee0oWFXWsP9_IcclMhBCw1uIeD2PuAFJGy40",
+    "title": "КПИ Мастер yclients",
+    "revisionId": "AIroW36YSCb5no_mqSrUvdnViwvm2BCRNyBI0Oit87uA4laNQqp3Nh3SuhBQAGvOGhDPPSaowJY2gWQ_KI4xEm1Lz0DIPELFXPgWuG-yWxk",
+    "documentUrl": "https://docs.google.com/document/d/1O5iHE4_Ee0oWFXWsP9_IcclMhBCw1uIeD2PuAFJGy40",
+    "selectedTabId": null
+  },
+  "dropdownMetadata": {
+    "status": "unavailable",
+    "resolvedTool": null,
+    "authoritative": false,
+    "count": 0
+  },
+  "controlAwareness": {
+    "hasProtectedControls": false,
+    "authoritativeDropdownCount": 0,
+    "opaqueControlCount": 0,
+    "affectedParagraphCount": 0,
+    "nativeElementCounts": {},
+    "preservationRequired": false,
+    "recommendedBehavior": "No protected controls were detected in the scanned scope."
+  },
+  "warnings": [],
+  "error": null
+}

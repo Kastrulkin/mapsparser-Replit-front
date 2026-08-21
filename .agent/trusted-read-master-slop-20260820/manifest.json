@@ -1,0 +1,57 @@
+{
+  "bridgeVersion": "3.6",
+  "kind": "google-docs-trusted-read",
+  "status": "complete",
+  "outputDir": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/trusted-read-master-slop-20260820",
+  "target": {
+    "documentId": "1O5iHE4_Ee0oWFXWsP9_IcclMhBCw1uIeD2PuAFJGy40",
+    "title": "КПИ Мастер yclients",
+    "revisionId": "AIroW36YSCb5no_mqSrUvdnViwvm2BCRNyBI0Oit87uA4laNQqp3Nh3SuhBQAGvOGhDPPSaowJY2gWQ_KI4xEm1Lz0DIPELFXPgWuG-yWxk",
+    "documentUrl": "https://docs.google.com/document/d/1O5iHE4_Ee0oWFXWsP9_IcclMhBCw1uIeD2PuAFJGy40",
+    "selectedTabId": null
+  },
+  "dropdownMetadata": {
+    "status": "unavailable",
+    "resolvedTool": null,
+    "authoritative": false,
+    "count": 0
+  },
+  "controlAwareness": {
+    "hasProtectedControls": false,
+    "authoritativeDropdownCount": 0,
+    "opaqueControlCount": 0,
+    "affectedParagraphCount": 0,
+    "nativeElementCounts": {},
+    "preservationRequired": false,
+    "recommendedBehavior": "No protected controls were detected in the scanned scope."
+  },
+  "warnings": [],
+  "files": {
+    "document_result": {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/trusted-read-master-slop-20260820/document-result.json",
+      "bytes": 106609,
+      "sha256": "cba50b13831c4a498b9a07438096533ae09ec1f9523c40e68a7fc25474d2153d"
+    },
+    "control_inventory": {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/trusted-read-master-slop-20260820/control-inventory.json",
+      "bytes": 1033,
+      "sha256": "f8b02c953630ece8ef28b6101ec9f19742efb495f10bab136a5cf7d5b1427e5f"
+    },
+    "document_outline": {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/trusted-read-master-slop-20260820/document-outline.json",
+      "bytes": 30425,
+      "sha256": "1c700c38afae1080ced43b1019139c00d9be14f222412a8435614d529549725a"
+    },
+    "document_text": {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/trusted-read-master-slop-20260820/document-text.md",
+      "bytes": 10147,
+      "sha256": "841c8a38f708a010a561a00beafe20a8a41a658ba1376bb8358b2370d7d32391"
+    },
+    "receipt": {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/.agent/trusted-read-master-slop-20260820/receipt.json",
+      "bytes": 964,
+      "sha256": "164f7b91307658d53dbbc8410cca4570607a2f306af6119b481ba80e640c9c12"
+    }
+  },
+  "error": null
+}

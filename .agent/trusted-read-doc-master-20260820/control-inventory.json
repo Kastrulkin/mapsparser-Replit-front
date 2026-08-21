@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "kind": "google-docs-trusted-read-context",
+  "target": {
+    "documentId": "1kQqpnxEr83Kfnw5CK3sSitwWEhMfLlhpeAR4oXE6tDc",
+    "title": "Ведение КПИ в YClients",
+    "revisionId": "AIroW34iQ-8O0bt-Xxp1xX_m3l6jkVAfi_02SpzWakDNon7neomSgI53_9Iwff0vbpmvj1UQ91QQ5Dy0BiRSb6ZkQBafmYDVNtOmwhP7rUc",
+    "documentUrl": "https://docs.google.com/document/d/1kQqpnxEr83Kfnw5CK3sSitwWEhMfLlhpeAR4oXE6tDc",
+    "selectedTabId": "t.0"
+  },
+  "dropdownMetadata": {
+    "status": "unavailable",
+    "resolvedTool": null,
+    "authoritative": false,
+    "count": 0
+  },
+  "derivedControlInventory": {
+    "hasProtectedControls": false,
+    "authoritativeDropdownCount": 0,
+    "opaqueControlCount": 0,
+    "nativeElementCounts": {},
+    "tabsScanned": [
+      "t.0"
+    ],
+    "controls": [],
+    "nativeElements": []
+  },
+  "editGuidance": {
+    "advisoryOnly": true,
+    "requiresTargetedPreservation": false,
+    "recommendedBehavior": "No protected controls were detected in the scanned scope.",
+    "warnings": []
+  }
+}

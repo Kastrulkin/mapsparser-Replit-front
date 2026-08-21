@@ -48,6 +48,13 @@ frontend/test-results/
 .codex/google-docs/
 .codex-docs/
 
+# Reproducible local audit snapshots and inspection renders
+outputs/*_public_reviews_*.json
+outputs/backup_*.sql
+outputs/**/preview.png
+outputs/**/*.inspect.ndjson
+output/**/*.inspect.ndjson
+
 # Sync conflict backups / duplicate suffix files
 .canon_backup_*/
 .cleanup_backup_*/

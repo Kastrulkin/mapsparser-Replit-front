@@ -1,0 +1,10 @@
+[Unit]
+Description=Send exact LocalOS template email cohort 1
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/seo-app/debug_data/dispatch_template_email_cohort_20260811.sh 0
+StandardOutput=append:/opt/seo-app/debug_data/template-email-cohort-1.log
+StandardError=append:/opt/seo-app/debug_data/template-email-cohort-1.log

@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule LocalOS template email cohort 1
+
+[Timer]
+OnCalendar=2026-08-12 10:00:00 Europe/Moscow
+AccuracySec=1s
+Persistent=true
+Unit=localos-template-email-cohort1-20260812.service
+
+[Install]
+WantedBy=timers.target

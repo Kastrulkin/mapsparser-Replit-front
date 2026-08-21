@@ -1,0 +1,1650 @@
+{
+  "source_url": "https://yandex.com/maps/org/avalure/219500919155/reviews/",
+  "fetched_at": "2026-08-19T08:13:58.474514+00:00",
+  "title": "Avalure",
+  "address": "Saint Petersburg, Sredniy Vasilyevskogo Ostrova Avenue, 28/29",
+  "phones": [
+    {
+      "number": "+7 (904) 513-56-68",
+      "type": "phone",
+      "value": "+79045135668"
+    }
+  ],
+  "categories": [
+    {
+      "id": "892508964",
+      "name": "Cosmetology",
+      "class": "spa",
+      "seoname": "cosmetology",
+      "pluralName": "Cosmetology"
+    },
+    {
+      "id": "243767624613",
+      "name": "permanent makeup studio",
+      "class": "spa",
+      "seoname": "permanent_makeup_studio",
+      "pluralName": "Permanent makeup studios"
+    }
+  ],
+  "rating_data": {
+    "ratingCount": 34,
+    "ratingValue": 4.900000095367432,
+    "reviewCount": 31
+  },
+  "working_time": "daily, 09:00–21:00",
+  "business_links": [
+    {
+      "type": "booking",
+      "aref": "#yandex_booking",
+      "href": "https://dikidi.ru/2016391"
+    }
+  ],
+  "features": [
+    {
+      "id": "Possible_with_dog",
+      "value": true,
+      "name": "Possible with a dog",
+      "type": "bool",
+      "important": true
+    },
+    {
+      "id": "cosmetology_services",
+      "value": [
+        {
+          "id": "eyebrow",
+          "name": "eyebrow correction"
+        },
+        {
+          "id": "cleansing",
+          "name": "cleansing"
+        },
+        {
+          "id": "cosmetic_aesthetician",
+          "name": "cosmetic aesthetician"
+        },
+        {
+          "id": "carbon_peeling",
+          "name": "carbon peeling"
+        },
+        {
+          "id": "plastic_massage",
+          "name": "plastic massage"
+        },
+        {
+          "id": "microcurrent_therapy",
+          "name": "microcurrent therapy"
+        },
+        {
+          "id": "ultrasound_procedure",
+          "name": "ultrasound"
+        },
+        {
+          "id": "carboxytherapy",
+          "name": "carboxytherapy"
+        },
+        {
+          "id": "permanent_makeup_removal",
+          "name": "permanent makeup removal"
+        },
+        {
+          "id": "cosmetic_massage",
+          "name": "cosmetic massage"
+        },
+        {
+          "id": "dyeing_eyelashes",
+          "name": "eyelashes/eyebrow coloring"
+        },
+        {
+          "id": "facial",
+          "name": "facial"
+        },
+        {
+          "id": "arsonvalization",
+          "name": "arsonvalization"
+        },
+        {
+          "id": "RF_lifting",
+          "name": "RF lifting"
+        },
+        {
+          "id": "facial_massage",
+          "name": "facial massage"
+        },
+        {
+          "id": "peeling_face",
+          "name": "peeling"
+        },
+        {
+          "id": "tattoo_removal",
+          "name": "tattoo removal"
+        },
+        {
+          "id": "permanent_lip_makeup",
+          "name": "permanent lip makeup"
+        },
+        {
+          "id": "permanent_makeup",
+          "name": "cosmetic tattoo"
+        }
+      ],
+      "name": "cosmetology services",
+      "type": "enum",
+      "important": true
+    },
+    {
+      "id": "types_of_cosmetology",
+      "value": [
+        {
+          "id": "aesthetic_cosmetology",
+          "name": "aesthetic cosmetology"
+        }
+      ],
+      "name": "types of cosmetology",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "gift_certificate",
+      "value": true,
+      "name": "gift certificate",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "petfriendly",
+      "value": [
+        {
+          "id": "allowed_with_dogs_35_cm",
+          "name": "allowed with dogs up to 35 cm."
+        }
+      ],
+      "name": "petfriendly",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "car_park",
+      "value": true,
+      "name": "parking",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "for_women_only",
+      "value": true,
+      "name": "for women only",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "payment_method",
+      "value": [
+        {
+          "id": "cash",
+          "name": "cash"
+        }
+      ],
+      "name": "payment method",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "promotions",
+      "value": [
+        {
+          "id": "special_offers",
+          "name": "special offers"
+        },
+        {
+          "id": "promotions",
+          "name": "promotions"
+        },
+        {
+          "id": "discounts",
+          "name": "discounts"
+        }
+      ],
+      "name": "promotions",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "tattoo removal",
+      "value": true,
+      "name": "tattoo removal",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "preliminary_registration",
+      "value": true,
+      "name": "preliminary registration",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "permanent_makeup",
+      "value": [
+        {
+          "id": "eyes_permanent",
+          "name": "eyes"
+        },
+        {
+          "id": "eyebrows_permanent",
+          "name": "eyebrows"
+        },
+        {
+          "id": "lips_permanent",
+          "name": "lips"
+        }
+      ],
+      "name": "permanent makeup",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "wheelchair_access",
+      "value": [
+        {
+          "id": "unavailable",
+          "name": "unavailable"
+        }
+      ],
+      "name": "wheelchair accessibility",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "online_recording",
+      "value": true,
+      "name": "online appointments",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "wheelchair_accessible_vocabulary",
+      "value": [
+        {
+          "id": "wheelchair_accessible_na",
+          "name": "Not available"
+        }
+      ],
+      "name": "wheelchair accessible",
+      "type": "enum",
+      "important": false
+    },
+    {
+      "id": "cosmetology for men",
+      "value": true,
+      "name": "cosmetology for men",
+      "type": "bool",
+      "important": false
+    },
+    {
+      "id": "show_briefly_about_the_place_block",
+      "value": true,
+      "type": "bool",
+      "important": false
+    }
+  ],
+  "events_previews": {
+    "count": 21,
+    "uri": "tycoon_events/1.x",
+    "items": [
+      {
+        "id": 70106288,
+        "contentShort": "Почему нельзя выдавливать прыщи?\n\nКажется, что выдавить прыщ — самый быстрый способ избавиться от воспаления. Но на практике самостоятельное...",
+        "text": "Почему нельзя выдавливать прыщи?\n\nКажется, что выдавить прыщ — самый быстрый способ избавиться от воспаления. Но на практике самостоятельное...",
+        "publicationTime": 1786463832134,
+        "photos": [
+          {
+            "id": "1a035a7a-d8a3-45cd-a485-1d54f6f6d003",
+            "size": {
+              "width": 1672,
+              "height": 941
+            },
+            "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/19815664/2a0000019ff18a941d84589b0e49a1f99c19/%s",
+            "possibleSizes": [
+              "S",
+              "M",
+              "L",
+              "XL"
+            ]
+          }
+        ],
+        "uri": "tycoon_events/1.x/post/70106288",
+        "urls": [],
+        "itemType": "post"
+      },
+      {
+        "id": 69684283,
+        "contentShort": "Как выбрать пилинг для лица? | Косметолог в Санкт-Петербурге\n\nХотите сделать пилинг лица в Санкт-Петербурге, но не знаете, какой выбрать? Од...",
+        "text": "Как выбрать пилинг для лица? | Косметолог в Санкт-Петербурге\n\nХотите сделать пилинг лица в Санкт-Петербурге, но не знаете, какой выбрать? Од...",
+        "publicationTime": 1785519383043,
+        "photos": [
+          {
+            "id": "5401785a-563f-4537-9390-4e449aba2643",
+            "size": {
+              "width": 1672,
+              "height": 941
+            },
+            "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/20978221/2a0000019fb93f7e3482f79705b55dca8384/%s",
+            "possibleSizes": [
+              "S",
+              "M",
+              "L",
+              "XL"
+            ]
+          }
+        ],
+        "uri": "tycoon_events/1.x/post/69684283",
+        "urls": [],
+        "itemType": "post"
+      },
+      {
+        "id": 69433358,
+        "contentShort": "Что происходит во время микротоков? | Микротоковая терапия лица в Санкт-Петербурге\n\nМногие, кто впервые записывается на микротоки для лица в...",
+        "text": "Что происходит во время микротоков? | Микротоковая терапия лица в Санкт-Петербурге\n\nМногие, кто впервые записывается на микротоки для лица в...",
+        "publicationTime": 1784905168952,
+        "photos": [
+          {
+            "id": "a431d775-f056-4009-8b10-a0d4efd1fc43",
+            "size": {
+              "width": 1280,
+              "height": 720
+            },
+            "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/18765929/2a0000019f94a35f6dc479e4f65496c9e7cc/%s",
+            "possibleSizes": [
+              "S",
+              "M",
+              "L",
+              "XL"
+            ]
+          }
+        ],
+        "uri": "tycoon_events/1.x/post/69433358",
+        "urls": [],
+        "itemType": "post"
+      }
+    ]
+  },
+  "reviews": [
+    {
+      "businessComment": {
+        "text": "Спасибо за такой тёплый и подробный отзыв! Очень приятно, что карбоновый пилинг лица прошёл для вас комфортно и дал заметный результат. Для меня важно, чтобы каждая процедура в студии косметологии сопровождалась понятным объяснением, деликатным уходом и ощущением спокойствия.\n\nРада, что после лазерного карбонового пилинга вы увидели более ровный тон, свежесть и здоровое сияние кожи. Аккуратность, безопасность и внимательное отношение к деталям — основа моей работы как косметолога.\n\nБуду рада видеть вас снова на уходовых процедурах и поддерживающих сеансах. Спасибо за доверие и высокую оценку моей работы! 💛\nС уважением, Екатерина 🌿",
+        "updatedTime": "2026-02-25T05:10:18.605Z"
+      },
+      "reviewId": "q52erfk0YIQvRNh6sk7WefmCcIDrlrA",
+      "businessId": "219500919155",
+      "author": {
+        "name": "АЛИНА  ЛУНЕВА | ГЕОМАРКЕТОЛОГ",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/17694366/dQGgJqjbyJlckAbcGAy1YXVo2Sw-1/{size}",
+        "professionLevel": "Level 11 Local Expert",
+        "rtb": "Level 11 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "yxmvzvd1wc2j5tb6m5nxvhdxw0",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делала карбоновый пилинг у Екатерины. Процедуру объяснили спокойно и понятно, без навязывания. Во время сеанса было комфортно, ощущений неприятных почти не было. Кожа после стала более ровной, свежей, появился здоровый цвет лица. Отдельно отмечу аккуратность и внимательное отношение. Спасибо Екатерине за профессиональный подход и приятную атмосферу.",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Catherine'de karbon peelingi yaptım. Prosedür, empoze edilmeden sakince ve anlaşılır bir şekilde açıklanmıştır. Seans sırasında rahattı, neredeyse hiç tatsız his yoktu. Cilt daha pürüzsüz, tazelendikten sonra sağlıklı bir cilt ortaya çıktı. Ayrı ayrı, doğruluğu ve özenli tutumu not edeceğim. Profesyonel yaklaşımı ve hoş atmosferi için Ekaterina'ya teşekkür ederiz."
+      },
+      "rating": 5,
+      "updatedTime": "2026-02-24T11:50:03.257Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "16341471_2a0000019c8f7c115a5d2886a8730f4b10a7",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16341471/2a0000019c8f7c115a5d2886a8730f4b10a7/{size}",
+          "createdTime": 1771933799920,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "АЛИНА  ЛУНЕВА | ГЕОМАРКЕТОЛОГ",
+            "publicId": "yxmvzvd1wc2j5tb6m5nxvhdxw0",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/17694366/dQGgJqjbyJlckAbcGAy1YXVo2Sw-1/{size}",
+            "updateTime": 1771933799920,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        },
+        {
+          "type": "photo",
+          "id": "16874425_2a0000019c8f787415cd0c906c263ad25327",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16874425/2a0000019c8f787415cd0c906c263ad25327/{size}",
+          "createdTime": 1771933563989,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "АЛИНА  ЛУНЕВА | ГЕОМАРКЕТОЛОГ",
+            "publicId": "yxmvzvd1wc2j5tb6m5nxvhdxw0",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/17694366/dQGgJqjbyJlckAbcGAy1YXVo2Sw-1/{size}",
+            "updateTime": 1771933563989,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Огромное спасибо за такой тёплый, искренний и подробный отзыв! Мне безумно приятно, что вы доверили мне свои брови и остались довольны результатом 🌟\n\nПерманентный макияж бровей — это всегда индивидуальная работа, где важно учесть каждую деталь: форму, оттенок, особенности лица и ваши пожелания. Я рада, что нам удалось создать именно тот результат, о котором вы мечтали — натуральные, аккуратные брови с естественным эффектом.\n\nВ своей работе я использую современные техники пудрового напыления бровей, которые позволяют добиться мягкого, деликатного результата без перегруженности. Такой татуаж бровей выглядит максимально естественно, подчеркивает черты лица и сохраняет ухоженный вид каждый день без макияжа.\n\nОчень приятно, что вы отметили комфорт процедуры — для меня важно, чтобы перманентный макияж бровей проходил безболезненно, безопасно и спокойно, а клиент чувствовал себя уверенно на каждом этапе.\n\nОтдельное спасибо за слова о чистоте и атмосфере студии — мы действительно уделяем большое внимание стерильности, уюту и качеству сервиса, чтобы каждая процедура в сфере косметологии и перманентного макияжа была не только эффективной, но и приятной.\n\nБуду рада видеть вас снова на коррекции перманентного макияжа бровей, а также на других процедурах: уход за кожей, чистка лица, массаж лица.\n\nЕсли вы ищете перманентный макияж бровей в Санкт-Петербурге, натуральный татуаж бровей, профессиональный мастер перманента, с радостью помогу и проконсультирую.\n\nС благодарностью и теплом,\nЕкатерина — мастер перманентного макияжа и основатель студии 💖",
+        "updatedTime": "2026-03-18T07:24:49.256Z"
+      },
+      "reviewId": "VHyoKW5INCGLvWTCffw7pnvQz67xVOdD",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Алена Хлынова",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/53031/0s-5/{size}",
+        "professionLevel": "Level 10 Local Expert",
+        "rtb": "Level 10 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "2p8naqmng765ujaahcxtan5d70",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "🌟 Хочу выразить огромную благодарность Катюшеньке за просто волшебный результат!\nС самого первого визита я была уверена, что попала в руки профессионала, но конечный результат превзошел все мои ожидания. Татуаж бровей получился именно таким, как я мечтала – естественным и аккуратным. Мастер учёл все мои пожелания и создал настоящий шедевр!\nОсобенно приятно, что процесс был комфортным и безболезненным, а результат превзошел все мои ожидания. Теперь каждый день смотрю на себя в зеркало с улыбкой и уверенностью.\nСпасибо вам огромное за вашу работу, терпение и индивидуальный подход! Буду рекомендовать вас всем своим подругам и обязательно вернусь снова! 💖\nP.S. Отдельное спасибо за чистоту и уют салона – это тоже важный фактор при выборе мастера! 💆‍♀️\n",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "🌟 Sadece büyülü sonuç için Katyushenka'ya büyük minnettarlığımı ifade etmek istiyorum!\nİlk ziyaretimden beri bir profesyonelin eline geçtiğime emindim ama sonuç tüm beklentilerimi aştı. Kaş dövmesi tam olarak hayal ettiğim gibi ortaya çıktı - doğal ve temiz. Usta tüm isteklerimi dikkate aldı ve gerçek bir şaheser yarattı!\nSürecin rahat ve acısız olması özellikle güzel ve sonuç tüm beklentilerimi aştı. Şimdi her gün aynada kendime gülümseyerek ve güvenle bakıyorum.\nÇalışmanız, sabrınız ve kişisel yaklaşımınız için çok teşekkür ederim! Sizi tüm kız arkadaşlarıma tavsiye edeceğim ve kesinlikle tekrar döneceğim! 💖\nNot: Kabinin temizliği ve rahatlığı için özel teşekkürler - bu bir usta seçerken de önemli bir faktördür! 💆‍♀️\n"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-16T09:17:01.765Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "19555209_2a0000019cf5ef4c57a692a567bdad768a50",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/19555209/2a0000019cf5ef4c57a692a567bdad768a50/{size}",
+          "createdTime": 1773652628385,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "Алена Хлынова",
+            "publicId": "2p8naqmng765ujaahcxtan5d70",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/53031/0s-5/{size}",
+            "updateTime": 1773652628385,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой тёплый отзыв и доверие к моей работе! 🌸\nМне очень приятно, что вы выбрали меня для такой важной и ответственной процедуры, как перекрытие перманентного макияжа бровей.\n\nДействительно, исправление и перекрытие неудачного перманентного макияжа бровей — это более сложная задача, чем первичный перманент. Здесь важно учитывать глубину старого пигмента, его оттенок, форму и особенности кожи. Я всегда тщательно провожу консультацию, подбираю правильную технику и оттенок, чтобы новый перманентный макияж бровей выглядел натурально, аккуратно и гармонично.\n\nОчень рада, что результат полностью оправдал ваши ожидания — это для меня самый важный показатель качества работы. В своей практике я стремлюсь к тому, чтобы даже после сложных случаев клиент получал красивые, естественные брови без эффекта “татуажа”.\n\nСпасибо, что отметили локацию — студия «Авалюр» действительно удобно расположена на Васильевском острове, рядом с метро, что делает посещение комфортным.\n\nБуду рада видеть вас снова на коррекции перманентного макияжа бровей, а также на других процедурах: уход за кожей, чистка лица, массаж лица.\n\nЕсли вы ищете перекрытие перманентного макияжа бровей в Санкт-Петербурге, исправление татуажа бровей или опытного мастера перманента, с удовольствием помогу вам.\n\nС благодарностью,\nЕкатерина — мастер перманентного макияжа и основатель студии 💛",
+        "updatedTime": "2026-03-25T11:07:59.036Z"
+      },
+      "reviewId": "obtI24LHH6qWFnuxeJcF5Gekd9Bq8vZ-",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Ольга Б.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/57243/0y-6/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "qfu75vh1fz52a79k09kwmyyme4",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Огромное спасибо Екатерине за перекрытие перманентного макияжа бровей! Я очень переживала, так как это ответственная процедура, но Катя сделала всё на высшем уровне. Результат полностью соответствует моим ожиданиям — именно то, что я хотела. Отдельно хочу отметить удобную локацию: студия в двух шагах от метро, добираться одно удовольствие. Обязательно приду еще и буду рекомендовать вас друзьям!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Kaşların kalıcı makyajının örtüşmesi için Ekaterina'ya çok teşekkür ederim! Bu sorumlu bir prosedür olduğu için çok endişelendim, ancak Katya her şeyi en üst düzeyde yaptı. Sonuç beklentilerime tam olarak uyuyor - tam olarak istediğim şey. Ayrı ayrı, uygun bir yere dikkat çekmek istiyorum: metroya bir taş atımı uzaklıktaki stüdyo, oraya ulaşmak bir zevk. Kesinlikle geleceğim ve sizi arkadaşlarınıza tavsiye edeceğim!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-24T10:32:09.916Z",
+      "reactions": {
+        "likes": 1,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "2390040_2a0000019d1f66f1922c6d5950254de67144",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/2390040/2a0000019d1f66f1922c6d5950254de67144/{size}",
+          "createdTime": 1774348334915,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "Ольга Б.",
+            "publicId": "qfu75vh1fz52a79k09kwmyyme4",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/57243/0y-6/{size}",
+            "updateTime": 1774348334915,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой тёплый и подробный отзыв! 🌸\nМне очень приятно, что вам понравился результат ламинирования бровей с окрашиванием и вы остались довольны эффектом.\n\nЛаминирование бровей — это процедура, которая позволяет уложить волоски в нужном направлении, придать бровям аккуратную форму и визуальную густоту. В сочетании с профессиональным окрашиванием бровей мы получаем максимально естественный, но при этом ухоженный результат.\n\nЯ всегда подбираю индивидуальный оттенок краски для бровей с учётом цветотипа, оттенка волос и кожи, чтобы брови выглядели гармонично и натурально. Очень рада, что вы это отметили — для меня важно, чтобы результат выглядел «как свои, только лучше».\n\nТакже большое внимание уделяю аккуратности и комфорту — каждая процедура коррекции бровей, ламинирования и окрашивания проводится с соблюдением всех стандартов и с заботой о клиенте.\n\nОтлично, что эффект держится — это показатель правильно подобранной техники и качественных материалов. При регулярном ламинировании бровей у мастера волоски становятся более послушными и ухоженными.\n\nБуду рада видеть вас снова в студии «Авалюр» на Васильевском острове — на ламинировании бровей, окрашивании, коррекции бровей, а также на других процедурах ухода.\n\nЕсли вы ищете ламинирование бровей в Санкт-Петербурге, окрашивание бровей, коррекцию бровей у мастера или уход за бровями, с удовольствием помогу вам.\n\nС теплом,\nЕкатерина — мастер и основатель студии 💛",
+        "updatedTime": "2026-03-25T11:04:32.528Z"
+      },
+      "reviewId": "s0dhbbBKjyWqjEHUCcVsVRrrxefpw3yVC",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Пользователь Б.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/28439/CglIbZlDZZthLP9ieoWhykCY8e0-1/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "6px04cv01nb22xu2k2zv0q9eww",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Хочу поблагодарить Екатерину за ламинирование и окрашивание бровей! Всё сделано на высшем уровне: аккуратно, комфортно, с вниманием к деталям. Катя подобрала идеальный оттенок под мой цветотип, брови получились натуральные, но при этом очень ухоженные. Эффект держится отлично. Теперь только к вам, спасибо за вашу работу!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Kaşları lamine ettiği ve boyadığı için Ekaterina'ya teşekkür etmek istiyorum! Her şey en üst düzeyde yapılır: özenle, rahat bir şekilde, detaylara dikkat edilerek. Katya, renk tipim için mükemmel gölgeyi seçti, kaşlar doğal çıktı, ama aynı zamanda çok bakımlı. Etki mükemmel bir şekilde devam ediyor. Şimdi sadece size, çalışmanız için teşekkür ederim!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-24T10:40:41.503Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "16069310_2a0000019d1f6eb9599acb11e3480d62c8b7",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16069310/2a0000019d1f6eb9599acb11e3480d62c8b7/{size}",
+          "createdTime": 1774348844547,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "Пользователь Б.",
+            "publicId": "6px04cv01nb22xu2k2zv0q9eww",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/28439/CglIbZlDZZthLP9ieoWhykCY8e0-1/{size}",
+            "updateTime": 1774348844547,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        },
+        {
+          "type": "photo",
+          "id": "16158716_2a0000019d1f6eb0e2e078d7ba9054797f5d",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16158716/2a0000019d1f6eb0e2e078d7ba9054797f5d/{size}",
+          "createdTime": 1774348842330,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 1,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "Пользователь Б.",
+            "publicId": "6px04cv01nb22xu2k2zv0q9eww",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/28439/CglIbZlDZZthLP9ieoWhykCY8e0-1/{size}",
+            "updateTime": 1774348842330,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой подробный и тёплый отзыв! 🌸\nМне очень приятно, что вы доверили мне свою кожу и остались довольны результатом чистки лица у косметолога.\n\nДействительно, профессиональная чистка лица — это процедура, которая требует не только эффективности, но и максимально деликатного подхода. В своей работе я всегда стараюсь проводить комбинированную чистку лица аккуратно и бережно, чтобы минимизировать дискомфорт и при этом качественно очистить кожу от загрязнений, чёрных точек и закупоренных пор.\n\nОчень рада, что вы отметили результат: чистая кожа, суженные поры и быстрое восстановление без выраженных покраснений — это именно тот эффект, к которому я стремлюсь в каждой процедуре косметологии для лица. Для меня важно, чтобы после чистки лица в Санкт-Петербурге клиент мог быстро вернуться к привычному ритму жизни и наслаждаться отражением в зеркале.\n\nТакже я всегда уделяю внимание индивидуальному подходу: оцениваю состояние кожи, подбираю оптимальную технику и даю рекомендации по домашнему уходу за кожей лица, чтобы сохранить результат после процедуры.\n\nБуду рада видеть вас снова в студии «Авалюр» на Васильевском острове — на чистке лица, пилингах, массаже лица или других косметологических процедурах.\n\nЕсли вы ищете косметолога в Санкт-Петербурге, чистку лица рядом или профессиональный уход за кожей, с удовольствием помогу подобрать подходящую программу.\n\nС теплом и заботой,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-03-23T17:05:18.649Z"
+      },
+      "reviewId": "wMuU8pr1B5SGB8HnGRybtpb8bRlxg3lTJ",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Анастасия П.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/44850/J2LKVDdB7Wkj3r6fghUex8Ex0YA-1/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "bdrxe7r8qkez1zh2jpfafvn1wm",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делала чистку лица. Мастер Екатерина очень аккуратная и внимательная, чувствовала себя в надежных руках. Несмотря на то, что чистка — процедура не из самых приятных, мастер сделала все максимально деликатно, результат отличный: кожа чистая, поры сузились, никаких следов и покраснений уже на следующий день. Спасибо, теперь только к вам.",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Yüzümü temizledim. Usta Catherine çok temiz ve özenli, emin ellerde hissetti. Temizliğin en keyifli prosedür olmamasına rağmen, usta her şeyi olabildiğince hassas bir şekilde yaptı, sonuç mükemmel: cilt temiz, gözenekler daraldı, ertesi gün iz ve kızarıklık yok. Teşekkürler, şimdi sadece size geliyorum."
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-23T08:44:35.251Z",
+      "reactions": {
+        "likes": 1,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо большое за такой подробный отзыв и доверие! 💛\n\nОчень рада, что процедура пилинга лица прошла для вас комфортно и оставила положительные впечатления. Действительно, в нашей студии мы всегда подбираем пилинг под тип кожи, чтобы результат был максимально эффективным и при этом безопасным — будь то миндальный пилинг, BioRePeel или PRX-T33.\n\nОтдельно благодарю за отметку, что я всё подробно объяснила — для меня важно, чтобы каждый клиент понимал, как проходит процедура и какой результат ожидать от профессионального пилинга лица. Такой подход помогает добиться выраженного эффекта: ровный тон кожи, свежий цвет лица, гладкость и улучшение текстуры.\n\nОчень приятно, что вы отметили атмосферу студии — мы действительно создаём пространство, где можно не только получить качественную услугу, но и расслабиться.\n\nБуду рада видеть вас снова на процедурах и подобрать для вас курс пилингов для лица в Санкт-Петербурге, чтобы закрепить результат и усилить эффект ✨\n\nЗаписывайтесь на консультацию и процедуры — всегда помогу подобрать оптимальный уход и программу именно для вашей кожи!\n\n\nС уважением,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-04-15T06:57:20.413Z"
+      },
+      "reviewId": "JUgA7IMmlLuJhk-xF9p412BSnOEvbFn",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Мари",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/57243/0u-5/{size}",
+        "professionLevel": "Level 6 Local Expert",
+        "rtb": "Level 6 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "3jzehn35gvrx70ye4f7ghah6f8",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Была на пилинге у Екатерины. Долго не решалась, но всё прошло очень комфортно — мастер всё объяснила, подобрала щадящий вариант под мою кожу. После процедуры лицо стало заметно свежее, тон выровнялся, кожа на ощупь более гладкая. Понравилось внимательное отношение и спокойная атмосфера. Думаю, приду ещё на курс.",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Catherine'de peeling yapıyordum. Uzun süre cesaret edemedim, ama her şey çok rahat geçti - usta her şeyi açıkladı, cildimin altında nazik bir seçenek aldı. İşlemden sonra yüz gözle görülür şekilde tazelendi, ton düzleşti, cilt dokunuşa daha pürüzsüz hale geldi. Özenli tutumu ve sakin atmosferi beğendim. Sanırım kursa geri döneceğim."
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-09T08:28:26.924Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой подробный и тёплый отзыв! 🌸\nМне очень приятно, что вам понравился массаж лица и вы остались довольны результатом.\n\nДействительно, профессиональный массаж лица у косметолога — это не только про расслабление, но и про глубокую проработку мышц, улучшение лимфодренажа и восстановление тонуса кожи. Я всегда стараюсь сочетать деликатность и эффективность, чтобы процедура была максимально комфортной и при этом давала видимый результат.\n\nОчень рада, что вы отметили эффект: снятие отёчности, свежий цвет лица и отдохнувший внешний вид — это один из ключевых результатов массажа лица в Санкт-Петербурге, особенно после даже одного сеанса. При прохождении курса эффект усиливается: подтягивается овал лица, улучшается упругость кожи и замедляются возрастные изменения.\n\nСпасибо, что отметили удобную локацию студии «Авалюр» на Васильевском острове — действительно важно, чтобы к косметологу было легко добираться.\n\nБуду с радостью ждать вас снова на массаж лица, а также могу предложить комплексный уход: микротоки для лица, чистку лица или пилинги, чтобы усилить и закрепить результат.\n\nЕсли вы ищете массаж лица в Санкт-Петербурге, косметолога на Васильевском острове или уход за кожей лица у профессионала, буду рада помочь вам.\n\nС заботой о вашей коже,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-03-25T11:09:03.006Z"
+      },
+      "reviewId": "15GKlnQqRAuRIMC1nj2wfICY01yJIflkY",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Татьяна",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/36777/0m-3/{size}",
+        "professionLevel": "Level 4 Local Expert",
+        "rtb": "Level 4 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "w3c1m4qhc8nrtaejpdpv3gddem",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Была на массаже лица у Екатерины. Студия в удобной локации, добираться легко, что для меня большой плюс. Сама процедура очень понравилась: Катя работает мягко, но при этом чувствуется глубокая проработка. Расслабилась так, что чуть не уснула. После сеанса лицо отдохнувшее, посвежевшее, исчезла отечность. Обязательно приду еще",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Catherine'de yüz masajındaydım. Stüdyo uygun bir yerde, oraya ulaşmak kolay, bu benim için büyük bir artı. Prosedürün kendisini gerçekten beğendim: Katya nazikçe çalışıyor, ancak aynı zamanda derin bir çalışma hissediliyor. O kadar rahatladım ki neredeyse uyuyakalıyordum. Seanstan sonra dinlenmiş, tazelenmiş yüz, şişlik kayboldu. Kesinlikle tekrar geleceğim"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-24T20:02:57.917Z",
+      "reactions": {
+        "likes": 1,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и доверие! 🌸\nОчень рада, что ваше первое знакомство с микротоками для лица прошло комфортно и оставило положительные впечатления.\n\nДействительно, микротоковая терапия для лица часто вызывает вопросы у тех, кто пробует её впервые. Поэтому для меня важно подробно объяснить, как проходит процедура, подобрать индивидуальный режим и сделать всё максимально деликатно и безопасно.\n\nОчень приятно, что вы уже после первого сеанса заметили результат — подтянутость кожи, улучшение упругости и более свежий внешний вид. Это одно из главных преимуществ микротоков у косметолога: мягкое, но эффективное воздействие на мышцы лица и кожу без боли и реабилитации.\n\nРегулярные процедуры микротоковой терапии помогают:\n— улучшить овал лица\n— уменьшить отёчность\n— повысить тонус кожи\n— усилить выработку коллагена\n— сохранить молодость кожи\n\nСпасибо, что отметили мой подход и профессионализм — для меня это очень ценно. Я всегда стремлюсь, чтобы каждая процедура в сфере косметологии для лица была не только результативной, но и комфортной для клиента.\n\nБуду рада видеть вас снова в студии «Авалюр» на Васильевском острове — можем продолжить курс микротоков для лица или подобрать комплексный уход.\n\nЕсли вы ищете микротоки для лица в Санкт-Петербурге, косметолога рядом или процедуры для подтяжки лица без инъекций, с радостью помогу вам.\n\nС заботой о вашей коже,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-03-23T17:06:02.421Z"
+      },
+      "reviewId": "qA2_ZR8fb70jx8ZXN_GsBgKpphB_iMu_K",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Даниэлла Митру",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/25817/0l-9/{size}",
+        "professionLevel": "Level 4 Local Expert",
+        "rtb": "Level 4 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "yz8q6kdc8e2qe4n1rmdxm2h4t4",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Ходила к Екатерине на микротоки. До этого не пробовала эту процедуру, переживала, что будет неприятно. Катя все подробно объяснила, подобрала режим, и процесс прошел комфортно. После первого раза уже заметила, что кожа подтянулась и стала более упругой. Видно, что мастер знает свое дело. Рекомендую.",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Mikro akımlar için Catherine'e gittim. Bundan önce bu prosedürü denemedim, tatsız olacağından endişelendim. Katya her şeyi ayrıntılı olarak açıkladı, rejimi seçti ve süreç rahattı. İlk seferden sonra cildin sıkıldığını ve daha elastik hale geldiğini fark ettim. Efendinin işini bildiği açıktır. Öneriyorum."
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-23T09:35:41.266Z",
+      "reactions": {
+        "likes": 1,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой тёплый, подробный отзыв и доверие! 💙 Мне очень приятно, что вы решились попробовать микротоковую терапию для лица именно у меня и остались довольны результатом.\n\nЯ прекрасно понимаю, что перед первой процедурой микротоков для лица у многих возникают вопросы и переживания, особенно если кожа чувствительная. Именно поэтому для меня так важно провести консультацию, внимательно выслушать ваши пожелания, оценить состояние кожи и подобрать индивидуальные параметры процедуры. Комфорт, безопасность и эффективность — мои главные принципы работы.\n\nОчень рада, что уже после первого сеанса вы заметили, как кожа стала более свежей, упругой, а овал лица — более чётким. Микротоковая терапия действительно помогает улучшить микроциркуляцию, активизировать лимфодренаж, уменьшить отёчность, повысить тонус мышц лица и улучшить качество кожи без боли и длительного восстановления. Наиболее выраженный и стойкий результат достигается после прохождения полного курса микротоков для лица, который всегда подбирается индивидуально.\n\nСпасибо, что отметили мой подход и отношение к работе. Для меня очень важно, чтобы каждый клиент чувствовал себя спокойно, комфортно и уходил не только с заметным результатом, но и с пониманием, как правильно ухаживать за кожей дальше.\n\nБуду с удовольствием ждать вас снова в моей студии в Санкт-Петербурге, на Васильевском острове, чтобы продолжить курс микротоковой терапии для лица и помочь сохранить молодость, упругость и естественное сияние вашей кожи. До скорой встречи! 🌿Большое спасибо за такой тёплый, подробный отзыв и доверие! 💙 Мне очень приятно, что вы решились попробовать микротоковую терапию для лица именно у меня и остались довольны результатом.\n\nЯ прекрасно понимаю, что перед первой процедурой микротоков для лица у многих возникают вопросы и переживания, особенно если кожа чувствительная. Именно поэтому для меня так важно провести консультацию, внимательно выслушать ваши пожелания, оценить состояние кожи и подобрать индивидуальные параметры процедуры. Комфорт, безопасность и эффективность — мои главные принципы работы.\n\nОчень рада, что уже после первого сеанса вы заметили, как кожа стала более свежей, упругой, а овал лица — более чётким. Микротоковая терапия действительно помогает улучшить микроциркуляцию, активизировать лимфодренаж, уменьшить отёчность, повысить тонус мышц лица и улучшить качество кожи без боли и длительного восстановления. Наиболее выраженный и стойкий результат достигается после прохождения полного курса микротоков для лица, который всегда подбирается индивидуально.\n\nСпасибо, что отметили мой подход и отношение к работе. Для меня очень важно, чтобы каждый клиент чувствовал себя спокойно, комфортно и уходил не только с заметным результатом, но и с пониманием, как правильно ухаживать за кожей дальше.\n\nБуду с удовольствием ждать вас снова в моей студии в Санкт-Петербурге, на Васильевском острове, чтобы продолжить курс микротоковой терапии для лица и помочь сохранить молодость, упругость и естественное сияние вашей кожи. До скорой встречи! 🌿",
+        "updatedTime": "2026-07-03T07:28:09.835Z"
+      },
+      "reviewId": "llQnmT1d3h1KnZYe0WVEak0gVh27vB",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Евгения",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/6214067/GeY5HVAtyh1FRhcMrjEKT8vYw0Q-1/{size}",
+        "professionLevel": "Level 8 Local Expert",
+        "rtb": "Level 8 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "wuab209azbam4htdvmtwavcxqw",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Долго присматривалась к микротокам, но боялась неизвестности. Решилась записаться к Екатерине — и ни разу не пожалела! Она очень деликатно расспросила о моих ощущениях, настроила аппарат специально под мою чувствительную кожу, так что весь сеанс прошёл легко и расслабляюще. Уже на следующий день заметила, что лицо посвежело, а овал стал чётче. Кожа стала более упругая. Катя — настоящий профи, видно, что она горит своим делом. Обязательно пойду на курс и всем советую попробовать!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Mikro akımlara uzun süre baktım ama bilinmeyenden korktum. Catherine'e kaydolmaya karar verdim — ve asla pişman olmadım! Duygularımı çok hassas bir şekilde sordu, cihazı özellikle hassas cildime uyacak şekilde ayarladı, böylece tüm seans kolay ve dinlendirici geçti. Ertesi gün yüzünün tazelendiğini ve ovalin daha net hale geldiğini fark ettim. Cilt daha elastik hale geldi. Katya gerçek bir profesyonel, işini yaktığı açık. Kesinlikle kursa gideceğim ve herkese denemelerini tavsiye edeceğim!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-07-02T17:08:23.546Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой тёплый отзыв и доверие к моей работе! Мне очень приятно, что вам понравился результат перманентного макияжа губ и что губы получились именно такими — натуральными, аккуратными и гармоничными.\n\nПерманентный макияж губ — это процедура, которая позволяет подчеркнуть естественную форму губ, добавить мягкий оттенок и создать эффект ухоженных губ без ежедневного макияжа. Перед процедурой я всегда провожу консультацию, подбираю оттенок пигмента и форму губ, чтобы результат выглядел максимально естественно и подходил к цветотипу клиента.\n\nОчень рада, что вы отметили комфорт во время процедуры. Для меня важно, чтобы перманентный макияж губ проходил спокойно, безопасно и профессионально, а каждая деталь — от формы до насыщенности цвета — была тщательно проработана. Такой подход помогает добиться естественного результата и красивого эффекта пудровых губ.\n\nСпасибо, что выбрали нашу студию и доверили мне такую деликатную процедуру. Буду рада снова видеть вас на коррекции перманентного макияжа губ, а также на других процедурах красоты и ухода за кожей.\n\nЕсли вы ищете перманентный макияж губ, татуаж губ у мастера или профессиональную студию перманентного макияжа, буду рада помочь и проконсультировать.\n\nС уважением,\nЕкатерина — мастер и основатель студии. 🌸",
+        "updatedTime": "2026-03-13T08:01:17.953Z"
+      },
+      "reviewId": "Y6NZEFzFkjXfF87kn81k-p4QzoEW-UN",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Ольга Ш.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/45566/uUhRXyOFFW7xsZfZQ9oH7BqQI-1/{size}",
+        "professionLevel": "Level 6 Local Expert",
+        "rtb": "Level 6 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "dj70mcdhqv71kgvg088f0kkz98",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делала перманентный макияж губ у Екатерины. Результат превзошёл ожидания - губы выглядят очень натурально и аккуратно, цвет подобран идеально. Процедура прошла спокойно и комфортно. Екатерина настоящий профессионал, всё объясняет и внимательно относится к деталям. Очень рада, что выбрала именно эту студию!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Catherine'de kalıcı dudak makyajı yaptım. Sonuç beklentileri aştı - dudaklar çok doğal ve temiz görünüyor, renk mükemmel bir şekilde seçiliyor. Prosedür sakin ve rahattı. Catherine gerçek bir profesyonel, her şeyi açıklıyor ve ayrıntılara dikkat ediyor. Bu özel stüdyoyu seçtiğime çok sevindim!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-12T12:31:46.785Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и доверие! 💛\n\nОчень рада, что вам понравилась чистка лица у косметолога и что процедура прошла комфортно. Профессиональная чистка лица в Санкт-Петербурге — это важный этап в работе с кожей, особенно если есть постакне, высыпания и расширенные поры.\n\nОтдельно приятно, что вы отметили рекомендации по уходу — домашний уход за кожей лица действительно играет ключевую роль. Без правильно подобранных средств даже самая качественная косметология для лица не даст стойкого результата. Поэтому мы всегда выстраиваем систему: процедуры + домашний уход.\n\nОтлично, что мы составили план работы с постакне — это уже половина успеха. В зависимости от состояния кожи, мы будем использовать:\n— пилинги для лица при постакне\n— деликатные чистки\n— процедуры на выравнивание тона и текстуры кожи\n\nТакой комплексный подход позволяет постепенно добиться ровной, чистой и здоровой кожи без следов постакне.\n\nБуду рада продолжить с вами работу и довести результат до идеала ✨\nЕсли вы ищете лечение постакне в Санкт-Петербурге, чистку лица, пилинг лица или косметолога рядом, с удовольствием помогу вам.\n\nС заботой о вашей коже,\nЕкатерина — косметолог и основатель студии «Авалюр» 💛",
+        "updatedTime": "2026-04-30T05:54:12.220Z"
+      },
+      "reviewId": "qeYU0wl6kn-YJkvo1-J8xwy5xlGs0O",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Ольга Ельсова",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/26057/0m-6/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "uxtufgjm1886rjdc7tcjdhg2m4",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делала чистку лица , всё прошло хорошо! Екатерина дала всё необходимые рекомендации по домашнему уходу! Сделали план по дальнейшей работе с пост акне. Будем работать в данном направлении! ",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Yüzümü temizledim, her şey yolunda gitti! Catherine verdi sunduğu öneriler ve ev bakımı! Bir plan yaptı ve daha fazla çalışma ile bir yazı akne. Çalışacağız bu yönde! "
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-29T15:56:37.066Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо большое за ваш отзыв и доверие к нашей студии! Очень рада, что комбинированная чистка лица и пилинг дали хороший результат и вы уже заметили, как кожа стала чище и легче дышит.\n\nКомбинированная чистка лица — одна из самых эффективных процедур в профессиональной косметологии, особенно когда необходимо глубоко очистить кожу, убрать черные точки, загрязненные поры и излишки себума. В ходе процедуры мы аккуратно очищаем кожу, проводим профессиональную обработку проблемных зон и используем пилинг для обновления кожи, чтобы улучшить её текстуру и цвет лица.\n\nМне очень приятно, что вы отметили консультацию. Для меня важно не только сделать процедуру, но и подробно объяснить клиенту важность правильного домашнего ухода за кожей лица. Грамотно подобранный уход помогает сохранить результат после чистки лица у косметолога, уменьшить появление черных точек и поддерживать кожу здоровой и ухоженной.\n\nРада, что вам понравилась атмосфера нашей студии — мы стараемся создать комфортное пространство, где каждая процедура проходит спокойно и профессионально.\n\nБуду рада видеть вас снова на процедурах ухода за кожей. Обязательно приходите на массаж лица — он отлично дополняет косметологические процедуры, улучшает микроциркуляцию, помогает коже выглядеть более свежей и отдохнувшей.\n\nЕсли вы ищете косметолога, комбинированную чистку лица в Санкт-Петербурге, профессиональный пилинг лица или уход за кожей у косметолога, буду рада помочь.\n\nЗаписаться на чистку лица, пилинг или консультацию косметолога можно через Яндекс Карты или по телефону.\n\nС уважением,\nЕкатерина — косметолог и основатель студии.",
+        "updatedTime": "2026-03-12T07:32:04.919Z"
+      },
+      "reviewId": "A_Aq70I8JDjUmw6YHPjjKhZYgSH78Qjx",
+      "businessId": "219500919155",
+      "author": {
+        "name": "ИЛЬЯ П.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/26057/0l-2/{size}",
+        "professionLevel": "Level 6 Local Expert",
+        "rtb": "Level 6 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "1mnuqdmm7mea8k8q8bjjn4gnn4",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делал комбинированную чистку лица и пилинг,все прошло хорошо! Черные точки ушли,даже стало как-то легче. Ещё Екатерина проконсультировала и объяснила важности домашнего ухода! Все доходчиво.  Обязательно приду на массаж, уж очень понравилась атмосфера)! Советую😉",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Kombine yüz temizliği ve peeling yaptım, her şey yolunda gitti! Siyah noktalar gitti, hatta bir şekilde daha da kolaylaştı. Ekaterina ayrıca evde bakımın önemini tavsiye etti ve açıkladı! Her şey anlaşılabilir.  Kesinlikle masaja geleceğim, atmosferi gerçekten çok beğendim)! Tavsiye etmek😉"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-11T20:23:57.562Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и рекомендацию! 🌸\nМне очень приятно, что вам понравилась чистка лица и пилинг и вы остались довольны результатом.\n\nПрофессиональная чистка лица у косметолога — это эффективная процедура для глубокого очищения кожи, удаления загрязнений, чёрных точек и очищения пор. В сочетании с пилингом для лица мы дополнительно выравниваем тон кожи, улучшаем её текстуру и придаём свежий, ухоженный вид.\n\nОчень рада, что вы заметили результат: очищенные поры, более свежая и сияющая кожа — это именно тот эффект, к которому я стремлюсь в работе. При регулярном уходе и правильно подобранной программе косметологии для лица результат становится ещё более выраженным и устойчивым.\n\nСпасибо, что отметили чистоту и уют кабинета — я уделяю особое внимание стерильности и комфорту, чтобы каждая процедура проходила безопасно и спокойно. Также приятно, что вы оценили удобное расположение студии «Авалюр» на Васильевском острове рядом с метро.\n\nБуду рада видеть вас снова на процедурах чистки лица, пилингов, массажа лица или других косметологических услуг. Также всегда готова подобрать индивидуальный уход за кожей лица и дать рекомендации.\n\nЕсли вы ищете чистку лица в Санкт-Петербурге, пилинг лица, косметолога рядом или профессиональный уход за кожей, с удовольствием помогу вам.\n\nС теплом,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-04-05T10:03:37.958Z"
+      },
+      "reviewId": "KvJdDyrnYgsjvlX3MMBfYegeRlE3Pi5g",
+      "businessId": "219500919155",
+      "author": {
+        "name": "🌸",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/59871/0a-6/{size}",
+        "professionLevel": "Level 4 Local Expert",
+        "rtb": "Level 4 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "g3m4requ7wkhwewfecwkqm2k50",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Все прошло хорошо)! Делала чистку лица и пилинг. Поры подчистились, кожа стала свежее. Кабинет чистый, уютный, рядом с метро. Рекомендую 👌",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Her şey yolunda gitti)! Yüzümü temizledim ve soyuldum. Gözenekler temizlendi, cilt tazelendi. Ofis temiz, rahat ve metroya yakın. Öneriyorum 👌"
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-04T10:17:28.440Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "19693520_2a0000019d57ffc6bb8bde6cec2d99e72002",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/19693520/2a0000019d57ffc6bb8bde6cec2d99e72002/{size}",
+          "createdTime": 1775297874305,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "🌸",
+            "publicId": "g3m4requ7wkhwewfecwkqm2k50",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/59871/0a-6/{size}",
+            "updateTime": 1775297874305,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и тёплые слова! Очень рада, что вам понравилась процедура микротоков для лица и вы заметили результат — более подтянутую кожу, свежий и здоровый цвет лица.\n\nМикротоковая терапия для лица — одна из эффективных процедур в современной косметологии, которая помогает мягко стимулировать мышцы лица, улучшить микроциркуляцию и запустить процессы естественного восстановления кожи. Благодаря этому кожа становится более упругой, подтянутой, улучшается тон лица и уменьшаются признаки усталости.\n\nМне особенно приятно, что процедура для вас прошла расслабляюще. Я всегда стараюсь, чтобы косметологические процедуры для лица были не только эффективными, но и максимально комфортными. Также важно подобрать правильный домашний уход за кожей лица, чтобы результат после микротоков у косметолога сохранялся как можно дольше.\n\nСпасибо, что отметили атмосферу нашей студии — для меня важно создать пространство, где можно спокойно отдохнуть и получить профессиональный уход за кожей у косметолога.\n\nБуду рада видеть вас снова на процедурах микротоковой терапии, массажа лица, чистки лица и других процедур косметологии. Если вы ищете косметолога, микротоки для лица или уход за кожей лица, с удовольствием помогу подобрать подходящую программу ухода.\n\nС уважением,\nЕкатерина — косметолог и основатель студии. 🌸",
+        "updatedTime": "2026-03-13T07:59:09.624Z"
+      },
+      "reviewId": "D2hF0HhLgbKcWaHjFfn5B2-LEMDoh2",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Эллина Лученкова",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/69015/0a-7/{size}",
+        "professionLevel": "Level 5 Local Expert",
+        "rtb": "Level 5 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "1c8kucw7p9f7qxeq3cawezav1w",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делала процедуру микротоков для лица. Очень понравился эффект — кожа стала более подтянутой, появился здоровый цвет лица и ощущение свежести. Процедура расслабляющая, даже немного отдохнула. Екатерина всё подробно объяснила и подобрала уход. В студии очень приятная атмосфера. Советую!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Yüz için mikro akım prosedürü yaptım. Etkiyi gerçekten beğendim - cilt daha sıkılaştı, sağlıklı bir cilt ve tazelik hissi ortaya çıktı. Prosedür rahatlatıcı, hatta biraz dinlendim. Catherine her şeyi ayrıntılı olarak açıkladı ve bakımı aldı. Stüdyoda çok hoş bir atmosfer var. Tavsiye ederim!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-12T11:24:16.565Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо большое за ваш отзыв и доверие! 💛\nОчень рада, что вам понравился курс микротоковой терапии лица и процедуры прошли комфортно и безболезненно. Это действительно одна из самых востребованных и эффективных процедур — микротоки для лица мягко стимулируют мышцы, улучшают лимфодренаж и дают заметный эффект лифтинга уже после первых сеансов.\n\nОтлично, что вы увидели результат уже на второй процедуре — при курсовом подходе микротоковая терапия в Санкт-Петербурге помогает добиться выраженного эффекта: подтянутая кожа, свежий цвет лица, уменьшение отёков и улучшение овала лица.\nСпасибо, что отметили локацию — я стараюсь, чтобы студия была не только уютной, но и удобной для тех, кто ищет микротоки рядом или косметолога в СПб рядом с метро.\n\nБуду рада видеть вас снова — можно поддерживать результат и комбинировать микротоки с массажем лица или уходовыми процедурами для максимального эффекта ✨\n\nЗаписывайтесь на микротоки для лица в СПб — с удовольствием подберу для вас индивидуальный курс и уход!\n\nС уважением,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-04-15T06:57:32.101Z"
+      },
+      "reviewId": "OjFPNfxm5uj4Q30gC2lwJu0_rBDmSPk",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Анна Смирнова",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/50595/d8OhV0TQzSWtPKTrzk7FJp8iTUU-1/{size}",
+        "professionLevel": "Level 2 Local Expert",
+        "rtb": "Level 2 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "aebedbw22z3vuk6y031rhhz6cc",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Хочу сказать спасибо Екатерине! Прошла курс микротоковой терапии. Все прошло хорошо. Было совершенно не больно . Результат уже был виден на второй процедуре😍! очень классная локация!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Teşekkür etmek istiyorum, Catherine! Geçti ders microcurrent therapeutics. Her şey yolunda gitti. Tamamen zarar vermez . Sonuç, ikinci prosedürde zaten görülebiliyordu! çok güzel bir yer!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-14T08:04:21.353Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо вам за такой душевный отзыв и доверие! 🌸\nОчень рада, что чистка лица и массаж лица подарили ощущение комфорта и настоящего расслабления. Для меня важно, чтобы процедуры в студии косметологии проходили деликатно, бережно и с максимальной заботой о коже.\n\nПриятно знать, что вы почувствовали эффект не только от ухода, но и от атмосферы. Профессиональная чистка лица помогает коже дышать, улучшает текстуру и цвет лица, а массаж лица способствует снятию напряжения, улучшению микроциркуляции и восстановлению тонуса кожи.\n\nОтдельное спасибо за ваши слова о подборе средств. Грамотно выстроенный домашний уход за кожей лица действительно играет ключевую роль в поддержании результата после косметологических процедур. Я всегда стараюсь подбирать косметику индивидуально — с учётом типа кожи, её состояния и задач.\n\nБуду рада видеть вас снова в студии «Авалюр» на Васильевском острове ✨\nСпасибо, что выбираете меня как своего косметолога в Санкт-Петербурге!\n\nС заботой о вашей коже,\nЕкатерина 💛",
+        "updatedTime": "2026-02-26T12:05:00.466Z"
+      },
+      "reviewId": "FkzV2oVXBDyzwzGF_BI4mZqwO9A7dzU7",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Александра Малина",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/26057/0m-8/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "wu0d2yjrv5tgje1fdu3ubduenr",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делала чистку лица и была на массаже. Руки мастера такие нежные) - истинное расслабление. Так же давно хотела получить правильный домашний уход, Екатерина помогла мне с выбором косметики. Спасибо!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Yüzümü temizledim ve masaj yapıyordum. Ustanın elleri çok naziktir) - gerçek rahatlama. Uzun zaman önce doğru evde bakımı almak istedim, Ekaterina kozmetik seçimimde bana yardım etti. Teşekkür ederiz!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-02-25T15:34:11.011Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Благодарю вас за такой тёплый отзыв! Мне, как мастеру и основателю студии, особенно приятно читать такие слова о моей работе по перманентному макияжу бровей.\n\nДля меня перманентный макияж бровей — это не просто процедура, а индивидуальная работа с формой, цветом и пропорциями лица. Я всегда тщательно выстраиваю архитектуру бровей, подбираю оттенок пигмента и согласовываю эскиз, чтобы результат выглядел максимально естественно, гармонично и подчёркивал вашу красоту.\n\nОчень рада, что вам понравилась обстановка в кабинете — я создаю пространство, где каждая девушка чувствует себя спокойно и уверенно. Важно, чтобы процедура перманентного макияжа проходила в комфортной атмосфере и с полным доверием к мастеру.\n\nСпасибо за вашу рекомендацию и доверие к моей работе. Буду рада видеть вас снова на коррекции и других процедурах в студии!",
+        "updatedTime": "2026-03-04T08:12:38.512Z"
+      },
+      "reviewId": "uz6LR2Msy-0dIB8fwn4vIouC-K3odZ",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Oksana Burdonova",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/25358/QbokDsQ5bPgUGEl4NCtnHLMkK0-1/{size}",
+        "professionLevel": "Level 11 Local Expert",
+        "rtb": "Level 11 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "27mrc4ae0gxgr9v4ga50yz22h4",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Была на процедуре перманентного макияжа бровей у мастера Екатерины. Очень понравилась и работа, и обстановка в кабинете. Результат превзошел ожидания, я довольна. Рекомендую!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Usta Ekaterina'da kalıcı kaş makyajı prosedüründeydi. Hem işi hem de ofisteki durumu gerçekten beğendim. Sonuç beklentileri aştı, memnunum. Tavsiye ederim!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-03T13:49:10.437Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и высокую оценку моей работы! 🌿 Очень рада, что чистка лица оправдала ваши ожидания и вы сразу заметили результат. Для меня важно, чтобы профессиональная косметологическая чистка лица не только эффективно очищала кожу, но и помогала сохранить её здоровье и красоту надолго.\n\nПосле каждой процедуры чистки лица в Санкт-Петербурге я обязательно подбираю индивидуальные рекомендации по домашнему уходу за кожей лица, ведь именно правильный уход помогает продлить эффект, уменьшить риск появления чёрных точек, воспалений, расширенных пор и постакне. Комплексный подход позволяет добиться максимально чистой, ровной и сияющей кожи.\n\nСпасибо за рекомендацию и доверие! Буду рада вновь видеть вас в студии на Васильевском острове. Если захотите продолжить уход за кожей, всегда помогу подобрать оптимальные процедуры — комбинированную чистку лица, профессиональный пилинг лица, уходовые программы или курс процедур для улучшения качества кожи. \n\nС заботой о вашей коже,\nЕкатерина — косметолог и основатель студии «Авалюр» 💛",
+        "updatedTime": "2026-07-02T16:18:19.681Z"
+      },
+      "reviewId": "PcDC5W78aD68VkH_6VghH_nGIAD8V7",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Сергей Аристов",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/37154/J9OjxpM9byvfGquCuTqApk4oxTM-1/{size}",
+        "professionLevel": "Level 6 Local Expert",
+        "rtb": "Level 6 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "989q7v2kkq9taj0k1w7bud87nc",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Был на чистке, доволен результатом, эффект виден сразу. Екатерина, супер профессионал, после процедуры дала рекомендации по уходу. Рекомендую однозначно и ещё вернусь. ",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Temizlemedeydim, sonuçtan memnun kaldım, etki hemen görülebiliyor. Süper profesyonel Ekaterina, işlemden sonra bakım önerileri verdi. Kesinlikle tavsiye ederim ve tekrar döneceğim. "
+      },
+      "rating": 5,
+      "updatedTime": "2026-07-02T13:02:58.179Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой тёплый отзыв и доверие к моей работе! Очень рада, что вам понравилась процедура чистки лица и карбонового пилинга, и что вы чувствовали себя комфортно во время визита.\n\nПрофессиональная чистка лица — одна из самых эффективных процедур в косметологии, которая помогает глубоко очистить поры, удалить загрязнения и черные точки, улучшить состояние кожи и вернуть ей свежий, здоровый вид. В нашей студии я всегда стараюсь выполнять комбинированную чистку лица максимально деликатно, чтобы процедура была не только эффективной, но и комфортной для клиента.\n\nКарбоновый пилинг лица отлично дополняет чистку — он помогает дополнительно очистить поры, выровнять тон кожи, уменьшить жирный блеск и улучшить текстуру кожи. Именно поэтому сочетание чистки лица у косметолога и карбонового пилинга даёт такой заметный результат уже после первой процедуры.\n\nМне очень приятно, что вы отметили аккуратность работы. Для меня важно, чтобы каждая процедура косметологии для лица проходила профессионально, безопасно и приносила видимый результат.\n\nБуду рада снова видеть вас в нашей студии на процедурах ухода за кожей лица, карбонового пилинга, чистки лица или других косметологических процедурах. Также всегда готова подобрать индивидуальный уход за кожей и дать консультацию косметолога.\n\nС уважением и благодарностью,\nЕкатерина — косметолог и основатель студии. 🌸",
+        "updatedTime": "2026-03-12T16:47:04.782Z"
+      },
+      "reviewId": "-K0nDc2bj5NZVj7F1e2weeBsUxA8o0Cv2",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Валерия Ви",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/31078/0x-7/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "vfpkhcdymy052j9xu5w6vzvb38",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Посетила процедуру чистки лица и карбонового пилинга у Екатерины, специалист компетентен и с ней было очень комфортно 💕🌸. Чистка была выполнена очень деликатно и качественно, золотые ручки 😍",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Ekaterina'da yüz temizleme ve karbon soyma prosedürüne katıldım, uzman yetkin ve onunla çok rahattı. Temizlik çok hassas ve verimli bir şekilde yapıldı, altın kulplar"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-12T07:39:20.646Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и доверие! Очень радa, что вы выбрали меня как специалиста и остались довольны результатом чистки лица у косметолога 👍\n\nВы абсолютно правы — чистка лица для мужчин так же важна, как и для девушек. Мужская кожа имеет свои особенности: более плотная структура, активная работа сальных желез, склонность к загрязнению пор и появлению чёрных точек, поэтому профессиональная чистка лица в Санкт-Петербурге помогает поддерживать кожу в здоровом и ухоженном состоянии.\n\nВо время процедуры я всегда подбираю подходящий формат — комбинированную чистку лица, чтобы максимально эффективно и при этом деликатно очистить кожу, убрать загрязнения, улучшить текстуру и цвет лица. Важно, чтобы процедура проходила комфортно, а результат был заметен уже после первого посещения.\n\nОчень приятно, что вы остались довольны результатом — чистая кожа, очищенные поры и свежий внешний вид — это именно тот эффект, к которому мы стремимся в косметологии.\n\nБуду рада видеть вас снова в студии «Авалюр» на Васильевском острове — можем дополнить уход процедурами пилинга лица, массажа лица или микротоковой терапии, чтобы усилить результат.\n\nЕсли вы ищете чистку лица для мужчин в Санкт-Петербурге, косметолога рядом или профессиональный уход за кожей лица, с удовольствием помогу вам.\n\nС уважением,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-04-09T06:42:56.920Z"
+      },
+      "reviewId": "1Qo0s8GD9K7NCcg0GOPqmy3I3uQAgBD",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Дмитрий Казанцев",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/18057972/7UeG8E0jV5ZzcOKORpcRPiWs-1/{size}",
+        "professionLevel": "Level 9 Local Expert",
+        "rtb": "Level 9 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "bxgn13qwfz8294ebvk2f7f4y7m",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "То что парням не подходят процедуры -бред! Я был на чистке лица у Екатерины. Все прошло хорошо. Результатом очень доволен. Супер мастер! Однозначно рекомендую 👍",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Prosedürlerin erkekler için uygun olmaması saçmalıktır! Catherine'de yüzümü temizliyordum. Her şey yolunda gitti. Sonuçtan çok memnunum. Süper usta! Kesinlikle tavsiye ederim"
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-08T09:17:00.770Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо большое за ваш отзыв! Мне очень приятно, что чистка лица в Санкт-Петербурге оставила такие яркие впечатления и результат понравился — кожа стала мягкой, сияющей и ухоженной. Я всегда стараюсь делать процедуры максимально аккуратно, чтобы после профессионального ухода кожа не испытывала дискомфорта и сразу выглядела здоровой.\n\nДля меня важно не только качество чистки лица, но и ваш комфорт: каждая процедура проводится с учётом индивидуальных особенностей кожи, без покраснений и раздражений. Ваши слова о том, что чувствовали себя спокойно после салона, — лучшая награда для мастера.\n\nБуду рада видеть вас снова на чистку лица, профессиональные уходовые процедуры и массаж лица. В студии «Авалюр» я всегда делаю упор на естественную красоту, здоровье кожи и безопасный уход для каждого клиента. ✨\n\nС заботой,\nЕкатерина, мастер студии «Авалюр»",
+        "updatedTime": "2026-02-19T17:50:21.676Z"
+      },
+      "reviewId": "ikuiQUIZhhDOt6HUqQRQgaWz3YSqH_yp",
+      "businessId": "219500919155",
+      "author": {
+        "name": "natasha b.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/57243/0b-2/{size}",
+        "professionLevel": "Level 5 Local Expert",
+        "rtb": "Level 5 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "m39z1yd0ckp4w4cgzy5wtt2n1c",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Девочки, это восторг! 😍 Сходила на чистку лица. Кожа стала такой мягкой, сияющей и «дышащей». Раньше всегда боялась покраснений после процедуры, но здесь все сделали настолько аккуратно, что я спокойно пошла по делам сразу после салона. Мастер — просто волшебница, очень чуткая и профессиональная. Рекомендую на все 100%!»",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Kızlar, bu bir zevk! 😍 Yüzünü temizlemeye gittim. Cilt çok yumuşak, parlak ve «nefes alabilir» hale geldi. Eskiden işlemden sonra her zaman kızarıklıktan korkardım ama burada her şeyi o kadar dikkatli yaptılar ki salondan hemen sonra sakince işe gittim. Usta sadece bir büyücü, çok hassas ve profesyonel. Her şeyi% 100 tavsiye ederim!»"
+      },
+      "rating": 5,
+      "updatedTime": "2026-02-18T19:17:01.316Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "18143431_2a0000019c722f2bf19307c633124f350730",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/18143431/2a0000019c722f2bf19307c633124f350730/{size}",
+          "createdTime": 1771442220790,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 0,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "natasha b.",
+            "publicId": "m39z1yd0ckp4w4cgzy5wtt2n1c",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/57243/0b-2/{size}",
+            "updateTime": 1771442220790,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и рекомендацию! 💛\n\nМне очень приятно, что вы отметили чистоту и уют студии — для меня это важная часть работы. В студии «Авалюр» на Васильевском острове я строго соблюдаю все стандарты стерильности и безопасности в косметологии, чтобы каждая процедура проходила комфортно и безопасно.\n\nТакже благодарю за оценку локации — действительно, удобно, когда косметолог рядом с метро в Санкт-Петербурге, и можно легко добраться на процедуры без лишних затрат времени.\n\nОтдельное спасибо за слова о профессионализме. Я всегда подбираю индивидуальный уход за кожей лица, будь то чистка лица, пилинг, массаж лица или микротоки, чтобы клиент получал не просто услугу, а заметный и стойкий результат.\n\nЕсли вы ищете косметолога в Санкт-Петербурге, чистку лица рядом, пилинг лица или профессиональный уход за кожей, буду рада помочь вам и подобрать оптимальную программу ухода.\n\nБуду ждать вас снова в студии «Авалюр» — с заботой о вашей коже и результате ✨",
+        "updatedTime": "2026-04-30T05:53:39.351Z"
+      },
+      "reviewId": "VDq9EuXiHkndZ6ZER24s1ajok5bSmFf",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Андрей Ельсов",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/57243/lTVLCiA3jCqDFmFyqi11qbCQCw-1/{size}",
+        "professionLevel": "Level 7 Local Expert",
+        "rtb": "Level 7 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "2mc1haymber342tn9jb3bu181m",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Чистый, аккуратный кабинет. Рядом с метро в шаговой доступности. Косметолог профессионал своего дела! Рекомендую",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Temiz, düzenli bir ofis. Metroya yakın yürüme mesafesindedir. Güzellik uzmanı kendi alanında profesyoneldir! Öneriyorum"
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-29T15:50:10.710Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой тёплый отзыв! 🤗\nМне очень приятно, что вам понравилась атмосфера и вы оценили массаж лица у косметолога.\nЯ стараюсь, чтобы каждая процедура в студии «Авалюр» на Васильевском острове была не только эффективной, но и максимально комфортной. Профессиональный массаж лица в Санкт-Петербурге — это не просто расслабление, а полноценная работа с кожей и мышцами лица: улучшается микроциркуляция, снимается напряжение, уменьшается отёчность и возвращается свежий, отдохнувший вид.\nОчень рада, что вам не хотелось уходить — это лучший показатель того, что уход за лицом у косметолога проходит в правильной атмосфере и с заботой о клиенте 💛\nПри регулярном посещении массаж лица в СПб даёт выраженный результат:\n• подтяжка овала лица\n• улучшение тонуса кожи\n• более ровный цвет лица\n• естественный лифтинг без инъекций\nБуду рада видеть вас снова — можем продолжить курс массажа лица, а также дополнить уход процедурами микротоков, пилингов или чистки лица для ещё более заметного эффекта.\nЕсли вы ищете массаж лица в Санкт-Петербурге, косметолога рядом или уход за кожей лица, с удовольствием помогу вам ✨\nС теплом,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-05-04T06:09:39.594Z"
+      },
+      "reviewId": "X5gwPpyVSiu1Xs5RNP2e5LKii4B9I4a",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Яночка",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/51381/Xct2yym57NrsQPPtSdMJoRU4deM-1/{size}",
+        "professionLevel": "Level 5 Local Expert",
+        "rtb": "Level 5 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "qavgj2yu55f59up9w58yed6080",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Все очень понравилось, очень уютный кабинет - не хотелось уходить 🤗 Делали массаж лица, рекомендую 🙏",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Her şeyi çok beğendim, çok rahat bir ofis - ayrılmak istemedim 🤗 Yüz masajı yaptılar, tavsiye ederim"
+      },
+      "rating": 5,
+      "updatedTime": "2026-05-03T22:14:05.200Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [
+        {
+          "type": "photo",
+          "id": "18111128_2a0000019defe7eb55d34ea81d17b9a1ea3b",
+          "businessId": "219500919155",
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/18111128/2a0000019defe7eb55d34ea81d17b9a1ea3b/{size}",
+          "createdTime": 1777846448270,
+          "moderation": {
+            "status": "ACCEPTED"
+          },
+          "showReactions": true,
+          "reactions": {
+            "likes": 1,
+            "dislikes": 0,
+            "userReaction": "NONE"
+          },
+          "copyright": {
+            "name": "Яночка",
+            "publicId": "qavgj2yu55f59up9w58yed6080",
+            "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/51381/Xct2yym57NrsQPPtSdMJoRU4deM-1/{size}",
+            "updateTime": 1777846448270,
+            "hasPublicProfile": true,
+            "isSubscribed": false
+          }
+        }
+      ],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такой лаконичный, но очень ценный отзыв! 💛\nМне искренне приятно, что вы отметили профессионализм и результат — для меня важно, чтобы каждая процедура в сфере косметологии для лица была максимально эффективной и давала видимый эффект уже после первого посещения.\n\nЯ всегда придерживаюсь принципа индивидуального подхода к каждому клиенту: подбираю процедуры с учётом состояния кожи и задач — будь то чистка лица, пилинг, микротоки или массаж лица. Такой подход позволяет добиться быстрых и при этом безопасных результатов.\n\nОтдельное спасибо за оценку атмосферы — в студии «Авалюр» на Васильевском острове я стараюсь создать пространство, где комфортно и спокойно, а все процедуры проходят с соблюдением стерильности и профессиональных стандартов косметологии.\nОчень рада, что вы заметили эффект сразу после процедуры — это один из главных ориентиров в моей работе: свежая кожа, улучшение тона лица, ухоженный внешний вид уже после первого визита.\n\nБуду рада видеть вас снова и подобрать для вас индивидуальную программу ухода за кожей лица в Санкт-Петербурге, чтобы закрепить и усилить результат ✨\nЕсли вы ищете косметолога в СПб, уход за лицом, чистку лица, пилинг или процедуры омоложения, с удовольствием помогу вам.\nС теплом,\nЕкатерина — косметолог и основатель студии 💛\n",
+        "updatedTime": "2026-04-20T18:26:24.823Z"
+      },
+      "reviewId": "AcZEH6KRLSY4flse59iMYimCr1F2fa9M",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Сергей Гуреев",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/39249/tARO5D7t9QDVsPHyC0hUbjfUo-1/{size}",
+        "professionLevel": "Level 13 Local Expert",
+        "rtb": "Level 13 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "jfwgnpz2r9xxktka1mp0hectkr",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Профессионал высокого класса, максимальная клиентоориентированность, уютная обстановка. Эффект практически сразу.",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Üst düzey profesyonel, maksimum müşteri odaklılık, rahat bir ortam. Etki neredeyse anında."
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-20T04:26:27.871Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо большое за ваш отзыв и тёплые слова! ❤️\n\nОчень рада, что вам понравилась чистка лица и массаж лица и вы остались довольны результатом. В нашей студии я уделяю особое внимание качеству процедур — профессиональная чистка лица помогает глубоко очистить кожу, убрать чёрные точки и улучшить состояние пор, а массаж лица усиливает кровообращение, снимает напряжение и придаёт коже свежий, отдохнувший вид.\n\nОтдельно приятно, что вы отметили чистоту и уют — для меня важно, чтобы каждая процедура проходила в комфортной и безопасной обстановке. Удобное расположение рядом с метро тоже делает посещение максимально комфортным для клиентов, которые ищут чистку лица рядом или массаж лица в Санкт-Петербурге.\n\nБуду рада видеть вас снова на процедурах — можно продолжить уход курсом, чтобы закрепить результат и добиться ещё более выраженного эффекта ✨\n\nЗаписывайтесь на чистку лица в СПб и профессиональный массаж лица — с удовольствием подберу для вас индивидуальную программу ухода!\n\nС уважением,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-04-15T06:58:35.071Z"
+      },
+      "reviewId": "CUZdyUkfotZTHL3NLO9lqpc2YRGVXv",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Ирина К.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/53031/0k-1/{size}",
+        "professionLevel": "Level 5 Local Expert",
+        "rtb": "Level 5 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "ngyrvgrn7dx4hkyqx641xqeqn8",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Была на чистке лица и массаже! Я очень давольно результатом. Студия чистая,уютная, рядом с метро! Рекомендую!❤️",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Yüzümü temizliyordum ve masajdaydım! Ben çok uzun zaman önce sonuçlandım. Stüdyo temiz, rahat, metroya yakın! Tavsiye ederim!❤️"
+      },
+      "rating": 5,
+      "updatedTime": "2026-04-14T07:41:51.196Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за ваш отзыв и доверие! Мне очень приятно, что вам понравился результат и ваши новые брови выглядят натурально и аккуратно — это как раз тот эффект, к которому я всегда стремлюсь.\n\nПерманентный макияж бровей — это не просто процедура, а точная работа с формой, цветом и архитектурой лица. Я всегда подбираю индивидуальную форму бровей, учитывая черты лица, цветотип и пожелания клиента, чтобы результат выглядел максимально естественно — как свои брови, только лучше.\n\nВ работе использую современные техники пудрового напыления бровей, которые позволяют добиться мягкого, натурального эффекта без резких линий. Благодаря этому перманент бровей выглядит естественно, держится долго и экономит время на ежедневный макияж.\n\nОчень рада, что вы остались в восторге — для меня это самая большая ценность! Буду рада видеть вас снова на коррекции перманентного макияжа бровей, а также на других процедурах: уход за кожей, чистка лица, массаж лица.\n\nЕсли вы ищете перманентный макияж бровей в Санкт-Петербурге, натуральные брови, татуаж бровей у мастера, всегда рада помочь и проконсультировать.\n\nС благодарностью,\nЕкатерина — мастер перманентного макияжа и основатель студии. 🔥",
+        "updatedTime": "2026-03-17T19:14:50.666Z"
+      },
+      "reviewId": "r7N_1VMDRwvB64lMiymLni9mfKLCbt9aC",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Оксана Писарева",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/58107/0f-1/{size}",
+        "professionLevel": "Level 3 Local Expert",
+        "rtb": "Level 3 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "vru34e9z2ccbhy0t36u5p165rw",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Екатерина, спасибо огромное за мои новые брови! 🔥 И главное они выглядят как свои. Я в восторге, правда. Это просто супер 👍.",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Catherine, yeni kaşlarım için çok teşekkür ederim! Ve en önemlisi, kendilerine benziyorlar. Çok mutluyum, gerçekten. Bu sadece süper 👍."
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-16T12:12:44.203Z",
+      "reactions": {
+        "likes": 1,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Здравствуйте! 🌸\n\nСпасибо вам за такой тёплый отзыв и доверие! Очень рада, что чистка лица и массаж лица в Санкт-Петербурге оставили приятные впечатления, а атмосфера студии показалась вам уютной и комфортной. Для меня действительно важно, чтобы каждая процедура проходила не только эффективно, но и максимально спокойно для клиента.\n\nОтдельное спасибо за ваши слова о подходе к работе. Я всегда стараюсь глубоко вникать в состояние кожи и причины возможных проблем — будь то чувствительность, обезвоженность, высыпания или потеря тонуса. Индивидуальный подход — основа качественной косметологии на Васильевском острове.\n\nОчень приятно, что вы решили взять курс массажа лица 😌\nКурсовые процедуры позволяют добиться более выраженного результата:\n\n✨ улучшение тонуса кожи\n✨ более чёткий овал лица\n✨ уменьшение отёчности\n✨ здоровый цвет лица\n✨ накопительный лифтинг-эффект\n\nРегулярный профессиональный массаж лица работает не только на внешний эффект, но и на общее состояние кожи и мышечного каркаса.\n\nБуду с радостью ждать вас на следующих процедурах — продолжим работать над красотой, здоровьем и сиянием кожи ✨\n\nС заботой о вашей коже,\nЕкатерина 💆‍♀️\nСтудия «Авалюр», Санкт-Петербург\nСредний проспект В.О., 28/29",
+        "updatedTime": "2026-02-23T11:05:03.967Z"
+      },
+      "reviewId": "WyORTO9w2ZhrvP-WkWMomeF5sTn3X7Kr",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Юлия Б.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/59871/0o-7/{size}",
+        "professionLevel": "Level 4 Local Expert",
+        "rtb": "Level 4 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "z5xd9m6yvd3twf4yhy3ynxwbnr",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Была у Екатерины на чистке лица и массаже! Все понравилось! Чистая , уютная студия. Екатерина, очень приятная, вникает в суть проблемы! Взяла курс массажей😋",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Catherine yüzünü temizliyordu ve masajdaydı! Her şeyi beğendim! Temiz, rahat bir stüdyo. Catherine, çok hoş, sorunun özüne bakıyor! Masaj kursu aldım"
+      },
+      "rating": 5,
+      "updatedTime": "2026-02-22T16:12:11.654Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Большое спасибо за такие тёплые слова и доверие! 🌷\nМне очень приятно, что вы прошли курс массажа лица и остались довольны результатом.\n\nПрофессиональный массаж лица — это не только про расслабление, но и про заметный эффект для кожи: улучшение микроциркуляции, повышение тонуса, более чёткий овал лица и здоровый цвет кожи. Особенно важно проходить именно курс, так как курсовой массаж лица даёт накопительный лифтинг-эффект и более выраженный результат.\n\nОчень рада, что вам понравился результат и сам процесс — для меня важно, чтобы каждая процедура косметологии для лица проходила комфортно и приносила не только пользу, но и удовольствие.\n\nБуду с радостью ждать вас снова в студии «Авалюр» на Васильевском острове — можем повторить курс массажа лица, а также дополнить уход процедурами, такими как микротоки для лица, чистка лица или пилинги, для ещё более выраженного эффекта.\n\nЕсли вы ищете массаж лица в Санкт-Петербурге, косметолога рядом или уход за кожей лица у профессионала, буду рада помочь вам.\n\nС теплом и заботой,\nЕкатерина — косметолог и основатель студии 💛",
+        "updatedTime": "2026-03-25T11:05:50.049Z"
+      },
+      "reviewId": "uFst_xkjj0YxcQ6sQrvuwSwWeCThNu",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Мария",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/16491550/OjdhBivTlQhNsvV3bvjFI5JQPA-1/{size}",
+        "professionLevel": "Level 5 Local Expert",
+        "rtb": "Level 5 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "8u4e2978fwf8ba0zej0t6cj5dc",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Чудесный мастер Екатерина - профессионал своего дела. Прошла курс массажа , благодарю и еще вернусь 🌷",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Harika usta Ekaterina, işinde bir profesyoneldir. Masaj kursuna katıldım, teşekkür ederim ve tekrar döneceğim"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-24T05:25:20.773Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо вам большое за отзыв и доверие! 🌸\n\nМне очень приятно, что вам понравился перманентный макияж губ и процедура чистки лица. Я всегда стараюсь, чтобы каждая процедура проходила максимально аккуратно, безопасно и в комфортной атмосфере. Стерильность, внимательное отношение и качественный результат — для меня это основа работы.\n\nПерманент губ помогает подчеркнуть естественную форму, сделать цвет более насыщенным и аккуратным, а профессиональная чистка лица позволяет коже выглядеть свежей, чистой и ухоженной. Очень рада, что вы остались довольны результатом.\n\nБуду рада видеть вас снова на процедурах в студии!\nСпасибо, что выбираете меня как своего мастера и косметолога. 💛",
+        "updatedTime": "2026-03-09T14:01:21.566Z"
+      },
+      "reviewId": "FQU97Mlytt_1IrHeHs6tMylwL1vSXm",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Александра М.",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/27232/ElEvrXJoMQa7b9ieRm4kJPCw4S4-1/{size}",
+        "professionLevel": "Level 4 Local Expert",
+        "rtb": "Level 4 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "9ag0h15751wxfndbyh98dqn2fc",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Спасибо Екатерине! Классная работа! Делала перманент губ и чистку лица! Все стерильно, аккуратно!",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Ekaterina'ya teşekkür ederim! Harika iş! Dudakları kalıcı hale getirdim ve yüzümü temizledim! Her şey steril, dikkatli!"
+      },
+      "rating": 5,
+      "updatedTime": "2026-03-07T12:25:14.783Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо большое за такой тёплый отзыв! 💛 Мне очень приятно, что вы уже не первый раз доверяете мне перманентный макияж губ. Для меня это самая высокая оценка работы, ведь повторный визит означает, что результат оправдал ваши ожидания.\n\nЯ очень рада, что процедура перманентного макияжа губ прошла для вас настолько комфортно и безболезненно, что удалось полностью расслабиться. Я всегда стараюсь сделать татуаж губ максимально деликатным: тщательно подбираю технику, оттенок пигмента и работаю аккуратно, чтобы процедура была не только безопасной, но и комфортной для каждого клиента.\n\nСпасибо, что отметили уходовые средства после процедуры. После перманентного макияжа губ правильный домашний уход играет важную роль — он помогает коже быстрее восстановиться, сохранить красивый оттенок и получить максимально качественный результат. Именно поэтому каждому клиенту я подробно рассказываю о процессе заживления и выдаю всё необходимое для ухода.\n\nБуду рада снова видеть вас в студии «Авалюр» в Санкт-Петербурге на Васильевском острове! \n\nЕсли захотите обновить перманент губ,  сделать перманентный макияж бровей, чистку лица, профессиональный массаж лица, \nмикротоковую терапию или подобрать индивидуальный домашний уход, с удовольствием помогу. \n\nДо новых встреч и спасибо за ваше доверие! 💕",
+        "updatedTime": "2026-07-28T13:25:57.295Z"
+      },
+      "reviewId": "EVdyAMWXfXw7fFW6ERv-HxfKQQq9ldWUR",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Nikanaglova",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/36777/0b-8/{size}",
+        "professionLevel": "Level 2 Local Expert",
+        "rtb": "Level 2 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "14a8dnhce09t37582ppzc1ceqg",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Делаю не перввй раз перманент губ. \nНастолько все качетсвенно, кофморто и небольно, что засыпаю на процедуре. \nВ конце мастер дает уходовые средства с  собой, что очено мило. ",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Bir kereden fazla dudak kalıcı yapıyorum. \nHer şey o kadar kaliteli, kahve ve saçma ki prosedürde uyuyakalıyorum. \nSonunda, usta onunla birlikte bakım ürünleri verir ki bu çok sevimlidir. "
+      },
+      "rating": 5,
+      "updatedTime": "2026-07-28T10:35:00.435Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    },
+    {
+      "businessComment": {
+        "text": "Спасибо за такой тёплый отзыв! 💛\n\nОчень рады, что вам понравился массаж лица у Екатерины и сама атмосфера процедуры. Для нас особенно ценно слышать, что вы получили не только результат, но и удовольствие от визита.\n\nВ студии «Авалюр» мы уделяем большое внимание качеству услуг:\n✨ профессиональный массаж лица в Санкт-Петербурге\n✨ бережный подход к коже\n✨ комфортная и расслабляющая атмосфера\n✨ работа мастера с медицинским образованием\n\nЕкатерина действительно делает акцент на ощущениях клиента и состоянии кожи, чтобы каждая процедура была не просто уходом, а полноценным отдыхом и восстановлением.\n\nБудем рады видеть вас снова на массаж лица, уходовые процедуры или косметологические услуги на Васильевском острове 🌸\nЕсли появятся вопросы или пожелания — всегда на связи!\n\nС заботой о вашей красоте,\nстудия «Авалюр» ✨",
+        "updatedTime": "2026-02-17T08:50:53.611Z"
+      },
+      "reviewId": "akUQEHuTVgX9JTBEA2UOYjuCkU02q67",
+      "businessId": "219500919155",
+      "author": {
+        "name": "Наталья Шарапова",
+        "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/21377/miR1rnBaWB83iqVyqpa079x3yfY-1/{size}",
+        "professionLevel": "Level 4 Local Expert",
+        "rtb": "Level 4 Local Expert",
+        "rtbType": "PROFESSION",
+        "publicId": "e6ndynk9zuhpmryud1rvyjjbvr",
+        "achievements": [],
+        "professions": [],
+        "isSubscribed": false
+      },
+      "text": "Ходила к Екатерине на массаж лица. Очень понравилось! Приятная девушка и массаж кайфовый 🧘🏽‍♀️  ",
+      "textLanguage": "ru",
+      "textTranslations": {
+        "tr": "Yüz masajı için Catherine'e gittim. Çok beğendim! Hoş bir kız ve yüksek bir masaj 🧘🏽♀️  "
+      },
+      "rating": 5,
+      "updatedTime": "2026-02-16T16:49:01.137Z",
+      "reactions": {
+        "likes": 0,
+        "dislikes": 0,
+        "userReaction": "NONE"
+      },
+      "photos": [],
+      "videos": [],
+      "pinned": false
+    }
+  ]
+}

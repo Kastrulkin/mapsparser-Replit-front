@@ -1,0 +1,1843 @@
+{
+  "schema_version": "localos_followup_batch_review_v1",
+  "base_manifest_canonical_sha256": "4b21c0f98df7a726e0afae3504692e0b7c2a4faace8cdddf733590257a46a386",
+  "batch_id": "followup-batch-01-20260820",
+  "created_at": "2026-08-20T18:24:01.535561+00:00",
+  "planned_send_date": "2026-08-21",
+  "state": "draft_for_user_approval",
+  "delivery_authorized": false,
+  "queued": false,
+  "sent": false,
+  "input_count": 25,
+  "ready_count": 16,
+  "blocked_count": 9,
+  "items": [
+    {
+      "name": "Медика Стар",
+      "lead_id": "b0ec3c4a-ca18-41d4-928c-a256a50fd565",
+      "campaign_id": "35b2ee63-5443-42e4-8dd4-9e0cee1c3eb1",
+      "first_touch_id": "eec099a7-1dc8-40c2-a447-ec7c71981471",
+      "proposed_touch_id": "275579ad-e3a4-4fb7-8d45-d4f99fb0e049",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "osteop84@mail.ru",
+      "contact_source_url": "https://osteop.ru/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "eec099a7-1dc8-40c2-a447-ec7c71981471",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://osteop.ru/",
+          "status": 200,
+          "final_url": "https://osteop.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/medika_star/111459030300/",
+          "price_source_url": "https://yandex.com/maps/org/medika_star/111459030300/prices/",
+          "title": "Medica Star",
+          "org_id": "111459030300",
+          "review_count": 141,
+          "rating": 4.699999809265137,
+          "news_count": 1,
+          "service_count": 57,
+          "priced_service_count": 57,
+          "categories": [
+            "Medical center, clinic",
+            "ultrasonography",
+            "osteopathy"
+          ],
+          "researched_at": "2026-08-20T18:22:46.713467+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Medica Star - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Medica Star на Яндекс Картах сейчас опубликовано 57 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Medica Star на Яндекс Картах сейчас опубликовано 57 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 56
+      }
+    },
+    {
+      "name": "#АйДаКодить",
+      "lead_id": "b0d1cc32-e2a0-4a92-ba8c-9e3cbab49f94",
+      "campaign_id": "1a483dc8-a427-4f6e-aa04-d38b50219f7b",
+      "first_touch_id": "0de0ab17-fbcc-4e4c-9092-02fdac747b28",
+      "proposed_touch_id": "656eb892-a1e8-4950-9e52-69eed571a03e",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "hello@codims.ru",
+      "contact_source_url": "https://codims.ru/",
+      "first_angle": "signal",
+      "status": "blocked",
+      "reasons": [
+        "later_email_touches"
+      ],
+      "evidence": {
+        "first_touch_id": "0de0ab17-fbcc-4e4c-9092-02fdac747b28",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 3
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://codims.ru/",
+          "status": 200,
+          "final_url": "https://codims.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/aydakodit/43884878561",
+          "price_source_url": "https://yandex.com/maps/org/aydakodit/43884878561/prices/",
+          "title": "AiDaKodit",
+          "org_id": "43884878561",
+          "review_count": 49,
+          "rating": 4.900000095367432,
+          "news_count": 24,
+          "service_count": 15,
+          "priced_service_count": 15,
+          "categories": [
+            "Computer courses",
+            "courses and master classes",
+            "further education"
+          ],
+          "researched_at": "2026-08-20T18:22:49.330329+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "AiDaKodit - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке AiDaKodit на Яндекс Картах сейчас опубликовано 15 услуг, у каждой указана цена.\n\nПри таком объёме клиенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке AiDaKodit на Яндекс Картах сейчас опубликовано 15 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме клиенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "later_email_touches"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Миллениум",
+      "lead_id": "b099f081-c330-46c5-beaf-263d196501ee",
+      "campaign_id": "37d7dc3e-d6fd-4025-b9d1-8e89fe246265",
+      "first_touch_id": "b4fd28c5-ed44-4b81-a83b-43ee961e2476",
+      "proposed_touch_id": "696c9090-4661-4ca2-b076-01bad85c8fcf",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "marketing.millenium@yandex.ru",
+      "contact_source_url": "https://milleniummedc.ru/contacts/",
+      "first_angle": "reviews_content",
+      "status": "blocked",
+      "reasons": [
+        "gmail_first_exact_missing",
+        "no_distinct_supported_second_angle"
+      ],
+      "evidence": {
+        "first_touch_id": "b4fd28c5-ed44-4b81-a83b-43ee961e2476",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://milleniummedc.ru/contacts/",
+          "status": 200,
+          "final_url": "https://milleniummedc.ru/contacts/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/millenium/69727619510",
+          "price_source_url": "https://yandex.com/maps/org/millenium/69727619510/prices/",
+          "title": "Millenium",
+          "org_id": "69727619510",
+          "review_count": 909,
+          "rating": 4.900000095367432,
+          "news_count": 9,
+          "service_count": 7,
+          "priced_service_count": 7,
+          "categories": [
+            "Medical center, clinic",
+            "wellness center",
+            "medical rehabilitation centre"
+          ],
+          "researched_at": "2026-08-20T18:22:52.136256+00:00"
+        }
+      },
+      "draft": null,
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "gmail_first_exact_missing",
+          "no_distinct_supported_second_angle"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 0
+      }
+    },
+    {
+      "name": "Нева-Мед",
+      "lead_id": "ae6c9f8c-4e98-414e-bc11-36026563d64b",
+      "campaign_id": "7f484062-f700-446f-b974-04f6b2f569bd",
+      "first_touch_id": "655252e2-7645-49ef-910b-bcb109afd61b",
+      "proposed_touch_id": "4f6f3fce-e5d9-4e2a-89da-4b5cda2b5d53",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "info@neva-med.com",
+      "contact_source_url": "https://neva-med.com/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "655252e2-7645-49ef-910b-bcb109afd61b",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://neva-med.com/",
+          "status": 200,
+          "final_url": "https://neva-med.com/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/neva_med/1283641810/",
+          "price_source_url": "https://yandex.com/maps/org/neva_med/1283641810/prices/",
+          "title": "Meditsinsky tsentr Evo",
+          "org_id": "1283641810",
+          "review_count": 44,
+          "rating": 4.400000095367432,
+          "news_count": 10,
+          "service_count": 117,
+          "priced_service_count": 117,
+          "categories": [
+            "Medical center, clinic",
+            "wellness center",
+            "medical rehabilitation centre"
+          ],
+          "researched_at": "2026-08-20T18:22:55.289053+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Meditsinsky tsentr Evo - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Meditsinsky tsentr Evo на Яндекс Картах сейчас опубликовано 117 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Meditsinsky tsentr Evo на Яндекс Картах сейчас опубликовано 117 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 57
+      }
+    },
+    {
+      "name": "Общество Чистых Лиц",
+      "lead_id": "abe24ce5-2531-4fa1-a5a5-91f9431c9a1c",
+      "campaign_id": "705b6350-5d95-4796-bd9f-de4095c9de92",
+      "first_touch_id": "8ed9698b-9fbe-45a9-b08e-e7ef9e4e8c23",
+      "proposed_touch_id": "a083c255-cb2f-4033-a819-4c0504817254",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "lumiline@mail.ru",
+      "contact_source_url": "https://www.obshestvo-chistyh-lits.ru/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "8ed9698b-9fbe-45a9-b08e-e7ef9e4e8c23",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://www.obshestvo-chistyh-lits.ru/",
+          "status": 200,
+          "final_url": "https://www.obshestvo-chistyh-lits.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/obshchestvo_chistykh_lits/217458914168",
+          "price_source_url": "https://yandex.com/maps/org/obshchestvo_chistykh_lits/217458914168/prices/",
+          "title": "Obshestvo Chistyh Lits",
+          "org_id": "217458914168",
+          "review_count": 149,
+          "rating": 5.0,
+          "news_count": 4,
+          "service_count": 193,
+          "priced_service_count": 193,
+          "categories": [
+            "Cosmetology",
+            "medical center, clinic"
+          ],
+          "researched_at": "2026-08-20T18:22:58.322087+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Obshestvo Chistyh Lits - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Obshestvo Chistyh Lits на Яндекс Картах сейчас опубликовано 193 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Obshestvo Chistyh Lits на Яндекс Картах сейчас опубликовано 193 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 57
+      }
+    },
+    {
+      "name": "Неоэстетика",
+      "lead_id": "a85a5edf-0eee-4de1-9af9-f0b718a65d2f",
+      "campaign_id": "bd0cbbf7-d5f6-4472-8f9d-b82d1562e599",
+      "first_touch_id": "ffa3939c-17f9-4dea-b166-a6b3f081eaf6",
+      "proposed_touch_id": "3409a778-7527-481c-9729-a720217f7016",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "public@neoestetika.ru",
+      "contact_source_url": "https://www.neoestetika.ru/?yclid=3888667673026887679&utm_content=17684412838&utm_source=geoadv_maps",
+      "first_angle": "signal",
+      "status": "blocked",
+      "reasons": [
+        "first_touch_not_sent_in_database",
+        "gmail_first_exact_missing"
+      ],
+      "evidence": {
+        "first_touch_id": "ffa3939c-17f9-4dea-b166-a6b3f081eaf6",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://www.neoestetika.ru/?yclid=3888667673026887679&utm_content=17684412838&utm_source=geoadv_maps",
+          "status": 200,
+          "final_url": "https://www.neoestetika.ru/?yclid=3888667673026887679&utm_content=17684412838&utm_source=geoadv_maps",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/neoestetika/1452198369",
+          "price_source_url": "https://yandex.com/maps/org/neoestetika/1452198369/prices/",
+          "title": "Неоэстетика",
+          "org_id": "1452198369",
+          "review_count": 243,
+          "rating": 5.0,
+          "news_count": 29,
+          "service_count": 58,
+          "priced_service_count": 58,
+          "categories": [
+            "Cosmetology",
+            "hair removal",
+            "medical center, clinic"
+          ],
+          "researched_at": "2026-08-20T18:23:01.238943+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Неоэстетика - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Неоэстетика на Яндекс Картах сейчас опубликовано 58 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Неоэстетика на Яндекс Картах сейчас опубликовано 58 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "first_touch_not_sent_in_database",
+          "gmail_first_exact_missing"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Космик",
+      "lead_id": "a4e49c17-c182-4352-8fef-70684aa56b68",
+      "campaign_id": "85e07679-d04c-4887-ac7d-c0f8698afc49",
+      "first_touch_id": "a4c53e8a-1ace-435e-b78a-05e73f39be61",
+      "proposed_touch_id": "ce0ef24d-9640-4e0d-82fc-f2bef1b9815e",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "info@cosmicspb.ru",
+      "contact_source_url": "https://cosmicspb.ru/kontakti",
+      "first_angle": "reviews_content",
+      "status": "blocked",
+      "reasons": [
+        "gmail_first_exact_missing"
+      ],
+      "evidence": {
+        "first_touch_id": "a4c53e8a-1ace-435e-b78a-05e73f39be61",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://cosmicspb.ru/kontakti",
+          "status": 200,
+          "final_url": "https://cosmicspb.ru/kontakti",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/kosmik/203062047760",
+          "price_source_url": "https://yandex.com/maps/org/kosmik/203062047760/prices/",
+          "title": "Cosmic",
+          "org_id": "203062047760",
+          "review_count": 376,
+          "rating": 5.0,
+          "news_count": 47,
+          "service_count": 334,
+          "priced_service_count": 334,
+          "categories": [
+            "Dental clinic",
+            "cosmetology",
+            "medical center, clinic"
+          ],
+          "researched_at": "2026-08-20T18:23:04.416872+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Cosmic - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Cosmic на Яндекс Картах сейчас опубликовано 334 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Cosmic на Яндекс Картах сейчас опубликовано 334 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "gmail_first_exact_missing"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Центр семейной медицины Тельмана",
+      "lead_id": "9ec14a53-8160-4c67-aa42-caef63be225e",
+      "campaign_id": "ad2c6fe9-9ecc-41b5-be55-b0f658251198",
+      "first_touch_id": "f106ead4-dbaa-4e28-8029-5a08fedb9a9f",
+      "proposed_touch_id": "c3ba44a5-8e13-499d-aa9d-50dc145c6d05",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "ooo_csm@bk.ru",
+      "contact_source_url": "https://csmspb.ru:443/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "f106ead4-dbaa-4e28-8029-5a08fedb9a9f",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://csmspb.ru:443/",
+          "status": 200,
+          "final_url": "https://csmspb.ru:443/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/tsentr_semeynoy_meditsiny_telmana/1694420944",
+          "price_source_url": "https://yandex.com/maps/org/tsentr_semeynoy_meditsiny_telmana/1694420944/prices/",
+          "title": "Telman Family Medicine Center",
+          "org_id": "1694420944",
+          "review_count": 180,
+          "rating": 5.0,
+          "news_count": 371,
+          "service_count": 598,
+          "priced_service_count": 598,
+          "categories": [
+            "Medical center, clinic",
+            "dermatology",
+            "cosmetology"
+          ],
+          "researched_at": "2026-08-20T18:23:07.780327+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Telman Family Medicine Center - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Telman Family Medicine Center на Яндекс Картах сейчас опубликовано 598 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Telman Family Medicine Center на Яндекс Картах сейчас опубликовано 598 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 58
+      }
+    },
+    {
+      "name": "Pro Visage",
+      "lead_id": "9e46d044-d85d-4089-8f04-8db6b632ef4a",
+      "campaign_id": "4b6f5207-f69b-4758-aecd-efe79b6ca559",
+      "first_touch_id": "6458edba-5e57-42a2-8e5a-1602b7f1b879",
+      "proposed_touch_id": "939e16fb-794b-407d-8dd1-badb6faa3ff7",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "vitalio2008@yandex.ru",
+      "contact_source_url": "https://provisage.ru/contacts.html",
+      "first_angle": "reviews_content",
+      "status": "blocked",
+      "reasons": [
+        "gmail_first_exact_missing",
+        "later_email_touches"
+      ],
+      "evidence": {
+        "first_touch_id": "6458edba-5e57-42a2-8e5a-1602b7f1b879",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 5
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://provisage.ru/contacts.html",
+          "status": 200,
+          "final_url": "https://provisage.ru/contacts.html",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/pro_visage/61444256373/",
+          "price_source_url": "https://yandex.com/maps/org/pro_visage/61444256373/prices/",
+          "title": "Pro Visage",
+          "org_id": "61444256373",
+          "review_count": 503,
+          "rating": 4.900000095367432,
+          "news_count": 153,
+          "service_count": 349,
+          "priced_service_count": 349,
+          "categories": [
+            "Beauty salon",
+            "nail salon",
+            "cosmetology"
+          ],
+          "researched_at": "2026-08-20T18:23:10.841225+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Pro Visage - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Pro Visage на Яндекс Картах сейчас опубликовано 349 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Pro Visage на Яндекс Картах сейчас опубликовано 349 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "gmail_first_exact_missing",
+          "later_email_touches"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 56
+      }
+    },
+    {
+      "name": "Кристина",
+      "lead_id": "966a0a73-3eec-4720-b187-12e1cbf81424",
+      "campaign_id": "b9658dda-f292-4873-a5b4-6bd9cbdd83fd",
+      "first_touch_id": "702b914f-1ce4-4fa8-89a5-51498ab27856",
+      "proposed_touch_id": "e123ab78-c446-42e8-a381-29778a192913",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "info@mc-kristina.ru",
+      "contact_source_url": "https://mc-kristina.ru/contacts.html",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "702b914f-1ce4-4fa8-89a5-51498ab27856",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://mc-kristina.ru/contacts.html",
+          "status": 200,
+          "final_url": "https://mc-kristina.ru/contacts.html",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/kristina/1011176009/",
+          "price_source_url": "https://yandex.com/maps/org/kristina/1011176009/prices/",
+          "title": "Kristina",
+          "org_id": "1011176009",
+          "review_count": 171,
+          "rating": 4.599999904632568,
+          "news_count": 2,
+          "service_count": 192,
+          "priced_service_count": 192,
+          "categories": [
+            "Medical center, clinic",
+            "medical laboratory",
+            "diagnostic center"
+          ],
+          "researched_at": "2026-08-20T18:23:13.655744+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Kristina - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Kristina на Яндекс Картах сейчас опубликовано 192 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Kristina на Яндекс Картах сейчас опубликовано 192 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "ЛюбиЗуб",
+      "lead_id": "9632dd18-433a-4f72-9283-30e15bc24d85",
+      "campaign_id": "b90eb650-4eef-486f-9638-0e46d921e663",
+      "first_touch_id": "bc710318-7fed-4ba4-9c4b-54c005fb3a87",
+      "proposed_touch_id": "776cdd80-8e78-47ed-a2eb-c2f3d9947286",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "hello@lubizub.ru",
+      "contact_source_url": "https://lubizub.ru/?utm_campaign=glavnaya&utm_medium=cpc&utm_source=yandexmaps&yclid=4392422177547747327",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "bc710318-7fed-4ba4-9c4b-54c005fb3a87",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://lubizub.ru/?utm_campaign=glavnaya&utm_medium=cpc&utm_source=yandexmaps&yclid=4392422177547747327",
+          "status": 200,
+          "final_url": "https://lubizub.ru/?utm_campaign=glavnaya&utm_medium=cpc&utm_source=yandexmaps&yclid=4392422177547747327",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/lyubizub/243497934939",
+          "price_source_url": "https://yandex.com/maps/org/lyubizub/243497934939/prices/",
+          "title": "LubiZub",
+          "org_id": "243497934939",
+          "review_count": 65,
+          "rating": 5.0,
+          "news_count": 25,
+          "service_count": 61,
+          "priced_service_count": 61,
+          "categories": [
+            "Dental clinic"
+          ],
+          "researched_at": "2026-08-20T18:23:16.989726+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "LubiZub - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке LubiZub на Яндекс Картах сейчас опубликовано 61 услуга, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке LubiZub на Яндекс Картах сейчас опубликовано 61 услуга, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Профессор",
+      "lead_id": "9518e045-1fb8-4328-800f-d942bc314815",
+      "campaign_id": "bec77dfb-ce9c-49e1-807c-6f2aafd36357",
+      "first_touch_id": "e508043d-db67-49d8-895c-5485c8282d28",
+      "proposed_touch_id": "ad7b1fc4-191f-4896-a121-bea5933d9be6",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "glavvrach@mcprofessor.ru",
+      "contact_source_url": "https://mcprofessor.ru/contacts",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "e508043d-db67-49d8-895c-5485c8282d28",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://mcprofessor.ru/contacts",
+          "status": 200,
+          "final_url": "https://mcprofessor.ru/contacts",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/professor/1132519405/",
+          "price_source_url": "https://yandex.com/maps/org/professor/1132519405/prices/",
+          "title": "Professor",
+          "org_id": "1132519405",
+          "review_count": 285,
+          "rating": 4.599999904632568,
+          "news_count": 0,
+          "service_count": 383,
+          "priced_service_count": 383,
+          "categories": [
+            "Medical center, clinic",
+            "medical laboratory",
+            "diagnostic center"
+          ],
+          "researched_at": "2026-08-20T18:23:20.081537+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Professor - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Professor на Яндекс Картах сейчас опубликовано 383 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Professor на Яндекс Картах сейчас опубликовано 383 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Медикал Он Груп",
+      "lead_id": "9247b559-cacc-4f46-b20e-6a93bb540187",
+      "campaign_id": "54b262ef-8aa2-4bcd-a249-a4244d658de5",
+      "first_touch_id": "1f304a37-6b58-45d8-9a25-0ba7baa0102c",
+      "proposed_touch_id": "0750f8d2-0236-44af-8b6c-9dd47c338a7b",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "online.spb@medongroup.ru",
+      "contact_source_url": "https://medongroup-spb.ru/?utm_campaign=priority&utm_source=yandex_maps",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "1f304a37-6b58-45d8-9a25-0ba7baa0102c",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://medongroup-spb.ru/?utm_campaign=priority&utm_source=yandex_maps",
+          "status": 200,
+          "final_url": "https://medongroup-spb.ru/?utm_campaign=priority&utm_source=yandex_maps",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/medikal_on_grup/1516062583/",
+          "price_source_url": "https://yandex.com/maps/org/medikal_on_grup/1516062583/prices/",
+          "title": "Medical On Group",
+          "org_id": "1516062583",
+          "review_count": 547,
+          "rating": 4.599999904632568,
+          "news_count": 3,
+          "service_count": 352,
+          "priced_service_count": 352,
+          "categories": [
+            "Medical center, clinic",
+            "gynecology clinic",
+            "urology center"
+          ],
+          "researched_at": "2026-08-20T18:23:22.898433+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Medical On Group - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Medical On Group на Яндекс Картах сейчас опубликовано 352 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Medical On Group на Яндекс Картах сейчас опубликовано 352 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 57
+      }
+    },
+    {
+      "name": "Аетерна",
+      "lead_id": "8f1bca2b-4016-4b5d-a596-7f87318d39e7",
+      "campaign_id": "fbf01c3f-aca3-4fb5-8d27-1aab96cba6ca",
+      "first_touch_id": "bf88fd9e-1066-4e74-9f53-2b6855c7f13e",
+      "proposed_touch_id": "c8a66ed4-ffaf-4868-88d6-b10b3a11518d",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "i@igorantonenko.ru",
+      "contact_source_url": "https://aeterna-clinic.ru/",
+      "first_angle": "signal",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "bf88fd9e-1066-4e74-9f53-2b6855c7f13e",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://aeterna-clinic.ru/",
+          "status": 200,
+          "final_url": "https://aeterna-clinic.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/ayeterna/157884394104/",
+          "price_source_url": "https://yandex.com/maps/org/ayeterna/157884394104/prices/",
+          "title": "Aeterna",
+          "org_id": "157884394104",
+          "review_count": 35,
+          "rating": 4.900000095367432,
+          "news_count": 4,
+          "service_count": 91,
+          "priced_service_count": 91,
+          "categories": [
+            "Cosmetology",
+            "hair removal",
+            "massage salon"
+          ],
+          "researched_at": "2026-08-20T18:23:25.718935+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Aeterna - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Aeterna на Яндекс Картах сейчас опубликовано 91 услуга, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Aeterna на Яндекс Картах сейчас опубликовано 91 услуга, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Мими Клиник",
+      "lead_id": "8c61a34d-b551-40bf-a96b-48526ec8552c",
+      "campaign_id": "1a806226-0145-4637-8009-a7b8e60e139e",
+      "first_touch_id": "74c81164-e73c-41f1-a0b6-fd290856b72e",
+      "proposed_touch_id": "cbb5eb80-2980-47b9-b2e5-a3452785dc4a",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "mimiclinic@mail.ru",
+      "contact_source_url": "https://mimiclinic.ru/about-us/specialisty/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "74c81164-e73c-41f1-a0b6-fd290856b72e",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://mimiclinic.ru/about-us/specialisty/",
+          "status": 200,
+          "final_url": "https://mimiclinic.ru/about-us/specialisty/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/mimi_klinik/62836072707",
+          "price_source_url": "https://yandex.com/maps/org/mimi_klinik/62836072707/prices/",
+          "title": "MimiClinic",
+          "org_id": "62836072707",
+          "review_count": 180,
+          "rating": 5.0,
+          "news_count": 66,
+          "service_count": 275,
+          "priced_service_count": 275,
+          "categories": [
+            "Cosmetology",
+            "beauty salon",
+            "spa"
+          ],
+          "researched_at": "2026-08-20T18:23:28.685647+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "MimiClinic - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке MimiClinic на Яндекс Картах сейчас опубликовано 275 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке MimiClinic на Яндекс Картах сейчас опубликовано 275 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Дентал",
+      "lead_id": "8b1a0f42-82a6-4361-9a7f-ba93184e2c94",
+      "campaign_id": "e7ec01ba-5f48-4e70-896c-24ecf8ccf29a",
+      "first_touch_id": "2588f100-a8bc-4552-9efb-b9c524513140",
+      "proposed_touch_id": "96f5031e-09b9-4963-917e-8a1e65cc4663",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "oksismail@mail.ru",
+      "contact_source_url": "https://center-dentist.ru/contact",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "2588f100-a8bc-4552-9efb-b9c524513140",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://center-dentist.ru/contact",
+          "status": 200,
+          "final_url": "https://center-dentist.ru/contact",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/dental/67819873463",
+          "price_source_url": "https://yandex.com/maps/org/dental/67819873463/prices/",
+          "title": "Dental",
+          "org_id": "67819873463",
+          "review_count": 63,
+          "rating": 4.400000095367432,
+          "news_count": 10,
+          "service_count": 42,
+          "priced_service_count": 42,
+          "categories": [
+            "Dental clinic",
+            "diagnostic center"
+          ],
+          "researched_at": "2026-08-20T18:23:31.551609+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Dental - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Dental на Яндекс Картах сейчас опубликовано 42 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Dental на Яндекс Картах сейчас опубликовано 42 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Мир семьи",
+      "lead_id": "87d5e334-81ca-4d9d-acc8-b4880b81ef84",
+      "campaign_id": "c0a1654d-220f-40eb-8c6f-aeb6a45f2177",
+      "first_touch_id": "6d5f7b89-d70a-4a08-a272-e092f06f8a8e",
+      "proposed_touch_id": "569cf05d-25c1-4007-80a0-7029ec2416fd",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "info@flmed.ru",
+      "contact_source_url": "https://flmed.ru/contact/solnechnyij-gorod",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "6d5f7b89-d70a-4a08-a272-e092f06f8a8e",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://flmed.ru/contact/solnechnyij-gorod",
+          "status": 200,
+          "final_url": "https://flmed.ru/contact/solnechnyij-gorod",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/mir_semyi/148677829491/",
+          "price_source_url": "https://yandex.com/maps/org/mir_semyi/148677829491/prices/",
+          "title": "Clinic Mir sem'i",
+          "org_id": "148677829491",
+          "review_count": 128,
+          "rating": 4.400000095367432,
+          "news_count": 1,
+          "service_count": 164,
+          "priced_service_count": 164,
+          "categories": [
+            "Medical center, clinic",
+            "children's polyclinic",
+            "diagnostic center"
+          ],
+          "researched_at": "2026-08-20T18:23:34.479544+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Clinic Mir sem'i - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Clinic Mir sem'i на Яндекс Картах сейчас опубликовано 164 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Clinic Mir sem'i на Яндекс Картах сейчас опубликовано 164 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 58
+      }
+    },
+    {
+      "name": "АМД Лаборатории",
+      "lead_id": "84c579c9-aed2-4633-8f91-f53761887e8e",
+      "campaign_id": "f5f208de-d5d7-4752-a225-bda438c30ba9",
+      "first_touch_id": "d40dbba7-4623-47a3-b0fb-e6222704bf2d",
+      "proposed_touch_id": "04b1f085-f53b-4b2d-8f5c-41608a54b0fa",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "oramdlab@mail.ru",
+      "contact_source_url": "https://amdlab-spb.ru/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "d40dbba7-4623-47a3-b0fb-e6222704bf2d",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://amdlab-spb.ru/",
+          "status": 200,
+          "final_url": "https://amdlab-spb.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/amd_laboratorii/1387171418/",
+          "price_source_url": "https://yandex.com/maps/org/amd_laboratorii/1387171418/prices/",
+          "title": "Amd Laboratorii",
+          "org_id": "1387171418",
+          "review_count": 82,
+          "rating": 4.5,
+          "news_count": 49,
+          "service_count": 80,
+          "priced_service_count": 80,
+          "categories": [
+            "Medical center, clinic",
+            "cosmetology",
+            "beauty salon"
+          ],
+          "researched_at": "2026-08-20T18:23:37.077716+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Amd Laboratorii - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Amd Laboratorii на Яндекс Картах сейчас опубликовано 80 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Amd Laboratorii на Яндекс Картах сейчас опубликовано 80 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 56
+      }
+    },
+    {
+      "name": "Европейский институт Здоровья Семьи",
+      "lead_id": "7191f1e1-bfcf-4fd2-9d72-f8eaa2ef1056",
+      "campaign_id": "0c38e3fd-0ffa-4578-800b-25ffba00a975",
+      "first_touch_id": "db240633-d2f4-410c-93a1-8e4206e5742b",
+      "proposed_touch_id": "4de50be1-b616-4fdd-a1ac-4f52283e08ad",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "eizs@mail.ru",
+      "contact_source_url": "https://www.eizs.ru/",
+      "first_angle": "reviews_content",
+      "status": "blocked",
+      "reasons": [
+        "gmail_first_exact_missing"
+      ],
+      "evidence": {
+        "first_touch_id": "db240633-d2f4-410c-93a1-8e4206e5742b",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://www.eizs.ru/",
+          "status": 200,
+          "final_url": "https://www.eizs.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/yevropeyskiy_institut_zdorovya_semyi/1105117763/",
+          "price_source_url": "https://yandex.com/maps/org/yevropeyskiy_institut_zdorovya_semyi/1105117763/prices/",
+          "title": "European Institute of Family Health",
+          "org_id": "1105117763",
+          "review_count": 751,
+          "rating": 4.800000190734863,
+          "news_count": 202,
+          "service_count": 548,
+          "priced_service_count": 548,
+          "categories": [
+            "Medical center, clinic",
+            "gynecology clinic",
+            "diagnostic center"
+          ],
+          "researched_at": "2026-08-20T18:23:42.109206+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "European Institute of Family Health - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке European Institute of Family Health на Яндекс Картах сейчас опубликовано 548 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке European Institute of Family Health на Яндекс Картах сейчас опубликовано 548 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "gmail_first_exact_missing"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 59
+      }
+    },
+    {
+      "name": "Монрепо",
+      "lead_id": "6e7bc79a-3f2e-4a2e-81e3-3dbd2bbb3711",
+      "campaign_id": "070721f9-917b-4c04-bee6-dd749d1fba2d",
+      "first_touch_id": "a8b9c709-8df7-41a6-b68e-79ba7b90faa9",
+      "proposed_touch_id": "388d0eff-e197-4890-9a90-e2ed33c0de1d",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "spamonrepo@yandex.ru",
+      "contact_source_url": "https://spa-monrepo.ru/contacts/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "a8b9c709-8df7-41a6-b68e-79ba7b90faa9",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://spa-monrepo.ru/contacts/",
+          "status": 200,
+          "final_url": "https://spa-monrepo.ru/contacts/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/monrepo/1185194185/",
+          "price_source_url": "https://yandex.com/maps/org/monrepo/1185194185/prices/",
+          "title": "Monrepo",
+          "org_id": "1185194185",
+          "review_count": 58,
+          "rating": 4.699999809265137,
+          "news_count": 1,
+          "service_count": 66,
+          "priced_service_count": 66,
+          "categories": [
+            "Massage salon",
+            "cosmetology",
+            "spa"
+          ],
+          "researched_at": "2026-08-20T18:23:46.311397+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Monrepo - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Monrepo на Яндекс Картах сейчас опубликовано 66 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Monrepo на Яндекс Картах сейчас опубликовано 66 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Микшель",
+      "lead_id": "6e0536f7-6088-4922-8a4b-e2823875848d",
+      "campaign_id": "dc4bd054-8a4b-4488-b027-90104d9d6062",
+      "first_touch_id": "3ab0a45b-8271-4a22-ae6b-1c0c38319644",
+      "proposed_touch_id": "6ee37b14-5669-4989-8ec2-69b15e046cad",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "clinika_zdorovoi_kozhi@mail.ru",
+      "contact_source_url": "http://mik-clinic.ru/",
+      "first_angle": "signal",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "3ab0a45b-8271-4a22-ae6b-1c0c38319644",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "http://mik-clinic.ru/",
+          "status": 200,
+          "final_url": "http://mik-clinic.ru/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/mikshel/208821103308",
+          "price_source_url": "https://yandex.com/maps/org/mikshel/208821103308/prices/",
+          "title": "Mickshel",
+          "org_id": "208821103308",
+          "review_count": 207,
+          "rating": 5.0,
+          "news_count": 2,
+          "service_count": 9,
+          "priced_service_count": 9,
+          "categories": [
+            "Cosmetology",
+            "dermatology"
+          ],
+          "researched_at": "2026-08-20T18:23:48.931244+00:00"
+        }
+      },
+      "draft": {
+        "angle": "reviews_themes",
+        "subject": "Mickshel - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Mickshel на Яндекс Картах сейчас опубликовано 207 отзывов.\n\nВ таком объёме уже могут повторяться вопросы и темы, полезные для карточки и сайта. Это можно проверить по текстам отзывов.\n\nLocalOS может выделить повторяющиеся темы и превратить их в короткий план материалов.\n\nПоказать три повторяющиеся темы?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Mickshel на Яндекс Картах сейчас опубликовано 207 отзывов.",
+        "problem_hypothesis": "В таком объёме уже могут повторяться вопросы и темы, полезные для карточки и сайта. Это можно проверить по текстам отзывов.",
+        "offer_bridge": "LocalOS может выделить повторяющиеся темы и превратить их в короткий план материалов.",
+        "cta": "Показать три повторяющиеся темы?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 50
+      }
+    },
+    {
+      "name": "Личный доктор",
+      "lead_id": "6dd06859-e743-46d5-bff8-c046c737d106",
+      "campaign_id": "735e515a-38ef-4853-b9ef-dc859ff71785",
+      "first_touch_id": "e3385891-c79c-48c7-bb2a-75fdff785251",
+      "proposed_touch_id": "f3b68b18-3a82-4a20-bb1d-7b7b84c631ea",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "info@lichnydoctor.ru",
+      "contact_source_url": "https://lichnydoctor.ru/medicinskiy-centr-lichnyy-doktor-kolpino",
+      "first_angle": "signal",
+      "status": "blocked",
+      "reasons": [
+        "later_email_touches"
+      ],
+      "evidence": {
+        "first_touch_id": "e3385891-c79c-48c7-bb2a-75fdff785251",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 3
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://lichnydoctor.ru/medicinskiy-centr-lichnyy-doktor-kolpino",
+          "status": 200,
+          "final_url": "https://lichnydoctor.ru/medicinskiy-centr-lichnyy-doktor-kolpino",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/lichny_doktor/1228993155/",
+          "price_source_url": "https://yandex.com/maps/org/lichny_doktor/1228993155/prices/",
+          "title": "Lichny doktor",
+          "org_id": "1228993155",
+          "review_count": 39,
+          "rating": 4.199999809265137,
+          "news_count": 4,
+          "service_count": 3,
+          "priced_service_count": 3,
+          "categories": [
+            "Medical center, clinic",
+            "medical laboratory"
+          ],
+          "researched_at": "2026-08-20T18:23:52.042179+00:00"
+        }
+      },
+      "draft": {
+        "angle": "reviews_themes",
+        "subject": "Lichny doktor - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Lichny doktor на Яндекс Картах сейчас опубликовано 39 отзывов.\n\nВ таком объёме уже могут повторяться вопросы и темы, полезные для карточки и сайта. Это можно проверить по текстам отзывов.\n\nLocalOS может выделить повторяющиеся темы и превратить их в короткий план материалов.\n\nПоказать три повторяющиеся темы?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Lichny doktor на Яндекс Картах сейчас опубликовано 39 отзывов.",
+        "problem_hypothesis": "В таком объёме уже могут повторяться вопросы и темы, полезные для карточки и сайта. Это можно проверить по текстам отзывов.",
+        "offer_bridge": "LocalOS может выделить повторяющиеся темы и превратить их в короткий план материалов.",
+        "cta": "Показать три повторяющиеся темы?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "later_email_touches"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 51
+      }
+    },
+    {
+      "name": "Zub",
+      "lead_id": "652bd87e-df15-412f-84c2-c83f34b953a7",
+      "campaign_id": "3cbed05b-08ff-4431-b888-69ca2881d21b",
+      "first_touch_id": "6ff2e1ff-2983-44be-9917-17bf7bd6de91",
+      "proposed_touch_id": "c7269860-5f18-4abb-9bc0-edc1daec210c",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "info@zub-stoma.ru",
+      "contact_source_url": "https://www.zub-stoma.ru/ctomatologiya-na-%C2%ABprospekte-prosveshheniya%C2%BB/kontaktyi.html",
+      "first_angle": "reviews_content",
+      "status": "blocked",
+      "reasons": [
+        "gmail_first_exact_missing"
+      ],
+      "evidence": {
+        "first_touch_id": "6ff2e1ff-2983-44be-9917-17bf7bd6de91",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://www.zub-stoma.ru/ctomatologiya-na-%C2%ABprospekte-prosveshheniya%C2%BB/kontaktyi.html",
+          "status": 200,
+          "final_url": "https://www.zub-stoma.ru/ctomatologiya-na-%C2%ABprospekte-prosveshheniya%C2%BB/kontaktyi.html",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/zub/1082450760",
+          "price_source_url": "https://yandex.com/maps/org/zub/1082450760/prices/",
+          "title": "Zub",
+          "org_id": "1082450760",
+          "review_count": 261,
+          "rating": 5.0,
+          "news_count": 8,
+          "service_count": 106,
+          "priced_service_count": 106,
+          "categories": [
+            "Dental clinic",
+            "children's dentistry"
+          ],
+          "researched_at": "2026-08-20T18:23:55.269413+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Zub - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Zub на Яндекс Картах сейчас опубликовано 106 услуг, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Zub на Яндекс Картах сейчас опубликовано 106 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "gmail_first_exact_missing"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "Космоэксперт",
+      "lead_id": "64f47908-b1dc-4f07-bb26-4028e1457116",
+      "campaign_id": "4f1bb9f9-8694-4305-b684-4a8525caa10d",
+      "first_touch_id": "7745e1f8-b13f-47df-bb76-a5959d6c2881",
+      "proposed_touch_id": "797ed162-20f1-4337-8ee7-cf7820624c09",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "adm.cosmoex@gmail.com",
+      "contact_source_url": "https://cosmoexpert.pro:443/",
+      "first_angle": "reviews_content",
+      "status": "blocked",
+      "reasons": [
+        "gmail_first_exact_missing"
+      ],
+      "evidence": {
+        "first_touch_id": "7745e1f8-b13f-47df-bb76-a5959d6c2881",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 0,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://cosmoexpert.pro:443/",
+          "status": 200,
+          "final_url": "https://cosmoexpert.pro:443/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/kosmoekspert/128718226937",
+          "price_source_url": "https://yandex.com/maps/org/kosmoekspert/128718226937/prices/",
+          "title": "Cosmoexpert",
+          "org_id": "128718226937",
+          "review_count": 528,
+          "rating": 5.0,
+          "news_count": 33,
+          "service_count": 274,
+          "priced_service_count": 274,
+          "categories": [
+            "Cosmetology",
+            "beauty salon"
+          ],
+          "researched_at": "2026-08-20T18:23:58.241514+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Cosmoexpert - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Cosmoexpert на Яндекс Картах сейчас опубликовано 274 услуги, у каждой указана цена.\n\nПри таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Cosmoexpert на Яндекс Картах сейчас опубликовано 274 услуги, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме пациенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 0,
+        "max_score": 18,
+        "verdict": "reject",
+        "reason_codes": [
+          "gmail_first_exact_missing"
+        ],
+        "risk": "Blocked by preflight.",
+        "word_count": 55
+      }
+    },
+    {
+      "name": "ЛанСет",
+      "lead_id": "6426c897-ba77-4b44-9879-a0b39ce3489b",
+      "campaign_id": "18f5bd7f-eb10-4020-bd37-91afdf02aaa4",
+      "first_touch_id": "c40f43d1-f3f7-4be4-83ff-6c4407709db4",
+      "proposed_touch_id": "bcd49d34-8868-4945-adbe-5dabc0c8ef73",
+      "sequence_index": 1,
+      "channel": "email",
+      "recipient": "va@lanset.ru",
+      "contact_source_url": "https://lanset.ru/kontakty/",
+      "first_angle": "reviews_content",
+      "status": "ready_for_user_approval",
+      "reasons": [],
+      "evidence": {
+        "first_touch_id": "c40f43d1-f3f7-4be4-83ff-6c4407709db4",
+        "database": {
+          "suppressions": 0,
+          "inbound": 0,
+          "reactions": 0,
+          "delivery_failures": 0,
+          "email_leads": 1,
+          "later_email_touches": 0
+        },
+        "gmail": {
+          "sent_count": 1,
+          "unique_body_count": 1,
+          "first_exact_count": 1,
+          "reply_count": 0,
+          "bounce_count": 0
+        },
+        "contact": {
+          "source_url": "https://lanset.ru/kontakty/",
+          "status": 200,
+          "final_url": "https://lanset.ru/kontakty/",
+          "recipient_visible": true
+        },
+        "research": {
+          "source_url": "https://yandex.com/maps/org/lanset/1027216438/",
+          "price_source_url": "https://yandex.com/maps/org/lanset/1027216438/prices/",
+          "title": "Lanset Limited Co",
+          "org_id": "1027216438",
+          "review_count": 150,
+          "rating": 4.900000095367432,
+          "news_count": 1,
+          "service_count": 26,
+          "priced_service_count": 26,
+          "categories": [
+            "Cables and wires",
+            "telecommunication equipment",
+            "installation of networks"
+          ],
+          "researched_at": "2026-08-20T18:24:01.373405+00:00"
+        }
+      },
+      "draft": {
+        "angle": "service_menu_structure",
+        "subject": "Lanset Limited Co - карточка на Яндекс Картах",
+        "text": "Здравствуйте!\n\nВ карточке Lanset Limited Co на Яндекс Картах сейчас опубликовано 26 услуг, у каждой указана цена.\n\nПри таком объёме клиенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.\n\nLocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.\n\nПоказать пример структуры на 5-7 разделов?\n\n--\nАлександр\nоснователь LocalOS",
+        "observation": "В карточке Lanset Limited Co на Яндекс Картах сейчас опубликовано 26 услуг, у каждой указана цена.",
+        "problem_hypothesis": "При таком объёме клиенту может быть непросто быстро сравнить направления. Это гипотеза, которую можно проверить по структуре меню.",
+        "offer_bridge": "LocalOS может подготовить более короткую структуру разделов и названий, не меняя исходный прайс.",
+        "cta": "Показать пример структуры на 5-7 разделов?"
+      },
+      "quality": {
+        "score": 17,
+        "max_score": 18,
+        "verdict": "approve",
+        "reason_codes": [],
+        "risk": "Current official-page fact; no dated timing trigger.",
+        "word_count": 57
+      }
+    }
+  ],
+  "review_sha256": "b28b8bab343703419fda376976595590b66edc23e20216f83533b708ac19c2fa"
+}
