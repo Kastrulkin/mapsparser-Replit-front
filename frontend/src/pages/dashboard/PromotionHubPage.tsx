@@ -58,8 +58,7 @@ export const PromotionHubPage = () => {
   }
   if (currentBusiness?.creator_promotion_available !== true) {
     return <Navigate to="/dashboard/partnerships" replace />;
-  }
-
+}
   return (
     <div className="space-y-8 pb-12 antialiased">
       <DashboardPageHeader
@@ -97,4 +96,3 @@ export const PromotionHubPage = () => {
     </div>
   );
 };
-

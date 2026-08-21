@@ -5,6 +5,8 @@ __pycache__/
 
 # Node.js
 node_modules/
+.pnpm-store/
+.tmp/
 
 # Env files
 .env
@@ -23,6 +25,8 @@ node_modules/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite-shm
+*.sqlite-wal
 tmp_*.py
 tmp_docx_work/
 data/backups/
@@ -36,6 +40,13 @@ seo-images.tar.gz
 frontend/dist/
 frontend/public-dist/
 frontend/node_modules/
+frontend/test-results/
+
+# Local document rendering and connector working directories
+.agent/google-docs/
+.agent/tmp/
+.codex/google-docs/
+.codex-docs/
 
 # Sync conflict backups / duplicate suffix files
 .canon_backup_*/
@@ -46,3 +57,5 @@ README ([0-9]).md
 **/* ([0-9]).py
 **/* ([0-9]).ts
 **/* ([0-9]).tsx
+**/* ([0-9]).json
+**/* ([0-9]).md

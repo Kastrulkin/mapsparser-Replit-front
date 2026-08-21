@@ -19,6 +19,13 @@ LocalOS помогает владельцам и управляющим лока
 - Очередь парсинга, статусы задач, retry/recovery, captcha/error visibility и smoke-проверки для надёжности.
 - Сетевой режим: родительский бизнес, локации, network dashboard, network-wide reviews и история метрик. Владелец может добавлять сотрудников ко всей сети или только к отдельному бизнесу. Сотрудники работают под собственными аккаунтами без прав superadmin и без передачи владения.
 
+### Аналитика сайта (beta)
+- Лёгкий standalone `tracker.js` собирает анонимные сессии, просмотры страниц, пороги прокрутки, безопасные CTA-клики, внешние переходы и факт начала/отправки формы.
+- Tracker не читает значения полей, не использует fingerprinting, session replay, heatmaps или персонализацию и поддерживает consent mode.
+- В кабинете доступны посетители, сессии, страницы, источники, целевые действия и популярные пути за 7/30/90 дней; данные ограничены существующим tenant-доступом к бизнесу.
+- Агрегированные SQL-метрики подготовлены как источник данных для будущих сигналов «Пути роста», без LLM-обработки событий.
+- Production/privacy contract, flags and rollout gates: [`docs/WEB_TRACKING_PRODUCTION.md`](docs/WEB_TRACKING_PRODUCTION.md).
+
 ### Услуги и меню услуг
 - Управление услугами, категориями, ценами, описаниями, SEO-вариантами и источниками данных.
 - Оптимизация названий и описаний услуг через suggestions, preview и явное подтверждение.
@@ -121,7 +128,7 @@ LocalOS помогает владельцам и управляющим лока
   - Используются в webhooks ИИ-агента (`/api/webhooks/telegram`), когда бот общается напрямую с клиентами.
   - В уведомлениях владельцу (support-запросы, бронирования) поле `telegram_bot_token` опционально: если заполнено — уведомление может уйти через бот бизнеса, если нет — через глобальный бот LocalOS.
 - **Текущий production runtime**
-  - Основной owner-bot запускается как `openclaw-localos-telegram-bot.service`.
+  - Основной owner-bot запускается как Compose-сервис `telegram-bot`; host-level systemd polling отключён, чтобы не было двух poller с одним токеном.
   - Telegram Bot API и внешние social HTTP API направляются через Grimbird HTTP proxy на OpenClaw.
   - Telethon/userbot использует Grimbird SOCKS5 proxy.
   - На LocalOS используются private endpoints `192.168.0.177:10809` и `192.168.0.177:10808`; loopback endpoints допустимы только на OpenClaw.
@@ -170,8 +177,8 @@ LocalOS помогает владельцам и управляющим лока
 | Фронтенд (Dev) | `3000` | Vite dev server |
 | Фронтенд (Prod) | `80/443` | Nginx (статический фронтенд) |
 | Бэкенд API | `8000` | Flask API сервер |
-| Бот управления | - | `openclaw-localos-telegram-bot.service` (host runtime polling) |
-| Бот обмена отзывами | - | Systemd сервис (polling) |
+| Бот управления | - | Compose-сервис `telegram-bot` (polling) |
+| Legacy-боты | - | Host-level systemd не используется как production runtime |
 | Grimbird HTTP proxy | `192.168.0.177:10809` | Telegram Bot API и внешние social HTTP API с LocalOS host |
 | Grimbird SOCKS5 proxy | `192.168.0.177:10808` | Telethon/MTProto с LocalOS host |
 
@@ -518,7 +525,7 @@ python scripts/smoke_client_info_gate.py
 На текущем проде `localos.pro` systemd-сервисы для `app` и `worker` не используются как основная схема запуска. Канонический runtime:
 
 - `docker compose`
-- `postgres`, `app`, `worker` как отдельные контейнеры
+- `postgres`, `redis`, `app`, `worker`, `telegram-bot` как отдельные контейнеры
 - frontend раздаётся Flask из `/app/frontend/dist`
 
 Старые примеры с non-Docker runtime сохранены только как legacy-контекст и не должны использоваться как актуальная инструкция деплоя.
@@ -577,23 +584,15 @@ SMTP_PASSWORD=ваш_пароль
 ### 3. Запуск сервисов
 ```bash
 cd /opt/seo-app
-docker compose up -d postgres app worker
-
-# Текущий production owner-bot работает отдельным host service.
-systemctl restart openclaw-localos-telegram-bot.service
-
-# Отдельный legacy-бот обмена отзывами, если он включён на хосте.
-systemctl restart telegram-reviews-bot.service
+docker compose up -d postgres redis app worker telegram-bot
 ```
 
 ### 4. Проверка работы
 ```bash
 cd /opt/seo-app
 docker compose ps
-docker compose logs --since 10m app worker
+docker compose logs --since 10m app worker telegram-bot
 curl -I http://localhost:8000
-systemctl status openclaw-localos-telegram-bot.service --no-pager
-systemctl status telegram-reviews-bot.service --no-pager
 ```
 
 ## Как коммитить изменения
