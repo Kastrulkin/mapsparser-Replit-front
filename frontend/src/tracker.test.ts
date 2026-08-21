@@ -45,7 +45,10 @@ describe('standalone tracker consent and transport contract', () => {
     const sectionEntry = Object.create(null);
     Reflect.set(sectionEntry, 'target', document.querySelector('#services'));
     Reflect.set(sectionEntry, 'isIntersecting', true);
-    Reflect.set(sectionEntry, 'intersectionRatio', 0.75);
+    Reflect.set(sectionEntry, 'intersectionRatio', 0.2);
+    Reflect.set(sectionEntry, 'boundingClientRect', { height: 3000 });
+    Reflect.set(sectionEntry, 'rootBounds', { height: 900 });
+    Reflect.set(sectionEntry, 'intersectionRect', { height: 600 });
     if (intersectionCallback) Reflect.apply(intersectionCallback, null, [[sectionEntry]]);
     await new Promise((resolve) => window.setTimeout(resolve, 1050));
     tracker.flush();

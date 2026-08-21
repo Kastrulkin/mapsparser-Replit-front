@@ -6,7 +6,7 @@
     if (!script) return;
     var trackerId = script.getAttribute("data-business") || "";
     if (trackerId.indexOf("pub_") !== 0) return;
-    var trackerVersion = "1.3.0";
+    var trackerVersion = "1.3.1";
     var schemaVersion = 2;
     var maxQueueSize = 100;
     var apiOrigin = new URL(script.src, window.location.href).origin;
@@ -188,7 +188,11 @@
         entries.forEach(function (entry) {
           var state = observedSections.find(function (item) { return item.element === entry.target; });
           if (!state) return;
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          var sectionHeight = Math.max(1, Number(entry.boundingClientRect && entry.boundingClientRect.height) || 0);
+          var viewportHeight = Math.max(1, Number(entry.rootBounds && entry.rootBounds.height) || document.documentElement.clientHeight || window.innerHeight || 0);
+          var visibleHeight = Math.max(0, Number(entry.intersectionRect && entry.intersectionRect.height) || 0);
+          var enoughVisible = visibleHeight >= Math.min(sectionHeight, viewportHeight) * 0.5;
+          if (entry.isIntersecting && enoughVisible) {
             if (!state.visibleAt) state.visibleAt = Date.now();
             if (!state.viewed && !state.timer) {
               state.timer = window.setTimeout(function () {
@@ -202,7 +206,7 @@
             leaveSection(state);
           }
         });
-      }, { threshold: [0.5] });
+      }, { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5] });
       observedSections.forEach(function (state) { sectionObserver.observe(state.element); });
     }
 
