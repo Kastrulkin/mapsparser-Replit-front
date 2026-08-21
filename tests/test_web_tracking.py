@@ -188,6 +188,7 @@ def test_first_session_source_attribution(utm_source, referrer, source_type, lab
         ("outbound_click", "https://wa.me/79990000000", "whatsapp", "whatsapp"),
         ("outbound_click", "https://t.me/business", "telegram", "telegram"),
         ("outbound_click", "https://yclients.com/company/1", "booking", "yclients"),
+        ("outbound_click", "https://www.example.com/prices", None, None),
         ("outbound_click", "https://partner.example/path", "outbound", "partner.example"),
     ],
 )
@@ -216,6 +217,30 @@ def test_foreground_engagement_is_bounded_and_requires_explicit_duration():
         NOW,
     )
     assert error == "invalid_engagement"
+
+
+def test_section_events_keep_only_bounded_non_personal_metadata():
+    raw = _event(
+        "section_engagement",
+        {
+            "engagement_ms": 45000,
+            "section": {
+                "key": "services",
+                "label": "Услуги",
+                "position": 2,
+                "form_value": "person@example.com",
+            },
+        },
+    )
+    _tracker_id, events, error = validate_batch(
+        {"tracker_id": "pub_public-not-secret", "events": [raw]},
+        NOW,
+    )
+
+    assert error is None
+    assert events[0]["metadata"]["section"] == {"key": "services", "label": "Услуги", "position": 2}
+    assert events[0]["metadata"]["engagement_ms"] == 45000
+    assert "person@example.com" not in str(events[0]["metadata"])
 
 
 class _Cursor:

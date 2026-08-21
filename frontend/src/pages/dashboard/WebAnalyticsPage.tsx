@@ -51,6 +51,7 @@ type Metrics = {
   traffic_sources: Array<{ source: string; source_type?: string; sessions: number }>;
   conversions: Array<{ action: string; action_type?: string; count: number }>;
   top_paths: Array<{ path: string; sessions: number }>;
+  sections: Array<{ hostname?: string; path: string; key: string; label: string; position: number; views: number; visitors: number; sessions: number; reach_percent: number; average_engagement_seconds: number; exits: number }>;
   funnel: { sessions: number; target_actions: number; requires_page_groups: boolean };
 };
 
@@ -300,6 +301,26 @@ export const WebAnalyticsPage = () => {
             </tbody>
           </table>
           {!metrics?.top_pages.length ? <p className="px-6 py-10 text-center text-sm text-slate-500">{copy.pagesEmpty}</p> : null}
+        </div>
+      </DashboardSection>
+
+      <DashboardSection title={copy.sectionsTitle} description={copy.sectionsDescription} contentClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500"><tr><th className="px-6 py-3">{copy.sectionColumn}</th><th className="px-4 py-3 text-right">{copy.reachColumn}</th><th className="px-4 py-3 text-right">{copy.viewsColumn}</th><th className="px-4 py-3 text-right">{copy.engagementColumn}</th><th className="px-6 py-3 text-right">{copy.exitsColumn}</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {(metrics?.sections || []).map((item) => (
+                <tr key={`${item.hostname || ''}${item.path}-${item.key}`}>
+                  <td className="px-6 py-4"><div className="font-medium text-slate-900">{item.label || item.key}</div><div className="mt-1 text-xs text-slate-400">{item.hostname ? `${item.hostname}${item.path}` : item.path}</div></td>
+                  <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">{formatNumber(item.reach_percent, copy.locale)}%</td>
+                  <td className="px-4 py-4 text-right tabular-nums">{formatNumber(item.views, copy.locale)}</td>
+                  <td className="px-4 py-4 text-right tabular-nums">{formatDuration(item.average_engagement_seconds)}</td>
+                  <td className="px-6 py-4 text-right tabular-nums">{formatNumber(item.exits, copy.locale)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!metrics?.sections?.length ? <p className="px-6 py-10 text-center text-sm text-slate-500">{copy.sectionsEmpty}</p> : null}
         </div>
       </DashboardSection>
 

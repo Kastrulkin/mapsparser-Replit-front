@@ -22,7 +22,14 @@ def aggregate_web_tracking_day(cursor, target_date: date) -> int:
                COUNT(DISTINCT s.visitor_id), COUNT(DISTINCT e.session_id),
                COUNT(*),
                COUNT(*) FILTER (WHERE e.event_type = 'page_view'),
-               COUNT(*) FILTER (WHERE e.action_type IS NOT NULL)
+               COUNT(*) FILTER (
+                   WHERE e.action_type IS NOT NULL
+                     AND NOT (
+                         e.action_type = 'outbound'
+                         AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                             = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+                     )
+               )
         FROM web_events e
         JOIN web_sessions s ON s.id = e.session_id
         WHERE e.occurred_at >= %s AND e.occurred_at < %s
@@ -37,15 +44,25 @@ def aggregate_web_tracking_day(cursor, target_date: date) -> int:
             business_id, tracker_id, metric_date, dimension_type, dimension_key,
             visitors, sessions, events, page_views, target_actions
         )
-        SELECT e.business_id, e.tracker_id, %s, 'page', e.page_hostname || E'\n' || e.page_path,
+        SELECT e.business_id, e.tracker_id, %s, 'page',
+               (CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END) || E'\n' || e.page_path,
                COUNT(DISTINCT s.visitor_id), COUNT(DISTINCT e.session_id),
                COUNT(*),
                COUNT(*) FILTER (WHERE e.event_type = 'page_view'),
-               COUNT(*) FILTER (WHERE e.action_type IS NOT NULL)
+               COUNT(*) FILTER (
+                   WHERE e.action_type IS NOT NULL
+                     AND NOT (
+                         e.action_type = 'outbound'
+                         AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                             = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+                     )
+               )
         FROM web_events e
         JOIN web_sessions s ON s.id = e.session_id
         WHERE e.occurred_at >= %s AND e.occurred_at < %s
-        GROUP BY e.business_id, e.tracker_id, e.page_hostname, e.page_path
+        GROUP BY e.business_id, e.tracker_id,
+                 CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END,
+                 e.page_path
         """,
         (target_date, day_start, day_end),
     )
@@ -60,7 +77,14 @@ def aggregate_web_tracking_day(cursor, target_date: date) -> int:
                s.source_type || '|' || s.source_label || '|' || s.source_domain,
                COUNT(DISTINCT s.visitor_id), COUNT(DISTINCT s.id), COUNT(*),
                COUNT(*) FILTER (WHERE e.event_type = 'page_view'),
-               COUNT(*) FILTER (WHERE e.action_type IS NOT NULL)
+               COUNT(*) FILTER (
+                   WHERE e.action_type IS NOT NULL
+                     AND NOT (
+                         e.action_type = 'outbound'
+                         AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                             = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+                     )
+               )
         FROM web_sessions s
         JOIN web_events e ON e.session_id = s.id
         WHERE e.occurred_at >= %s AND e.occurred_at < %s
@@ -79,7 +103,14 @@ def aggregate_web_tracking_day(cursor, target_date: date) -> int:
                COUNT(DISTINCT s.visitor_id), COUNT(DISTINCT e.session_id),
                COUNT(*),
                COUNT(*) FILTER (WHERE e.event_type = 'page_view'),
-               COUNT(*) FILTER (WHERE e.action_type IS NOT NULL)
+               COUNT(*) FILTER (
+                   WHERE e.action_type IS NOT NULL
+                     AND NOT (
+                         e.action_type = 'outbound'
+                         AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                             = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+                     )
+               )
         FROM web_events e
         JOIN web_sessions s ON s.id = e.session_id
         WHERE e.occurred_at >= %s AND e.occurred_at < %s
@@ -101,6 +132,11 @@ def aggregate_web_tracking_day(cursor, target_date: date) -> int:
         JOIN web_sessions s ON s.id = e.session_id
         WHERE e.occurred_at >= %s AND e.occurred_at < %s
           AND e.action_type IS NOT NULL
+          AND NOT (
+              e.action_type = 'outbound'
+              AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                  = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+          )
         GROUP BY e.business_id, e.tracker_id, e.action_type, e.action_provider, e.action_domain
         """,
         (target_date, day_start, day_end),

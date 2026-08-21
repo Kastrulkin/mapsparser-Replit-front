@@ -39,6 +39,113 @@ def _run_migration(database_url: str, action: str, revision: str | None = None):
     subprocess.run(command, cwd=project_root, env=environment, check=True, timeout=60, capture_output=True, text=True)
 
 
+def _create_minimal_metrics_schema(database_url: str):
+    connection = psycopg2.connect(database_url)
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """CREATE TABLE users (id text PRIMARY KEY, email text);
+               CREATE TABLE businesses (id text PRIMARY KEY, owner_id text, name text);
+               CREATE TABLE business_web_trackers (
+                   id uuid PRIMARY KEY, business_id text, public_tracker_id text,
+                   allowed_domains text[], enabled boolean DEFAULT true,
+                   tracking_enabled boolean DEFAULT true
+               );
+               CREATE TABLE web_visitors (id uuid PRIMARY KEY, business_id text, anonymous_id text);
+               CREATE TABLE web_sessions (
+                   id uuid PRIMARY KEY, business_id text, visitor_id uuid, session_key text,
+                   started_at timestamptz, landing_page text, landing_hostname text,
+                   source_label text DEFAULT 'direct', source_type text DEFAULT 'direct', source_domain text
+               );
+               CREATE TABLE web_events (
+                   id bigserial PRIMARY KEY, business_id text, tracker_id uuid, session_id uuid,
+                   event_id text, event_type text, page_hostname text, page_path text,
+                   occurred_at timestamptz, action_type text, action_provider text,
+                   action_domain text, metadata_json jsonb DEFAULT '{}'::jsonb
+               );
+               CREATE TABLE web_daily_metrics (
+                   business_id text, tracker_id uuid, metric_date date,
+                   dimension_type text, dimension_key text,
+                   page_views integer DEFAULT 0, target_actions integer DEFAULT 0
+               );"""
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def web_tracking_database_url(request):
+    database_url = os.environ.get("WEB_TRACKING_TEST_DATABASE_URL")
+    if database_url:
+        _create_minimal_metrics_schema(database_url)
+        return database_url
+    postgres_container = request.getfixturevalue("postgres_container")
+    request.getfixturevalue("run_migrations")
+    return _dsn(postgres_container)
+
+
+def test_metrics_merge_www_and_apex_into_one_page(web_tracking_database_url):
+    database_url = web_tracking_database_url
+    connection = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+    cursor = connection.cursor()
+    business_id = f"web-business-{uuid.uuid4()}"
+    owner_id = f"web-owner-{uuid.uuid4()}"
+    tracker_id = str(uuid.uuid4())
+    visitor_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
+    try:
+        cursor.execute("INSERT INTO users (id, email) VALUES (%s, %s)", (owner_id, f"{owner_id}@test.local"))
+        cursor.execute(
+            "INSERT INTO businesses (id, owner_id, name) VALUES (%s, %s, 'Canonical Host Test')",
+            (business_id, owner_id),
+        )
+        cursor.execute(
+            """INSERT INTO business_web_trackers
+               (id, business_id, public_tracker_id, allowed_domains)
+               VALUES (%s, %s, %s, ARRAY['organicspb.ru', 'www.organicspb.ru'])""",
+            (tracker_id, business_id, f"pub_{uuid.uuid4().hex}"),
+        )
+        cursor.execute(
+            "INSERT INTO web_visitors (id, business_id, anonymous_id) VALUES (%s, %s, %s)",
+            (visitor_id, business_id, f"v_{uuid.uuid4().hex}"),
+        )
+        cursor.execute(
+            """INSERT INTO web_sessions
+               (id, business_id, visitor_id, session_key, started_at, landing_page, landing_hostname)
+               VALUES (%s, %s, %s, %s, NOW(), '/', 'organicspb.ru')""",
+            (session_id, business_id, visitor_id, f"s_{uuid.uuid4().hex}"),
+        )
+        cursor.execute(
+            """INSERT INTO web_events
+               (business_id, tracker_id, session_id, event_id, event_type, page_hostname, page_path, occurred_at)
+               VALUES (%s, %s, %s, %s, 'page_view', 'organicspb.ru', '/', NOW()),
+                      (%s, %s, %s, %s, 'page_view', 'www.organicspb.ru', '/', NOW())""",
+            (
+                business_id,
+                tracker_id,
+                session_id,
+                f"e_{uuid.uuid4().hex}",
+                business_id,
+                tracker_id,
+                session_id,
+                f"e_{uuid.uuid4().hex}",
+            ),
+        )
+
+        analytics = get_business_web_metrics(cursor, business_id, 30)
+
+        assert analytics["totals"]["page_views"] == 2
+        assert len(analytics["top_pages"]) == 1
+        assert analytics["top_pages"][0]["hostname"] == "organicspb.ru"
+        assert analytics["top_pages"][0]["path"] == "/"
+        assert analytics["top_pages"][0]["views"] == 2
+        assert analytics["top_pages"][0]["visitors"] == 1
+    finally:
+        connection.rollback()
+        connection.close()
+
+
 def test_postgres_migration_idempotent_ingestion_and_tenant_isolation(postgres_container, run_migrations):
     database_url = _dsn(postgres_container)
     _run_migration(database_url, "upgrade")

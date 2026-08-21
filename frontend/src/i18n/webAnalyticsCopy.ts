@@ -1,5 +1,14 @@
 import type { Language } from './LanguageContext';
 
+type SectionAnalyticsCopy = {
+  sectionsTitle: string;
+  sectionsDescription: string;
+  sectionColumn: string;
+  reachColumn: string;
+  exitsColumn: string;
+  sectionsEmpty: string;
+};
+
 export type WebAnalyticsCopy = {
   locale: string;
   eyebrow: string;
@@ -58,7 +67,7 @@ export type WebAnalyticsCopy = {
   funnelFuture: string;
   sourceLabels: Record<string, string>;
   actionLabels: Record<string, string>;
-};
+} & SectionAnalyticsCopy;
 
 const labels = (
   direct: string,
@@ -79,7 +88,7 @@ const labels = (
   actionLabels: { form, phone, email, whatsapp, telegram, booking, outbound },
 });
 
-const copy: Record<Language, WebAnalyticsCopy> = {
+const copy: Record<Language, Omit<WebAnalyticsCopy, keyof SectionAnalyticsCopy>> = {
   ru: {
     locale: 'ru-RU', eyebrow: 'Путь клиента на сайте', title: 'Аналитика сайта', description: 'Анонимная статистика показывает, откуда приходят посетители, какие страницы смотрят и где переходят к целевому действию. LocalOS не записывает поля форм и не вмешивается в работу сайта.', periodDays: '{days} дней', noComparison: 'нет базы сравнения', comparison: '{value}% к прошлому периоду', loadError: 'Не удалось загрузить аналитику сайта', copyError: 'Не удалось скопировать автоматически. Выделите код вручную.', saveError: 'Не удалось сохранить домены', selectBusiness: 'Сначала выберите бизнес.', workingTitle: 'Сбор данных работает', connectTitle: 'Подключите сайт к LocalOS', workingDescription: 'LocalOS получает события. Код можно использовать на нескольких доменах этого бизнеса.', connectDescription: 'Добавьте этот код на все страницы сайта перед закрывающим тегом </body>. После установки LocalOS начнёт собирать анонимную статистику поведения посетителей.', statusWorking: 'Работает', statusNotDetected: 'Не обнаружен', checkConnection: 'Проверить подключение', allowedDomains: 'Разрешённые домены', domainsDescription: 'События принимаются только с этих доменов. Несколько доменов разделяйте запятыми.', domainPlaceholder: 'example.ru, www.example.ru', saveDomains: 'Сохранить домены', savingDomains: 'Сохраняем', preparingCode: 'Готовим код…', codeCopied: 'Код скопирован', copyCode: 'Скопировать код', privacyTitle: 'Приватность по умолчанию', privacyDescription: 'Без fingerprinting, записи клавиатуры, значений полей, heatmaps и session replay.', lastEvent: 'Последнее событие', noEventsYet: 'ещё не получено', visitors: 'Посетители', sessions: 'Сессии', pageViews: 'Просмотры страниц', targetActions: 'Целевые действия', sourcesTitle: 'Источники посетителей', sourcesDescription: 'Базовая атрибуция по UTM и referrer первого просмотра.', sourcesEmpty: 'Источники появятся после первых посещений.', actionsTitle: 'Целевые действия', actionsDescription: 'Переход означает намерение, но не подтверждённую запись или звонок.', actionsEmpty: 'Целевые действия появятся после кликов по контактам, записи или отправки формы.', pagesTitle: 'Популярные страницы', pagesDescription: 'Страницы, которые чаще всего участвуют в пути посетителя.', pageColumn: 'Страница', visitorsColumn: 'Посетители', viewsColumn: 'Просмотры', engagementColumn: 'Среднее вовлечение', actionsColumn: 'Целевые действия', pagesEmpty: 'Страницы появятся после первых просмотров.', pathsTitle: 'Популярные пути', pathsDescription: 'До пяти первых страниц в сессии — без записи содержимого страницы.', pathsEmpty: 'Пути появятся, когда посетители откроют несколько страниц.', sessionsCount: '{value} сессий', funnelTitle: 'Воронка', funnelDescription: 'LocalOS не угадывает назначение страниц по URL.', funnelFuture: 'Группы «услуга» и «цены» будут доступны после настройки целей во второй итерации.',
     ...labels('Прямые заходы', 'Поиск', 'Соцсети', 'Карты', 'Другие сайты', 'Не определено', 'Форма', 'Звонок', 'Email', 'WhatsApp', 'Telegram', 'Запись', 'Внешний переход'),
@@ -122,7 +131,23 @@ const copy: Record<Language, WebAnalyticsCopy> = {
   },
 };
 
-export const getWebAnalyticsCopy = (language: Language) => copy[language];
+const sectionCopy: Record<Language, SectionAnalyticsCopy> = {
+  ru: { sectionsTitle: 'Секции страницы', sectionsDescription: 'Показывает, до каких блоков страницы доходят посетители, сколько времени проводят в них и после каких блоков чаще уходят.', sectionColumn: 'Секция', reachColumn: 'Дошли', exitsColumn: 'Уходы', sectionsEmpty: 'Данные появятся после того, как посетители увидят секции страницы хотя бы одну секунду.' },
+  en: { sectionsTitle: 'Page sections', sectionsDescription: 'Shows which page sections visitors reach, how long they engage, and which sections are most often the last viewed.', sectionColumn: 'Section', reachColumn: 'Reached', exitsColumn: 'Exits', sectionsEmpty: 'Data will appear after visitors view page sections for at least one second.' },
+  fr: { sectionsTitle: 'Sections de page', sectionsDescription: 'Indique les sections atteintes, le temps passé et les sections après lesquelles les visiteurs quittent le site.', sectionColumn: 'Section', reachColumn: 'Atteinte', exitsColumn: 'Sorties', sectionsEmpty: 'Les données apparaîtront après une seconde de consultation d’une section.' },
+  es: { sectionsTitle: 'Secciones de la página', sectionsDescription: 'Muestra qué secciones alcanzan los visitantes, cuánto tiempo permanecen y dónde suelen salir.', sectionColumn: 'Sección', reachColumn: 'Alcance', exitsColumn: 'Salidas', sectionsEmpty: 'Los datos aparecerán cuando una sección se vea durante al menos un segundo.' },
+  el: { sectionsTitle: 'Ενότητες σελίδας', sectionsDescription: 'Δείχνει ποιες ενότητες βλέπουν οι επισκέπτες, για πόσο χρόνο και από πού αποχωρούν.', sectionColumn: 'Ενότητα', reachColumn: 'Προσέγγιση', exitsColumn: 'Έξοδοι', sectionsEmpty: 'Τα δεδομένα θα εμφανιστούν μετά από τουλάχιστον ένα δευτερόλεπτο προβολής.' },
+  de: { sectionsTitle: 'Seitenabschnitte', sectionsDescription: 'Zeigt erreichte Abschnitte, Verweildauer und häufige Ausstiege.', sectionColumn: 'Abschnitt', reachColumn: 'Erreicht', exitsColumn: 'Ausstiege', sectionsEmpty: 'Daten erscheinen, sobald ein Abschnitt mindestens eine Sekunde sichtbar war.' },
+  th: { sectionsTitle: 'ส่วนของหน้า', sectionsDescription: 'แสดงว่าส่วนใดมีผู้เข้าชมถึง ใช้เวลานานเท่าใด และออกหลังส่วนใดบ่อยที่สุด', sectionColumn: 'ส่วน', reachColumn: 'เข้าถึง', exitsColumn: 'ออก', sectionsEmpty: 'ข้อมูลจะแสดงเมื่อมีการดูส่วนของหน้าอย่างน้อยหนึ่งวินาที' },
+  ar: { sectionsTitle: 'أقسام الصفحة', sectionsDescription: 'يعرض الأقسام التي يصل إليها الزوار ومدة التفاعل والأقسام التي يغادرون بعدها.', sectionColumn: 'القسم', reachColumn: 'الوصول', exitsColumn: 'المغادرات', sectionsEmpty: 'ستظهر البيانات بعد مشاهدة القسم لمدة ثانية واحدة على الأقل.' },
+  ha: { sectionsTitle: 'Sassan shafi', sectionsDescription: 'Yana nuna sassan da baƙi suka kai, lokacin da suka ɗauka da inda suka fi fita.', sectionColumn: 'Sashe', reachColumn: 'Sun kai', exitsColumn: 'Fita', sectionsEmpty: 'Bayanai za su bayyana bayan an ga sashe na aƙalla daƙiƙa ɗaya.' },
+  tr: { sectionsTitle: 'Sayfa bölümleri', sectionsDescription: 'Ziyaretçilerin ulaştığı bölümleri, etkileşim süresini ve en sık çıkılan bölümleri gösterir.', sectionColumn: 'Bölüm', reachColumn: 'Ulaşma', exitsColumn: 'Çıkışlar', sectionsEmpty: 'Bir bölüm en az bir saniye görüntülendikten sonra veriler görünür.' },
+};
+
+export const getWebAnalyticsCopy = (language: Language): WebAnalyticsCopy => ({
+  ...copy[language],
+  ...sectionCopy[language],
+});
 
 export const formatWebAnalyticsCopy = (template: string, values: Record<string, string | number>) => (
   Object.entries(values).reduce(

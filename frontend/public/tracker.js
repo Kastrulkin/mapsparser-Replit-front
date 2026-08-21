@@ -6,7 +6,7 @@
     if (!script) return;
     var trackerId = script.getAttribute("data-business") || "";
     if (trackerId.indexOf("pub_") !== 0) return;
-    var trackerVersion = "1.2.2";
+    var trackerVersion = "1.3.0";
     var schemaVersion = 2;
     var maxQueueSize = 100;
     var apiOrigin = new URL(script.src, window.location.href).origin;
@@ -18,8 +18,14 @@
     var foregroundStartedAt = 0;
     var pageDepths = {};
     var lastPageViewKey = "";
-    var lastPageViewAt = 0;
+    var sectionObserver = null;
+    var observedSections = [];
     var startedForms = typeof WeakSet === "function" ? new WeakSet() : null;
+
+    function canonicalHostname(value) {
+      var hostname = String(value || "").toLowerCase().replace(/\.$/, "");
+      return hostname.indexOf("www.") === 0 ? hostname.slice(4) : hostname;
+    }
 
     function randomId(prefix) {
       var bytes = new Uint8Array(12);
@@ -47,6 +53,10 @@
 
     function page() {
       return { hostname: window.location.hostname, path: window.location.pathname || "/", title: document.title || "" };
+    }
+
+    function pageKey(value) {
+      return canonicalHostname(value.hostname) + value.path;
     }
     var activePage = page();
 
@@ -129,14 +139,71 @@
 
     function trackPageView() {
       var nextPage = page();
-      var nextPageKey = nextPage.hostname + nextPage.path;
-      var now = Date.now();
+      var nextPageKey = pageKey(nextPage);
       activePage = nextPage;
-      if (nextPageKey === lastPageViewKey && now - lastPageViewAt < 1000) return;
+      if (nextPageKey === lastPageViewKey) {
+        if (!sectionObserver) setupSectionTracking();
+        return;
+      }
       lastPageViewKey = nextPageKey;
-      lastPageViewAt = now;
       pageDepths = {};
       enqueue("page_view", { page: activePage });
+      setupSectionTracking();
+    }
+
+    function sectionDescriptor(element, position) {
+      var heading = element.querySelector("h1,h2,h3,[role='heading'],.t-title,.t-name,.t-heading");
+      var label = element.getAttribute("data-localos-section") || element.getAttribute("aria-label") || (heading ? heading.textContent : "") || element.id || "Секция " + position;
+      label = String(label).replace(/\s+/g, " ").trim().slice(0, 120);
+      var key = element.getAttribute("data-localos-section") || element.id || label.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 100) || "section-" + position;
+      return { element: element, key: key, label: label, position: position, visibleAt: 0, viewed: false, timer: 0 };
+    }
+
+    function leaveSection(state) {
+      if (state.timer) window.clearTimeout(state.timer);
+      state.timer = 0;
+      if (!state.visibleAt || !state.viewed) {
+        state.visibleAt = 0;
+        return;
+      }
+      var elapsed = Math.max(0, Math.min(600000, Date.now() - state.visibleAt));
+      state.visibleAt = 0;
+      if (elapsed >= 1000) enqueue("section_engagement", { engagement_ms: elapsed, section: { key: state.key, label: state.label, position: state.position }, page: activePage });
+    }
+
+    function stopSectionTracking() {
+      observedSections.forEach(leaveSection);
+      observedSections = [];
+      if (sectionObserver) sectionObserver.disconnect();
+      sectionObserver = null;
+    }
+
+    function setupSectionTracking() {
+      stopSectionTracking();
+      if (!consent || typeof window.IntersectionObserver !== "function") return;
+      var elements = Array.prototype.slice.call(document.querySelectorAll("[data-localos-section], main section, body > section, .t-records > .t-rec"));
+      elements = elements.filter(function (element, index) { return elements.indexOf(element) === index; });
+      observedSections = elements.map(function (element, index) { return sectionDescriptor(element, index + 1); });
+      sectionObserver = new window.IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          var state = observedSections.find(function (item) { return item.element === entry.target; });
+          if (!state) return;
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            if (!state.visibleAt) state.visibleAt = Date.now();
+            if (!state.viewed && !state.timer) {
+              state.timer = window.setTimeout(function () {
+                state.timer = 0;
+                if (!state.visibleAt || state.viewed) return;
+                state.viewed = true;
+                enqueue("section_view", { section: { key: state.key, label: state.label, position: state.position }, page: activePage });
+              }, 1000);
+            }
+          } else {
+            leaveSection(state);
+          }
+        });
+      }, { threshold: [0.5] });
+      observedSections.forEach(function (state) { sectionObserver.observe(state.element); });
     }
 
     function checkpointForeground(eventName) {
@@ -167,7 +234,7 @@
       if (element.href) {
         try {
           var url = new URL(element.href, window.location.href);
-          outbound = url.protocol === "tel:" || url.protocol === "mailto:" || (url.hostname && url.hostname !== window.location.hostname);
+          outbound = url.protocol === "tel:" || url.protocol === "mailto:" || (url.hostname && canonicalHostname(url.hostname) !== canonicalHostname(window.location.hostname));
         } catch (_error) {}
       }
       enqueue(outbound ? "outbound_click" : "click", { element: element });
@@ -202,17 +269,26 @@
       var original = window.history[method];
       if (!original) return;
       window.history[method] = function () {
-        checkpointForeground("page_leave");
+        var previousPageKey = pageKey(page());
         var result = original.apply(this, arguments);
-        window.setTimeout(trackPageView, 0);
+        if (pageKey(page()) !== previousPageKey) {
+          checkpointForeground("page_leave");
+          stopSectionTracking();
+          window.setTimeout(trackPageView, 0);
+        }
         return result;
       };
     }
 
     wrapHistory("pushState");
     wrapHistory("replaceState");
-    window.addEventListener("popstate", function () { checkpointForeground("page_leave"); trackPageView(); });
-    window.addEventListener("pagehide", function () { checkpointForeground("page_leave"); flush(true); });
+    window.addEventListener("popstate", function () {
+      if (pageKey(page()) === lastPageViewKey) return;
+      checkpointForeground("page_leave");
+      stopSectionTracking();
+      trackPageView();
+    });
+    window.addEventListener("pagehide", function () { stopSectionTracking(); checkpointForeground("page_leave"); flush(true); });
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "hidden") {
         checkpointForeground("heartbeat");
@@ -230,9 +306,12 @@
           startHeartbeat();
           enqueue("session_start");
           if (!options || options.emitPageView !== false) trackPageView();
+          else setupSectionTracking();
         } else if (!consent) {
+          stopSectionTracking();
           stopHeartbeat();
           queue = [];
+          lastPageViewKey = "";
           if (flushTimer) window.clearTimeout(flushTimer);
           flushTimer = 0;
         }

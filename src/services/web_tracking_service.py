@@ -24,6 +24,8 @@ SUPPORTED_EVENTS = {
     "form_submit",
     "heartbeat",
     "page_leave",
+    "section_view",
+    "section_engagement",
 }
 MAX_BATCH_EVENTS = 25
 MAX_REQUEST_BYTES = 64 * 1024
@@ -76,6 +78,13 @@ def normalize_hostname(value: object) -> str:
     return hostname
 
 
+def canonical_site_hostname(value: object) -> str:
+    hostname = normalize_hostname(value)
+    if hostname.startswith("www."):
+        return hostname[4:]
+    return hostname
+
+
 def _timestamp(value) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -109,7 +118,7 @@ def _safe_href(value: object, page_hostname: str = "") -> str:
     include_port = port and not (parsed.scheme == "http" and port == 80) and not (parsed.scheme == "https" and port == 443)
     port_suffix = f":{port}" if include_port else ""
     origin = f"{parsed.scheme}://{hostname}{port_suffix}"
-    if hostname == normalize_hostname(page_hostname):
+    if canonical_site_hostname(hostname) == canonical_site_hostname(page_hostname):
         return f"{origin}{parsed.path}"[:500]
     return origin[:500]
 
@@ -154,6 +163,8 @@ def classify_target_action(event_type: str, metadata: dict, page_hostname: str) 
     if href == "mailto:":
         return {"type": "email", "provider": None, "domain": None}
     domain = normalize_hostname(urlparse(href).hostname or "")
+    if domain and canonical_site_hostname(domain) == canonical_site_hostname(page_hostname):
+        return {"type": None, "provider": None, "domain": None}
     if domain == "wa.me" or domain == "whatsapp.com" or domain.endswith(".whatsapp.com"):
         return {"type": "whatsapp", "provider": "whatsapp", "domain": domain}
     if domain == "t.me" or domain == "telegram.me" or domain.endswith(".telegram.me"):
@@ -193,8 +204,9 @@ def validate_event(raw: object, now: datetime | None = None) -> tuple[dict | Non
     if occurred_at is None or occurred_at < current - timedelta(days=7) or occurred_at > current + timedelta(minutes=10):
         return None, "invalid_timestamp"
     engagement_ms = raw.get("engagement_ms")
-    if event_type in {"heartbeat", "page_leave"} and not (
-        type(engagement_ms) is int and 0 <= engagement_ms <= 30000
+    max_engagement_ms = 600000 if event_type == "section_engagement" else 30000
+    if event_type in {"heartbeat", "page_leave", "section_engagement"} and not (
+        type(engagement_ms) is int and 0 <= engagement_ms <= max_engagement_ms
     ):
         return None, "invalid_engagement"
 
@@ -208,6 +220,7 @@ def validate_event(raw: object, now: datetime | None = None) -> tuple[dict | Non
     utm = raw.get("utm") if isinstance(raw.get("utm"), dict) else {}
     element = raw.get("element") if isinstance(raw.get("element"), dict) else {}
     form = raw.get("form") if isinstance(raw.get("form"), dict) else {}
+    section = raw.get("section") if isinstance(raw.get("section"), dict) else {}
 
     metadata = {
         "title": _text(page.get("title"), 300),
@@ -230,8 +243,13 @@ def validate_event(raw: object, now: datetime | None = None) -> tuple[dict | Non
             "name": _text(form.get("name"), 120),
             "action": _safe_href(form.get("action"), hostname),
         },
+        "section": {
+            "key": _text(section.get("key"), 100),
+            "label": _text(section.get("label"), 120),
+            "position": section.get("position") if type(section.get("position")) is int and 1 <= section.get("position") <= 500 else None,
+        },
         "depth": raw.get("depth") if raw.get("depth") in {25, 50, 75, 100} else None,
-        "engagement_ms": engagement_ms if type(engagement_ms) is int and 0 <= engagement_ms <= 30000 else None,
+        "engagement_ms": engagement_ms if type(engagement_ms) is int and 0 <= engagement_ms <= max_engagement_ms else None,
         "device_type": _text(raw.get("device_type"), 20) or "unknown",
     }
     if metadata["device_type"] not in {"mobile", "tablet", "desktop", "unknown"}:
@@ -581,9 +599,25 @@ def get_business_web_metrics(cursor, business_id: str, period_days: int = 30) ->
         ), raw_counts AS (
             SELECT
                 COUNT(*) FILTER (WHERE e.event_type = 'page_view' AND (e.occurred_at AT TIME ZONE 'UTC')::date >= current_start) AS page_views,
-                COUNT(*) FILTER (WHERE e.action_type IS NOT NULL AND (e.occurred_at AT TIME ZONE 'UTC')::date >= current_start) AS conversions,
+                COUNT(*) FILTER (
+                    WHERE e.action_type IS NOT NULL
+                      AND NOT (
+                          e.action_type = 'outbound'
+                          AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                              = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+                      )
+                      AND (e.occurred_at AT TIME ZONE 'UTC')::date >= current_start
+                ) AS conversions,
                 COUNT(*) FILTER (WHERE e.event_type = 'page_view' AND (e.occurred_at AT TIME ZONE 'UTC')::date < current_start) AS previous_page_views,
-                COUNT(*) FILTER (WHERE e.action_type IS NOT NULL AND (e.occurred_at AT TIME ZONE 'UTC')::date < current_start) AS previous_conversions
+                COUNT(*) FILTER (
+                    WHERE e.action_type IS NOT NULL
+                      AND NOT (
+                          e.action_type = 'outbound'
+                          AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                              = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+                      )
+                      AND (e.occurred_at AT TIME ZONE 'UTC')::date < current_start
+                ) AS previous_conversions
             FROM web_events e, bounds
             WHERE e.business_id = %s
               AND (e.occurred_at AT TIME ZONE 'UTC')::date >= previous_start
@@ -607,25 +641,34 @@ def get_business_web_metrics(cursor, business_id: str, period_days: int = 30) ->
     cursor.execute(
         """
         WITH page_events AS (
-            SELECT e.session_id, s.visitor_id, e.page_hostname, e.page_path, e.metadata_json, e.occurred_at,
+            SELECT e.session_id, s.visitor_id,
+                   CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END AS page_hostname,
+                   e.page_path, e.metadata_json, e.occurred_at,
                    e.id
             FROM web_events e
             JOIN web_sessions s ON s.id = e.session_id
             WHERE e.business_id = %s AND e.event_type = 'page_view'
               AND e.occurred_at >= (((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - (%s::int - 1))::timestamp AT TIME ZONE 'UTC')
         ), conversions AS (
-            SELECT page_hostname, page_path, COUNT(*) AS count
+            SELECT CASE WHEN page_hostname LIKE 'www.%%' THEN substring(page_hostname FROM 5) ELSE page_hostname END AS page_hostname,
+                   page_path, COUNT(*) AS count
             FROM web_events
             WHERE business_id = %s AND action_type IS NOT NULL
+              AND NOT (
+                  action_type = 'outbound'
+                  AND CASE WHEN action_domain LIKE 'www.%%' THEN substring(action_domain FROM 5) ELSE action_domain END
+                      = CASE WHEN page_hostname LIKE 'www.%%' THEN substring(page_hostname FROM 5) ELSE page_hostname END
+              )
               AND occurred_at >= (((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - (%s::int - 1))::timestamp AT TIME ZONE 'UTC')
-            GROUP BY page_hostname, page_path
+            GROUP BY 1, page_path
         ), engagement AS (
-            SELECT page_hostname, page_path,
+            SELECT CASE WHEN page_hostname LIKE 'www.%%' THEN substring(page_hostname FROM 5) ELSE page_hostname END AS page_hostname,
+                   page_path,
                    SUM(COALESCE((metadata_json->>'engagement_ms')::int, 0)) AS engagement_ms
             FROM web_events
             WHERE business_id = %s AND event_type IN ('heartbeat', 'page_leave')
               AND occurred_at >= (((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - (%s::int - 1))::timestamp AT TIME ZONE 'UTC')
-            GROUP BY page_hostname, page_path
+            GROUP BY 1, page_path
         )
         SELECT p.page_hostname AS hostname, p.page_path AS path,
                MAX(NULLIF(p.metadata_json->>'title', '')) AS title,
@@ -674,6 +717,11 @@ def get_business_web_metrics(cursor, business_id: str, period_days: int = 30) ->
             SELECT e.action_type, e.action_provider, e.action_domain, COUNT(*) AS count
             FROM web_events e, bounds
             WHERE e.business_id = %s AND e.action_type IS NOT NULL
+              AND NOT (
+                  e.action_type = 'outbound'
+                  AND CASE WHEN e.action_domain LIKE 'www.%%' THEN substring(e.action_domain FROM 5) ELSE e.action_domain END
+                      = CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END
+              )
               AND (e.occurred_at AT TIME ZONE 'UTC')::date >= start_date
               AND (e.occurred_at AT TIME ZONE 'UTC')::date < tomorrow
               AND NOT EXISTS (
@@ -704,7 +752,9 @@ def get_business_web_metrics(cursor, business_id: str, period_days: int = 30) ->
     cursor.execute(
         """
         WITH ordered AS (
-            SELECT session_id, page_hostname || page_path AS page_label, occurred_at, id,
+            SELECT session_id,
+                   (CASE WHEN page_hostname LIKE 'www.%%' THEN substring(page_hostname FROM 5) ELSE page_hostname END) || page_path AS page_label,
+                   occurred_at, id,
                    ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY occurred_at, id) AS position
             FROM web_events
             WHERE business_id = %s AND event_type = 'page_view'
@@ -719,6 +769,60 @@ def get_business_web_metrics(cursor, business_id: str, period_days: int = 30) ->
         (business_id, period_days),
     )
     top_paths = _row_list(cursor)
+    cursor.execute(
+        """
+        WITH section_views AS (
+            SELECT e.session_id, s.visitor_id, e.page_path,
+                   CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END AS page_hostname,
+                   e.metadata_json->'section'->>'key' AS section_key,
+                   MAX(e.metadata_json->'section'->>'label') AS section_label,
+                   MAX(COALESCE((e.metadata_json->'section'->>'position')::int, 0)) AS position,
+                   MIN(e.occurred_at) AS first_viewed_at
+            FROM web_events e
+            JOIN web_sessions s ON s.id = e.session_id
+            WHERE e.business_id = %s AND e.event_type = 'section_view'
+              AND e.occurred_at >= (((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - (%s::int - 1))::timestamp AT TIME ZONE 'UTC')
+              AND COALESCE(e.metadata_json->'section'->>'key', '') <> ''
+            GROUP BY e.session_id, s.visitor_id, e.page_hostname, e.page_path, e.metadata_json->'section'->>'key'
+        ), section_engagement AS (
+            SELECT e.session_id,
+                   CASE WHEN e.page_hostname LIKE 'www.%%' THEN substring(e.page_hostname FROM 5) ELSE e.page_hostname END AS page_hostname,
+                   e.page_path, e.metadata_json->'section'->>'key' AS section_key,
+                   SUM(COALESCE((e.metadata_json->>'engagement_ms')::int, 0)) AS engagement_ms
+            FROM web_events e
+            WHERE e.business_id = %s AND e.event_type = 'section_engagement'
+              AND e.occurred_at >= (((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - (%s::int - 1))::timestamp AT TIME ZONE 'UTC')
+            GROUP BY e.session_id, e.page_hostname, e.page_path, e.metadata_json->'section'->>'key'
+        ), last_sections AS (
+            SELECT session_id, page_hostname, page_path, section_key,
+                   ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY first_viewed_at DESC, position DESC) AS rank
+            FROM section_views
+        ), period_sessions AS (
+            SELECT COUNT(*) AS count FROM web_sessions
+            WHERE business_id = %s
+              AND started_at >= (((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - (%s::int - 1))::timestamp AT TIME ZONE 'UTC')
+        )
+        SELECT v.page_hostname AS hostname, v.page_path AS path, v.section_key AS key,
+               MAX(v.section_label) AS label, MAX(v.position) AS position,
+               COUNT(*) AS views, COUNT(DISTINCT v.visitor_id) AS visitors,
+               COUNT(DISTINCT v.session_id) AS sessions,
+               ROUND(COUNT(DISTINCT v.session_id)::numeric * 100 / GREATEST(MAX(ps.count), 1))::int AS reach_percent,
+               ROUND(COALESCE(SUM(g.engagement_ms), 0)::numeric / GREATEST(COUNT(DISTINCT v.session_id), 1) / 1000)::int AS average_engagement_seconds,
+               COUNT(DISTINCT v.session_id) FILTER (WHERE last.rank = 1) AS exits
+        FROM section_views v
+        CROSS JOIN period_sessions ps
+        LEFT JOIN section_engagement g ON g.session_id = v.session_id
+             AND g.page_hostname = v.page_hostname AND g.page_path = v.page_path AND g.section_key = v.section_key
+        LEFT JOIN last_sections last ON last.session_id = v.session_id
+             AND last.page_hostname = v.page_hostname AND last.page_path = v.page_path
+             AND last.section_key = v.section_key AND last.rank = 1
+        GROUP BY v.page_hostname, v.page_path, v.section_key
+        ORDER BY MAX(v.position), views DESC
+        LIMIT 100
+        """,
+        (business_id, period_days, business_id, period_days, business_id, period_days),
+    )
+    sections = _row_list(cursor)
     return {
         "period_days": period_days,
         "totals": totals,
@@ -726,6 +830,7 @@ def get_business_web_metrics(cursor, business_id: str, period_days: int = 30) ->
         "traffic_sources": sources,
         "conversions": conversions,
         "top_paths": top_paths,
+        "sections": sections,
         "funnel": {
             "sessions": int(totals.get("sessions") or 0),
             "service_page_views": None,

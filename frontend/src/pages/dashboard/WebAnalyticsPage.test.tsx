@@ -32,6 +32,7 @@ const metricsResponse = {
     traffic_sources: [{ source: 'Google', source_type: 'search', sessions: 5 }],
     conversions: [{ action: 'Форма отправлена', action_type: 'form', count: 2 }],
     top_paths: [{ path: '/ → /services', sessions: 3 }],
+    sections: [{ hostname: 'example.com', path: '/', key: 'services', label: 'Услуги и цены', position: 2, views: 4, visitors: 3, sessions: 3, reach_percent: 60, average_engagement_seconds: 18, exits: 1 }],
     funnel: { sessions: 5, target_actions: 3, requires_page_groups: true },
   },
 };
@@ -63,6 +64,8 @@ describe('WebAnalyticsPage', () => {
     expect(screen.getByText('Услуги')).toBeInTheDocument();
     expect(screen.getByText('Google')).toBeInTheDocument();
     expect(screen.getByText('Форма')).toBeInTheDocument();
+    expect(screen.getByText('Услуги и цены')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
   });
 
   it('reloads analytics for a newly selected period', async () => {

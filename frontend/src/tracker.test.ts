@@ -8,9 +8,19 @@ describe('standalone tracker consent and transport contract', () => {
   it('creates no identifiers before consent, stops after revoke, and falls back when beacon declines', async () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    document.body.innerHTML = '<main><section id="services"><h2>Услуги</h2></section></main>';
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 });
     const beaconMock = vi.fn().mockReturnValue(false);
+    let intersectionCallback: IntersectionObserverCallback | null = null;
+    class IntersectionObserverMock {
+      constructor(callback: IntersectionObserverCallback) {
+        intersectionCallback = callback;
+      }
+      observe() { return undefined; }
+      disconnect() { return undefined; }
+    }
     Reflect.set(window, 'fetch', fetchMock);
+    Reflect.set(window, 'IntersectionObserver', IntersectionObserverMock);
     Object.defineProperty(window.navigator, 'sendBeacon', { configurable: true, value: beaconMock });
 
     const script = document.createElement('script');
@@ -31,19 +41,53 @@ describe('standalone tracker consent and transport contract', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(window.localStorage.getItem('localos_visitor_id')).toMatch(/^v_[a-f0-9]{24}$/);
     expect(window.sessionStorage.getItem('localos_session_id')).toMatch(/^s_[a-f0-9]{24}$/);
+
+    const sectionEntry = Object.create(null);
+    Reflect.set(sectionEntry, 'target', document.querySelector('#services'));
+    Reflect.set(sectionEntry, 'isIntersecting', true);
+    Reflect.set(sectionEntry, 'intersectionRatio', 0.75);
+    if (intersectionCallback) Reflect.apply(intersectionCallback, null, [[sectionEntry]]);
+    await new Promise((resolve) => window.setTimeout(resolve, 1050));
+    tracker.flush();
+    const sectionEvents = fetchMock.mock.calls
+      .flatMap((call) => JSON.parse(String(call[1]?.body)).events)
+      .filter((event) => event.event === 'section_view');
+    expect(sectionEvents).toEqual([expect.objectContaining({ section: { key: 'services', label: 'Услуги', position: 1 } })]);
+
+    const callsBeforeSamePageReplace = fetchMock.mock.calls.length;
+    const initialNow = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(initialNow + 2_000);
     window.history.replaceState({}, '', window.location.pathname);
     await new Promise((resolve) => window.setTimeout(resolve, 10));
     tracker.flush();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const eventsAfterSamePageReplace = fetchMock.mock.calls
+      .slice(callsBeforeSamePageReplace)
+      .flatMap((call) => JSON.parse(String(call[1]?.body)).events);
+    expect(eventsAfterSamePageReplace.filter((event) => event.event === 'page_view')).toHaveLength(0);
+    nowSpy.mockRestore();
+
+    const sameSiteLink = document.createElement('a');
+    sameSiteLink.href = 'https://www.localhost/internal';
+    sameSiteLink.textContent = 'Internal';
+    sameSiteLink.addEventListener('click', (event) => event.preventDefault());
+    document.body.appendChild(sameSiteLink);
+    sameSiteLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    tracker.flush();
+    const clickEvents = fetchMock.mock.calls
+      .flatMap((call) => JSON.parse(String(call[1]?.body)).events)
+      .filter((event) => event.element?.text === 'Internal');
+    expect(clickEvents).toEqual([expect.objectContaining({ event: 'click' })]);
+
+    const callsAfterInternalClick = fetchMock.mock.calls.length;
     tracker.setConsent(true);
     tracker.flush();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterInternalClick);
 
     tracker.setConsent(false);
     document.body.innerHTML = '<button data-localos-cta>Action</button>';
     document.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     tracker.flush();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterInternalClick);
 
     tracker.setConsent(true);
     window.dispatchEvent(new Event('pagehide'));
