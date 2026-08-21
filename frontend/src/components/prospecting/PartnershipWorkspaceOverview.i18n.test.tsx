@@ -26,7 +26,7 @@ describe('PartnershipWorkspaceOverview localization', () => {
       </LanguageProvider>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Αναζήτηση συνεργατών' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Κοινές ενέργειες' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

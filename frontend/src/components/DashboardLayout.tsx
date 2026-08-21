@@ -18,6 +18,8 @@ type DashboardBusiness = {
   subscription_ends_at?: string | null;
   network_id?: string | null;
   network_name?: string | null;
+  web_tracking_available?: boolean;
+  creator_promotion_available?: boolean;
 };
 
 export type ControlScope = {
@@ -33,6 +35,7 @@ const paidDashboardSections = [
   { path: '/dashboard/average-ticket', title: 'Средний чек доступен после оплаты', hint: 'Расчёты и рекомендации по среднему чеку включаются на платном тарифе.' },
   { path: '/dashboard/ai-chat-promotion', title: 'Продвижение в AI-чатах доступно после оплаты', hint: 'Проверки и рекомендации по AI-выдаче включаются на платном тарифе.' },
   { path: '/dashboard/partnerships', title: 'Поиск партнёров доступен после оплаты', hint: 'Подбор, подготовка и ведение партнёрских контактов включаются на платном тарифе.' },
+  { path: '/dashboard/promotion', title: 'Продвижение доступно после оплаты', hint: 'Поиск партнёров и локальных авторов, подготовка контактов и аналитика включаются на платном тарифе.' },
   { path: '/dashboard/operator', title: 'Оператор доступен после оплаты', hint: 'Единый рабочий центр задач и запусков включается на платном тарифе.' },
   { path: '/dashboard/telegram-radar', title: 'Telegram-радар доступен после оплаты', hint: 'Мониторинг Telegram и обработка найденных сигналов включаются на платном тарифе.' },
   { path: '/dashboard/agents', title: 'Агенты доступны после оплаты', hint: 'Настройка и запуск автоматизаций включаются на платном тарифе.' },
@@ -221,7 +224,13 @@ export const DashboardLayout = () => {
   return (
     <GuidedTourProvider user={user}>
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.06),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#f6f8fc_100%)] text-slate-900">
-      <DashboardSidebar isMobile={false} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)} />
+      <DashboardSidebar
+        isMobile={false}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        webTrackingAvailable={currentBusiness?.web_tracking_available === true}
+        creatorPromotionAvailable={currentBusiness?.creator_promotion_available === true}
+      />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
           businesses={businesses}
@@ -276,6 +285,8 @@ export const DashboardLayout = () => {
       <DashboardSidebar
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
+        webTrackingAvailable={currentBusiness?.web_tracking_available === true}
+        creatorPromotionAvailable={currentBusiness?.creator_promotion_available === true}
       />
       </div>
     </GuidedTourProvider>

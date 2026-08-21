@@ -25,8 +25,8 @@ describe('DashboardSidebar localization', () => {
 
     expect(await screen.findByRole('link', { name: 'Χειριστής' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Περιεχόμενο' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Πράκτορες' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Αναζήτηση συνεργατών' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Αυτοματοποίηση' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Κοινές ενέργειες' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\b(?:Operator|Content|Agents|Partner Search)\b/);
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });

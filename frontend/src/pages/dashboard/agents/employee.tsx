@@ -1282,7 +1282,7 @@ export const EmployeeTestResultPanel = ({
   useEffect(() => {
     setEvaluation(activeRun?.evaluation || null);
     setEvaluationError('');
-  }, [activeRun?.id, activeRun?.evaluation?.rating, activeRun?.evaluation?.feedback]);
+  }, [activeRun?.id, activeRun?.evaluation]);
   const submitEvaluation = async (rating: 'useful' | 'not_useful') => {
     if (!activeRun?.id || evaluationLoading) {
       return;

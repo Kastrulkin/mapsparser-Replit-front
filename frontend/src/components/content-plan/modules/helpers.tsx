@@ -758,7 +758,7 @@ export function _socialChannelSetupSort(left: SocialChannelReadiness, right: Soc
 }
 
 export function _socialChannelConnectionStateLabel(channel: SocialChannelReadiness, isRu: boolean): string {
-  if (Boolean(channel.ready)) return isRu ? 'готово' : 'ready';
+  if (channel.ready) return isRu ? 'готово' : 'ready';
   const status = String(channel.status || '').trim();
   if (status.includes('permission') || status.includes('blocked')) return isRu ? 'нужны права' : 'permissions';
   if ((channel.missing_fields || []).length > 0) return isRu ? 'нужны ключи' : 'keys needed';

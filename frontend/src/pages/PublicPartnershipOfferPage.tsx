@@ -25,10 +25,12 @@ import {
   Building2,
   Camera,
   CheckCircle2,
+  ChevronDown,
   ExternalLink,
   Loader2,
   MapPinned,
   MessageSquareText,
+  Newspaper,
   Search,
   ShieldCheck,
   Sparkles,
@@ -121,6 +123,7 @@ type OfferPagePayload = {
       reviews_count?: number;
       products_count?: number;
       news_count?: number;
+      unanswered_count?: number;
       source_url?: string;
     }>;
     reviews_preview?: Array<{ text?: string; author?: string; rating?: number; org_reply?: string }>;
@@ -145,6 +148,8 @@ type OfferPagePayload = {
       photos_state?: string;
       photos_count?: number;
       locations_count?: number;
+      discovered_cards_count?: number;
+      duplicate_cards_count?: number;
       locations_with_news?: number;
       weak_locations_count?: number;
       unverified_locations_count?: number;
@@ -178,6 +183,32 @@ type OfferPagePayload = {
   enabled_languages?: string[];
   available_languages?: string[];
   audit_full?: Record<string, any>;
+  content_audit?: {
+    title?: string;
+    summary?: string;
+    plan_intro?: string;
+    facts_label?: string;
+    metrics?: Array<{ label?: string; value?: string; detail?: string }>;
+    findings?: Array<{ title?: string; body?: string }>;
+    patterns?: Array<{
+      title?: string;
+      body?: string;
+      source_label?: string;
+      source_url?: string;
+    }>;
+    plan?: Array<{
+      date_label?: string;
+      type?: string;
+      title?: string;
+      goal?: string;
+      draft?: string;
+      facts_needed?: string[];
+      visual_brief?: string;
+      cta?: string;
+      platforms?: string[];
+    }>;
+    methodology_note?: string;
+  };
   match?: {
     match_score?: number;
     score_explanation?: string;
@@ -576,12 +607,17 @@ const buildAuditFunnelSummary = (
   const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
   const childrenNetwork = lang === 'ru' && isChildrenEducationNetworkAudit(page);
   if (childrenNetwork) {
+    const uniqueLocations = Number(state.locations_count || locations.length || 0);
+    const discoveredCards = Number(state.discovered_cards_count || uniqueLocations);
+    const duplicateCards = Number(state.duplicate_cards_count || 0);
     return {
       title: textIncludesAny(displayName, ['шансик'])
         ? 'Шансик — сеть детских танцевальных студий'
         : displayName,
       eyebrow: 'Публичный аудит сети',
-      diagnosis: 'База у сети хорошая, но карточки ведутся неравномерно: сильные филиалы уже создают доверие, а слабые точки с меньшим рейтингом, отзывами и наполнением могут мешать родителю выбрать ближайший филиал.',
+      diagnosis: duplicateCards > 0
+        ? `Аудит охватывает всю сеть. В сетевом объекте Яндекса найдено ${discoveredCards} карточек: ${uniqueLocations} уникальных точек и один дубль Балканской площади без рейтинга. Карточки ведутся неравномерно, поэтому родитель получает разное впечатление о сети в зависимости от выбранного адреса.`
+        : `Аудит охватывает всю сеть из ${uniqueLocations} точек. Карточки ведутся неравномерно, поэтому родитель получает разное впечатление о сети в зависимости от выбранного адреса.`,
       facts: [
         {
           label: 'Карточки',
@@ -668,27 +704,38 @@ const buildAuditProblemCards = (
   issueBlocks: Array<NonNullable<OfferPagePayload['audit']>['issue_blocks'][number]>,
 ): AuditFunnelProblem[] => {
   if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
+    const state = page.audit?.current_state || {};
+    const locations = page.audit?.network_locations || [];
+    const uniqueLocations = Number(state.locations_count || locations.length || 0);
+    const discoveredCards = Number(state.discovered_cards_count || uniqueLocations);
+    const duplicateCards = Number(state.duplicate_cards_count || 0);
+    const locationsWithNews = Number(state.locations_with_news || 0);
+    const locationsWithoutNews = Number(state.weak_locations_count || Math.max(0, uniqueLocations - locationsWithNews));
+    const unansweredReviews = Number(state.unanswered_reviews_count || 0);
+    const locationsWithUnanswered = locations.filter((item) => Number(item.unanswered_count || 0) > 0).length;
     return [
       {
-        title: 'Сильный разброс по филиалам',
-        problem: 'Рейтинг по точкам отличается от 4.2 до 4.9, а отзывы — от 3 до 26.',
-        clientImpact: 'Родитель выбирает конкретный филиал рядом с домом. Если одна точка выглядит слабее, это снижает доверие не только к ней, но и к сети в целом.',
-        diy: 'Выбрать 2 слабые точки, задать им цель по отзывам и обновить описание занятий, фото и новости в первую очередь.',
-        localos: 'Используем данные по 7000 проверенных карточкам на Яндекс картах, покажем слабые места и дадим еженедельный контроль, чтобы отдельные филиалы догнали сильные.',
+        title: 'В сетевом объекте есть дубль',
+        problem: duplicateCards > 0
+          ? `Яндекс показывает ${discoveredCards} карточку, но уникальных действующих точек — ${uniqueLocations}. Карточка Балканской площади дублируется, у дубля нет рейтинга.`
+          : 'Состав сетевого объекта нужно регулярно сверять с фактическим списком филиалов.',
+        clientImpact: 'Дубль размывает статистику сети и может путать родителей при выборе адреса.',
+        diy: 'Проверить обе карточки Балканской площади и отправить в Яндекс запрос на объединение или закрытие дубля.',
+        localos: 'Показываем в кабинете только уникальные точки, а дубли отмечаем отдельно как задачу для исправления.',
       },
       {
-        title: 'Работа с отзывами не должна быть случайной',
-        problem: 'У филиалов разная база отзывов: где-то 21–26 отзывов, а где-то только 3–8. Новые отзывы нужно регулярно запрашивать у клиентов и отвечать на них в течение суток.',
-        clientImpact: 'Родители смотрят не только на рейтинг, но и на свежесть отзывов и реакцию студии. Если ответов мало или они появляются нерегулярно, карточка выглядит менее живой.',
-        diy: 'После каждого пробного занятия просить отзыв у родителей, закрепить ответственного и отвечать на новые отзывы в течение 24 часов.',
-        localos: 'Настроим регулярный сценарий сбора отзывов, подготовим человеческие ответы и покажем, какие филиалы всё ещё проседают по доверию.',
+        title: `${locationsWithoutNews} точек без новостей`,
+        problem: `Новости есть у ${locationsWithNews} из ${uniqueLocations} уникальных филиалов. Остальные точки не используют публикации для поисковой видимости и доверия.`,
+        clientImpact: 'Родитель видит менее живую карточку, а филиал теряет возможность рассказать о специалистах, занятиях и результатах.',
+        diy: 'Запустить в этих филиалах первый месячный план: общая тема сети, локальный факт и фотография конкретной точки.',
+        localos: 'Покажем филиалы без публикаций и подготовим для них тексты, адаптированные под карты и социальные сети.',
       },
       {
-        title: 'Нужны регулярные публикации и обновления',
-        problem: 'Новости и обновления по филиалам выходят неравномерно. Карточкам нужен регулярный ритм публикаций: направления танцев, группы, пробные занятия, сезонные наборы и новости студии.',
-        clientImpact: 'Свежие публикации помогают родителю понять, что студия активна, а поисковикам — лучше связывать карточку с ключевыми поисковыми запросами, так людям проще найти вас в интернете.',
-        diy: 'Вести 4-5 публикаций в месяц по каждому филиалу: популярные танцы, наборы в группы, фото с занятий, расписание и условия пробного занятия.',
-        localos: 'Подготовим контент-план для каждой из карточек, тексты публикаций и отследим отклик аудитории. Публикации готовятся не только для карт, но и для популярных соцсетей.',
+        title: `${unansweredReviews} отзывов без ответа`,
+        problem: `Отзывы без публичной реакции распределены по ${locationsWithUnanswered} филиалам сети.`,
+        clientImpact: 'Качество коммуникации выглядит разным в зависимости от выбранного адреса.',
+        diy: 'Сначала закрыть точки с самой большой очередью, затем закрепить единый срок ответа — не более 48 часов.',
+        localos: 'Соберём отзывы всех филиалов в одной очереди, подготовим ответы и покажем, где задача ещё не закрыта.',
       },
     ];
   }
@@ -3703,6 +3750,186 @@ const PublicPartnershipOfferPage: React.FC = () => {
     </div>
   );
 
+  const contentAudit = page.content_audit;
+  const contentChanges = (contentAudit?.findings || []).slice(-3);
+  const contentPlan = contentAudit ? (
+    <div className="space-y-8">
+      <header className="max-w-3xl">
+        <div className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">Что улучшить в публикациях</div>
+        <h2 className="mt-2 text-balance text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
+          {contentAudit.title || 'Рекомендации и контент-план'}
+        </h2>
+        {contentAudit.summary ? (
+          <p className="mt-3 text-pretty text-base leading-7 text-slate-650">{contentAudit.summary}</p>
+        ) : null}
+      </header>
+
+      <section className="flex items-start gap-4 rounded-2xl bg-orange-50 p-4 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.14)] sm:p-5">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-[0_6px_18px_rgba(249,115,22,0.22)]">
+          <Newspaper className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-balance text-lg font-black text-slate-950">Новости на картах — это те же посты</h3>
+          <p className="mt-1 text-pretty text-sm leading-6 text-slate-700">
+            {auditProfileForWhy.includes('education')
+              ? 'Их видят в карточке и находят через поиск. Хороший пост отвечает на вопрос родителя ещё до звонка и может привести в школу. Одну тему можно по-разному подать в Яндекс Картах, Telegram и VK.'
+              : 'Их видят в карточке и находят через поиск. Хороший пост отвечает на вопрос клиента ещё до звонка и помогает дойти до записи. Одну тему можно по-разному подать в Яндекс Картах, Telegram и VK.'}
+          </p>
+        </div>
+      </section>
+
+      {contentChanges.length > 0 ? (
+        <section aria-labelledby="content-audit-findings-title">
+          <h3 id="content-audit-findings-title" className="text-balance text-xl font-black text-slate-950">Три главных изменения</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {contentChanges.map((finding, index) => (
+              <article key={`${finding.title || 'finding'}-${index}`} className="rounded-2xl bg-sky-50 p-4 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.10)]">
+                <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-white text-sm font-black tabular-nums text-sky-700 shadow-sm">{index + 1}</div>
+                <h4 className="text-balance font-bold text-slate-950">{finding.title}</h4>
+                {finding.body ? <p className="mt-2 text-pretty text-sm leading-6 text-slate-700">{finding.body}</p> : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {(contentAudit.plan || []).length > 0 ? (
+        <section aria-labelledby="content-audit-plan-title">
+          <div className="max-w-3xl">
+            <h3 id="content-audit-plan-title" className="text-balance text-2xl font-black text-slate-950">Контент-план на неделю</h3>
+            <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
+              {contentAudit.plan_intro || 'Четыре разные задачи: история, доказательство метода, повседневная работа и практический вопрос клиента.'}
+            </p>
+          </div>
+          <div className="mt-5 space-y-4">
+            {(contentAudit.plan || []).map((item, index) => (
+              <article key={`${item.title || 'plan'}-${index}`} className="overflow-hidden rounded-3xl bg-slate-50 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+                <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.75fr)] lg:p-6">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.date_label ? <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-bold tabular-nums text-white">{item.date_label}</span> : null}
+                      {item.type ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">{item.type}</span> : null}
+                      {(item.facts_needed || []).length > 0 ? <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-950">{contentAudit.facts_label || 'Нужны факты от школы'}</span> : null}
+                    </div>
+                    <h4 className="mt-3 text-balance text-xl font-black text-slate-950">{item.title}</h4>
+                    {item.goal ? <p className="mt-2 text-pretty text-sm leading-6 text-slate-600"><span className="font-bold text-slate-900">Задача: </span>{item.goal}</p> : null}
+                    {(item.platforms || []).length > 0 ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Площадки</span>
+                        {(item.platforms || []).map((platform) => (
+                          <span key={platform} className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.10)]">{platform}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {item.draft ? (
+                      <div className="mt-4 rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
+                        <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Каркас текста</div>
+                        <p className="mt-2 whitespace-pre-wrap text-pretty text-sm leading-6 text-slate-800">{item.draft}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <aside className="space-y-3">
+                    {(item.facts_needed || []).length > 0 ? (
+                      <div className="rounded-2xl bg-amber-50 p-4 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.14)]">
+                        <div className="font-bold text-amber-950">Какие факты нужны</div>
+                        <ul className="mt-2 space-y-2">
+                          {(item.facts_needed || []).map((fact) => <li key={fact} className="text-pretty text-sm leading-5 text-amber-950">• {fact}</li>)}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {item.visual_brief ? (
+                      <div className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
+                        <div className="flex items-center gap-2 font-bold text-slate-950"><Camera className="h-4 w-4 text-sky-600" />Что снять</div>
+                        <p className="mt-2 text-pretty text-sm leading-6 text-slate-700">{item.visual_brief}</p>
+                      </div>
+                    ) : null}
+                    {item.cta ? (
+                      <div className="rounded-2xl bg-emerald-50 p-4 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.12)]">
+                        <div className="font-bold text-emerald-950">Следующее действие</div>
+                        <p className="mt-2 text-pretty text-sm leading-6 text-emerald-950">{item.cta}</p>
+                      </div>
+                    ) : null}
+                  </aside>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="space-y-3" aria-label="Обоснование контент-плана">
+        <details className="group rounded-2xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3 font-bold text-slate-950 transition-[background-color] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 sm:px-5">
+            <span>Почему выбраны эти темы</span>
+            <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-slate-100 px-4 py-4 sm:px-5">
+            {(contentAudit.findings || [])[0]?.body ? <p className="text-pretty text-sm leading-6 text-slate-700">{(contentAudit.findings || [])[0].body}</p> : null}
+            <ul className="mt-4 grid gap-3 md:grid-cols-2">
+              {(contentAudit.plan || []).map((item, index) => (
+                <li key={`${item.title || 'reason'}-${index}`} className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-sm font-bold text-slate-950">{item.title}</div>
+                  {item.goal ? <p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{item.goal}</p> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
+
+        {(contentAudit.patterns || []).length > 0 ? (
+          <details className="group rounded-2xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3 font-bold text-slate-950 transition-[background-color] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 sm:px-5">
+              <span>Примеры из базы LocalOS</span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-slate-100 px-4 py-4 sm:px-5">
+              <p className="text-pretty text-sm leading-6 text-slate-600">
+                Отсюда берём только форму подачи. Факты для Smart Class должны прийти от самой школы.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {(contentAudit.patterns || []).map((pattern, index) => (
+                  <article key={`${pattern.title || 'pattern'}-${index}`} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+                    <h4 className="text-balance font-bold text-slate-950">{pattern.title}</h4>
+                    {pattern.body ? <p className="mt-2 text-pretty text-sm leading-6 text-slate-700">{pattern.body}</p> : null}
+                    {pattern.source_url ? (
+                      <a href={pattern.source_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-sky-700 transition-[background-color,color,transform] hover:bg-sky-100 hover:text-sky-900 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2">
+                        {pattern.source_label || 'Открыть пример'}
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </div>
+          </details>
+        ) : null}
+
+        {(contentAudit.metrics || []).length > 0 || contentAudit.methodology_note ? (
+          <details className="group rounded-2xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3 font-bold text-slate-950 transition-[background-color] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 sm:px-5">
+              <span>Как проводился разбор</span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-slate-100 px-4 py-4 sm:px-5">
+              {(contentAudit.metrics || []).length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {(contentAudit.metrics || []).map((metric, index) => (
+                    <article key={`${metric.label || 'metric'}-${index}`} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+                      <div className="text-3xl font-black tabular-nums tracking-tight text-slate-950">{metric.value || '—'}</div>
+                      <div className="mt-1 text-sm font-bold text-slate-800">{metric.label}</div>
+                      {metric.detail ? <p className="mt-2 text-pretty text-xs leading-5 text-slate-600">{metric.detail}</p> : null}
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+              {contentAudit.methodology_note ? <p className="mt-4 rounded-2xl bg-slate-100 p-4 text-pretty text-xs leading-5 text-slate-600">{contentAudit.methodology_note}</p> : null}
+            </div>
+          </details>
+        ) : null}
+      </section>
+    </div>
+  ) : undefined;
+
   return (
     <PublicAuditExperience
       direction={lang === 'ar' ? 'rtl' : 'ltr'}
@@ -3726,6 +3953,10 @@ const PublicPartnershipOfferPage: React.FC = () => {
       photoAlt={(index) => interpolate(text.photoAlt, { index: index + 1 })}
       onPrepareWithLocalOS={openDashboardRegistration}
       fullPlan={fullPlan}
+      contentPlan={contentPlan}
+      auditTabLabel="Аудит карточки"
+      contentTabLabel="Рекомендации и контент-план"
+      initialView={contentPlan ? 'content' : 'audit'}
     />
   );
 };

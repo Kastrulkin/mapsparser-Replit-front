@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap, Activity } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -46,8 +46,11 @@ const TelegramSourceCatalog = lazy(() =>
 const CrmIntegrationRequestsAdmin = lazy(() =>
   import('../../components/admin/CrmIntegrationRequestsAdmin').then((module) => ({ default: module.CrmIntegrationRequestsAdmin })),
 );
+const WebTrackingDiagnostics = lazy(() =>
+  import('../../components/admin/WebTrackingDiagnostics').then((module) => ({ default: module.WebTrackingDiagnostics })),
+);
 
-type AdminTabId = 'businesses' | 'companies' | 'subscriptions' | 'crmRequests' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
+type AdminTabId = 'businesses' | 'companies' | 'subscriptions' | 'crmRequests' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge' | 'webTracking';
 interface Business {
   id: string;
   name: string;
@@ -375,6 +378,7 @@ const adminTabs: AdminTabConfig[] = [
   { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
   { id: 'proxies', label: 'Прокси', icon: Network },
   { id: 'parsing', label: 'Парсинг', icon: MapPin },
+  { id: 'webTracking', label: 'Сайты', icon: Activity },
 ];
 
 const primaryAdminTabs: AdminTabConfig[] = [
@@ -395,6 +399,7 @@ const toolsAdminTabs: AdminTabConfig[] = [
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
   { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
+  { id: 'webTracking', label: 'Сайты', icon: Activity },
 ];
 
 const isAdminTabId = (value: string | null): value is AdminTabId => (
@@ -1346,7 +1351,7 @@ export const AdminPage: React.FC = () => {
               })}
             </div>
 
-            <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-7">
               {toolsAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1861,6 +1866,14 @@ export const AdminPage: React.FC = () => {
                 </div>
               </div>
             )}
+          </DashboardSection>
+        ) : activeTab === 'webTracking' ? (
+          <DashboardSection
+            title="Web-tracking"
+            description="Проверка установки tracker’ов, потока событий, версий, ошибок и безопасной очистки данных."
+            contentClassName="space-y-5"
+          >
+            <WebTrackingDiagnostics />
           </DashboardSection>
         ) : activeTab === 'agentApi' ? (
           <DashboardSection

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
+import { featureFlags } from "./config/featureFlags";
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
@@ -115,6 +116,11 @@ const FinancePage = lazy(() =>
     default: module.FinancePage,
   })),
 );
+const WebAnalyticsPage = lazy(() =>
+  import("./pages/dashboard/WebAnalyticsPage").then((module) => ({
+    default: module.WebAnalyticsPage,
+  })),
+);
 const AverageTicketPage = lazy(() =>
   import("./pages/dashboard/AverageTicketPage").then((module) => ({
     default: module.AverageTicketPage,
@@ -146,6 +152,21 @@ const AIChatPromotionPage = lazy(() =>
 const PartnershipSearchPage = lazy(() =>
   import("./pages/dashboard/PartnershipSearchPage").then((module) => ({
     default: module.PartnershipSearchPage,
+  })),
+);
+const PromotionHubPage = lazy(() =>
+  import("./pages/dashboard/PromotionHubPage").then((module) => ({
+    default: module.PromotionHubPage,
+  })),
+);
+const InfluencerPromotionPage = lazy(() =>
+  import("./pages/dashboard/InfluencerPromotionPage").then((module) => ({
+    default: module.InfluencerPromotionPage,
+  })),
+);
+const CreatorRoomPage = lazy(() =>
+  import("./pages/CreatorRoomPage").then((module) => ({
+    default: module.CreatorRoomPage,
   })),
 );
 const OperatorPage = lazy(() =>
@@ -223,6 +244,10 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
+  if (pathname.startsWith("/creator-room/")) {
+    return false;
+  }
+
   if (pathname === "/bazich") {
     return false;
   }
@@ -284,10 +309,14 @@ const AppShell = () => {
             <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
+            <Route path="web-analytics" element={featureFlags.webTracking ? <WebAnalyticsPage /> : <Navigate to="/dashboard/progress" replace />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
             <Route path="partnerships" element={<PartnershipSearchPage />} />
+            <Route path="promotion" element={<PromotionHubPage />} />
+            <Route path="promotion/partnerships" element={<PartnershipSearchPage />} />
+            <Route path="promotion/influencers" element={<InfluencerPromotionPage />} />
             <Route path="operator" element={<OperatorPage />} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<AgentBlueprintsPage />} />
@@ -311,7 +340,9 @@ const AppShell = () => {
             <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />
           ) : null}
           <Route path="/room/:roomSlug" element={<PublicSalesRoomPage />} />
+          <Route path="/creator-room/:token" element={<CreatorRoomPage />} />
           <Route path="/veselaya-rascheska-hit" element={<VeselayaRascheskaOfferPage />} />
+          <Route path="/web-analytics" element={<Navigate to="/dashboard/web-analytics" replace />} />
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

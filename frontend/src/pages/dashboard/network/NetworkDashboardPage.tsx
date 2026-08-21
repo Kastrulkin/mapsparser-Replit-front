@@ -45,12 +45,25 @@ interface NetworkLocation {
     yandex_url?: string | null;
     website?: string | null;
     site?: string | null;
+    is_network_parent?: boolean;
 }
 
 interface NetworkLocationsResponse {
     success: boolean;
     network_id?: string | null;
     locations?: NetworkLocation[];
+}
+
+interface LocationAlertsResponse {
+    success: boolean;
+    data?: {
+        locations?: Array<{
+            business_id: string;
+            news_count?: number;
+            unanswered_reviews_count?: number;
+            alerts?: Array<{ type?: string; message?: string }>;
+        }>;
+    };
 }
 
 export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embedded = false, businessId }) => {
@@ -108,7 +121,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
 
                 const locationsRes = await fetch(`/api/business/${businessId}/network-locations`, { headers });
                 const locationsJson: NetworkLocationsResponse = await locationsRes.json().catch(() => ({ success: false, locations: [] }));
-                const locations = (locationsJson.locations || []);
+                const locations = (locationsJson.locations || []).filter((location) => !location.is_network_parent);
                 const networkId = String(locationsJson.network_id || '').trim();
                 const isNetworkView = Boolean(networkId) && locations.length > 1;
 
@@ -133,7 +146,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                     };
                 });
 
-                const [healthRes, historyRes] = await Promise.all([
+                const [healthRes, historyRes, alertsRes] = await Promise.all([
                     fetch(
                         isNetworkView
                             ? `/api/network/health?network_id=${encodeURIComponent(networkId)}`
@@ -151,10 +164,34 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         })(),
                         { headers }
                     ),
+                    fetch(
+                        isNetworkView
+                            ? `/api/network/locations-alerts?network_id=${encodeURIComponent(networkId)}`
+                            : `/api/network/locations-alerts?business_id=${businessId}`,
+                        { headers },
+                    ),
                 ]);
 
                 const healthJson: HealthResponse = await healthRes.json().catch(() => ({ success: false }));
                 const historyJson: MetricsHistoryResponse = await historyRes.json().catch(() => ({ history: [] }));
+                const alertsJson: LocationAlertsResponse = await alertsRes.json().catch(() => ({ success: false }));
+                const attentionByBusiness = new Map(
+                    (alertsJson.data?.locations || []).map((location) => [location.business_id, location]),
+                );
+
+                const salonsWithAttention = mappedSalons.map((salon) => {
+                    const attention = attentionByBusiness.get(salon.id);
+                    const attentionLabels = (attention?.alerts || [])
+                        .map((alert) => String(alert.message || '').trim())
+                        .filter(Boolean);
+                    return {
+                        ...salon,
+                        status: attentionLabels.length > 0 ? 'problem' : salon.status,
+                        newsCount: Number(attention?.news_count || 0),
+                        unansweredReviews: Number(attention?.unanswered_reviews_count || 0),
+                        attentionLabels,
+                    } satisfies SalonData;
+                });
 
                 setHealth(healthJson.data || null);
 
@@ -167,7 +204,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                     }));
                 setTimeline(timelinePoints);
 
-                if (mappedSalons.length === 0) {
+                if (salonsWithAttention.length === 0) {
                     const avgRating = Number(healthJson.data?.avg_rating || 0);
                     const totalReviews = Number(healthJson.data?.total_reviews || 0);
                     setSalons([{
@@ -185,7 +222,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         recentReviews: [],
                     }]);
                 } else {
-                    setSalons(mappedSalons);
+                    setSalons(salonsWithAttention);
                 }
             } catch {
                 setHealth(null);

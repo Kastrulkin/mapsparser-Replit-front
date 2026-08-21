@@ -3,7 +3,7 @@ import { newAuth } from '@/lib/auth_new';
 import { _socialOpenClawReadinessDetails, _socialApprovalSummary, _socialWorkerEnvLines, _socialLaunchRunbookClipboardLines, _socialAttributionFeedback, _readStoredPreferences, _writeStoredPreferences, _isValidItemFilterKey, _isValidContentLanguageKey, _isValidViewPresetKey, _inferViewPresetKey, _removeRecordKeys, copyTextToClipboard } from './helpers';
 import type { ScopeOption, SocialPost, SocialPublishRehearsalBulk, SocialRecommendationPayload, SocialAttributionEventType, ContentMixKey } from './types';
 
-export const createCoreActions = (scope) => {
+export const useCoreActions = (scope) => {
   const {
     businessId, language, isRu, context, setContext, plans, setPlans, currentPlan,
     setCurrentPlan, setLoading, setGenerating, setMetricsLoading, setError, setLearningMetrics, selectedScopeKey, setSelectedScopeKey,

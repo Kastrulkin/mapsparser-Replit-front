@@ -106,6 +106,10 @@ export type PublicAuditExperienceProps = {
   photoAlt: (index: number) => string;
   onPrepareWithLocalOS: () => void;
   fullPlan: ReactNode;
+  contentPlan?: ReactNode;
+  auditTabLabel?: string;
+  contentTabLabel?: string;
+  initialView?: 'audit' | 'content';
   mapUrl?: string;
 };
 
@@ -144,12 +148,17 @@ export const PublicAuditExperience = ({
   photoAlt,
   onPrepareWithLocalOS,
   fullPlan,
+  contentPlan,
+  auditTabLabel = 'Аудит карточки',
+  contentTabLabel = 'Контент-план',
+  initialView = 'audit',
   mapUrl,
 }: PublicAuditExperienceProps) => {
   const [expandedProblems, setExpandedProblems] = useState<Set<string>>(new Set());
   const [expandedNews, setExpandedNews] = useState<Set<string>>(new Set());
   const [servicesExpanded, setServicesExpanded] = useState(false);
   const [planExpanded, setPlanExpanded] = useState(false);
+  const [activeView, setActiveView] = useState<'audit' | 'content'>(initialView);
 
   const toggleProblem = (id: string) => {
     setExpandedProblems((current) => {
@@ -223,43 +232,68 @@ export const PublicAuditExperience = ({
 
             <p className="mt-4 max-w-3xl text-pretty text-base leading-7 text-slate-650 md:text-lg">{diagnosis}</p>
 
-            {problems.length > 0 ? (
-              <div className="mt-6 grid gap-2 md:grid-cols-3">
-                {problems.map((problem, index) => (
-                  <a
-                    key={problem.id}
-                    href={`#priority-${problem.id}`}
-                    className={`flex min-h-16 items-start gap-3 rounded-2xl bg-slate-50 p-3 text-start shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)] transition-[background-color,box-shadow,transform] hover:bg-white hover:shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_4px_16px_rgba(15,23,42,0.06)] active:scale-[0.96] ${focusRing}`}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-black tabular-nums text-orange-600 shadow-sm">{index + 1}</span>
-                    <span className="text-pretty text-sm font-semibold leading-5 text-slate-800">{problem.title}</span>
-                  </a>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#priority-actions"
-                className={`inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.96] ${focusRing}`}
-              >
-                {labels.fixYourself}
-              </a>
-              <button
-                type="button"
-                onClick={onPrepareWithLocalOS}
-                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white shadow-sm transition-[background-color,transform] hover:bg-orange-600 active:scale-[0.96] ${focusRing}`}
-              >
-                <Sparkles className="h-4 w-4" />
-                {labels.prepareWithLocalOS}
-              </button>
-            </div>
           </div>
         </section>
 
+        {contentPlan ? (
+          <div
+            role="tablist"
+            aria-label="Разделы отчёта"
+            className={`grid grid-cols-2 gap-2 rounded-2xl bg-white p-2 ${surfaceShadow}`}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeView === 'audit'}
+              aria-controls="public-audit-panel"
+              onClick={() => setActiveView('audit')}
+              className={`flex min-h-14 items-center justify-center gap-2 rounded-xl px-3 text-center text-sm font-bold leading-5 text-white transition-[background-color,box-shadow,transform] active:scale-[0.96] sm:px-5 ${focusRing} ${
+                activeView === 'audit'
+                  ? 'bg-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.20)] hover:bg-slate-800'
+                  : 'bg-orange-500 shadow-[0_6px_18px_rgba(249,115,22,0.18)] hover:bg-orange-600'
+              }`}
+            >
+              <Check className={`h-4 w-4 shrink-0 ${activeView === 'audit' ? 'opacity-100' : 'opacity-0'}`} />
+              {auditTabLabel}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeView === 'content'}
+              aria-controls="public-content-panel"
+              onClick={() => setActiveView('content')}
+              className={`flex min-h-14 items-center justify-center gap-2 rounded-xl px-3 text-center text-sm font-bold leading-5 text-white transition-[background-color,box-shadow,transform] active:scale-[0.96] sm:px-5 ${focusRing} ${
+                activeView === 'content'
+                  ? 'bg-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.20)] hover:bg-slate-800'
+                  : 'bg-orange-500 shadow-[0_6px_18px_rgba(249,115,22,0.18)] hover:bg-orange-600'
+              }`}
+            >
+              <Check className={`h-4 w-4 shrink-0 ${activeView === 'content' ? 'opacity-100' : 'opacity-0'}`} />
+              {contentTabLabel}
+            </button>
+          </div>
+        ) : null}
+
+        {activeView === 'audit' || !contentPlan ? <div id="public-audit-panel" role="tabpanel" className="space-y-5">
         <section id="priority-actions" className={`scroll-mt-5 rounded-[2rem] bg-white p-5 md:p-6 ${surfaceShadow}`}>
           <h2 className="text-balance text-2xl font-black tracking-tight text-slate-950">{labels.fixToday}</h2>
           <p className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-slate-600">{labels.fixTodayHint}</p>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <a
+              href="#priority-actions"
+              className={`inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.96] ${focusRing}`}
+            >
+              {labels.fixYourself}
+            </a>
+            <button
+              type="button"
+              onClick={onPrepareWithLocalOS}
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white shadow-sm transition-[background-color,transform] hover:bg-orange-600 active:scale-[0.96] ${focusRing}`}
+            >
+              <Sparkles className="h-4 w-4" />
+              {labels.prepareWithLocalOS}
+            </button>
+          </div>
           <div className="mt-5 space-y-3">
             {problems.map((problem, index) => {
               const open = expandedProblems.has(problem.id);
@@ -477,6 +511,11 @@ export const PublicAuditExperience = ({
           </button>
           {planExpanded ? <div id="public-audit-full-plan" className="border-t border-slate-100 p-5 md:p-6">{fullPlan}</div> : null}
         </section>
+        </div> : (
+          <section id="public-content-panel" role="tabpanel" className={`rounded-[2rem] bg-white p-5 md:p-8 ${surfaceShadow}`}>
+            {contentPlan}
+          </section>
+        )}
 
         {mapUrl ? (
           <footer>

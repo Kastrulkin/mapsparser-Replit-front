@@ -70,6 +70,9 @@ export interface SalonData {
     ratingTrend: number;
     status: 'active' | 'problem' | 'offline';
     reviews: number;
+    newsCount?: number;
+    unansweredReviews?: number;
+    attentionLabels?: string[];
     negativePercent: number;
     recentReviews: Review[];
 }

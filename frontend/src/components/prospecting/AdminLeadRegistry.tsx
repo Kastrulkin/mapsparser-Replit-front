@@ -1484,7 +1484,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const replyReceived = humanReplyEvents.some((event) => event.touch_id === touch.id);
     const status = replyReceived
       ? 'reply'
-      : !automaticOutreachChannels.has(channel) && !['manual_sent', 'sent', 'delivered'].includes(rawStatus)
+      : !automaticOutreachChannels.has(channel)
+          && !['manual_sent', 'sent', 'delivered'].includes(rawStatus)
+          && !['needs_attention', 'manual_expired'].includes(rawStatus)
         ? 'awaiting_manual_send'
         : ['approved', 'queued', 'scheduled'].includes(rawStatus)
           ? 'scheduled'
@@ -1519,7 +1521,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       errorText: delivery?.error_text || '',
     };
   });
-  const campaignNeedsAttention = campaignStatusItems.some((item) => ['failed', 'dlq', 'retry'].includes(item.status));
+  const campaignNeedsAttention = campaignStatusItems.some((item) => (
+    ['failed', 'dlq', 'retry', 'needs_attention', 'manual_expired'].includes(item.status)
+  ));
   const nextCampaignTouch = campaignStatusItems.find((item) => ['scheduled', 'awaiting_manual_send'].includes(item.status));
   const campaignStatusLabel = pilotReplyReceived
     ? 'Ответ получен'
@@ -2511,6 +2515,39 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       await reloadLatestOutreachCampaign();
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Не удалось проверить ответ');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const recordManualTouchEvent = async (
+    touch: { id: string },
+    eventType: 'sent' | 'skipped' | 'reply',
+  ) => {
+    if (!savedOutreachCampaign?.id || !touch.id) return;
+    const note = eventType === 'reply'
+      ? window.prompt('Кратко запишите ответ партнёра. Он остановит следующие касания этой цепочки.')
+      : '';
+    if (eventType === 'reply' && !note?.trim()) return;
+    const busyKey = `manual-touch-${touch.id}-${eventType}`;
+    setBusyAction(busyKey);
+    setNotice('');
+    try {
+      await newAuth.makeRequest(
+        `/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/touches/${encodeURIComponent(touch.id)}/manual-event`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ event_type: eventType, note: note?.trim() || '' }),
+        },
+      );
+      setNotice(eventType === 'sent'
+        ? 'Ручная отправка отмечена. LocalOS продолжит цепочку по расписанию.'
+        : eventType === 'skipped'
+          ? 'Касание пропущено.'
+          : 'Ответ записан. Следующие касания остановлены.');
+      await reloadLatestOutreachCampaign();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось записать ручное действие');
     } finally {
       setBusyAction('');
     }
@@ -4456,17 +4493,53 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             <div className="mt-1 text-pretty text-xs leading-5 text-rose-700">{item.errorText}</div>
                           ) : null}
                         </div>
-                        {item.verificationHref ? (
-                          <a
-                            href={item.verificationHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex min-h-10 shrink-0 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
-                          >
-                            {item.verificationLabel}
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        ) : null}
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          {item.verificationHref ? (
+                            <a
+                              href={item.verificationHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
+                            >
+                              {item.verificationLabel}
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          ) : null}
+                          {!automaticOutreachChannels.has(item.channel)
+                            && ['awaiting_manual_send', 'needs_attention', 'manual_expired'].includes(item.status) ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void recordManualTouchEvent(item, 'sent')}
+                                  disabled={busyAction.startsWith(`manual-touch-${item.id}-`)}
+                                >
+                                  Отметить отправленным
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void recordManualTouchEvent(item, 'skipped')}
+                                  disabled={busyAction.startsWith(`manual-touch-${item.id}-`)}
+                                >
+                                  Пропустить
+                                </Button>
+                              </>
+                            ) : null}
+                          {!automaticOutreachChannels.has(item.channel)
+                            && ['manual_sent', 'sent', 'delivered'].includes(item.status) ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void recordManualTouchEvent(item, 'reply')}
+                                disabled={busyAction.startsWith(`manual-touch-${item.id}-`)}
+                              >
+                                Записать ответ
+                              </Button>
+                            ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -15,7 +15,9 @@ import {
   Sparkles,
   Handshake,
   Bot,
-  Radar
+  Radar,
+  BarChart3,
+  Megaphone
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -27,12 +29,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
+import { featureFlags } from '../config/featureFlags';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  webTrackingAvailable?: boolean;
+  creatorPromotionAvailable?: boolean;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -40,6 +45,8 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onClose,
   collapsed = false,
   onToggleCollapse,
+  webTrackingAvailable = false,
+  creatorPromotionAvailable = false,
 }) => {
   const location = useLocation();
   const { t, language } = useLanguage();
@@ -105,6 +112,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/finance',
       tooltip: shellCopy.financeHint,
     },
+    ...(featureFlags.webTracking && webTrackingAvailable ? [{
+        id: 'web-analytics',
+        label: navigationCopy.webAnalytics,
+        icon: BarChart3,
+        path: '/dashboard/web-analytics',
+        tooltip: navigationCopy.webAnalyticsHint,
+      }] : []),
     {
       id: 'chats',
       label: t.dashboard.sidebar.chats,
@@ -112,13 +126,19 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/chats',
       tooltip: shellCopy.chatsHint,
     },
-    {
+    ...(featureFlags.promotionHub && creatorPromotionAvailable ? [{
+      id: 'promotion',
+      label: navigationCopy.promotion,
+      icon: Megaphone,
+      path: '/dashboard/promotion',
+      tooltip: navigationCopy.promotionHint,
+    }] : [{
       id: 'partnerships',
       label: navigationCopy.partnerships,
       icon: Handshake,
       path: '/dashboard/partnerships',
       tooltip: navigationCopy.partnershipsHint,
-    },
+    }]),
     {
       id: 'telegram-radar',
       label: demoCopy.telegramRadar,
@@ -158,6 +178,9 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const isActive = (path: string) => {
     if (path === '/dashboard/today') {
       return location.pathname === '/dashboard' || location.pathname === path;
+    }
+    if (path === '/dashboard/promotion') {
+      return location.pathname === path || location.pathname.startsWith('/dashboard/promotion/');
     }
     return location.pathname === path;
   };

@@ -40,7 +40,7 @@ import {
 import { ContentOverviewView } from './modules/ContentOverviewView';
 import { ContentPlanView } from './modules/ContentPlanView';
 import { ContentQueueView } from './modules/ContentQueueView';
-import { createCoreActions } from './modules/createCoreActions';
+import { useCoreActions } from './modules/createCoreActions';
 import { createSocialActions } from './modules/createSocialActions';
 import { createPlanActions } from './modules/createPlanActions';
 import {
@@ -979,7 +979,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .filter((channel) => String(channel.publish_mode || '').trim() === 'api')
       .sort(_socialChannelSetupSort);
     const readyApiChannels = apiChannels.filter((channel) => Boolean(channel.ready));
-    const blockedApiChannels = apiChannels.filter((channel) => !Boolean(channel.ready));
+    const blockedApiChannels = apiChannels.filter((channel) => !channel.ready);
     const supervisedChannels = socialChannelReadiness
       .filter((channel) => String(channel.publish_mode || '').trim() !== 'api')
       .sort(_socialChannelSetupSort);
@@ -1021,7 +1021,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   }, [socialApiPreflight]);
   const socialApiPreflightSummary = useMemo(() => {
     const ready = socialApiPreflight.filter((item) => Boolean(item.ready));
-    const needsAttention = socialApiPreflight.filter((item) => !Boolean(item.ready));
+    const needsAttention = socialApiPreflight.filter((item) => !item.ready);
     return {
       checked: socialApiPreflight.length,
       ready,
@@ -1031,9 +1031,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const socialFirstApiPublishReadiness = useMemo(() => {
     const apiChannels = socialChannelReadiness.filter((channel) => String(channel.publish_mode || '').trim() === 'api');
     const readyChannels = apiChannels.filter((channel) => Boolean(channel.ready));
-    const blockedChannels = apiChannels.filter((channel) => !Boolean(channel.ready));
+    const blockedChannels = apiChannels.filter((channel) => !channel.ready);
     const liveReady = socialApiPreflight.filter((item) => Boolean(item.ready));
-    const liveBlocked = socialApiPreflight.filter((item) => !Boolean(item.ready));
+    const liveBlocked = socialApiPreflight.filter((item) => !item.ready);
     const primaryReady = liveReady.length > 0 ? liveReady : readyChannels;
     const primaryBlocked = liveBlocked.length > 0 ? liveBlocked : blockedChannels;
     const firstReady = primaryReady[0];
@@ -1053,7 +1053,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       ? setupFocusStepsSource.filter(Boolean).map(String).slice(0, 4)
       : [];
     const setupFocusChecks = Array.isArray(setupFocus?.connection_checks)
-      ? setupFocus.connection_checks.filter((item) => !Boolean(item.ok)).slice(0, 4)
+      ? setupFocus.connection_checks.filter((item) => !item.ok).slice(0, 4)
       : [];
     const setupFocusMissingFields = Array.isArray(setupFocus?.missing_fields)
       ? setupFocus.missing_fields.filter(Boolean).map(String).slice(0, 4)
@@ -1753,7 +1753,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     missingDateCandidates, planOperationalSummary, overviewRiskScore, repeatTemplateCandidate, viewPresets, activeLocationLabel, activeWeekLabel, locationWeekFocusSummary,
     networkOperatingSlices, quickActions, operatorQualityInsights, actionRefs
   };
-  const coreActions = createCoreActions(controllerScope);
+  const coreActions = useCoreActions(controllerScope);
   const {
     loadPlans, openPlan, deletePlan, loadLearningMetrics, loadSocialRuntimeStatus, loadSocialPosts, loadContext, toggleMix,
     toggleSelectedItem, clearSelectedItems, generatePlan, saveItem, generateDraft, createNews, prepareSocialPosts, openSocialApprovalPreview,

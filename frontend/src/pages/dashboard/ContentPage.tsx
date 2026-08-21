@@ -1601,7 +1601,7 @@ function ContentWorkspace() {
     }
   };
 
-  const useManualPublish = async (post: SocialPost) => {
+  const openManualPublish = async (post: SocialPost) => {
     if (!currentPlan?.id) return;
     setBusyAction(`manual-publish-${post.id}`);
     setError('');
@@ -2936,7 +2936,7 @@ function ContentWorkspace() {
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => { void useManualPublish(post); }}
+                                        onClick={() => { void openManualPublish(post); }}
                                         disabled={Boolean(busyAction)}
                                         className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform"
                                       >

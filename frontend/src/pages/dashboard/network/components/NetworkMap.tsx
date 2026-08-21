@@ -38,7 +38,7 @@ const RATING_MARKER_OFFSET: [number, number] = [-27, -62];
 
 const formatRating = (value: number) => {
     if (!Number.isFinite(value) || value <= 0) {
-        return '0';
+        return '—';
     }
     return Number(value.toFixed(2)).toString();
 };
@@ -205,12 +205,14 @@ const NetworkMapCanvas: React.FC<{
                                 key={location.id}
                                 geometry={[location.lat, location.lon]}
                                 properties={{
-                                    hintContent: `${location.name} • ${formatRating(location.rating)}★`,
+                                    hintContent: location.rating > 0
+                                        ? `${location.name} • ${formatRating(location.rating)}★`
+                                        : `${location.name} • нет оценки`,
                                     balloonContentHeader: location.name,
                                     balloonContentBody: `
                                         <div style="min-width: 220px">
                                             <div style="font-size: 14px; margin-bottom: 6px;">${location.address}</div>
-                                            <div style="font-size: 14px;"><strong>Рейтинг:</strong> ${formatRating(location.rating)} / 5</div>
+                                            <div style="font-size: 14px;"><strong>Рейтинг:</strong> ${location.rating > 0 ? `${formatRating(location.rating)} / 5` : 'Нет оценки'}</div>
                                             <div style="font-size: 14px;"><strong>Статус:</strong> ${tone.label}</div>
                                             <div style="font-size: 14px;"><strong>Отзывов:</strong> ${location.reviews}</div>
                                         </div>
@@ -306,7 +308,7 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({ locations, onOpenDashboa
                                                         <span className="block truncate text-xs text-slate-500">{location.address}</span>
                                                     </span>
                                                     <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${tone.surface}`}>
-                                                        {formatRating(location.rating)}★
+                                                        {location.rating > 0 ? `${formatRating(location.rating)}★` : 'Нет оценки'}
                                                     </span>
                                                 </div>
                                                 <div className="mt-2 flex flex-wrap gap-2">
@@ -417,7 +419,7 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({ locations, onOpenDashboa
                                                         <div className="mt-1 line-clamp-2 text-sm text-slate-500">{location.address}</div>
                                                     </div>
                                                     <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${tone.surface}`}>
-                                                        {formatRating(location.rating)}
+                                                        {location.rating > 0 ? formatRating(location.rating) : 'Нет оценки'}
                                                     </span>
                                                 </div>
                                                 <div className="mt-2 text-sm text-slate-700">

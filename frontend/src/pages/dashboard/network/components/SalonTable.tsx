@@ -36,7 +36,7 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons, onOpenDashboard,
 
     const formatRating = (value: number) => {
         if (!Number.isFinite(value) || value <= 0) {
-            return '0';
+            return null;
         }
         return Number(value.toFixed(2)).toString();
     };
@@ -118,7 +118,7 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons, onOpenDashboard,
                                 </Button>
                             </TableHead>
                             <TableHead className="text-right">Отзывы</TableHead>
-                            <TableHead className="text-right">% негатива</TableHead>
+                            <TableHead>Что требует внимания</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                     </TableHeader>
@@ -138,13 +138,25 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons, onOpenDashboard,
                                     </TableCell>
                                     <TableCell>{getStatusBadge(salon.status)}</TableCell>
                                     <TableCell className="text-right font-bold">
-                                        {formatRating(salon.rating)} <span className="text-muted-foreground text-xs font-normal">/ 5</span>
+                                        {formatRating(salon.rating) ? (
+                                            <>{formatRating(salon.rating)} <span className="text-muted-foreground text-xs font-normal">/ 5</span></>
+                                        ) : (
+                                            <span className="text-muted-foreground text-sm font-normal">Нет оценки</span>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-right">{salon.reviews}</TableCell>
-                                    <TableCell className="text-right">
-                                        <span className={salon.negativePercent > 15 ? "text-red-600 font-bold" : salon.negativePercent > 5 ? "text-yellow-600" : "text-emerald-600"}>
-                                            {salon.negativePercent}%
-                                        </span>
+                                    <TableCell>
+                                        {salon.attentionLabels?.length ? (
+                                            <div className="flex max-w-[360px] flex-wrap gap-1.5">
+                                                {salon.attentionLabels.map((label) => (
+                                                    <Badge key={label} variant="outline" className="max-w-full border-amber-200 bg-amber-50 text-amber-900">
+                                                        <span className="truncate">{label}</span>
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-sm text-emerald-700">Всё в порядке</span>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <Button variant="ghost" size="icon" className="h-8 w-8">

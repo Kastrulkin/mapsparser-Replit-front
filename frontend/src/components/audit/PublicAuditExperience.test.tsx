@@ -77,7 +77,7 @@ describe('PublicAuditExperience', () => {
     render(<PublicAuditExperience {...baseProps} />);
 
     expect(screen.getByText('72/100')).toBeInTheDocument();
-    expect(screen.getAllByText('Нет свежих публикаций')).toHaveLength(2);
+    expect(screen.getAllByText('Нет свежих публикаций')).toHaveLength(1);
     expect(screen.queryByText('Полное описание проблемы.')).not.toBeInTheDocument();
     expect(screen.queryByText('Скрытый полный план')).not.toBeInTheDocument();
 
@@ -129,5 +129,45 @@ describe('PublicAuditExperience', () => {
     if (!photoSection) throw new Error('Missing photo section');
     expect(within(photoSection).queryByRole('checkbox')).not.toBeInTheDocument();
     expect(within(photoSection).getByText('Нужно добавить')).toBeInTheDocument();
+  });
+
+  it('keeps audit and content recommendations in two accessible tabs', async () => {
+    const user = userEvent.setup();
+    render(
+      <PublicAuditExperience
+        {...baseProps}
+        contentPlan={<div>Четыре публикации с визуальными заданиями</div>}
+        auditTabLabel="Аудит карточки"
+        contentTabLabel="Рекомендации и контент-план"
+      />,
+    );
+
+    const auditTab = screen.getByRole('tab', { name: 'Аудит карточки' });
+    const contentTab = screen.getByRole('tab', { name: 'Рекомендации и контент-план' });
+    expect(screen.getAllByRole('tab')[0]).toBe(auditTab);
+    expect(screen.getAllByRole('tab')[1]).toBe(contentTab);
+    expect(auditTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Что исправить сегодня' })).toBeInTheDocument();
+
+    await user.click(contentTab);
+
+    expect(contentTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Четыре публикации с визуальными заданиями')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Что исправить сегодня' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Исправить самостоятельно' })).not.toBeInTheDocument();
+  });
+
+  it('can open directly on the content plan', () => {
+    render(
+      <PublicAuditExperience
+        {...baseProps}
+        contentPlan={<div>Готовый контент-план</div>}
+        initialView="content"
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: 'Контент-план' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Готовый контент-план')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Что исправить сегодня' })).not.toBeInTheDocument();
   });
 });

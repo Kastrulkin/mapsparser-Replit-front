@@ -43,7 +43,7 @@ const clarityCopy: Record<Language, DemoAgentClarityCopy> = {
 
 export function DemoAgentsPage() {
   const { language } = useLanguage();
-  const t = { ...copy[language], ...clarityCopy[language] };
+  const t = useMemo(() => ({ ...copy[language], ...clarityCopy[language] }), [language]);
   const [selected, setSelected] = useState(0);
   const [stage, setStage] = useState<'idle' | 'running' | 'review' | 'approved'>('idle');
   const agent = t.cards[selected];
