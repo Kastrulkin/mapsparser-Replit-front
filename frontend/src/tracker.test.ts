@@ -8,7 +8,7 @@ describe('standalone tracker consent and transport contract', () => {
   it('creates no identifiers before consent, stops after revoke, and falls back when beacon declines', async () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
-    document.body.innerHTML = '<main><section id="services"><h2>Услуги</h2></section></main>';
+    document.body.innerHTML = '<nav><a href="#services">Услуги</a></nav><main><section id="services"><div class="tn-atom">Технический текст</div></section></main>';
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 });
     const beaconMock = vi.fn().mockReturnValue(false);
     let intersectionCallback: IntersectionObserverCallback | null = null;

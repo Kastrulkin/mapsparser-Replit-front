@@ -6,7 +6,7 @@
     if (!script) return;
     var trackerId = script.getAttribute("data-business") || "";
     if (trackerId.indexOf("pub_") !== 0) return;
-    var trackerVersion = "1.3.1";
+    var trackerVersion = "1.3.2";
     var schemaVersion = 2;
     var maxQueueSize = 100;
     var apiOrigin = new URL(script.src, window.location.href).origin;
@@ -151,10 +151,33 @@
       setupSectionTracking();
     }
 
+    function normalizedSectionLabel(value) {
+      return String(value || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    }
+
+    function linkedSectionLabel(element) {
+      if (!element.id) return "";
+      var links = Array.prototype.slice.call(document.querySelectorAll("a[href]"));
+      var match = links.find(function (link) {
+        try { return new URL(link.getAttribute("href"), window.location.href).hash === "#" + element.id; }
+        catch (_error) { return false; }
+      });
+      return match ? normalizedSectionLabel(match.innerText || match.textContent) : "";
+    }
+
+    function contentSectionLabel(element) {
+      var candidates = Array.prototype.slice.call(element.querySelectorAll(".t-title,.t-name,.t-heading,[data-elem-type='text'] .tn-atom,.t-text,.t-descr"));
+      for (var index = 0; index < candidates.length; index += 1) {
+        var value = normalizedSectionLabel(candidates[index].innerText || candidates[index].textContent);
+        if (value.length >= 3) return value;
+      }
+      return "";
+    }
+
     function sectionDescriptor(element, position) {
       var heading = element.querySelector("h1,h2,h3,[role='heading'],.t-title,.t-name,.t-heading");
-      var label = element.getAttribute("data-localos-section") || element.getAttribute("aria-label") || (heading ? heading.textContent : "") || element.id || "Секция " + position;
-      label = String(label).replace(/\s+/g, " ").trim().slice(0, 120);
+      var label = element.getAttribute("data-localos-section") || element.getAttribute("aria-label") || linkedSectionLabel(element) || (heading ? heading.textContent : "") || contentSectionLabel(element) || "Секция " + position;
+      label = normalizedSectionLabel(label);
       var key = element.getAttribute("data-localos-section") || element.id || label.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 100) || "section-" + position;
       return { element: element, key: key, label: label, position: position, visibleAt: 0, viewed: false, timer: 0 };
     }
