@@ -1343,6 +1343,8 @@ def test_sender_modes_are_explicit_and_never_fall_back_across_motions():
     assert resolve_sender_mode("localos_sales") == "localos"
     assert resolve_sender_mode("client_partnership") == "partner_business"
     assert resolve_sender_mode("client_partnership", "localos_for_partner") == "localos_for_partner"
+    assert resolve_sender_mode("creator_collaboration") == "partner_business"
+    assert resolve_sender_mode("creator_collaboration", "localos_for_partner") == "localos_for_partner"
 
     for motion, mode in (
         ("localos_sales", "partner_business"),
@@ -2321,6 +2323,7 @@ def test_official_activity_summary_ranks_before_individual_social_posts_for_beau
 
 
 def test_current_map_news_is_a_supported_content_activity_signal():
+    observed_at = datetime.now(timezone.utc).isoformat()
     ledger = build_evidence_ledger(
         {
             "workstream_type": "localos_sales",
@@ -2333,7 +2336,7 @@ def test_current_map_news_is_a_supported_content_activity_signal():
                     "parse_context": {
                         "facts_verified": True,
                         "last_parse_status": "completed",
-                        "last_parse_at": "2026-08-12T09:00:00Z",
+                        "last_parse_at": observed_at,
                     },
                 }
             },

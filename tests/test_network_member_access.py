@@ -1,6 +1,7 @@
 from flask import Flask
 
 from api import auth_user_api
+from api.prospecting.access_schema import _resolve_business_for_user
 from core.auth_helpers import verify_business_access
 from services.social_posts import dispatch_reports
 
@@ -12,6 +13,26 @@ class AccessCursor:
 
     def execute(self, query, params):
         self.executed.append((query, params))
+
+    def fetchone(self):
+        return self.row
+
+
+class PartnershipAccessCursor:
+    def __init__(self):
+        self.row = None
+
+    def execute(self, query, params):
+        normalized = " ".join(str(query).split()).lower()
+        if "exists ( select 1 from business_members" in normalized:
+            self.row = {
+                "owner_id": "owner-1",
+                "has_business_membership": False,
+                "has_network_membership": True,
+                "owns_network": False,
+            }
+        else:
+            self.row = None
 
     def fetchone(self):
         return self.row
@@ -33,6 +54,16 @@ def test_network_member_has_business_access():
     assert allowed is True
     assert owner_id == "owner-1"
     assert cursor.executed[0][1] == ("member-1", "member-1", "member-1", "business-1")
+
+
+def test_partnership_business_resolution_accepts_network_member():
+    business_id = _resolve_business_for_user(
+        PartnershipAccessCursor(),
+        {"user_id": "member-1", "is_superadmin": False},
+        "business-1",
+    )
+
+    assert business_id == "business-1"
 
 
 def test_direct_business_member_has_business_access():
@@ -204,7 +235,48 @@ def test_auth_me_returns_network_member_businesses(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["businesses"][0]["id"] == "business-1"
+    assert response.get_json()["businesses"][0]["web_tracking_available"] is False
     assert calls == ["member-1"]
+
+
+def test_auth_me_exposes_web_tracking_only_for_pilot_business(monkeypatch):
+    class FakeDatabaseManager:
+        def is_superadmin(self, user_id):
+            return False
+
+        def get_businesses_for_user_access(self, user_id):
+            return [
+                {"id": "business-1", "name": "Pilot"},
+                {"id": "business-2", "name": "Control"},
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setenv("WEB_TRACKING_ENABLED", "true")
+    monkeypatch.setenv("WEB_TRACKING_BUSINESS_IDS", "business-1")
+    monkeypatch.setattr(
+        auth_user_api,
+        "verify_session",
+        lambda token: {
+            "user_id": "member-1",
+            "email": "member@example.com",
+            "is_active": True,
+        },
+    )
+    monkeypatch.setattr(auth_user_api, "DatabaseManager", FakeDatabaseManager)
+
+    app = Flask(__name__)
+    app.register_blueprint(auth_user_api.auth_user_bp)
+    response = app.test_client().get(
+        "/api/auth/me",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    businesses = response.get_json()["businesses"]
+    assert businesses[0]["web_tracking_available"] is True
+    assert businesses[1]["web_tracking_available"] is False
 
 
 def test_network_member_migration_has_safe_constraints():

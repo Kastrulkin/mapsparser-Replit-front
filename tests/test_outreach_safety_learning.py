@@ -759,6 +759,50 @@ def test_worker_finalizes_no_reply_only_after_reply_sync_and_before_dispatch():
     assert 'OUTREACH_NO_REPLY_GRACE_HOURS", "168"' in block
 
 
+def test_reply_sync_failure_is_scoped_to_affected_senders(monkeypatch):
+    import worker
+
+    class FakeConnection:
+        def cursor(self):
+            return object()
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+    class FakeDatabase:
+        def __init__(self):
+            self.conn = FakeConnection()
+
+        def close(self):
+            return None
+
+    dispatched = {}
+    monkeypatch.setenv("OUTREACH_DISPATCH_ENABLED", "true")
+    monkeypatch.setenv("OUTREACH_DISPATCH_BUSINESS_IDS", "business-safe")
+    monkeypatch.setattr(
+        worker,
+        "_sync_outreach_replies_if_due",
+        lambda: {"healthy": False, "blocked_sender_ids": ["sender-failed"]},
+    )
+    monkeypatch.setattr(worker, "DatabaseManager", FakeDatabase)
+    monkeypatch.setattr(worker, "expire_manual_touches", lambda _cursor: 0)
+    monkeypatch.setattr(worker, "finalize_no_reply_campaigns", lambda _cursor, **_kwargs: 0)
+    monkeypatch.setattr(
+        worker,
+        "dispatch_due_outreach_queue",
+        lambda **kwargs: dispatched.update(kwargs) or {"picked": 0},
+    )
+    monkeypatch.setattr(worker.time, "time", lambda: 10_000.0)
+    worker._LAST_OUTREACH_DISPATCH_AT = 0.0
+
+    worker._dispatch_outreach_queue_if_due()
+
+    assert dispatched["blocked_sender_ids"] == ["sender-failed"]
+
+
 def test_background_dispatch_fails_closed_without_explicit_cohort():
     result = dispatch_due_outreach_queue(
         batch_size=20,

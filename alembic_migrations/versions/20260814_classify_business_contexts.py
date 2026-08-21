@@ -79,21 +79,25 @@ def upgrade():
     # them during reads. They cannot be confirmed anymore.
     op.execute(
         """
-        UPDATE action_requests request
-        SET status = 'expired', updated_at = NOW()
-        FROM action_approvals approval
-        WHERE approval.action_id = request.action_id
-          AND request.status = 'pending_human'
-          AND approval.expires_at <= NOW()
-        """
-    )
-    op.execute(
-        """
-        UPDATE action_approvals
-        SET status = 'expired', resolved_at = COALESCE(resolved_at, NOW()),
-            decision_reason = COALESCE(decision_reason, 'ttl expired during context reconciliation')
-        WHERE status = 'pending_human'
-          AND expires_at <= NOW()
+        DO $$
+        BEGIN
+            IF to_regclass('public.action_requests') IS NOT NULL
+               AND to_regclass('public.action_approvals') IS NOT NULL THEN
+                UPDATE action_requests request
+                SET status = 'expired', updated_at = NOW()
+                FROM action_approvals approval
+                WHERE approval.action_id = request.action_id
+                  AND request.status = 'pending_human'
+                  AND approval.expires_at <= NOW();
+
+                UPDATE action_approvals
+                SET status = 'expired', resolved_at = COALESCE(resolved_at, NOW()),
+                    decision_reason = COALESCE(decision_reason, 'ttl expired during context reconciliation')
+                WHERE status = 'pending_human'
+                  AND expires_at <= NOW();
+            END IF;
+        END
+        $$
         """
     )
 

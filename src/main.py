@@ -19,6 +19,7 @@ import random
 import re
 import threading
 import logging
+import time
 from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -26,7 +27,7 @@ import requests
 
 # GigaChat TLS verification is explicit: use GIGACHAT_SSL_VERIFY=false only as a documented provider workaround.
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'true')
-from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
+from flask import Flask, g, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.exceptions import HTTPException
@@ -145,6 +146,8 @@ from api.telegram_opportunity_radar_api import telegram_opportunity_radar_bp
 from api.telegram_research_api import telegram_research_bp
 from api.outreach_campaign_api import outreach_campaign_bp
 from api.material_downloads_api import material_downloads_bp
+from api.creator_promotion_api import creator_promotion_bp
+from api.web_tracking_api import ingestion_rate_limited_response, tracking_rate_limit_key, web_tracking_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
@@ -263,8 +266,17 @@ def rate_limit_if_available(limit_str):
     return decorator
 
 if limiter:
+    @app.before_request
+    def remember_web_tracking_request_start():
+        if request.path == "/api/tracking/events":
+            g.web_tracking_started_at = time.perf_counter()
+
     @app.errorhandler(429)
     def handle_rate_limit(error):
+        if request.path == "/api/tracking/events":
+            return ingestion_rate_limited_response(
+                getattr(g, "web_tracking_started_at", time.perf_counter())
+            )
         return jsonify(
             {
                 "success": False,
@@ -329,6 +341,20 @@ app.register_blueprint(telegram_opportunity_radar_bp)
 app.register_blueprint(telegram_research_bp)
 app.register_blueprint(outreach_campaign_bp)
 app.register_blueprint(material_downloads_bp)
+app.register_blueprint(creator_promotion_bp)
+app.register_blueprint(web_tracking_bp)
+if limiter:
+    _web_tracking_endpoint = "web_tracking_api.receive_tracking_events"
+    _web_tracking_view = app.view_functions[_web_tracking_endpoint]
+    _web_tracking_view = limiter.limit(
+        os.getenv("WEB_TRACKING_IP_TRACKER_RATE_LIMIT", "120 per minute"),
+        key_func=tracking_rate_limit_key,
+    )(_web_tracking_view)
+    _web_tracking_view = limiter.limit(
+        os.getenv("WEB_TRACKING_GLOBAL_RATE_LIMIT", "12000 per minute"),
+        key_func=lambda: "web_tracking_global",
+    )(_web_tracking_view)
+    app.view_functions[_web_tracking_endpoint] = _web_tracking_view
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:

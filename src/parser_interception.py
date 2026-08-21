@@ -370,6 +370,102 @@ class YandexMapsInterceptionParser:
         # Fallback на старый формат: /org/123456/
         match = re.search(r'/org/(\d+)', url)
         return match.group(1) if match else None
+
+    def _extract_ll_z_from_url(self, url: str) -> tuple:
+        """Extract map coordinates and zoom without raising on malformed input."""
+        if not url:
+            return (None, None)
+        try:
+            query = parse_qs(urlparse(url).query)
+            return (query.get("ll", [None])[0], query.get("z", [None])[0])
+        except Exception:
+            return (None, None)
+
+    def _build_overview_url(self, base_url: str, ll: Optional[str] = None, z: Optional[str] = None) -> str:
+        """Build an organization overview URL, removing a prices suffix."""
+        parsed = urlparse(re.sub(r"/prices/?", "/", base_url or ""))
+        path = (parsed.path or "").rstrip("/") + "/"
+        overview = f"{parsed.scheme or 'https'}://{parsed.netloc or 'yandex.ru'}{path}"
+        return f"{overview}?ll={ll}&z={z}" if ll and z else overview
+
+    def _is_location_info_org_bound(self, json_data: Any, request_url: str = "") -> bool:
+        """Return true only when a location-info payload belongs to the requested organization."""
+        target = str(self.org_id or "").strip()
+        if not target or not json_data:
+            return False
+        oid_pattern = re.compile(r"oid=(\d+)", re.I)
+        org_path_pattern = re.compile(r"/org/[^/]*/" + re.escape(target) + r"(?:/|$)", re.I)
+        remaining_nodes = 50000
+
+        def scalar_matches(value: Any) -> bool:
+            if isinstance(value, bool) or value is None:
+                return False
+            if isinstance(value, (int, float)):
+                return str(int(value)) == target
+            if not isinstance(value, str):
+                return False
+            normalized = value.strip()
+            if normalized == target:
+                return True
+            oid_match = oid_pattern.search(normalized)
+            return bool(
+                (oid_match and oid_match.group(1) == target)
+                or org_path_pattern.search(normalized)
+                or normalized.endswith(f"/{target}")
+                or normalized.endswith(f"/{target}/")
+            )
+
+        def walk(node: Any, depth: int) -> bool:
+            nonlocal remaining_nodes
+            remaining_nodes -= 1
+            if remaining_nodes <= 0 or depth > 20:
+                return False
+            if isinstance(node, dict):
+                return any(scalar_matches(value) or walk(value, depth + 1) for value in node.values())
+            if isinstance(node, list):
+                return any(scalar_matches(value) or walk(value, depth + 1) for value in node)
+            return scalar_matches(node)
+
+        try:
+            return walk(json_data, 0)
+        except (TypeError, RecursionError, KeyError):
+            return False
+
+    def _extract_org_object_from_location_info(self, json_data: Any) -> Optional[Dict[str, Any]]:
+        """Select the richest node explicitly tied to the requested organization."""
+        target = str(self.org_id or "").strip()
+        if not target:
+            return None
+        candidates = self._collect_org_id_matched_nodes(json_data, target)
+        if candidates:
+            return self._select_best_org_node(candidates)
+
+        uri_pattern = re.compile(r"(?:oid=|/org/[^/]*/)" + re.escape(target) + r"(?:/|$|&)", re.I)
+        uri_candidates: List[Dict[str, Any]] = []
+
+        def walk(node: Any) -> None:
+            if isinstance(node, dict):
+                uri = node.get("uri")
+                if isinstance(uri, str) and uri_pattern.search(uri):
+                    uri_candidates.append(node)
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for value in node:
+                    walk(value)
+
+        walk(json_data)
+        return self._select_best_org_node(uri_candidates)
+
+    def _score_location_info_payload(self, data: Any) -> int:
+        """Score non-empty core fields in an extracted location-info payload."""
+        if not isinstance(data, dict):
+            return 0
+        return sum(
+            1
+            for key in ("phone", "site", "hours", "hours_full", "rating", "description")
+            if data.get(key)
+        )
     
     def parse_yandex_card(self, url: str, session: BrowserSession) -> Dict[str, Any]:
         """
@@ -623,9 +719,8 @@ class YandexMapsInterceptionParser:
         if "/prices/" in current_url or current_url.rstrip("/").endswith("/prices"):
             print("⚠️ Редирект на страницу цен (/prices/). Переходим на overview по исходному URL...")
             # Используем исходный URL (с ll= из ссылки на карты) для стабилизации региона
-            overview_url = initial_url if initial_url and "/prices/" not in initial_url else url
-            if not overview_url or "/prices/" in overview_url:
-                overview_url = re.sub(r"/prices/?", "/", current_url)
+            ll, zoom = self._extract_ll_z_from_url(initial_url or current_url)
+            overview_url = self._build_overview_url(initial_url or current_url, ll, zoom)
             try:
                 # Ждём org API при переходе на overview
                 def _is_org_api_resp(r):
@@ -1381,9 +1476,10 @@ class YandexMapsInterceptionParser:
             
             # Специальная обработка для location-info API
             elif 'location-info' in url:
+                if self.org_id and not self._is_location_info_org_bound(json_data, url):
+                    print("⚠️ [LOCATION_INFO] location_info_rejected_not_org_bound (area-based)")
+                    continue
                 org_data = self._extract_location_info(json_data)
-                if org_data:
-                    print(f"✅ Извлечены данные организации из location-info API")
                 if org_data:
                     print(f"✅ Извлечены данные организации из location-info API")
                     data.update(org_data)
@@ -1583,8 +1679,7 @@ class YandexMapsInterceptionParser:
         target_node: Optional[Dict[str, Any]] = None
         target_org_id = str(self.org_id or "").strip()
         if target_org_id:
-            matched_nodes = self._collect_org_id_matched_nodes(json_data, target_org_id)
-            target_node = self._select_best_org_node(matched_nodes)
+            target_node = self._extract_org_object_from_location_info(json_data)
         
         def extract_nested(data):
             if isinstance(data, dict):
@@ -1722,17 +1817,21 @@ class YandexMapsInterceptionParser:
                 for value in data.values():
                     extract_nested(value)
 
-        if target_node:
+        if target_org_id:
+            if not target_node:
+                return {}
             extract_nested(target_node)
-        # Добираем оставшиеся поля из всего ответа, но уже не перезатираем собранное.
-        extract_nested(json_data)
+        else:
+            extract_nested(json_data)
+
+        fallback_payload = target_node if target_org_id else json_data
 
         # Fallback по наиболее частым путям (payload.company.*)
         try:
             addr_nested = (
-                _get_nested(json_data, "payload.company.address.formatted")
-                or _get_nested(json_data, "payload.company.address_name")
-                or _get_nested(json_data, "payload.company.fullAddress")
+                _get_nested(fallback_payload, "payload.company.address.formatted")
+                or _get_nested(fallback_payload, "payload.company.address_name")
+                or _get_nested(fallback_payload, "payload.company.fullAddress")
             )
             _set_if_empty(result, "address", addr_nested)
         except Exception:
@@ -1740,15 +1839,15 @@ class YandexMapsInterceptionParser:
 
         try:
             rating_nested = (
-                _get_nested(json_data, "payload.company.ratingData.rating")
-                or _get_nested(json_data, "payload.company.ratingData.score")
+                _get_nested(fallback_payload, "payload.company.ratingData.rating")
+                or _get_nested(fallback_payload, "payload.company.ratingData.score")
             )
             _set_if_empty(result, "rating", rating_nested)
         except Exception:
             pass
 
         try:
-            cnt = _get_nested(json_data, "payload.company.ratingData.count")
+            cnt = _get_nested(fallback_payload, "payload.company.ratingData.count")
             if isinstance(cnt, (int, float, str)):
                 try:
                     cnt_int = int(cnt)
@@ -1759,7 +1858,7 @@ class YandexMapsInterceptionParser:
             pass
 
         try:
-            rubrics = _get_nested(json_data, "payload.company.rubrics") or []
+            rubrics = _get_nested(fallback_payload, "payload.company.rubrics") or []
             names = []
             if isinstance(rubrics, list):
                 for r in rubrics:

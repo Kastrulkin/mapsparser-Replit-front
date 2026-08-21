@@ -373,6 +373,69 @@ def _build_children_education_network_summary(page_json: dict[str, Any], audit: 
     ).strip()
 
 
+def _build_spa_wellness_network_summary(page_json: dict[str, Any], audit: dict[str, Any]) -> str:
+    if isinstance(page_json.get("locations"), list):
+        locations = page_json.get("locations")
+    elif isinstance(audit.get("network_locations"), list):
+        locations = audit.get("network_locations")
+    else:
+        locations = []
+    location_rows = [item for item in locations if isinstance(item, dict)]
+    if not location_rows:
+        return _normalize_text(audit.get("summary_text"))
+
+    ratings = []
+    for item in location_rows:
+        try:
+            rating = float(item.get("rating"))
+        except (TypeError, ValueError):
+            continue
+        if rating > 0:
+            ratings.append(rating)
+
+    rating_text = ""
+    if ratings and min(ratings) == max(ratings):
+        rating_text = (
+            f"Во всех {len(ratings)} филиалах рейтинг {ratings[0]:.1f}. "
+            "По рейтингу разницы нет, поэтому сравниваем отзывы."
+        )
+    elif ratings:
+        rating_text = f"Рейтинг филиалов - от {min(ratings):.1f} до {max(ratings):.1f}."
+
+    by_low_share = sorted(
+        location_rows,
+        key=lambda item: float(item.get("low_rating_share") or 0),
+        reverse=True,
+    )
+    by_unanswered = sorted(
+        location_rows,
+        key=lambda item: int(item.get("unanswered_count") or 0),
+        reverse=True,
+    )
+
+    def short_address(item: dict[str, Any]) -> str:
+        address = _normalize_text(item.get("address"))
+        return address.removeprefix("Санкт-Петербург, ") or _normalize_text(item.get("name"))
+
+    negative_items = [item for item in by_low_share if float(item.get("low_rating_share") or 0) > 0][:3]
+    negative_text = ", ".join(
+        f"{short_address(item)} - {float(item.get('low_rating_share') or 0):.1f}%"
+        for item in negative_items
+    )
+    unanswered_items = [item for item in by_unanswered if int(item.get("unanswered_count") or 0) > 0][:3]
+    unanswered_text = ", ".join(
+        f"{short_address(item)} - {int(item.get('unanswered_count') or 0)}"
+        for item in unanswered_items
+    )
+
+    parts = [rating_text]
+    if negative_text:
+        parts.append(f"Самая высокая доля оценок 1-3: {negative_text}.")
+    if unanswered_text:
+        parts.append(f"Начать с ответов: {unanswered_text}.")
+    return " ".join(part for part in parts if part).strip()
+
+
 def _normalize_children_education_network_details(audit: dict[str, Any], *, slug: str) -> dict[str, Any]:
     next_audit = copy.deepcopy(audit)
     if slug != "shansik-set-detskikh-tantsevalnykh-studiy":
@@ -502,6 +565,11 @@ def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | N
         if audit_profile == "network_children_education":
             audit = _normalize_children_education_network_details(audit, slug=output_slug)
             network_summary = _build_children_education_network_summary(output, audit, slug=output_slug)
+            audit["summary_text"] = network_summary
+            audit["summary_public"] = truncate_sentence(network_summary, 300)
+            audit["summary_whatsapp"] = truncate_sentence(network_summary, 220)
+        elif audit_profile == "network_spa_wellness":
+            network_summary = _build_spa_wellness_network_summary(output, audit)
             audit["summary_text"] = network_summary
             audit["summary_public"] = truncate_sentence(network_summary, 300)
             audit["summary_whatsapp"] = truncate_sentence(network_summary, 220)

@@ -1456,7 +1456,7 @@ def test_hunter_timeout_and_rate_limit_are_retryable_but_bad_request_is_not():
     ) is False
 
 
-def test_failed_enrichment_exposes_an_actionable_workstream_state():
+def test_quality_rejection_exposes_an_actionable_workstream_state():
     cursor = FailureCursor()
 
     result = fail_enrichment_job(
@@ -1465,15 +1465,39 @@ def test_failed_enrichment_exposes_an_actionable_workstream_state():
         MessageQualityError("message_quality_failed", "Текст не прошёл quality gate"),
     )
 
-    assert result["status"] == "failed"
+    assert result["status"] == "needs_evidence"
     assert cursor.executions[0][1][4] == "message_quality_failed"
     workstream_query, workstream_params = cursor.executions[1]
     assert "lifecycle_status" in workstream_query
     assert "needs_attention" in workstream_query
     assert workstream_params == (
-        "failed",
+        "needs_evidence",
+        "needs_evidence",
         "Текст не прошёл quality gate",
-        "failed",
+        "needs_evidence",
+        "needs_evidence",
+        "job-1",
+    )
+
+
+def test_quality_gate_rejection_is_review_state_not_technical_failure():
+    cursor = FailureCursor()
+
+    result = fail_enrichment_job(
+        cursor,
+        {"id": "job-1", "attempt_count": 2, "max_attempts": 2},
+        MessageQualityError("message_quality_failed", "Текст не прошёл quality gate"),
+    )
+
+    assert result["status"] == "needs_evidence"
+    assert cursor.executions[0][1][4] == "message_quality_failed"
+    _workstream_query, workstream_params = cursor.executions[1]
+    assert workstream_params == (
+        "needs_evidence",
+        "needs_evidence",
+        "Текст не прошёл quality gate",
+        "needs_evidence",
+        "needs_evidence",
         "job-1",
     )
 

@@ -31,6 +31,8 @@ class CampaignHistoryCursor:
             }]
         elif "from outreach_campaign_events" in normalized:
             self.rows = []
+        elif "from lead_workstream_research" in normalized:
+            self.rows = []
         elif "from outreach_inbound_events" in normalized:
             self.rows = [{
                 "id": "reply-1",

@@ -1,5 +1,7 @@
 # Этап 1: сборка фронтенда (Vite/React)
 FROM node:20-slim AS frontend-builder
+ARG VITE_PROMOTION_HUB_ENABLED=false
+ENV VITE_PROMOTION_HUB_ENABLED=${VITE_PROMOTION_HUB_ENABLED}
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /app/frontend

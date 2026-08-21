@@ -93,6 +93,9 @@ from services.founder_content_editorial import (
     mark_founder_content_delivered,
     prepare_due_founder_content_drafts,
 )
+from services.web_tracking_maintenance import run_web_tracking_maintenance
+from services.creator_promotion_service import process_next_creator_search_job
+from services.creator_source_enrichment_service import process_creator_source_enrichment_batch
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -108,7 +111,10 @@ _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
 _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT = 0.0
+_LAST_WEB_TRACKING_MAINTENANCE_AT = 0.0
 _LAST_FOUNDER_CONTENT_AT = 0.0
+_LAST_CREATOR_SEARCH_AT = 0.0
+_LAST_CREATOR_SOURCE_ENRICHMENT_AT = 0.0
 
 
 def _record_external_card_change_if_enabled(
@@ -136,7 +142,11 @@ def _record_external_card_change_if_enabled(
         print(f"[KNOWLEDGE] Failed to record external card change for {business_id}: {exc}")
 _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_OUTREACH_REPLY_SYNC_AT = 0.0
-_OUTREACH_REPLY_SYNC_HEALTHY = True
+_OUTREACH_REPLY_SYNC_STATE = {
+    "healthy": True,
+    "global_block": False,
+    "blocked_sender_ids": [],
+}
 _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
 _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
@@ -1405,6 +1415,31 @@ def _env_bool(name: str, default: bool) -> bool:
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _run_web_tracking_maintenance_if_due() -> None:
+    global _LAST_WEB_TRACKING_MAINTENANCE_AT
+    if not _env_bool("WEB_TRACKING_MAINTENANCE_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("WEB_TRACKING_MAINTENANCE_INTERVAL_SEC", "3600")))
+    if now - _LAST_WEB_TRACKING_MAINTENANCE_AT < interval_sec:
+        return
+    _LAST_WEB_TRACKING_MAINTENANCE_AT = now
+    database = DatabaseManager()
+    try:
+        result = run_web_tracking_maintenance(
+            database.conn.cursor(),
+            dry_run=_env_bool("WEB_TRACKING_MAINTENANCE_DRY_RUN", True),
+            batch_size=max(100, min(int(os.getenv("WEB_TRACKING_RETENTION_BATCH_SIZE", "10000")), 50000)),
+        )
+        database.conn.commit()
+        print(f"[WEB_TRACKING_MAINTENANCE] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception as error:
+        database.conn.rollback()
+        print(f"[WEB_TRACKING_MAINTENANCE] failed={type(error).__name__}", flush=True)
+    finally:
+        database.close()
+
+
 def _run_yookassa_renewals_if_due() -> None:
     global _LAST_YOOKASSA_RENEWALS_AT
     if not _env_bool("YOOKASSA_RENEWALS_ENABLED", False):
@@ -1438,15 +1473,15 @@ def _run_yookassa_renewals_if_due() -> None:
         print(f"[YOOKASSA_RENEWALS] unexpected error: {e}", flush=True)
 
 
-def _sync_outreach_replies_if_due() -> bool:
-    global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_HEALTHY
+def _sync_outreach_replies_if_due() -> dict[str, Any]:
+    global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_STATE
     if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
-        return True
+        return {"healthy": True, "global_block": False, "blocked_sender_ids": []}
 
     now = time.time()
     interval_sec = max(10, int(os.getenv("OUTREACH_REPLY_SYNC_INTERVAL_SEC", "60")))
     if now - _LAST_OUTREACH_REPLY_SYNC_AT < interval_sec:
-        return _OUTREACH_REPLY_SYNC_HEALTHY
+        return dict(_OUTREACH_REPLY_SYNC_STATE)
     _LAST_OUTREACH_REPLY_SYNC_AT = now
 
     try:
@@ -1486,14 +1521,35 @@ def _sync_outreach_replies_if_due() -> bool:
                 f"failed={reply_sync_failed}",
                 flush=True,
             )
-        _OUTREACH_REPLY_SYNC_HEALTHY = (
-            reply_sync_failed <= 0 or not _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        failed_sender_ids = sorted({
+            str(item.get("sender_account_id") or "").strip()
+            for result in (email_reply_sync, vk_reply_sync)
+            for item in (result.get("sender_results") or [])
+            if item.get("status") == "failed" and str(item.get("sender_account_id") or "").strip()
+        })
+        accounted_failures = sum(
+            1
+            for result in (email_reply_sync, vk_reply_sync)
+            for item in (result.get("sender_results") or [])
+            if item.get("status") == "failed" and str(item.get("sender_account_id") or "").strip()
         )
-        return _OUTREACH_REPLY_SYNC_HEALTHY
+        unscoped_failures = max(0, reply_sync_failed - accounted_failures)
+        fail_closed = _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        _OUTREACH_REPLY_SYNC_STATE = {
+            "healthy": reply_sync_failed <= 0,
+            "global_block": bool(fail_closed and unscoped_failures > 0),
+            "blocked_sender_ids": failed_sender_ids if fail_closed else [],
+        }
+        return dict(_OUTREACH_REPLY_SYNC_STATE)
     except Exception as e:
         print(f"[OUTREACH_REPLY_SYNC] error: {e}", flush=True)
-        _OUTREACH_REPLY_SYNC_HEALTHY = not _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
-        return _OUTREACH_REPLY_SYNC_HEALTHY
+        fail_closed = _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        _OUTREACH_REPLY_SYNC_STATE = {
+            "healthy": False,
+            "global_block": fail_closed,
+            "blocked_sender_ids": [],
+        }
+        return dict(_OUTREACH_REPLY_SYNC_STATE)
 
 
 def _dispatch_outreach_queue_if_due() -> None:
@@ -1501,7 +1557,7 @@ def _dispatch_outreach_queue_if_due() -> None:
     reply_sync_ready = _sync_outreach_replies_if_due()
     if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
         return
-    if not reply_sync_ready:
+    if reply_sync_ready.get("global_block"):
         print("[OUTREACH_DISPATCH] skipped: reply_sync_failed", flush=True)
         return
 
@@ -1548,6 +1604,7 @@ def _dispatch_outreach_queue_if_due() -> None:
             campaign_only=True,
             allowed_business_ids=allowed_business_ids,
             allow_platform=allow_platform,
+            blocked_sender_ids=list(reply_sync_ready.get("blocked_sender_ids") or []),
         )
         picked = int(result.get("picked") or 0)
         if picked > 0:
@@ -1910,6 +1967,44 @@ def _process_operator_async_job_if_due() -> None:
             )
     except Exception:
         print("[OPERATOR_ASYNC_JOB] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _process_creator_search_if_due() -> None:
+    global _LAST_CREATOR_SEARCH_AT
+    if not _env_bool("INFLUENCER_ASYNC_SEARCH_ENABLED", True):
+        return
+    now = time.time()
+    interval_sec = max(1, int(os.getenv("INFLUENCER_SEARCH_INTERVAL_SEC", "2")))
+    if now - _LAST_CREATOR_SEARCH_AT < interval_sec:
+        return
+    _LAST_CREATOR_SEARCH_AT = now
+    try:
+        result = process_next_creator_search_job()
+        if result:
+            print(f"[CREATOR_SEARCH] job_id={result.get('id')} status={result.get('status')}", flush=True)
+    except Exception:
+        print("[CREATOR_SEARCH] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _enrich_creator_sources_if_due() -> None:
+    global _LAST_CREATOR_SOURCE_ENRICHMENT_AT
+    if not _env_bool("INFLUENCER_SOURCE_ENRICHMENT_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("INFLUENCER_SOURCE_ENRICHMENT_INTERVAL_SEC", "21600")))
+    if now - _LAST_CREATOR_SOURCE_ENRICHMENT_AT < interval_sec:
+        return
+    _LAST_CREATOR_SOURCE_ENRICHMENT_AT = now
+    try:
+        result = process_creator_source_enrichment_batch()
+        if result and result.get("selected"):
+            print(f"[CREATOR_SOURCE_ENRICHMENT] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception:
+        print("[CREATOR_SOURCE_ENRICHMENT] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
 
@@ -7030,6 +7125,8 @@ if __name__ == "__main__":
             _dispatch_agent_schedules_if_due()
             _process_agent_run_queue_if_due()
             _process_operator_async_job_if_due()
+            _enrich_creator_sources_if_due()
+            _process_creator_search_if_due()
             _process_contact_intelligence_if_due()
             _dispatch_social_posts_if_due()
             _collect_social_post_metrics_if_due()
@@ -7044,6 +7141,7 @@ if __name__ == "__main__":
             _check_openclaw_callback_alerts_if_due()
             _reconcile_openclaw_billing_if_due()
             _run_yookassa_renewals_if_due()
+            _run_web_tracking_maintenance_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)

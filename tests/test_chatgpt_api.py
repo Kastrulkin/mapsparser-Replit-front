@@ -2,15 +2,22 @@
 """
 Тесты для ChatGPT API endpoints
 """
-import requests
 import json
+import os
 import time
 from datetime import datetime, timedelta
 
+import pytest
+import requests
+
 # Конфигурация
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("CHATGPT_API_BASE_URL", "http://localhost:8000").rstrip("/")
 CHATGPT_USER_ID = "test_user_123"
 ADMIN_TOKEN = None  # Установите токен администратора для тестов статистики
+pytestmark = pytest.mark.skipif(
+    os.getenv("CHATGPT_API_INTEGRATION") != "1",
+    reason="set CHATGPT_API_INTEGRATION=1 for live HTTP integration tests",
+)
 
 def print_test(name):
     """Вывести название теста"""
@@ -461,4 +468,3 @@ if __name__ == "__main__":
     
     success = run_all_tests()
     sys.exit(0 if success else 1)
-

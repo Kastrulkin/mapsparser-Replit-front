@@ -74,16 +74,19 @@ def test_other_residential_chain_passes_current_deterministic_quality_gate():
         assert gate["total_score"] >= 15
 
 
-def test_yes_apart_chain_passes_current_deterministic_quality_gate():
+def test_yes_apart_chain_blocks_decorative_touches_until_specific_evidence_exists():
     name = "Yes apart"
     category = "Апарт-отель / жилой комплекс"
     candidate = _candidate(name, category, "https://yesapart.com", "workstream-yes-apart")
 
+    gates = []
     for message in _messages(name, category):
         gate = _manual_gate(message["text"], candidate, "email", message["angle"])
-        assert gate["passed"] is True
-        assert gate["total_score"] >= 15
-        assert gate["manual_review"]["passed"] is True
+        gates.append(gate)
+
+    assert any("DECORATIVE_PERSONALIZATION" in gate["reason_codes"] for gate in gates)
+    assert any(gate["checks"]["specificity"] is False for gate in gates)
+    assert all(gate["manual_review"]["passed"] is gate["passed"] for gate in gates)
 
 
 def test_shared_venue_and_wrong_brand_contacts_are_not_recipients():

@@ -49,6 +49,7 @@ def _client(monkeypatch):
     monkeypatch.setattr(operator_api, "DatabaseManager", FakeDatabaseManager)
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1", "id": "user-1"})
     monkeypatch.setattr(operator_api, "verify_business_access", lambda cursor, business_id, user_data: (True, "user-1"))
+    monkeypatch.setattr(operator_api, "_scope_automation_allowed", lambda cursor, scope, is_superadmin=False: True)
     monkeypatch.setattr(operator_api, "record_operator_event", lambda *args, **kwargs: None)
     return app.test_client()
 

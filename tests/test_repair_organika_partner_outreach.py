@@ -63,7 +63,7 @@ def test_fitness_offer_uses_confirmed_massage_services():
     assert "после тренировок" in messages[0]["text"]
 
 
-def test_all_supported_sequences_pass_the_quality_gate():
+def test_supported_sequences_do_not_bypass_specificity_gate():
     cases = (
         ("Oceankid", "Бассейн / центр развития ребёнка"),
         ("DESALU", "Магазин детской одежды"),
@@ -79,8 +79,14 @@ def test_all_supported_sequences_pass_the_quality_gate():
         candidate = _candidate(name, category, "https://example.test", f"ws-{index}")
         messages = _messages(name, category)
         assert len(messages) == 4
+        gates = []
         for message in messages:
             gate = _manual_gate(message["text"], candidate, "email", message["angle"])
-            assert gate["passed"] is True
-            assert gate["total_score"] >= 15
+            gates.append(gate)
             assert message["text"].count("?") == 1
+
+        assert any(
+            "DECORATIVE_PERSONALIZATION" in gate["reason_codes"]
+            for gate in gates
+        )
+        assert any(gate["checks"]["specificity"] is False for gate in gates)

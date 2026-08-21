@@ -121,7 +121,7 @@ def _decision_is_current(row: dict[str, Any]) -> bool:
 def _scope_sender_mode(workstream_type: str) -> str:
     if workstream_type == "localos_sales":
         return SENDER_MODE_LOCALOS
-    if workstream_type == "client_partnership":
+    if workstream_type in {"client_partnership", "creator_collaboration"}:
         return SENDER_MODE_LOCALOS_FOR_PARTNER
     raise ValueError("Unsupported workstream_type")
 
@@ -203,9 +203,9 @@ def _candidate_query(
 ) -> tuple[str, list[Any]]:
     filters = ["ws.workstream_type = %s"]
     params: list[Any] = [workstream_type]
-    if workstream_type == "client_partnership":
+    if workstream_type in {"client_partnership", "creator_collaboration"}:
         if not business_ids:
-            raise ValueError("At least one business_id is required for client_partnership")
+            raise ValueError("At least one business_id is required for business-scoped outreach")
         filters.append("ws.client_business_id = ANY(%s)")
         params.append(business_ids)
     if workstream_ids:
@@ -1150,7 +1150,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--workstream-type",
-        choices=("localos_sales", "client_partnership"),
+        choices=("localos_sales", "client_partnership", "creator_collaboration"),
         required=True,
     )
     parser.add_argument("--business-id", action="append", default=[])

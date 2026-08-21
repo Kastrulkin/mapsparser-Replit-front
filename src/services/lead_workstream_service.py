@@ -9,7 +9,8 @@ from typing import Any, Iterable
 
 LOCALOS_SALES = "localos_sales"
 CLIENT_PARTNERSHIP = "client_partnership"
-WORKSTREAM_TYPES = {LOCALOS_SALES, CLIENT_PARTNERSHIP}
+CREATOR_COLLABORATION = "creator_collaboration"
+WORKSTREAM_TYPES = {LOCALOS_SALES, CLIENT_PARTNERSHIP, CREATOR_COLLABORATION}
 
 
 def normalize_workstream_type(value: Any) -> str | None:
@@ -22,6 +23,9 @@ def normalize_workstream_type(value: Any) -> str | None:
         "client_partnership": CLIENT_PARTNERSHIP,
         "partnership": CLIENT_PARTNERSHIP,
         "partnership_outreach": CLIENT_PARTNERSHIP,
+        "creator": CREATOR_COLLABORATION,
+        "influencer": CREATOR_COLLABORATION,
+        "creator_collaboration": CREATOR_COLLABORATION,
         "client_outreach": LOCALOS_SALES,
     }
     return aliases.get(normalized)
@@ -156,6 +160,8 @@ def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[
 
 def lead_kind(workstreams: Iterable[dict[str, Any]]) -> str:
     types = {str(item.get("workstream_type") or "") for item in workstreams}
+    if CREATOR_COLLABORATION in types:
+        return "creator"
     if LOCALOS_SALES in types and CLIENT_PARTNERSHIP in types:
         return "both"
     if CLIENT_PARTNERSHIP in types:
@@ -516,8 +522,8 @@ def create_workstream(
     normalized_type = normalize_workstream_type(workstream_type)
     if normalized_type not in WORKSTREAM_TYPES:
         raise ValueError("Unsupported workstream_type")
-    if normalized_type == CLIENT_PARTNERSHIP and not client_business_id:
-        raise ValueError("client_business_id is required for client partnership")
+    if normalized_type in {CLIENT_PARTNERSHIP, CREATOR_COLLABORATION} and not client_business_id:
+        raise ValueError("client_business_id is required for business-scoped outreach")
     if normalized_type == LOCALOS_SALES:
         client_business_id = None
 
@@ -543,11 +549,11 @@ def create_workstream(
         cur.execute(
             """
             SELECT * FROM lead_workstreams
-            WHERE lead_id = %s AND workstream_type = 'client_partnership'
+            WHERE lead_id = %s AND workstream_type = %s
               AND client_business_id = %s
             LIMIT 1
             """,
-            (lead_id, client_business_id),
+            (lead_id, normalized_type, client_business_id),
         )
     existing = cur.fetchone()
     if existing:

@@ -15,6 +15,20 @@ depends_on = None
 
 
 def upgrade():
+    # Legacy installations created this table lazily at runtime. New databases
+    # must receive the base table from Alembic before the profile columns below.
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS userexamples (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            example_type TEXT NOT NULL,
+            example_text TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_user_examples_user_type ON userexamples(user_id, example_type)")
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS business_id TEXT REFERENCES businesses(id) ON DELETE CASCADE")
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS platform TEXT")
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'manual'")

@@ -92,9 +92,9 @@ def main() -> int:
         if args.apply:
             path.unlink()
 
-    remaining = [path for path, _timestamp in candidates if path in keep]
+    remaining = [(path, timestamp) for path, timestamp in candidates if path in keep]
     if remaining:
-        newest = max(remaining, key=lambda path: path.stat().st_mtime)
+        newest = max(remaining, key=lambda item: item[1])[0]
         latest = backup_dir / "latest.sql.gz"
         if args.apply:
             temporary = backup_dir / ".latest.sql.gz.tmp"

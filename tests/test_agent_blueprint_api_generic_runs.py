@@ -253,7 +253,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "use_ai_compiler: true" in agents_page_source
     assert "connect_required_integrations" in agents_page_source
     assert "recentPostCreateHandoff" in agents_page_source
-    assert "recentPostCreateHandoff?.connection_plan || agentConnectionPlan" in agents_page_source
+    assert "postCreateHandoff={recentPostCreateHandoff}" in agents_page_source
+    assert "connectionPlan={agentConnectionPlan}" in agents_page_source
     assert "binding_key" in agents_page_source
     assert "selectedBuilderConnectionBindings" in agents_page_source
     assert "selected_connection_bindings: selectedBuilderConnectionBindings" in agents_page_source
@@ -354,9 +355,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "next_binding" in builder_api_source
     assert "next_route" in builder_api_source
     assert "_preferred_handoff_route" in builder_api_source
-    assert "Следующий доступ" in agents_page_source
-    assert "recentPostCreateHandoff.next_binding" in agents_page_source
-    assert "recentPostCreateHandoff.next_route" in agents_page_source
+    assert "next_binding: nextBinding" in agents_page_source
+    assert "next_route: nextRoute" in agents_page_source
     assert "connection_plan" in api_source
     assert "localos_agent_connection_plan_v1" in api_source
     assert "agent_binding_integrations" in api_source

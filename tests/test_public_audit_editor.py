@@ -284,6 +284,49 @@ def test_normalize_public_audit_rewrites_children_network_summary_without_false_
     assert "отзывы" in summary.lower()
 
 
+def test_normalize_public_audit_makes_spa_network_summary_actionable() -> None:
+    page_json = {
+        "name": "Extra СПА - сеть",
+        "audit": {
+            "audit_profile": "network_spa_wellness",
+            "summary_text": "Услуги не раскрыты в карточке.",
+            "network_locations": [
+                {
+                    "address": "Санкт-Петербург, улица Типанова, 21",
+                    "rating": 5.0,
+                    "low_rating_share": 11.4,
+                    "unanswered_count": 20,
+                },
+                {
+                    "address": "Санкт-Петербург, Большая Пушкарская улица, 20",
+                    "rating": 5.0,
+                    "low_rating_share": 6.7,
+                    "unanswered_count": 30,
+                },
+                {
+                    "address": "Санкт-Петербург, проспект Энгельса, 154",
+                    "rating": 5.0,
+                    "low_rating_share": 4.9,
+                    "unanswered_count": 11,
+                },
+            ],
+            "current_state": {
+                "locations_count": 3,
+                "rating_min": 5.0,
+                "rating_max": 5.0,
+            },
+        },
+    }
+
+    normalized = normalize_public_audit_page_json(page_json)
+    summary = normalized["audit"]["summary_text"]
+
+    assert "по рейтингу разницы нет" in summary.lower()
+    assert "улица Типанова, 21 - 11.4%" in summary
+    assert "Большая Пушкарская улица, 20 - 30" in summary
+    assert "услуги не раскрыты" not in summary.lower()
+
+
 def test_normalize_public_audit_rewrites_shansik_weak_fit_and_top_issues_copy() -> None:
     page_json = {
         "slug": "shansik-set-detskikh-tantsevalnykh-studiy",

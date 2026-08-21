@@ -2,6 +2,18 @@
 # Postgres и приложение — в разных контейнерах; данные БД — в volume.
 
 services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   postgres:
     image: pgvector/pgvector:0.8.0-pg16-trixie
     restart: unless-stopped
@@ -21,18 +33,40 @@ services:
     build:
       context: .
       network: host
+      args:
+        VITE_PROMOTION_HUB_ENABLED: ${VITE_PROMOTION_HUB_ENABLED:-false}
     restart: unless-stopped
     environment:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
-      APP_ENV: ${APP_ENV:-}
+      APP_ENV: ${APP_ENV:-production}
       FRONTEND_URL: ${FRONTEND_URL:-}
       FRONTEND_DIST_DIR: /app/frontend/dist
       PUBLIC_FRONTEND_DIST_DIR: /app/frontend/public-dist
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
-      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-memory://}
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
+      WEB_TRACKING_ENABLED: ${WEB_TRACKING_ENABLED:-false}
+      WEB_TRACKING_CREATE_ENABLED: ${WEB_TRACKING_CREATE_ENABLED:-false}
+      WEB_TRACKING_INGEST_ENABLED: ${WEB_TRACKING_INGEST_ENABLED:-false}
+      WEB_TRACKING_ANALYTICS_ENABLED: ${WEB_TRACKING_ANALYTICS_ENABLED:-false}
+      WEB_TRACKING_BUSINESS_IDS: ${WEB_TRACKING_BUSINESS_IDS:-}
+      WEB_TRACKING_IP_TRACKER_RATE_LIMIT: ${WEB_TRACKING_IP_TRACKER_RATE_LIMIT:-120 per minute}
+      WEB_TRACKING_GLOBAL_RATE_LIMIT: ${WEB_TRACKING_GLOBAL_RATE_LIMIT:-12000 per minute}
+      WEB_TRACKING_IN_PROCESS_RATE_LIMIT: ${WEB_TRACKING_IN_PROCESS_RATE_LIMIT:-120}
+      PROMOTION_HUB_ENABLED: ${PROMOTION_HUB_ENABLED:-false}
+      INFLUENCER_DISCOVERY_ENABLED: ${INFLUENCER_DISCOVERY_ENABLED:-false}
+      INFLUENCER_OUTREACH_ENABLED: ${INFLUENCER_OUTREACH_ENABLED:-false}
+      INFLUENCER_METRICS_ENABLED: ${INFLUENCER_METRICS_ENABLED:-false}
+      INFLUENCER_BUSINESS_IDS: ${INFLUENCER_BUSINESS_IDS:-}
+      INFLUENCER_ASYNC_SEARCH_ENABLED: ${INFLUENCER_ASYNC_SEARCH_ENABLED:-true}
+      INFLUENCER_SOURCE_ENRICHMENT_ENABLED: ${INFLUENCER_SOURCE_ENRICHMENT_ENABLED:-false}
+      WEB_TRACKING_METRICS_REDIS_URL: ${WEB_TRACKING_METRICS_REDIS_URL:-redis://redis:6379/0}
+      WEB_TRACKING_METRICS_PREFIX: ${WEB_TRACKING_METRICS_PREFIX:-localos:web_tracking:ingestion}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      WEB_THREADS: ${WEB_THREADS:-4}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
       CONTENT_GENERATION_V2_ENABLED: ${CONTENT_GENERATION_V2_ENABLED:-false}
       PUBLIC_DEMO_ENABLED: ${PUBLIC_DEMO_ENABLED:-false}
       PUBLIC_DEMO_USER_ID: ${PUBLIC_DEMO_USER_ID:-}
@@ -206,9 +240,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    command: ["python", "src/main.py"]
+    command:
+      - /bin/sh
+      - -c
+      - exec gunicorn --bind 0.0.0.0:8000 --workers "$${WEB_CONCURRENCY:-2}" --threads "$${WEB_THREADS:-4}" --timeout "$${GUNICORN_TIMEOUT:-300}" --access-logfile - --error-logfile - src.main:app
 
   worker:
     build:
@@ -219,13 +258,22 @@ services:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
-      APP_ENV: ${APP_ENV:-}
+      APP_ENV: ${APP_ENV:-production}
       FRONTEND_URL: ${FRONTEND_URL:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
-      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-memory://}
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
       CONTENT_GENERATION_V2_ENABLED: ${CONTENT_GENERATION_V2_ENABLED:-false}
       FOUNDER_CONTENT_MORNING_ENABLED: ${FOUNDER_CONTENT_MORNING_ENABLED:-false}
+      WEB_TRACKING_MAINTENANCE_ENABLED: ${WEB_TRACKING_MAINTENANCE_ENABLED:-false}
+      WEB_TRACKING_MAINTENANCE_DRY_RUN: ${WEB_TRACKING_MAINTENANCE_DRY_RUN:-true}
+      WEB_TRACKING_MAINTENANCE_INTERVAL_SEC: ${WEB_TRACKING_MAINTENANCE_INTERVAL_SEC:-3600}
+      WEB_TRACKING_RETENTION_BATCH_SIZE: ${WEB_TRACKING_RETENTION_BATCH_SIZE:-10000}
+      INFLUENCER_ASYNC_SEARCH_ENABLED: ${INFLUENCER_ASYNC_SEARCH_ENABLED:-true}
+      INFLUENCER_SEARCH_INTERVAL_SEC: ${INFLUENCER_SEARCH_INTERVAL_SEC:-2}
+      INFLUENCER_SOURCE_ENRICHMENT_ENABLED: ${INFLUENCER_SOURCE_ENRICHMENT_ENABLED:-false}
+      INFLUENCER_SOURCE_ENRICHMENT_INTERVAL_SEC: ${INFLUENCER_SOURCE_ENRICHMENT_INTERVAL_SEC:-21600}
+      INFLUENCER_SOURCE_ENRICHMENT_BATCH_SIZE: ${INFLUENCER_SOURCE_ENRICHMENT_BATCH_SIZE:-100}
       FOUNDER_CONTENT_MORNING_HOUR: ${FOUNDER_CONTENT_MORNING_HOUR:-9}
       FOUNDER_CONTENT_MORNING_MINUTE: ${FOUNDER_CONTENT_MORNING_MINUTE:-30}
       FOUNDER_CONTENT_COOLDOWN_HOURS: ${FOUNDER_CONTENT_COOLDOWN_HOURS:-36}
@@ -475,6 +523,7 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
 
 networks:
   default:

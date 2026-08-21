@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [[ -z "${repo_root}" || "$(pwd -P)" != "$(cd "${repo_root}" && pwd -P)" ]]; then
-  echo "Run from project root (/opt/seo-app or local workspace root)"
-  exit 1
-fi
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
-dist_dir="${1:-frontend/dist}"
+dist_dir="${1:-${repo_root}/frontend/dist}"
 index_file="${2:-${dist_dir}/index.html}"
 
 if [[ ! -f "${index_file}" && -f "${dist_dir}/public-audit/index.html" ]]; then

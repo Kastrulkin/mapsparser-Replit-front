@@ -2,10 +2,10 @@ from pathlib import Path
 
 from flask import Flask
 
-from src.api import admin_prospecting
-from src.api.prospecting.search_routes import _geo_distance_km
-from src.api.prospecting.partner_discovery import _ensure_imported_partnership_workstream
-from src.api.admin_prospecting import (
+from api import admin_prospecting
+from api.prospecting.search_routes import _geo_distance_km
+from api.prospecting.partner_discovery import _ensure_imported_partnership_workstream
+from api.admin_prospecting import (
     _build_organika_partner_offer_text,
     _candidate_is_closed,
     _extract_card_profile_fields,
@@ -17,16 +17,16 @@ from src.api.admin_prospecting import (
     _partnership_source_requires_map_match,
     _select_partnership_map_candidate,
 )
-from src.core.audit_quality import evaluate_audit_quality
-from src.core.audit_editorial import apply_audit_editorial_pass
-from src.core import card_audit
-from src.core.card_audit import (
+from core.audit_quality import evaluate_audit_quality
+from core.audit_editorial import apply_audit_editorial_pass
+from core import card_audit
+from core.card_audit import (
     _build_reasoning_fields,
     _detect_audit_profile_details,
     _lead_snapshot_business_id,
     build_lead_card_preview_snapshot,
 )
-from src.api.prospecting import lead_parsing
+from api.prospecting import lead_parsing
 from scripts.backfill_partnership_match_artifacts import (
     _build_prerequisite_assessment,
     _has_verified_category_evidence,

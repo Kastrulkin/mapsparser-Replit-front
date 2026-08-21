@@ -126,6 +126,20 @@ def test_network_member_can_read_shared_business_external_summary(monkeypatch):
     assert response.get_json()["success"] is True
 
 
+def test_network_member_can_read_shared_business_external_reviews(monkeypatch):
+    monkeypatch.setattr(external_accounts_api, "verify_session", _network_member_session)
+    monkeypatch.setattr(external_accounts_api, "DatabaseManager", AccessDatabase)
+    monkeypatch.setattr(external_accounts_api, "get_business_owner_id", lambda cursor, business_id: "owner-1")
+
+    response = main.app.test_client().get(
+        "/api/business/business-1/external/reviews",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+
+
 def test_network_member_can_read_shared_business_external_posts(monkeypatch):
     monkeypatch.setattr(external_accounts_api, "verify_session", _network_member_session)
     monkeypatch.setattr(external_accounts_api, "DatabaseManager", AccessDatabase)

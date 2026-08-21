@@ -22,6 +22,7 @@ from flask import Blueprint, jsonify, request, send_file
 from psycopg2.extras import Json, RealDictCursor
 
 from auth_system import CONSENT_VERSION, normalize_email, verify_session
+from core.auth_helpers import verify_business_access
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
 from core.audit_quality import evaluate_audit_quality
@@ -494,17 +495,8 @@ def _resolve_business_for_user(cur, user_data: dict, requested_business_id: str 
         return None
     if is_superadmin:
         return business_id
-    cur.execute(
-        """
-        SELECT id
-        FROM businesses
-        WHERE id = %s AND owner_id = %s
-        LIMIT 1
-        """,
-        (business_id, user_id),
-    )
-    row = cur.fetchone()
-    return (row["id"] if hasattr(row, "get") else row[0]) if row else None
+    has_access, _owner_id = verify_business_access(cur, business_id, user_data)
+    return business_id if has_access else None
 
 def _ensure_partnership_columns(conn) -> None:
     cur = conn.cursor()

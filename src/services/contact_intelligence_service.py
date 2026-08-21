@@ -3113,7 +3113,12 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
     attempt_count = int(job.get("attempt_count") or 0)
     max_attempts = int(job.get("max_attempts") or 2)
     retryable = provider_error_is_retryable(error)
-    status = "retry_wait" if retryable and attempt_count < max_attempts else "failed"
+    quality_rejection = isinstance(error, MessageQualityError)
+    status = (
+        "needs_evidence"
+        if quality_rejection
+        else "retry_wait" if retryable and attempt_count < max_attempts else "failed"
+    )
     error_code = str(getattr(error, "code", "") or error.__class__.__name__)
     error_message = str(error)[:1000]
     cursor.execute(
@@ -3121,7 +3126,7 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
         UPDATE lead_enrichment_jobs
         SET status = %s, current_phase = %s,
             next_attempt_at = CASE WHEN %s = 'retry_wait' THEN NOW() + INTERVAL '10 minutes' ELSE next_attempt_at END,
-            completed_at = CASE WHEN %s = 'failed' THEN NOW() ELSE NULL END,
+            completed_at = CASE WHEN %s IN ('failed', 'needs_evidence') THEN NOW() ELSE NULL END,
             error_code = %s, error_message = %s, updated_at = NOW()
         WHERE id = %s
         RETURNING *
@@ -3135,10 +3140,15 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
     cursor.execute(
         """
         UPDATE lead_workstreams workstream
-        SET lifecycle_status = CASE WHEN %s = 'retry_wait' THEN 'enriching' ELSE 'needs_attention' END,
+        SET lifecycle_status = CASE
+                WHEN %s = 'retry_wait' THEN 'enriching'
+                WHEN %s = 'needs_evidence' THEN 'needs_evidence'
+                ELSE 'needs_attention'
+            END,
             status_reason = %s,
             next_step = CASE
                 WHEN %s = 'retry_wait' THEN 'LocalOS повторит enrichment автоматически'
+                WHEN %s = 'needs_evidence' THEN 'Добавьте подтверждённые факты и подготовьте текст заново'
                 ELSE 'Проверьте ошибку enrichment и запустите повторную обработку'
             END,
             state_changed_at = NOW(),
@@ -3147,7 +3157,7 @@ def fail_enrichment_job(cursor, job: dict[str, Any], error: Exception) -> dict[s
         WHERE job.id = %s
           AND workstream.id = job.workstream_id
         """,
-        (status, error_message, status, job.get("id")),
+        (status, status, error_message, status, status, job.get("id")),
     )
     return updated_job
 

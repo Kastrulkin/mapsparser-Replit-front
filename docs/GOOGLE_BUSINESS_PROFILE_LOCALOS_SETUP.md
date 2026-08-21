@@ -2,7 +2,10 @@
 
 Status: `beta / Google Basic API Access review pending`.
 
-Last verified: 30 July 2026. No approval response was found in the connected mailbox at that check.
+Last verified: 14 August 2026. A new access request was submitted using the
+verified LocalOS Business Profile after Google rejected the earlier client
+profile based request because the selected listing ID was associated with a
+different website.
 
 ## Current Decision
 
@@ -45,8 +48,9 @@ Do not commit the OAuth client secret. Store it only in production environment v
 
 ## New GBP Allowlist Project
 
-The repeat application uses a separate project and an agency account that
-manages a real, verified client profile.
+The repeat application uses a separate project for Google Business Profile API
+approval. The current access request uses the verified LocalOS Business Profile
+as the applicant evidence profile because its website is `https://localos.pro`.
 
 - Google Cloud project name: `LocalOS GBP`
 - Project ID: `localos-gbp`
@@ -63,6 +67,11 @@ The OAuth client secret is intentionally not documented or committed.
 
 ### Agency Organization And First Managed Profile
 
+- Applicant GBP profile: `LocalOS`
+- Applicant profile type: service-area business
+- Applicant profile status: `Verified`
+- Applicant profile website: `https://localos.pro/`
+- Applicant listing/fid observed in Google Search: `1691055692617577882`
 - GBP organization: `LocalOS`
 - Organization ID: `110155982680425683163`
 - Location group: `Клиенты LocalOS`
@@ -74,9 +83,10 @@ The OAuth client secret is intentionally not documented or committed.
 - LocalOS access level: manager
 - Primary ownership: unchanged
 
-The profile is the evidence that LocalOS operates as an agency managing an
-authorized client's established Business Profile. LocalOS itself is an online
-SaaS product and is not represented as a local storefront for this application.
+The LocalOS profile is the applicant evidence profile for API access. Managed
+client profiles remain proof of the agency/SaaS use case, but they should not be
+selected as the applicant profile when the company website field is
+`https://localos.pro`.
 
 ## Required Environment Variables
 
@@ -103,19 +113,28 @@ Submit the access request from Google Business Profile Help:
 The active repeat application was submitted with:
 
 - request type: `Application For Basic API Access`;
-- account: `info@localos.pro`;
+- signed-in account: `Demyanovap@gmail.com`;
 - Google Cloud project number: `649313441761`;
 - company website: `https://localos.pro`;
-- verified client profile: `Веселая расческа`, Проспект Энгельса, 154;
+- verified applicant profile: `LocalOS`;
 - use case: authorized owners and agencies connect their own Business Profiles
   to LocalOS to manage business information, services, approved posts, reviews,
   and performance data. External writes remain subject to explicit approval.
 
-Submitted on 2026-07-18.
+Submitted on 2026-08-14.
 
-- Google support case ID recorded in the setup work: `7-6688000041542`.
-- The user-facing help workflow later displayed confirmation ID `0-1749000041409` on 2026-07-19. Google has not confirmed whether these two references identify the same internal case, so both are retained for support searches.
+- Google support case ID: `1-0494000040762`.
 - Google-stated review time: approximately 7-10 business days.
+
+Rejected application superseded by the current request:
+
+- submitted on 2026-07-18;
+- Google support case ID recorded in the setup work: `7-6688000041542`;
+- user-facing help workflow confirmation ID: `0-1749000041409`;
+- selected evidence profile: `Веселая расческа`, Проспект Энгельса, 154;
+- company website: `https://localos.pro`;
+- result on 2026-08-06: rejected by Google's internal quality checks because
+  the selected listing ID was associated with a different website.
 
 Historical application (not the current allowlist request):
 

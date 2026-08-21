@@ -49,7 +49,7 @@ class _FinanceHealthCursor:
 
 
 def test_finance_health_describes_coverage_in_business_terms():
-    result = load_finance_data_health(_FinanceHealthCursor(), ["business-1"])
+    result = load_finance_data_health(_FinanceHealthCursor(), ["business-1"], now=NOW)
 
     assert result["data_health"]["source"] == "yclients_stats"
     assert result["data_health"]["coverage"] == ["sales", "services"]

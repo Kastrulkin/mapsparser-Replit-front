@@ -789,7 +789,7 @@ def _represented_business_opening(context: dict[str, Any]) -> str:
 def resolve_sender_mode(workstream_type: str, requested_mode: Any = None) -> str:
     """Resolve an explicit sender identity without allowing a hidden fallback."""
     motion = _text(workstream_type)
-    if motion not in {"localos_sales", "client_partnership"}:
+    if motion not in {"localos_sales", "client_partnership", "creator_collaboration"}:
         raise ValueError("Unsupported workstream_type for outreach sender")
     requested = _text(requested_mode).lower()
     default_mode = (
@@ -802,8 +802,8 @@ def resolve_sender_mode(workstream_type: str, requested_mode: Any = None) -> str
         raise ValueError("Unsupported sender_mode")
     if motion == "localos_sales" and mode != SENDER_MODE_LOCALOS:
         raise ValueError("LocalOS sales campaigns must be sent by LocalOS")
-    if motion == "client_partnership" and mode == SENDER_MODE_LOCALOS:
-        raise ValueError("Partner campaigns require partner_business or localos_for_partner sender_mode")
+    if motion in {"client_partnership", "creator_collaboration"} and mode == SENDER_MODE_LOCALOS:
+        raise ValueError("Business campaigns require partner_business or localos_for_partner sender_mode")
     return mode
 
 
@@ -1664,7 +1664,7 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
     workstream["sender_profile"] = _dict(cursor.fetchone())
     workstream["business_sender_profile"] = (
         dict(workstream["sender_profile"])
-        if workstream.get("workstream_type") == "client_partnership"
+        if workstream.get("workstream_type") in {"client_partnership", "creator_collaboration"}
         else {}
     )
     cursor.execute(
@@ -1678,7 +1678,7 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         """
     )
     workstream["platform_sender_profile"] = _dict(cursor.fetchone())
-    if workstream.get("workstream_type") == "client_partnership":
+    if workstream.get("workstream_type") in {"client_partnership", "creator_collaboration"}:
         cursor.execute(
             """
             SELECT COUNT(*) AS service_count

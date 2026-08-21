@@ -40,6 +40,59 @@ def _table_has_column(cursor, table_name: str, column_name: str) -> bool:
     return bool(row.get("has_column")) if isinstance(row, dict) else bool(row[0])
 
 
+def _network_attention_rows(cursor, where_sql: str, params: list[Any]) -> list[dict[str, Any]]:
+    """Return one current, user-facing health row per location."""
+    has_reviews = _table_exists(cursor, "externalbusinessreviews")
+    reviews_sql = """
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) FILTER (
+                WHERE COALESCE(NULLIF(TRIM(review.response_text), ''), '') IN ('', '—')
+                  AND COALESCE(review.is_current, TRUE) IS TRUE
+            ) AS unanswered_reviews
+            FROM externalbusinessreviews review
+            WHERE review.business_id = b.id
+        ) reviews ON TRUE
+    """ if has_reviews else "LEFT JOIN LATERAL (SELECT 0::bigint AS unanswered_reviews) reviews ON TRUE"
+
+    cursor.execute(
+        f"""
+        SELECT
+            b.id AS business_id,
+            b.name AS business_name,
+            b.address,
+            b.business_type,
+            b.yandex_url,
+            COALESCE(latest_card.rating, b.rating, 0) AS rating,
+            COALESCE(latest_card.reviews_count, b.reviews_count, 0) AS reviews_count,
+            COALESCE(
+                NULLIF(b.external_ids->>'yandex_news_count', '')::integer,
+                jsonb_array_length(
+                CASE
+                    WHEN jsonb_typeof(COALESCE(latest_card.news::jsonb, '[]'::jsonb)) = 'array'
+                    THEN COALESCE(latest_card.news::jsonb, '[]'::jsonb)
+                    ELSE '[]'::jsonb
+                END
+                ),
+                0
+            ) AS news_count,
+            COALESCE(reviews.unanswered_reviews, 0) AS unanswered_reviews_count
+        FROM businesses b
+        LEFT JOIN LATERAL (
+            SELECT card.rating, card.reviews_count, card.news
+            FROM cards card
+            WHERE card.business_id = b.id
+            ORDER BY card.is_latest DESC NULLS LAST, card.created_at DESC
+            LIMIT 1
+        ) latest_card ON TRUE
+        {reviews_sql}
+        WHERE {where_sql}
+        ORDER BY b.address, b.name
+        """,
+        params,
+    )
+    return [dict(row) for row in (cursor.fetchall() or [])]
+
+
 def require_auth(f):
     """Decorator to require authentication for API endpoints."""
     @wraps(f)
@@ -111,6 +164,8 @@ def get_network_health(current_user):
         if network_id:
             where_clauses.append("b.network_id = %s")
             params.append(network_id)
+            where_clauses.append("b.id <> %s")
+            params.append(network_id)
         
         if business_id:
             # Phase 0.1: Security & Validation
@@ -131,7 +186,6 @@ def get_network_health(current_user):
             params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
-        has_map_parse_results = _table_exists(cursor, "mapparseresults")
 
         # Для одного бизнеса — используем унифицированные метрики (external → cards → MapParseResults)
         if requested_business_id and not network_id:
@@ -147,39 +201,30 @@ def get_network_health(current_user):
             unanswered_reviews_count = (unr[0] if isinstance(unr, (list, tuple)) else unr.get('count', 0)) or 0
             locations_count = 1
         else:
-            # Агрегат по нескольким бизнесам — MapParseResults (последняя запись на бизнес)
-            if has_map_parse_results:
-                cursor.execute(f"""
-                    SELECT 
-                        COUNT(DISTINCT b.id) as locations_count,
-                        AVG(CAST(mpr.rating AS REAL)) as avg_rating,
-                        SUM(mpr.reviews_count) as total_reviews
-                    FROM Businesses b
-                    LEFT JOIN LATERAL (
-                        SELECT rating, reviews_count FROM MapParseResults
-                        WHERE business_id = b.id ORDER BY created_at DESC LIMIT 1
-                    ) mpr ON true
-                    WHERE {where_sql}
-                """, params)
-                row = cursor.fetchone()
-                locations_count = (row.get('locations_count') if isinstance(row, dict) else row[0]) or 0
-                avg_rating = round((row.get('avg_rating') if isinstance(row, dict) else row[1]) or 0, 1)
-                total_reviews = (row.get('total_reviews') if isinstance(row, dict) else row[2]) or 0
-            else:
-                cursor.execute(f"SELECT COUNT(DISTINCT b.id) AS locations_count FROM Businesses b WHERE {where_sql}", params)
-                row = cursor.fetchone() or {}
-                locations_count = (row.get('locations_count') if isinstance(row, dict) else row[0]) or 0
-                avg_rating = 0
-                total_reviews = 0
-            unanswered_reviews_count = 0
-        
-        # Count locations with alerts (placeholder for now)
-        locations_with_alerts = 0
+            location_rows = _network_attention_rows(cursor, where_sql, params)
+            locations_count = len(location_rows)
+            ratings = [float(row.get("rating") or 0) for row in location_rows if float(row.get("rating") or 0) > 0]
+            avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
+            total_reviews = sum(int(row.get("reviews_count") or 0) for row in location_rows)
+            unanswered_reviews_count = sum(int(row.get("unanswered_reviews_count") or 0) for row in location_rows)
+
+        if requested_business_id and not network_id:
+            attention_rows = _network_attention_rows(cursor, where_sql, params)
+        else:
+            attention_rows = location_rows
+
+        locations_with_alerts = sum(
+            1
+            for row in attention_rows
+            if int(row.get("news_count") or 0) == 0
+            or int(row.get("unanswered_reviews_count") or 0) > 0
+            or (0 < float(row.get("rating") or 0) < 4.5)
+        )
         alerts_breakdown = {
-            "stale_news": 0,
+            "stale_news": sum(1 for row in attention_rows if int(row.get("news_count") or 0) == 0),
             "stale_photos": 0,
-            "unanswered_reviews": 0,
-            "low_rating": 0
+            "unanswered_reviews": sum(1 for row in attention_rows if int(row.get("unanswered_reviews_count") or 0) > 0),
+            "low_rating": sum(1 for row in attention_rows if 0 < float(row.get("rating") or 0) < 4.5),
         }
         
         db.close()
@@ -258,6 +303,8 @@ def get_location_alerts(current_user):
         if network_id:
             where_clauses.append("b.network_id = %s")
             params.append(network_id)
+            where_clauses.append("b.id <> %s")
+            params.append(network_id)
 
         if business_id:
             # Phase 0.1: Security & Validation
@@ -277,49 +324,7 @@ def get_location_alerts(current_user):
             params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
-        has_map_parse_results = _table_exists(cursor, "mapparseresults")
-        has_usernews_business_id = _table_has_column(cursor, "usernews", "business_id")
-        
-        # Get all businesses with their thresholds and latest activity
-        if has_map_parse_results:
-            cursor.execute(f"""
-                SELECT 
-                    b.id as business_id,
-                    b.name as business_name,
-                    b.business_type,
-                    bt.alert_threshold_news_days,
-                    bt.alert_threshold_photos_days,
-                    bt.alert_threshold_reviews_days,
-                    mpr.rating,
-                    mpr.reviews_count,
-                    mpr.photos_count,
-                    mpr.created_at as last_parse
-                FROM Businesses b
-                LEFT JOIN BusinessTypes bt ON b.business_type = bt.type_key
-                LEFT JOIN MapParseResults mpr ON b.id = mpr.business_id
-                WHERE {where_sql}
-                ORDER BY b.name
-            """, params)
-        else:
-            cursor.execute(f"""
-                SELECT 
-                    b.id as business_id,
-                    b.name as business_name,
-                    b.business_type,
-                    bt.alert_threshold_news_days,
-                    bt.alert_threshold_photos_days,
-                    bt.alert_threshold_reviews_days,
-                    NULL::float AS rating,
-                    NULL::int AS reviews_count,
-                    NULL::int AS photos_count,
-                    NULL::timestamp AS last_parse
-                FROM Businesses b
-                LEFT JOIN BusinessTypes bt ON b.business_type = bt.type_key
-                WHERE {where_sql}
-                ORDER BY b.name
-            """, params)
-        
-        businesses = cursor.fetchall()
+        businesses = _network_attention_rows(cursor, where_sql, params)
         locations_with_alerts = []
         
         for biz in businesses:
@@ -328,78 +333,46 @@ def get_location_alerts(current_user):
             business_type = biz['business_type']
             rating = float(biz['rating']) if biz['rating'] else None
             
-            # Get thresholds (with defaults if not configured)
-            threshold_news = biz['alert_threshold_news_days'] or 30
-            threshold_photos = biz['alert_threshold_photos_days'] or 90
-            threshold_reviews = biz['alert_threshold_reviews_days'] or 7
-            
             alerts = []
-            
-            # Check for stale news
-            news_row = None
-            if has_usernews_business_id:
-                cursor.execute("""
-                    SELECT MAX(created_at) as last_news
-                    FROM UserNews
-                    WHERE business_id = %s
-                """, (business_id,))
-                news_row = cursor.fetchone()
 
-            last_news_value = None
-            if isinstance(news_row, dict):
-                last_news_value = news_row.get('last_news')
-            elif isinstance(news_row, (list, tuple)) and news_row:
-                last_news_value = news_row[0]
+            news_count = int(biz.get("news_count") or 0)
+            unanswered_count = int(biz.get("unanswered_reviews_count") or 0)
+            if news_count == 0 and (not alert_type or alert_type == 'stale_news'):
+                alerts.append({
+                    "type": "stale_news",
+                    "severity": "warning",
+                    "count": 0,
+                    "message": "В карточке нет новостей",
+                })
 
-            if last_news_value:
-                if isinstance(last_news_value, str):
-                    last_news = datetime.fromisoformat(last_news_value)
-                else:
-                    last_news = last_news_value
-                days_since_news = (datetime.now() - last_news).days
+            if unanswered_count > 0 and (not alert_type or alert_type == 'unanswered_reviews'):
+                alerts.append({
+                    "type": "unanswered_reviews",
+                    "severity": "urgent",
+                    "count": unanswered_count,
+                    "message": f"Отзывов без ответа: {unanswered_count}",
+                })
 
-                if days_since_news > threshold_news:
-                    if not alert_type or alert_type == 'stale_news':
-                        alerts.append({
-                            "type": "stale_news",
-                            "severity": "warning",
-                            "days_since": days_since_news,
-                            "threshold": threshold_news,
-                            "message": f"Новости не обновлялись {days_since_news} дней (порог: {threshold_news})"
-                        })
-            elif has_usernews_business_id:
-                # No news at all
-                if not alert_type or alert_type == 'stale_news':
-                    alerts.append({
-                        "type": "stale_news",
-                        "severity": "warning",
-                        "days_since": None,
-                        "threshold": threshold_news,
-                        "message": f"Нет новостей"
-                    })
-            
-            # Check for stale photos (placeholder - need to implement photo tracking)
-            # For now, skip
-            
-            # Check for low rating (below average)
-            if rating and rating < 4.0:  # Hardcoded threshold for now
+            if rating and rating < 4.5:
                 if not alert_type or alert_type == 'low_rating':
                     alerts.append({
                         "type": "low_rating",
                         "severity": "info",
                         "rating": rating,
-                        "message": f"Рейтинг {rating} ниже среднего"
+                        "message": f"Рейтинг {rating:.1f} ниже сильных точек сети"
                     })
-            
-            # Add unanswered reviews check (placeholder)
-            # TODO: Implement when external review sync is available
             
             if alerts:
                 locations_with_alerts.append({
                     "business_id": business_id,
                     "business_name": business_name,
                     "business_type": business_type,
+                    "address": biz.get("address"),
+                    "yandex_url": biz.get("yandex_url"),
                     "rating": rating,
+                    "reviews_count": int(biz.get("reviews_count") or 0),
+                    "news_count": news_count,
+                    "unanswered_reviews_count": unanswered_count,
                     "alerts": alerts
                 })
         

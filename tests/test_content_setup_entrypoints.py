@@ -3,6 +3,7 @@ from pathlib import Path
 
 CONTENT_PAGE = Path("frontend/src/pages/dashboard/ContentPage.tsx")
 AUDIENCE_INSIGHTS = Path("frontend/src/components/AudienceInsights.tsx")
+CONTENT_WORKSPACE_COPY = Path("frontend/src/i18n/contentWorkspaceCopy.ts")
 CONTENT_PLAN_SERVICE = Path("src/services/content_plan_service.py")
 
 
@@ -27,8 +28,9 @@ def test_content_setup_values_are_saved_and_used_for_generation() -> None:
 
 def test_audience_insights_opens_source_selection_in_a_drawer() -> None:
     source = AUDIENCE_INSIGHTS.read_text(encoding="utf-8")
+    copy_source = CONTENT_WORKSPACE_COPY.read_text(encoding="utf-8")
 
-    assert "Настроить источники" in source
-    assert "Добавить канал конкурента" in source
+    assert "Настроить источники" in copy_source
+    assert "Добавить канал конкурента" in copy_source
     assert '<TelegramResearchSetup businessId={businessId} mode="sources" />' in source
     assert '<Sheet open={sourcesOpen}' in source

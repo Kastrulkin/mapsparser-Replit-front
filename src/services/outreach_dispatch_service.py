@@ -26,6 +26,7 @@ def dispatch_due_outreach_queue(
     allowed_business_ids: list[str] | None = None,
     allow_platform: bool = False,
     max_daily_outreach_batch: int | None = None,
+    blocked_sender_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Dispatch queued/retry outreach items to the configured outbound provider."""
     from api import admin_prospecting as p
@@ -34,6 +35,11 @@ def dispatch_due_outreach_queue(
     cohort_business_ids = sorted({
         str(item or "").strip()
         for item in (allowed_business_ids or [])
+        if str(item or "").strip()
+    })
+    blocked_senders = sorted({
+        str(item or "").strip()
+        for item in (blocked_sender_ids or [])
         if str(item or "").strip()
     })
     if campaign_only and not allow_platform and not cohort_business_ids:
@@ -132,6 +138,10 @@ def dispatch_due_outreach_queue(
         if queue_id:
             query += " AND q.id = %s"
             params.append(queue_id)
+        if blocked_senders:
+            placeholders = ",".join(["%s"] * len(blocked_senders))
+            query += f" AND q.sender_account_id IS NOT NULL AND q.sender_account_id NOT IN ({placeholders})"
+            params.extend(blocked_senders)
         if campaign_only:
             query += " AND q.campaign_touch_id IS NOT NULL"
             cohort_clauses: list[str] = []

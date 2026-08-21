@@ -9,7 +9,7 @@ def test_compose_passes_security_runtime_env_to_app_and_worker():
     required = [
         "ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}",
         "RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}",
-        "RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-memory://}",
+        "RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}",
         "EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}",
     ]
     for item in required:

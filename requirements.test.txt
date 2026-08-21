@@ -7,3 +7,4 @@ flask
 flask-migrate
 flask-sqlalchemy
 pip-audit
+python-telegram-bot[socks]==20.8

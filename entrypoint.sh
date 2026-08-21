@@ -37,9 +37,14 @@ try:
     print(f"Acquiring migration advisory lock {lock_id}...")
     cur.execute("SELECT pg_advisory_lock(%s)", (lock_id,))
     print("Migration lock acquired.")
-    cur.execute("SELECT version_num FROM alembic_version LIMIT 1")
-    row = cur.fetchone()
-    current_db_revision = row[0] if row else None
+    cur.execute("SELECT to_regclass('public.alembic_version')")
+    alembic_version_table = cur.fetchone()[0]
+    if alembic_version_table:
+        cur.execute("SELECT version_num FROM alembic_version LIMIT 1")
+        row = cur.fetchone()
+        current_db_revision = row[0] if row else None
+    else:
+        current_db_revision = None
 
     versions_dir = Path("/app/alembic_migrations/versions")
     available_migration_files = sorted(path.name for path in versions_dir.glob("*.py"))

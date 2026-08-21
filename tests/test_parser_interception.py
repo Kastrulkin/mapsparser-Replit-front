@@ -87,6 +87,31 @@ def test_location_info_org_bound_recursive():
     print("✅ test_location_info_org_bound_recursive passed")
 
 
+def test_foreign_location_info_does_not_contaminate_core_fields():
+    parser = YandexMapsInterceptionParser()
+    parser.org_id = "203293742306"
+    parser.api_responses = {
+        "https://yandex.ru/maps/api/location-info": {
+            "data": {
+                "items": [
+                    {
+                        "id": "999",
+                        "title": "Чужая организация",
+                        "address": "Чужой адрес",
+                        "rating": 5,
+                    }
+                ]
+            }
+        }
+    }
+
+    result = parser._extract_data_from_responses()
+
+    assert result["title"] == ""
+    assert result["address"] == ""
+    assert result["rating"] == ""
+
+
 def test_extract_org_object_from_location_info():
     """Извлечение объекта организации из location-info."""
     parser = YandexMapsInterceptionParser()
@@ -153,7 +178,7 @@ def test_extract_ll_z_and_build_overview_url():
     print("✅ test_extract_ll_z_and_build_overview_url passed")
 
 
-def test_parser_interception():
+def run_parser_interception_smoke():
     """Тестирование Network Interception парсера"""
     
     # Тестовый URL
@@ -218,7 +243,6 @@ if __name__ == "__main__":
     test_wait_for_goods_logic()
     # Интеграционный тест (требует браузер) — пропустить при --unit-only
     if "--unit-only" not in sys.argv:
-        success = test_parser_interception()
+        success = run_parser_interception_smoke()
         sys.exit(0 if success else 1)
     print("✅ Unit tests OK (integration skipped)")
-

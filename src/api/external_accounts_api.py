@@ -1958,13 +1958,13 @@ def get_external_reviews(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
-        owner_id = get_business_owner_id(cursor, business_id)
+        # Проверяем доступ владельца, участника бизнеса или участника сети.
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
