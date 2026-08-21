@@ -1,14 +1,14 @@
 """Allow website section analytics events.
 
 Revision ID: 20260821_001
-Revises: 20260816_001
+Revises: 20260820_002
 """
 
 from alembic import op
 
 
 revision = "20260821_001"
-down_revision = "20260816_001"
+down_revision = "20260820_002"
 branch_labels = None
 depends_on = None
 
