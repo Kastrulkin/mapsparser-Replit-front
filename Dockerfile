@@ -9,7 +9,7 @@ ARG VITE_WEB_TRACKING_ENABLED=false
 ARG VITE_PROMOTION_HUB_ENABLED=false
 RUN VITE_WEB_TRACKING_ENABLED="$VITE_WEB_TRACKING_ENABLED" \
     VITE_PROMOTION_HUB_ENABLED="$VITE_PROMOTION_HUB_ENABLED" \
-    npm run build
+    npm run build:all
 
 # Этап 2: backend + worker
 # Базовый образ Python 3.11 на Debian bookworm (стабильный apt-канал).
@@ -66,8 +66,9 @@ RUN python -m playwright install chromium
 
 # Код проекта (src, scripts, tests и т.д.). Папка scripts/ не должна быть в .dockerignore (migrate_sqlite_to_postgres.py, smoke).
 COPY . .
-# Подставляем собранный фронтенд из первого этапа (поле «Город» и прочие правки всегда актуальны)
+# Подставляем оба собранных фронтенда из первого этапа.
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --from=frontend-builder /app/frontend/public-dist ./frontend/public-dist
 
 # Entrypoint: ждёт Postgres, выполняет flask db upgrade, затем exec CMD
 COPY entrypoint.sh /app/entrypoint.sh
