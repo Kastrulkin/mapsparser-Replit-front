@@ -33,6 +33,9 @@ services:
     build:
       context: .
       network: host
+      args:
+        VITE_PROMOTION_HUB_ENABLED: ${VITE_PROMOTION_HUB_ENABLED:-false}
+        VITE_WEB_TRACKING_ENABLED: ${VITE_WEB_TRACKING_ENABLED:-false}
     restart: unless-stopped
     environment:
       DEBUG_DIR: /app/debug_data

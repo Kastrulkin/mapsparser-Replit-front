@@ -5,7 +5,11 @@ COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /app/frontend
 RUN npm ci --legacy-peer-deps
 COPY frontend/ .
-RUN npm run build
+ARG VITE_WEB_TRACKING_ENABLED=false
+ARG VITE_PROMOTION_HUB_ENABLED=false
+RUN VITE_WEB_TRACKING_ENABLED="$VITE_WEB_TRACKING_ENABLED" \
+    VITE_PROMOTION_HUB_ENABLED="$VITE_PROMOTION_HUB_ENABLED" \
+    npm run build
 
 # Этап 2: backend + worker
 # Базовый образ Python 3.11 на Debian bookworm (стабильный apt-канал).
