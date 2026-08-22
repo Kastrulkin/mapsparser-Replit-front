@@ -3,19 +3,23 @@ import { Navigate, useOutletContext } from 'react-router-dom';
 import {
   Activity,
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   BarChart3,
   Check,
   Clipboard,
   ExternalLink,
   Globe2,
+  History,
+  Plug,
   RefreshCw,
   Route,
+  Settings2,
   ShieldCheck,
 } from 'lucide-react';
 
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { WebAnalyticsInsights } from '@/components/web-analytics/WebAnalyticsInsights';
+import { WebAnalyticsWorkspace } from '@/components/web-analytics/WebAnalyticsWorkspace';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -53,6 +57,13 @@ type Metrics = {
   top_paths: Array<{ path: string; sessions: number }>;
   sections: Array<{ hostname?: string; path: string; key: string; label: string; position: number; views: number; visitors: number; sessions: number; reach_percent: number; average_engagement_seconds: number; exits: number }>;
   funnel: { sessions: number; target_actions: number; requires_page_groups: boolean };
+  funnel_v2?: { configured: boolean; stages: Array<{ key: string; label: string; sessions: number }> };
+  cta_performance?: Array<{ cta_id: string; label?: string | null; impressions: number; clicks: number; ctr_percent: number }>;
+  form_funnels?: Array<{ form_id: string; starts: number; validation_errors: number; attempts: number; successes: number; submit_errors: number }>;
+  confirmed_outcomes?: Array<{ event_type: string; count: number; attributed: number; revenue: number | string; currency?: string | null }>;
+  devices?: Array<{ device_type: string; sessions: number; visitors: number }>;
+  visitor_cohorts?: { new_visitors?: number; returning_visitors?: number };
+  recommendations?: Array<{ kind: string; title: string; detail: string }>;
 };
 
 const numberValue = (value: unknown) => {
@@ -95,6 +106,7 @@ export const WebAnalyticsPage = () => {
   const copy = getWebAnalyticsCopy(language);
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [period, setPeriod] = useState(30);
+  const [activeView, setActiveView] = useState('overview');
   const [tracker, setTracker] = useState<Tracker | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -205,6 +217,20 @@ export const WebAnalyticsPage = () => {
 
       {error ? <div role="alert" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div> : null}
 
+      <nav aria-label="Разделы аналитики" className="flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1 shadow-inner">
+        {[
+          { key: 'overview', label: 'Результаты', icon: BarChart3 },
+          { key: 'setup', label: 'Цели сайта', icon: Settings2 },
+          { key: 'changes', label: 'Изменения', icon: History },
+          { key: 'integration', label: 'Подключения', icon: Plug },
+        ].map((item) => {
+          const Icon = item.icon;
+          return <button key={item.key} type="button" onClick={() => setActiveView(item.key)} className={cn('flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96]', activeView === item.key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800')}><Icon className="h-4 w-4" />{item.label}</button>;
+        })}
+      </nav>
+
+      {activeView === 'overview' ? <>
+
       <DashboardSection
         title={working ? copy.workingTitle : copy.connectTitle}
         description={working
@@ -267,6 +293,8 @@ export const WebAnalyticsPage = () => {
         <Metric label={copy.targetActions} value={totals.conversions} previous={totals.previous_conversions} copy={copy} />
       </div>
 
+      <WebAnalyticsInsights metrics={metrics} locale={copy.locale} />
+
       <div className="grid gap-6 xl:grid-cols-2">
         <DashboardSection title={copy.sourcesTitle} description={copy.sourcesDescription}>
           {(metrics?.traffic_sources || []).length ? (
@@ -324,20 +352,10 @@ export const WebAnalyticsPage = () => {
         </div>
       </DashboardSection>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <DashboardSection title={copy.pathsTitle} description={copy.pathsDescription}>
-          {(metrics?.top_paths || []).length ? <div className="space-y-2">{metrics?.top_paths.map((item) => <div key={item.path} className="flex gap-3 rounded-xl bg-slate-50 px-4 py-3"><Route className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><div className="text-sm font-medium leading-6 text-slate-800">{item.path}</div><div className="mt-1 text-xs text-slate-500 tabular-nums">{formatWebAnalyticsCopy(copy.sessionsCount, { value: formatNumber(item.sessions, copy.locale) })}</div></div></div>)}</div> : <p className="py-8 text-center text-sm text-slate-500">{copy.pathsEmpty}</p>}
-        </DashboardSection>
-        <DashboardSection title={copy.funnelTitle} description={copy.funnelDescription}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-xl bg-slate-950 px-4 py-3 text-white"><span>{copy.sessions}</span><strong className="tabular-nums">{formatNumber(metrics?.funnel.sessions, copy.locale)}</strong></div>
-            <div className="flex justify-center text-slate-300"><ArrowRight className="h-4 w-4 rotate-90" /></div>
-            <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">{copy.funnelFuture}</div>
-            <div className="flex justify-center text-slate-300"><ArrowRight className="h-4 w-4 rotate-90" /></div>
-            <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3 text-emerald-900 ring-1 ring-emerald-200"><span>{copy.targetActions}</span><strong className="tabular-nums">{formatNumber(metrics?.funnel.target_actions, copy.locale)}</strong></div>
-          </div>
-        </DashboardSection>
-      </div>
+      <DashboardSection title={copy.pathsTitle} description={copy.pathsDescription}>
+        {(metrics?.top_paths || []).length ? <div className="grid gap-2 lg:grid-cols-2">{metrics?.top_paths.map((item) => <div key={item.path} className="flex gap-3 rounded-xl bg-slate-50 px-4 py-3"><Route className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><div className="text-sm font-medium leading-6 text-slate-800">{item.path}</div><div className="mt-1 text-xs text-slate-500 tabular-nums">{formatWebAnalyticsCopy(copy.sessionsCount, { value: formatNumber(item.sessions, copy.locale) })}</div></div></div>)}</div> : <p className="py-8 text-center text-sm text-slate-500">{copy.pathsEmpty}</p>}
+      </DashboardSection>
+      </> : <WebAnalyticsWorkspace businessId={currentBusinessId} mode={activeView === 'changes' ? 'changes' : activeView === 'integration' ? 'integration' : 'setup'} onChanged={() => void load(true)} />}
     </div>
   );
 };

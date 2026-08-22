@@ -31,6 +31,29 @@ from services.web_tracking_service import (
     validate_tracker_domains,
 )
 from services.web_tracking_observability import get_ingestion_metrics, record_ingestion_metrics
+from services.web_tracking_goals_service import (
+    WebConversionAuthenticationError,
+    WebTrackingConfigurationError,
+    conversion_key_status,
+    delete_annotation,
+    delete_campaign_cost,
+    delete_goal,
+    delete_page_group,
+    get_web_analytics_extensions,
+    ingest_confirmed_conversion,
+    list_annotations,
+    list_campaign_costs,
+    list_goals,
+    list_page_groups,
+    preview_page_group,
+    resolve_conversion_tracker,
+    rotate_conversion_key,
+    save_annotation,
+    save_campaign_cost,
+    save_goal,
+    save_page_group,
+    save_system_annotation,
+)
 
 
 web_tracking_bp = Blueprint("web_tracking_api", __name__)
@@ -60,6 +83,10 @@ def _business_allowlisted(business_id: str) -> bool:
         item.strip() for item in os.getenv("WEB_TRACKING_BUSINESS_IDS", "").split(",") if item.strip()
     }
     return not configured or business_id in configured
+
+
+def _web_configuration_unavailable(business_id: str) -> bool:
+    return not _flag("WEB_TRACKING_ENABLED") or not _flag("WEB_TRACKING_ANALYTICS_ENABLED") or not _business_allowlisted(business_id)
 
 
 def tracking_rate_limit_key() -> str:
@@ -166,6 +193,10 @@ def _require_business(cursor, business_id: str):
         message = "Нет доступа к бизнесу" if owner_id else "Бизнес не найден"
         return None, (jsonify({"success": False, "error": message}), status)
     return user_data, None
+
+
+def _user_id(user_data: dict) -> str:
+    return str(user_data.get("user_id") or user_data.get("id") or "")
 
 
 @web_tracking_bp.route("/api/tracking/events", methods=["POST", "OPTIONS"])
@@ -305,9 +336,233 @@ def business_web_analytics(business_id: str):
         except ValueError:
             period_days = 30
         metrics = get_business_web_metrics(cursor, business_id, period_days)
+        metrics.update(get_web_analytics_extensions(cursor, business_id, period_days))
         return jsonify({"success": True, "metrics": metrics})
     except Exception:
         return jsonify({"success": False, "error": "Не удалось собрать аналитику сайта"}), 500
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-analytics/configuration", methods=["GET"])
+def web_analytics_configuration(business_id: str):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _user, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        return jsonify({
+            "success": True,
+            "page_groups": list_page_groups(cursor, business_id),
+            "goals": list_goals(cursor, business_id),
+            "annotations": list_annotations(cursor, business_id),
+            "campaign_costs": list_campaign_costs(cursor, business_id),
+            "conversion_key": conversion_key_status(cursor, business_id),
+        })
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-page-groups/preview", methods=["POST"])
+def web_page_group_preview(business_id: str):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _user, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        return jsonify({"success": True, "preview": preview_page_group(cursor, business_id, request.get_json(silent=True))})
+    except WebTrackingConfigurationError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-page-groups", methods=["POST"])
+@web_tracking_bp.route("/api/business/<business_id>/web-page-groups/<group_id>", methods=["PATCH", "DELETE"])
+def web_page_group_mutation(business_id: str, group_id: str = ""):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_data, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        if request.method == "DELETE":
+            if not delete_page_group(cursor, business_id, group_id):
+                return jsonify({"success": False, "error": "page_group_not_found"}), 404
+            save_system_annotation(cursor, business_id, "Удалена группа страниц", "page")
+            db.conn.commit()
+            return jsonify({"success": True})
+        group = save_page_group(
+            cursor, business_id, _user_id(user_data), request.get_json(silent=True), group_id,
+        )
+        save_system_annotation(cursor, business_id, f"Настроена группа страниц: {group['name']}", "page")
+        db.conn.commit()
+        return jsonify({"success": True, "page_group": group})
+    except WebTrackingConfigurationError as error:
+        db.conn.rollback()
+        status = 404 if str(error) == "page_group_not_found" else 400
+        return jsonify({"success": False, "error": str(error)}), status
+    except Exception:
+        db.conn.rollback()
+        logger.exception("web page group mutation failed")
+        return jsonify({"success": False, "error": "page_group_save_failed"}), 500
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-goals", methods=["POST"])
+@web_tracking_bp.route("/api/business/<business_id>/web-goals/<goal_id>", methods=["PATCH", "DELETE"])
+def web_goal_mutation(business_id: str, goal_id: str = ""):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_data, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        if request.method == "DELETE":
+            if not delete_goal(cursor, business_id, goal_id):
+                return jsonify({"success": False, "error": "goal_not_found"}), 404
+            save_system_annotation(cursor, business_id, "Удалена цель сайта", "tracker")
+            db.conn.commit()
+            return jsonify({"success": True})
+        goal = save_goal(cursor, business_id, _user_id(user_data), request.get_json(silent=True), goal_id)
+        save_system_annotation(cursor, business_id, f"Настроена цель: {goal['name']}", "tracker")
+        db.conn.commit()
+        return jsonify({"success": True, "goal": goal})
+    except WebTrackingConfigurationError as error:
+        db.conn.rollback()
+        status = 404 if str(error) == "goal_not_found" else 400
+        return jsonify({"success": False, "error": str(error)}), status
+    except Exception:
+        db.conn.rollback()
+        logger.exception("web goal mutation failed")
+        return jsonify({"success": False, "error": "goal_save_failed"}), 500
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-change-annotations", methods=["POST"])
+@web_tracking_bp.route("/api/business/<business_id>/web-change-annotations/<annotation_id>", methods=["DELETE"])
+def web_change_annotation_mutation(business_id: str, annotation_id: str = ""):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_data, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        if request.method == "DELETE":
+            if not delete_annotation(cursor, business_id, annotation_id):
+                return jsonify({"success": False, "error": "annotation_not_found"}), 404
+            db.conn.commit()
+            return jsonify({"success": True})
+        annotation = save_annotation(cursor, business_id, _user_id(user_data), request.get_json(silent=True))
+        db.conn.commit()
+        return jsonify({"success": True, "annotation": annotation})
+    except WebTrackingConfigurationError as error:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(error)}), 400
+    except Exception:
+        db.conn.rollback()
+        logger.exception("web change annotation mutation failed")
+        return jsonify({"success": False, "error": "annotation_save_failed"}), 500
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-campaign-costs", methods=["POST"])
+@web_tracking_bp.route("/api/business/<business_id>/web-campaign-costs/<cost_id>", methods=["DELETE"])
+def web_campaign_cost_mutation(business_id: str, cost_id: str = ""):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_data, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        if request.method == "DELETE":
+            if not delete_campaign_cost(cursor, business_id, cost_id):
+                return jsonify({"success": False, "error": "campaign_cost_not_found"}), 404
+            db.conn.commit()
+            return jsonify({"success": True})
+        cost = save_campaign_cost(cursor, business_id, _user_id(user_data), request.get_json(silent=True))
+        save_system_annotation(cursor, business_id, f"Добавлены расходы кампании: {cost['source']}", "campaign")
+        db.conn.commit()
+        return jsonify({"success": True, "campaign_cost": cost})
+    except WebTrackingConfigurationError as error:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(error)}), 400
+    except Exception:
+        db.conn.rollback()
+        logger.exception("web campaign cost mutation failed")
+        return jsonify({"success": False, "error": "campaign_cost_save_failed"}), 500
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/business/<business_id>/web-conversion-key", methods=["POST"])
+def web_conversion_key_rotation(business_id: str):
+    if _web_configuration_unavailable(business_id):
+        return jsonify({"success": False, "error": "web_analytics_unavailable"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _user, access_error = _require_business(cursor, business_id)
+        if access_error:
+            return access_error
+        result = rotate_conversion_key(cursor, business_id)
+        save_system_annotation(cursor, business_id, "Обновлён ключ подтверждённых конверсий", "tracker")
+        db.conn.commit()
+        return jsonify({"success": True, "conversion_key": result})
+    except WebTrackingConfigurationError as error:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(error)}), 409
+    except Exception:
+        db.conn.rollback()
+        logger.exception("web conversion key rotation failed")
+        return jsonify({"success": False, "error": "conversion_key_rotation_failed"}), 500
+    finally:
+        db.close()
+
+
+@web_tracking_bp.route("/api/web-tracking/conversions", methods=["POST"])
+def receive_confirmed_conversion():
+    if not _flag("WEB_TRACKING_ENABLED"):
+        return jsonify({"success": False, "error": "web_tracking_unavailable"}), 404
+    authorization = request.headers.get("Authorization", "")
+    token = authorization[7:] if authorization.startswith("Bearer ") else ""
+    rate_key = f"conversion:{hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]}"
+    if not _rate_allowed(rate_key):
+        return jsonify({"success": False, "error": "rate_limited"}), 429
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        tracker = resolve_conversion_tracker(cursor, token)
+        result = ingest_confirmed_conversion(cursor, tracker, request.get_json(silent=True))
+        db.conn.commit()
+        return jsonify({"success": True, **result}), 202
+    except WebConversionAuthenticationError:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": "invalid_conversion_key"}), 401
+    except WebTrackingConfigurationError as error:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(error)}), 400
+    except Exception:
+        db.conn.rollback()
+        logger.exception("confirmed web conversion ingestion failed")
+        return jsonify({"success": False, "error": "conversion_ingestion_failed"}), 500
     finally:
         db.close()
 

@@ -6,7 +6,7 @@
     if (!script) return;
     var trackerId = script.getAttribute("data-business") || "";
     if (trackerId.indexOf("pub_") !== 0) return;
-    var trackerVersion = "1.3.2";
+    var trackerVersion = "1.4.0";
     var schemaVersion = 2;
     var maxQueueSize = 100;
     var apiOrigin = new URL(script.src, window.location.href).origin;
@@ -20,6 +20,8 @@
     var lastPageViewKey = "";
     var sectionObserver = null;
     var observedSections = [];
+    var ctaObserver = null;
+    var observedCtas = [];
     var startedForms = typeof WeakSet === "function" ? new WeakSet() : null;
 
     function canonicalHostname(value) {
@@ -137,18 +139,41 @@
       };
     }
 
+    function formDescriptor(form) {
+      var section = form && form.closest ? form.closest("[data-localos-section],section,.t-rec") : null;
+      return {
+        id: form && (form.getAttribute("data-localos-form") || form.id) || "",
+        name: form && form.getAttribute("name") || "",
+        action: form && form.action || "",
+        section_key: section ? (section.getAttribute("data-localos-section") || section.id || "").slice(0, 100) : ""
+      };
+    }
+
+    function ctaDescriptor(element) {
+      var section = element && element.closest ? element.closest("[data-localos-section],section,.t-rec") : null;
+      var sectionKey = section ? (section.getAttribute("data-localos-section") || section.id || "") : "";
+      return {
+        id: element.getAttribute("data-localos-cta") || "",
+        label: element.getAttribute("data-localos-cta-label") || element.getAttribute("aria-label") || (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 160),
+        position: element.getAttribute("data-localos-cta-position") || "cta-" + (Array.prototype.indexOf.call(document.querySelectorAll("[data-localos-cta]"), element) + 1),
+        section_key: sectionKey.slice(0, 100)
+      };
+    }
+
     function trackPageView() {
       var nextPage = page();
       var nextPageKey = pageKey(nextPage);
       activePage = nextPage;
       if (nextPageKey === lastPageViewKey) {
         if (!sectionObserver) setupSectionTracking();
+        if (!ctaObserver) setupCtaTracking();
         return;
       }
       lastPageViewKey = nextPageKey;
       pageDepths = {};
       enqueue("page_view", { page: activePage });
       setupSectionTracking();
+      setupCtaTracking();
     }
 
     function normalizedSectionLabel(value) {
@@ -176,7 +201,7 @@
 
     function sectionDescriptor(element, position) {
       var heading = element.querySelector("h1,h2,h3,[role='heading'],.t-title,.t-name,.t-heading");
-      var label = element.getAttribute("data-localos-section") || element.getAttribute("aria-label") || linkedSectionLabel(element) || (heading ? heading.textContent : "") || contentSectionLabel(element) || "Секция " + position;
+      var label = element.getAttribute("data-localos-section-label") || element.getAttribute("data-localos-section") || element.getAttribute("aria-label") || linkedSectionLabel(element) || (heading ? heading.textContent : "") || contentSectionLabel(element) || "Секция " + position;
       label = normalizedSectionLabel(label);
       var key = element.getAttribute("data-localos-section") || element.id || label.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 100) || "section-" + position;
       return { element: element, key: key, label: label, position: position, visibleAt: 0, viewed: false, timer: 0 };
@@ -199,6 +224,39 @@
       observedSections = [];
       if (sectionObserver) sectionObserver.disconnect();
       sectionObserver = null;
+    }
+
+    function stopCtaTracking() {
+      observedCtas.forEach(function (state) { if (state.timer) window.clearTimeout(state.timer); });
+      observedCtas = [];
+      if (ctaObserver) ctaObserver.disconnect();
+      ctaObserver = null;
+    }
+
+    function setupCtaTracking() {
+      stopCtaTracking();
+      if (!consent || typeof window.IntersectionObserver !== "function") return;
+      var elements = Array.prototype.slice.call(document.querySelectorAll("[data-localos-cta]"));
+      observedCtas = elements.map(function (element) { return { element: element, seen: false, timer: 0 }; });
+      ctaObserver = new window.IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          var state = observedCtas.find(function (item) { return item.element === entry.target; });
+          if (!state || state.seen) return;
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            if (!state.timer) state.timer = window.setTimeout(function () {
+              state.timer = 0;
+              if (state.seen) return;
+              state.seen = true;
+              enqueue("cta_impression", { cta: ctaDescriptor(state.element), page: activePage });
+              ctaObserver.unobserve(state.element);
+            }, 500);
+          } else if (state.timer) {
+            window.clearTimeout(state.timer);
+            state.timer = 0;
+          }
+        });
+      }, { threshold: [0, 0.5, 1] });
+      observedCtas.forEach(function (state) { ctaObserver.observe(state.element); });
     }
 
     function setupSectionTracking() {
@@ -257,6 +315,7 @@
       var target = event.target && event.target.closest ? event.target.closest("a,button,[role='button'],[data-localos-cta]") : null;
       if (!target) return;
       var element = describeElement(target);
+      var explicitCta = target.closest ? target.closest("[data-localos-cta]") : null;
       var outbound = false;
       if (element.href) {
         try {
@@ -264,6 +323,7 @@
           outbound = url.protocol === "tel:" || url.protocol === "mailto:" || (url.hostname && canonicalHostname(url.hostname) !== canonicalHostname(window.location.hostname));
         } catch (_error) {}
       }
+      if (explicitCta) enqueue("cta_click", { element: element, cta: ctaDescriptor(explicitCta) });
       enqueue(outbound ? "outbound_click" : "click", { element: element });
       if (outbound) flush(false);
     }, true);
@@ -272,14 +332,27 @@
       var form = event.target && event.target.closest ? event.target.closest("form") : null;
       if (!form || (startedForms && startedForms.has(form))) return;
       if (startedForms) startedForms.add(form);
-      enqueue("form_start", { form: { id: form.id || "", name: form.getAttribute("name") || "", action: form.action || "" } });
+      enqueue("form_start", { form: formDescriptor(form) });
     }, true);
 
     document.addEventListener("submit", function (event) {
       var form = event.target;
-      enqueue("form_submit", { form: { id: form.id || "", name: form.getAttribute("name") || "", action: form.action || "" } });
+      enqueue("form_submit_attempt", { form: formDescriptor(form) });
       flush(false);
     }, true);
+
+    document.addEventListener("invalid", function (event) {
+      var form = event.target && event.target.closest ? event.target.closest("form") : null;
+      if (!form) return;
+      enqueue("form_validation_error", { form: formDescriptor(form), error_type: "browser_validation" });
+    }, true);
+
+    function trackTildaSuccess(event) {
+      var form = event.target && event.target.closest ? event.target.closest("form") : null;
+      enqueue("form_submit_success", { form: formDescriptor(form) });
+      flush(false);
+    }
+    document.addEventListener("tildaform:aftersuccess", trackTildaSuccess);
 
     window.addEventListener("scroll", function () {
       var height = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0) - window.innerHeight;
@@ -301,6 +374,7 @@
         if (pageKey(page()) !== previousPageKey) {
           checkpointForeground("page_leave");
           stopSectionTracking();
+          stopCtaTracking();
           window.setTimeout(trackPageView, 0);
         }
         return result;
@@ -313,9 +387,10 @@
       if (pageKey(page()) === lastPageViewKey) return;
       checkpointForeground("page_leave");
       stopSectionTracking();
+      stopCtaTracking();
       trackPageView();
     });
-    window.addEventListener("pagehide", function () { stopSectionTracking(); checkpointForeground("page_leave"); flush(true); });
+    window.addEventListener("pagehide", function () { stopSectionTracking(); stopCtaTracking(); checkpointForeground("page_leave"); flush(true); });
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "hidden") {
         checkpointForeground("heartbeat");
@@ -333,15 +408,31 @@
           startHeartbeat();
           enqueue("session_start");
           if (!options || options.emitPageView !== false) trackPageView();
-          else setupSectionTracking();
+          else { setupSectionTracking(); setupCtaTracking(); }
         } else if (!consent) {
           stopSectionTracking();
+          stopCtaTracking();
           stopHeartbeat();
           queue = [];
           lastPageViewKey = "";
           if (flushTimer) window.clearTimeout(flushTimer);
           flushTimer = 0;
         }
+      },
+      trackFormResult: function (result, form, errorType) {
+        var allowed = {
+          validation_error: "form_validation_error",
+          success: "form_submit_success",
+          error: "form_submit_error"
+        };
+        var eventName = allowed[result];
+        if (!eventName) return false;
+        enqueue(eventName, { form: formDescriptor(form), error_type: String(errorType || "").slice(0, 80) });
+        flush(false);
+        return true;
+      },
+      getAttribution: function () {
+        return consent ? { tracker_id: trackerId, session_id: sessionId } : { tracker_id: trackerId, session_id: "" };
       },
       flush: function () { flush(false); }
     };

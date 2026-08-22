@@ -135,6 +135,7 @@ def test_form_events_never_keep_field_values_or_personal_contact_targets():
         "id": "lead-form",
         "name": "lead",
         "action": "https://example.com/private-submit",
+        "section_key": "",
     }
     assert "values" not in events[0]["metadata"]["form"]
     assert "person@example.com" not in str(events[0]["metadata"])
@@ -437,11 +438,12 @@ def test_analytics_api_returns_aggregation_for_allowed_business(monkeypatch):
     monkeypatch.setattr(web_tracking_api, "require_auth_from_request", lambda: {"user_id": "owner-1"})
     monkeypatch.setattr(web_tracking_api, "verify_business_access", lambda *_args: (True, "owner-1"))
     monkeypatch.setattr(web_tracking_api, "get_business_web_metrics", lambda _cursor, business_id, period: {"business": business_id, "period_days": period})
+    monkeypatch.setattr(web_tracking_api, "get_web_analytics_extensions", lambda _cursor, _business_id, _period: {"goals": []})
 
     response = _app().test_client().get("/api/business/business-1/web-analytics?period=7")
 
     assert response.status_code == 200
-    assert response.get_json()["metrics"] == {"business": "business-1", "period_days": 7}
+    assert response.get_json()["metrics"] == {"business": "business-1", "period_days": 7, "goals": []}
 
 
 def test_ingestion_can_be_disabled_while_existing_analytics_remain_readable(monkeypatch):
@@ -451,6 +453,7 @@ def test_ingestion_can_be_disabled_while_existing_analytics_remain_readable(monk
     monkeypatch.setattr(web_tracking_api, "require_auth_from_request", lambda: {"user_id": "owner-1"})
     monkeypatch.setattr(web_tracking_api, "verify_business_access", lambda *_args: (True, "owner-1"))
     monkeypatch.setattr(web_tracking_api, "get_business_web_metrics", lambda *_args: {"sessions": 9})
+    monkeypatch.setattr(web_tracking_api, "get_web_analytics_extensions", lambda *_args: {})
 
     response = _app().test_client().get("/api/business/business-1/web-analytics")
 
@@ -599,4 +602,45 @@ def test_tracker_supports_spa_beacon_and_never_reads_input_values():
     assert 'document.addEventListener("submit"' in source
     assert 'window.setInterval(function () { checkpointForeground("heartbeat"); }, 30000)' in source
     assert 'checkpointForeground("page_leave")' in source
+    assert 'enqueue("cta_impression"' in source
+    assert 'enqueue("cta_click"' in source
+    assert 'enqueue("form_submit_attempt"' in source
+    assert 'trackFormResult: function' in source
+    assert 'document.addEventListener("invalid"' in source
+    assert 'document.addEventListener("tildaform:aftersuccess"' in source
+    assert 'window.addEventListener("tildaform:aftersuccess"' not in source
+    assert 'getAttribution: function' in source
     assert ".value" not in source
+
+
+def test_confirmed_conversion_endpoint_requires_key_and_is_idempotent(monkeypatch):
+    _Database.cursor = _Cursor()
+    monkeypatch.setattr(web_tracking_api, "DatabaseManager", _Database)
+    captured = {}
+    monkeypatch.setattr(web_tracking_api, "resolve_conversion_tracker", lambda _cursor, token: captured.update({"token": token}) or {"id": "tracker-1", "business_id": "business-1"})
+    monkeypatch.setattr(web_tracking_api, "ingest_confirmed_conversion", lambda _cursor, tracker, payload: captured.update({"tracker": tracker, "payload": payload}) or {"id": "conversion-1", "accepted": True, "duplicate": False})
+
+    response = _app().test_client().post(
+        "/api/web-tracking/conversions",
+        headers={"Authorization": "Bearer locconv_secret"},
+        json={"source": "yclients", "external_id": "booking-1", "event_type": "booking_confirmed"},
+    )
+
+    assert response.status_code == 202
+    assert response.get_json()["accepted"] is True
+    assert captured["token"] == "locconv_secret"
+    assert captured["payload"]["external_id"] == "booking-1"
+
+
+def test_page_group_preview_enforces_business_access(monkeypatch):
+    _Database.cursor = _Cursor()
+    monkeypatch.setattr(web_tracking_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(web_tracking_api, "require_auth_from_request", lambda: {"user_id": "user-2"})
+    monkeypatch.setattr(web_tracking_api, "verify_business_access", lambda *_args: (False, "owner-1"))
+
+    response = _app().test_client().post(
+        "/api/business/business-1/web-page-groups/preview",
+        json={"name": "Услуги", "group_type": "service", "match_type": "prefix", "include_patterns": ["/services"]},
+    )
+
+    assert response.status_code == 403

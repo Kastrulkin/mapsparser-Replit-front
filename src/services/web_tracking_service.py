@@ -26,6 +26,12 @@ SUPPORTED_EVENTS = {
     "page_leave",
     "section_view",
     "section_engagement",
+    "cta_impression",
+    "cta_click",
+    "form_submit_attempt",
+    "form_validation_error",
+    "form_submit_success",
+    "form_submit_error",
 }
 MAX_BATCH_EVENTS = 25
 MAX_REQUEST_BYTES = 64 * 1024
@@ -151,7 +157,7 @@ def classify_traffic_source(utm_source: object, referrer: object) -> dict[str, s
 
 
 def classify_target_action(event_type: str, metadata: dict, page_hostname: str) -> dict[str, str | None]:
-    if event_type == "form_submit":
+    if event_type in {"form_submit", "form_submit_success"}:
         action = metadata.get("form", {}).get("action", "")
         domain = normalize_hostname(urlparse(action).hostname or "") or page_hostname
         return {"type": "form", "provider": None, "domain": domain}
@@ -221,6 +227,7 @@ def validate_event(raw: object, now: datetime | None = None) -> tuple[dict | Non
     element = raw.get("element") if isinstance(raw.get("element"), dict) else {}
     form = raw.get("form") if isinstance(raw.get("form"), dict) else {}
     section = raw.get("section") if isinstance(raw.get("section"), dict) else {}
+    cta = raw.get("cta") if isinstance(raw.get("cta"), dict) else {}
 
     metadata = {
         "title": _text(page.get("title"), 300),
@@ -242,12 +249,20 @@ def validate_event(raw: object, now: datetime | None = None) -> tuple[dict | Non
             "id": _text(form.get("id"), 120),
             "name": _text(form.get("name"), 120),
             "action": _safe_href(form.get("action"), hostname),
+            "section_key": _text(form.get("section_key"), 100),
         },
         "section": {
             "key": _text(section.get("key"), 100),
             "label": _text(section.get("label"), 120),
             "position": section.get("position") if type(section.get("position")) is int and 1 <= section.get("position") <= 500 else None,
         },
+        "cta": {
+            "id": _text(cta.get("id"), 120),
+            "label": _text(cta.get("label"), 160),
+            "position": _text(cta.get("position"), 80),
+            "section_key": _text(cta.get("section_key"), 100),
+        },
+        "error_type": _text(raw.get("error_type"), 80),
         "depth": raw.get("depth") if raw.get("depth") in {25, 50, 75, 100} else None,
         "engagement_ms": engagement_ms if type(engagement_ms) is int and 0 <= engagement_ms <= max_engagement_ms else None,
         "device_type": _text(raw.get("device_type"), 20) or "unknown",
@@ -387,23 +402,37 @@ def delete_business_web_analytics(
             (SELECT COUNT(*) FROM web_visitors WHERE business_id = %s) AS visitors,
             (SELECT COUNT(*) FROM web_sessions WHERE business_id = %s) AS sessions,
             (SELECT COUNT(*) FROM web_events WHERE business_id = %s) AS events,
-            (SELECT COUNT(*) FROM web_daily_metrics WHERE business_id = %s) AS metrics
+            (SELECT COUNT(*) FROM web_daily_metrics WHERE business_id = %s) AS metrics,
+            (SELECT COUNT(*) FROM web_page_groups WHERE business_id = %s) AS page_groups,
+            (SELECT COUNT(*) FROM web_goals WHERE business_id = %s) AS goals,
+            (SELECT COUNT(*) FROM web_confirmed_conversions WHERE business_id = %s) AS confirmed_conversions,
+            (SELECT COUNT(*) FROM web_campaign_costs WHERE business_id = %s) AS campaign_costs,
+            (SELECT COUNT(*) FROM web_change_annotations WHERE business_id = %s) AS change_annotations
         """,
-        (business_id, business_id, business_id, business_id, business_id, business_id),
+        (
+            business_id, business_id, business_id, business_id, business_id, business_id,
+            business_id, business_id, business_id, business_id, business_id,
+        ),
     )
     counts = {key: int(value or 0) for key, value in dict(cursor.fetchone() or {}).items()}
+    for optional_key in ("page_groups", "goals", "confirmed_conversions", "campaign_costs", "change_annotations"):
+        counts.setdefault(optional_key, 0)
     audit_id = str(uuid.uuid4())
     if dry_run:
         cursor.execute(
             """INSERT INTO web_tracking_deletion_audits
-               (id, business_id, requested_by, mode, status, trackers, visitors, sessions, events, metrics)
-               VALUES (%s, %s, %s, 'dry_run', 'reviewed', %s, %s, %s, %s, %s)""",
+               (id, business_id, requested_by, mode, status, trackers, visitors, sessions, events, metrics,
+                page_groups, goals, confirmed_conversions, campaign_costs, change_annotations)
+               VALUES (%s, %s, %s, 'dry_run', 'reviewed', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (audit_id, business_id, requested_by, counts["trackers"], counts["visitors"],
-             counts["sessions"], counts["events"], counts["metrics"]),
+             counts["sessions"], counts["events"], counts["metrics"], counts["page_groups"],
+             counts["goals"], counts["confirmed_conversions"], counts["campaign_costs"],
+             counts["change_annotations"]),
         )
         return {"audit_id": audit_id, "mode": "dry_run", "status": "reviewed", **counts}
     cursor.execute(
-        """SELECT id, trackers, visitors, sessions, events, metrics
+        """SELECT id, trackers, visitors, sessions, events, metrics, page_groups, goals,
+                  confirmed_conversions, campaign_costs, change_annotations
            FROM web_tracking_deletion_audits
            WHERE business_id = %s AND requested_by = %s AND mode = 'dry_run' AND status = 'reviewed'
              AND created_at >= NOW() - INTERVAL '24 hours'
@@ -415,17 +444,30 @@ def delete_business_web_analytics(
         raise WebTrackingDeletionError("recent_dry_run_required")
     if counts["active_trackers"]:
         raise WebTrackingDeletionError("disable_tracking_before_deletion")
-    if any(int(review[key] or 0) != counts[key] for key in ("trackers", "visitors", "sessions", "events", "metrics")):
+    deletion_keys = (
+        "trackers", "visitors", "sessions", "events", "metrics", "page_groups", "goals",
+        "confirmed_conversions", "campaign_costs", "change_annotations",
+    )
+    review_values = dict(review)
+    if any(int(review_values.get(key) or 0) != counts[key] for key in deletion_keys):
         raise WebTrackingDeletionError("deletion_scope_changed")
+    cursor.execute("DELETE FROM web_page_groups WHERE business_id = %s", (business_id,))
+    cursor.execute("DELETE FROM web_goals WHERE business_id = %s", (business_id,))
+    cursor.execute("DELETE FROM web_confirmed_conversions WHERE business_id = %s", (business_id,))
+    cursor.execute("DELETE FROM web_campaign_costs WHERE business_id = %s", (business_id,))
+    cursor.execute("DELETE FROM web_change_annotations WHERE business_id = %s", (business_id,))
     cursor.execute("DELETE FROM business_web_trackers WHERE business_id = %s", (business_id,))
     cursor.execute("DELETE FROM web_sessions WHERE business_id = %s", (business_id,))
     cursor.execute("DELETE FROM web_visitors WHERE business_id = %s", (business_id,))
     cursor.execute(
         """INSERT INTO web_tracking_deletion_audits
-           (id, business_id, requested_by, mode, status, trackers, visitors, sessions, events, metrics)
-           VALUES (%s, %s, %s, 'execute', 'completed', %s, %s, %s, %s, %s)""",
+               (id, business_id, requested_by, mode, status, trackers, visitors, sessions, events, metrics,
+                page_groups, goals, confirmed_conversions, campaign_costs, change_annotations)
+               VALUES (%s, %s, %s, 'execute', 'completed', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (audit_id, business_id, requested_by, counts["trackers"], counts["visitors"],
-         counts["sessions"], counts["events"], counts["metrics"]),
+         counts["sessions"], counts["events"], counts["metrics"], counts["page_groups"],
+         counts["goals"], counts["confirmed_conversions"], counts["campaign_costs"],
+         counts["change_annotations"]),
     )
     return {"audit_id": audit_id, "mode": "execute", "status": "completed", **counts}
 
@@ -475,14 +517,16 @@ def ingest_events(cursor, tracker: dict, events: list[dict]) -> dict[str, int]:
         session_values.append((
             str(uuid.uuid4()), business_id, visitor_ids[event["visitor_key"]], session_key,
             event["occurred_at"], event["path"], event["hostname"], meta["referrer"],
-            utm["source"], utm["medium"], utm["campaign"], meta["device_type"],
+            utm["source"], utm["medium"], utm["campaign"], utm["term"], utm["content"],
+            meta["device_type"],
             source["type"], source["label"], source["domain"],
         ))
     session_rows = execute_values(
         cursor,
         """INSERT INTO web_sessions (
                id, business_id, visitor_id, session_key, started_at, landing_page,
-               landing_hostname, referrer, utm_source, utm_medium, utm_campaign, device_type,
+               landing_hostname, referrer, utm_source, utm_medium, utm_campaign, utm_term,
+               utm_content, device_type,
                source_type, source_label, source_domain
            ) VALUES %s
            ON CONFLICT (business_id, session_key) DO UPDATE
