@@ -1041,7 +1041,7 @@ export const WebAnalyticsWorkspace = ({
     );
   }
 
-  const integrationExample = `curl -X POST https://localos.pro/api/web-tracking/conversions \\\n+  -H "Authorization: Bearer YOUR_KEY" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{"source":"yclients","external_id":"ORDER-123","event_type":"booking_confirmed","attribution_session_id":"s_..."}'`;
+  const integrationExample = `curl -X POST https://localos.pro/api/web-tracking/conversions \\\n  -H "Authorization: Bearer YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"source":"yclients","external_id":"ORDER-123","event_type":"booking_confirmed","attribution_session_id":"s_..."}'`;
 
   return (
     <div className="space-y-6">
