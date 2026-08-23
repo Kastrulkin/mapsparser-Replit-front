@@ -776,6 +776,18 @@ def default_publish_mode(platform: str, browser_available: bool | None = None) -
         return "openclaw_browser" if is_browser_available else "manual"
     return "manual"
 
+
+def _publish_mode_for_item(platform: str, item: dict[str, Any]) -> str:
+    metadata = _json_dict(item.get("metadata_json"))
+    manual_platforms = {
+        str(value or "").strip()
+        for value in (metadata.get("manual_publish_platforms") or [])
+        if str(value or "").strip()
+    }
+    if str(platform or "").strip() in manual_platforms:
+        return "manual"
+    return default_publish_mode(platform)
+
 def next_action_for_social_post(post: dict[str, Any]) -> str:
     status = str(post.get("status") or "").strip()
     platform = str(post.get("platform") or "").strip()
@@ -1340,7 +1352,7 @@ def _upsert_social_post(
     plan_id = str(item.get("plan_id") or item.get("parent_plan_id") or "").strip()
     business_id = str(item.get("business_id") or item.get("plan_business_id") or "").strip()
     scheduled_for = item.get("scheduled_for")
-    publish_mode = default_publish_mode(platform)
+    publish_mode = _publish_mode_for_item(platform, item)
     variant_payload = variant or {}
     platform_text = str(variant_payload.get("text") or _platform_text(platform, base_text)).strip()
     metadata = _initial_metadata(platform, publish_mode, item)
@@ -1437,7 +1449,7 @@ def _preview_social_post_for_platform(
     item_id = str(item.get("id") or "").strip()
     plan_id = str(item.get("plan_id") or item.get("parent_plan_id") or "").strip()
     business_id = str(item.get("business_id") or item.get("plan_business_id") or "").strip()
-    publish_mode = default_publish_mode(platform)
+    publish_mode = _publish_mode_for_item(platform, item)
     platform_text = _platform_text(platform, base_text)
     status = "needs_review" if platform_text.strip() else "draft"
     existing_post = existing if isinstance(existing, dict) else {}

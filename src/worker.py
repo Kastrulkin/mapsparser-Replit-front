@@ -59,6 +59,11 @@ from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.growth_rhythm_notifications import collect_due_growth_rhythm_reminders, mark_growth_rhythm_reminder_sent
+from services.content_publish_notifications import (
+    collect_due_content_publish_handoffs,
+    format_content_publish_handoff,
+    mark_content_publish_handoff_sent,
+)
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
 from services.operator_async_jobs import process_next_operator_async_job
@@ -1784,6 +1789,26 @@ def _run_card_automation_if_due() -> None:
             else:
                 db.conn.rollback()
                 print(f"[GROWTH_RHYTHM_REMINDER] failed to send telegram reminder to {telegram_id}", flush=True)
+        content_handoffs = collect_due_content_publish_handoffs(db.conn)
+        for handoff in content_handoffs:
+            telegram_id = str(handoff.get("telegram_id") or "").strip()
+            post_id = str(handoff.get("id") or "").strip()
+            user_id = str(handoff.get("user_id") or "").strip()
+            message, reply_markup = format_content_publish_handoff(handoff)
+            send_result = _send_telegram_message_result(telegram_id, message, reply_markup=reply_markup)
+            message_id = int(send_result.get("message_id") or 0)
+            if not bool(send_result.get("success")) or not message_id:
+                db.conn.rollback()
+                print(f"[CONTENT_PUBLISH_HANDOFF] failed post_id={post_id} telegram_id={telegram_id}", flush=True)
+                continue
+            if mark_content_publish_handoff_sent(
+                db.conn,
+                post_id=post_id,
+                user_id=user_id,
+                telegram_message_id=message_id,
+            ):
+                db.conn.commit()
+                print(f"[CONTENT_PUBLISH_HANDOFF] sent post_id={post_id} telegram_id={telegram_id}", flush=True)
     except Exception as e:
         print(f"[CARD_AUTOMATION] error: {e}", flush=True)
     finally:

@@ -527,7 +527,7 @@ def save_scope_notification_preferences(
     scope_id = str(scope.get("id") or "").strip() or None
     if kind not in SCOPE_TYPES:
         raise ValueError("unsupported_control_scope")
-    allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results", "finance_rhythm"}
+    allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results", "finance_rhythm", "content_publications"}
     clean = {key: bool(value) for key, value in notifications.items() if key in allowed_keys}
     current = _load_preference(cursor, user_id)
     all_preferences = dict(current.get("notification_preferences_json") or {})
