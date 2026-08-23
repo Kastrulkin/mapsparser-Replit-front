@@ -133,6 +133,13 @@ if [[ "${restart_services}" -eq 1 ]]; then
   retry_command "docker compose up -d --force-recreate app worker" remote_exec "docker compose up -d --force-recreate app worker"
 fi
 
+echo "Syncing backend source into app and worker containers..."
+retry_command "backend source in app container" remote_exec "docker compose cp ${remote_tmp}/src/. app:/app/src/"
+retry_command "backend source in worker container" remote_exec "docker compose cp ${remote_tmp}/src/. worker:/app/src/"
+if [[ "${restart_services}" -eq 1 ]]; then
+  retry_command "restart app and worker after source sync" remote_exec "docker compose restart app worker"
+fi
+
 echo "Syncing runtime social smoke scripts into app and worker containers..."
 retry_command "runtime social scripts in app container" remote_exec "\
   docker compose exec -T app sh -lc 'mkdir -p /app/scripts' && \
