@@ -1,4 +1,5 @@
 from legacy_routes import shared as _shared
+from core.auth_helpers import verify_business_access
 
 globals().update(_shared.runtime_namespace)
 
@@ -1639,14 +1640,14 @@ def generate_telegram_bind_token():
         if not business_id:
             return jsonify({"error": "business_id обязателен"}), 400
 
-        # Проверяем, что бизнес принадлежит пользователю
+        # Ссылка привязывает Telegram к текущему LocalOS-аккаунту.
+        # Активные сотрудники бизнеса или сети имеют тот же доступ, что и владелец.
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id FROM businesses WHERE id = %s AND owner_id = %s", (business_id, user_data['user_id']))
-        business_row = cursor.fetchone()
-        if not business_row:
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
+            return jsonify({"error": "Бизнес не найден или нет доступа"}), 403
 
         # Генерируем токен привязки
         import secrets
@@ -1713,12 +1714,10 @@ def get_telegram_bind_status():
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Проверяем, что бизнес принадлежит пользователю
-        cursor.execute("SELECT id FROM businesses WHERE id = %s AND owner_id = %s", (business_id, user_data['user_id']))
-        business_row = cursor.fetchone()
-        if not business_row:
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
+            return jsonify({"error": "Бизнес не найден или нет доступа"}), 403
 
         # Проверяем, привязан ли Telegram для этого бизнеса
         cursor.execute(
