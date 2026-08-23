@@ -117,9 +117,9 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
   };
 
   const compactCopy = language === 'ru'
-    ? {
+      ? {
         title: 'Бот LocalOS для аккаунта',
-        description: 'Привяжите Telegram владельца: бот будет присылать уведомления, результаты работы и команды для управления аккаунтом LocalOS.',
+        description: 'Привяжите Telegram сотрудника, который вошёл в LocalOS: бот будет присылать ему выбранные уведомления и готовые материалы.',
         instruction: 'Сгенерируйте персональную ссылку и откройте ее в Telegram. Код привяжет бот именно к текущему аккаунту и выбранному бизнесу.',
         connected: 'Бот LocalOS привязан к этому аккаунту.',
       }
