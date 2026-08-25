@@ -255,6 +255,22 @@ def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any
         """,
         (json.dumps(result, ensure_ascii=False, default=str), action_id),
     )
+    result_json = json.dumps(result, ensure_ascii=False, default=str)
+    result_text = str(result.get("chat_response") or result.get("summary") or "").strip()
+    cursor.execute(
+        """
+        UPDATE operatormessages
+        SET status = 'completed',
+            content = COALESCE(NULLIF(%s, ''), content),
+            result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb
+        WHERE conversation_id = (
+            SELECT conversation_id FROM operatoractions WHERE id = %s
+        )
+          AND role = 'operator'
+          AND result_json #>> '{approval,action_id}' = %s
+        """,
+        (result_text, result_json, action_id, action_id),
+    )
 
 
 def reject_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
@@ -266,4 +282,20 @@ def reject_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any
         WHERE id = %s
         """,
         (json.dumps(result, ensure_ascii=False, default=str), action_id),
+    )
+    result_json = json.dumps(result, ensure_ascii=False, default=str)
+    result_text = str(result.get("chat_response") or result.get("summary") or "").strip()
+    cursor.execute(
+        """
+        UPDATE operatormessages
+        SET status = 'rejected',
+            content = COALESCE(NULLIF(%s, ''), content),
+            result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb
+        WHERE conversation_id = (
+            SELECT conversation_id FROM operatoractions WHERE id = %s
+        )
+          AND role = 'operator'
+          AND result_json #>> '{approval,action_id}' = %s
+        """,
+        (result_text, result_json, action_id, action_id),
     )

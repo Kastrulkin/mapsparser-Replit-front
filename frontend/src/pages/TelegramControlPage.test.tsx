@@ -706,4 +706,111 @@ describe('TelegramControlPage scope integrity', () => {
     })).toBe(false);
   });
 
+  it('confirms and rejects governed Operator actions inside the mini-app chat', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/operator/telegram/bootstrap') return jsonResponse({
+        success: true,
+        user: { id: 'user-1', name: 'Owner' },
+        web_session_token: 'session',
+        today_v2_enabled: false,
+        selected_scope: { kind: 'business', id: 'business-1', name: 'Точка один', business_ids: ['business-1'], can_switch: false },
+        summary: { attention_items: [] },
+        catalog: { businesses: [{ id: 'business-1', name: 'Точка один' }], networks: [], total_choices: 1 },
+        navigation: [
+          { key: 'today', label: 'Сегодня', group: 'primary', status: 'available' },
+          { key: 'operator', label: 'Оператор', group: 'primary', status: 'available' },
+        ],
+      });
+      if (url.startsWith('/api/operator/mobile/workspace')) return jsonResponse({ items: [], summary: { attention_items: [] } });
+      if (url.startsWith('/api/operator/mobile/operator/history')) return jsonResponse({
+        items: [
+          {
+            id: 'message-confirm',
+            role: 'operator',
+            content: 'Применить изменение цены?',
+            status: 'approval_required',
+            result_json: { approval: { action_id: 'action-confirm' } },
+          },
+          {
+            id: 'message-reject',
+            role: 'operator',
+            content: 'Отправить сообщение?',
+            status: 'approval_required',
+            result_json: { approval: { action_id: 'action-reject' } },
+          },
+        ],
+      });
+      if (url === '/api/operator/actions/action-confirm/confirm' && init?.method === 'POST') return jsonResponse({
+        success: true,
+        operator_result: { status: 'completed', chat_response: 'Изменение применено.' },
+      });
+      if (url === '/api/operator/actions/action-reject/reject' && init?.method === 'POST') return jsonResponse({
+        success: true,
+        operator_result: { status: 'rejected', chat_response: 'Отправка отклонена.' },
+      });
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<TelegramControlPage />);
+    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    expect(await screen.findByText('Применить изменение цены?')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Подтвердить' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Отклонить' })).toHaveLength(2);
+
+    await user.click(screen.getAllByRole('button', { name: 'Подтвердить' })[0]);
+    expect(await screen.findByText('Изменение применено.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Отклонить' })).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Отклонить' }));
+    expect(await screen.findByText('Отправка отклонена.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/operator/actions/'))).toHaveLength(2);
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/action-confirm/confirm') && String(init?.body).includes('business-1'))).toBe(true);
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/action-reject/reject') && String(init?.body).includes('business-1'))).toBe(true);
+  });
+
+  it('keeps approval controls available after a failed decision request', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/operator/telegram/bootstrap') return jsonResponse({
+        success: true,
+        user: { id: 'user-1', name: 'Owner' },
+        web_session_token: 'session',
+        today_v2_enabled: false,
+        selected_scope: { kind: 'business', id: 'business-1', name: 'Точка один', business_ids: ['business-1'], can_switch: false },
+        summary: { attention_items: [] },
+        catalog: { businesses: [{ id: 'business-1', name: 'Точка один' }], networks: [], total_choices: 1 },
+        navigation: [{ key: 'operator', label: 'Оператор', group: 'primary', status: 'available' }],
+      });
+      if (url.startsWith('/api/operator/mobile/workspace')) return jsonResponse({ items: [], summary: { attention_items: [] } });
+      if (url.startsWith('/api/operator/mobile/operator/history')) return jsonResponse({
+        items: [{
+          id: 'message-retry',
+          role: 'operator',
+          content: 'Применить изменение?',
+          status: 'approval_required',
+          result_json: { approval: { action_id: 'action-retry' } },
+        }],
+      });
+      if (url === '/api/operator/actions/action-retry/confirm' && init?.method === 'POST') return Promise.resolve(new Response(JSON.stringify({
+        success: false,
+        error: 'Временно не удалось подтвердить.',
+      }), { status: 503, headers: { 'Content-Type': 'application/json' } }));
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<TelegramControlPage />);
+    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await user.click(await screen.findByRole('button', { name: 'Подтвердить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Временно не удалось подтвердить.');
+    expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Отклонить' })).toBeEnabled();
+  });
+
 });

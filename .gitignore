@@ -44,7 +44,10 @@ frontend/test-results/
 
 # Local document rendering and connector working directories
 .agent/google-docs/
+.agent/google-docs-trusted-read/
+.agent/outputs/
 .agent/tmp/
+.agent/tasks/partner-touches-20260823/
 .codex/google-docs/
 .codex-docs/
 
