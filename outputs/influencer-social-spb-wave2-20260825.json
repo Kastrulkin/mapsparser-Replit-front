@@ -1,0 +1,2267 @@
+{
+  "schema_version": "1.0",
+  "title": "Публичные Instagram, Threads и TikTok авторы пилотных городов",
+  "status": "public_research_only",
+  "generated_at": "2026-08-25T14:13:37.597548+00:00",
+  "candidate_count": 63,
+  "channel_count": 140,
+  "platform_counts": {
+    "instagram": 63,
+    "threads": 40,
+    "tiktok": 37
+  },
+  "city_counts": {
+    "Батуми": 8,
+    "Краснодар": 28,
+    "Санкт-Петербург": 27
+  },
+  "candidates": [
+    {
+      "candidate_id": "eaf3aa9b61db33660db6",
+      "display_name": "Alina | UGC Creator | Travel & Lifestyle",
+      "profile_type": "author",
+      "primary_handle": "alinagulayeva_",
+      "city": "Батуми",
+      "description": "1,332 Followers, 689 Following, 173 Posts - See Instagram photos and videos from Alina | UGC Creator | Travel & Lifestyle (@alinagulayeva_)",
+      "contactability": "advertising_contact",
+      "audience_band": "nano",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/alinagulayeva_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1332,
+          "source_url": "https://www.instagram.com/alinagulayeva_"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@alinagulayeva_",
+          "verification_status": "public_index_verified",
+          "follower_count": 145,
+          "source_url": "https://threadlook.com/profile/alinagulayeva_"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:37.592633+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "0a980ed30fe63d7d06d8",
+      "display_name": "Daria Makes",
+      "profile_type": "author",
+      "primary_handle": "dariamakes8",
+      "city": "Батуми",
+      "description": "359 Followers, 235 Following, 131 Posts - See Instagram photos and videos from Daria Makes (@dariamakes8)",
+      "contactability": "manual_only",
+      "audience_band": "nano",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/dariamakes8",
+          "verification_status": "original_profile_opened",
+          "follower_count": 359,
+          "source_url": "https://www.instagram.com/dariamakes8"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:16.171780+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "55eab9040df0caba9c03",
+      "display_name": "GABI-M🎧",
+      "profile_type": "author",
+      "primary_handle": "mari.gabaidze",
+      "city": "Батуми",
+      "description": "40K Followers, 660 Following, 863 Posts - See Instagram photos and videos from GABI-M🎧 (@mari.gabaidze)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/mari.gabaidze",
+          "verification_status": "original_profile_opened",
+          "follower_count": 40000,
+          "source_url": "https://www.instagram.com/mari.gabaidze"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@mari.gabaidze",
+          "verification_status": "original_profile_opened",
+          "follower_count": 6600,
+          "source_url": "https://www.threads.com/@mari.gabaidze"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@mari.gabaidze",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@mari.gabaidze"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:13.546367+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "aa4317b424ab7e81228c",
+      "display_name": "Hannah Chabanova",
+      "profile_type": "author",
+      "primary_handle": "its.chabik",
+      "city": "Батуми",
+      "description": "1,541 Followers, 250 Following, 114 Posts - See Instagram photos and videos from Hannah Chabanova (@its.chabik)",
+      "contactability": "manual_only",
+      "audience_band": "nano",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/its.chabik",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1541,
+          "source_url": "https://www.instagram.com/its.chabik"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@its.chabik",
+          "verification_status": "original_profile_opened",
+          "follower_count": 174,
+          "source_url": "https://www.threads.com/@its.chabik"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:14.348728+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "8591e4e63d8a25e41ac7",
+      "display_name": "Miron Megalodon",
+      "profile_type": "author",
+      "primary_handle": "miron.megalodon",
+      "city": "Батуми",
+      "description": "46K Followers, 27 Following, 65 Posts - See Instagram photos and videos from Miron Megalodon (@miron.megalodon)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/miron.megalodon",
+          "verification_status": "original_profile_opened",
+          "follower_count": 46000,
+          "source_url": "https://www.instagram.com/miron.megalodon"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@miron.megalodon",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@miron.megalodon"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:18.173643+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "e9aa6ff513b096fa25e6",
+      "display_name": "MORGANA NEWS | НОВИНИ | ЦІКАВИНКИ",
+      "profile_type": "author",
+      "primary_handle": "morgana_news",
+      "city": "Батуми",
+      "description": "22K Followers, 179 Following, 233 Posts - See Instagram photos and videos from MORGANA NEWS | НОВИНИ | ЦІКАВИНКИ (@morgana_news)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/morgana_news",
+          "verification_status": "original_profile_opened",
+          "follower_count": 22000,
+          "source_url": "https://www.instagram.com/morgana_news"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@morgana_news",
+          "verification_status": "original_profile_opened",
+          "follower_count": 157,
+          "source_url": "https://www.threads.com/@morgana_news"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@morgana_news",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@morgana_news"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:13.276262+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "237e3e923845737097b0",
+      "display_name": "Olga  • UGC",
+      "profile_type": "author",
+      "primary_handle": "olga.rouge",
+      "city": "Батуми",
+      "description": "912 Followers, 1,835 Following, 341 Posts - See Instagram photos and videos from Olga  • UGC (@olga.rouge)",
+      "contactability": "advertising_contact",
+      "audience_band": "nano",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/olga.rouge",
+          "verification_status": "original_profile_opened",
+          "follower_count": 912,
+          "source_url": "https://www.instagram.com/olga.rouge"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@olga.rouge",
+          "verification_status": "public_index_verified",
+          "follower_count": 10,
+          "source_url": "https://threadlook.com/profile/olga.rouge"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@olga.rouge",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@olga.rouge"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:34.317054+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "2a89f1dc575b96338a3b",
+      "display_name": "Розочка с Одессы🌹Настя",
+      "profile_type": "author",
+      "primary_handle": "_rozochka.life_",
+      "city": "Батуми",
+      "description": "47K Followers, 238 Following, 821 Posts - See Instagram photos and videos from Розочка с Одессы🌹Настя (@_rozochka.life_)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/_rozochka.life_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 47000,
+          "source_url": "https://www.instagram.com/_rozochka.life_"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@_rozochka.life_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 3300,
+          "source_url": "https://www.threads.com/@_rozochka.life_"
+        }
+      ],
+      "discovery_sources": [
+        "https://collabstr.com/top-influencers/instagram/in/georgia/batumi"
+      ],
+      "researched_at": "2026-08-25T14:13:30.274621+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "74a231389c5bbbf5a2c7",
+      "display_name": ":Pauly",
+      "profile_type": "author",
+      "primary_handle": "kidultish",
+      "city": "Краснодар",
+      "description": "13K Followers, 4,076 Following, 10 Posts - See Instagram photos and videos from :Pauly (@kidultish)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/kidultish",
+          "verification_status": "original_profile_opened",
+          "follower_count": 13000,
+          "source_url": "https://www.instagram.com/kidultish"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@kidultish",
+          "verification_status": "original_profile_opened",
+          "follower_count": 160,
+          "source_url": "https://www.threads.com/@kidultish"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@kidultish",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@kidultish"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:42.128684+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "507b11cb6fc65eaeb4a6",
+      "display_name": "Adelina S.",
+      "profile_type": "author",
+      "primary_handle": "miss.palazyan",
+      "city": "Краснодар",
+      "description": "22K Followers, 497 Following, 178 Posts - See Instagram photos and videos from Adelina S. (@miss.palazyan)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/miss.palazyan",
+          "verification_status": "original_profile_opened",
+          "follower_count": 22000,
+          "source_url": "https://www.instagram.com/miss.palazyan"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@miss.palazyan",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1900,
+          "source_url": "https://www.threads.com/@miss.palazyan"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@miss.palazyan",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@miss.palazyan"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:42.174253+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "3d3a20198ab86f3e4e05",
+      "display_name": "Anastasiia Makarenko",
+      "profile_type": "author",
+      "primary_handle": "makarenko__anastasiia",
+      "city": "Краснодар",
+      "description": "21K Followers, 146 Following, 62 Posts - See Instagram photos and videos from Anastasiia Makarenko (@makarenko__anastasiia)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/makarenko__anastasiia",
+          "verification_status": "original_profile_opened",
+          "follower_count": 21000,
+          "source_url": "https://www.instagram.com/makarenko__anastasiia"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:44.456675+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "34f0386ea1eca449f7fd",
+      "display_name": "Eduard Spertsyan",
+      "profile_type": "author",
+      "primary_handle": "edospertsyan.74",
+      "city": "Краснодар",
+      "description": "138K Followers, 900 Following, 99 Posts - See Instagram photos and videos from Eduard Spertsyan (@edospertsyan.74)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/edospertsyan.74",
+          "verification_status": "original_profile_opened",
+          "follower_count": 138000,
+          "source_url": "https://www.instagram.com/edospertsyan.74"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@edospertsyan.74",
+          "verification_status": "public_index_verified",
+          "follower_count": 4600,
+          "source_url": "https://threadlook.com/profile/edospertsyan.74"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@edospertsyan.74",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@edospertsyan.74"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:58.530895+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "f36e3175e8dbeba67019",
+      "display_name": "Evgeniy Zhukov",
+      "profile_type": "author",
+      "primary_handle": "zhukov.evg",
+      "city": "Краснодар",
+      "description": "12K Followers, 147 Following, 42 Posts - See Instagram photos and videos from Evgeniy Zhukov (@zhukov.evg)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/zhukov.evg",
+          "verification_status": "original_profile_opened",
+          "follower_count": 12000,
+          "source_url": "https://www.instagram.com/zhukov.evg"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:44.420490+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "3ab4688cd9f753091447",
+      "display_name": "Horns and Bones",
+      "profile_type": "author",
+      "primary_handle": "hornsandbones",
+      "city": "Краснодар",
+      "description": "80K Followers, 530 Following, 244 Posts - See Instagram photos and videos from Horns and Bones (@hornsandbones)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/hornsandbones",
+          "verification_status": "original_profile_opened",
+          "follower_count": 80000,
+          "source_url": "https://www.instagram.com/hornsandbones"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:13:19.505948+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "01e357c1ea2ce739bb1b",
+      "display_name": "Ju 🪐",
+      "profile_type": "author",
+      "primary_handle": "juliasher_13",
+      "city": "Краснодар",
+      "description": "37K Followers, 700 Following, 1,110 Posts - See Instagram photos and videos from Ju 🪐 (@juliasher_13)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/juliasher_13",
+          "verification_status": "original_profile_opened",
+          "follower_count": 37000,
+          "source_url": "https://www.instagram.com/juliasher_13"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@juliasher_13",
+          "verification_status": "original_profile_opened",
+          "follower_count": 4000,
+          "source_url": "https://www.threads.com/@juliasher_13"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:56.505737+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "283f28b160ab89a1e4d6",
+      "display_name": "Kristina…⚜️",
+      "profile_type": "author",
+      "primary_handle": "_kristina_surikovna_",
+      "city": "Краснодар",
+      "description": "47K Followers, 621 Following, 1,061 Posts - See Instagram photos and videos from Kristina…⚜️ (@_kristina_surikovna_)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/_kristina_surikovna_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 47000,
+          "source_url": "https://www.instagram.com/_kristina_surikovna_"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@_kristina_surikovna_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 3200,
+          "source_url": "https://www.threads.com/@_kristina_surikovna_"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:43.550534+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "9927260426219a74e0fc",
+      "display_name": "Natali Model / Fitness coach / Makeup Marbella Malaga",
+      "profile_type": "author",
+      "primary_handle": "sutulanatali",
+      "city": "Краснодар",
+      "description": "131K Followers, 687 Following, 3,588 Posts - See Instagram photos and videos from Natali Model / Fitness coach / Makeup Marbella Malaga (@sutulanatali)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/sutulanatali",
+          "verification_status": "original_profile_opened",
+          "follower_count": 131000,
+          "source_url": "https://www.instagram.com/sutulanatali"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@sutulanatali",
+          "verification_status": "original_profile_opened",
+          "follower_count": 805,
+          "source_url": "https://www.threads.com/@sutulanatali"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:12:57.782141+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "d6faa8bb0afb6a86bb29",
+      "display_name": "Sergey Petrov",
+      "profile_type": "author",
+      "primary_handle": "seregapetrov",
+      "city": "Краснодар",
+      "description": "16K Followers, 597 Following, 244 Posts - See Instagram photos and videos from Sergey Petrov (@seregapetrov)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/seregapetrov",
+          "verification_status": "original_profile_opened",
+          "follower_count": 16000,
+          "source_url": "https://www.instagram.com/seregapetrov"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@seregapetrov",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@seregapetrov"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:44.595461+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "43931e96eaaf31b8e4de",
+      "display_name": "Анастасия Ахмедова /Лазаренко/",
+      "profile_type": "author",
+      "primary_handle": "_nastya.lazarenko",
+      "city": "Краснодар",
+      "description": "19K Followers, 1,081 Following, 3,061 Posts - See Instagram photos and videos from Анастасия Ахмедова /Лазаренко/ (@_nastya.lazarenko)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/_nastya.lazarenko",
+          "verification_status": "original_profile_opened",
+          "follower_count": 19000,
+          "source_url": "https://www.instagram.com/_nastya.lazarenko"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:45.272016+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "d4cc6f0feb71b27ff126",
+      "display_name": "Андрей Алексеенко",
+      "profile_type": "author",
+      "primary_handle": "alekseenko_krd",
+      "city": "Краснодар",
+      "description": "11K Followers, 19 Following, 279 Posts - See Instagram photos and videos from Андрей Алексеенко (@alekseenko_krd)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/alekseenko_krd",
+          "verification_status": "original_profile_opened",
+          "follower_count": 11000,
+          "source_url": "https://www.instagram.com/alekseenko_krd"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:44.379718+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "7b5dd88c356355e622c7",
+      "display_name": "Андрей Панжин",
+      "profile_type": "author",
+      "primary_handle": "panzhin77",
+      "city": "Краснодар",
+      "description": "45K Followers, 500 Following, 145 Posts - See Instagram photos and videos from Андрей Панжин (@panzhin77)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/panzhin77",
+          "verification_status": "original_profile_opened",
+          "follower_count": 45000,
+          "source_url": "https://www.instagram.com/panzhin77"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@panzhin77",
+          "verification_status": "original_profile_opened",
+          "follower_count": 404,
+          "source_url": "https://www.threads.com/@panzhin77"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:43.512684+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "80694f3ca50322120a46",
+      "display_name": "АНИ | ПСИХОЛОГ | ИСКУССТВО ФЛИРТА | ПСИХОЛОГИЯ ОТНОШЕНИЙ",
+      "profile_type": "author",
+      "primary_handle": "an.ni_gray",
+      "city": "Краснодар",
+      "description": "143K Followers, 110 Following, 4,609 Posts - See Instagram photos and videos from АНИ | ПСИХОЛОГ | ИСКУССТВО ФЛИРТА | ПСИХОЛОГИЯ ОТНОШЕНИЙ (@an.ni_gray)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/an.ni_gray",
+          "verification_status": "original_profile_opened",
+          "follower_count": 143000,
+          "source_url": "https://www.instagram.com/an.ni_gray"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@an.ni_gray",
+          "verification_status": "public_index_verified",
+          "follower_count": 6900,
+          "source_url": "https://threadlook.com/profile/an.ni_gray"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@an.ni_gray",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@an.ni_gray"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:13:20.437354+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "f0577e9ec60f1df84e67",
+      "display_name": "Анна Бершадская",
+      "profile_type": "author",
+      "primary_handle": "bershadskaya",
+      "city": "Краснодар",
+      "description": "170K Followers, 344 Following, 1,641 Posts - See Instagram photos and videos from Анна Бершадская (@bershadskaya)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/bershadskaya",
+          "verification_status": "original_profile_opened",
+          "follower_count": 170000,
+          "source_url": "https://www.instagram.com/bershadskaya"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@bershadskaya",
+          "verification_status": "original_profile_opened",
+          "follower_count": 6400,
+          "source_url": "https://www.threads.com/@bershadskaya"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@bershadskaya",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@bershadskaya"
+        }
+      ],
+      "discovery_sources": [
+        "https://adinblog.ru/топ/города/краснодар/"
+      ],
+      "researched_at": "2026-08-25T14:13:21.167292+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "d6bb146232070aaadb9d",
+      "display_name": "АХРА САМАНДЖИЯ | хореограф",
+      "profile_type": "author",
+      "primary_handle": "axra_saz",
+      "city": "Краснодар",
+      "description": "17K Followers, 1,411 Following, 2,182 Posts - See Instagram photos and videos from АХРА САМАНДЖИЯ | хореограф (@axra_saz)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/axra_saz",
+          "verification_status": "original_profile_opened",
+          "follower_count": 17000,
+          "source_url": "https://www.instagram.com/axra_saz"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:45.588845+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "f4415843c02b56c974ce",
+      "display_name": "Вадим КУЛАГА | уникальная керамика",
+      "profile_type": "author",
+      "primary_handle": "vadim_kulaga",
+      "city": "Краснодар",
+      "description": "108K Followers, 668 Following, 235 Posts - See Instagram photos and videos from Вадим КУЛАГА | уникальная керамика (@vadim_kulaga)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/vadim_kulaga",
+          "verification_status": "original_profile_opened",
+          "follower_count": 108000,
+          "source_url": "https://www.instagram.com/vadim_kulaga"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@vadim_kulaga",
+          "verification_status": "original_profile_opened",
+          "follower_count": 2000,
+          "source_url": "https://www.threads.com/@vadim_kulaga"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:12:58.266309+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "e458ea06c20f10198fbf",
+      "display_name": "Косметолог📍Майкоп📍Краснодар",
+      "profile_type": "author",
+      "primary_handle": "dr_zaira_sheudzhen",
+      "city": "Краснодар",
+      "description": "15K Followers, 451 Following, 504 Posts - See Instagram photos and videos from Косметолог📍Майкоп📍Краснодар (@dr_zaira_sheudzhen)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/dr_zaira_sheudzhen",
+          "verification_status": "original_profile_opened",
+          "follower_count": 15000,
+          "source_url": "https://www.instagram.com/dr_zaira_sheudzhen"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@dr_zaira_sheudzhen",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1100,
+          "source_url": "https://www.threads.com/@dr_zaira_sheudzhen"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:42.095171+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "99dc3801f3811806f44b",
+      "display_name": "КРАСНОДАР",
+      "profile_type": "author",
+      "primary_handle": "irene_attitude",
+      "city": "Краснодар",
+      "description": "10K Followers, 261 Following, 265 Posts - See Instagram photos and videos from КРАСНОДАР (@irene_attitude)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/irene_attitude",
+          "verification_status": "original_profile_opened",
+          "follower_count": 10000,
+          "source_url": "https://www.instagram.com/irene_attitude"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@irene_attitude",
+          "verification_status": "original_profile_opened",
+          "follower_count": 553,
+          "source_url": "https://www.threads.com/@irene_attitude"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:44.371809+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "2a88ea787fc3f091b8cc",
+      "display_name": "Лили Кецман",
+      "profile_type": "author",
+      "primary_handle": "lili.ketsman",
+      "city": "Краснодар",
+      "description": "62K Followers, 6 Following, 694 Posts - See Instagram photos and videos from Лили Кецман (@lili.ketsman)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/lili.ketsman",
+          "verification_status": "original_profile_opened",
+          "follower_count": 62000,
+          "source_url": "https://www.instagram.com/lili.ketsman"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@lili.ketsman",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1200,
+          "source_url": "https://www.threads.com/@lili.ketsman"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@lili.ketsman",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@lili.ketsman"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:12:58.785063+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "9222306fc588d96f1da4",
+      "display_name": "Машталир Наталья",
+      "profile_type": "author",
+      "primary_handle": "smenila_imya",
+      "city": "Краснодар",
+      "description": "10K Followers, 3,196 Following, 1,716 Posts - See Instagram photos and videos from Машталир Наталья (@smenila_imya)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/smenila_imya",
+          "verification_status": "original_profile_opened",
+          "follower_count": 10000,
+          "source_url": "https://www.instagram.com/smenila_imya"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@smenila_imya",
+          "verification_status": "original_profile_opened",
+          "follower_count": 944,
+          "source_url": "https://www.threads.com/@smenila_imya"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:42.067947+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "926c71d203c7591038df",
+      "display_name": "Милена🧿🤞🏻 | Модель ? 📍Krd",
+      "profile_type": "author",
+      "primary_handle": "ssseallorredd",
+      "city": "Краснодар",
+      "description": "13K Followers, 451 Following, 56 Posts - See Instagram photos and videos from Милена🧿🤞🏻 | Модель ? 📍Krd (@ssseallorredd)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/ssseallorredd",
+          "verification_status": "original_profile_opened",
+          "follower_count": 13000,
+          "source_url": "https://www.instagram.com/ssseallorredd"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@ssseallorredd",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@ssseallorredd"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:45.206315+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "b9caaedd73a68c8974ac",
+      "display_name": "НАТАЛИ - TOP 🔝 МАКИЯЖ ВИЗАЖИСТ ОБУЧЕНИЕ КРАСНОДАР",
+      "profile_type": "author",
+      "primary_handle": "naberri_makeup",
+      "city": "Краснодар",
+      "description": "118K Followers, 2,369 Following, 1,584 Posts - See Instagram photos and videos from НАТАЛИ - TOP 🔝 МАКИЯЖ ВИЗАЖИСТ ОБУЧЕНИЕ КРАСНОДАР (@naberri_makeup)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/naberri_makeup",
+          "verification_status": "original_profile_opened",
+          "follower_count": 118000,
+          "source_url": "https://www.instagram.com/naberri_makeup"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@naberri_makeup",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1800,
+          "source_url": "https://www.threads.com/@naberri_makeup"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@naberri_makeup",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@naberri_makeup"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:12:55.843579+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "12c57b7e231c7b5ba105",
+      "display_name": "Обучаю съемке Reels на смартфон.",
+      "profile_type": "author",
+      "primary_handle": "mitopro",
+      "city": "Краснодар",
+      "description": "100K Followers, 2 Following, 1,179 Posts - See Instagram photos and videos from Обучаю съемке Reels на смартфон. (@mitopro)",
+      "contactability": "manual_only",
+      "audience_band": "mid",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/mitopro",
+          "verification_status": "original_profile_opened",
+          "follower_count": 100000,
+          "source_url": "https://www.instagram.com/mitopro"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@mitopro",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1300,
+          "source_url": "https://www.threads.com/@mitopro"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@mitopro",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@mitopro"
+        }
+      ],
+      "discovery_sources": [
+        "https://infludata.com/rankings/top-20-influencer-russia-krasnodar-instagram"
+      ],
+      "researched_at": "2026-08-25T14:12:55.868994+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "c52c579ba96b4614b50b",
+      "display_name": "Отари Бадров",
+      "profile_type": "author",
+      "primary_handle": "otarrri",
+      "city": "Краснодар",
+      "description": "14K Followers, 555 Following, 44 Posts - See Instagram photos and videos from Отари Бадров (@otarrri)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/otarrri",
+          "verification_status": "original_profile_opened",
+          "follower_count": 14000,
+          "source_url": "https://www.instagram.com/otarrri"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@otarrri",
+          "verification_status": "original_profile_opened",
+          "follower_count": 499,
+          "source_url": "https://www.threads.com/@otarrri"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@otarrri",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@otarrri"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:55.557024+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "a7251639956fd4390ced",
+      "display_name": "Сюзанна ♌️Саруханян",
+      "profile_type": "author",
+      "primary_handle": "suzanna_sarukhanyan",
+      "city": "Краснодар",
+      "description": "47K Followers, 1,053 Following, 1,853 Posts - See Instagram photos and videos from Сюзанна ♌️Саруханян (@suzanna_sarukhanyan)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/suzanna_sarukhanyan",
+          "verification_status": "original_profile_opened",
+          "follower_count": 47000,
+          "source_url": "https://www.instagram.com/suzanna_sarukhanyan"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@suzanna_sarukhanyan",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1900,
+          "source_url": "https://www.threads.com/@suzanna_sarukhanyan"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:57.200289+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "39b82c7d83fd78c6a0a8",
+      "display_name": "🄴🄻🄸🅉🄰🅅🄴🅃🄰",
+      "profile_type": "author",
+      "primary_handle": "lizlizaaaaa",
+      "city": "Краснодар",
+      "description": "42K Followers, 79 Following, 17 Posts - See Instagram photos and videos from 🄴🄻🄸🅉🄰🅅🄴🅃🄰 (@lizlizaaaaa)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/lizlizaaaaa",
+          "verification_status": "original_profile_opened",
+          "follower_count": 42000,
+          "source_url": "https://www.instagram.com/lizlizaaaaa"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@lizlizaaaaa",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@lizlizaaaaa"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:43.783062+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "a95d125fe19a8be95439",
+      "display_name": "🔥Перевяз Газ🔥",
+      "profile_type": "author",
+      "primary_handle": "_perevyaz_",
+      "city": "Краснодар",
+      "description": "73K Followers, 448 Following, 164 Posts - See Instagram photos and videos from 🔥Перевяз Газ🔥 (@_perevyaz_)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/_perevyaz_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 73000,
+          "source_url": "https://www.instagram.com/_perevyaz_"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@_perevyaz_",
+          "verification_status": "original_profile_opened",
+          "follower_count": 349,
+          "source_url": "https://www.threads.com/@_perevyaz_"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@_perevyaz_",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@_perevyaz_"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/krasnodar"
+      ],
+      "researched_at": "2026-08-25T14:12:40.966529+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "99a0c751281ee90ae335",
+      "display_name": "Alfiya Berezovskaya 🕊️🤍",
+      "profile_type": "author",
+      "primary_handle": "alfiyagram",
+      "city": "Санкт-Петербург",
+      "description": "50K Followers, 118 Following, 246 Posts - See Instagram photos and videos from Alfiya Berezovskaya 🕊️🤍 (@alfiyagram)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/alfiyagram",
+          "verification_status": "original_profile_opened",
+          "follower_count": 50000,
+          "source_url": "https://www.instagram.com/alfiyagram"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@alfiyagram",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@alfiyagram"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:06.337336+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "3edbc92a9fcc1eac175e",
+      "display_name": "glass.gorodok",
+      "profile_type": "author",
+      "primary_handle": "glass.gorodok",
+      "city": "Санкт-Петербург",
+      "description": "0 Followers, 0 Following, 0 Posts - See Instagram photos and videos from  (@glass.gorodok)",
+      "contactability": "manual_only",
+      "audience_band": "unknown",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/glass.gorodok",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.instagram.com/glass.gorodok"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:24.061798+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "eef2cf2e9e2af7625705",
+      "display_name": "IVAN POKIDYSHEV",
+      "profile_type": "author",
+      "primary_handle": "pokidyshev_art",
+      "city": "Санкт-Петербург",
+      "description": "64K Followers, 2,813 Following, 396 Posts - See Instagram photos and videos from IVAN POKIDYSHEV (@pokidyshev_art)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/pokidyshev_art",
+          "verification_status": "original_profile_opened",
+          "follower_count": 64000,
+          "source_url": "https://www.instagram.com/pokidyshev_art"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@pokidyshev_art",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1600,
+          "source_url": "https://www.threads.com/@pokidyshev_art"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:05.941655+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "7ae975823d700c78f521",
+      "display_name": "my name is art",
+      "profile_type": "author",
+      "primary_handle": "azrtusa",
+      "city": "Санкт-Петербург",
+      "description": "45K Followers, 183 Following, 181 Posts - See Instagram photos and videos from my name is art (@azrtusa)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/azrtusa",
+          "verification_status": "original_profile_opened",
+          "follower_count": 45000,
+          "source_url": "https://www.instagram.com/azrtusa"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:08.749614+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "ea46fb0e9c7fc118d0fc",
+      "display_name": "Polli Zelenina",
+      "profile_type": "author",
+      "primary_handle": "polli.zelenina",
+      "city": "Санкт-Петербург",
+      "description": "45K Followers, 133 Following, 189 Posts - See Instagram photos and videos from Polli Zelenina (@polli.zelenina)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/polli.zelenina",
+          "verification_status": "original_profile_opened",
+          "follower_count": 45000,
+          "source_url": "https://www.instagram.com/polli.zelenina"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@polli.zelenina",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1400,
+          "source_url": "https://www.threads.com/@polli.zelenina"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:52.563518+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "cf50fb2f42291d1fba6f",
+      "display_name": "Vladislav Ivanov",
+      "profile_type": "author",
+      "primary_handle": "lineysfilm",
+      "city": "Санкт-Петербург",
+      "description": "65K Followers, 927 Following, 77 Posts - See Instagram photos and videos from Vladislav Ivanov (@lineysfilm)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/lineysfilm",
+          "verification_status": "original_profile_opened",
+          "follower_count": 65000,
+          "source_url": "https://www.instagram.com/lineysfilm"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@lineysfilm",
+          "verification_status": "original_profile_opened",
+          "follower_count": 12200,
+          "source_url": "https://www.threads.com/@lineysfilm"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@lineysfilm",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@lineysfilm"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:48.690818+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "8ea92495ab37aca40085",
+      "display_name": "Александр Ерохин",
+      "profile_type": "author",
+      "primary_handle": "erokhin___alexander",
+      "city": "Санкт-Петербург",
+      "description": "44K Followers, 249 Following, 295 Posts - See Instagram photos and videos from Александр Ерохин (@erokhin___alexander)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/erokhin___alexander",
+          "verification_status": "original_profile_opened",
+          "follower_count": 44000,
+          "source_url": "https://www.instagram.com/erokhin___alexander"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:35.351587+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "a833b58b3decb0d0acc2",
+      "display_name": "Алексей Шишкин. Журналист",
+      "profile_type": "author",
+      "primary_handle": "stadter",
+      "city": "Санкт-Петербург",
+      "description": "22K Followers, 679 Following, 1,215 Posts - See Instagram photos and videos from Алексей Шишкин. Журналист (@stadter)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/stadter",
+          "verification_status": "original_profile_opened",
+          "follower_count": 22000,
+          "source_url": "https://www.instagram.com/stadter"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@stadter",
+          "verification_status": "original_profile_opened",
+          "follower_count": 2500,
+          "source_url": "https://www.threads.com/@stadter"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@stadter",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@stadter"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:10.422271+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "d331842df035b0a5c435",
+      "display_name": "Алина | лайфстайл контент-креатор, стиль, Петербург",
+      "profile_type": "author",
+      "primary_handle": "bulaavina",
+      "city": "Санкт-Петербург",
+      "description": "41K Followers, 999 Following, 1,817 Posts - See Instagram photos and videos from Алина | лайфстайл контент-креатор, стиль, Петербург (@bulaavina)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/bulaavina",
+          "verification_status": "original_profile_opened",
+          "follower_count": 41000,
+          "source_url": "https://www.instagram.com/bulaavina"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@bulaavina",
+          "verification_status": "original_profile_opened",
+          "follower_count": 2500,
+          "source_url": "https://www.threads.com/@bulaavina"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@bulaavina",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@bulaavina"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:51.525143+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "b591bfa066ad2fc063d2",
+      "display_name": "Анастасия Решетникова",
+      "profile_type": "author",
+      "primary_handle": "areshetnikova",
+      "city": "Санкт-Петербург",
+      "description": "93K Followers, 1,581 Following, 771 Posts - See Instagram photos and videos from Анастасия Решетникова (@areshetnikova)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/areshetnikova",
+          "verification_status": "original_profile_opened",
+          "follower_count": 93000,
+          "source_url": "https://www.instagram.com/areshetnikova"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@areshetnikova",
+          "verification_status": "original_profile_opened",
+          "follower_count": 424,
+          "source_url": "https://www.threads.com/@areshetnikova"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@areshetnikova",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@areshetnikova"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:42.126537+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "4f6438017fe4c9537d42",
+      "display_name": "ариша. маркетинг и креатив",
+      "profile_type": "author",
+      "primary_handle": "picturishka",
+      "city": "Санкт-Петербург",
+      "description": "50K Followers, 138 Following, 388 Posts - See Instagram photos and videos from ариша. маркетинг и креатив (@picturishka)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/picturishka",
+          "verification_status": "original_profile_opened",
+          "follower_count": 50000,
+          "source_url": "https://www.instagram.com/picturishka"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@picturishka",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@picturishka"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:51.435924+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "c19aad47ca7256776036",
+      "display_name": "Важный человек",
+      "profile_type": "author",
+      "primary_handle": "vlad_pitergid",
+      "city": "Санкт-Петербург",
+      "description": "48 Followers, 86 Following, 0 Posts - See Instagram photos and videos from Важный человек (@vlad_pitergid)",
+      "contactability": "manual_only",
+      "audience_band": "nano",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/vlad_pitergid",
+          "verification_status": "original_profile_opened",
+          "follower_count": 48,
+          "source_url": "https://www.instagram.com/vlad_pitergid"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@vlad_pitergid",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@vlad_pitergid"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:10.461692+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "04a53d4bfb85436b78a8",
+      "display_name": "Витражи в России",
+      "profile_type": "author",
+      "primary_handle": "provitroart",
+      "city": "Санкт-Петербург",
+      "description": "1,441 Followers, 108 Following, 388 Posts - See Instagram photos and videos from Витражи в России (@provitroart)",
+      "contactability": "manual_only",
+      "audience_band": "nano",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/provitroart",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1441,
+          "source_url": "https://www.instagram.com/provitroart"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:29.154048+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "2da78a1c5134ffb1ea2e",
+      "display_name": "ДИАНА | HIGH HEELS | ACRO HEELS | КОЛПИНО | САНКТ-ПЕТЕРБУРГ",
+      "profile_type": "author",
+      "primary_handle": "sinitsuna.di",
+      "city": "Санкт-Петербург",
+      "description": "Диана - преподаю high heels\n🩰проведу тебя от начинающего к профи\nПиши «ТАНЦЫ» в директ чтобы попасть ко мне!",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/sinitsuna.di",
+          "verification_status": "public_catalog_verified",
+          "follower_count": 80891,
+          "source_url": "https://www.modash.io/find-influencers/russia/saint-petersburg"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@sinitsuna.di",
+          "verification_status": "original_profile_opened",
+          "follower_count": 927,
+          "source_url": "https://www.threads.com/@sinitsuna.di"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@sinitsuna.di",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@sinitsuna.di"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:09.010942+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "e9a71cd76da60f831d61",
+      "display_name": "жизнь в сталинке, ремонт в старом фонде и непарадный Петербург",
+      "profile_type": "author",
+      "primary_handle": "stalinka_na_chernoi",
+      "city": "Санкт-Петербург",
+      "description": "77K Followers, 815 Following, 2,114 Posts - See Instagram photos and videos from жизнь в сталинке, ремонт в старом фонде и непарадный Петербург (@stalinka_na_chernoi)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/stalinka_na_chernoi",
+          "verification_status": "original_profile_opened",
+          "follower_count": 77000,
+          "source_url": "https://www.instagram.com/stalinka_na_chernoi"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@stalinka_na_chernoi",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@stalinka_na_chernoi"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:25.239423+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "02fda18d9c491b5b5914",
+      "display_name": "Ия Гаас | ссать и делать",
+      "profile_type": "author",
+      "primary_handle": "gaas_mi",
+      "city": "Санкт-Петербург",
+      "description": "97K Followers, 307 Following, 1,811 Posts - See Instagram photos and videos from Ия Гаас | ссать и делать (@gaas_mi)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/gaas_mi",
+          "verification_status": "original_profile_opened",
+          "follower_count": 97000,
+          "source_url": "https://www.instagram.com/gaas_mi"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@gaas_mi",
+          "verification_status": "original_profile_opened",
+          "follower_count": 12700,
+          "source_url": "https://www.threads.com/@gaas_mi"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@gaas_mi",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@gaas_mi"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:11.304866+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "64a50033833053ca1561",
+      "display_name": "Ксюша Сидорина aka метлахтайл",
+      "profile_type": "author",
+      "primary_handle": "mettlachtile",
+      "city": "Санкт-Петербург",
+      "description": "81K Followers, 797 Following, 1,169 Posts - See Instagram photos and videos from Ксюша Сидорина aka метлахтайл (@mettlachtile)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/mettlachtile",
+          "verification_status": "original_profile_opened",
+          "follower_count": 81000,
+          "source_url": "https://www.instagram.com/mettlachtile"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@mettlachtile",
+          "verification_status": "original_profile_opened",
+          "follower_count": 6800,
+          "source_url": "https://www.threads.com/@mettlachtile"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@mettlachtile",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@mettlachtile"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg",
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:12:48.482608+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "1ea2d2332b00ed9a78d3",
+      "display_name": "Лёля Такси 👑 LЁLYA 🐯",
+      "profile_type": "author",
+      "primary_handle": "olechechkin",
+      "city": "Санкт-Петербург",
+      "description": "82K Followers, 340 Following, 1,304 Posts - See Instagram photos and videos from Лёля Такси 👑 LЁLYA 🐯 (@olechechkin)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/olechechkin",
+          "verification_status": "original_profile_opened",
+          "follower_count": 82000,
+          "source_url": "https://www.instagram.com/olechechkin"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@olechechkin",
+          "verification_status": "original_profile_opened",
+          "follower_count": 4200,
+          "source_url": "https://www.threads.com/@olechechkin"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@olechechkin",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@olechechkin"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:48.414035+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "1429b16edfbc4eedcee2",
+      "display_name": "Лероша Пéкур ✱ reels, лайфстайл, приколы :)",
+      "profile_type": "author",
+      "primary_handle": "pekur.v",
+      "city": "Санкт-Петербург",
+      "description": "32K Followers, 723 Following, 520 Posts - See Instagram photos and videos from Лероша Пéкур ✱ reels, лайфстайл, приколы :) (@pekur.v)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/pekur.v",
+          "verification_status": "original_profile_opened",
+          "follower_count": 32000,
+          "source_url": "https://www.instagram.com/pekur.v"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@pekur.v",
+          "verification_status": "original_profile_opened",
+          "follower_count": 2400,
+          "source_url": "https://www.threads.com/@pekur.v"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@pekur.v",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@pekur.v"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:21.591039+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "64d23fa9788c01f2de06",
+      "display_name": "Люда Горгуца",
+      "profile_type": "author",
+      "primary_handle": "old_apartment",
+      "city": "Санкт-Петербург",
+      "description": "33K Followers, 609 Following, 287 Posts - See Instagram photos and videos from Люда Горгуца (@old_apartment)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/old_apartment",
+          "verification_status": "original_profile_opened",
+          "follower_count": 33000,
+          "source_url": "https://www.instagram.com/old_apartment"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:35.190563+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "6227f7f170077a0cafd7",
+      "display_name": "Настасья - блогер • модель • lifestyle influencer 📍Москва/Спб",
+      "profile_type": "author",
+      "primary_handle": "ask_nastasia",
+      "city": "Санкт-Петербург",
+      "description": "92K Followers, 724 Following, 511 Posts - See Instagram photos and videos from Настасья - блогер • модель • lifestyle influencer 📍Москва/Спб (@ask_nastasia)",
+      "contactability": "advertising_contact",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/ask_nastasia",
+          "verification_status": "original_profile_opened",
+          "follower_count": 92000,
+          "source_url": "https://www.instagram.com/ask_nastasia"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@ask_nastasia",
+          "verification_status": "original_profile_opened",
+          "follower_count": 4500,
+          "source_url": "https://www.threads.com/@ask_nastasia"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@ask_nastasia",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@ask_nastasia"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:12:40.761220+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "3909121d9ab9a09f9d4f",
+      "display_name": "Ника о бережном отношении к старому фонду",
+      "profile_type": "author",
+      "primary_handle": "details_spb",
+      "city": "Санкт-Петербург",
+      "description": "14K Followers, 1,143 Following, 2,069 Posts - See Instagram photos and videos from Ника о бережном отношении к старому фонду (@details_spb)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/details_spb",
+          "verification_status": "original_profile_opened",
+          "follower_count": 14000,
+          "source_url": "https://www.instagram.com/details_spb"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@details_spb",
+          "verification_status": "original_profile_opened",
+          "follower_count": 1500,
+          "source_url": "https://www.threads.com/@details_spb"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@details_spb",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@details_spb"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:07.026146+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "c764011af635f82a054f",
+      "display_name": "Никита | изучаю дореволюционную одежду",
+      "profile_type": "author",
+      "primary_handle": "historycostume",
+      "city": "Санкт-Петербург",
+      "description": "13K Followers, 45 Following, 109 Posts - See Instagram photos and videos from Никита | изучаю дореволюционную одежду (@historycostume)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/historycostume",
+          "verification_status": "original_profile_opened",
+          "follower_count": 13000,
+          "source_url": "https://www.instagram.com/historycostume"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@historycostume",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@historycostume"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:13:11.759982+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "7248dc342d317b6106cc",
+      "display_name": "Про Питер и путешествия",
+      "profile_type": "author",
+      "primary_handle": "kotlet",
+      "city": "Санкт-Петербург",
+      "description": "33K Followers, 1,418 Following, 4,654 Posts - See Instagram photos and videos from Про Питер и путешествия (@kotlet)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/kotlet",
+          "verification_status": "original_profile_opened",
+          "follower_count": 33000,
+          "source_url": "https://www.instagram.com/kotlet"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@kotlet",
+          "verification_status": "original_profile_opened",
+          "follower_count": 23300,
+          "source_url": "https://www.threads.com/@kotlet"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@kotlet",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@kotlet"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg",
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:12:51.490799+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "88ae8328a01be20b1c36",
+      "display_name": "Сергей Макаров",
+      "profile_type": "author",
+      "primary_handle": "sergeygokk",
+      "city": "Санкт-Петербург",
+      "description": "45K Followers, 1,189 Following, 1,572 Posts - See Instagram photos and videos from Сергей Макаров (@sergeygokk)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/sergeygokk",
+          "verification_status": "original_profile_opened",
+          "follower_count": 45000,
+          "source_url": "https://www.instagram.com/sergeygokk"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@sergeygokk",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@sergeygokk"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:09.808406+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "4af5adddb95090ddccf4",
+      "display_name": "Таня ✶ fashion influencer ✶ ugc-контент ✶ Питер",
+      "profile_type": "author",
+      "primary_handle": "miniiriba",
+      "city": "Санкт-Петербург",
+      "description": "Из принципа не веду блог на одну тему, \nпоэтому вещаю про блогинг, креатив, стиль, \nпутешествия и вайбовую жизнь в Питере 🎪\npr, ugc @miniiriba_pr",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/miniiriba",
+          "verification_status": "public_catalog_verified",
+          "follower_count": 35616,
+          "source_url": "https://www.modash.io/find-influencers/russia/saint-petersburg"
+        },
+        {
+          "platform": "threads",
+          "canonical_url": "https://www.threads.com/@miniiriba",
+          "verification_status": "original_profile_opened",
+          "follower_count": 2900,
+          "source_url": "https://www.threads.com/@miniiriba"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@miniiriba",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@miniiriba"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg"
+      ],
+      "researched_at": "2026-08-25T14:13:06.208388+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    },
+    {
+      "candidate_id": "7147e7189322fb0036ad",
+      "display_name": "Тут жизнь и Лера🎠",
+      "profile_type": "author",
+      "primary_handle": "tut_lera",
+      "city": "Санкт-Петербург",
+      "description": "89K Followers, 548 Following, 1,005 Posts - See Instagram photos and videos from Тут жизнь и Лера🎠 (@tut_lera)",
+      "contactability": "manual_only",
+      "audience_band": "micro",
+      "channels": [
+        {
+          "platform": "instagram",
+          "canonical_url": "https://www.instagram.com/tut_lera",
+          "verification_status": "original_profile_opened",
+          "follower_count": 89000,
+          "source_url": "https://www.instagram.com/tut_lera"
+        },
+        {
+          "platform": "tiktok",
+          "canonical_url": "https://www.tiktok.com/@tut_lera",
+          "verification_status": "original_profile_opened",
+          "follower_count": null,
+          "source_url": "https://www.tiktok.com/@tut_lera"
+        }
+      ],
+      "discovery_sources": [
+        "https://www.modash.io/find-influencers/russia/saint-petersburg",
+        "https://www.sobaka.ru/city/urbanistics/145052"
+      ],
+      "researched_at": "2026-08-25T14:12:45.873861+00:00",
+      "limitations": [
+        "Город подтверждён публичной городской подборкой; долю аудитории в городе нужно запросить перед кампанией.",
+        "Профиль существует, но готовность к конкретной коллаборации не подразумевается."
+      ]
+    }
+  ],
+  "limitations": [
+    "Это discovery-база, а не утверждённый shortlist.",
+    "Никакие сообщения не отправлялись и production LocalOS не изменялся."
+  ]
+}

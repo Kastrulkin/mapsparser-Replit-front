@@ -1,0 +1,3544 @@
+{
+  "schema_version": "1.0",
+  "title": "Telegrator: проверенные локальные Telegram-каналы Санкт-Петербурга",
+  "status": "public_research_only",
+  "generated_at": "2026-08-25T14:21:08.311051+00:00",
+  "candidate_count": 44,
+  "platform_counts": {
+    "telegram": 44
+  },
+  "city_counts": {
+    "Санкт-Петербург": 44
+  },
+  "candidates": [
+    {
+      "candidate_id": "1c29479e730e0db2539b",
+      "display_name": "Санкт-Петербург | Записки Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter_zapiski",
+      "username": "piter_zapiski",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Санкт-Петербург – один из красивейших городов мира с большим количеством исторических памятников и достопримечательностей.\nКонтакты - @TrenerBal\nБольше каналов Санкт-Петербурга -\n@piterrek\nПрайс  @pricepiterr",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 1200,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/TrenerBal",
+        "https://t.me/piterrek",
+        "https://t.me/pricepiterr"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter_zapiski",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "dc472d7fdf20400ca827",
+      "display_name": "Метро Петербурга",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spbmetro",
+      "username": "spbmetro",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Новости городской подземки\nВ соответствии с требованиями законодательства страница добавлена в перечень Роскомнадзора: https://knd.gov.ru/license?id=67617f2540af125d6a4519ee®istryType=bloggersPermission",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "subscriber_count": 102000,
+      "audience_band": "mid",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spbmetro",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "dccf71a08a94a8f85fb2",
+      "display_name": "Кофе и билеты (в Петербурге)",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/v_poiskax_chuda",
+      "username": "v_poiskax_chuda",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Про путешествия и Петербург. Городские истории.\nРегистрация в РКН: https://gosuslugi.ru/snet/67ad9a1175b36e054e04de83\nАвтор канала @saraeva_yulia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 96000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [
+        "https://t.me/saraeva_yulia"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/v_poiskax_chuda",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "7bb0e4d38b04ca8a2c6f",
+      "display_name": "Маргарита Симоньян. Литература и История",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/msimonyan_literature",
+      "username": "msimonyan_literature",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Регистрация в Роскомнадзоре: https://knd.gov.ru/license?id=673c8dfe6afad41667cf31ea®istryType=bloggersPermission\nЗдесь я публикую любимые стихи, цитаты и интересные вопросы.\nПравила розыгрыша книг — здесь:\ntelemetr.me/msimonyan_literature/750",
+      "topics": [
+        "Санкт-Петербург",
+        "книги и культура"
+      ],
+      "subscriber_count": 88000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/msimonyan_literature",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "a7dfc32bf3c7bd3265b9",
+      "display_name": "СКИДКИ и АКЦИИ из Питера piterskie_skidki",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/skidki_iz_pitera",
+      "username": "skidki_iz_pitera",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Скидки и глюки из СПБ\n@skidki_ps_bot каталог промокодов\n@skidki_v_spb_bot каталог промокодов\nОбратная связь telemetr.me/skidki_iz_pitera?direct\nПо рекламе telemetr.me/skidki_elena?direct\n@EAN13_barcode_bot\nРКН https://clck.ru/3NN5Tr",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 83000,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/EAN13_barcode_bot",
+        "https://t.me/skidki_ps_bot",
+        "https://t.me/skidki_v_spb_bot"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/skidki_iz_pitera",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "1b9d7a5f14b208fc7ea7",
+      "display_name": "Горбилет Петербург – билеты со скидкой",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/gorbilet",
+      "username": "gorbilet",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Сервис горящих билетов со скидками до 90%🔥\n👉🏼 По всем вопросам пишите сюда: @Gorbilet_podderzka_bot\nНаш сайт: https://gorbilet.com/go/703JkB\nМы в Max: https://max.ru/gorbilet\nЗарегистрированы в Роскомнадзоре: https://clck.ru/3G6WeC",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг"
+      ],
+      "subscriber_count": 81000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [
+        "https://t.me/Gorbilet_podderzka_bot"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/gorbilet",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "378c3e2b495d418e1442",
+      "display_name": "В Питере есть",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_rest",
+      "username": "spb_rest",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "В Питере есть всё, но мы здесь делимся самым классным 🩷\nО ресторанах, развлечениях, интересных местах и жизни в Петербурге с любовью.\nПо сотрудничеству: @kommunikacia\nРКН: https://clck.ru/3FmHue",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "места и путешествия"
+      ],
+      "subscriber_count": 77000,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/kommunikacia"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_rest",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "615bdb31d68bc4e1d81d",
+      "display_name": "KudaGo: Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/kudagospb",
+      "username": "kudagospb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Афиша и интересные места Санкт-Петербурга\nПо вопросам продвижения: bit.ly/3B95zaI\nДля бизнеса: @bkudago\nВключена Роскомнадзором в перечень персональных страниц, уникальная ссылка: https://go.kudago.com/3DYugYM\nЗаявление № 5465558980",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 50000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [
+        "https://t.me/bkudago"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/kudagospb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "e9390bce4039e18a2e98",
+      "display_name": "БОГЕМА ПИТЕРСКАЯ (нишевый телеграм-канал)",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/bogemasranaya",
+      "username": "bogemasranaya",
+      "city": "Санкт-Петербург",
+      "districts": [
+        "Петроградский"
+      ],
+      "district_status": "publicly_confirmed",
+      "description": "Петроградская шпана, ленинградский панк, питерский сноб\n@boheme_bot - написать мне\nTRC-20: TSU2NXWWD54TMbTDd4b2G9VuQjmZ6uungs\nПародийный контент",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 30000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [
+        "https://t.me/boheme_bot"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/bogemasranaya",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "d19c8651d34fec4ed0b9",
+      "display_name": "TripSoup про Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/tripsoup",
+      "username": "tripsoup",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Канал про мероприятия в Петербурге. Интересные локации, подборки, идеи, куда сходить от местного жителя.\nПро сотрудничество: http://tripsoup.ru/telegram\nVK: https://vk.com/im/channels/-236520874?cmid=1",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 28000,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/tripsoup",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "14d90ab8b49cec18b09c",
+      "display_name": "Петербургский «Зенит»",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/zenitspb",
+      "username": "zenitspb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Актуальные новости о петербургском клубе. Оперативно, оригинально, своими руками.\nОбратная связь — @pravosudie7",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 23000,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/pravosudie7"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/zenitspb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "0315692d9d1cfedc7e6c",
+      "display_name": "Петербургский дневник",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/dnevspb",
+      "username": "dnevspb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Все о Петербурге и его жителях.\nДзен: https://dzen.ru/spbdnevnik.ru\nВключена Роскомнадзором в перечень персональных страниц https://knd.gov.ru/license?id=674ebfc79d804a279b07db84®istryType=bloggersPermission",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 20000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/dnevspb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "d256cf32a33096cd32ff",
+      "display_name": "Новое литературное обозрение",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/nlobooks",
+      "username": "nlobooks",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Независимое гуманитарное издательство, основанное в 1992 году. Главный редактор — Ирина Прохорова. Интеллектуальный нон-фикшн, современная проза и поэзия. Интернет-магазин: https://www.nlobooks.ru/",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "книги и культура"
+      ],
+      "subscriber_count": 19000,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/nlobooks",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "ce5d13bea4851be98095",
+      "display_name": "Литература и жизнь",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/bookninja",
+      "username": "bookninja",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Пишу про книги и всё вокруг них. Рекламы на канале нет.\nПоддержать автора можно здесь: https://boosty.to/bookninja/donate\nКнижного ниндзю нарисовала https://x.com/nyura_kim",
+      "topics": [
+        "Санкт-Петербург",
+        "книги и культура"
+      ],
+      "subscriber_count": 18000,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/bookninja",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "5585178f3f784098f365",
+      "display_name": "Интересный Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/interestpiter",
+      "username": "interestpiter",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Подслушиваем, наблюдаем, фиксируем неторопливую жизнь Петербурга.\nРеклама @kuda_media, просто напишите в личку \"Прайс Питер\"\nОтдать нам 4 голоса telemetr.me/boost/interestpiter 🙏\nзаявл № 7305025895\"\nРкн https://vk.cc/cXrG01",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 9800,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/kuda_media"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/interestpiter",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "3b652f87f9503d2e84a7",
+      "display_name": "Халабалу: события скидки СПб / Афиша куда пойти и Магазины где купить в Петербурге",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/hullaspb",
+      "username": "hullaspb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "РКН № 4938266875\nПолезный канал о шопинге, скидках и мероприятиях в Петербурге – от портала Hullabaloo.ru\n🛍 Скидки • Акции • Распродажи • Промокоды\n🏙 События и Фестивали\n👉 Купить рекламу: https://telega.in/c/hullaspb\n📩 @olgapokrovskaia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг"
+      ],
+      "subscriber_count": 9100,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/olgapokrovskaia"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/hullaspb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "b6d47e664322a0cf815a",
+      "display_name": "Вкусный Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/vkusnypiter",
+      "username": "vkusnypiter",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Канал про гастрономию Петербурга. Куда сходить и что пробовать.\nРеклама и фидбэк | @ale5ander",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "события и досуг"
+      ],
+      "subscriber_count": 8800,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/ale5ander"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/vkusnypiter",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "f91857b001e0340d90f9",
+      "display_name": "Посетить Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/posetipeterburg",
+      "username": "posetipeterburg",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Ежедневно посещаю интересные места и вам советую ✨\nПитер| СПб | Санкт-Петербург\nДля связи со мной @karinaaagr",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "места и путешествия"
+      ],
+      "subscriber_count": 6400,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/karinaaagr"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/posetipeterburg",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "6eebb74f7fbee32cc19e",
+      "display_name": "Ася Занегина | О литературе 📚",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/asyazanegina",
+      "username": "asyazanegina",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Литературоведьма, историк философии, искусствовед, специалист по готической литературе🕸️\nYouTube (60K)\nПоддержать золотишком мой проект ❤️: https://www.donationalerts.com/r/zanegina\nПо всем вопросам вот сюда 🔮: @asya_zanegina",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "книги и культура"
+      ],
+      "subscriber_count": 5500,
+      "audience_band": "nano",
+      "contactability": "manual_only",
+      "public_contacts": [
+        "https://t.me/asya_zanegina"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/asyazanegina",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "1dba3af4979deb3301d0",
+      "display_name": "Северные районы Петербурга 🇷🇺",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/nordspb",
+      "username": "nordspb",
+      "city": "Санкт-Петербург",
+      "districts": [
+        "Выборгский",
+        "Калининский",
+        "Курортный",
+        "Приморский"
+      ],
+      "district_status": "publicly_confirmed",
+      "description": "Новости северных районов Петербурга: Парнас, Мурино, Девяткино, Курортный, Выборгский, Приморский и Калининский.",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "subscriber_count": 2700,
+      "audience_band": "nano",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/nordspb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "aa2781f7fd1926684850",
+      "display_name": "В Центре Петербурга 🇷🇺 Z",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/vcentrespb",
+      "username": "vcentrespb",
+      "city": "Санкт-Петербург",
+      "districts": [
+        "Адмиралтейский",
+        "Центральный"
+      ],
+      "district_status": "publicly_confirmed",
+      "description": "Новости Центрального района Петербурга и центра города вообще, включая Адмиралтейский район. Если вам интересны события города - вы едете сюда.",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "события и досуг",
+        "районные новости"
+      ],
+      "subscriber_count": 2600,
+      "audience_band": "nano",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/vcentrespb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "c1489068844422f3e12c",
+      "display_name": "Питер №1",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/saintp01",
+      "username": "saintp01",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Лучший канал о Петербурге и ЛО!\nПрислать новость: @saintp01_bot\nНаш чат: @saintp01_chat\nРеклама и сотрудничество: @prodovan5000\nМы в MAX: https://max.ru/pitereshaet",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 2200,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/prodovan5000",
+        "https://t.me/saintp01_bot",
+        "https://t.me/saintp01_chat"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/saintp01",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "30f02cf1ad4eb2d7c385",
+      "display_name": "Большие проспекты Петербурга 🇷🇺 Z",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/bigpros",
+      "username": "bigpros",
+      "city": "Санкт-Петербург",
+      "districts": [
+        "Василеостровский",
+        "Кронштадтский",
+        "Петроградский"
+      ],
+      "district_status": "publicly_confirmed",
+      "description": "Новости Петроградского и Василеостровского районов Петербурга + немножечко Кронштадт",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "subscriber_count": 2000,
+      "audience_band": "nano",
+      "contactability": "manual_only",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/bigpros",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "78f7b249b9eed3518a5f",
+      "display_name": "Давай с Нами, Петербург!",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/davaisnami",
+      "username": "davaisnami",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Гид культурных и движовых мероприятий Петербурга. Все самые интересные события, которые не стоит пропускать.\nСвязь: @Magusch\nБот по удобной навигации: @DavaiSNamiBot\nhttps://tips.yandex.ru/guest/payment/8951620",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия",
+        "книги и культура"
+      ],
+      "subscriber_count": 1900,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/DavaiSNamiBot",
+        "https://t.me/Magusch"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/davaisnami",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "0d9d52377f39d1d9650c",
+      "display_name": "Петербург без фильтров",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/petrolenspb",
+      "username": "petrolenspb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Новости районов Санкт-Петербурга и Ленинградской области. Для живого человека. Делаем почти 10 лет. Для связи @kamnevn",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "subscriber_count": 1600,
+      "audience_band": "nano",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/kamnevn"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/petrolenspb",
+      "discovery_source_url": "https://telegrator.ru/channels/spb/",
+      "evidence_summary": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "5408157d9e949e2d83f9",
+      "display_name": "Вечерний Питер | Афиша Новости",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piterve",
+      "username": "piterve",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Мероприятия, события, красивые места СПБ - в одном месте! \n\nСвежая афиша, интересные факты об уже знакомых местах, идеи досуга и многое другое\n\nСотрудничество @yuliatree",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 155000,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/yuliatree"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piterve",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "d2368c86faf64bfc65ec",
+      "display_name": "Молния | Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/molnia_piter",
+      "username": "molnia_piter",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Сервис городского оповещения и оперативных новостей. Следим за происходящим в Петербурге.\n\nПо рекламе: @nevablog78\n\nПрислать новость: @My_Piter_bot\n\nСотрудничаем: @Tgpodbor_official, @Spiral_Yuri, @TpIpLe11",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны"
+      ],
+      "subscriber_count": 146000,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/My_Piter_bot",
+        "https://t.me/Spiral_Yuri",
+        "https://t.me/Tgpodbor_official",
+        "https://t.me/TpIpLe11",
+        "https://t.me/nevablog78"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/molnia_piter",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "2514c4f23f5e315c83b8",
+      "display_name": "Мой Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/mypiterb",
+      "username": "mypiterb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Один из крупнейших каналов про Питер. \nРассказываем главные новости, показываем места для отдыха в Питере.\n\nПо рекламе только: @denkoadmin1\n\nСсылка на канал https://t.me/+6O4ymirOZxIwY2Nh",
+      "topics": [
+        "Санкт-Петербург",
+        "места и путешествия"
+      ],
+      "subscriber_count": 121000,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/denkoadmin1"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/mypiterb",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "256057d2c99eabfc03f8",
+      "display_name": "Питер live",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piterblive",
+      "username": "piterblive",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Один из крупнейших каналов про Питер. \nРассказываем главные новости, показываем места для отдыха в Питере.\n\nПо рекламе только: @denkoadmin1",
+      "topics": [
+        "Санкт-Петербург",
+        "места и путешествия"
+      ],
+      "subscriber_count": 119000,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/denkoadmin1"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piterblive",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "20b79cd45d70f897e786",
+      "display_name": "Мой город — Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spbmycity",
+      "username": "spbmycity",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "🌟 Рассказываем и показываем самые интересные места и события в Петербурге и Ленинградской области\n\nПо рекламе: @nevablog78\n\nНаш прайс: @mejgorod_pr_bot\n\nМы есть на: telega.in/c/spbmycity\n\nСотрудничаем: @TpIpLe11, @Spiral_Yuri",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 106000,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Spiral_Yuri",
+        "https://t.me/TpIpLe11",
+        "https://t.me/mejgorod_pr_bot",
+        "https://t.me/nevablog78"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spbmycity",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "e7eec2d51a394ffd575f",
+      "display_name": "В Питере — жить!",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter_club",
+      "username": "piter_club",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Новости Петербурга с душой и без цензуры! Засняли что-то интересное, пришлите нам ;) \n\nПо рекламе @factura_smm \n\nМы есть на: https://telega.in/c/piter_club\n\nСотрудничаем: @Spiral_Yuri , @portiespb",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 100000,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Spiral_Yuri",
+        "https://t.me/factura_smm",
+        "https://t.me/portiespb"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter_club",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "cf96f500f362d9ac2c15",
+      "display_name": "Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piterbnows",
+      "username": "piterbnows",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Один из крупнейших каналов про Питер. \nНовости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @oximedia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "subscriber_count": 98900,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/oximedia"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piterbnows",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "35fd4a98d6ab389b556f",
+      "display_name": "Любимый Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/lubspb",
+      "username": "lubspb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Новости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @oximedia\n\nСсылка на канал https://t.me/+hwthFcenvMQzMGY0",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "subscriber_count": 97400,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/oximedia"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/lubspb",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "ca87a7637ab37ada183e",
+      "display_name": "Типичный Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter_tipichniy",
+      "username": "piter_tipichniy",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Паблик о городе на Неве. Присоединяйся 😉\n\nПо вопросам рекламы- @Adda_manager",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны"
+      ],
+      "subscriber_count": 95000,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Adda_manager"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter_tipichniy",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "989296cf0a79f2bd42af",
+      "display_name": "Питер | Новости",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piterh",
+      "username": "piterh",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Самые интересные новости Питера🌃\n\nРеклама: @rekvladimir",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 93600,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/rekvladimir"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piterh",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "8b455a3593ca1213210d",
+      "display_name": "Питер Сегодня",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piterbnews",
+      "username": "piterbnews",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Новости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @oximedia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "subscriber_count": 87500,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/oximedia"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piterbnews",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "63180307b9313a505dfd",
+      "display_name": "Телеблог Санкт - Петербург Гатчина Выборг Тихвин Кириши Кингисепп Мурино Ленинградская область Кудрово Сертолово",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/Sankt_Peterburg3",
+      "username": "Sankt_Peterburg3",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "За рекламой @Teleblog_Vladimir \nВсе Каналы Телеграм и ВК\nhttps://t.me/ReklamaTeleblog/100",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 86800,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Teleblog_Vladimir"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/Sankt_Peterburg3",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "de1f84c2da15e6cd840d",
+      "display_name": "Питер Онлайн",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_online",
+      "username": "spb_online",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Санкт-Петербургский пульс 🔔\n\nУзнай больше о том, чем живет Северная столица! Актуальные и значимые события Санкт-Петербурга, Ленинградской области, всей России.\n\nОставайтесь на волне событий, в ритме новостей Питера!\n\nНа связи: @artur_lans",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг"
+      ],
+      "subscriber_count": 85800,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/artur_lans"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_online",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "905203c444edd9b20456",
+      "display_name": "Питер Срочно!",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/pitersrochno",
+      "username": "pitersrochno",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Один из крупнейших каналов про Питер. \nНовости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @viktoriadmin",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "subscriber_count": 79200,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/viktoriadmin"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/pitersrochno",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "60a4dbead4d1fa069892",
+      "display_name": "Куда пойти в Питере",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/gopeterburg",
+      "username": "gopeterburg",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "📅 ПЕТЕРБУРГ. АФИША\n\n👀 Интересные события\n🤘 Популярные мероприятия\n🤔 Необычные локации СПб\n🧐 Лучшие места для посещения\n \n📲 По всем вопросам: @alex_admin_tg",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 75200,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/alex_admin_tg"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/gopeterburg",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "b97ea63013f3013fad55",
+      "display_name": "Санкт-Петербург LIVE",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_smi",
+      "username": "spb_smi",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Главный телеграм-канал Санкт-Петербурга и Ленинградской Области!\n\nПригласить друзей: https://t.me/+UncGGOtIvHs1Y2Y6\n\nПоделиться новостью: @Andry_SMI\n\nКупить рекламу: @Tatiana_SMI1\nКупить через биржу: https://telega.in/c/spb_smi",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 68200,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Andry_SMI",
+        "https://t.me/Tatiana_SMI1"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_smi",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "49d2fa255254b6029ae1",
+      "display_name": "Мой Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/petrograd_my",
+      "username": "petrograd_my",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Самый уютный канал о Петербурге и Ленинградской области. Новости, мероприятия, красивые локации, редкие и уникальные фото — все в одном месте.\n\nПо рекламе: @nevablog78\n\nНаш прайс: @mejgorod_pr_bot\n\nСотрудничаем: @Tgpodbor_official, @TpIpLe11",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 63200,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Tgpodbor_official",
+        "https://t.me/TpIpLe11",
+        "https://t.me/mejgorod_pr_bot",
+        "https://t.me/nevablog78"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/petrograd_my",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "fc785c6f387234ba6b70",
+      "display_name": "ТУР СКАНЕР для МСК и СПБ",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/luckywings",
+      "username": "luckywings",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Самый полезный канал о горящих турах из Москвы и Санкт-Петербурга\n\nЕще больше туров и информация о нашем проекте - на сайте turscanner.ru\n\nОбщение, вопросы в https://vk.com/luckywings\n\nРекомендации отелей и лайфхаки https://luckywings.ru/",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "subscriber_count": 58200,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/luckywings",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "candidate_id": "49f7be716fd4a6f8ce5e",
+      "display_name": "Питер для детей • Афиша",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/detstvo_spb",
+      "username": "detstvo_spb",
+      "city": "Санкт-Петербург",
+      "districts": [],
+      "district_status": "ask_creator",
+      "description": "Афиша интересных мест и мероприятий для детей и родителей северной столицы.\n\nЗдесь вас ждут — новые открытия и незабываемые впечатления!\n\nПо вопросам рекламы: @Joe_barbaro_2\nРеклама(коммерция): t.me/Scaletta_Agency/21",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "subscriber_count": 58600,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "public_contacts": [
+        "https://t.me/Joe_barbaro_2"
+      ],
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/detstvo_spb",
+      "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+      "evidence_summary": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:20:41.422605+00:00",
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "entity_id": "1c29479e730e0db2539b",
+      "display_name": "Санкт-Петербург | Записки Питер",
+      "profile_type": "channel",
+      "primary_handle": "piter_zapiski",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Санкт-Петербург – один из красивейших городов мира с большим количеством исторических памятников и достопримечательностей.\nКонтакты - @TrenerBal\nБольше каналов Санкт-Петербурга -\n@piterrek\nПрайс  @pricepiterr",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/TrenerBal",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piter_zapiski",
+          "username": "piter_zapiski",
+          "follower_count": 1200,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piter_zapiski",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/TrenerBal",
+          "https://t.me/piterrek",
+          "https://t.me/pricepiterr"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "dc472d7fdf20400ca827",
+      "display_name": "Метро Петербурга",
+      "profile_type": "channel",
+      "primary_handle": "spbmetro",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Новости городской подземки\nВ соответствии с требованиями законодательства страница добавлена в перечень Роскомнадзора: https://knd.gov.ru/license?id=67617f2540af125d6a4519ee®istryType=bloggersPermission",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/spbmetro",
+          "username": "spbmetro",
+          "follower_count": 102000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/spbmetro",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "dccf71a08a94a8f85fb2",
+      "display_name": "Кофе и билеты (в Петербурге)",
+      "profile_type": "channel",
+      "primary_handle": "v_poiskax_chuda",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Про путешествия и Петербург. Городские истории.\nРегистрация в РКН: https://gosuslugi.ru/snet/67ad9a1175b36e054e04de83\nАвтор канала @saraeva_yulia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": "https://t.me/saraeva_yulia",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/v_poiskax_chuda",
+          "username": "v_poiskax_chuda",
+          "follower_count": 96000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/v_poiskax_chuda",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/saraeva_yulia"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "7bb0e4d38b04ca8a2c6f",
+      "display_name": "Маргарита Симоньян. Литература и История",
+      "profile_type": "channel",
+      "primary_handle": "msimonyan_literature",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Регистрация в Роскомнадзоре: https://knd.gov.ru/license?id=673c8dfe6afad41667cf31ea®istryType=bloggersPermission\nЗдесь я публикую любимые стихи, цитаты и интересные вопросы.\nПравила розыгрыша книг — здесь:\ntelemetr.me/msimonyan_literature/750",
+      "topics": [
+        "Санкт-Петербург",
+        "книги и культура"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/msimonyan_literature",
+          "username": "msimonyan_literature",
+          "follower_count": 88000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/msimonyan_literature",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "a7dfc32bf3c7bd3265b9",
+      "display_name": "СКИДКИ и АКЦИИ из Питера piterskie_skidki",
+      "profile_type": "channel",
+      "primary_handle": "skidki_iz_pitera",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Скидки и глюки из СПБ\n@skidki_ps_bot каталог промокодов\n@skidki_v_spb_bot каталог промокодов\nОбратная связь telemetr.me/skidki_iz_pitera?direct\nПо рекламе telemetr.me/skidki_elena?direct\n@EAN13_barcode_bot\nРКН https://clck.ru/3NN5Tr",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/EAN13_barcode_bot",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/skidki_iz_pitera",
+          "username": "skidki_iz_pitera",
+          "follower_count": 83000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/skidki_iz_pitera",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/EAN13_barcode_bot",
+          "https://t.me/skidki_ps_bot",
+          "https://t.me/skidki_v_spb_bot"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "1b9d7a5f14b208fc7ea7",
+      "display_name": "Горбилет Петербург – билеты со скидкой",
+      "profile_type": "channel",
+      "primary_handle": "gorbilet",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Сервис горящих билетов со скидками до 90%🔥\n👉🏼 По всем вопросам пишите сюда: @Gorbilet_podderzka_bot\nНаш сайт: https://gorbilet.com/go/703JkB\nМы в Max: https://max.ru/gorbilet\nЗарегистрированы в Роскомнадзоре: https://clck.ru/3G6WeC",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": "https://t.me/Gorbilet_podderzka_bot",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/gorbilet",
+          "username": "gorbilet",
+          "follower_count": 81000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/gorbilet",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Gorbilet_podderzka_bot"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "378c3e2b495d418e1442",
+      "display_name": "В Питере есть",
+      "profile_type": "channel",
+      "primary_handle": "spb_rest",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "В Питере есть всё, но мы здесь делимся самым классным 🩷\nО ресторанах, развлечениях, интересных местах и жизни в Петербурге с любовью.\nПо сотрудничеству: @kommunikacia\nРКН: https://clck.ru/3FmHue",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/kommunikacia",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/spb_rest",
+          "username": "spb_rest",
+          "follower_count": 77000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/spb_rest",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/kommunikacia"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "615bdb31d68bc4e1d81d",
+      "display_name": "KudaGo: Петербург",
+      "profile_type": "channel",
+      "primary_handle": "kudagospb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Афиша и интересные места Санкт-Петербурга\nПо вопросам продвижения: bit.ly/3B95zaI\nДля бизнеса: @bkudago\nВключена Роскомнадзором в перечень персональных страниц, уникальная ссылка: https://go.kudago.com/3DYugYM\nЗаявление № 5465558980",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": "https://t.me/bkudago",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/kudagospb",
+          "username": "kudagospb",
+          "follower_count": 50000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/kudagospb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/bkudago"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "e9390bce4039e18a2e98",
+      "display_name": "БОГЕМА ПИТЕРСКАЯ (нишевый телеграм-канал)",
+      "profile_type": "channel",
+      "primary_handle": "bogemasranaya",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [
+        "Петроградский"
+      ],
+      "description": "Петроградская шпана, ленинградский панк, питерский сноб\n@boheme_bot - написать мне\nTRC-20: TSU2NXWWD54TMbTDd4b2G9VuQjmZ6uungs\nПародийный контент",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": "https://t.me/boheme_bot",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/bogemasranaya",
+          "username": "bogemasranaya",
+          "follower_count": 30000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/bogemasranaya",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "publicly_confirmed",
+        "public_contacts": [
+          "https://t.me/boheme_bot"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "d19c8651d34fec4ed0b9",
+      "display_name": "TripSoup про Питер",
+      "profile_type": "channel",
+      "primary_handle": "tripsoup",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Канал про мероприятия в Петербурге. Интересные локации, подборки, идеи, куда сходить от местного жителя.\nПро сотрудничество: http://tripsoup.ru/telegram\nVK: https://vk.com/im/channels/-236520874?cmid=1",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/tripsoup",
+          "username": "tripsoup",
+          "follower_count": 28000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/tripsoup",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "14d90ab8b49cec18b09c",
+      "display_name": "Петербургский «Зенит»",
+      "profile_type": "channel",
+      "primary_handle": "zenitspb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Актуальные новости о петербургском клубе. Оперативно, оригинально, своими руками.\nОбратная связь — @pravosudie7",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/pravosudie7",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/zenitspb",
+          "username": "zenitspb",
+          "follower_count": 23000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/zenitspb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/pravosudie7"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "0315692d9d1cfedc7e6c",
+      "display_name": "Петербургский дневник",
+      "profile_type": "channel",
+      "primary_handle": "dnevspb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Все о Петербурге и его жителях.\nДзен: https://dzen.ru/spbdnevnik.ru\nВключена Роскомнадзором в перечень персональных страниц https://knd.gov.ru/license?id=674ebfc79d804a279b07db84®istryType=bloggersPermission",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/dnevspb",
+          "username": "dnevspb",
+          "follower_count": 20000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/dnevspb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "d256cf32a33096cd32ff",
+      "display_name": "Новое литературное обозрение",
+      "profile_type": "channel",
+      "primary_handle": "nlobooks",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Независимое гуманитарное издательство, основанное в 1992 году. Главный редактор — Ирина Прохорова. Интеллектуальный нон-фикшн, современная проза и поэзия. Интернет-магазин: https://www.nlobooks.ru/",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "книги и культура"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/nlobooks",
+          "username": "nlobooks",
+          "follower_count": 19000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/nlobooks",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "ce5d13bea4851be98095",
+      "display_name": "Литература и жизнь",
+      "profile_type": "channel",
+      "primary_handle": "bookninja",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Пишу про книги и всё вокруг них. Рекламы на канале нет.\nПоддержать автора можно здесь: https://boosty.to/bookninja/donate\nКнижного ниндзю нарисовала https://x.com/nyura_kim",
+      "topics": [
+        "Санкт-Петербург",
+        "книги и культура"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/bookninja",
+          "username": "bookninja",
+          "follower_count": 18000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/bookninja",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "5585178f3f784098f365",
+      "display_name": "Интересный Питер",
+      "profile_type": "channel",
+      "primary_handle": "interestpiter",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Подслушиваем, наблюдаем, фиксируем неторопливую жизнь Петербурга.\nРеклама @kuda_media, просто напишите в личку \"Прайс Питер\"\nОтдать нам 4 голоса telemetr.me/boost/interestpiter 🙏\nзаявл № 7305025895\"\nРкн https://vk.cc/cXrG01",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/kuda_media",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/interestpiter",
+          "username": "interestpiter",
+          "follower_count": 9800,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/interestpiter",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/kuda_media"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "3b652f87f9503d2e84a7",
+      "display_name": "Халабалу: события скидки СПб / Афиша куда пойти и Магазины где купить в Петербурге",
+      "profile_type": "channel",
+      "primary_handle": "hullaspb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "РКН № 4938266875\nПолезный канал о шопинге, скидках и мероприятиях в Петербурге – от портала Hullabaloo.ru\n🛍 Скидки • Акции • Распродажи • Промокоды\n🏙 События и Фестивали\n👉 Купить рекламу: https://telega.in/c/hullaspb\n📩 @olgapokrovskaia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/olgapokrovskaia",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/hullaspb",
+          "username": "hullaspb",
+          "follower_count": 9100,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/hullaspb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/olgapokrovskaia"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "b6d47e664322a0cf815a",
+      "display_name": "Вкусный Питер",
+      "profile_type": "channel",
+      "primary_handle": "vkusnypiter",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Канал про гастрономию Петербурга. Куда сходить и что пробовать.\nРеклама и фидбэк | @ale5ander",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "события и досуг"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/ale5ander",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/vkusnypiter",
+          "username": "vkusnypiter",
+          "follower_count": 8800,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/vkusnypiter",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/ale5ander"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "f91857b001e0340d90f9",
+      "display_name": "Посетить Петербург",
+      "profile_type": "channel",
+      "primary_handle": "posetipeterburg",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Ежедневно посещаю интересные места и вам советую ✨\nПитер| СПб | Санкт-Петербург\nДля связи со мной @karinaaagr",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/karinaaagr",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/posetipeterburg",
+          "username": "posetipeterburg",
+          "follower_count": 6400,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/posetipeterburg",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/karinaaagr"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "6eebb74f7fbee32cc19e",
+      "display_name": "Ася Занегина | О литературе 📚",
+      "profile_type": "channel",
+      "primary_handle": "asyazanegina",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Литературоведьма, историк философии, искусствовед, специалист по готической литературе🕸️\nYouTube (60K)\nПоддержать золотишком мой проект ❤️: https://www.donationalerts.com/r/zanegina\nПо всем вопросам вот сюда 🔮: @asya_zanegina",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "книги и культура"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": "https://t.me/asya_zanegina",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/asyazanegina",
+          "username": "asyazanegina",
+          "follower_count": 5500,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/asyazanegina",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/asya_zanegina"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "1dba3af4979deb3301d0",
+      "display_name": "Северные районы Петербурга 🇷🇺",
+      "profile_type": "channel",
+      "primary_handle": "nordspb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [
+        "Выборгский",
+        "Калининский",
+        "Курортный",
+        "Приморский"
+      ],
+      "description": "Новости северных районов Петербурга: Парнас, Мурино, Девяткино, Курортный, Выборгский, Приморский и Калининский.",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/nordspb",
+          "username": "nordspb",
+          "follower_count": 2700,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/nordspb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "publicly_confirmed",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "aa2781f7fd1926684850",
+      "display_name": "В Центре Петербурга 🇷🇺 Z",
+      "profile_type": "channel",
+      "primary_handle": "vcentrespb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [
+        "Адмиралтейский",
+        "Центральный"
+      ],
+      "description": "Новости Центрального района Петербурга и центра города вообще, включая Адмиралтейский район. Если вам интересны события города - вы едете сюда.",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "события и досуг",
+        "районные новости"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/vcentrespb",
+          "username": "vcentrespb",
+          "follower_count": 2600,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/vcentrespb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "publicly_confirmed",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "c1489068844422f3e12c",
+      "display_name": "Питер №1",
+      "profile_type": "channel",
+      "primary_handle": "saintp01",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Лучший канал о Петербурге и ЛО!\nПрислать новость: @saintp01_bot\nНаш чат: @saintp01_chat\nРеклама и сотрудничество: @prodovan5000\nМы в MAX: https://max.ru/pitereshaet",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/prodovan5000",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/saintp01",
+          "username": "saintp01",
+          "follower_count": 2200,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/saintp01",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/prodovan5000",
+          "https://t.me/saintp01_bot",
+          "https://t.me/saintp01_chat"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "30f02cf1ad4eb2d7c385",
+      "display_name": "Большие проспекты Петербурга 🇷🇺 Z",
+      "profile_type": "channel",
+      "primary_handle": "bigpros",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [
+        "Василеостровский",
+        "Кронштадтский",
+        "Петроградский"
+      ],
+      "description": "Новости Петроградского и Василеостровского районов Петербурга + немножечко Кронштадт",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "contactability": "manual_only",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/bigpros",
+          "username": "bigpros",
+          "follower_count": 2000,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/bigpros",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "publicly_confirmed",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "78f7b249b9eed3518a5f",
+      "display_name": "Давай с Нами, Петербург!",
+      "profile_type": "channel",
+      "primary_handle": "davaisnami",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Гид культурных и движовых мероприятий Петербурга. Все самые интересные события, которые не стоит пропускать.\nСвязь: @Magusch\nБот по удобной навигации: @DavaiSNamiBot\nhttps://tips.yandex.ru/guest/payment/8951620",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия",
+        "книги и культура"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/DavaiSNamiBot",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/davaisnami",
+          "username": "davaisnami",
+          "follower_count": 1900,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/davaisnami",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/DavaiSNamiBot",
+          "https://t.me/Magusch"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "0d9d52377f39d1d9650c",
+      "display_name": "Петербург без фильтров",
+      "profile_type": "channel",
+      "primary_handle": "petrolenspb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Новости районов Санкт-Петербурга и Ленинградской области. Для живого человека. Делаем почти 10 лет. Для связи @kamnevn",
+      "topics": [
+        "Санкт-Петербург",
+        "районные новости"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/kamnevn",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/petrolenspb",
+          "username": "petrolenspb",
+          "follower_count": 1600,
+          "audience_band": "nano",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/petrolenspb",
+          "discovery_source_url": "https://telegrator.ru/channels/spb/",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "Telegrator отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telegrator.ru/channels/spb/",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/kamnevn"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "5408157d9e949e2d83f9",
+      "display_name": "Вечерний Питер | Афиша Новости",
+      "profile_type": "channel",
+      "primary_handle": "piterve",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Мероприятия, события, красивые места СПБ - в одном месте! \n\nСвежая афиша, интересные факты об уже знакомых местах, идеи досуга и многое другое\n\nСотрудничество @yuliatree",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/yuliatree",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piterve",
+          "username": "piterve",
+          "follower_count": 155000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piterve",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/yuliatree"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "d2368c86faf64bfc65ec",
+      "display_name": "Молния | Питер",
+      "profile_type": "channel",
+      "primary_handle": "molnia_piter",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Сервис городского оповещения и оперативных новостей. Следим за происходящим в Петербурге.\n\nПо рекламе: @nevablog78\n\nПрислать новость: @My_Piter_bot\n\nСотрудничаем: @Tgpodbor_official, @Spiral_Yuri, @TpIpLe11",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/My_Piter_bot",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/molnia_piter",
+          "username": "molnia_piter",
+          "follower_count": 146000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/molnia_piter",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/My_Piter_bot",
+          "https://t.me/Spiral_Yuri",
+          "https://t.me/Tgpodbor_official",
+          "https://t.me/TpIpLe11",
+          "https://t.me/nevablog78"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "2514c4f23f5e315c83b8",
+      "display_name": "Мой Питер",
+      "profile_type": "channel",
+      "primary_handle": "mypiterb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Один из крупнейших каналов про Питер. \nРассказываем главные новости, показываем места для отдыха в Питере.\n\nПо рекламе только: @denkoadmin1\n\nСсылка на канал https://t.me/+6O4ymirOZxIwY2Nh",
+      "topics": [
+        "Санкт-Петербург",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/denkoadmin1",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/mypiterb",
+          "username": "mypiterb",
+          "follower_count": 121000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/mypiterb",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/denkoadmin1"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "256057d2c99eabfc03f8",
+      "display_name": "Питер live",
+      "profile_type": "channel",
+      "primary_handle": "piterblive",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Один из крупнейших каналов про Питер. \nРассказываем главные новости, показываем места для отдыха в Питере.\n\nПо рекламе только: @denkoadmin1",
+      "topics": [
+        "Санкт-Петербург",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/denkoadmin1",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piterblive",
+          "username": "piterblive",
+          "follower_count": 119000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piterblive",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/denkoadmin1"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "20b79cd45d70f897e786",
+      "display_name": "Мой город — Питер",
+      "profile_type": "channel",
+      "primary_handle": "spbmycity",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "🌟 Рассказываем и показываем самые интересные места и события в Петербурге и Ленинградской области\n\nПо рекламе: @nevablog78\n\nНаш прайс: @mejgorod_pr_bot\n\nМы есть на: telega.in/c/spbmycity\n\nСотрудничаем: @TpIpLe11, @Spiral_Yuri",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Spiral_Yuri",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/spbmycity",
+          "username": "spbmycity",
+          "follower_count": 106000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/spbmycity",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Spiral_Yuri",
+          "https://t.me/TpIpLe11",
+          "https://t.me/mejgorod_pr_bot",
+          "https://t.me/nevablog78"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "e7eec2d51a394ffd575f",
+      "display_name": "В Питере — жить!",
+      "profile_type": "channel",
+      "primary_handle": "piter_club",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Новости Петербурга с душой и без цензуры! Засняли что-то интересное, пришлите нам ;) \n\nПо рекламе @factura_smm \n\nМы есть на: https://telega.in/c/piter_club\n\nСотрудничаем: @Spiral_Yuri , @portiespb",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Spiral_Yuri",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piter_club",
+          "username": "piter_club",
+          "follower_count": 100000,
+          "audience_band": "mid",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piter_club",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Spiral_Yuri",
+          "https://t.me/factura_smm",
+          "https://t.me/portiespb"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "cf96f500f362d9ac2c15",
+      "display_name": "Питер",
+      "profile_type": "channel",
+      "primary_handle": "piterbnows",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Один из крупнейших каналов про Питер. \nНовости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @oximedia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/oximedia",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piterbnows",
+          "username": "piterbnows",
+          "follower_count": 98900,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piterbnows",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/oximedia"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "35fd4a98d6ab389b556f",
+      "display_name": "Любимый Питер",
+      "profile_type": "channel",
+      "primary_handle": "lubspb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Новости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @oximedia\n\nСсылка на канал https://t.me/+hwthFcenvMQzMGY0",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/oximedia",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/lubspb",
+          "username": "lubspb",
+          "follower_count": 97400,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/lubspb",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/oximedia"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "ca87a7637ab37ada183e",
+      "display_name": "Типичный Питер",
+      "profile_type": "channel",
+      "primary_handle": "piter_tipichniy",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Паблик о городе на Неве. Присоединяйся 😉\n\nПо вопросам рекламы- @Adda_manager",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Adda_manager",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piter_tipichniy",
+          "username": "piter_tipichniy",
+          "follower_count": 95000,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piter_tipichniy",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Adda_manager"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "989296cf0a79f2bd42af",
+      "display_name": "Питер | Новости",
+      "profile_type": "channel",
+      "primary_handle": "piterh",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Самые интересные новости Питера🌃\n\nРеклама: @rekvladimir",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/rekvladimir",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piterh",
+          "username": "piterh",
+          "follower_count": 93600,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piterh",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/rekvladimir"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "8b455a3593ca1213210d",
+      "display_name": "Питер Сегодня",
+      "profile_type": "channel",
+      "primary_handle": "piterbnews",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Новости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @oximedia",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/oximedia",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/piterbnews",
+          "username": "piterbnews",
+          "follower_count": 87500,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/piterbnews",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/oximedia"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "63180307b9313a505dfd",
+      "display_name": "Телеблог Санкт - Петербург Гатчина Выборг Тихвин Кириши Кингисепп Мурино Ленинградская область Кудрово Сертолово",
+      "profile_type": "channel",
+      "primary_handle": "Sankt_Peterburg3",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "За рекламой @Teleblog_Vladimir \nВсе Каналы Телеграм и ВК\nhttps://t.me/ReklamaTeleblog/100",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Teleblog_Vladimir",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/Sankt_Peterburg3",
+          "username": "Sankt_Peterburg3",
+          "follower_count": 86800,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/Sankt_Peterburg3",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Teleblog_Vladimir"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "de1f84c2da15e6cd840d",
+      "display_name": "Питер Онлайн",
+      "profile_type": "channel",
+      "primary_handle": "spb_online",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Санкт-Петербургский пульс 🔔\n\nУзнай больше о том, чем живет Северная столица! Актуальные и значимые события Санкт-Петербурга, Ленинградской области, всей России.\n\nОставайтесь на волне событий, в ритме новостей Питера!\n\nНа связи: @artur_lans",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/artur_lans",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/spb_online",
+          "username": "spb_online",
+          "follower_count": 85800,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/spb_online",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/artur_lans"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "905203c444edd9b20456",
+      "display_name": "Питер Срочно!",
+      "profile_type": "channel",
+      "primary_handle": "pitersrochno",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Один из крупнейших каналов про Питер. \nНовости, события и культура \n\nРЕКЛАМА ТОЛЬКО У @viktoriadmin",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "книги и культура"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/viktoriadmin",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/pitersrochno",
+          "username": "pitersrochno",
+          "follower_count": 79200,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/pitersrochno",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/viktoriadmin"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "60a4dbead4d1fa069892",
+      "display_name": "Куда пойти в Питере",
+      "profile_type": "channel",
+      "primary_handle": "gopeterburg",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "📅 ПЕТЕРБУРГ. АФИША\n\n👀 Интересные события\n🤘 Популярные мероприятия\n🤔 Необычные локации СПб\n🧐 Лучшие места для посещения\n \n📲 По всем вопросам: @alex_admin_tg",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/alex_admin_tg",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/gopeterburg",
+          "username": "gopeterburg",
+          "follower_count": 75200,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/gopeterburg",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/alex_admin_tg"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "b97ea63013f3013fad55",
+      "display_name": "Санкт-Петербург LIVE",
+      "profile_type": "channel",
+      "primary_handle": "spb_smi",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Главный телеграм-канал Санкт-Петербурга и Ленинградской Области!\n\nПригласить друзей: https://t.me/+UncGGOtIvHs1Y2Y6\n\nПоделиться новостью: @Andry_SMI\n\nКупить рекламу: @Tatiana_SMI1\nКупить через биржу: https://telega.in/c/spb_smi",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Andry_SMI",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/spb_smi",
+          "username": "spb_smi",
+          "follower_count": 68200,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/spb_smi",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Andry_SMI",
+          "https://t.me/Tatiana_SMI1"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "49d2fa255254b6029ae1",
+      "display_name": "Мой Питер",
+      "profile_type": "channel",
+      "primary_handle": "petrograd_my",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Самый уютный канал о Петербурге и Ленинградской области. Новости, мероприятия, красивые локации, редкие и уникальные фото — все в одном месте.\n\nПо рекламе: @nevablog78\n\nНаш прайс: @mejgorod_pr_bot\n\nСотрудничаем: @Tgpodbor_official, @TpIpLe11",
+      "topics": [
+        "Санкт-Петербург",
+        "еда и рестораны",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Tgpodbor_official",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/petrograd_my",
+          "username": "petrograd_my",
+          "follower_count": 63200,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/petrograd_my",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Tgpodbor_official",
+          "https://t.me/TpIpLe11",
+          "https://t.me/mejgorod_pr_bot",
+          "https://t.me/nevablog78"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "fc785c6f387234ba6b70",
+      "display_name": "ТУР СКАНЕР для МСК и СПБ",
+      "profile_type": "channel",
+      "primary_handle": "luckywings",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Самый полезный канал о горящих турах из Москвы и Санкт-Петербурга\n\nЕще больше туров и информация о нашем проекте - на сайте turscanner.ru\n\nОбщение, вопросы в https://vk.com/luckywings\n\nРекомендации отелей и лайфхаки https://luckywings.ru/",
+      "topics": [
+        "Санкт-Петербург"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": null,
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/luckywings",
+          "username": "luckywings",
+          "follower_count": 58200,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/luckywings",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": []
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    },
+    {
+      "entity_id": "49f7be716fd4a6f8ce5e",
+      "display_name": "Питер для детей • Афиша",
+      "profile_type": "channel",
+      "primary_handle": "detstvo_spb",
+      "cities": [
+        "Санкт-Петербург"
+      ],
+      "districts": [],
+      "description": "Афиша интересных мест и мероприятий для детей и родителей северной столицы.\n\nЗдесь вас ждут — новые открытия и незабываемые впечатления!\n\nПо вопросам рекламы: @Joe_barbaro_2\nРеклама(коммерция): t.me/Scaletta_Agency/21",
+      "topics": [
+        "Санкт-Петербург",
+        "события и досуг",
+        "места и путешествия"
+      ],
+      "contactability": "advertising_contact",
+      "preferred_contact": "https://t.me/Joe_barbaro_2",
+      "channels": [
+        {
+          "platform": "telegram",
+          "canonical_url": "https://t.me/detstvo_spb",
+          "username": "detstvo_spb",
+          "follower_count": 58600,
+          "audience_band": "micro",
+          "verification_status": "original_profile_opened",
+          "source_url": "https://t.me/detstvo_spb",
+          "discovery_source_url": "https://telno.ru/city/Saint-Petersburg",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00"
+        }
+      ],
+      "evidence": [
+        {
+          "observed": "TelNo отнёс канал к Санкт-Петербургу; оригинальный t.me-профиль открыт.",
+          "source_url": "https://telno.ru/city/Saint-Petersburg",
+          "source_type": "public_catalog_and_original_profile",
+          "researched_at": "2026-08-25T14:20:41.422605+00:00",
+          "confidence": 0.85
+        }
+      ],
+      "research": {
+        "researched_at": "2026-08-25T14:20:41.422605+00:00",
+        "district_status": "ask_creator",
+        "public_contacts": [
+          "https://t.me/Joe_barbaro_2"
+        ]
+      },
+      "limitations": [
+        "Район и долю локальной аудитории нужно уточнить перед кампанией."
+      ]
+    }
+  ],
+  "limitations": [
+    "Никакие сообщения не отправлялись; это discovery-база, а не утверждённый shortlist."
+  ]
+}

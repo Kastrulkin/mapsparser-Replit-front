@@ -57,6 +57,17 @@ def fetch(url: str) -> str:
         except (HTTPError, URLError, TimeoutError) as exc:
             last_error = exc
             time.sleep(0.4 * (attempt + 1))
+    try:
+        curl_result = subprocess.run(
+            ["curl", "-L", "--max-time", "20", "-A", USER_AGENT, "-s", url],
+            capture_output=True,
+            check=False,
+            timeout=24,
+        )
+        if curl_result.returncode == 0 and curl_result.stdout:
+            return curl_result.stdout.decode("utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError):
+        pass
     if last_error:
         raise last_error
     raise RuntimeError("request failed")
@@ -94,7 +105,13 @@ def discover() -> dict[str, dict[str, object]]:
             document = fetch(source_url)
         except (HTTPError, URLError, TimeoutError):
             continue
-        if source_type == "adinblog":
+        if "modash.io/find-influencers" in source_url:
+            handles = re.findall(
+                r'url:"https://www\.instagram\.com/([A-Za-z0-9_.]{3,})"',
+                document,
+                flags=re.IGNORECASE,
+            )
+        elif source_type == "adinblog":
             handles = re.findall(r'/(?:блогер|%D0%B1%D0%BB%D0%BE%D0%B3%D0%B5%D1%80)/([A-Za-z0-9_.]{3,})', document, flags=re.IGNORECASE)
         else:
             handles = re.findall(r'href=["\']https?://(?:www\.)?instagram\.com/([A-Za-z0-9_.]{3,})', document, flags=re.IGNORECASE)
@@ -104,6 +121,24 @@ def discover() -> dict[str, dict[str, object]]:
                 continue
             item = discovered.setdefault(normalized, {"handle": handle, "city": city, "discovery_sources": []})
             item["discovery_sources"].append(source_url)
+            if "modash.io/find-influencers" in source_url:
+                profile_match = re.search(
+                    rf'fullName:(?:"([^"]*)"|`([^`]*)`).{{0,250}}?username:"{re.escape(handle)}"'
+                    rf'.{{0,500}}?url:"https://www\.instagram\.com/{re.escape(handle)}"'
+                    rf'.{{0,300}}?followers:(\d+)',
+                    document,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                if profile_match:
+                    item["catalog_display_name"] = html.unescape(profile_match.group(1) or profile_match.group(2) or handle)
+                    item["catalog_followers"] = int(profile_match.group(3))
+                bio_match = re.search(
+                    rf'username:"{re.escape(handle)}",bio:(?:"([^"]*)"|`([^`]*)`)',
+                    document,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                if bio_match:
+                    item["catalog_description"] = html.unescape(bio_match.group(1) or bio_match.group(2) or "").strip()
     for handle in BATUMI_HANDLES:
         discovered[handle.lower()] = {
             "handle": handle,
@@ -116,23 +151,28 @@ def discover() -> dict[str, dict[str, object]]:
 def verify(item: dict[str, object]) -> dict[str, object] | None:
     handle = str(item["handle"])
     instagram_url = f"https://www.instagram.com/{handle}"
+    instagram_document = ""
     try:
         instagram_document = fetch(instagram_url)
     except (HTTPError, URLError, TimeoutError):
-        return None
+        pass
     instagram_title = meta(instagram_document, "og:title")
     instagram_description = meta(instagram_document, "og:description")
-    if f"@{handle.lower()}" not in instagram_title.lower():
+    original_profile_opened = f"@{handle.lower()}" in instagram_title.lower()
+    catalog_verified = bool(item.get("catalog_followers")) and any(
+        "modash.io/find-influencers" in str(source) for source in item.get("discovery_sources", [])
+    )
+    if not original_profile_opened and not catalog_verified:
         return None
-    followers = parse_followers(instagram_description)
+    followers = parse_followers(instagram_description) or item.get("catalog_followers")
     if followers and followers > 200_000:
         return None
     channels: list[dict[str, object]] = [{
         "platform": "instagram",
         "canonical_url": instagram_url,
-        "verification_status": "original_profile_opened",
+        "verification_status": "original_profile_opened" if original_profile_opened else "public_catalog_verified",
         "follower_count": followers,
-        "source_url": instagram_url,
+        "source_url": instagram_url if original_profile_opened else (item.get("discovery_sources") or [instagram_url])[0],
     }]
     threads_url = f"https://www.threads.com/@{handle}"
     threads_verified = False
@@ -194,9 +234,9 @@ def verify(item: dict[str, object]) -> dict[str, object] | None:
             "follower_count": None,
             "source_url": tiktok_url,
         })
-    display_name = instagram_title.split("(@", 1)[0].strip()
+    display_name = instagram_title.split("(@", 1)[0].strip() or str(item.get("catalog_display_name") or handle)
     candidate_id = hashlib.sha256(f"instagram:{handle.lower()}".encode("utf-8")).hexdigest()[:20]
-    description_text = instagram_description
+    description_text = instagram_description or str(item.get("catalog_description") or "")
     contactability = "advertising_contact" if re.search(
         r"(ugc|influencer|collab|cooperation|сотруднич|реклам)",
         f"{instagram_title} {instagram_description}",

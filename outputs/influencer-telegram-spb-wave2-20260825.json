@@ -1,0 +1,1641 @@
+{
+  "schema_version": "1.0",
+  "title": "Telemetr: проверенные локальные Telegram-каналы",
+  "status": "public_research_only",
+  "generated_at": "2026-08-25T14:15:01.817500+00:00",
+  "candidate_count": 62,
+  "platform_counts": {
+    "telegram": 62
+  },
+  "city_counts": {
+    "Краснодар": 3,
+    "Санкт-Петербург": 59
+  },
+  "candidates": [
+    {
+      "candidate_id": "429d6758a5bce8a26eec",
+      "display_name": "Морские деликатесы",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/mdkrdru",
+      "username": "mdkrdru",
+      "city": "Краснодар",
+      "description": "☎️89183481507\t⏰с 9 до 22\tНовороссийск:\t📍Пр-т Дзержинского 203\tКраснодар \t📍Западный обход 41/1\t📍Тургенева 155\t📍Зиповская 39/6\t📍Кр.партизан 149\t📍Гаражная 128\t📍Трудовой славы 1/1\t📍В-Кругликовская 22/3\t📍Карасунская 308 \t📍5 дорожная 70/2\t📍Разведчиков 15",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 73188,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/mdkrdru",
+      "discovery_source_url": "https://telemetr.me/catalog/region/krasnodar",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1692650999",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:55.401996+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "b97479e8bb1be527819a",
+      "display_name": "Новости Краснодара и Края",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/krasnodar_smi",
+      "username": "krasnodar_smi",
+      "city": "Краснодар",
+      "description": "Главный телеграм-канал Краснодара и Краснодарского Края!\t\tПригласить друзей: https://t.me/+XinUhI4HMUoyN2M6\t\tПоделиться новостью: @Andry_SMI\t\tКупить рекламу: @ADV_SMI\tКупить через биржу: https://telega.in/c/krasnodar_smi\t\thttps://clck.ru/3FTUEJ\t18+",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 138510,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/krasnodar_smi",
+      "discovery_source_url": "https://telemetr.me/catalog/region/krasnodar",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1639863971",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:52.042992+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "7068eb5b235b7592491e",
+      "display_name": "Новости Краснодара и края |ЮГ-24",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/yug_24_ru",
+      "username": "yug_24_ru",
+      "city": "Краснодар",
+      "description": "📢 Краснодар и Краснодарский край, освещаем все происходящее в круглосуточном режиме\t\t→ Только реклама @anton_palchikov\t→ Предложить новость @yug_24_bot\t→ Купить рекламу: https://telega.in/c/yug_24_ru",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 143160,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/yug_24_ru",
+      "discovery_source_url": "https://telemetr.me/catalog/region/krasnodar",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1515992485",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:49.984908+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "88442629e0c491a809bf",
+      "display_name": "AUGUST WALZ - женская одежда мода",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/augustwalz",
+      "username": "augustwalz",
+      "city": "Санкт-Петербург",
+      "description": "Наш сайт: augustwalz.ru\tМенеджер: @augustwalzspb\t\tВК https://vk.com/augustwalz \t\tМЫ В MAX - https://max.ru/id600300473572_biz\t\t👗ТЦ Владимирский Пассаж. СПБ, Владимирский проспект 19 , первый этаж , центральная галерея !\tЕжедневно с 11.00 до 21.00",
+      "topics": [
+        "Магазины",
+        "Красота и мода",
+        "Региональные"
+      ],
+      "subscriber_count": 20647,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/augustwalz",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1314740110",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:48.256407+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "dd597c0735f2581e597d",
+      "display_name": "BAKERBRANDS",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/bakerbrands",
+      "username": "bakerbrands",
+      "city": "Санкт-Петербург",
+      "description": "Brands&Vintage Stuff🛒\t\t▫️Всё наличие: @bakerbrandsnl\t▫️Гарантии и отзывы : @bakerbrandsrw\t▫️Канал админа: @truebaker\t▫️Санкт-Петербург \t▫️(Ⓜ️Чернышевская/📍Фурштатская,8)\t▫️Доставка по РФ🇷🇺/РБ🇧🇾и СНГ \t\tПо всем вопросам: @bakerbrandss",
+      "topics": [
+        "Магазины"
+      ],
+      "subscriber_count": 30748,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/bakerbrands",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1784606285",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:30.090968+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "84b37348a77a73e2c33f",
+      "display_name": "Fjordcloth",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/fjordcloth",
+      "username": "fjordcloth",
+      "city": "Санкт-Петербург",
+      "description": "Для заказа и по всем вопросам @fjordcloth_direct\t\tВк: @fjordcloth\t\tАдрес: г.Санкт-Петербург, ул.Чехова д.8\tРаботам с 12:00 до 21:00 \tкаждый день",
+      "topics": [
+        "Магазины"
+      ],
+      "subscriber_count": 17960,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/fjordcloth",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1292110225",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.456140+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "adf1ee85a70d4ad5f374",
+      "display_name": "GradSPb | Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/gradspb",
+      "username": "gradspb",
+      "city": "Санкт-Петербург",
+      "description": "• Про Санкт-Петербург\t• Места и события СПб\t• Интересные факты\t\t• Новости Питера в нашем @todayspb\t\t\t• По рекламе: @dnsxp\t\t• РКН: https://clck.ru/3FJYwP",
+      "topics": [
+        "Путешествия",
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 46652,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/gradspb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1523076309",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.975352+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "36cd8ab4b2936a3b1181",
+      "display_name": "MANIOLINI",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/maniolinishop",
+      "username": "maniolinishop",
+      "city": "Санкт-Петербург",
+      "description": "Дом обуви, вдохновленный тобой❤️\t\tКоллекция SS’26 уже в наличии\t\t#3T5NW\t\tОформить заказ: \thttps://maniolini.tilda.ws/\t\tПо телефону: +79117945474",
+      "topics": [
+        "Магазины",
+        "Региональные"
+      ],
+      "subscriber_count": 41943,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/maniolinishop",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1399550826",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.923159+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "02957540cfb81c4fdd28",
+      "display_name": "Night2Day Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/night2day_spb",
+      "username": "night2day_spb",
+      "city": "Санкт-Петербург",
+      "description": "Здесь новые места, культурные события и ответ на главный вопрос: куда сходить в Петербурге? \t\tСтарший брат @poh_plyashem \t\tПо рекламе и фото: @VaasTheSlain",
+      "topics": [
+        "Путешествия",
+        "Кулинария",
+        "Афиша"
+      ],
+      "subscriber_count": 32919,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/night2day_spb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1280115739",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.099084+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "e36faaf6f90815828edf",
+      "display_name": "Petshop Days — фестиваль для питомцев",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/petshopdays",
+      "username": "petshopdays",
+      "city": "Санкт-Петербург",
+      "description": "Бесплатный фестиваль владельцев и любителей домашних животных от команды @petshopru 🩵",
+      "topics": [
+        "Животные",
+        "Афиша",
+        "Фильмы и сериалы"
+      ],
+      "subscriber_count": 10722,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/petshopdays",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1312024503",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:48.801641+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "370398794c168cfc7d92",
+      "display_name": "two-ta | между Петербургом и тобой",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/twotaofficial",
+      "username": "twotaofficial",
+      "city": "Санкт-Петербург",
+      "description": "Бренд и производство кожаных сумок и аксессуаров📍Санкт-Петербург\t\tНаш сайт: https://clck.ru/3TRnq2\t\tЗадать вопросы: @twota_bags",
+      "topics": [
+        "Магазины",
+        "Региональные"
+      ],
+      "subscriber_count": 13599,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/twotaofficial",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1538185634",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.786435+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "91471b13665c96c7d984",
+      "display_name": "Änta’s / PRO.Änta’s 🙋‍♀️🌿 Растения 🌱 Уход 🙌🏼 Вдохновение 🦕",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/proantas",
+      "username": "proantas",
+      "city": "Санкт-Петербург",
+      "description": "▫️Санкт-Петербург, Боровая 116\t▫️Тропическое пространство PRO.Änta’s Шоу рум - Äранжерея 🌱\tРастения, Динозавры, Керамика\tИ всё такое 🌿✨🦕\t\tВопросы сюда: @proantas_admin\tтел. +7 (995) 594-77-96\t\tПодкаст: https://zelenogo-vremeni-sut.mave.digital\t\t6338148508",
+      "topics": [
+        "Маркетинг и реклама",
+        "Рукоделие",
+        "Искусство"
+      ],
+      "subscriber_count": 11374,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/proantas",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1236434368",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:42.466371+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "395225c801e3ee83b42d",
+      "display_name": "АннаЛогия",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/ch_annalogy",
+      "username": "ch_annalogy",
+      "city": "Санкт-Петербург",
+      "description": "📍Санкт-Петербург\t\t✨ По вопросам сотрудничества: @Ave_Anne\t✨ YouTube канал: https://youtube.com/@ch_annalogy\t✨ TikTok: https://www.tiktok.com/@annalogychanel",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 13391,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/ch_annalogy",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2016941316",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.757761+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "80d411c49fb3a7d7c75a",
+      "display_name": "Аскона-Дисконт(Санкт-Петербург)",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/vekdiscountspb",
+      "username": "vekdiscountspb",
+      "city": "Санкт-Петербург",
+      "description": "Единственный в Санкт-Петербурге Дисконт-центр \"Askona\"\tМы находимся по адресу СПБ. Дунайский пр., д 27 к1 ТРК \"Дунай\"(2 Этаж)\tРежим работы ежедневно с 10.00 до 22.00 \tТел.для связи +79036470002;+79036470004",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 17904,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/vekdiscountspb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2144954143",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.393036+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "cfc3d1ac62208e8006d3",
+      "display_name": "Банк «Санкт-Петербург»",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/mybspb",
+      "username": "mybspb",
+      "city": "Санкт-Петербург",
+      "description": "Ответственность. Внимание. Будущее.\t  \tОфициальный канал Банка «Санкт-Петербург» \t\tРегистрация в перечне РКН: https://knd.gov.ru/license?id=675bf083e9320a200a93bb88&registryType=bloggersPermission",
+      "topics": [
+        "Бизнес и финансы",
+        "Региональные"
+      ],
+      "subscriber_count": 19007,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/mybspb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1381395548",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.383751+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "a3fceb020ad630da3387",
+      "display_name": "Бесплатный Питер | Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter_free78",
+      "username": "piter_free78",
+      "city": "Санкт-Петербург",
+      "description": "🎉 Все бесплатные мероприятия и развлечения города\t\tПодписывайся и развлекайся бесплатно! \t\tОбратная связь - @dima_pr78\tКупить рекламу: https://telega.in/channels/+DcNoO4S9oqU4MWUy/card\t\tРКН https://vk.cc/cJCAot\t\t#U9PH4",
+      "topics": [
+        "Афиша",
+        "Халява, скидки, акции",
+        "Региональные"
+      ],
+      "subscriber_count": 19907,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter_free78",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1601562968",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.482738+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "00f774ab41ec634e90e9",
+      "display_name": "Ботанический сад Петра Великого. Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/botsad_spb_official",
+      "username": "botsad_spb_official",
+      "city": "Санкт-Петербург",
+      "description": "Официальный канал Ботанического сада Петра Великого. Санкт-Петербург. \tНаш сайт и электронные билеты: https://botsad-spb.com/ru/posetitelyam/elektronnye-bilety\tМы в ВК: https://vk.com/botsad_spb\t\tНомер заявления для регистрации в Роскомнадзоре №5165600516",
+      "topics": [
+        "Путешествия",
+        "Сад и огород",
+        "Афиша"
+      ],
+      "subscriber_count": 15031,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/botsad_spb_official",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1712587169",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:37.903664+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "47ebfee5ead2009dc979",
+      "display_name": "бьютисóфия",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/beautysophia",
+      "username": "beautysophia",
+      "city": "Санкт-Петербург",
+      "description": "Виктория Ходякова, 39 лет, анти-эйдж профилактика для тела и светский гедонизм для души\t\t@beautysophiapr\t\t📍Питер\tMAX: https://max.ru/beautysophia\tрегистрация https://clk.li/eAfM",
+      "topics": [
+        "Бизнес и финансы",
+        "Медицина и здоровье",
+        "Красота и мода"
+      ],
+      "subscriber_count": 19399,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/beautysophia",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1542154404",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:35.464727+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "614ec5f6e944025c4afd",
+      "display_name": "Вера в курсе",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/verochkavkurse",
+      "username": "verochkavkurse",
+      "city": "Санкт-Петербург",
+      "description": "личный блог. пишу о звездах, о себе и даже о тебе. для связи - @sprosivery\t\t🇷🇺Санкт-Петербург | Майкоп \t\tMAX: https://max.ru/verochkavkurse\t\tРКН: https://golnk.ru/RaqeW\t\tот лица канала может писать @ladyiks",
+      "topics": [
+        "Религия",
+        "Региональные"
+      ],
+      "subscriber_count": 39943,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/verochkavkurse",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2111276132",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.695894+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "7817be6b30756408eb9b",
+      "display_name": "Вечерний Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/ta_samaya_vecherka",
+      "username": "ta_samaya_vecherka",
+      "city": "Санкт-Петербург",
+      "description": "Одна из старейших газет Петербурга в новом прочтении.\t\tСвязь: https://vk.me/ta_samaya_vecherka\tДзен: https://dzen.ru/ve4erka\t\tЗаявление в РКН № 7821506828\tВключена в перечень персональных страниц https://gosuslugi.ru/snet/68ecfe7813ba5925b349bb3a",
+      "topics": [
+        "Региональные",
+        "Организации"
+      ],
+      "subscriber_count": 11948,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/ta_samaya_vecherka",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1673237187",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:56.075784+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "0bd3e3396e62c9f946dc",
+      "display_name": "ВК «Зенит» (Санкт-Петербург)",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/vczenitspb",
+      "username": "vczenitspb",
+      "city": "Санкт-Петербург",
+      "description": "Официальный канал клуба, сайт: https://vczenit.ru/\t\tГенеральный спонсор - ПАО «Газпром»\tErid: 2W5zFJHmmwN",
+      "topics": [
+        "Спорт",
+        "Региональные",
+        "Организации"
+      ],
+      "subscriber_count": 14877,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/vczenitspb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1400430741",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.717447+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "9a1388600d023bb2e873",
+      "display_name": "ВКА имени А.Ф.Можайского",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/vka_spb",
+      "username": "vka_spb",
+      "city": "Санкт-Петербург",
+      "description": "Информационный канал \tВКА имени А.Ф.Можайского\t\tСайты- vka.mil.ru, vka.spb.ru\tMAX - max.ru/vka_spb\tВКонтакте - vk.com/vka_spb\tФорум - forum.vka.spb.ru\t\tПроголосовать - https://t.me/vka_spb?boost\t\tРеестр РКН: https://clck.ru/3PVe6M\t\tг. Санкт-Петербург",
+      "topics": [
+        "Военное",
+        "Региональные"
+      ],
+      "subscriber_count": 11876,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/vka_spb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1225979990",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:42.060661+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "51090d7b91412f111c42",
+      "display_name": "ГЛАВНОЕ / Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/topspb_tv",
+      "username": "topspb_tv",
+      "city": "Санкт-Петербург",
+      "description": "Присылайте новости нашему боту @spb_glavnoe_bot\t\tНовости, явления, события, герои Петербурга. Телеканал «Санкт-Петербург» / tvspb.ru\t\tУВЕДОМЛЕНИЕ РКН №014133 https://knd.gov.ru/license? \tid=673c97bf340096358bb65180&registryType=bloggersPermission",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 25089,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/topspb_tv",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1046750516",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.285166+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "bdd1ff5f67c8b11334ae",
+      "display_name": "Денис Сенников. Терапия личности",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/denis_sennikovv",
+      "username": "denis_sennikovv",
+      "city": "Санкт-Петербург",
+      "description": "Психотерапевт (25 лет практики) и основатель Института психологии и психотерапии самосознания (Санкт-Петербург)\t\tБлог для помощи  практикующим психологам. \t\tЗаметки, статьи, подкасты, инструменты для работы.\t\tN° 6937738057",
+      "topics": [
+        "Психология",
+        "Подкасты",
+        "Региональные"
+      ],
+      "subscriber_count": 11046,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/denis_sennikovv",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1795172044",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:45.341755+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "2491edde46a6e81f85ab",
+      "display_name": "Детская Афиша | Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/deti_spb",
+      "username": "deti_spb",
+      "city": "Санкт-Петербург",
+      "description": "Куда сходить с детьми в Санкт-Петербурге. Афиша мероприятий для детей в Питере\t\tадмин - @siarhei22\thttps://telega.in/c/deti_spb\t\tРегистрация в РКН - https://clck.ru/3LABvY",
+      "topics": [
+        "Путешествия",
+        "Для родителей",
+        "Афиша"
+      ],
+      "subscriber_count": 11214,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/deti_spb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1601785290",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:57.870067+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "40f87db010ff1fae12ab",
+      "display_name": "Дима Раймер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/dimaraymer",
+      "username": "dimaraymer",
+      "city": "Санкт-Петербург",
+      "description": "😌Добро пожаловать😌\t📍Санкт-Петербург \t\t🧩Распаковки \t🧩Готовлю\t🧩Моменты из жизни\t\tПравила:\t-Ссылки 🚫\t-Оскорбления, спор 🚫\tПоддерживаем приятную атмосферу, злым не рады🥹\t\tКупить рекламу: https://telega.in/c/dimaraymer",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 42002,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/dimaraymer",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1571677204",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.834867+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "d56e57a765280bbe0ad9",
+      "display_name": "Дорожный Контроль СПБ | ЛО",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/doroga_47",
+      "username": "doroga_47",
+      "city": "Санкт-Петербург",
+      "description": "Оперативные события Санкт-Петербурга ЛО 24/7\tДТП|ЧП|Помощь на дороге\t\tРеклама\thttps://telega.in/c/doroga_47\t\tРКН: https://gosuslugi.ru/snet/67b302f748dfb51c40f9e9aa",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 16821,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/doroga_47",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1209381540",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.764919+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "aa754b20a07fb24ac434",
+      "display_name": "ЕРВИШНЯ",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/yourrwishestg",
+      "username": "yourrwishestg",
+      "city": "Санкт-Петербург",
+      "description": "Личный дневник Анны Ервишни с фешн мыслями, парф обзорами и буднями инфлюенсера💋🏹🐈‍⬛\t\t📍Санкт-Петербург \tМой вк: https://vk.ru/yourrwishesvk\t\tПо поводу рекламы: @callmemrskittie\t\tРегистрация канала: https://knd.gov.ru/license?id=6736b835ac39970d5f6e3",
+      "topics": [
+        "Авторский блог",
+        "Блогеры",
+        "Региональные"
+      ],
+      "subscriber_count": 38260,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/yourrwishestg",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1707573575",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.914810+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "63063f82d1629cfac663",
+      "display_name": "живи моментом",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/dolcenient",
+      "username": "dolcenient",
+      "city": "Санкт-Петербург",
+      "description": "inspiration in everyday💌\t\t📍 Санкт-Петербург\tпо поводу сотрудничества: @vvivolavita / @aftershw\t\tреклама на канале: https://t.me/prdolcenient\t\tpinterest 🖇️ https://pin.it/6GX7afPjU\t\t№ 7648657496",
+      "topics": [
+        "Красота и мода",
+        "Региональные"
+      ],
+      "subscriber_count": 11704,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/dolcenient",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1837558393",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:42.310067+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "321d1124c2e5ae8cde96",
+      "display_name": "и просто так",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/writeforfriends",
+      "username": "writeforfriends",
+      "city": "Санкт-Петербург",
+      "description": "от шопоголизма здесь не лечат!\tя Крис, и тут много о бьюти, стиле, и настоящей жизни \t\t📍Петербург\tДля особо важных писем: @writeforfriends_pr \t\tдетский канал: @writeformoms\tинст: https://www.instagram.com/kristabely\t\tРКН https://clck.ru/3GEsVg",
+      "topics": [
+        "Для родителей",
+        "Красота и мода",
+        "Региональные"
+      ],
+      "subscriber_count": 28749,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/writeforfriends",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2053984342",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.029747+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "c915f0abd6a12fecb9b0",
+      "display_name": "Куда пойти в Питере с детьми",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/gokidspeterburg",
+      "username": "gokidspeterburg",
+      "city": "Санкт-Петербург",
+      "description": "Санкт-Петербург, полезная афиша для родителей.\tИнтересные события для деток, занимательные мероприятия, необычные локации, лучшие места для посещения с ребенком.\t📲 Сотрудничество: @alex_admin_tg",
+      "topics": [
+        "Путешествия",
+        "Для родителей",
+        "Афиша"
+      ],
+      "subscriber_count": 34132,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/gokidspeterburg",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1348648713",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:27.223963+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "958465ac50e1c5f06cd4",
+      "display_name": "Магазин Geek Trip",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/gktrp",
+      "username": "gktrp",
+      "city": "Санкт-Петербург",
+      "description": "Наш адрес:\tСанкт-Петербург, ул. Некрасова, д. 1/38\t\tgeek-trip.ru — доставляем по всей России! \t\tsupport@geek-trip.ru и @gktrp_support — обратная связь по вашим заказам",
+      "topics": [
+        "Магазины",
+        "Путешествия"
+      ],
+      "subscriber_count": 14607,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/gktrp",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1750743694",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:55.657756+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "13cd9551a2120452cfe9",
+      "display_name": "Магазин детских товаров «Мама Жанна»",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/mamazhannarf",
+      "username": "mamazhannarf",
+      "city": "Санкт-Петербург",
+      "description": "📍МСК, Миклухо-Маклая, 36 А\t+79600509854\t📍СПБ, пр.Шаумяна д.2\t+79600510041\t📍Уфа, Проспект Октября, 39 \t+79649648418\t📍Казань, Победы, 139, корпус 2 +79600360659\t📍Самара, Галактионовская 277 , +79649780547\t📍ЕКБ, ул.Крестинского, д.2\t+79090003308\t\t№ 577900433",
+      "topics": [
+        "Магазины",
+        "Для родителей"
+      ],
+      "subscriber_count": 30910,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/mamazhannarf",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1352200229",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.867938+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "41c5604c3ddd8c6dcd16",
+      "display_name": "Марафон «Белые ночи»",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/wn_marathon",
+      "username": "wn_marathon",
+      "city": "Санкт-Петербург",
+      "description": "4 июля 2026\tСанкт-Петербург\tОфициальный сайт: https://wnmarathon.runc.run\t\tЗаявление РКН №7145941778.\tРегистрация в перечне РКН: https://gosuslugi.ru/snet/678771ee506f967728052ef1.",
+      "topics": [
+        "Спорт",
+        "Региональные"
+      ],
+      "subscriber_count": 21494,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/wn_marathon",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1678251624",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.410207+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "5ce5caa0a4c6ee91d29a",
+      "display_name": "Мегаполис | ДТП и ЧП | Санкт-Петербург | Питер💡",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/megapolisonline",
+      "username": "megapolisonline",
+      "city": "Санкт-Петербург",
+      "description": "№ 4912890041\tMz71rW\tВсе важные события Санкт-Петербурга. \t\tТелеграм канал https://vk.com/spb_today\tПрислать новость - через сообщения \tРеклама @yolga,  https://telega.in/c/Megapolisonline\tМакс - https://max.ru/megapolisspb",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 77279,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/megapolisonline",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1138760472",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.657058+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "b4f049d8a2f7dc1f299a",
+      "display_name": "Мой Питер",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/my_SPB78",
+      "username": "my_SPB78",
+      "city": "Санкт-Петербург",
+      "description": "Всё самое интересное про Санкт-Петербург в одном месте.\t\tРеклама — @tvoy_adm24, @lgotniksocpaket\t\t#KVSVI\t\t№ 6182828679",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 27519,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/my_SPB78",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2358467571",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.045140+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "d33cf50885b3a5587282",
+      "display_name": "МОСТ: ХЕРСОН",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/mostks",
+      "username": "mostks",
+      "city": "Санкт-Петербург",
+      "description": "Новини Херсонщини🇺🇦 \t\tЗв'язатися 📲 @Most_feedbackBot\t\tПідтримати донатом: \thttps://most.ks.ua/donate/?utm_source=telegram&utm_medium=bio&utm_campaign=membership+promo",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 21085,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/mostks",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1105337717",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.338888+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "aa02191d78547c2498a7",
+      "display_name": "Мятный Латте",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/notesofamintlatte",
+      "username": "notesofamintlatte",
+      "city": "Санкт-Петербург",
+      "description": "Аня 📍Санкт-Петербург\t\tРегистрация в РКН: https://gosuslugi.ru/snet/682f89a145f79f0796f7a5f1\t\tЛичный контакт: @ann_mirosh",
+      "topics": [
+        "Авторский блог",
+        "Региональные"
+      ],
+      "subscriber_count": 18553,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/notesofamintlatte",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1871524523",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.482910+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "d23857d0a1519576fced",
+      "display_name": "Незнакомый Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/unknown_piter",
+      "username": "unknown_piter",
+      "city": "Санкт-Петербург",
+      "description": "Крупнейший познавательный канал про Санкт-Петербург\t\tПо рекламе: @alex_petersburg (оплата только сюда)\t\tМенеджеры: @arkadmin @Tgpodbor_official @Spiral_Yuri \tДоп. менеджеры: @salesrek\t\tРегистрация в РКН: https://clck.ru/3EoMMx",
+      "topics": [
+        "Познавательные",
+        "Искусство",
+        "Региональные"
+      ],
+      "subscriber_count": 88209,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/unknown_piter",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2079480145",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.818100+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "4e6aa2b8b80b9f55d7f6",
+      "display_name": "Неугомонная",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/neugomonnay_n",
+      "username": "neugomonnay_n",
+      "city": "Санкт-Петербург",
+      "description": "Home / Shopping / Lifestyle\tВеликий Новгород - Санкт-Петербург \t\tВладелец @Sun_688 Главный Менеджер \t@prmyshalovaaa \tМенеджер @lunrevee @engzhi591\t\thttps://gosuslugi.ru/snet/684810728c020e133acf9f7b",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 40575,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/neugomonnay_n",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2390685492",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.844276+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "3d78727ba50e1ae37758",
+      "display_name": "Новости Санкт Петербурга",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/newsspbtop",
+      "username": "newsspbtop",
+      "city": "Санкт-Петербург",
+      "description": "Новости северной столицы. Санкт-Петербург в фокусе: важные события и известия. #8NLDC\t\tСотрудничество: @newsspbtopbot\t\tКупить рекламу: https://telega.in/c/newsspbtop",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 13195,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/newsspbtop",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1720492644",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:42.123746+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "bb8f85dd0ac68e59a24c",
+      "display_name": "Оптика Призма СПб",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/optica_prisma",
+      "username": "optica_prisma",
+      "city": "Санкт-Петербург",
+      "description": "Оптика КРЕАТИВНЫХ и СТИЛЬНЫХ очков!\tДоставка по России почтой и сдек\t\tПримерка ⤵️\tСанкт-Петербург\t🏠ул.Савушкина 116 \t⌚️11.00-21.00",
+      "topics": [
+        "Магазины",
+        "Наука и технологии"
+      ],
+      "subscriber_count": 11937,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/optica_prisma",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1223424577",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.884880+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "afbd65b1dc8c64e149fe",
+      "display_name": "Ортопед Доктор Мамонтов д.м.н. Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/doktormamontov",
+      "username": "doktormamontov",
+      "city": "Санкт-Петербург",
+      "description": "Лечу  https://www.centerto.com    YT   https://www.youtube.com/c/ДокторМамонтов          Чат Консультации по пятницам             https://t.me/DocMamontov Реклама https://telega.in/c/doktormamontov Лично @doctormamontov РКН реестр 021326",
+      "topics": [
+        "Медицина и здоровье",
+        "Авторский блог",
+        "Региональные"
+      ],
+      "subscriber_count": 21547,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/doktormamontov",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1489199832",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.272739+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "4426dd4812cc88c69ccd",
+      "display_name": "Петербургские истории 🎞",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter_places",
+      "username": "piter_places",
+      "city": "Санкт-Петербург",
+      "description": "Санкт-Петербург \t🏛 Истории о людях\t📝 Легенды и тайны Питера\tРеклама: @Sila_teleg_sales @Sila_teleg \tРКН: https://knd.gov.ru/license?id=67602c1b2516457be8707b5c&registryType=bloggersPermission\t#8LEG8",
+      "topics": [
+        "Путешествия",
+        "Авторский блог",
+        "Подслушано"
+      ],
+      "subscriber_count": 45405,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter_places",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1827086168",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.723395+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "60e88c19d071c53cbd94",
+      "display_name": "Питер в голове • Про Санкт-Петербург • СПБ",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter_v_golove",
+      "username": "piter_v_golove",
+      "city": "Санкт-Петербург",
+      "description": "Я, Марк - ваш проводник по современному Санкт-Петербургу!\t📍Все самое интересное о СПБ! \t📍Уникальные места и события Питера о которых мало кто знает!\tРеклама / статистика https://all-stats.ru/channel/telegram-channel-piter_v_golo\t👉Для связи: @bizz_freedom",
+      "topics": [
+        "Путешествия",
+        "Авторский блог",
+        "Познавательные"
+      ],
+      "subscriber_count": 75620,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter_v_golove",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2115053730",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.786242+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "c5251397df887d08ce69",
+      "display_name": "Радар Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/radar_piter",
+      "username": "radar_piter",
+      "city": "Санкт-Петербург",
+      "description": "🔔Включите обязательно уведомления, чтобы получать точную и оперативную информацию. \t\tПо рекламе: @ktoktoktoktooo",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 38128,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/radar_piter",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2549707378",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.820601+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "982bcd6823a830885d2c",
+      "display_name": "Разберу по составу",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/skintelligence",
+      "username": "skintelligence",
+      "city": "Санкт-Петербург",
+      "description": "📍Санкт-Петербург \tПо вопросам сотрудничества: @Alina_skincare\t\tДругих каналов и соцсетей нет.\tБАДам, коллагенам, детоксам просьба не беспокоить! Консультаций нет.\t\tРеестр РКН: https://rkn.link/FOP",
+      "topics": [
+        "Медицина и здоровье",
+        "Авторский блог",
+        "Региональные"
+      ],
+      "subscriber_count": 26945,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/skintelligence",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1877767440",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:48.214015+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "5cbcdb246507805d6879",
+      "display_name": "развивая стиль | Лидия Шаро",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/sharovashare",
+      "username": "sharovashare",
+      "city": "Санкт-Петербург",
+      "description": "О стиле и жизни. Санкт-Петербург основной \t\tКанал MAX 📌 \thttps://max.ru/sharovashare\t\tСотрудничество личные блоги/мероприятия/рестораны @lidiya_sharo\t\t❗️Бренды @rufa_abubikerova\t\tВ перечне РКН\t\thttps://gosuslugi.ru/snet/673a4853340096358ba9f0d2",
+      "topics": [
+        "Кулинария",
+        "Афиша",
+        "Красота и мода"
+      ],
+      "subscriber_count": 30402,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/sharovashare",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1153462325",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:30.235532+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "2b86813359becbbf3299",
+      "display_name": "Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/piter",
+      "username": "piter",
+      "city": "Санкт-Петербург",
+      "description": "Подписывайся и будь в курсе жизни Санкт-Петербурга! \t\tСотрудничество: @i_piter",
+      "topics": [
+        "Афиша",
+        "Региональные"
+      ],
+      "subscriber_count": 17428,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/piter",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1111577546",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.360343+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "d342ba08e26a6e99c9db",
+      "display_name": "Санкт-Петербург - Новости",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_lives",
+      "username": "spb_lives",
+      "city": "Санкт-Петербург",
+      "description": "Новости и события Санкт-Петербурга.\t\tРеклама - @hapney",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 12800,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_lives",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1874602537",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.875169+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "b97ea63013f3013fad55",
+      "display_name": "Санкт-Петербург LIVE",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_smi",
+      "username": "spb_smi",
+      "city": "Санкт-Петербург",
+      "description": "В Питере жить!\t\tПригласить друзей: https://t.me/+QtgvYBN6BeoxNzIy\t\tПоделиться новостью: @Andry_SMI\t\tКупить рекламу: @ADV_SMI\tКупить через биржу: https://telega.in/c/spb_smi\t\thttps://clck.ru/3FS3qp\t18+",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 164929,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_smi",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1465133646",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.762227+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "27a8e0a6d758954e1ae3",
+      "display_name": "Санкт-Петербург online | Saintpgo",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/saintpgoo",
+      "username": "saintpgoo",
+      "city": "Санкт-Петербург",
+      "description": "Полезный канал для жителей и гостей Санкт-Петербурга.\t\tРассказываю о самых интересных местах и событиях Санкт-Петербурга.\t\tСсылка: https://t.me/+yYOmDl1YmX0xMjUy\t\t🗣 новость:  @Saintpgo_prbot\t▪️По рекламе: @ignatievone\t\tРКН: https://clck.ru/3FifSb",
+      "topics": [
+        "Путешествия",
+        "Афиша",
+        "Новости"
+      ],
+      "subscriber_count": 105973,
+      "audience_band": "mid",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/saintpgoo",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1493636331",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.709568+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "691cb40b3f2758817aad",
+      "display_name": "Санкт-Петербург | Питер Live",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/petersburg_live",
+      "username": "petersburg_live",
+      "city": "Санкт-Петербург",
+      "description": "Все главные новости Петербурга. \t\tПодайте заявку, чтобы перейти к просмотру!\t\tРеклама: @spbcity78\t\tКупить рекламу через биржу: \thttps://telega.in/c/+XQFoAyOhV35lNmJi\t\tРКН: clck.ru/3GNN5J",
+      "topics": [
+        "Новости",
+        "Региональные"
+      ],
+      "subscriber_count": 67052,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/petersburg_live",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1491700053",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:27.034807+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "437abb5784c19961c017",
+      "display_name": "Санкт-Петербург сегодня",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_burg",
+      "username": "spb_burg",
+      "city": "Санкт-Петербург",
+      "description": "Самые интересные новости Петербурга, секретные места, афиша города.\t\t📩Присылайте фото и видео @pitertop02_bot\t\tРеклама @avian555, итоги розыгрышей @reklamnayalisa. Переходите из описания!\t\tРегистрация в РКН https://clck.ru/3NYcmw",
+      "topics": [
+        "Афиша",
+        "Видео",
+        "Новости"
+      ],
+      "subscriber_count": 38628,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_burg",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1944712323",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.802889+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "fe3c35071fec083d9bcf",
+      "display_name": "Санкт-Петербург Сейчас",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/spb_radar",
+      "username": "spb_radar",
+      "city": "Санкт-Петербург",
+      "description": "Информационный российский источник для оповещения населения об воздушной угрозе.\t\t🔔Включите обязательно уведомления, чтобы получать точную и оперативную информацию",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 30125,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/spb_radar",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2454089371",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:30.377127+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "55ff4a4f81a146326dd0",
+      "display_name": "Санкт-Петербург 💚 Куда пойти",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/russian_spb78",
+      "username": "russian_spb78",
+      "city": "Санкт-Петербург",
+      "description": "Здесь все самое интересное о культурной столице нашей Родины для Вас. \t\tПригласить: https://t.me/+LGF_0nQVkRg3OGE6\t\tСообщество ВК https://vk.com/russian_spb78\t\t📈Купить рекламу @Djonik0161 или https://telega.in/c/+LGF_0nQVkRg3OGE6",
+      "topics": [
+        "Путешествия",
+        "Афиша",
+        "Региональные"
+      ],
+      "subscriber_count": 15394,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/russian_spb78",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2009652887",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:37.975824+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "89957ab15d5827d62360",
+      "display_name": "Северная столица | Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/peterburg_sever",
+      "username": "peterburg_sever",
+      "city": "Санкт-Петербург",
+      "description": "🔥 Тот самый канал, в котором пишут о том, что не покажут по ТВ! \t\t💵 ПО РЕКЛАМЕ (в лс): @vkmamaru (ОТВЕЧАЮ СТРОГО Я, менеджеры не ускорят время ответа)\t\tКанал на биржа: @legist4 https://telega.in/c/peterburg_sever и @Spiral_Yuri , @swaymedia",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 34573,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/peterburg_sever",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2227570047",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:26.899324+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "55987467b80a0087aef4",
+      "display_name": "Суши Wok Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/sushiwokspb",
+      "username": "sushiwokspb",
+      "city": "Санкт-Петербург",
+      "description": "Самые выгодные промокоды и акции для друзей Суши Wok в Санкт-Петербурге и ЛО!\tБесплатная доставка при заказе от 2000₽ 🚚\t\tСделать заказ: sushiwok.ru\t\tПодпишись на нашу группу вк: https://vk.com/sushiwok",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 20744,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/sushiwokspb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1752890275",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:34.250186+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "f8d92c2de63cfced8d93",
+      "display_name": "ТРЦ «Галерея»",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/galeria_mall_spb",
+      "username": "galeria_mall_spb",
+      "city": "Санкт-Петербург",
+      "description": "🎁 Подарки за покупки в приложении: https://onelink.to/639vb8\t\t#️⃣ Важные новости по тегам\t#открытия\t#будниГалереи\t#советыстилиста \t#вещьнедели\t#трендсезона\t#хочукакунее и #хочукакунего\t\tНомер рег. 5061438156\t\t📍г. Санкт-Петербург",
+      "topics": [
+        "Афиша",
+        "Искусство",
+        "Наука и технологии"
+      ],
+      "subscriber_count": 16244,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/galeria_mall_spb",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1693421338",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:51.865877+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "e12a34b25f487295cc80",
+      "display_name": "Хоккей в Санкт-Петербурге!",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/hockey_piter_tg",
+      "username": "hockey_piter_tg",
+      "city": "Санкт-Петербург",
+      "description": "🔥 Моментальная публикация постов по итогам матчей ФХСПБ!\t\tМенеджер(по рекламе и другим вопросам): @hockey_piter_manager\t\tmail: press@hockeyspb.online\t\tФХСПБ, Лен.хоккей, федерация СПБ, хоккей спб",
+      "topics": [
+        "Спорт",
+        "Региональные"
+      ],
+      "subscriber_count": 13057,
+      "audience_band": "micro",
+      "contactability": "advertising_contact",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/hockey_piter_tg",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=2097632686",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.904914+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "c44bf8d7fb2d3f0c15c1",
+      "display_name": "ЧАЁК",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/chaekshop",
+      "username": "chaekshop",
+      "city": "Санкт-Петербург",
+      "description": "Магазин китайского чая ЧАЁК — свежий взгляд на культуру! \t\t🌐 chaekshop.ru\t📩 @chaek_friend\t\tСанкт-Петербург, набережная канала Грибоедова, 72\t\t#0FKVH",
+      "topics": [
+        "Магазины"
+      ],
+      "subscriber_count": 11736,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/chaekshop",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1343465225",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:42.192252+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "3a33b4fc825306562230",
+      "display_name": "Чико | Санкт-Петербург",
+      "profile_type": "channel",
+      "platform": "telegram",
+      "canonical_url": "https://t.me/chicko_saint_petersburg",
+      "username": "chicko_saint_petersburg",
+      "city": "Санкт-Петербург",
+      "description": "🫰🏻Чико — вкус Азии в Питере!\t\t📍Щербаков пер. 17/3с2 \tСвязь: @chickospb\t📍ул. 2-я Советская 27/2 (Невский\t пр-кт 142)\tСвязь: +7(911)107-97-07\tБронь столиков: https://chicko.restoplace.ws/\t\tНомер заявления РКН: № 7305467782",
+      "topics": [
+        "Региональные"
+      ],
+      "subscriber_count": 14123,
+      "audience_band": "micro",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://t.me/chicko_saint_petersburg",
+      "discovery_source_url": "https://telemetr.me/catalog/region/spb",
+      "secondary_source_url": "https://telemetr.me/analytics/?name=1950898902",
+      "evidence_summary": "Telemetr отнёс канал к городскому тегу; оригинальный t.me-профиль открыт.",
+      "researched_at": "2026-08-25T14:14:41.654150+00:00",
+      "limitations": [
+        "Перед кампанией нужно вручную проверить долю локальной аудитории и условия размещения."
+      ]
+    }
+  ],
+  "limitations": [
+    "Это discovery-база, а не утверждённый shortlist; никаких сообщений не отправлялось."
+  ]
+}

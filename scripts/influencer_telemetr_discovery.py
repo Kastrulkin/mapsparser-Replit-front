@@ -9,6 +9,7 @@ import hashlib
 import html
 import json
 import re
+import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -19,8 +20,8 @@ from urllib.request import Request, urlopen
 
 USER_AGENT = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 SOURCES = {
-    "Санкт-Петербург": "https://telemetr.me/catalog/tag/spb",
-    "Краснодар": "https://telemetr.me/catalog/tag/krasnodar",
+    "Санкт-Петербург": "https://telemetr.me/catalog/region/spb",
+    "Краснодар": "https://telemetr.me/catalog/region/krasnodar",
 }
 EXCLUDED = ("авто и мото", "недвижимость", "вакансии", "даркнет", "для взрослых", "криптовалюты", "объявления")
 
@@ -35,6 +36,17 @@ def fetch(url: str) -> str:
         except Exception as error:
             last_error = error
             time.sleep(0.5 * (attempt + 1))
+    try:
+        result = subprocess.run(
+            ["curl", "-L", "--max-time", "20", "-A", USER_AGENT, "-s", url],
+            capture_output=True,
+            check=False,
+            timeout=24,
+        )
+        if result.returncode == 0 and result.stdout:
+            return result.stdout.decode("utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError):
+        pass
     if last_error:
         raise last_error
     raise RuntimeError("request failed")
