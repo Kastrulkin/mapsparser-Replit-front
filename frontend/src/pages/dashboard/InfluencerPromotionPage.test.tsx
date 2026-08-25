@@ -84,6 +84,33 @@ describe('InfluencerPromotionPage accessibility states', () => {
     expect(newAuth.makeRequest).toHaveBeenCalledTimes(2);
   });
 
+  it('places manual channel entry above filters and allows saving before search', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const quickAddHeading = await screen.findByRole('heading', { name: 'Уже знаете подходящего автора?' });
+    const filterHeading = screen.getByRole('heading', { name: 'Кого нужно найти' });
+    expect(quickAddHeading.compareDocumentPosition(filterHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Добавьте публичную ссылку вручную. Площадка не станет получателем сообщения, пока контакт не будет отдельно проверен.')).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('Имя или название площадки'), 'Мамы Петербурга');
+    await user.type(screen.getByPlaceholderText('https://t.me/…'), 'https://instagram.com/mamypeterburga');
+    const addButton = screen.getByRole('button', { name: 'Добавить' });
+    expect(addButton).toBeEnabled();
+    vi.mocked(newAuth.makeRequest).mockClear();
+    await user.click(addButton);
+
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalled());
+    const addCall = vi.mocked(newAuth.makeRequest).mock.calls.find(([path]) => path === '/promotion/influencers/creators/manual');
+    const requestBody = addCall?.[1]?.body;
+    if (typeof requestBody !== 'string') throw new Error('Manual creator request body was not serialized');
+    expect(JSON.parse(requestBody)).toMatchObject({
+      business_id: 'business-1',
+      display_name: 'Мамы Петербурга',
+      url: 'https://instagram.com/mamypeterburga',
+    });
+  });
+
   it('sends structured local filters when launching discovery', async () => {
     const user = userEvent.setup();
     renderPage();
