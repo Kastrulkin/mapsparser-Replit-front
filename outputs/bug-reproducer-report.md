@@ -2,31 +2,31 @@
 
 ## ✅ FIX_PROVEN — Bug reproduced and fix proven
 
-> The same reproducer changed from failing to passing and broader checks passed.
+> The approved regression cases failed on the reported Operator path before the fix, the same focused suite passes after the fix, and the broader Operator suite passes.
 
 **Project:** LocalOS
-**Bug:** Нативный Yandex-парсер принимает неполную коллекцию отзывов
-**Environment:** Python 3.11 arm64, pytest; production Docker worker on localos.pro
+**Bug:** Operator loses today's content-plan result and charges a credit after planner failure
+**Environment:** LocalOS production trace plus Python 3.11.7 regression tests on Darwin arm64
 **Generated:** 2026-08-25
 
 ## Original report
 
-Собственный парсер отзывов работает нестабильно; требуется сначала пробовать его, а при неудаче использовать Apify.
+For Весёлая Расчёска, the request ‘Покажи мне сегодняшние посты из контент плана’ returned a blocked response and charged one credit even though today's content-plan post existed and the read-only content.list_items tool completed successfully.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | Нативный результат сохраняется только при достаточно полном наборе отзывов; блокировка, таймаут или неполнота запускают Apify fallback. | До исправления 5 загруженных отзывов при reviews_count=344 признавались успешным результатом; HTTP 429 и пустая страница могли занимать попытку несколько минут. |
+| Observed behavior | Operator returns the available post for 25 August and does not charge for a technical planner failure. | The successful tool result was replaced with a blocked response after DEEPSEEK_EMPTY_RESPONSE, and one credit was charged. |
 
 ## Minimal reproduction
 
-Regression-тест передаёт валидную карточку Органики с reviews_count=344 и только пятью уникальными отзывами.
+Two focused tests simulate a successful content.list_items call followed by DEEPSEEK_EMPTY_RESPONSE and verify both preserved output and released billing reservation.
 
-**Confirming signal:** До исправления _validate_parsing_result вернул True вместо False; тест завершился с exit code 1.
+**Confirming signal:** Before the fix, 2 of 16 focused tests failed: the tool result was lost and the reservation was charged.
 
 ### Reproduction files approved at Gate 1
 
-- [test_worker_services_quality.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_worker_services_quality.py:168>) — Regression-тест неполной коллекции и тесты native-first/fallback.
-- [smoke_native_yandex_reviews.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/scripts/smoke_native_yandex_reviews.py:1>) — Read-only production canary нативного Yandex-парсера.
+- [test_operator_tool_loop.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_operator_tool_loop.py:322>) — Approved regression for preserving today's content result after an empty planner response.
+- [test_operator_tool_billing.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_operator_tool_billing.py:78>) — Approved regression for releasing the credit reservation on DEEPSEEK_EMPTY_RESPONSE.
 
 ## Red to green evidence
 
@@ -34,103 +34,70 @@ Regression-тест передаёт валидную карточку Орга�
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | 1,329.118 ms | 517.449 ms |
+| Duration | — ms | 376.803 ms |
 | Same command | — | True |
-| Broader suite | — | passed |
+| Broader suite | — | passed: 238 Operator tests |
 
 ### Before — failing evidence
 
 ```text
-F                                                                        [100%]
-=================================== FAILURES ===================================
-_______ test_validate_native_yandex_rejects_incomplete_review_collection _______
-
-    def test_validate_native_yandex_rejects_incomplete_review_collection():
-        card_data = {
-            "title": "Органика",
-            "address": "Санкт-Петербург, проспект Испытателей, 35",
-            "rating": 4.8,
-            "reviews_count": 344,
-            "categories": ["Салон красоты"],
-            "reviews": [
-                {
-                    "id": f"review-{index}",
-                    "author": f"Автор {index}",
-                    "rating": 5,
-                    "text": f"Отзыв {index}",
-                }
-                for index in range(5)
-            ],
-        }
-
-        is_successful, reason, validation = worker._validate_parsing_result(
-            card_data,
-            source="yandex_maps",
-        )
-
->       assert is_successful is False
-E       assert True is False
-
-tests/test_worker_services_quality.py:191: AssertionError
-=========================== short test summary info ============================
-FAILED tests/test_worker_services_quality.py::test_validate_native_yandex_rejects_incomplete_review_collection
-1 failed, 17 deselected in 0.82s
+14 passed, 2 failed. test_tool_loop_preserves_successful_read_when_final_planner_response_is_empty: the successful content.list_items observation was replaced by a blocked planner response after DEEPSEEK_EMPTY_RESPONSE. test_paid_tool_loop_releases_reservation_for_deepseek_empty_response: the reservation was charged instead of released because the provider error code was not normalized or classified as a technical planner failure.
 ```
 
 ### After — fixed evidence
 
 ```text
-.                                                                        [100%]
-1 passed, 23 deselected in 0.25s
+................                                                         [100%]
+16 passed in 0.10s
 ```
 
 ## Root cause
 
-Валидация проверяла наличие reviews_count, но не сопоставляла его с фактически загруженными уникальными отзывами. Нативный sync Playwright обычно не имел отдельного короткого общего таймаута, а HTTP 403/429 не завершал разбор немедленно.
+The tool loop treated any final planner error as authoritative even after a successful safe read-only tool call. The billing guard compared a small case-sensitive set of error codes, so DEEPSEEK_EMPTY_RESPONSE was not recognized as a technical failure.
 
 ## Approved fix
 
-Добавлена проверка полноты нативных отзывов, раннее распознавание HTTP 403/429/limited, изолированная нативная попытка с лимитом 180 секунд и автоматический fallback на Apify только для Yandex. Google, 2ГИС и Apple сохраняют прежние маршруты.
+Preserve the last successful read-only observation when final summarization fails, provide a deterministic content-list fallback, mark planner failure metadata, and normalize technical planner failure codes so billing releases the reservation.
 
-**Why this is causal:** Новый guard отклоняет доказанный неполный payload, а единый native-first helper вызывает Apify ровно при отклонении нативного результата. Принудительный subprocess гарантирует завершение нативной попытки по лимиту.
+**Why this is causal:** The changed branches are exactly where the successful observation was discarded and where the reservation finalization mode was selected.
 
 ### Production files approved at Gate 2
 
-- [worker.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/worker.py:1280>) — Ограниченная нативная попытка, проверка полноты и Apify fallback.
-- [parser_interception.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/parser_interception.py:688>) — Быстрое завершение при HTTP 403/429 и ответах limited/forbidden.
+- [operator_tool_loop.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/operator_tool_loop.py:299>) — Preserves safe read-only results and renders a deterministic fallback.
+- [operator_tool_billing.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/operator_tool_billing.py:15>) — Normalizes technical planner failures and releases their reservations.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Тот же regression-тест | ✅ passed | exit 1 до исправления → exit 0 после исправления. |
-| Целевой worker/parser набор | ✅ passed | 34 passed, 2 skipped. |
-| Расширенный worker/parser набор | ✅ passed | 49 passed, 3 skipped. |
-| Синтаксис и diff | ✅ passed | py_compile и git diff --check завершились успешно. |
+| Focused red-to-green suite | ✅ passed | 2 failures before; 16 passed after with the same command. |
+| Broader Operator suite | ✅ passed | 238 tests passed. |
+| Production deployment smoke | ✅ passed | App and worker run the deployed hashes; HTTP returned 200 and the deterministic in-container fallback smoke passed. |
+| Billing correction | ✅ passed | The exact erroneous charge received one idempotent compensating +1 ledger entry; balance returned from 48 to 49. |
 
 ## Reproduce
 
 ```bash
-arch -arm64 venv/bin/python -m pytest -q tests/test_worker_services_quality.py -k native_yandex_rejects_incomplete_review_collection
+./venv/bin/python -m pytest -q tests/test_operator_tool_loop.py tests/test_operator_tool_billing.py
 ```
 ```bash
-arch -arm64 venv/bin/python -m pytest -q tests/test_worker*.py tests/test_parser*.py
+./venv/bin/python -m pytest -q tests/test_operator*.py
 ```
 
 ## Limitations
 
-- Полнота допускает расхождение до 5%, но не менее двух отзывов, чтобы учитывать удалённые или задвоенные записи.
-- Production canary показал текущий HTTP 429 без прокси и пустой ответ через активный прокси; до улучшения proxy pool Apify будет использоваться часто.
+- The paid production request was not repeated because doing so could create another charge.
+- The fallback is intentionally limited to successful safe read-only observations; write and approval flows keep their existing boundaries.
 
 ## Residual risks
 
-- Нужна production smoke-проверка после частичного deployment.
-- Нативный маршрут зависит от качества proxy pool; fallback сохраняет обновление отзывов при его деградации.
+- A different read-only capability without a dedicated formatter may return the generic preserved-result message rather than a capability-specific summary.
+- Live provider behavior remains externally variable even though an empty final response no longer destroys the successful tool result or charges the user.
 
 ## Notes
 
-- Тестовые canary-запуски не записывали карточки или отзывы в production DB.
-- Операторская резервация кредитов освобождается с фактической стоимостью 0, если нативный путь успешен и Apify не запускался.
+- Gate 1 and Gate 2 were explicitly approved by the user.
+- No publication, external send, or provider write was performed during diagnosis, verification, deployment, or refund.
 
 ---
 
