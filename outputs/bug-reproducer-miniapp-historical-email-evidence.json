@@ -1,0 +1,45 @@
+{
+  "classification": "FIX_DEPLOYED",
+  "task": "Hide historical email reconciliation markers in the LocalOS Mini App and restore visible text for the Vesyolaya Raschyoska school outreach batch",
+  "date": "2026-08-25",
+  "reproduction": {
+    "command": "npm test -- src/components/telegram/PartnershipsMobileModule.test.tsx",
+    "before": "1 failed, 4 passed",
+    "after": "5 passed",
+    "root_cause": "PartnershipsMobileModule rendered approved_text without distinguishing a historical reconciliation marker."
+  },
+  "verification": {
+    "targeted_lint": "passed",
+    "frontend_build": "passed",
+    "public_frontend_build": "passed",
+    "runtime_http": 200,
+    "deployed_asset": "frontend/dist/assets/TelegramControlPage-CLa3a_QO.js",
+    "deployed_phrase_verified": true
+  },
+  "release": {
+    "source_commit": "0ad685d8",
+    "branch": "codex/content-generation-v2",
+    "deployed_at": "2026-08-25",
+    "isolated_clean_worktree": true,
+    "frontend_integrity": "passed",
+    "public_frontend_integrity": "passed"
+  },
+  "production_data_repair": {
+    "rows": 39,
+    "breakdown": {"гимназия": 4, "детский сад": 18, "школа": 17},
+    "visible_markers_after": 0,
+    "audit_metadata_preserved": 39,
+    "send_status_preserved": 39,
+    "backup_path": "/opt/seo-app/debug_data/veselaya-school-email-drafts-before-repair-20260825.csv",
+    "backup_sha256": "dca534da79f892263dbbecd13ce492a8634ff2cccea0dc522c31c7be455a4b06"
+  },
+  "yougile": {
+    "expected_followups": 39,
+    "found_followups": 39,
+    "column": "Второе касание",
+    "deadline": "2026-08-29",
+    "all_assigned": true,
+    "missing": 0
+  },
+  "residual_risk": "Future historical imports still rely on the marker contract. The affected records are repaired and the source guard is live in production."
+}
