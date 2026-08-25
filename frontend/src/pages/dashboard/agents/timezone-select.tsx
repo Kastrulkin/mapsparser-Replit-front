@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useLanguage, type Language } from '@/i18n/LanguageContext';
+import { getAgentDeepCopy } from './agent-deep-copy';
 
 const FALLBACK_TIMEZONES = [
   'UTC',
@@ -105,15 +107,33 @@ const supportedTimezones = () => {
   }
 };
 
-const timezoneCityName = (timezone: string) => {
-  if (CITY_NAMES[timezone]) return CITY_NAMES[timezone];
+const timezoneCityName = (timezone: string, language: Language) => {
+  if (language === 'ru' && CITY_NAMES[timezone]) return CITY_NAMES[timezone];
   const parts = timezone.split('/');
   return String(parts[parts.length - 1] || timezone).replaceAll('_', ' ');
 };
 
-const timezoneOffset = (timezone: string) => {
+const localeByLanguage: Record<Language, string> = {
+  ru: 'ru-RU', en: 'en-US', fr: 'fr-FR', es: 'es-ES', el: 'el-GR', de: 'de-DE',
+  th: 'th-TH', ar: 'ar-SA', ha: 'ha-NG', tr: 'tr-TR',
+};
+
+const selectorCopy: Record<Language, { search: string; empty: string; count: string }> = {
+  ru: { search: 'Найти город или Europe/Paris', empty: 'Часовой пояс не найден', count: 'часовых поясов' },
+  en: { search: 'Find a city or Europe/Paris', empty: 'Time zone not found', count: 'time zones' },
+  fr: { search: 'Rechercher une ville ou Europe/Paris', empty: 'Fuseau horaire introuvable', count: 'fuseaux horaires' },
+  es: { search: 'Buscar ciudad o Europe/Paris', empty: 'Zona horaria no encontrada', count: 'zonas horarias' },
+  el: { search: 'Αναζήτηση πόλης ή Europe/Paris', empty: 'Δεν βρέθηκε ζώνη ώρας', count: 'ζώνες ώρας' },
+  de: { search: 'Stadt oder Europe/Paris suchen', empty: 'Zeitzone nicht gefunden', count: 'Zeitzonen' },
+  th: { search: 'ค้นหาเมืองหรือ Europe/Paris', empty: 'ไม่พบเขตเวลา', count: 'เขตเวลา' },
+  ar: { search: 'ابحث عن مدينة أو Europe/Paris', empty: 'لم يتم العثور على المنطقة الزمنية', count: 'مناطق زمنية' },
+  ha: { search: 'Nemo birni ko Europe/Paris', empty: 'Ba a sami yankin lokaci ba', count: 'yankunan lokaci' },
+  tr: { search: 'Şehir veya Europe/Paris ara', empty: 'Saat dilimi bulunamadı', count: 'saat dilimi' },
+};
+
+const timezoneOffset = (timezone: string, language: Language) => {
   try {
-    const part = new Intl.DateTimeFormat('ru-RU', {
+    const part = new Intl.DateTimeFormat(localeByLanguage[language], {
       timeZone: timezone,
       timeZoneName: 'shortOffset',
       hour: '2-digit',
@@ -128,23 +148,26 @@ export const TimezoneSelect = ({
   value,
   onChange,
   className,
-  ariaLabel = 'Часовой пояс',
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   className?: string;
   ariaLabel?: string;
 }) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
+  const localCopy = selectorCopy[language];
   const [open, setOpen] = useState(false);
   const options = useMemo(() => {
     const timezones = supportedTimezones();
     const values = value && !timezones.includes(value) ? [value, ...timezones] : timezones;
     return values.map((timezone) => ({
       timezone,
-      city: timezoneCityName(timezone),
-      offset: timezoneOffset(timezone),
+      city: timezoneCityName(timezone, language),
+      offset: timezoneOffset(timezone, language),
     }));
-  }, [value]);
+  }, [language, value]);
   const selected = options.find((option) => option.timezone === value) || options[0];
 
   return (
@@ -155,7 +178,7 @@ export const TimezoneSelect = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          aria-label={ariaLabel}
+          aria-label={ariaLabel || deepCopy.timezone}
           className={cn('min-h-10 w-full justify-between bg-white px-3 font-normal active:scale-[0.96] transition-transform', className)}
         >
           <span className="flex min-w-0 items-center gap-2 text-left">
@@ -170,10 +193,10 @@ export const TimezoneSelect = ({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(24rem,calc(100vw-2rem))] p-0">
         <Command>
-          <CommandInput placeholder="Найти город или Europe/Paris" />
+          <CommandInput placeholder={localCopy.search} />
           <CommandList className="max-h-80">
-            <CommandEmpty>Часовой пояс не найден</CommandEmpty>
-            <CommandGroup heading={`${options.length} часовых поясов`}>
+            <CommandEmpty>{localCopy.empty}</CommandEmpty>
+            <CommandGroup heading={`${options.length} ${localCopy.count}`}>
               {options.map((option) => (
                 <CommandItem
                   key={option.timezone}
