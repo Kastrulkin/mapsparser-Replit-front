@@ -34,9 +34,146 @@ TECHNICAL_CLASSIFICATIONS = {
 SUPPRESSION_CLASSIFICATIONS = {"not_interested", "unsubscribe", "complaint"}
 SENDER_BLOCKING_HEALTH = {"paused", "blocked"}
 
+PARTNERSHIP_ACTIVE_LIFECYCLES = {"converted"}
+PARTNERSHIP_REPLY_LIFECYCLES = {"replied", "responded"}
+PARTNERSHIP_SUPPRESSED_LIFECYCLES = {
+    "suppressed", "not_relevant", "disqualified", "closed_lost",
+}
+PARTNERSHIP_ACTIVE_RELATIONSHIPS = {
+    "engaged", "interested", "negotiating", "pilot", "active", "converted",
+}
+PARTNERSHIP_CLOSED_RELATIONSHIPS = {"lost", "suppressed", "do_not_contact"}
+
 
 def _dict(row: Any) -> dict[str, Any]:
     return dict(row) if row else {}
+
+
+def partnership_repeat_contact_guard(
+    *,
+    lifecycle_status: Any,
+    workstream_status: Any,
+    relationship_status: Any,
+    prior_conversation: dict[str, Any] | None,
+    do_not_call: bool = False,
+) -> dict[str, Any]:
+    """Describe whether a partnership lead may receive a new first touch.
+
+    This guard deliberately treats a partner-authored room message as stronger
+    evidence than a stale CRM stage. It is shared by queue creation, dispatch
+    preflight and the lead UI so those three views cannot drift independently.
+    """
+    lifecycle = str(lifecycle_status or "").strip().lower()
+    workstream = str(workstream_status or "").strip().lower()
+    relationship = str(relationship_status or "").strip().lower()
+    conversation = prior_conversation if isinstance(prior_conversation, dict) else {}
+    author_role = str(
+        conversation.get("author_role") or conversation.get("author_type") or ""
+    ).strip().lower()
+    direction = str(conversation.get("direction") or "").strip().lower()
+    body = str(conversation.get("text") or conversation.get("body_text") or "").strip()
+    partner_authored = bool(body) and (
+        direction == "inbound" or author_role in {"visitor", "partner", "recipient"}
+    )
+
+    reason = ""
+    display_status = lifecycle or workstream or "unprocessed"
+    if do_not_call or lifecycle in PARTNERSHIP_SUPPRESSED_LIFECYCLES:
+        reason = "suppressed_partnership"
+        display_status = "suppressed"
+    elif lifecycle in PARTNERSHIP_ACTIVE_LIFECYCLES or relationship in PARTNERSHIP_ACTIVE_RELATIONSHIPS:
+        reason = "active_partnership"
+        display_status = "converted"
+    elif lifecycle in PARTNERSHIP_REPLY_LIFECYCLES:
+        reason = "prior_partner_conversation"
+        display_status = "replied"
+    elif relationship in PARTNERSHIP_CLOSED_RELATIONSHIPS:
+        reason = "closed_partnership"
+        display_status = "suppressed"
+    elif partner_authored:
+        reason = "prior_partner_conversation"
+        display_status = "replied"
+
+    blocked = bool(reason)
+    return {
+        "blocked": blocked,
+        "reason": reason or None,
+        "display_status": display_status,
+        "warning": (
+            "С партнёром уже был контакт — не начинайте знакомство заново"
+            if blocked else None
+        ),
+        "last_contact_at": conversation.get("created_at") or conversation.get("occurred_at"),
+        "last_contact_channel": (
+            conversation.get("channel") or conversation.get("source_channel")
+        ),
+        "last_message_excerpt": body[:240] or None,
+    }
+
+
+def load_partnership_repeat_contact_guard(
+    cursor: Any,
+    *,
+    lead_id: str,
+    workstream_id: str | None = None,
+) -> dict[str, Any]:
+    """Load authoritative relationship evidence and evaluate the shared guard."""
+    cursor.execute(
+        """
+        SELECT ws.lifecycle_status, ws.status AS workstream_status,
+               relationship.negotiation_stage AS relationship_status,
+               COALESCE(relationship.do_not_call, FALSE) AS do_not_call,
+               prior_message.author_type, prior_message.direction,
+               prior_message.body_text, prior_message.source_channel,
+               COALESCE(prior_message.occurred_at, prior_message.created_at) AS message_created_at
+        FROM lead_workstreams ws
+        LEFT JOIN lead_relationship_states relationship ON relationship.workstream_id = ws.id
+        LEFT JOIN LATERAL (
+            SELECT message.author_type, message.direction, message.body_text,
+                   message.source_channel, message.occurred_at, message.created_at
+            FROM sales_rooms room
+            JOIN sales_room_messages message ON message.room_id = room.id
+            WHERE room.lead_id = ws.lead_id
+              AND (room.workstream_id = ws.id OR room.workstream_id IS NULL)
+              AND NULLIF(BTRIM(COALESCE(message.body_text, '')), '') IS NOT NULL
+              AND (
+                  COALESCE(message.direction, 'room') = 'inbound'
+                  OR COALESCE(message.author_type, 'visitor') IN ('visitor', 'partner', 'recipient')
+              )
+            ORDER BY COALESCE(message.occurred_at, message.created_at) DESC, message.created_at DESC
+            LIMIT 1
+        ) prior_message ON TRUE
+        WHERE ws.lead_id = %s
+          AND (%s::text IS NULL OR ws.id::text = %s::text)
+        ORDER BY CASE WHEN ws.id::text = %s::text THEN 0 ELSE 1 END, ws.updated_at DESC
+        LIMIT 1
+        """,
+        (lead_id, workstream_id, workstream_id, workstream_id),
+    )
+    row = _dict(cursor.fetchone())
+    if not row:
+        return partnership_repeat_contact_guard(
+            lifecycle_status=None,
+            workstream_status=None,
+            relationship_status=None,
+            prior_conversation=None,
+        )
+    prior_conversation = None
+    if row.get("body_text"):
+        prior_conversation = {
+            "author_type": row.get("author_type"),
+            "direction": row.get("direction"),
+            "body_text": row.get("body_text"),
+            "source_channel": row.get("source_channel") or "digital_room",
+            "created_at": row.get("message_created_at"),
+        }
+    return partnership_repeat_contact_guard(
+        lifecycle_status=row.get("lifecycle_status"),
+        workstream_status=row.get("workstream_status"),
+        relationship_status=row.get("relationship_status"),
+        prior_conversation=prior_conversation,
+        do_not_call=bool(row.get("do_not_call")),
+    )
 
 
 def _canonical_payload(value: Any) -> str:
@@ -399,6 +536,18 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
     item = _dict(cursor.fetchone())
     if not item:
         return {"allowed": False, "reason_code": "queue_item_missing"}
+    contact_guard = load_partnership_repeat_contact_guard(
+        cursor,
+        lead_id=str(item.get("lead_id") or ""),
+        workstream_id=str(item.get("workstream_id") or "") or None,
+    )
+    if contact_guard.get("blocked"):
+        return {
+            "allowed": False,
+            "reason_code": str(contact_guard.get("reason") or "prior_partner_conversation"),
+            "contact_guard": contact_guard,
+            "item": item,
+        }
     if not item.get("campaign_touch_id"):
         return {"allowed": False, "reason_code": "campaign_approval_required", "item": item}
     if item.get("campaign_status") not in {"approved", "active"}:
@@ -720,6 +869,10 @@ def block_queue_item_after_preflight(cursor: Any, queue_id: str, result: dict[st
         "campaign_approval_required",
         "channel_permanently_unavailable",
         "conflicting_active_campaign",
+        "active_partnership",
+        "prior_partner_conversation",
+        "suppressed_partnership",
+        "closed_partnership",
     }
     queue_status = "failed" if terminal else "paused"
     touch_status = "reply_cancelled" if reason_code == "recipient_replied" else "paused"

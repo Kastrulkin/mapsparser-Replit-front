@@ -112,6 +112,22 @@ type PartnershipLead = {
   pipeline_status?: string;
   pilot_cohort?: string;
   selected_channel?: string;
+  active_workstream_id?: string | null;
+  workstream_id?: string | null;
+  workstream_lifecycle_status?: string | null;
+  workstream_status_reason?: string | null;
+  sales_room_status?: string;
+  sales_room_data_mode?: string;
+  sales_room_url?: string;
+  contact_guard?: {
+    blocked?: boolean;
+    reason?: string | null;
+    display_status?: string;
+    warning?: string | null;
+    last_contact_at?: string | null;
+    last_contact_channel?: string | null;
+    last_message_excerpt?: string | null;
+  };
   updated_at?: string;
   rating?: number;
   reviews_count?: number;

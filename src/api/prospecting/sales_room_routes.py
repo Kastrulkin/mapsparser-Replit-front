@@ -62,6 +62,7 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.prospecting_service import ProspectingService
 from services.lead_workstream_service import resolve_workstream, update_workstream
 from services.lead_preparation_progress_service import record_lead_preparation_step
+from services.outreach_safety_service import load_partnership_repeat_contact_guard
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -465,6 +466,30 @@ def partnership_create_send_batch():
             if not rows:
                 return jsonify({"error": "No approved partnership drafts available for queue"}), 400
 
+            blocked_rows = []
+            eligible_rows = []
+            for row in rows:
+                contact_guard = load_partnership_repeat_contact_guard(
+                    cur,
+                    lead_id=str(row.get("lead_id") or ""),
+                    workstream_id=str(row.get("workstream_id") or "") or None,
+                )
+                if contact_guard.get("blocked"):
+                    blocked_rows.append({
+                        "lead_id": str(row.get("lead_id") or ""),
+                        "draft_id": str(row.get("id") or ""),
+                        "contact_guard": contact_guard,
+                    })
+                else:
+                    eligible_rows.append(row)
+            rows = eligible_rows
+            if not rows:
+                return jsonify({
+                    "error": "Partner already has a conversation; continue the existing dialogue",
+                    "reason_code": "prior_partner_conversation",
+                    "blocked": blocked_rows,
+                }), 409
+
             batch_id = str(uuid.uuid4())
             cur.execute(
                 """
@@ -494,8 +519,14 @@ def partnership_create_send_batch():
                 cur.execute(
                     """
                     UPDATE prospectingleads
-                    SET status = %s,
-                        partnership_stage = %s,
+                    SET status = CASE
+                            WHEN COALESCE(status, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN status
+                            ELSE %s
+                        END,
+                        partnership_stage = CASE
+                            WHEN COALESCE(partnership_stage, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN partnership_stage
+                            ELSE %s
+                        END,
                         updated_at = NOW()
                     WHERE id = %s
                     """,
@@ -507,7 +538,13 @@ def partnership_create_send_batch():
 
         snapshot = _load_partnership_send_snapshot(business_id=business_id)
         batch = next((item for item in snapshot["batches"] if item["id"] == batch_id), None)
-        return jsonify({"success": True, "daily_cap": MAX_DAILY_OUTREACH_BATCH, "batch": batch, **snapshot})
+        return jsonify({
+            "success": True,
+            "daily_cap": MAX_DAILY_OUTREACH_BATCH,
+            "batch": batch,
+            "blocked": blocked_rows,
+            **snapshot,
+        })
     except Exception as e:
         print(f"Error creating partnership send batch: {e}")
         return jsonify({"error": str(e)}), 500

@@ -24,6 +24,7 @@ from services.lead_workstream_service import (
     resolve_workstream,
     update_workstream,
 )
+from services.outreach_safety_service import partnership_repeat_contact_guard
 from api import admin_prospecting as _legacy
 
 ALLOWED_OUTREACH_CHANNELS = _legacy.ALLOWED_OUTREACH_CHANNELS
@@ -184,6 +185,15 @@ def partnership_list_leads():
                        prospectingleads.parse_business_id, prospectingleads.updated_at,
                        prospectingleads.created_at,
                        active_ws.id AS active_workstream_id,
+                       active_ws.lifecycle_status AS workstream_lifecycle_status,
+                       active_ws.status_reason AS workstream_status_reason,
+                       relationship.negotiation_stage AS relationship_status,
+                       COALESCE(relationship.do_not_call, FALSE) AS relationship_do_not_call,
+                       prior_message.author_type AS prior_message_author_type,
+                       prior_message.direction AS prior_message_direction,
+                       prior_message.body_text AS prior_message_body_text,
+                       prior_message.source_channel AS prior_message_source_channel,
+                       COALESCE(prior_message.occurred_at, prior_message.created_at) AS prior_message_created_at,
                        (
                            SELECT client_business.name
                            FROM businesses client_business
@@ -204,6 +214,22 @@ def partnership_list_leads():
                        artifact_last.updated_at AS artifact_updated_at
                 FROM prospectingleads
                 JOIN lead_workstreams active_ws ON active_ws.lead_id = prospectingleads.id
+                LEFT JOIN lead_relationship_states relationship ON relationship.workstream_id = active_ws.id
+                LEFT JOIN LATERAL (
+                    SELECT message.author_type, message.direction, message.body_text,
+                           message.source_channel, message.occurred_at, message.created_at
+                    FROM sales_rooms room
+                    JOIN sales_room_messages message ON message.room_id = room.id
+                    WHERE room.lead_id = prospectingleads.id
+                      AND (room.workstream_id = active_ws.id OR room.workstream_id IS NULL)
+                      AND NULLIF(BTRIM(COALESCE(message.body_text, '')), '') IS NOT NULL
+                      AND (
+                          COALESCE(message.direction, 'room') = 'inbound'
+                          OR COALESCE(message.author_type, 'visitor') IN ('visitor', 'partner', 'recipient')
+                      )
+                    ORDER BY COALESCE(message.occurred_at, message.created_at) DESC, message.created_at DESC
+                    LIMIT 1
+                ) prior_message ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT
                         pq.id, pq.status, pq.updated_at, pq.created_at, pq.retry_after, pq.error_message
@@ -257,6 +283,31 @@ def partnership_list_leads():
             sales_room_slug = str(payload.get("sales_room_slug") or "").strip()
             if sales_room_slug:
                 payload["sales_room_url"] = _make_sales_room_url(sales_room_slug)
+            prior_conversation = None
+            if payload.get("prior_message_body_text"):
+                prior_conversation = {
+                    "author_type": payload.pop("prior_message_author_type", None),
+                    "direction": payload.pop("prior_message_direction", None),
+                    "body_text": payload.pop("prior_message_body_text", None),
+                    "source_channel": payload.pop("prior_message_source_channel", None),
+                    "created_at": payload.pop("prior_message_created_at", None),
+                }
+            else:
+                for key in (
+                    "prior_message_author_type", "prior_message_direction",
+                    "prior_message_body_text", "prior_message_source_channel",
+                    "prior_message_created_at",
+                ):
+                    payload.pop(key, None)
+            payload["contact_guard"] = partnership_repeat_contact_guard(
+                lifecycle_status=payload.get("workstream_lifecycle_status"),
+                workstream_status=payload.get("pipeline_status"),
+                relationship_status=payload.pop("relationship_status", None),
+                prior_conversation=prior_conversation,
+                do_not_call=bool(payload.pop("relationship_do_not_call", False)),
+            )
+            if payload["contact_guard"].get("blocked"):
+                payload["pipeline_status"] = payload["contact_guard"].get("display_status")
             payload["next_best_action"] = _partnership_next_best_action(payload)
             items.append(payload)
         attach_conn = get_db_connection()

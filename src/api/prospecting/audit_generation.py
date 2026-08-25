@@ -62,7 +62,10 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.prospecting_service import ProspectingService
 from services.telegram_account_permissions_service import assert_account_access
 from services.outreach_reply_tracking_service import record_bound_inbound_event
-from services.outreach_safety_service import classify_inbound_event
+from services.outreach_safety_service import (
+    classify_inbound_event,
+    load_partnership_repeat_contact_guard,
+)
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -703,7 +706,16 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
         params.append(remaining_slots)
         cur.execute(query, params)
         selected_rows = [dict(row) for row in cur.fetchall()]
-        valid_rows = [row for row in selected_rows if _lead_has_channel_contact(row, row.get("channel"))]
+        valid_rows = []
+        for row in selected_rows:
+            if not _lead_has_channel_contact(row, row.get("channel")):
+                continue
+            contact_guard = load_partnership_repeat_contact_guard(
+                cur,
+                lead_id=str(row.get("lead_id") or ""),
+            )
+            if not contact_guard.get("blocked"):
+                valid_rows.append(row)
 
         if not valid_rows:
             return None, "No approved drafts available for queue"
@@ -742,8 +754,14 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
             cur.execute(
                 """
                 UPDATE prospectingleads
-                SET status = %s,
-                    pipeline_status = %s,
+                SET status = CASE
+                        WHEN COALESCE(status, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN status
+                        ELSE %s
+                    END,
+                    pipeline_status = CASE
+                        WHEN COALESCE(pipeline_status, '') IN ('replied', 'responded', 'converted', 'suppressed') THEN pipeline_status
+                        ELSE %s
+                    END,
                     updated_at = NOW()
                 WHERE id = %s
                 """,
