@@ -126,6 +126,15 @@ def _text_list(value: Any) -> list[str]:
     return []
 
 
+def _creator_result_limit(brief: dict[str, Any]) -> int:
+    try:
+        raw_value = brief.get("result_limit")
+        requested = 30 if raw_value is None or raw_value == "" else int(raw_value)
+    except (TypeError, ValueError):
+        requested = 30
+    return max(1, min(requested, 100))
+
+
 def _taxonomy_names(value: Any) -> list[str]:
     return [
         str(item.get("name") or "").strip()
@@ -436,10 +445,10 @@ def _search_catalog_candidates(
     brief: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     search_brief = brief or {}
+    requested_platforms = _text_list(search_brief.get("platforms"))
     structured_terms = [
         *_requested_audience_types(search_brief),
         *_text_list(search_brief.get("content_styles")),
-        *_text_list(search_brief.get("platforms")),
         *_text_list(search_brief.get("audience_size_bands")),
     ]
     patterns = [f"%{anchor}%" for anchor in [*(anchors or []), *structured_terms] if str(anchor).strip()]
@@ -471,6 +480,7 @@ def _search_catalog_candidates(
         JOIN LATERAL (
             SELECT item.* FROM creator_channels item
             WHERE item.creator_profile_id = profile.id
+              AND (COALESCE(ARRAY_LENGTH(%s::text[], 1), 0) = 0 OR item.platform = ANY(%s::text[]))
             ORDER BY
                 CASE item.verification_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END,
                 item.last_observed_at DESC NULLS LAST,
@@ -511,6 +521,7 @@ def _search_catalog_candidates(
         LIMIT %s
         """,
         (
+            requested_platforms, requested_platforms,
             patterns, patterns, patterns, patterns, patterns, patterns,
             patterns, patterns, patterns, patterns, patterns, patterns, patterns,
             max(1, min(limit, 1000)),
@@ -732,6 +743,8 @@ def _creator_from_source(cursor: Any, source: dict[str, Any]) -> dict[str, Any]:
         "evidence_texts": [evidence_text] if evidence_text else [],
         "document_count": int(source.get("document_count") or 0),
         "public_metrics": _json(metadata.get("public_metrics"), {}),
+        "platform": platform,
+        "platforms": [platform],
         "formats": formats,
         "last_observed_at": source.get("latest_document_at") or source.get("last_collected_at"),
         "contactability": contactability,
@@ -750,6 +763,8 @@ def enqueue_creator_search(cursor: Any, *, business_id: str, user_id: str, brief
     normalized_brief.setdefault("area", business.get("address") or "")
     normalized_brief.setdefault("topics", _text_list(business.get("categories")) or [str(business.get("industry") or business.get("business_type") or "")])
     normalized_brief.setdefault("goal", "Получить локальный охват и обращения")
+    normalized_brief["platforms"] = [item.lower() for item in _text_list(normalized_brief.get("platforms"))]
+    normalized_brief["result_limit"] = _creator_result_limit(normalized_brief)
     normalized_brief["_business_id"] = business_id
     normalized_brief["_own_urls"] = [url for url in [_canonical_url(business.get("website"))] if url]
     job_id = str(uuid.uuid4())
@@ -793,6 +808,12 @@ def process_creator_search_job(cursor: Any, *, business_id: str, job_id: str) ->
     ]
     active_anchors = [item for item in anchors if item]
     sources = _search_source_candidates(cursor, anchors=active_anchors)
+    requested_platforms = set(_text_list(normalized_brief.get("platforms")))
+    if requested_platforms:
+        sources = [
+            source for source in sources
+            if _platform_for_url(str(source.get("canonical_url") or ""), str(source.get("source_type") or "other")) in requested_platforms
+        ]
     catalog_candidates = _search_catalog_candidates(cursor, anchors=active_anchors, brief=normalized_brief)
     processed = 0
     errors = 0
@@ -896,6 +917,9 @@ def load_search_job(cursor: Any, *, business_id: str, job_id: str) -> dict[str, 
     job = _dict(cursor.fetchone())
     if not job:
         raise LookupError("Поиск не найден")
+    brief = _json(job.get("brief_json"), {})
+    result_limit = _creator_result_limit(brief)
+    requested_platforms = _text_list(brief.get("platforms"))
     cursor.execute(
         """
         SELECT result.*, profile.display_name, profile.profile_type, profile.description,
@@ -922,9 +946,10 @@ def load_search_job(cursor: Any, *, business_id: str, job_id: str) -> dict[str, 
                evidence.items_json AS evidence_json
         FROM creator_search_results result
         JOIN creator_profiles profile ON profile.id = result.creator_profile_id
-        LEFT JOIN LATERAL (
+        JOIN LATERAL (
             SELECT * FROM creator_channels candidate
             WHERE candidate.creator_profile_id = profile.id
+              AND (COALESCE(ARRAY_LENGTH(%s::text[], 1), 0) = 0 OR candidate.platform = ANY(%s::text[]))
             ORDER BY
                 CASE candidate.verification_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END,
                 candidate.last_observed_at DESC NULLS LAST,
@@ -951,9 +976,20 @@ def load_search_job(cursor: Any, *, business_id: str, job_id: str) -> dict[str, 
             WHERE item.creator_profile_id = profile.id
         ) evidence ON TRUE
         WHERE result.search_job_id = %s
-        ORDER BY result.score DESC, profile.display_name
+        ORDER BY
+            CASE result.result_group
+                WHEN 'best_fit' THEN 0
+                WHEN 'strong_local' THEN 1
+                WHEN 'precise_small_audience' THEN 2
+                WHEN 'needs_review' THEN 3
+                WHEN 'insufficient_data' THEN 4
+                ELSE 5
+            END,
+            result.score DESC,
+            profile.display_name
+        LIMIT %s
         """,
-        (job_id,),
+        (requested_platforms, requested_platforms, job_id, result_limit),
     )
     results: list[dict[str, Any]] = []
     for row in cursor.fetchall():
@@ -978,7 +1014,8 @@ def load_search_job(cursor: Any, *, business_id: str, job_id: str) -> dict[str, 
         item["gates"] = _json(item.pop("gates_json", {}), {})
         item["evidence"] = _json(item.pop("evidence_json", []), [])
         results.append(_json_ready(item))
-    job["brief"] = _json(job.pop("brief_json", {}), {})
+    job.pop("brief_json", None)
+    job["brief"] = brief
     job["progress"] = _json(job.pop("progress_json", {}), {})
     job["errors"] = _json(job.pop("error_json", {}), {})
     job["results"] = results

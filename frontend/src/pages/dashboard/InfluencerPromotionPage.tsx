@@ -249,6 +249,17 @@ const nextCollaborationStatus: Record<string, { status: string; label: string }>
 };
 
 const formatNumber = (value: unknown) => new Intl.NumberFormat('ru-RU').format(Number(value || 0));
+const platformLabel: Record<string, string> = {
+  instagram: 'Instagram', telegram: 'Telegram', threads: 'Threads', youtube: 'YouTube',
+  tiktok: 'TikTok', vk: 'VK', website: 'Сайт', other: 'Другой канал',
+};
+const audienceCount = (metrics?: Record<string, number>) => {
+  for (const key of ['followers', 'follower_count', 'subscribers', 'subscriber_count', 'members', 'audience_count']) {
+    const value = Number(metrics?.[key] || 0);
+    if (Number.isFinite(value) && value > 0) return Math.round(value);
+  }
+  return null;
+};
 const checkpointLabel = { '24h': '24 часа', '7d': '7 дней', '14d': '14 дней' };
 const topicLabel: Record<string, string> = {
   family_parenting: 'родители и дети', food_cafes: 'кафе и еда', local_places: 'места в городе',
@@ -346,7 +357,8 @@ export const InfluencerPromotionPage = () => {
   const [service, setService] = useState('');
   const [formats, setFormats] = useState('обзор, пост');
   const [contentStyle, setContentStyle] = useState('');
-  const [platforms, setPlatforms] = useState('');
+  const [platform, setPlatform] = useState('');
+  const [resultLimit, setResultLimit] = useState('30');
   const [audienceSizeBands, setAudienceSizeBands] = useState('nano, micro');
   const [contactRequired, setContactRequired] = useState(true);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
@@ -423,7 +435,8 @@ export const InfluencerPromotionPage = () => {
             service,
             formats: formats.split(',').map((item) => item.trim()).filter(Boolean),
             content_styles: contentStyle ? [contentStyle] : [],
-            platforms: platforms.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean),
+            platforms: platform ? [platform] : [],
+            result_limit: Math.max(1, Math.min(100, Number(resultLimit) || 30)),
             audience_size_bands: audienceSizeBands.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean),
             contact_required: contactRequired,
             budget: budget ? { maximum: Number(budget), currency: 'RUB' } : {},
@@ -894,12 +907,13 @@ export const InfluencerPromotionPage = () => {
                 <label className="text-sm font-medium text-slate-700">Город<Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Санкт-Петербург" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Район или метро<Input value={area} onChange={(event) => setArea(event.target.value)} placeholder="Выборгский район или Проспект Просвещения" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700 md:col-span-2">Аудитория<Textarea value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Например: родители детей 2–12 лет, живущие рядом" className="mt-2 min-h-24 rounded-xl bg-white" /></label>
-                <label className="text-sm font-medium text-slate-700">Услуга или повод<Input value={service} onChange={(event) => setService(event.target.value)} placeholder="Первая стрижка ребёнка" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
+                <label className="text-sm font-medium text-slate-700 md:col-span-2">Услуга или повод<Input value={service} onChange={(event) => setService(event.target.value)} placeholder="Первая стрижка ребёнка" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
+                <label className="text-sm font-medium text-slate-700">Канал<select value={platform} onChange={(event) => setPlatform(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-slate-900"><option value="">Любой канал</option><option value="instagram">Instagram</option><option value="telegram">Telegram</option><option value="threads">Threads</option><option value="youtube">YouTube</option><option value="tiktok">TikTok</option><option value="vk">VK</option></select></label>
+                <label className="text-sm font-medium text-slate-700">Сколько кандидатов<Input value={resultLimit} onChange={(event) => setResultLimit(event.target.value)} type="number" min="1" max="100" inputMode="numeric" className="mt-2 min-h-11 rounded-xl bg-white tabular-nums" /></label>
               </div>
               <button type="button" aria-expanded={advancedSearchOpen} onClick={() => setAdvancedSearchOpen((current) => !current)} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white hover:text-slate-950"><ChevronRight className={cn('h-4 w-4 transition-transform', advancedSearchOpen && 'rotate-90')} />Уточнить площадки и формат</button>
               {advancedSearchOpen ? <div className="mt-3 grid gap-4 rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">Подача<select value={contentStyle} onChange={(event) => setContentStyle(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-slate-900"><option value="">Любая</option><option value="reviews">Обзоры мест</option><option value="guides_and_selections">Гайды и подборки</option><option value="expert">Экспертная</option><option value="personal_lifestyle">Личный блог</option><option value="visual_ugc">Визуальный UGC</option></select></label>
-                <label className="text-sm font-medium text-slate-700">Платформы<Input value={platforms} onChange={(event) => setPlatforms(event.target.value)} placeholder="telegram, threads" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Размер аудитории<Input value={audienceSizeBands} onChange={(event) => setAudienceSizeBands(event.target.value)} placeholder="nano, micro" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Форматы<Input value={formats} onChange={(event) => setFormats(event.target.value)} placeholder="обзор, пост, визит" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Максимальный бюджет, ₽<Input value={budget} onChange={(event) => setBudget(event.target.value)} inputMode="decimal" placeholder="Можно оставить пустым" className="mt-2 min-h-11 rounded-xl bg-white tabular-nums" /></label>
@@ -922,8 +936,8 @@ export const InfluencerPromotionPage = () => {
               {Object.entries(groupedResults).map(([group, items]) => (
                 <div key={group} className="space-y-3"><h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">{groupLabel[group] || group} · <span className="tabular-nums">{items.length}</span></h3><div className="grid gap-3 lg:grid-cols-2">{items.map((result) => (
                   <article key={result.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_8px_24px_-20px_rgba(15,23,42,0.22)]">
-                    <div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-100 text-lg font-semibold text-amber-900">{String(result.display_name || '?').slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><h4 className="text-balance font-semibold text-slate-950">{result.display_name}</h4><p className="mt-1 text-xs text-slate-500">{result.platform || 'площадка не определена'}{result.home_city ? ` · автор: ${[result.home_city, result.home_district].filter(Boolean).join(', ')}` : ' · место автора не подтверждено'}</p></div><span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white tabular-nums">{result.score || 0}</span></div></div></div>
-                    <div className="mt-4 flex flex-wrap gap-2">{result.primary_topic ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900">{topicLabel[result.primary_topic] || result.primary_topic}</span> : null}{(result.content_styles || []).slice(0, 2).map((style) => <span key={style} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{styleLabel[style] || style}</span>)}<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{audienceBandLabel[result.audience_size_band || 'unknown'] || result.audience_size_band}</span></div>
+                    <div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-100 text-lg font-semibold text-amber-900">{String(result.display_name || '?').slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><h4 className="text-balance font-semibold text-slate-950">{result.display_name}</h4><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>Канал: <span className="font-medium text-slate-700">{platformLabel[result.platform || 'other'] || result.platform}</span></span><span>Аудитория: <span className="font-medium text-slate-700 tabular-nums">{audienceCount(result.public_metrics) ? `${formatNumber(audienceCount(result.public_metrics))} подписчиков` : 'количество не подтверждено'}</span></span>{result.home_city ? <span>Автор: {[result.home_city, result.home_district].filter(Boolean).join(', ')}</span> : <span>Место автора не подтверждено</span>}</div></div><span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white tabular-nums">{result.score || 0}</span></div></div></div>
+                    <div className="mt-4 flex flex-wrap gap-2">{result.primary_topic ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900">{topicLabel[result.primary_topic] || result.primary_topic}</span> : null}{(result.content_styles || []).slice(0, 2).map((style) => <span key={style} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{styleLabel[style] || style}</span>)}<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{audienceCount(result.public_metrics) ? `Аудитория: ${formatNumber(audienceCount(result.public_metrics))}` : audienceBandLabel[result.audience_size_band || 'unknown'] || result.audience_size_band}</span></div>
                     {(geographyNames(result.content_geographies) || result.metro_stations?.length || geographyNames(result.audience_geography)) ? <div className="mt-3 grid gap-1 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">{geographyNames(result.content_geographies) ? <span><span className="font-semibold text-slate-800">Пишет про:</span> {geographyNames(result.content_geographies)}</span> : null}{result.metro_stations?.length ? <span><span className="font-semibold text-slate-800">Метро:</span> {result.metro_stations.join(', ')}</span> : null}{geographyNames(result.audience_geography) ? <span><span className="font-semibold text-slate-800">Аудитория:</span> {geographyNames(result.audience_geography)}</span> : null}</div> : <p className="mt-3 text-xs leading-5 text-amber-700">Локальная география пока не подтверждена публичным материалом.</p>}
                     <ul className="mt-4 space-y-2 text-sm leading-5 text-slate-600">{(result.reasons || []).slice(0, 4).map((reason) => <li key={reason} className="flex gap-2 text-pretty"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" /><span>{reason}</span></li>)}</ul>
                     {result.taxonomy_evidence?.[0]?.observed || result.evidence?.[0]?.summary ? <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-700">Публичное доказательство:</span> {result.taxonomy_evidence?.[0]?.observed || result.evidence?.[0]?.summary}</div> : null}

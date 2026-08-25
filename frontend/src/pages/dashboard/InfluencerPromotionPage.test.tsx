@@ -94,7 +94,9 @@ describe('InfluencerPromotionPage accessibility states', () => {
     await user.type(screen.getByLabelText('Аудитория'), 'родители');
     await user.click(screen.getByRole('button', { name: 'Уточнить площадки и формат' }));
     await user.selectOptions(screen.getByLabelText('Подача'), 'reviews');
-    await user.type(screen.getByLabelText('Платформы'), 'telegram, threads');
+    await user.selectOptions(screen.getByLabelText('Канал'), 'instagram');
+    await user.clear(screen.getByLabelText('Сколько кандидатов'));
+    await user.type(screen.getByLabelText('Сколько кандидатов'), '30');
     await user.click(screen.getByRole('button', { name: 'Запустить поиск' }));
 
     await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalled());
@@ -107,7 +109,8 @@ describe('InfluencerPromotionPage accessibility states', () => {
       area: 'Выборгский',
       audience: 'родители',
       content_styles: ['reviews'],
-      platforms: ['telegram', 'threads'],
+      platforms: ['instagram'],
+      result_limit: 30,
       audience_size_bands: ['nano', 'micro'],
       contact_required: true,
     });
@@ -122,6 +125,8 @@ describe('InfluencerPromotionPage accessibility states', () => {
       result_group: 'needs_review',
       shortlist_status: index === 30 ? 'shortlisted' : 'suggested',
       score: index,
+      platform: index === 30 ? 'instagram' : 'telegram',
+      public_metrics: index === 30 ? { followers: 12500 } : {},
       reasons: ['Публичные данные требуют проверки'],
     }));
     vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
@@ -132,7 +137,9 @@ describe('InfluencerPromotionPage accessibility states', () => {
     });
     renderPage();
 
-    expect(await screen.findByRole('heading', { name: 'Автор 31' })).toBeInTheDocument();
+    const candidateHeading = await screen.findByRole('heading', { name: 'Автор 31' });
+    expect(candidateHeading.closest('article')).toHaveTextContent('Канал: Instagram');
+    expect(candidateHeading.closest('article')).toHaveTextContent(/Аудитория: 12.500 подписчиков/);
     expect(screen.getByRole('heading', { name: 'Кандидаты' }).parentElement).toHaveTextContent('30 из 31');
     expect(screen.getAllByRole('article')).toHaveLength(30);
 

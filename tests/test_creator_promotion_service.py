@@ -4,6 +4,7 @@ import pytest
 
 from services.creator_promotion_service import (
     SCORING_VERSION,
+    _creator_result_limit,
     add_metric_snapshot,
     build_tracking_plan,
     campaign_terms_review,
@@ -11,6 +12,14 @@ from services.creator_promotion_service import (
     preview_candidate_outreach,
     score_creator_candidate,
 )
+
+
+def test_creator_result_limit_defaults_and_clamps():
+    assert _creator_result_limit({}) == 30
+    assert _creator_result_limit({"result_limit": "30"}) == 30
+    assert _creator_result_limit({"result_limit": 0}) == 1
+    assert _creator_result_limit({"result_limit": 250}) == 100
+    assert _creator_result_limit({"result_limit": "invalid"}) == 30
 
 
 def test_campaign_terms_review_requires_explicit_agreement():
