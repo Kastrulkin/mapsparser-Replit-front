@@ -5,28 +5,27 @@
 > The same reproducer changed from failing to passing and broader checks passed.
 
 **Project:** LocalOS
-**Bug:** Network manager cannot read reviews or partnership rooms
-**Environment:** Local Python/pytest regression suite and Docker/PostgreSQL production at localos.pro
-**Generated:** 2026-08-21
+**Bug:** Operator approval did not apply a finance transaction
+**Environment:** Python virtualenv on macOS; production Docker/PostgreSQL smoke on /opt/seo-app
+**Generated:** 2026-08-25
 
 ## Original report
 
-Елена, менеджер сети Весёлая расчёска, должна видеть отзывы и цифровые комнаты точки Энгельса, 154, но получает отказ доступа.
+The user wants DeepSeek-driven Operator actions to be executed inside allowed LocalOS boundaries after explicit confirmation. Finance confirmation previously produced a request-only result and did not write the approved transaction.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | Активный участник сети получает тот же read-доступ к отзывам и партнёрскому контуру точки, что и к остальным данным этой точки. | Маршрут отзывов возвращал 403, а партнёрский определитель бизнеса возвращал None, потому что оба пути признавали только непосредственного владельца. |
+| Observed behavior | No finance row exists before confirmation; the approved ActionOrchestrator action creates exactly one transaction in the selected tenant; retry is idempotent. | The Operator routed finance approval to finance.transaction.create, whose documented behavior is request-only and localos_write_performed=false. |
 
 ## Minimal reproduction
 
-Два сфокусированных теста используют активное членство в сети и вызывают реальные функции маршрута и определения бизнеса.
+A focused handler test requests the dedicated approved finance capability twice, includes a forged payload business_id, and asserts one stored row scoped to the envelope tenant.
 
-**Confirming signal:** Два теста падали: отзывы возвращали 403 вместо 200, партнёрский resolver возвращал None вместо business-1.
+**Confirming signal:** Before the fix the capability lookup raised KeyError because no approved apply handler existed.
 
 ### Reproduction files approved at Gate 1
 
-- [test_employee_remaining_read_access.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_employee_remaining_read_access.py:129>) — Регрессия чтения отзывов активным участником сети.
-- [test_network_member_access.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_network_member_access.py:59>) — Регрессия разрешения партнёрского business scope участнику сети.
+- [test_agent_blueprint_capabilities.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_agent_blueprint_capabilities.py:326>) — Tenant, idempotency, and approved-write regression test.
 
 ## Red to green evidence
 
@@ -34,101 +33,68 @@
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | 3,039.808 ms | 1,993.457 ms |
+| Duration | 1,000 ms | 900 ms |
 | Same command | — | True |
 | Broader suite | — | passed |
 
 ### Before — failing evidence
 
 ```text
-.....F..F............                                                    [100%]
-=================================== FAILURES ===================================
-________ test_network_member_can_read_shared_business_external_reviews _________
-
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b879690>
-
-    def test_network_member_can_read_shared_business_external_reviews(monkeypatch):
-        monkeypatch.setattr(external_accounts_api, "verify_session", _network_member_session)
-        monkeypatch.setattr(external_accounts_api, "DatabaseManager", AccessDatabase)
-        monkeypatch.setattr(external_accounts_api, "get_business_owner_id", lambda cursor, business_id: "owner-1")
-
-        response = main.app.test_client().get(
-            "/api/business/business-1/external/reviews",
-            headers=_auth_headers(),
-        )
-
->       assert response.status_code == 200
-E       assert 403 == 200
-E        +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
-
-tests/test_employee_remaining_read_access.py:139: AssertionError
-_________ test_partnership_business_resolution_accepts_network_member __________
-
-    def test_partnership_business_resolution_accepts_network_member():
-        business_id = _resolve_business_for_user(
-            PartnershipAccessCursor(),
-            {"user_id": "member-1", "is_superadmin": False},
-            "business-1",
-        )
-
->       assert business_id == "business-1"
-E       AssertionError: assert None == 'business-1'
-
-tests/test_network_member_access.py:66: AssertionError
-=========================== short test summary info ============================
-FAILED tests/test_employee_remaining_read_access.py::test_network_member_can_read_shared_business_external_reviews
-FAILED tests/test_network_member_access.py::test_partnership_business_resolution_accepts_network_member
-2 failed, 19 passed in 2.28s
+FAILED tests/test_agent_blueprint_capabilities.py::test_operator_finance_apply_creates_one_scoped_transaction_idempotently - KeyError: 'finance.transaction.apply_operator'
+1 failed, 49 deselected in 0.45s
 ```
 
 ### After — fixed evidence
 
 ```text
-.....................                                                    [100%]
-21 passed in 1.32s
+.                                                                        [100%]
+1 passed, 49 deselected in 0.33s
 ```
 
 ## Root cause
 
-Два устаревших условия доступа обходили канонический verify_business_access и проверяли только owner_id/superadmin.
+Operator finance.prepare_transaction reused the generic finance.transaction.create proposal capability. That capability deliberately stops at a pending request and therefore cannot apply the confirmed transaction.
 
 ## Approved fix
 
-Оба пути переведены на канонический verify_business_access без изменения правил для посторонних пользователей.
+Added finance.transaction.apply_operator as a dedicated approval-required ActionOrchestrator capability, validated exactly one finance row, derived business scope only from the envelope tenant, used a stable action-based transaction ID, and routed Operator finance approvals to it.
 
-**Why this is causal:** Каноническая функция уже учитывает active business_members и network_members и сохранила tenant/demo ограничения.
+**Why this is causal:** The new handler is the execution target resumed by the same human-approved ActionOrchestrator action; its stable ID and tenant-scoped readback enforce one approved LocalOS write without granting DeepSeek database access.
 
 ### Production files approved at Gate 2
 
-- [external_accounts_api.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/external_accounts_api.py:1961>) — Чтение отзывов использует каноническую проверку бизнес-доступа.
-- [access_schema.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/prospecting/access_schema.py:489>) — Партнёрский scope учитывает активное членство в сети.
+- [agent_capability_handlers.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/agent_capability_handlers.py:106>) — Dedicated approval-required finance apply capability and handler.
+- [operator_core.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/operator_core.py:77>) — Operator finance route now targets the approved apply capability.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Focused red-to-green regression | ✅ passed | 2 failures before; 21 focused tests passed after. |
-| Adjacent access and route suite | ✅ passed | 27 tests passed. |
-| Production role probe | ✅ passed | Web reviews, services, content, partnerships and Mini App read routes returned 200 for Elena's role. |
+| Focused regression | ✅ passed | Same command changed from KeyError to 1 passed. |
+| Relevant backend suite | ✅ passed | 117 tests passed. |
+| Production runtime | ✅ passed | App and worker healthy, HTTP 200, exact file hashes match. |
+| Production capability smoke | ✅ passed | Handler registered as production_internal_write and Operator route targets it. |
 
 ## Reproduce
 
 ```bash
-python3 -m pytest -q tests/test_employee_remaining_read_access.py tests/test_network_member_access.py
+venv/bin/pytest -q tests/test_agent_blueprint_capabilities.py -k operator_finance_apply
 ```
 
 ## Limitations
 
-- Telegram UI cannot authenticate as Elena until she completes the one-time bind flow from her own Telegram account.
+- Production smoke did not create a real finance row because that would mutate a business ledger.
+- The handler applies one transaction per approval; bulk finance import remains a separate governed workflow.
 
 ## Residual risks
 
-- Telegram ID remains empty, so the bot and Mini App cannot yet identify Elena despite the corrected backend access.
+- External publication and provider dispatch remain unavailable until dedicated provider-write adapters and approvals exist.
+- Appointments create_request remains request-only rather than a direct booking write.
 
 ## Notes
 
-- Production subscription for Engelsa 154 was backed up and activated through 2026-09-15.
-- No external messages or publications were sent.
+- DeepSeek receives tool schemas and observations only; it never receives database credentials or unrestricted API access.
+- The user explicitly approved testing and the production fix in this task.
 
 ---
 

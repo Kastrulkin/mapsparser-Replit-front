@@ -250,6 +250,7 @@ export const OperatorPage = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
+  const [rejectingActionId, setRejectingActionId] = useState<string | null>(null);
   useEffect(() => {
     if (!currentBusinessId) {
       setConversationId(null);
@@ -512,6 +513,30 @@ export const OperatorPage = () => {
     }
   };
 
+  const rejectOperatorAction = async (actionId: string | undefined) => {
+    if (!currentBusinessId || !actionId) return;
+    setRejectingActionId(actionId);
+    try {
+      const response = await api.post(`/operator/actions/${encodeURIComponent(actionId)}/reject`, {
+        business_id: currentBusinessId,
+      });
+      appendOperatorResult(
+        response.data.operator_result || { status: 'blocked', chat_response: 'Не удалось отклонить действие.' },
+        'rejection',
+      );
+    } catch (err) {
+      appendOperatorResult(
+        {
+          status: 'blocked',
+          chat_response: err instanceof Error ? err.message : 'Не удалось отклонить действие',
+        },
+        'rejection-error',
+      );
+    } finally {
+      setRejectingActionId(null);
+    }
+  };
+
   const copyText = async (key: string, text: string) => {
     if (!text.trim()) return;
     await navigator.clipboard.writeText(text);
@@ -597,6 +622,7 @@ export const OperatorPage = () => {
                         manualPublishDraftId,
                         recoveringQueueId,
                         confirmingActionId,
+                        rejectingActionId,
                       }}
                       onCopy={copyText}
                       onCheckRefresh={checkRefreshResult}
@@ -605,6 +631,7 @@ export const OperatorPage = () => {
                       onApplyServices={applyServiceSuggestions}
                       onMarkManualPublished={markManualPublished}
                       onConfirmOperatorAction={confirmOperatorAction}
+                      onRejectOperatorAction={rejectOperatorAction}
                     />
                   ) : null}
                 </div>
@@ -665,6 +692,7 @@ type OperatorResultActionsProps = {
     manualPublishDraftId: string | null;
     recoveringQueueId: string | null;
     confirmingActionId: string | null;
+    rejectingActionId: string | null;
   };
   onCopy: (key: string, text: string) => Promise<void>;
   onCheckRefresh: (queueId: string | undefined) => Promise<void>;
@@ -673,6 +701,7 @@ type OperatorResultActionsProps = {
   onApplyServices: (jobId: string | undefined) => Promise<void>;
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
   onConfirmOperatorAction: (actionId: string | undefined) => Promise<void>;
+  onRejectOperatorAction: (actionId: string | undefined) => Promise<void>;
 };
 
 const OperatorResultActions = ({
@@ -686,6 +715,7 @@ const OperatorResultActions = ({
   onApplyServices,
   onMarkManualPublished,
   onConfirmOperatorAction,
+  onRejectOperatorAction,
 }: OperatorResultActionsProps) => {
   const capabilityPanelId = useId();
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
@@ -871,15 +901,27 @@ const OperatorResultActions = ({
 
       <div className="flex flex-wrap gap-2">
         {approval?.action_id && approval.status === 'pending' ? (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void onConfirmOperatorAction(approval.action_id)}
-            disabled={loading.confirmingActionId === approval.action_id}
-          >
-            {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-            Подтвердить
-          </Button>
+          <>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void onConfirmOperatorAction(approval.action_id)}
+              disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
+            >
+              {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Подтвердить
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void onRejectOperatorAction(approval.action_id)}
+              disabled={loading.confirmingActionId === approval.action_id || loading.rejectingActionId === approval.action_id}
+            >
+              {loading.rejectingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Отклонить
+            </Button>
+          </>
         ) : null}
         {isOperatorHelp ? (
           <Button

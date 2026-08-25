@@ -1,0 +1,61 @@
+{
+  "title": "Operator approval did not apply a finance transaction",
+  "project": "LocalOS",
+  "generated_at": "2026-08-25",
+  "mode": "prove-fix",
+  "original_report": "The user wants DeepSeek-driven Operator actions to be executed inside allowed LocalOS boundaries after explicit confirmation. Finance confirmation previously produced a request-only result and did not write the approved transaction.",
+  "discovery_scope": [
+    "Operator tool registry and confirmation flow",
+    "ActionOrchestrator capability registry and finance handlers",
+    "Existing finance transaction insertion contract"
+  ],
+  "candidates": [],
+  "expected": "No finance row exists before confirmation; the approved ActionOrchestrator action creates exactly one transaction in the selected tenant; retry is idempotent.",
+  "actual": "The Operator routed finance approval to finance.transaction.create, whose documented behavior is request-only and localos_write_performed=false.",
+  "environment": "Python virtualenv on macOS; production Docker/PostgreSQL smoke on /opt/seo-app",
+  "reproduction": "A focused handler test requests the dedicated approved finance capability twice, includes a forged payload business_id, and asserts one stored row scoped to the envelope tenant.",
+  "failure_signal": "Before the fix the capability lookup raised KeyError because no approved apply handler existed.",
+  "root_cause": "Operator finance.prepare_transaction reused the generic finance.transaction.create proposal capability. That capability deliberately stops at a pending request and therefore cannot apply the confirmed transaction.",
+  "fix_summary": "Added finance.transaction.apply_operator as a dedicated approval-required ActionOrchestrator capability, validated exactly one finance row, derived business scope only from the envelope tenant, used a stable action-based transaction ID, and routed Operator finance approvals to it.",
+  "why_causal": "The new handler is the execution target resumed by the same human-approved ActionOrchestrator action; its stable ID and tenant-scoped readback enforce one approved LocalOS write without granting DeepSeek database access.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_agent_blueprint_capabilities.py",
+      "line": 326,
+      "summary": "Tenant, idempotency, and approved-write regression test."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/agent_capability_handlers.py",
+      "line": 106,
+      "summary": "Dedicated approval-required finance apply capability and handler."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/operator_core.py",
+      "line": 77,
+      "summary": "Operator finance route now targets the approved apply capability."
+    }
+  ],
+  "checks": [
+    {"name": "Focused regression", "status": "passed", "detail": "Same command changed from KeyError to 1 passed."},
+    {"name": "Relevant backend suite", "status": "passed", "detail": "117 tests passed."},
+    {"name": "Production runtime", "status": "passed", "detail": "App and worker healthy, HTTP 200, exact file hashes match."},
+    {"name": "Production capability smoke", "status": "passed", "detail": "Handler registered as production_internal_write and Operator route targets it."}
+  ],
+  "reproduce": [
+    "venv/bin/pytest -q tests/test_agent_blueprint_capabilities.py -k operator_finance_apply"
+  ],
+  "limitations": [
+    "Production smoke did not create a real finance row because that would mutate a business ledger.",
+    "The handler applies one transaction per approval; bulk finance import remains a separate governed workflow."
+  ],
+  "residual_risks": [
+    "External publication and provider dispatch remain unavailable until dedicated provider-write adapters and approvals exist.",
+    "Appointments create_request remains request-only rather than a direct booking write."
+  ],
+  "notes": [
+    "DeepSeek receives tool schemas and observations only; it never receives database credentials or unrestricted API access.",
+    "The user explicitly approved testing and the production fix in this task."
+  ]
+}

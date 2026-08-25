@@ -36,6 +36,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "agent_document_analysis",
         "agent_table_analysis",
         "operator_intent_classify",
+        "operator_tool_plan",
         "average_ticket_analysis",
         "service_catalog_analysis",
         "review_signal_classify",

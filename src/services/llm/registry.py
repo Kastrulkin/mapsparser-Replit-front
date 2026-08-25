@@ -341,6 +341,27 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         timeout=20,
         shadow_allowed=True,
     ),
+    "operator_tool_plan": _task(
+        "operator_tool_plan",
+        provider="deepseek",
+        profile="deepseek_fast",
+        response_kind="json",
+        schema={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["tool_call", "final", "clarification"]},
+                "tool": {"type": "string"},
+                "arguments": {"type": "object"},
+                "message": {"type": "string"},
+            },
+            "required": ["action"],
+        },
+        max_tokens=900,
+        temperature=0.0,
+        timeout=20,
+        shadow_allowed=False,
+        pipeline_stage="planning",
+    ),
     "agent_compiler": _task(
         "agent_compiler",
         provider="deepseek",

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sys
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -41,9 +42,14 @@ from services.operator_conversations import (
     conversation_pending_context,
     create_pending_operator_action,
     get_or_create_operator_conversation,
+    list_pending_operator_actions,
+    list_operator_messages,
     set_operator_pending_context,
 )
 from subscription_manager import get_subscription_access, get_subscription_info
+
+
+logger = logging.getLogger(__name__)
 
 
 def _row_to_dict(cursor, row) -> dict[str, Any] | None:
@@ -502,6 +508,27 @@ def route_operator_chat_for_telegram(
             role="user",
             content=message,
         )
+    conversation_history = (
+        list_operator_messages(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            limit=12,
+        )
+        if persistence_enabled and conversation_id
+        else []
+    )
+    pending_approvals = (
+        list_pending_operator_actions(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            user_id=user_id,
+            limit=20,
+        )
+        if persistence_enabled and conversation_id
+        else []
+    )
     result, next_pending_context = route_operator_message(
         cursor,
         business_id=business_id,
@@ -510,6 +537,14 @@ def route_operator_chat_for_telegram(
         channel="telegram",
         limit=limit,
         pending_context=conversation_pending_context(conversation),
+        conversation_id=conversation_id,
+        conversation_history=conversation_history,
+        actor_context={
+            "role": "business_owner",
+            "is_superadmin": False,
+            "permissions": ["business.access"],
+        },
+        pending_approvals=pending_approvals,
         refresh_handler=refresh_reviews_from_operator,
         ai_router_handler=classify_operator_intent_with_ai,
         manual_review_handler=process_operator_chat_message,
@@ -610,6 +645,52 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
             limit=5,
             transport_key=business_ctx.get("telegram_id") or user_id,
         )
+        tool_trace = result.get("tool_trace") if isinstance(result.get("tool_trace"), list) else []
+        for tool_step in tool_trace:
+            if not isinstance(tool_step, dict):
+                continue
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_tool_executed",
+                action_key=str(tool_step.get("tool") or "operator_tool"),
+                channel="telegram",
+                status=str(tool_step.get("status") or "completed"),
+                input_summary={"step": tool_step.get("step")},
+                output_summary={"risk_class": tool_step.get("risk_class")},
+                metadata={
+                    "conversation_id": result.get("conversation_id"),
+                    "tool": tool_step.get("tool"),
+                    "external_writes_performed": bool(result.get("external_writes_performed")),
+                },
+            )
+        tool_plan_finalization = (
+            result.get("tool_plan_finalization_result")
+            if isinstance(result.get("tool_plan_finalization_result"), dict)
+            else {}
+        )
+        if tool_plan_finalization:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_usage_charged",
+                action_key="operator_tool_plan",
+                channel="telegram",
+                status=str(tool_plan_finalization.get("status") or "completed"),
+                input_summary={"action_key": "operator_tool_plan"},
+                output_summary={
+                    "charge_credits": tool_plan_finalization.get("charge_credits"),
+                    "release_credits": tool_plan_finalization.get("release_credits"),
+                    "planner_steps": result.get("planner_steps"),
+                },
+                metadata={
+                    "credit_charged": bool(tool_plan_finalization.get("side_effects", {}).get("credit_charged")),
+                    "paid_actions_performed": bool(tool_plan_finalization.get("side_effects", {}).get("credit_charged")),
+                    "external_writes_performed": False,
+                },
+            )
         ai_router = result.get("ai_router") if isinstance(result.get("ai_router"), dict) else {}
         ai_finalization = ai_router.get("finalization_result") if isinstance(ai_router.get("finalization_result"), dict) else {}
         if ai_finalization:
@@ -642,10 +723,14 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
         return result
     except Exception:
         conn.rollback()
+        error_id = str(uuid.uuid4())
+        logger.exception("Telegram Operator failed error_id=%s business_id=%s", error_id, business_ctx.get("business_id"))
         return {
             "status": "blocked",
             "capability": "operator.help",
-            "chat_response": "Не удалось выполнить команду Operator: " + str(sys.exc_info()[1]),
+            "chat_response": "Оператор временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
+            "error_code": "operator_chat_failed",
+            "error_id": error_id,
             "blocked_reasons": ["operator_chat_failed"],
         }
     finally:

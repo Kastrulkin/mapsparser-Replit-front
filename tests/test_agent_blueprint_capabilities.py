@@ -323,6 +323,116 @@ def test_finance_transaction_create_requires_orchestrator_human_gate():
     assert "finance" in decision["reason"]
 
 
+def test_operator_finance_apply_creates_one_scoped_transaction_idempotently(monkeypatch):
+    from services import agent_capability_handlers
+
+    class FinanceCursor:
+        def __init__(self):
+            self.description = []
+            self.last_result = None
+            self.last_results = []
+            self.inserted = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            params = params or ()
+            if "from information_schema.columns" in normalized_query:
+                self.last_results = [
+                    ("id",),
+                    ("business_id",),
+                    ("user_id",),
+                    ("amount",),
+                    ("transaction_date",),
+                    ("transaction_type",),
+                    ("category",),
+                    ("description",),
+                    ("notes",),
+                ]
+                return None
+            if normalized_query.startswith("insert into financialtransactions"):
+                transaction_id = str(params[0])
+                if not any(item[0] == transaction_id for item in self.inserted):
+                    self.inserted.append(tuple(params))
+                    self.last_result = (transaction_id,)
+                else:
+                    self.last_result = None
+                return None
+            if "from financialtransactions" in normalized_query:
+                transaction_id, business_id = str(params[0]), str(params[1])
+                match = next(
+                    (item for item in self.inserted if item[0] == transaction_id and item[1] == business_id),
+                    None,
+                )
+                self.last_result = (
+                    {
+                        "id": match[0],
+                        "business_id": match[1],
+                        "amount": match[3],
+                        "transaction_type": match[5],
+                    }
+                    if match
+                    else None
+                )
+                return None
+            raise AssertionError(f"Unhandled finance SQL: {query}")
+
+        def fetchall(self):
+            return self.last_results
+
+        def fetchone(self):
+            return self.last_result
+
+    class FinanceDatabase:
+        def __init__(self):
+            self.cursor_instance = FinanceCursor()
+            self.conn = self
+            self.committed = 0
+            self.closed = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed += 1
+
+        def rollback(self):
+            raise AssertionError("finance apply must not roll back")
+
+        def close(self):
+            self.closed = True
+
+    db = FinanceDatabase()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    handler = agent_capability_handlers.build_capability_handlers()["finance.transaction.apply_operator"]
+    envelope = {
+        "tenant_id": "biz1",
+        "action_id": "approved-action-1",
+        "actor": {"id": "user-1"},
+        "capability": "finance.transaction.apply_operator",
+        "payload": {
+            "rows": [
+                {
+                    "amount": 5000,
+                    "transaction_type": "expense",
+                    "transaction_date": "2026-08-25",
+                    "category": "Реклама",
+                    "description": "Контекст",
+                    "business_id": "attacker-business",
+                }
+            ]
+        },
+    }
+
+    first = handler(envelope, {"user_id": "user-1"})
+    second = handler(envelope, {"user_id": "user-1"})
+
+    assert first["result"]["status"] == "finance_transaction_created"
+    assert first["result"]["localos_write_performed"] is True
+    assert second["result"]["transaction"]["id"] == first["result"]["transaction"]["id"]
+    assert len(db.cursor_instance.inserted) == 1
+    assert db.cursor_instance.inserted[0][1] == "biz1"
+
+
 def test_approved_domain_executor_moves_sheet_request_after_human_gate():
     from services.agent_domain_request_executors import execute_approved_domain_requests
 

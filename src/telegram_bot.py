@@ -77,7 +77,7 @@ from services.operator_review_reply_bulk import (
     format_bulk_review_reply_result_for_telegram,
     generate_review_reply_drafts_for_unanswered_reviews,
 )
-from services.operator_core import confirm_pending_operator_action, should_route_operator_message
+from services.operator_core import confirm_pending_operator_action, reject_pending_operator_action, should_route_operator_message
 from services.operator_scope_summary import build_operator_scope_summary
 from services.telegram_control_scope import (
     list_control_scopes,
@@ -2074,7 +2074,10 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
     approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
     action_id = str(approval.get("action_id") or "").strip()
     if action_id:
-        rows.append([InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}")])
+        rows.append([
+            InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}"),
+            InlineKeyboardButton("❌ Отклонить", callback_data=f"operator_reject:{action_id}"),
+        ])
     rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
     return InlineKeyboardMarkup(rows)
 
@@ -4055,6 +4058,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     protected_business_prefixes = (
         "operator_confirm:",
+        "operator_reject:",
         "approval_approved_",
         "approval_rejected_",
         "approval_status_",
@@ -4141,10 +4145,42 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 format_operator_chat_result_for_telegram(result),
                 reply_markup=_build_operator_result_markup(result),
             )
-        except Exception as exc:
+        except Exception:
             conn.rollback()
+            logger.exception("Operator action confirmation failed action_id=%s", action_id)
             await query.edit_message_text(
-                "Не удалось подтвердить действие.\n\nПричина: " + str(exc),
+                "Не удалось подтвердить действие. Повторите позже.",
+                reply_markup=_build_ask_localos_menu(),
+            )
+        finally:
+            conn.close()
+        return
+
+    if data.startswith("operator_reject:"):
+        business_ctx = _control_scope_business_context(user_id, control_scope)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден активный бизнес.", reply_markup=_build_client_more_menu())
+            return
+        action_id = data.replace("operator_reject:", "", 1).strip()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            result, _idempotent = reject_pending_operator_action(
+                cursor,
+                action_id=action_id,
+                business_id=str(business_ctx.get("business_id") or ""),
+                user_id=str(business_ctx.get("user_id") or ""),
+            )
+            conn.commit()
+            await query.edit_message_text(
+                format_operator_chat_result_for_telegram(result),
+                reply_markup=_build_operator_result_markup(result),
+            )
+        except Exception:
+            conn.rollback()
+            logger.exception("Operator action rejection failed action_id=%s", action_id)
+            await query.edit_message_text(
+                "Не удалось отклонить действие.",
                 reply_markup=_build_ask_localos_menu(),
             )
         finally:

@@ -79,6 +79,16 @@ PAID_ACTIONS: dict[str, dict[str, Any]] = {
         "external_write": False,
         "description": "Fallback-классификация свободной команды в один из безопасных сценариев LocalOS.",
     },
+    "operator_tool_plan": {
+        "label": "Спланировать команду Operator",
+        "action_class": "paid_compute",
+        "cost_source": "model_tokens",
+        "provider": "deepseek",
+        "credit_multiplier": 1,
+        "manual_approval_required": False,
+        "external_write": False,
+        "description": "Построение ограниченного плана из разрешённых инструментов LocalOS без прямого доступа модели к базе.",
+    },
 }
 
 

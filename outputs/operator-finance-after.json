@@ -1,0 +1,8 @@
+{
+  "command": ["venv/bin/pytest", "-q", "tests/test_agent_blueprint_capabilities.py", "-k", "operator_finance_apply"],
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_ms": 900,
+  "stdout": ".                                                                        [100%]\n1 passed, 49 deselected in 0.33s",
+  "stderr": ""
+}

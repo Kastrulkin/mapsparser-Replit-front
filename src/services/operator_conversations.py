@@ -222,6 +222,28 @@ def get_operator_action(cursor: Any, *, action_id: str, business_id: str, user_i
     return _row(cursor, cursor.fetchone())
 
 
+def list_pending_operator_actions(
+    cursor: Any,
+    *,
+    conversation_id: str,
+    business_id: str,
+    user_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT id, capability, status, created_at
+        FROM operatoractions
+        WHERE conversation_id = %s AND business_id = %s AND user_id = %s
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (conversation_id, business_id, user_id, max(1, min(int(limit or 20), 50))),
+    )
+    return [_row(cursor, value) for value in (cursor.fetchall() or [])]
+
+
 def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
     cursor.execute(
         """
@@ -229,6 +251,18 @@ def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any
         SET status = 'completed', confirmed_at = COALESCE(confirmed_at, NOW()),
             executed_at = COALESCE(executed_at, NOW()), result_json = %s::jsonb,
             updated_at = NOW()
+        WHERE id = %s
+        """,
+        (json.dumps(result, ensure_ascii=False, default=str), action_id),
+    )
+
+
+def reject_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
+    cursor.execute(
+        """
+        UPDATE operatoractions
+        SET status = 'rejected', confirmed_at = COALESCE(confirmed_at, NOW()),
+            result_json = %s::jsonb, updated_at = NOW()
         WHERE id = %s
         """,
         (json.dumps(result, ensure_ascii=False, default=str), action_id),

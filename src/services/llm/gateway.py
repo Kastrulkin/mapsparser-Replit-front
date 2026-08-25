@@ -52,7 +52,7 @@ def _deepseek_business_allowed(business_id: str) -> bool:
 
 def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest) -> str:
     if (
-        request.task_key == "operator_intent_classify"
+        request.task_key in {"operator_intent_classify", "operator_tool_plan"}
         and definition.primary_provider == "deepseek"
         and _env_enabled("OPERATOR_DEEPSEEK_ROUTER_ENABLED")
     ):

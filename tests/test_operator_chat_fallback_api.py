@@ -193,6 +193,73 @@ def test_operator_chat_ai_manual_review_guard_does_not_add_review(monkeypatch) -
     assert calls == {"process": 1, "ai": 1}
 
 
+def test_operator_chat_returns_structured_error_without_leaking_exception(monkeypatch) -> None:
+    client = _client(monkeypatch)
+
+    def fail_route(*_args, **_kwargs):
+        raise RuntimeError("database password and internal traceback")
+
+    monkeypatch.setattr(operator_api, "route_operator_message", fail_route)
+
+    response = client.post("/api/operator/chat", json={"business_id": "biz-1", "message": "Проверь состояние"})
+    body = response.get_json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["error_code"] == "operator_chat_failed"
+    assert body["error_id"]
+    assert "password" not in body["error"].lower()
+    assert FakeDatabaseManager.instances[-1].conn.rollbacks == 1
+
+
+def test_operator_action_confirm_passes_authenticated_tenant_scope(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    calls = []
+
+    def confirm(cursor, *, action_id, business_id, user_id):
+        calls.append((action_id, business_id, user_id))
+        return {"status": "completed", "chat_response": "Готово."}, False
+
+    monkeypatch.setattr(operator_api, "confirm_pending_operator_action", confirm)
+    response = client.post("/api/operator/actions/action-1/confirm", json={"business_id": "biz-1"})
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert calls == [("action-1", "biz-1", "user-1")]
+
+
+def test_operator_action_reject_denies_cross_tenant_access(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    calls = []
+    monkeypatch.setattr(operator_api, "verify_business_access", lambda *_args, **_kwargs: (False, "owner-2"))
+    monkeypatch.setattr(
+        operator_api,
+        "reject_pending_operator_action",
+        lambda *_args, **_kwargs: calls.append("called"),
+    )
+
+    response = client.post("/api/operator/actions/action-1/reject", json={"business_id": "other-business"})
+
+    assert response.status_code == 403
+    assert calls == []
+
+
+def test_operator_action_reject_error_does_not_leak_internal_exception(monkeypatch) -> None:
+    client = _client(monkeypatch)
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("database password and internal traceback")
+
+    monkeypatch.setattr(operator_api, "reject_pending_operator_action", fail)
+    response = client.post("/api/operator/actions/action-1/reject", json={"business_id": "biz-1"})
+    body = response.get_json()
+
+    assert response.status_code == 500
+    assert body["error_code"] == "operator_action_rejection_failed"
+    assert body["error_id"]
+    assert "password" not in body["error"].lower()
+
+
 def test_operator_refresh_recovery_plan_endpoint(monkeypatch) -> None:
     client = _client(monkeypatch)
 

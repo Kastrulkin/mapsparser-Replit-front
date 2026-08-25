@@ -1,0 +1,8 @@
+{
+  "command": ["venv/bin/pytest", "-q", "tests/test_agent_blueprint_capabilities.py", "-k", "operator_finance_apply"],
+  "exit_code": 1,
+  "timed_out": false,
+  "duration_ms": 1000,
+  "stdout": "FAILED tests/test_agent_blueprint_capabilities.py::test_operator_finance_apply_creates_one_scoped_transaction_idempotently - KeyError: 'finance.transaction.apply_operator'\n1 failed, 49 deselected in 0.45s",
+  "stderr": ""
+}

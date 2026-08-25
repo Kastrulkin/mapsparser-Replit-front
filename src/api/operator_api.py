@@ -5,6 +5,7 @@ import sys
 import base64
 import hashlib
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -67,13 +68,19 @@ from services.operator_services_optimization import (
     optimize_services_from_operator,
 )
 from services.operator_social_post_generation import classify_social_post_generate_intent, generate_social_post_draft_from_operator
-from services.operator_core import confirm_pending_operator_action, operator_capability_catalog, route_operator_message
+from services.operator_core import (
+    confirm_pending_operator_action,
+    operator_capability_catalog,
+    reject_pending_operator_action,
+    route_operator_message,
+)
 from services.operator_conversations import (
     append_operator_message,
     conversation_pending_context,
     create_pending_operator_action,
     find_latest_operator_conversation,
     get_or_create_operator_conversation,
+    list_pending_operator_actions,
     list_operator_messages,
     set_operator_pending_context,
 )
@@ -90,6 +97,7 @@ from subscription_manager import get_allowed_content_plan_horizons
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
+logger = logging.getLogger(__name__)
 
 
 MOBILE_PAID_NAVIGATION_KEYS = {"operator", "progress", "content", "finance", "partnerships", "agents"}
@@ -758,7 +766,58 @@ def operator_inbox():
         return jsonify({"success": True, "inbox": inbox})
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        error_id = str(uuid.uuid4())
+        logger.exception("Operator action confirmation failed error_id=%s action_id=%s", error_id, action_id)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось подтвердить действие. Повторите позже или сообщите код ошибки поддержке.",
+            "error_code": "operator_action_confirmation_failed",
+            "error_id": error_id,
+        }), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/actions/<action_id>/reject", methods=["POST"])
+def reject_operator_action_request(action_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result, idempotent = reject_pending_operator_action(
+            cursor,
+            action_id=action_id,
+            business_id=business_id,
+            user_id=user_id,
+        )
+        if "action_not_found" in list(result.get("blocked_reasons") or []):
+            return jsonify({"success": False, "error": "Действие не найдено"}), 404
+        db.conn.commit()
+        return jsonify({
+            "success": str(result.get("status") or "") == "rejected",
+            "idempotent": idempotent,
+            "operator_result": result,
+        })
+    except Exception:
+        db.conn.rollback()
+        error_id = str(uuid.uuid4())
+        logger.exception("Operator action rejection failed error_id=%s action_id=%s", error_id, action_id)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось отклонить действие.",
+            "error_code": "operator_action_rejection_failed",
+            "error_id": error_id,
+        }), 500
     finally:
         db.close()
 
@@ -1107,6 +1166,19 @@ def operator_chat():
             role="user",
             content=message,
         )
+        conversation_history = list_operator_messages(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            limit=12,
+        )
+        pending_approvals = list_pending_operator_actions(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            user_id=user_id,
+            limit=20,
+        )
         result, next_pending_context = route_operator_message(
             cursor,
             business_id=business_id,
@@ -1117,6 +1189,14 @@ def operator_chat():
             explicit_url=payload.get("url"),
             pending_context=conversation_pending_context(conversation),
             action_payload=payload,
+            conversation_id=conversation_id,
+            conversation_history=conversation_history,
+            actor_context={
+                "role": str(user_data.get("role") or "business_user"),
+                "is_superadmin": bool(user_data.get("is_superadmin")),
+                "permissions": ["business.access"],
+            },
+            pending_approvals=pending_approvals,
             refresh_handler=refresh_reviews_from_operator,
             ai_router_handler=classify_operator_intent_with_ai,
             manual_review_handler=process_operator_chat_message,
@@ -1165,12 +1245,36 @@ def operator_chat():
         optimization_job = result.get("optimization_job") if isinstance(result.get("optimization_job"), dict) else {}
         drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
         finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
+        tool_plan_finalization = (
+            result.get("tool_plan_finalization_result")
+            if isinstance(result.get("tool_plan_finalization_result"), dict)
+            else {}
+        )
         ai_router = result.get("ai_router") if isinstance(result.get("ai_router"), dict) else {}
         ai_router_finalization = (
             ai_router.get("finalization_result")
             if isinstance(ai_router.get("finalization_result"), dict)
             else {}
         )
+        tool_trace = result.get("tool_trace") if isinstance(result.get("tool_trace"), list) else []
+        for tool_step in tool_trace:
+            if not isinstance(tool_step, dict):
+                continue
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_tool_executed",
+                action_key=str(tool_step.get("tool") or "operator_tool"),
+                status=str(tool_step.get("status") or "completed"),
+                input_summary={"step": tool_step.get("step")},
+                output_summary={"risk_class": tool_step.get("risk_class")},
+                metadata={
+                    "conversation_id": conversation_id,
+                    "tool": tool_step.get("tool"),
+                    "external_writes_performed": bool(result.get("external_writes_performed")),
+                },
+            )
         if ai_router_finalization:
             record_operator_event(
                 cursor,
@@ -1188,6 +1292,26 @@ def operator_chat():
                 metadata={
                     "credit_charged": bool(ai_router_finalization.get("side_effects", {}).get("credit_charged")),
                     "paid_actions_performed": bool(ai_router_finalization.get("side_effects", {}).get("credit_charged")),
+                    "external_writes_performed": False,
+                },
+            )
+        if tool_plan_finalization:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_usage_charged",
+                action_key="operator_tool_plan",
+                status=str(tool_plan_finalization.get("status") or "completed"),
+                input_summary={"action_key": "operator_tool_plan"},
+                output_summary={
+                    "charge_credits": tool_plan_finalization.get("charge_credits"),
+                    "release_credits": tool_plan_finalization.get("release_credits"),
+                    "planner_steps": result.get("planner_steps"),
+                },
+                metadata={
+                    "credit_charged": bool(tool_plan_finalization.get("side_effects", {}).get("credit_charged")),
+                    "paid_actions_performed": bool(tool_plan_finalization.get("side_effects", {}).get("credit_charged")),
                     "external_writes_performed": False,
                 },
             )
@@ -1282,9 +1406,9 @@ def operator_chat():
                 business_id=business_id,
                 user_id=user_id,
                 event_type="operator_usage_charged",
-                action_key=str(result.get("intent") or "review_replies_generate"),
+                action_key=str(result.get("executed_intent") or result.get("intent") or "review_replies_generate"),
                 status=str(finalization.get("status") or status),
-                input_summary={"action_key": str(result.get("intent") or "review_replies_generate")},
+                input_summary={"action_key": str(result.get("executed_intent") or result.get("intent") or "review_replies_generate")},
                 output_summary={
                     "charge_credits": finalization.get("charge_credits"),
                     "release_credits": finalization.get("release_credits"),
@@ -1303,7 +1427,14 @@ def operator_chat():
         })
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        error_id = str(uuid.uuid4())
+        logger.exception("Operator chat failed error_id=%s business_id=%s", error_id, business_id)
+        return jsonify({
+            "success": False,
+            "error": "Оператор временно недоступен. Повторите запрос или сообщите код ошибки поддержке.",
+            "error_code": "operator_chat_failed",
+            "error_id": error_id,
+        }), 500
     finally:
         db.close()
 

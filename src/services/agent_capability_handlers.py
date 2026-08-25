@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict
 
 from database_manager import DatabaseManager
@@ -103,6 +104,11 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "normalizes finance transaction proposals; LocalOS write requires a separate approval/apply flow",
         "approval_required": True,
     },
+    "finance.transaction.apply_operator": {
+        "risk": "localos_finance_write",
+        "side_effects": "creates exactly one approved LocalOS finance transaction for the selected tenant",
+        "approval_required": True,
+    },
     "partnership.audit_card": {
         "risk": "localos_partnership_read",
         "side_effects": "none; returns a structured partner-card audit snapshot",
@@ -151,6 +157,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "sheets.append_row_request": ("production_external_write", True),
     "google_sheets.update_cells": ("production_external_write", True),
     "finance.transaction.create": ("request_only", False),
+    "finance.transaction.apply_operator": ("production_internal_write", True),
     "billing.reserve": ("manual_only", False),
     "billing.settle": ("manual_only", False),
 }
@@ -230,6 +237,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "google_sheets.update_cells": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
+        "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
         "partnership.audit_card": _handle_partnership_audit_card,
         "partnership.match_services": _handle_partnership_match_services,
         "partnership.draft_offer": _handle_partnership_draft_offer,
@@ -1474,6 +1482,106 @@ def _handle_finance_transaction_create(envelope: Dict[str, Any], user_data: Dict
         provider_write_performed=False,
         manual_apply_required=True,
         next_action="approve_finance_import",
+    )
+
+
+def _handle_finance_transaction_apply_operator(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    action_id = str(envelope.get("action_id") or "").strip()
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    if not tenant_id or not action_id or len(rows) != 1 or not isinstance(rows[0], dict):
+        return _result(
+            "validation_error",
+            error_code="ONE_SCOPED_FINANCE_ROW_REQUIRED",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+
+    row = rows[0]
+    try:
+        amount = Decimal(str(row.get("amount") or "0"))
+    except (InvalidOperation, ValueError):
+        amount = Decimal("0")
+    transaction_type = str(row.get("transaction_type") or "").strip().lower()
+    transaction_date = str(row.get("transaction_date") or date.today().isoformat()).strip()
+    try:
+        date.fromisoformat(transaction_date)
+    except Exception:
+        return _result(
+            "validation_error",
+            error_code="FINANCE_DATE_INVALID",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+    if not amount.is_finite() or amount <= 0 or transaction_type not in {"income", "expense"}:
+        return _result(
+            "validation_error",
+            error_code="FINANCE_AMOUNT_OR_TYPE_INVALID",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+
+    transaction_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"localos:operator-finance:{action_id}"))
+    category = str(row.get("category") or "").strip()
+    description = str(row.get("description") or "").strip()
+    user_id = _actor_user_id(envelope, user_data)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        columns = _table_columns(cursor, "financialtransactions")
+        required_columns = {"id", "business_id", "amount"}
+        if not required_columns.issubset(columns):
+            raise RuntimeError("financialtransactions schema is unavailable")
+
+        fields = ["id", "business_id", "amount"]
+        values = [transaction_id, tenant_id, amount]
+        optional_values = [
+            ("user_id", user_id),
+            ("transaction_date", transaction_date),
+            ("transaction_type", transaction_type),
+            ("category", category),
+            ("description", description),
+            ("notes", description),
+        ]
+        for field, value in optional_values:
+            if field in columns:
+                fields.append(field)
+                values.append(value)
+        placeholders = ", ".join(["%s"] * len(fields))
+        cursor.execute(
+            f"INSERT INTO financialtransactions ({', '.join(fields)}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING RETURNING id",
+            tuple(values),
+        )
+        inserted = cursor.fetchone()
+        cursor.execute(
+            "SELECT id, business_id, amount, transaction_type FROM financialtransactions WHERE id = %s AND business_id = %s LIMIT 1",
+            (transaction_id, tenant_id),
+        )
+        stored = _row_to_dict(cursor, cursor.fetchone())
+        if not stored:
+            raise RuntimeError("approved finance transaction was not persisted in tenant scope")
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+    return _result(
+        "finance_transaction_created",
+        transaction={
+            "id": str(stored.get("id") or transaction_id),
+            "business_id": str(stored.get("business_id") or tenant_id),
+            "amount": stored.get("amount", amount),
+            "transaction_type": str(stored.get("transaction_type") or transaction_type),
+            "transaction_date": transaction_date,
+            "category": category,
+            "description": description,
+        },
+        created=bool(inserted),
+        localos_write_performed=True,
+        provider_write_performed=False,
     )
 
 

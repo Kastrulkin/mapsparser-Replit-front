@@ -39,6 +39,16 @@ def test_control_menu_is_mini_app_first_and_has_no_desktop_links() -> None:
     assert not any(button.url for button in buttons)
 
 
+def test_operator_approval_markup_offers_confirm_and_reject() -> None:
+    markup = telegram_bot._build_operator_result_markup(
+        {"approval": {"status": "pending", "action_id": "action-1"}}
+    )
+    callbacks = [button.callback_data for row in markup.inline_keyboard for button in row if button.callback_data]
+
+    assert "operator_confirm:action-1" in callbacks
+    assert "operator_reject:action-1" in callbacks
+
+
 def test_subscription_upgrade_prompt_for_trial_mentions_starter() -> None:
     text = telegram_dashboard._subscription_upgrade_prompt(
         {"tier": "trial", "status": "inactive"},
@@ -288,6 +298,105 @@ def test_telegram_operator_ai_fallback_routes_card_refresh(monkeypatch) -> None:
     assert result["ai_router"]["intent"] == "card_refresh"
     assert result["ai_router"]["charged_credits"] == 1
     assert calls == {"process": 1, "ai": 1, "refresh": 1}
+
+
+def test_telegram_operator_passes_same_conversation_context_to_tool_loop(monkeypatch) -> None:
+    captured = {}
+    cursor = type("PersistentCursor", (), {"execute": lambda self, *_args, **_kwargs: None, "fetchone": lambda self: None})()
+
+    monkeypatch.setattr(
+        telegram_dashboard,
+        "get_or_create_operator_conversation",
+        lambda *_args, **_kwargs: {"id": "conversation-1", "pending_context": {}},
+    )
+    monkeypatch.setattr(telegram_dashboard, "append_operator_message", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(telegram_dashboard, "set_operator_pending_context", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        telegram_dashboard,
+        "list_operator_messages",
+        lambda *_args, **_kwargs: [
+            {"role": "user", "content": "Работаем с этой точкой"},
+            {"role": "operator", "content": "Контекст запомнил."},
+        ],
+    )
+    monkeypatch.setattr(
+        telegram_dashboard,
+        "list_pending_operator_actions",
+        lambda *_args, **_kwargs: [{"id": "action-1", "capability": "services.apply", "status": "pending"}],
+    )
+
+    def route(_cursor, **kwargs):
+        captured.update(kwargs)
+        return {"status": "completed", "chat_response": "Готово."}, {}
+
+    monkeypatch.setattr(telegram_dashboard, "route_operator_message", route)
+
+    result = telegram_dashboard.route_operator_chat_for_telegram(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        message="Продолжай",
+    )
+
+    assert result["status"] == "completed"
+    assert captured["conversation_id"] == "conversation-1"
+    assert captured["conversation_history"][1]["role"] == "operator"
+    assert captured["pending_approvals"][0]["id"] == "action-1"
+    assert captured["actor_context"]["role"] == "business_owner"
+    assert captured["business_id"] == "biz-1"
+
+
+def test_telegram_operator_audits_tool_trace_and_planner_billing(monkeypatch) -> None:
+    events = []
+
+    class Connection:
+        def cursor(self):
+            return object()
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(telegram_dashboard, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(
+        telegram_dashboard,
+        "route_operator_chat_for_telegram",
+        lambda *_args, **_kwargs: {
+            "status": "completed",
+            "conversation_id": "conversation-1",
+            "tool_trace": [
+                {"step": 1, "tool": "maps.get_status", "status": "completed", "risk_class": "read_only"}
+            ],
+            "tool_plan_finalization_result": {
+                "status": "charged",
+                "charge_credits": 1,
+                "release_credits": 0,
+                "side_effects": {"credit_charged": True},
+            },
+            "planner_steps": 2,
+            "external_writes_performed": False,
+        },
+    )
+    monkeypatch.setattr(
+        telegram_dashboard,
+        "record_operator_event",
+        lambda _cursor, **kwargs: events.append(kwargs),
+    )
+
+    result = telegram_dashboard.build_operator_chat_result(
+        {"business_id": "biz-1", "user_id": "user-1", "telegram_id": "tg-1"},
+        "Покажи статус карточки",
+    )
+
+    assert result["status"] == "completed"
+    assert [event["event_type"] for event in events] == ["operator_tool_executed", "operator_usage_charged"]
+    assert events[0]["action_key"] == "maps.get_status"
+    assert events[1]["action_key"] == "operator_tool_plan"
 
 
 def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
