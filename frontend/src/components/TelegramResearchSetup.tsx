@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ChevronRight, Loader2, MessageSquareText, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 
@@ -47,6 +47,16 @@ type TelegramDialog = {
   selected?: boolean;
 };
 
+type CatalogSource = {
+  id: string;
+  title?: string;
+  canonical_url?: string;
+  telegram_username?: string;
+  categories?: string[];
+  documents_count?: number;
+  subscribed?: boolean;
+};
+
 const syncLabel = (source: ResearchSource) => {
   if (source.sync_status === 'syncing') return 'Загружаем историю';
   if (source.sync_status === 'queued') return 'Скоро начнём загрузку';
@@ -79,6 +89,11 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [query, setQuery] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogSources, setCatalogSources] = useState<CatalogSource[]>([]);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const catalogRequestId = useRef(0);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -280,6 +295,51 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
     }
   };
 
+  const loadCatalog = useCallback(async (searchValue: string, offset = 0) => {
+    if (!businessId || demoMode) return;
+    const requestId = catalogRequestId.current + 1;
+    catalogRequestId.current = requestId;
+    setCatalogLoading(true);
+    try {
+      const params = new URLSearchParams({ q: searchValue.trim(), limit: '40', offset: String(offset) });
+      const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/community-sources/catalog?${params.toString()}`);
+      if (catalogRequestId.current !== requestId) return;
+      const items = Array.isArray(response.items) ? response.items : [];
+      setCatalogSources((current) => offset > 0 ? [...current, ...items] : items);
+      setCatalogTotal(Number(response.total || 0));
+    } catch (requestError) {
+      if (catalogRequestId.current !== requestId) return;
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть каталог каналов');
+    } finally {
+      if (catalogRequestId.current === requestId) setCatalogLoading(false);
+    }
+  }, [businessId, demoMode]);
+
+  useEffect(() => {
+    if (mode === 'connection' || scopeType !== 'business' || !status?.account?.authorized || !status.account.radar_enabled) return;
+    const timer = window.setTimeout(() => void loadCatalog(catalogQuery), 250);
+    return () => window.clearTimeout(timer);
+  }, [catalogQuery, loadCatalog, mode, scopeType, status?.account?.authorized, status?.account?.radar_enabled]);
+
+  const subscribeCatalogSource = async (source: CatalogSource) => {
+    if (!businessId || source.subscribed) return;
+    setBusy(`catalog:${source.id}`);
+    setError('');
+    setMessage('');
+    try {
+      const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/community-sources/${encodeURIComponent(source.id)}/subscribe`, { method: 'POST' });
+      setCatalogSources((current) => current.map((item) => item.id === source.id ? { ...item, subscribed: true } : item));
+      setMessage(typeof response?.message === 'string'
+        ? response.message
+        : 'Канал добавлен. Его материалы будут учитываться в темах и публикациях этого бизнеса.');
+      await loadStatus();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось добавить канал из каталога');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const visibleDialogs = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
     if (!cleanQuery) return dialogs;
@@ -466,6 +526,53 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
                   {busy === 'source-url' ? 'Проверяем…' : 'Добавить'}
                 </Button>
               </div>
+            </div>
+
+            <div className="mt-5 border-t border-slate-200 pt-5">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">Каталог открытых каналов LocalOS</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">Выберите канал, который уже собирает LocalOS. История используется повторно, а канал добавляется только этому бизнесу.</p>
+                </div>
+                <span className="shrink-0 text-xs tabular-nums text-slate-500">Найдено: {catalogTotal}</span>
+              </div>
+              <div className="relative mt-3">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Название или тематика канала" className="min-h-11 bg-white pl-9" />
+              </div>
+              <div className="mt-3 max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-2xl bg-white ring-1 ring-slate-200">
+                {catalogLoading && catalogSources.length === 0 ? (
+                  <div className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Загружаем каталог</div>
+                ) : catalogSources.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-sm text-slate-500">В каталоге пока нет подходящих каналов.</div>
+                ) : catalogSources.map((source) => (
+                  <div key={source.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-slate-900">{source.title || source.telegram_username || 'Telegram-канал'}</span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">
+                        {source.telegram_username ? `@${source.telegram_username}` : source.canonical_url || 'Публичный источник'}
+                        {source.documents_count ? ` · ${source.documents_count} публикаций` : ''}
+                      </span>
+                      {source.categories?.length ? <span className="mt-1 block truncate text-xs text-slate-500">{source.categories.slice(0, 3).join(' · ')}</span> : null}
+                    </span>
+                    <Button
+                      type="button"
+                      variant={source.subscribed ? 'outline' : 'default'}
+                      onClick={() => void subscribeCatalogSource(source)}
+                      disabled={source.subscribed || busy === `catalog:${source.id}`}
+                      className={cn('min-h-10 shrink-0 px-3 transition-transform active:scale-[0.96]', !source.subscribed && 'bg-slate-950 text-white hover:bg-slate-800')}
+                    >
+                      {busy === `catalog:${source.id}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : source.subscribed ? <Check className="mr-2 h-4 w-4 text-emerald-600" /> : <Plus className="mr-2 h-4 w-4" />}
+                      {source.subscribed ? 'Добавлен' : 'Добавить'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {catalogSources.length < catalogTotal ? (
+                <Button type="button" variant="ghost" onClick={() => void loadCatalog(catalogQuery, catalogSources.length)} disabled={catalogLoading} className="mt-2 min-h-10 w-full text-slate-600">
+                  {catalogLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Показать ещё
+                </Button>
+              ) : null}
             </div>
 
             <p className="mt-5 text-sm font-semibold text-slate-950">Или выберите из чатов подключённого аккаунта</p>

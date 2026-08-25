@@ -504,6 +504,145 @@ def community_sources(business_id: str):
         db.close()
 
 
+@telegram_research_bp.get("/api/business/<business_id>/community-sources/catalog")
+def community_source_catalog(business_id: str):
+    db, cursor, _user_data, error = _require_business(business_id)
+    if error:
+        return error
+    query = str(request.args.get("q") or "").strip()[:120]
+    try:
+        limit = min(max(int(request.args.get("limit") or 40), 1), 100)
+        offset = max(int(request.args.get("offset") or 0), 0)
+    except (TypeError, ValueError):
+        db.close()
+        return jsonify({"success": False, "error": "Не удалось открыть каталог источников"}), 400
+    search_pattern = f"%{query}%"
+    try:
+        cursor.execute(
+            """
+            SELECT source.id, source.title, source.canonical_url, source.source_role,
+                   source.last_collected_at, source.sync_status,
+                   COALESCE(source.metadata_json->'categories', '[]'::jsonb) AS categories,
+                   COALESCE(source.metadata_json->>'telegram_username', '') AS telegram_username,
+                   (SELECT COUNT(*) FROM knowledge_documents document
+                    WHERE document.source_id = source.id AND document.invalidated_at IS NULL) AS documents_count,
+                   EXISTS (
+                       SELECT 1 FROM knowledge_source_subscriptions subscription
+                       WHERE subscription.business_id = %s
+                         AND subscription.source_id = source.id
+                         AND subscription.is_active = TRUE
+                   ) AS subscribed
+            FROM knowledge_sources source
+            WHERE source.source_type = 'telegram'
+              AND source.visibility = 'public'
+              AND source.sensitivity_class = 'public'
+              AND source.status = 'active'
+              AND source.business_id IS NULL
+              AND source.canonical_url LIKE 'https://t.me/%%'
+              AND (
+                    %s = ''
+                    OR source.title ILIKE %s
+                    OR source.canonical_url ILIKE %s
+                    OR source.metadata_json::text ILIKE %s
+                  )
+            ORDER BY subscribed DESC, documents_count DESC, source.last_collected_at DESC NULLS LAST, source.title
+            LIMIT %s OFFSET %s
+            """,
+            (business_id, query, search_pattern, search_pattern, search_pattern, limit, offset),
+        )
+        columns = [item[0] for item in (cursor.description or [])]
+        items = [dict(row) if hasattr(row, "keys") else dict(zip(columns, row)) for row in (cursor.fetchall() or [])]
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM knowledge_sources source
+            WHERE source.source_type = 'telegram'
+              AND source.visibility = 'public'
+              AND source.sensitivity_class = 'public'
+              AND source.status = 'active'
+              AND source.business_id IS NULL
+              AND source.canonical_url LIKE 'https://t.me/%%'
+              AND (
+                    %s = ''
+                    OR source.title ILIKE %s
+                    OR source.canonical_url ILIKE %s
+                    OR source.metadata_json::text ILIKE %s
+                  )
+            """,
+            (query, search_pattern, search_pattern, search_pattern),
+        )
+        count_row = cursor.fetchone()
+        total = int((count_row.get("count") if hasattr(count_row, "get") else count_row[0]) or 0) if count_row else 0
+        return jsonify({
+            "success": True,
+            "items": items,
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        })
+    finally:
+        db.close()
+
+
+@telegram_research_bp.post("/api/business/<business_id>/community-sources/<source_id>/subscribe")
+def subscribe_community_catalog_source(business_id: str, source_id: str):
+    db, cursor, user_data, error = _require_business(business_id)
+    if error:
+        return error
+    try:
+        cursor.execute(
+            """
+            SELECT id, title, canonical_url
+            FROM knowledge_sources
+            WHERE id = %s
+              AND source_type = 'telegram'
+              AND visibility = 'public'
+              AND sensitivity_class = 'public'
+              AND status = 'active'
+              AND business_id IS NULL
+              AND canonical_url LIKE 'https://t.me/%%'
+            """,
+            (source_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Публичный канал не найден"}), 404
+        source = dict(row) if hasattr(row, "keys") else {
+            "id": row[0],
+            "title": row[1],
+            "canonical_url": row[2],
+        }
+        context = _business_knowledge_context(cursor, business_id)
+        _subscribe_public_source(
+            cursor,
+            business_id=business_id,
+            source_id=str(source["id"]),
+            industry_key=context["industry_key"],
+            interval_hours=24,
+            submitted_by_user_id=_user_id(user_data),
+        )
+        cursor.execute(
+            """
+            UPDATE knowledge_sources
+            SET next_sync_at = LEAST(COALESCE(next_sync_at, NOW()), NOW()), updated_at = NOW()
+            WHERE id = %s
+            """,
+            (source["id"],),
+        )
+        db.conn.commit()
+        return jsonify({
+            "success": True,
+            "source": {**source, "subscribed": True},
+            "message": "Канал добавлен. Его материалы будут учитываться в темах и публикациях этого бизнеса.",
+        })
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": "Не удалось добавить канал из каталога"}), 400
+    finally:
+        db.close()
+
+
 @telegram_research_bp.post("/api/business/<business_id>/community-sources")
 def add_community_source(business_id: str):
     db, cursor, user_data, error = _require_business(business_id)

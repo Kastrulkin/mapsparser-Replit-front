@@ -437,6 +437,89 @@ def test_dialog_picker_does_not_disable_sources_added_by_url():
     assert "managed_source.knowledge_source_id = subscription.source_id" in route
 
 
+def test_business_catalog_only_lists_shared_public_telegram_sources():
+    source = Path("src/api/telegram_research_api.py").read_text(encoding="utf-8")
+    route = source.split("def community_source_catalog", 1)[1].split("def subscribe_community_catalog_source", 1)[0]
+
+    assert "source.source_type = 'telegram'" in route
+    assert "source.visibility = 'public'" in route
+    assert "source.sensitivity_class = 'public'" in route
+    assert "source.business_id IS NULL" in route
+    assert "source.canonical_url LIKE 'https://t.me/%%'" in route
+    assert "subscription.business_id = %s" in route
+
+
+def test_catalog_source_subscription_reuses_existing_public_source(monkeypatch):
+    from flask import Flask
+
+    from api import telegram_research_api
+
+    calls = []
+
+    class FakeConnection:
+        def commit(self):
+            calls.append("commit")
+
+        def rollback(self):
+            calls.append("rollback")
+
+    class FakeCursor:
+        def execute(self, query, params=None):
+            calls.append((" ".join(str(query).split()), params))
+
+        def fetchone(self):
+            return {
+                "id": "source-public",
+                "title": "Beauty Owners",
+                "canonical_url": "https://t.me/beauty_owners",
+            }
+
+    class FakeDatabase:
+        def __init__(self):
+            self.conn = FakeConnection()
+
+        def close(self):
+            calls.append("close")
+
+    database = FakeDatabase()
+    cursor = FakeCursor()
+    subscriptions = []
+    monkeypatch.setattr(
+        telegram_research_api,
+        "_require_business",
+        lambda _business_id: (database, cursor, {"user_id": "user-a"}, None),
+    )
+    monkeypatch.setattr(
+        telegram_research_api,
+        "_business_knowledge_context",
+        lambda _cursor, _business_id: {"industry_key": "beauty", "audience": "customers"},
+    )
+    monkeypatch.setattr(
+        telegram_research_api,
+        "_subscribe_public_source",
+        lambda _cursor, **payload: subscriptions.append(payload) or True,
+    )
+
+    app = Flask(__name__)
+    app.register_blueprint(telegram_research_api.telegram_research_bp)
+    response = app.test_client().post("/api/business/business-a/community-sources/source-public/subscribe")
+
+    assert response.status_code == 200
+    assert response.get_json()["source"]["subscribed"] is True
+    assert subscriptions[0]["business_id"] == "business-a"
+    assert subscriptions[0]["source_id"] == "source-public"
+    assert "commit" in calls
+
+
+def test_telegram_source_picker_exposes_shared_catalog():
+    component = Path("frontend/src/components/TelegramResearchSetup.tsx").read_text(encoding="utf-8")
+
+    assert "Каталог открытых каналов LocalOS" in component
+    assert "/community-sources/catalog" in component
+    assert "/subscribe" in component
+    assert "Добавлен" in component
+
+
 def test_personal_public_source_subscription_queues_admin_notification_and_both_uses():
     from api.telegram_research_api import _subscribe_public_source
 
