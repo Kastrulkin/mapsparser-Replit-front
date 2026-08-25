@@ -75,6 +75,45 @@ def test_paid_tool_loop_releases_reservation_when_provider_fails(monkeypatch):
     assert finalized[0]["actual_credits"] is None
 
 
+def test_paid_tool_loop_releases_reservation_for_deepseek_empty_response(monkeypatch):
+    monkeypatch.setattr(operator_tool_billing, "build_paid_action_preflight", lambda *_args, **_kwargs: {"status": "ready"})
+    monkeypatch.setattr(
+        operator_tool_billing,
+        "reserve_paid_action_credits",
+        lambda *_args, **_kwargs: {"status": "reserved", "reservation_id": "reservation-1"},
+    )
+    finalized = []
+
+    def finalize(*_args, **kwargs):
+        finalized.append(kwargs)
+        return {"status": "released", "charge_credits": 0, "release_credits": 1}
+
+    monkeypatch.setattr(operator_tool_billing, "finalize_reserved_action_credits", finalize)
+    monkeypatch.setattr(
+        operator_tool_billing,
+        "run_operator_tool_loop",
+        lambda **_kwargs: {
+            "status": "blocked",
+            "capability": "operator.help",
+            "chat_response": "Оператор не смог построить безопасный план действий.",
+            "blocked_reasons": ["DEEPSEEK_EMPTY_RESPONSE"],
+        },
+    )
+
+    result = operator_tool_billing.run_paid_operator_tool_loop(
+        object(),
+        business_id="business-1",
+        user_id="user-1",
+        message="Покажи мне сегодняшние посты из контент плана",
+        tools=[],
+    )
+
+    assert result["credit_charged"] is False
+    assert result["charged_credits"] == 0
+    assert finalized[0]["finalization_mode"] == "release"
+    assert finalized[0]["actual_credits"] is None
+
+
 def test_paid_tool_loop_releases_reservation_on_unexpected_failure(monkeypatch):
     monkeypatch.setattr(operator_tool_billing, "build_paid_action_preflight", lambda *_args, **_kwargs: {"status": "ready"})
     monkeypatch.setattr(

@@ -12,6 +12,36 @@ OPERATOR_TOOL_PLAN_ACTION_KEY = "operator_tool_plan"
 OPERATOR_TOOL_PLAN_CREDITS = 1
 
 
+def _is_technical_planner_failure(result: dict[str, Any]) -> bool:
+    if bool(result.get("planner_failed")):
+        return True
+    if str(result.get("status") or "").strip().lower() != "blocked":
+        return False
+    reasons = {
+        str(reason or "").strip().lower()
+        for reason in result.get("blocked_reasons") or []
+        if str(reason or "").strip()
+    }
+    exact_reasons = {
+        "operator_planner_failed",
+        "provider_timeout",
+        "provider_unavailable",
+        "provider_error",
+        "empty_response",
+        "invalid_response",
+        "invalid_json",
+        "schema_invalid",
+    }
+    technical_suffixes = (
+        "_empty_response",
+        "_request_failed",
+        "_invalid_response",
+        "_invalid_json",
+        "_schema_invalid",
+    )
+    return any(reason in exact_reasons or reason.endswith(technical_suffixes) for reason in reasons)
+
+
 def _idempotency_key(*, business_id: str, user_id: str, conversation_id: str, message: str) -> str:
     source = f"{business_id}|{user_id}|{conversation_id}|{str(message or '').strip().lower()}"
     return "operator-tool:" + hashlib.sha256(source.encode("utf-8")).hexdigest()
@@ -122,11 +152,7 @@ def run_paid_operator_tool_loop(
             "paid_actions_performed": False,
             "external_writes_performed": False,
         }
-    blocked_reasons = list(result.get("blocked_reasons") or [])
-    planner_failed = str(result.get("status") or "") == "blocked" and any(
-        reason in {"operator_planner_failed", "provider_timeout", "provider_unavailable", "invalid_response"}
-        for reason in blocked_reasons
-    )
+    planner_failed = _is_technical_planner_failure(result)
     finalization = finalize_reserved_action_credits(
         cursor,
         reservation_id=str(reservation.get("reservation_id") or ""),

@@ -317,3 +317,51 @@ def test_tool_loop_returns_structured_planner_failure():
 
     assert result["status"] == "blocked"
     assert result["blocked_reasons"] == ["provider_timeout"]
+
+
+def test_tool_loop_preserves_successful_read_when_final_planner_response_is_empty():
+    decisions = iter(
+        [
+            {"action": "tool_call", "tool": "content.list_items", "arguments": {}},
+            {
+                "action": "error",
+                "error_code": "DEEPSEEK_EMPTY_RESPONSE",
+                "message": "Оператор не смог построить безопасный план действий.",
+            },
+        ]
+    )
+
+    result = run_operator_tool_loop(
+        business_id="business-1",
+        user_id="user-1",
+        message="Покажи мне сегодняшние посты из контент плана",
+        tools=[
+            _tool(
+                "content.list_items",
+                lambda _args: {
+                    "status": "available",
+                    "module": "content",
+                    "items": [
+                        {
+                            "id": "post-1",
+                            "theme": "Сегодняшний пост",
+                            "scheduled_for": "2026-08-25",
+                            "status": "approved",
+                        }
+                    ],
+                    "as_of": "2026-08-25T20:00:00+00:00",
+                    "external_writes_performed": False,
+                },
+            )
+        ],
+        planner=lambda _state: next(decisions),
+    )
+
+    assert result["status"] != "blocked"
+    assert result["items"][0]["theme"] == "Сегодняшний пост"
+    assert "Сегодняшний пост" in result["chat_response"]
+    assert "approved" in result["chat_response"]
+    assert result["planner_failed"] is True
+    assert result["planner_error_code"] == "DEEPSEEK_EMPTY_RESPONSE"
+    assert result["tool_calls"] == 1
+    assert result["external_writes_performed"] is False

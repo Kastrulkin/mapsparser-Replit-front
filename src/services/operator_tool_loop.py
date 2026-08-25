@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from services.llm import LLMTaskRequest, run_llm_task
 
@@ -107,6 +109,30 @@ def plan_operator_step(state: dict[str, Any]) -> dict[str, Any]:
 def _tool_signature(tool_name: str, arguments: dict[str, Any]) -> str:
     payload = json.dumps(arguments, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(f"{tool_name}|{payload}".encode("utf-8")).hexdigest()
+
+
+def _fallback_read_response(tool_name: str, outcome: dict[str, Any], message: str) -> str:
+    items = [item for item in outcome.get("items") or [] if isinstance(item, dict)]
+    if tool_name != "content.list_items" or not items:
+        return "Данные получены, но Оператор не смог подготовить краткое резюме. Откройте результат, чтобы посмотреть детали."
+    selected = items
+    if "сегодня" in str(message or "").strip().lower():
+        try:
+            observed_at = datetime.fromisoformat(str(outcome.get("as_of") or "").replace("Z", "+00:00"))
+            today = observed_at.astimezone(ZoneInfo("Europe/Moscow")).date().isoformat()
+            today_items = [item for item in items if str(item.get("scheduled_for") or "")[:10] == today]
+            if today_items:
+                selected = today_items
+        except ValueError:
+            selected = items
+    lines = []
+    for item in selected[:10]:
+        title = str(item.get("title") or item.get("theme") or "Элемент контент-плана").strip()
+        scheduled_for = str(item.get("scheduled_for") or "").strip()
+        status = str(item.get("status") or "").strip()
+        details = " · ".join(value for value in (scheduled_for, status) if value)
+        lines.append(f"• {title}" + (f" — {details}" if details else ""))
+    return "Нашёл в контент-плане:\n" + "\n".join(lines)
 
 
 def _validate_tool_arguments(tool: dict[str, Any], arguments: dict[str, Any]) -> list[str]:
@@ -270,12 +296,45 @@ def run_operator_tool_loop(
                 "external_writes_performed": False,
             }
         if action == "error":
+            error_code = str(decision.get("error_code") or "operator_planner_failed")
+            last_tool_name = str(trace[-1].get("tool") or "") if trace else ""
+            last_tool = tool_map.get(last_tool_name) or {}
+            last_status = str(last_outcome.get("status") or "")
+            successful_read = bool(
+                last_outcome
+                and last_tool
+                and str(last_tool.get("risk_class") or "read_only")
+                in {"read_only", "privileged_read", "support_read"}
+                and last_status not in {"blocked", "denied", "error", "failed", "unavailable"}
+                and not bool(last_outcome.get("external_writes_performed"))
+            )
+            if successful_read:
+                return {
+                    **last_outcome,
+                    "status": last_status or "completed",
+                    "intent": "operator_tool_loop",
+                    "executed_intent": str(last_outcome.get("intent") or ""),
+                    "capability": str(last_tool.get("capability") or last_tool_name or "operator.help"),
+                    "chat_response": str(
+                        last_outcome.get("chat_response")
+                        or _fallback_read_response(last_tool_name, last_outcome, message)
+                    ),
+                    "planner_failed": True,
+                    "planner_error_code": error_code,
+                    "blocked_reasons": [error_code],
+                    "tool_trace": trace,
+                    "tool_calls": len(trace),
+                    "planner_steps": step_index + 1,
+                    "external_writes_performed": False,
+                }
             return {
                 "status": "blocked",
                 "intent": "operator_tool_loop",
                 "capability": "operator.help",
                 "chat_response": str(decision.get("message") or "Оператор временно не смог обработать запрос."),
-                "blocked_reasons": [str(decision.get("error_code") or "operator_planner_failed")],
+                "planner_failed": True,
+                "planner_error_code": error_code,
+                "blocked_reasons": [error_code],
                 "tool_trace": trace,
                 "tool_calls": len(trace),
                 "planner_steps": step_index + 1,
