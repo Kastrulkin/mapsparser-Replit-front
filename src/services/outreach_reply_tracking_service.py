@@ -30,8 +30,12 @@ def normalize_external_peer(channel: str, value: Any) -> str:
     if channel == "email":
         return raw.lower()
     if channel == "telegram":
-        if raw.startswith("https://t.me/"):
-            raw = raw.split("https://t.me/", 1)[1]
+        for prefix in ("https://t.me/", "http://t.me/", "https://telegram.me/", "http://telegram.me/"):
+            if raw.startswith(prefix):
+                raw = raw.split(prefix, 1)[1]
+                break
+        if raw.casefold().startswith(("m/", "c/", "s/", "joinchat/")):
+            return ""
         return raw.lstrip("@").lower()
     return raw
 

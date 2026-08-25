@@ -12,6 +12,7 @@ def test_external_peer_normalization_is_channel_specific():
     assert normalize_external_peer("email", " Lead@Example.COM ") == "lead@example.com"
     assert normalize_external_peer("telegram", "https://t.me/Partner_Name") == "partner_name"
     assert normalize_external_peer("telegram", "@Partner_Name") == "partner_name"
+    assert normalize_external_peer("telegram", "https://t.me/m/private-message") == ""
 
 
 def test_thread_sync_requires_flag_and_business_allowlist(monkeypatch):
