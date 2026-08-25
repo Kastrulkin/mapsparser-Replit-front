@@ -51,6 +51,7 @@ import {
 import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/i18n/LanguageContext';
 import type {
   DashboardContext,
   AgentBlueprint,
@@ -857,6 +858,21 @@ export const AgentBusinessHistoryPanel = ({
   );
 };
 
+const getSettingsHubCopy = (language: ReturnType<typeof useLanguage>['language']) => {
+  switch (language) {
+    case 'ru': return { title: 'Ещё настройки', description: 'Подключения, голос, версии и диагностика доступны здесь, но не мешают обычному просмотру результата.', connections: 'Подключения', voice: 'Голос и стиль', diagnostics: 'Диагностика' };
+    case 'en': return { title: 'More settings', description: 'Connections, voice, versions, and diagnostics are available here without distracting from the result.', connections: 'Connections', voice: 'Voice and style', diagnostics: 'Diagnostics' };
+    case 'fr': return { title: 'Plus de réglages', description: 'Les connexions, la voix, les versions et le diagnostic restent accessibles ici sans gêner la lecture du résultat.', connections: 'Connexions', voice: 'Voix et style', diagnostics: 'Diagnostic' };
+    case 'es': return { title: 'Más ajustes', description: 'Aquí puedes gestionar conexiones, voz, versiones y diagnóstico sin distraerte del resultado.', connections: 'Conexiones', voice: 'Voz y estilo', diagnostics: 'Diagnóstico' };
+    case 'de': return { title: 'Weitere Einstellungen', description: 'Verbindungen, Stimme, Versionen und Diagnose sind hier verfügbar, ohne vom Ergebnis abzulenken.', connections: 'Verbindungen', voice: 'Stimme und Stil', diagnostics: 'Diagnose' };
+    case 'el': return { title: 'Περισσότερες ρυθμίσεις', description: 'Οι συνδέσεις, η φωνή, οι εκδόσεις και τα διαγνωστικά είναι διαθέσιμα εδώ χωρίς να αποσπούν από το αποτέλεσμα.', connections: 'Συνδέσεις', voice: 'Φωνή και ύφος', diagnostics: 'Διαγνωστικά' };
+    case 'th': return { title: 'การตั้งค่าเพิ่มเติม', description: 'จัดการการเชื่อมต่อ น้ำเสียง เวอร์ชัน และการวินิจฉัยได้ที่นี่ โดยไม่รบกวนการดูผลลัพธ์', connections: 'การเชื่อมต่อ', voice: 'น้ำเสียงและสไตล์', diagnostics: 'การวินิจฉัย' };
+    case 'ar': return { title: 'إعدادات إضافية', description: 'يمكن إدارة الاتصالات والصوت والإصدارات والتشخيص هنا من دون تشتيت عرض النتيجة.', connections: 'الاتصالات', voice: 'الصوت والأسلوب', diagnostics: 'التشخيص' };
+    case 'ha': return { title: 'Ƙarin saituna', description: 'Ana samun haɗi, murya, sigogi da bincike a nan ba tare da dagula kallon sakamako ba.', connections: 'Haɗi', voice: 'Murya da salo', diagnostics: 'Bincike' };
+    case 'tr': return { title: 'Diğer ayarlar', description: 'Bağlantılar, ses, sürümler ve tanılama; sonuç görünümünü kalabalıklaştırmadan burada bulunur.', connections: 'Bağlantılar', voice: 'Ses ve stil', diagnostics: 'Tanılama' };
+  }
+};
+
 export const AgentSettingsHub = ({
   showAdvancedTools,
   onOpenConnections,
@@ -867,30 +883,34 @@ export const AgentSettingsHub = ({
   onOpenConnections: () => void;
   onOpenVoice: () => void;
   onOpenAdvanced: () => void;
-}) => (
+}) => {
+  const { language } = useLanguage();
+  const copy = getSettingsHubCopy(language);
+  return (
   <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-    <div className="text-sm font-semibold text-slate-950">Ещё настройки</div>
+    <div className="text-sm font-semibold text-slate-950">{copy.title}</div>
     <div className="mt-1 text-sm leading-6 text-slate-600">
-      Подключения, голос, версии и диагностика доступны здесь, но не мешают обычному просмотру результата.
+      {copy.description}
     </div>
     <div className="mt-4 grid gap-2 sm:grid-cols-3">
       <Button type="button" variant="outline" onClick={onOpenConnections}>
         <Database className="mr-2 h-4 w-4" />
-        Подключения
+        {copy.connections}
       </Button>
       <Button type="button" variant="outline" onClick={onOpenVoice}>
         <MessageSquareText className="mr-2 h-4 w-4" />
-        Голос и стиль
+        {copy.voice}
       </Button>
       {showAdvancedTools ? (
         <Button type="button" variant="outline" onClick={onOpenAdvanced}>
           <Wrench className="mr-2 h-4 w-4" />
-          Диагностика
+          {copy.diagnostics}
         </Button>
       ) : null}
     </div>
   </div>
-);
+  );
+};
 
 export const AgentScenarioPanel = ({
   blueprint,
