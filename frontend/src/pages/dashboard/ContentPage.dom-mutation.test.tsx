@@ -197,6 +197,36 @@ describe('Content page DOM ownership', () => {
     expect(screen.queryByText(/Не удалось:/)).not.toBeInTheDocument();
   });
 
+  it('translates an upstream photo size response into a readable message', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 413,
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      },
+    })));
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/photos?')) return { photos: [], coverage: null };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    const view = renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Медиатека' }));
+    const input = view.container.querySelector<HTMLInputElement>('input[type="file"]');
+
+    fireEvent.change(input!, {
+      target: { files: [new File(['large'], 'large.png', { type: 'image/png' })] },
+    });
+
+    expect(await screen.findByText(/Фото слишком большое./)).toHaveTextContent('Максимальный размер — 10 МБ.');
+    expect(screen.queryByText(/Unexpected token/)).not.toBeInTheDocument();
+  });
+
   it('keeps the content page usable when a browser translator ignores translate=no', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 

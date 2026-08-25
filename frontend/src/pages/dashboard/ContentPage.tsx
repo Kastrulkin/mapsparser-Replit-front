@@ -1266,9 +1266,17 @@ function ContentWorkspace() {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: formData,
     });
-    const data = await response.json();
+    if (response.status === 413) {
+      throw new Error('Фото слишком большое. Максимальный размер — 10 МБ.');
+    }
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error('Сервер не принял фото. Попробуйте загрузить его ещё раз.');
+    }
     if (!response.ok || !data.success) {
-      throw new Error(data.error || data.message || `Не удалось загрузить ${file.name}`);
+      throw new Error(String(data.error || data.message || `Не удалось загрузить ${file.name}`));
     }
     return data.photo && typeof data.photo === 'object' ? data.photo : {};
   };
