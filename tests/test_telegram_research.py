@@ -16,6 +16,27 @@ def test_travel_signal_uses_specific_audience_pain():
     assert signal["relevance_score"] >= 78
 
 
+def test_transport_sources_use_specific_travel_signals():
+    from services.telegram_research_service import classify_market_signal
+
+    signal = classify_market_signal(
+        "Рейс перенесли, турист уже едет в аэропорт, нужно срочно изменить трансфер.",
+        "transport",
+    )
+
+    assert signal is not None
+    assert signal["label"] == "Изменение рейса ломает организацию трансфера"
+
+
+def test_travel_insight_explains_what_will_be_added_to_the_plan():
+    from services.telegram_research_service import audience_content_angle
+
+    angle = audience_content_angle("Трансфер не подтверждён вовремя", "travel")
+
+    assert "Riderra" in angle
+    assert "подтверждает машину" in angle
+
+
 def test_generic_industry_still_detects_questions_and_pains():
     from services.telegram_research_service import classify_market_signal
 

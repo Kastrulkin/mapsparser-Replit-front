@@ -43,7 +43,15 @@ TRAVEL_SIGNAL_RULES: tuple[tuple[str, str, int, tuple[str, ...]], ...] = (
         "pain",
         "Изменение рейса ломает организацию трансфера",
         72,
-        ("перенесли рейс", "задержка рейса", "изменился рейс", "рейс отменили", "номер рейса"),
+        (
+            "перенесли рейс",
+            "рейс перенесли",
+            "задержка рейса",
+            "изменился рейс",
+            "рейс отменили",
+            "изменить трансфер",
+            "номер рейса",
+        ),
     ),
     (
         "pain",
@@ -98,6 +106,39 @@ GENERIC_SIGNAL_RULES: tuple[tuple[str, str, int, tuple[str, ...]], ...] = (
     ),
 )
 
+NON_ACTIONABLE_SIGNAL_LABELS = (
+    "Клиенты описывают повторяющуюся проблему",
+    "Аудитория задаёт практический вопрос",
+    "Аудитория сомневается перед решением",
+    "Участники делятся рабочей практикой",
+    "Рабочая ситуация турагента требует внимания",
+)
+
+TRAVEL_CONTENT_ANGLES = {
+    "Турагент рискует отношениями с клиентом": (
+        "Показать, как Riderra помогает турагенту сохранить доверие клиента, "
+        "когда поездка идёт не по плану."
+    ),
+    "Турагент уточняет условия трансфера": (
+        "Объяснить, какие данные нужны для расчёта и заказа трансфера и когда агент получает подтверждение."
+    ),
+    "Непонятно, кто отвечает за проблему в поездке": (
+        "Рассказать, кто остаётся на связи с турагентом и туристом, если во время поездки возникла проблема."
+    ),
+    "Изменение рейса ломает организацию трансфера": (
+        "Разобрать по шагам, что происходит с трансфером при переносе или отмене рейса."
+    ),
+    "Трансфер не подтверждён вовремя": (
+        "Объяснить, как Riderra подтверждает машину и что делать турагенту, если до поездки осталось мало времени."
+    ),
+    "Риск опоздания или неявки водителя": (
+        "Показать, как Riderra контролирует подачу машины и помогает, если водитель задерживается."
+    ),
+    "Нужен понятный порядок работы с групповыми поездками": (
+        "Показать порядок организации группового или MICE-трансфера: машины, встреча, координатор и изменения."
+    ),
+}
+
 
 def _row_dict(row: Any) -> dict[str, Any]:
     if isinstance(row, dict):
@@ -148,7 +189,7 @@ def classify_travel_signal(text: str) -> dict[str, Any] | None:
 
 
 def classify_market_signal(text: str, industry_key: str) -> dict[str, Any] | None:
-    if str(industry_key or "") == "travel":
+    if _canonical_industry_key(industry_key) == "travel":
         travel_signal = classify_travel_signal(text)
         if travel_signal:
             return travel_signal
@@ -170,6 +211,20 @@ def classify_market_signal(text: str, industry_key: str) -> dict[str, Any] | Non
         if best is None or score > int(best.get("relevance_score") or 0):
             best = candidate
     return best
+
+
+def _canonical_industry_key(value: Any) -> str:
+    industry_key = str(value or "local_business").strip().lower() or "local_business"
+    if industry_key in {"transport", "tourism", "transfers", "travel"}:
+        return "travel"
+    return industry_key
+
+
+def audience_content_angle(label: Any, industry: Any) -> str:
+    clean_label = str(label or "").strip()
+    if _canonical_industry_key(industry) == "travel" and clean_label in TRAVEL_CONTENT_ANGLES:
+        return TRAVEL_CONTENT_ANGLES[clean_label]
+    return f"Раскрыть тему «{clean_label}» на конкретном примере бизнеса."
 
 
 def raw_engagement(message: dict[str, Any]) -> int:
@@ -223,7 +278,7 @@ def _ingest_message(conn, source: dict[str, Any], message: dict[str, Any]) -> di
         except Exception:
             published_at = None
     source_metadata = _json_dict(source.get("metadata_json"))
-    industry_key = str(source_metadata.get("industry_key") or "local_business").strip() or "local_business"
+    industry_key = _canonical_industry_key(source_metadata.get("industry_key"))
     audience = str(source_metadata.get("audience") or "customers").strip() or "customers"
     signal = classify_market_signal(text, industry_key)
     relevance = int(signal.get("relevance_score") or 0) if signal else 0
@@ -768,13 +823,24 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
                     AND subscription.purposes_json @> '["community_pulse"]'::jsonb
               )
               AND c.concept_type IN ('pain', 'question', 'objection', 'practice', 'market_signal')
+              AND NOT (c.label = ANY(%s))
             GROUP BY c.id, bd.decision
             ORDER BY priority_score DESC, messages_count DESC, last_seen_at DESC NULLS LAST
             LIMIT %s
             """,
-            (business_id, business_id, business_id, business_id, max(1, min(int(limit or 50), 100))),
+            (
+                business_id,
+                business_id,
+                business_id,
+                business_id,
+                list(NON_ACTIONABLE_SIGNAL_LABELS),
+                max(1, min(int(limit or 50), 100)),
+            ),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        items = [dict(row) for row in cursor.fetchall()]
+        for item in items:
+            item["content_angle"] = audience_content_angle(item.get("label"), item.get("industry") or industry)
+        return items
     finally:
         cursor.close()
 
@@ -819,6 +885,7 @@ def decide_audience_insight(
         decision_row = dict(cursor.fetchone())
         updated = dict(concept)
         updated.update(decision_row)
+        updated["content_angle"] = audience_content_angle(updated.get("label"), updated.get("industry"))
         if decision == "use_in_plan":
             updated["content_plan_item"] = _add_insight_to_latest_plan(cursor, business_id, updated)
         elif decision == "save_as_rule":
@@ -832,9 +899,7 @@ def _add_insight_to_latest_plan(cursor: Any, business_id: str, concept: dict[str
     metadata = _json_dict(concept.get("metadata_json"))
     industry_key = str(concept.get("industry") or "local_business")
     audience = str(metadata.get("audience") or "customers")
-    audience_goal = "Ответить на реальный вопрос или проблему аудитории"
-    if industry_key == "travel":
-        audience_goal = "Ответить на реальную боль турагентов"
+    audience_goal = audience_content_angle(concept.get("label"), industry_key)
     cursor.execute(
         """
         SELECT id FROM contentplans
@@ -884,6 +949,7 @@ def _add_insight_to_latest_plan(cursor: Any, business_id: str, concept: dict[str
                 "knowledge_scope": f"business_or_public_{industry_key}",
                 "industry_key": industry_key,
                 "audience": audience,
+                "content_angle": audience_goal,
                 "topic_reason": "Тема основана на повторяющихся вопросах и обсуждениях аудитории",
             }),
         ),

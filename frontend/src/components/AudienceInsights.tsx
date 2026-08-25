@@ -21,6 +21,7 @@ type AudienceInsight = {
   last_seen_at?: string;
   has_private_sources?: boolean;
   decision?: string;
+  content_angle?: string;
 };
 
 export const AudienceInsights = ({ businessId }: { businessId: string }) => {
@@ -128,7 +129,10 @@ export const AudienceInsights = ({ businessId }: { businessId: string }) => {
               </div>
               <h3 className="mt-4 text-lg font-semibold leading-7 text-slate-950">{item.label}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">{fillContentTemplate(copy.repeated, { messages: item.messages_count || 0, sources: item.sources_count || 0 })}</p>
-              <p className="mt-2 text-xs text-slate-500">{fillContentTemplate(copy.whyImportant, { relevance: Math.round(item.relevance_score || 0), engagement: Math.round(item.engagement_score || 0) })}</p>
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{language === 'ru' ? 'Что добавить в план' : copy.audienceTopic}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{item.content_angle || item.label}</p>
+              </div>
               <div className="mt-auto flex flex-wrap gap-2 pt-5">
                 <Button type="button" onClick={() => void decide(item, 'use_in_plan')} disabled={savingId === item.id || item.decision === 'use_in_plan'} className="min-h-10 bg-slate-950 text-white hover:bg-slate-800">
                   <Lightbulb className="mr-2 h-4 w-4" /> {item.decision === 'use_in_plan' ? copy.addedToPlan : copy.useInPlan}
