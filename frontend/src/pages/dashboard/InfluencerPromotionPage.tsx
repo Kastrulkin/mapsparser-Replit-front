@@ -359,7 +359,8 @@ export const InfluencerPromotionPage = () => {
   const [contentStyle, setContentStyle] = useState('');
   const [platform, setPlatform] = useState('');
   const [resultLimit, setResultLimit] = useState('30');
-  const [audienceSizeBands, setAudienceSizeBands] = useState('nano, micro');
+  const [audienceMin, setAudienceMin] = useState('');
+  const [audienceMax, setAudienceMax] = useState('');
   const [contactRequired, setContactRequired] = useState(true);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [budget, setBudget] = useState('');
@@ -420,6 +421,12 @@ export const InfluencerPromotionPage = () => {
 
   const runSearch = async () => {
     if (!currentBusinessId) return;
+    const minimumAudience = audienceMin === '' ? undefined : Math.max(0, Number(audienceMin));
+    const maximumAudience = audienceMax === '' ? undefined : Math.max(0, Number(audienceMax));
+    if (minimumAudience !== undefined && maximumAudience !== undefined && minimumAudience > maximumAudience) {
+      setError('Минимальная аудитория не может быть больше максимальной.');
+      return;
+    }
     setBusy('search');
     setError('');
     setNotice('');
@@ -437,7 +444,8 @@ export const InfluencerPromotionPage = () => {
             content_styles: contentStyle ? [contentStyle] : [],
             platforms: platform ? [platform] : [],
             result_limit: Math.max(1, Math.min(100, Number(resultLimit) || 30)),
-            audience_size_bands: audienceSizeBands.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean),
+            audience_min: minimumAudience,
+            audience_max: maximumAudience,
             contact_required: contactRequired,
             budget: budget ? { maximum: Number(budget), currency: 'RUB' } : {},
             goal: 'Получить локальный охват и обращения',
@@ -917,11 +925,18 @@ export const InfluencerPromotionPage = () => {
                 <label className="text-sm font-medium text-slate-700 md:col-span-2">Услуга или повод<Input value={service} onChange={(event) => setService(event.target.value)} placeholder="Первая стрижка ребёнка" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Канал<select value={platform} onChange={(event) => setPlatform(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-slate-900"><option value="">Любой канал</option><option value="instagram">Instagram</option><option value="telegram">Telegram</option><option value="threads">Threads</option><option value="youtube">YouTube</option><option value="tiktok">TikTok</option><option value="vk">VK</option></select></label>
                 <label className="text-sm font-medium text-slate-700">Сколько кандидатов<Input value={resultLimit} onChange={(event) => setResultLimit(event.target.value)} type="number" min="1" max="100" inputMode="numeric" className="mt-2 min-h-11 rounded-xl bg-white tabular-nums" /></label>
+                <fieldset className="md:col-span-2">
+                  <legend className="text-sm font-medium text-slate-700">Аудитория канала, подписчиков</legend>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <Input aria-label="Минимум подписчиков" value={audienceMin} onChange={(event) => setAudienceMin(event.target.value)} type="number" min="0" inputMode="numeric" placeholder="От — например, 500" className="min-h-11 rounded-xl bg-white tabular-nums" />
+                    <Input aria-label="Максимум подписчиков" value={audienceMax} onChange={(event) => setAudienceMax(event.target.value)} type="number" min="0" inputMode="numeric" placeholder="До — например, 10 000" className="min-h-11 rounded-xl bg-white tabular-nums" />
+                  </div>
+                  <p className="mt-2 text-pretty text-xs leading-5 text-slate-500">Если задан диапазон, в результаты попадут только площадки с подтверждённым количеством подписчиков.</p>
+                </fieldset>
               </div>
               <button type="button" aria-expanded={advancedSearchOpen} onClick={() => setAdvancedSearchOpen((current) => !current)} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white hover:text-slate-950"><ChevronRight className={cn('h-4 w-4 transition-transform', advancedSearchOpen && 'rotate-90')} />Уточнить площадки и формат</button>
               {advancedSearchOpen ? <div className="mt-3 grid gap-4 rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">Подача<select value={contentStyle} onChange={(event) => setContentStyle(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-slate-900"><option value="">Любая</option><option value="reviews">Обзоры мест</option><option value="guides_and_selections">Гайды и подборки</option><option value="expert">Экспертная</option><option value="personal_lifestyle">Личный блог</option><option value="visual_ugc">Визуальный UGC</option></select></label>
-                <label className="text-sm font-medium text-slate-700">Размер аудитории<Input value={audienceSizeBands} onChange={(event) => setAudienceSizeBands(event.target.value)} placeholder="nano, micro" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Форматы<Input value={formats} onChange={(event) => setFormats(event.target.value)} placeholder="обзор, пост, визит" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Максимальный бюджет, ₽<Input value={budget} onChange={(event) => setBudget(event.target.value)} inputMode="decimal" placeholder="Можно оставить пустым" className="mt-2 min-h-11 rounded-xl bg-white tabular-nums" /></label>
                 <label className="flex min-h-11 items-center gap-3 self-end rounded-xl bg-slate-50 px-3 text-sm font-medium text-slate-700"><input type="checkbox" checked={contactRequired} onChange={(event) => setContactRequired(event.target.checked)} className="h-4 w-4 rounded border-slate-300 accent-slate-950" />Только с публичным способом связи</label>

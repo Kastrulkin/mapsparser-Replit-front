@@ -124,6 +124,8 @@ describe('InfluencerPromotionPage accessibility states', () => {
     await user.selectOptions(screen.getByLabelText('Канал'), 'instagram');
     await user.clear(screen.getByLabelText('Сколько кандидатов'));
     await user.type(screen.getByLabelText('Сколько кандидатов'), '30');
+    await user.type(screen.getByLabelText('Минимум подписчиков'), '500');
+    await user.type(screen.getByLabelText('Максимум подписчиков'), '10000');
     await user.click(screen.getByRole('button', { name: 'Запустить поиск' }));
 
     await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalled());
@@ -138,9 +140,24 @@ describe('InfluencerPromotionPage accessibility states', () => {
       content_styles: ['reviews'],
       platforms: ['instagram'],
       result_limit: 30,
-      audience_size_bands: ['nano', 'micro'],
+      audience_min: 500,
+      audience_max: 10000,
       contact_required: true,
     });
+  });
+
+  it('rejects an inverted audience range before starting discovery', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Подходящих авторов ещё не искали' });
+    vi.mocked(newAuth.makeRequest).mockClear();
+
+    await user.type(screen.getByLabelText('Минимум подписчиков'), '10000');
+    await user.type(screen.getByLabelText('Максимум подписчиков'), '500');
+    await user.click(screen.getByRole('button', { name: 'Запустить поиск' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Минимальная аудитория не может быть больше максимальной.');
+    expect(vi.mocked(newAuth.makeRequest)).not.toHaveBeenCalledWith('/promotion/influencers/searches', expect.anything());
   });
 
   it('prioritizes a reviewable first batch instead of rendering the whole catalog', async () => {

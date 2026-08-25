@@ -135,6 +135,55 @@ def _creator_result_limit(brief: dict[str, Any]) -> int:
     return max(1, min(requested, 100))
 
 
+def _audience_boundary(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        boundary = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("Количество подписчиков должно быть целым числом")
+    if boundary < 0:
+        raise ValueError("Количество подписчиков не может быть отрицательным")
+    return boundary
+
+
+def _normalize_audience_range(brief: dict[str, Any]) -> tuple[int | None, int | None]:
+    minimum = _audience_boundary(brief.get("audience_min"))
+    maximum = _audience_boundary(brief.get("audience_max"))
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ValueError("Минимальная аудитория не может быть больше максимальной")
+    return minimum, maximum
+
+
+def _candidate_audience_count(candidate: dict[str, Any]) -> int | None:
+    metrics = _json(candidate.get("public_metrics"), {})
+    for key in ("followers", "follower_count", "subscribers", "subscriber_count", "members", "audience_count"):
+        value = metrics.get(key)
+        if value is None or value == "":
+            continue
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            continue
+        if count >= 0:
+            return count
+    return None
+
+
+def _candidate_matches_audience_range(candidate: dict[str, Any], brief: dict[str, Any]) -> bool:
+    minimum, maximum = _normalize_audience_range(brief)
+    if minimum is None and maximum is None:
+        return True
+    count = _candidate_audience_count(candidate)
+    if count is None:
+        return False
+    if minimum is not None and count < minimum:
+        return False
+    if maximum is not None and count > maximum:
+        return False
+    return True
+
+
 def _taxonomy_names(value: Any) -> list[str]:
     return [
         str(item.get("name") or "").strip()
@@ -765,6 +814,9 @@ def enqueue_creator_search(cursor: Any, *, business_id: str, user_id: str, brief
     normalized_brief.setdefault("goal", "Получить локальный охват и обращения")
     normalized_brief["platforms"] = [item.lower() for item in _text_list(normalized_brief.get("platforms"))]
     normalized_brief["result_limit"] = _creator_result_limit(normalized_brief)
+    audience_minimum, audience_maximum = _normalize_audience_range(normalized_brief)
+    normalized_brief["audience_min"] = audience_minimum
+    normalized_brief["audience_max"] = audience_maximum
     normalized_brief["_business_id"] = business_id
     normalized_brief["_own_urls"] = [url for url in [_canonical_url(business.get("website"))] if url]
     job_id = str(uuid.uuid4())
@@ -826,6 +878,9 @@ def process_creator_search_job(cursor: Any, *, business_id: str, job_id: str) ->
         cursor.execute("SAVEPOINT creator_candidate")
         try:
             candidate = _creator_from_source(cursor, source)
+            if not _candidate_matches_audience_range(candidate, normalized_brief):
+                cursor.execute("RELEASE SAVEPOINT creator_candidate")
+                continue
             _store_creator_search_candidate(cursor, job_id=job_id, candidate=candidate, brief=normalized_brief)
             cursor.execute("RELEASE SAVEPOINT creator_candidate")
             processed += 1
@@ -834,6 +889,8 @@ def process_creator_search_job(cursor: Any, *, business_id: str, job_id: str) ->
             cursor.execute("RELEASE SAVEPOINT creator_candidate")
             errors += 1
     for candidate in catalog_candidates:
+        if not _candidate_matches_audience_range(candidate, normalized_brief):
+            continue
         cursor.execute("SAVEPOINT creator_catalog_candidate")
         try:
             _store_creator_search_candidate(cursor, job_id=job_id, candidate=candidate, brief=normalized_brief)

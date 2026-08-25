@@ -4,7 +4,9 @@ import pytest
 
 from services.creator_promotion_service import (
     SCORING_VERSION,
+    _candidate_matches_audience_range,
     _creator_result_limit,
+    _normalize_audience_range,
     add_metric_snapshot,
     build_tracking_plan,
     campaign_terms_review,
@@ -20,6 +22,21 @@ def test_creator_result_limit_defaults_and_clamps():
     assert _creator_result_limit({"result_limit": 0}) == 1
     assert _creator_result_limit({"result_limit": 250}) == 100
     assert _creator_result_limit({"result_limit": "invalid"}) == 30
+
+
+def test_audience_range_is_normalized_and_validated():
+    assert _normalize_audience_range({}) == (None, None)
+    assert _normalize_audience_range({"audience_min": "500", "audience_max": "10000"}) == (500, 10000)
+    with pytest.raises(ValueError, match="Минимальная аудитория"):
+        _normalize_audience_range({"audience_min": 10000, "audience_max": 500})
+
+
+def test_audience_range_is_a_hard_filter_and_requires_confirmed_metrics():
+    brief = {"audience_min": 500, "audience_max": 10000}
+    assert _candidate_matches_audience_range({"public_metrics": {"followers": 4500}}, brief) is True
+    assert _candidate_matches_audience_range({"public_metrics": {"subscribers": 12000}}, brief) is False
+    assert _candidate_matches_audience_range({"public_metrics": {}}, brief) is False
+    assert _candidate_matches_audience_range({"public_metrics": {}}, {}) is True
 
 
 def test_campaign_terms_review_requires_explicit_agreement():
