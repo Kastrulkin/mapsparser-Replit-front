@@ -2568,17 +2568,16 @@ function ContentWorkspace() {
                       disabled={Boolean(busyAction)}
                       className={cn('rounded-2xl', !hasDraftText ? 'bg-slate-950 text-white hover:bg-slate-800' : '')}
                     >
-                      {busyAction === 'generate-draft' ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Пишем...
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="mr-2 h-4 w-4" />
-                          {hasDraftText ? 'Сгенерировать заново' : 'Сгенерировать текст'}
-                        </>
-                      )}
+                      {busyAction === 'generate-draft'
+                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        : <Wand2 className="mr-2 h-4 w-4" />}
+                      <span translate="no" className="notranslate">
+                        {busyAction === 'generate-draft'
+                          ? 'Пишем...'
+                          : hasDraftText
+                            ? 'Сгенерировать заново'
+                            : 'Сгенерировать текст'}
+                      </span>
                     </Button>
                   </div>
                   {busyAction === 'generate-draft' ? <DraftGenerationFeedback ready={draftGenerationReady} /> : null}

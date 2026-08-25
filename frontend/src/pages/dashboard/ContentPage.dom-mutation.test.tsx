@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LanguageProvider } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 import { ContentPage } from './ContentPage';
@@ -42,7 +43,14 @@ function renderContentPage() {
       <LanguageProvider>
         <Routes>
           <Route element={<ContextRoute />}>
-            <Route path="/dashboard/content" element={<ContentPage />} />
+            <Route
+              path="/dashboard/content"
+              element={(
+                <ErrorBoundary>
+                  <ContentPage />
+                </ErrorBoundary>
+              )}
+            />
           </Route>
         </Routes>
       </LanguageProvider>
@@ -96,6 +104,31 @@ describe('Content page DOM ownership', () => {
     }
 
     expect(() => fireEvent.click(generateButton)).not.toThrow();
+  });
+
+  it('keeps the content page usable when a browser translator ignores translate=no', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    const generateButton = await screen.findByRole('button', { name: 'Сгенерировать заново' });
+    const label = generateButton.querySelector('span.notranslate');
+    const textNode = Array.from(label?.childNodes ?? []).find((node) => (
+      node.nodeType === Node.TEXT_NODE && node.textContent?.includes('Сгенерировать заново')
+    ));
+    const translatedWrapper = document.createElement('font');
+
+    expect(label).not.toBeNull();
+    expect(textNode).toBeDefined();
+    translatedWrapper.setAttribute('data-external-translation', 'true');
+    label!.insertBefore(translatedWrapper, textNode!);
+    translatedWrapper.appendChild(textNode!);
+
+    fireEvent.click(generateButton);
+
+    expect(screen.queryByText('Что-то пошло не так')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Пишем...' })).toBeInTheDocument();
+    consoleError.mockRestore();
   });
 
   it('does not replace the selected business plan with a late response from the previous business', async () => {
