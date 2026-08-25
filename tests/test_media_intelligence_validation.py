@@ -62,6 +62,8 @@ class FakeCursor:
     def fetchone(self):
         query = self.last_query
         if "from ai_capability_settings" in query:
+            if self.enabled is None:
+                return None
             return {"enabled": self.enabled}
         if "from photo_assets" in query and "asset_version" in query:
             return {
@@ -103,6 +105,23 @@ class FakeCursor:
                 "reserved_credits": self.reservation_inserts[-1][6],
             }
         return None
+
+    def fetchall(self):
+        return []
+
+
+def test_photo_intelligence_is_enabled_by_default_without_a_setting():
+    cursor = FakeCursor(enabled=None)
+
+    assert ai_runtime.is_capability_enabled(cursor, "biz-1", ai_runtime.VISION_CAPABILITY) is True
+    settings = ai_runtime.list_capability_settings(cursor, "biz-1")
+    assert settings[ai_runtime.VISION_CAPABILITY]["enabled"] is True
+
+
+def test_explicit_photo_intelligence_opt_out_is_preserved():
+    cursor = FakeCursor(enabled=False)
+
+    assert ai_runtime.is_capability_enabled(cursor, "biz-1", ai_runtime.VISION_CAPABILITY) is False
 
 
 def test_new_photo_analysis_charges_two_credits_and_updates_asset(monkeypatch):

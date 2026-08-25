@@ -72,7 +72,9 @@ def is_capability_enabled(cursor: Any, business_id: str, capability: str) -> boo
         """,
         (business_id, capability),
     )
-    row = _row_to_dict(cursor, cursor.fetchone()) or {}
+    row = _row_to_dict(cursor, cursor.fetchone())
+    if row is None:
+        return capability == VISION_CAPABILITY
     return bool(row.get("enabled"))
 
 
@@ -136,12 +138,12 @@ def list_capability_settings(cursor: Any, business_id: str) -> dict[str, dict[st
     indexed = {str(row.get("capability") or ""): row for row in rows}
     result: dict[str, dict[str, Any]] = {}
     for capability in capabilities:
-        row = indexed.get(capability) or {}
+        row = indexed.get(capability)
         result[capability] = {
             "capability": capability,
-            "enabled": bool(row.get("enabled")),
-            "enabled_at": row.get("enabled_at"),
-            "metadata_json": _json_value(row.get("metadata_json"), {}),
+            "enabled": capability == VISION_CAPABILITY if row is None else bool(row.get("enabled")),
+            "enabled_at": None if row is None else row.get("enabled_at"),
+            "metadata_json": {} if row is None else _json_value(row.get("metadata_json"), {}),
         }
     return result
 
