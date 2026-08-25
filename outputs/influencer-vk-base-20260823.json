@@ -1,0 +1,609 @@
+{
+  "schema_version": "1.0",
+  "title": "Публичные локальные VK-сообщества",
+  "status": "public_research_only",
+  "generated_at": "2026-08-23T11:43:22.901261+00:00",
+  "candidate_count": 31,
+  "platform_counts": {
+    "vk": 31
+  },
+  "city_counts": {
+    "Батуми": 1,
+    "Краснодар": 13,
+    "Санкт-Петербург": 17
+  },
+  "candidates": [
+    {
+      "candidate_id": "29d391a13e75d80e5662",
+      "display_name": "������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/forum_georgia",
+      "username": "forum_georgia",
+      "city": "Батуми",
+      "description": "���� ������������� �������� ���������� �� 140 ������� ����: https://t.me/tele_360chat � ��������� � ������� � ����� � ������ � ����� �� �������, ���������� �� 800 �� 50 000 � �������� ������ �� ����� � ������, ��������� � �������, � ����� � ��������, ������� � IT. ������ ���� ������� � ��������..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/forum_georgia",
+      "discovery_source_url": "https://emigrants.online/",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:22.274403+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "1de0de770352de31e7bb",
+      "display_name": "��� ���������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/my_krd",
+      "username": "my_krd",
+      "city": "Краснодар",
+      "description": "��������� ��� �� ����! ��� ��������� ����� ����������, ������ ���������� � ����� ���� �������, ��� �������� ���� � �������� ���������� - ��� ���������� ��� ���. ���������, ������������� ��������, �������� ������������, ���������� � ���������, ����������! ���: https://gosuslugi.ru/snet/67981f03c7c2cc2b6e76e79c",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/my_krd",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.908536+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "5c98cda30d98703325a4",
+      "display_name": "��� ���������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/ourkrd",
+      "username": "ourkrd",
+      "city": "Краснодар",
+      "description": "� 7916551972 🔥 ���������� ������-��� ����������! ������� ���������� ����� ������ ����������. � 🧡 ��������� 🧡 ���� 🧡 ������������ 🧡 ������� 🧡 ����� 🧡 ���� 🧡 ��������� 🧡 ��������� 🧡 ��������-��-������ 🧡 ������ 🧡 ������� 🧡 ������ 🧡 �������� 🧡 ����������� 🧡 ��������� 🧡 ���������� 🧡 ��������� 🧡 ���������..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/ourkrd",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.026538+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "138c02f97776d2be024b",
+      "display_name": "���� ����������� ���������. ������-�����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/ritmkrd",
+      "username": "ritmkrd",
+      "city": "Краснодар",
+      "description": "������-������ ����� ����������Ȼ - ��� ������ ������-����������� ������, ��� ������ ����� ��������� ����������, ������-�������, ������� �� ��������� ���� ��� ���������� � ����������, � ���������� ����� ��� ���� � ������ �������. ����� �� ������������� ������ �� ����� �������� � ������� ������ ���..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/ritmkrd",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/luchshie-pabliki-goroda-na-kotorye-stoit-podpisatsya",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.079762+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "79cfd2822c5af182cefc",
+      "display_name": "����� ����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/afishakrr",
+      "username": "afishakrr",
+      "city": "Краснодар",
+      "description": "������������, ��� ���� ���� ������ ����� � ����������! ❤️‍🔥  �������� �������, ��������, ������ ���� � �������� � ����������� ������. � ��� ��������� ������� � ��������� �������! ����� ������� � �������� ��� https://clck.ru/3GM6EV",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/afishakrr",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/luchshie-pabliki-goroda-na-kotorye-stoit-podpisatsya",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.154023+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "1181f99fc976ad8e651e",
+      "display_name": "�������� ������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/typical_kuban",
+      "username": "typical_kuban",
+      "city": "Краснодар",
+      "description": "�� ����� ������ �������������� ����.😎 �����, �������, ������� � �������� ������ ������. 💖 ����������� � ������� ������������� �� ������� ���: https://knd.gov.ru/license?id=676cec4b96de59064d43bf6e&registryType=bloggersPermission",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/typical_kuban",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.819074+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "e892712c33030e47c25e",
+      "display_name": "�������� ���������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/typical_krd",
+      "username": "typical_krd",
+      "city": "Краснодар",
+      "description": "� 7925124405 🥇������ ������-��� ���������� ❗️����� 1.000.000 ��������� 📢 ���� ���������� ������ � 2011 ���������� ������� ����� ���� ⬇️ t.me/tipich_bot �������: t.me/manager_tk TG: t.me/krd_tipich_ru MAX: max.ru/typical_krd ����������� � ������� ���: gosuslugi.ru/snet/67a10934cfd63644ac9bebca",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/typical_krd",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/luchshie-pabliki-goroda-na-kotorye-stoit-podpisatsya",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.962278+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "ae2445aa24311ca2fb5b",
+      "display_name": "�������� ��������� - ���������� ��������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/freekrasnodar1",
+      "username": "freekrasnodar1",
+      "city": "Краснодар",
+      "description": "❄❄❄������ � ��� ����� ������ ������!❄❄❄ ������ ��������� 2020 ����! �������� � ��������!",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/freekrasnodar1",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:18.553593+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "4535a285597e9fc0cf55",
+      "display_name": "�������� ������������� ����",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/tipich_kk",
+      "username": "tipich_kk",
+      "city": "Краснодар",
+      "description": "������� ������� ������ ��� � 4938392045",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/tipich_kk",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.130456+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "e5249fe140fa552fcb7a",
+      "display_name": "���������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/krasn23",
+      "username": "krasn23",
+      "city": "Краснодар",
+      "description": "� 6703510535 ��� ���  ��� �����-���� ��� � ���������� ��� �� ��� ��� ����, ������ ��� ������, ������� ��� ��������, ������� � ����� ��������! ���������... ��� �����-�����. � �� ��� ����� :-)",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/krasn23",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:18.966901+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "6fd35a7c0abc63eb7da0",
+      "display_name": "��������� | ������ 23",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/kraskrd",
+      "username": "kraskrd",
+      "city": "Краснодар",
+      "description": "��������� ������� ������ ������! ���������� ���� ������� ����� ������ \"���������� �������\". ������� � ������������ ���������. ����������� �� ����� ���������� ��������� �������� ���� �� ������ �������� �������� ��������, ������� ��� � ����������� � ��������� � �� ������ ���� ���. ������������, ��..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/kraskrd",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/luchshie-pabliki-goroda-na-kotorye-stoit-podpisatsya",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:18.901922+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "dfaf3fa50200b7e2a794",
+      "display_name": "��������� ��������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/krdgo",
+      "username": "krdgo",
+      "city": "Краснодар",
+      "description": "������� ������ � ���� ����������� � ������� ������������� �� ������� ���: https://knd.gov.ru/license?id=676dfdfa40af125d6a91423e&registryType=bloggersPermission",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/krdgo",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.190365+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "023aec9fac8b52ff6772",
+      "display_name": "���������-online",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/krd_online",
+      "username": "krd_online",
+      "city": "Краснодар",
+      "description": "C���� ���������� ������ � ����������! ��� ����� �� ����� ������.",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/krd_online",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:18.940328+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "ecd14f8f5667018ffaf2",
+      "display_name": "���������� ���������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/krd24",
+      "username": "krd24",
+      "city": "Краснодар",
+      "description": "�������, ����������, �����, ������, ������ � ����� ������. ����������� � ������� ������������� �� ������� ���: https://knd.gov.ru/license?id=67640ffc506f9677283e8b02&registryType=bloggersPermission",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/krd24",
+      "discovery_source_url": "https://krasnodar.mediaohvat.ru/public_blogger",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:19.169400+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "caecf28b39d2b145775f",
+      "display_name": "#����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/iwantto_petersburg",
+      "username": "iwantto_petersburg",
+      "city": "Санкт-Петербург",
+      "description": "���, � ����� ������� ������:  🚩������ �����  🚩���������� �����  🚩�������� ������������  ���������� ��� ������� ����������, ��� � ���, ��� �������� ���� ������ ������� ��� ������ ������� �������� ���� ������� �����! ����������� � ������� ���: https://gosuslugi.ru/snet/67abe962962afd032d8ba742",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/iwantto_petersburg",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:21.511365+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "2986133c526befa034b2",
+      "display_name": "KUDAGO: �����-���������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/kudagospb",
+      "username": "kudagospb",
+      "city": "Санкт-Петербург",
+      "description": "����� �����-����������: ���������� ����� � �������. ��������, ���� ������� � ����������. �������� ������ �� ������ ���������� ��������� � �� ����� KUDAGO: https://business.kudago.com/?utm_source=vk&utm_medium=spb �������� �������������� � �������� ������������ �������, ���������� ������: https://go.kudago.com/4h2fkaH..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/kudagospb",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:21.556006+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "d6f2170c11244a71381d",
+      "display_name": "��� �����, �����! [�������� �����]",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/piter",
+      "username": "piter",
+      "city": "Санкт-Петербург",
+      "description": "� 7896600896",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/piter",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.379554+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "f66ad11d1d31be9b3d05",
+      "display_name": "���� ������� � ������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/piterbesplatno",
+      "username": "piterbesplatno",
+      "city": "Санкт-Петербург",
+      "description": "�� ��������� ������ ���������� � �� ����� ������� ������ � ������ ����������� ��� ������� ����������. ������ ��������� �������, ��������, ������,  ��������������� �����������, ���������, ���������, ������, ���������, ������-������� � �������� ����������� ������ :) � 4919017709",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/piterbesplatno",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.537720+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "b501f1048e21f706bbcf",
+      "display_name": "����� | ���������� �� ����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/in_piter",
+      "username": "in_piter",
+      "city": "Санкт-Петербург",
+      "description": "✅��� ����� ���������� � ������ � ����� � �������� ������� - ����������, �������, ������� �������������� � ������ �� ����������! ����������� � ������� ���: https://gosuslugi.ru/snet/67ad51afbe63a80aa9ac125b",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/in_piter",
+      "discovery_source_url": "https://gorod-plus.tv/news/103042",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:21.475807+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "9791e32b811167de09e8",
+      "display_name": "����� �� ������������ | ������������ ������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/vasilyevskiyostrov",
+      "username": "vasilyevskiyostrov",
+      "city": "Санкт-Петербург",
+      "description": "����� �� ������������ -  ��� ����� �������� � ����� ��������  ���������� ������� � ������ �.�. �. �����-����������.  ���� ���������: 24.10.2014 �. ������� ������ https://vk.cc/aqVJri ��������� � ������������  � 4835855602 ����������",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/vasilyevskiyostrov",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.944438+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "187fb691fc699653dc6e",
+      "display_name": "����� ������� ����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/afichaspb",
+      "username": "afichaspb",
+      "city": "Санкт-Петербург",
+      "description": "��������� ��������� �������� ���� ����� � ����������? � ���������� \"����� ����������\" �� ���������� � ���� ������������, �������� � ������� ������ �� ����. �������, ���������� ����� � ������� ������� ������!  ��������� � ���������� ������� ������, ��� ������������ ����������� ����������� � �����������..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/afichaspb",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.898330+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "5bdccf2ee5830ffcb7f4",
+      "display_name": "�����-��������� - ��� ��� �����! | ����� | ���",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/o_st.petersburg",
+      "username": "o_st.petersburg",
+      "city": "Санкт-Петербург",
+      "description": "�����-��������� � ���� �� ����������� ������� ���� � ������� ����������� ������������ ���������� � ����������������������. ����������� � ���: https://gosuslugi.ru/snet/67990b4b58ab2221b0f23b57",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/o_st.petersburg",
+      "discovery_source_url": "https://gorod-plus.tv/news/103042",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:22.166333+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "6efe3452541839cf61ce",
+      "display_name": "������� - ����������� ����� | ����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/kupchinoask",
+      "username": "kupchinoask",
+      "city": "Санкт-Петербург",
+      "description": "🌆 ����������� � ������� | ����������� ������ - ��� ����������� ���� ����� ������ ������� � ����������� �� ����� � ������� � ����� ������������ ������ ������ �����-��������� � �����, ������� �������� ����� ��� �������.   💛 ����� ������� ���������, ������������, ������������ � ���������� ����������...",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/kupchinoask",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:22.059467+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "29042185537f98fbae0e",
+      "display_name": "�������� �����-����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/aesthetics_spb",
+      "username": "aesthetics_spb",
+      "city": "Санкт-Петербург",
+      "description": "� 4969903553 ������ �����-���������� � ����� ������ ������������ ������������� ���� ���������� �����. ������ \"�������� �����-����������\" ���������� ��� ������������ ����������. �������� ������������ ������� ����� ������ ����������.",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/aesthetics_spb",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.050924+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "9d9ccfc6448ce0162919",
+      "display_name": "��������-������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/shuvalovo_ozerki",
+      "username": "shuvalovo_ozerki",
+      "city": "Санкт-Петербург",
+      "description": "���������� ��� ������� �� ��������-������! �������� ������ �������������� ��������-������ ������� ����������� ����������� ����� ������������ ��������  �������� ��� ������ ��� �������� ����������� ����������� ����� �������� ����������� ����� ������",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/shuvalovo_ozerki",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.813890+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "407b234b3c2d470edb1c",
+      "display_name": "��������� | ���� � �����",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/oldnow",
+      "username": "oldnow",
+      "city": "Санкт-Петербург",
+      "description": "������������� ���������� ���������� ��������� � ������ ���� � ����� ����� ���� �� ������ � ����� ������ ������� ����������� ����, � ���� �� ������� ��� � ������, ������ ���������� ������������ ����� � ��������� ����������: vk.me/oldnow ��������� �� �������:  #��������������@oldnow; #����������������@oldnow..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/oldnow",
+      "discovery_source_url": "https://gorod-plus.tv/news/103042",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:22.302199+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "8f61f02655728a81f066",
+      "display_name": "��������� | �������������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/oldenspb",
+      "username": "oldenspb",
+      "city": "Санкт-Петербург",
+      "description": "������ �� ������� ������ ����� ������ ���� ���������� ��������������� ����� � ���������� ����������. �����, �������, ����...",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/oldenspb",
+      "discovery_source_url": "https://gorod-plus.tv/news/103042",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:22.900900+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "00cb79681a0c7eed75a1",
+      "display_name": "��������� �����-��������� ���������� ���",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/baraholka_sanktpeterburg",
+      "username": "baraholka_sanktpeterburg",
+      "city": "Санкт-Петербург",
+      "description": "��������� �����-��������� ���������� ��� !�����! ���� ��� ���������� �������� �������� ��� ������ ����������, �� ��� ���������!  ������� ������: - ��������� ��� � ���� �������������� ��������� ������ ����� �������� ����������� ��� ����������� (������ ��� ������� 30% �� ���� ������ ������) - �����������:..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/baraholka_sanktpeterburg",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:21.279434+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "54debeb443901fbe87e9",
+      "display_name": "��������� ������ | ������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/9online",
+      "username": "9online",
+      "city": "Санкт-Петербург",
+      "description": "���������� �����-������ ������, ������ ��������� � ������������ ���� ���������� � 2013 ���� 😎 - �� ����� ���������� ������������?  - ����� �������� ���������?  ��������� ������� �������� 👉 https://telegram.me/news9online/3274 ������ ������� 👇🏻 https://vk.com/@9online-reklama",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/9online",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:21.200437+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "cb9b310abf44beea343d",
+      "display_name": "��������� ���������� ����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/estkomspb",
+      "username": "estkomspb",
+      "city": "Санкт-Петербург",
+      "description": "",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/estkomspb",
+      "discovery_source_url": "https://gorod-plus.tv/news/103042",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:22.600115+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    },
+    {
+      "candidate_id": "1bb063af3c3a39d19080",
+      "display_name": "����������� ����� �����-����������",
+      "profile_type": "community",
+      "platform": "vk",
+      "canonical_url": "https://vk.com/newstucentr",
+      "username": "newstucentr",
+      "city": "Санкт-Петербург",
+      "description": "����������� �������� � �������������: vk.cc/cNeYzC ���� �������������� ��� � ����������� ���������� ������������ ������! ����� �� ������� �� ������ �������, ���������, �����������, ����������, ���������� � ����� � ����� ������������ ������, �� � ������� �������� ���� ����������� � �������� �� ������..",
+      "contactability": "manual_only",
+      "verification_status": "original_profile_opened",
+      "source_url": "https://vk.com/newstucentr",
+      "discovery_source_url": "https://www.yapokupayu.ru/blogs/post/interesnye-pabliki-o-sankt-peterburge",
+      "evidence_summary": "Публичная городская подборка ссылается на сообщество; оригинальная VK-страница открыта.",
+      "researched_at": "2026-08-23T11:43:20.287630+00:00",
+      "limitations": [
+        "Нужно вручную проверить тематический fit, активность, аудиторию и условия размещения."
+      ]
+    }
+  ],
+  "limitations": [
+    "База собрана из публичных городских подборок; сообщения не отправлялись."
+  ]
+}

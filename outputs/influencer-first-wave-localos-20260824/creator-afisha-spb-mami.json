@@ -1,0 +1,141 @@
+{
+  "schema_version": "1.0",
+  "lead_id": "creator-afisha-spb-mami",
+  "motion": "creator_network_intake",
+  "identity": {
+    "company_name": "Мамы Санкт-Петербург - Афиша",
+    "contact_name": "Мамы Санкт-Петербург - Афиша",
+    "contact_role": "автор или представитель площадки",
+    "public_urls": [
+      "https://t.me/afishaspbmami"
+    ]
+  },
+  "contacts": [
+    {
+      "channel": "telegram",
+      "value": "https://t.me/afishaspbmamibot",
+      "source_url": "https://t.me/afishaspbmami",
+      "observed_at": "2026-08-24T18:15:00+03:00",
+      "confidence": "high",
+      "email_status": "not_applicable"
+    }
+  ],
+  "qualification": {
+    "segment": "Весёлая расчёска",
+    "icp_score": 92,
+    "disqualifiers": []
+  },
+  "evidence": [
+    {
+      "evidence_id": "evidence-creator-afisha-spb-mami",
+      "kind": "social_activity",
+      "observation": "Публичное описание позиционирует канал как афишу детских мероприятий Петербурга и указывает контакт для сотрудничества.",
+      "source_url": "https://t.me/afishaspbmami",
+      "source_type": "public_professional_profile",
+      "source_date": null,
+      "researched_at": "2026-08-24T18:15:00+03:00",
+      "confidence": "high",
+      "usable_for_outreach": true
+    }
+  ],
+  "personalization_candidates": [
+    {
+      "personalization_id": "personalization-creator-afisha-spb-mami",
+      "observation": "Публичное описание позиционирует канал как афишу детских мероприятий Петербурга и указывает контакт для сотрудничества.",
+      "evidence_ids": [
+        "evidence-creator-afisha-spb-mami"
+      ],
+      "problem_hypothesis": "Гипотеза: площадке могут подойти локальные семейные услуги и тематические подборки.",
+      "relevance_to_offer": "LocalOS может сопоставлять аудиторию площадки с конкретными бизнесами и возвращаться с готовым брифом.",
+      "personalized_opener": "Мы в LocalOS помогаем локальным бизнесам находить подходящие площадки для сотрудничества. Обратили внимание на Мамы Санкт-Петербург - Афиша: канал собирает детские события и места для родителей Петербурга.",
+      "confidence": "high",
+      "usable": true,
+      "removal_test_passed": true
+    }
+  ],
+  "selected_personalization_id": "personalization-creator-afisha-spb-mami",
+  "touches": [
+    {
+      "touch_no": 1,
+      "channel": "telegram",
+      "angle": "сбор актуальных условий для сети локальных бизнесов",
+      "body": "Здравствуйте!\n\nМы в LocalOS помогаем локальным бизнесам находить подходящие площадки для сотрудничества. Обратили внимание на Мамы Санкт-Петербург - Афиша: канал собирает детские события и места для родителей Петербурга.\n\nПодскажите, пожалуйста, актуальные форматы, цены, географию аудитории, охваты последних рекламных размещений и удобный контакт.\n\nЕсли найдём подходящий бизнес, вернёмся с конкретным брифом; сроки, маркировку и права на материал согласуем отдельно.",
+      "cta": "Подскажите, пожалуйста, актуальные форматы, цены, географию аудитории, охваты последних рекламных размещений и удобный контакт.",
+      "evidence_ids": [
+        "evidence-creator-afisha-spb-mami"
+      ]
+    }
+  ],
+  "quality_gate": {
+    "score": 17,
+    "verdict": "approve",
+    "reason_codes": [],
+    "criteria": [
+      {
+        "name": "source_validity",
+        "score": 2,
+        "note": "Original public profile or current public professional source."
+      },
+      {
+        "name": "observation_accuracy",
+        "score": 2,
+        "note": "Observation stays within the source."
+      },
+      {
+        "name": "freshness_and_why_now",
+        "score": 1,
+        "note": "Current terms still need confirmation."
+      },
+      {
+        "name": "bridge_from_signal_to_offer",
+        "score": 2,
+        "note": "The message explains the LocalOS matchmaking role."
+      },
+      {
+        "name": "recipient_specificity",
+        "score": 2,
+        "note": "The profile theme changes the outreach reason."
+      },
+      {
+        "name": "proof_integrity",
+        "score": 2,
+        "note": "No performance promise is made."
+      },
+      {
+        "name": "natural_channel_fit",
+        "score": 2,
+        "note": "Short first touch."
+      },
+      {
+        "name": "single_cta_and_length",
+        "score": 2,
+        "note": "One request for current terms."
+      },
+      {
+        "name": "state_and_suppression_safety",
+        "score": 2,
+        "note": "Draft only; no delivery state."
+      }
+    ]
+  },
+  "approval": {
+    "status": "needs_review",
+    "approved_by": null,
+    "approved_at": null
+  },
+  "campaign": {
+    "status": "research_only",
+    "sender": "LocalOS",
+    "external_send_performed": false
+  },
+  "outcome": {
+    "reply_status": "none",
+    "unsubscribe": false,
+    "suppressed": false
+  },
+  "risks": [
+    "Content approval is still required before delivery.",
+    "No external message has been sent."
+  ],
+  "generated_at": "2026-08-24T18:15:00+03:00"
+}

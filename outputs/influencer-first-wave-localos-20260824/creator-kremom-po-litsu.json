@@ -1,0 +1,141 @@
+{
+  "schema_version": "1.0",
+  "lead_id": "creator-kremom-po-litsu",
+  "motion": "creator_network_intake",
+  "identity": {
+    "company_name": "Кремом по лицу - Валерия Скрябина",
+    "contact_name": "Кремом по лицу - Валерия Скрябина",
+    "contact_role": "автор или представитель площадки",
+    "public_urls": [
+      "https://t.me/kremom_po_litsu"
+    ]
+  },
+  "contacts": [
+    {
+      "channel": "telegram",
+      "value": "https://t.me/Eklllerchik",
+      "source_url": "https://t.me/kremom_po_litsu",
+      "observed_at": "2026-08-24T18:15:00+03:00",
+      "confidence": "high",
+      "email_status": "not_applicable"
+    }
+  ],
+  "qualification": {
+    "segment": "Органика",
+    "icp_score": 94,
+    "disqualifiers": []
+  },
+  "evidence": [
+    {
+      "evidence_id": "evidence-creator-kremom-po-litsu",
+      "kind": "social_activity",
+      "observation": "Публичный профиль связывает Валерию Скрябину с петербургским beauty-каналом и указывает Telegram-контакт для записи.",
+      "source_url": "https://t.me/kremom_po_litsu",
+      "source_type": "public_professional_profile",
+      "source_date": null,
+      "researched_at": "2026-08-24T18:15:00+03:00",
+      "confidence": "high",
+      "usable_for_outreach": true
+    }
+  ],
+  "personalization_candidates": [
+    {
+      "personalization_id": "personalization-creator-kremom-po-litsu",
+      "observation": "Публичный профиль связывает Валерию Скрябину с петербургским beauty-каналом и указывает Telegram-контакт для записи.",
+      "evidence_ids": [
+        "evidence-creator-kremom-po-litsu"
+      ],
+      "problem_hypothesis": "Гипотеза: автору могут подойти локальные beauty и wellness-проекты с аккуратным согласованием утверждений.",
+      "relevance_to_offer": "LocalOS может подобрать конкретный проект после получения коммерческих условий и допустимых форматов.",
+      "personalized_opener": "Мы в LocalOS помогаем локальным бизнесам находить подходящих авторов для сотрудничества. Обратили внимание на Кремом по лицу и ваш экспертный контент об уходе.",
+      "confidence": "high",
+      "usable": true,
+      "removal_test_passed": true
+    }
+  ],
+  "selected_personalization_id": "personalization-creator-kremom-po-litsu",
+  "touches": [
+    {
+      "touch_no": 1,
+      "channel": "telegram",
+      "angle": "сбор актуальных условий для сети локальных бизнесов",
+      "body": "Валерия, здравствуйте!\n\nМы в LocalOS помогаем локальным бизнесам находить подходящих авторов для сотрудничества. Обратили внимание на Кремом по лицу и ваш экспертный контент об уходе.\n\nПодскажите, пожалуйста, актуальные форматы, цены, географию аудитории, охваты последних рекламных интеграций и удобный контакт.\n\nЕсли найдём подходящий бизнес, вернёмся с конкретным брифом; услугу, сроки, маркировку и права на материал согласуем отдельно.",
+      "cta": "Подскажите, пожалуйста, актуальные форматы, цены, географию аудитории, охваты последних рекламных интеграций и удобный контакт.",
+      "evidence_ids": [
+        "evidence-creator-kremom-po-litsu"
+      ]
+    }
+  ],
+  "quality_gate": {
+    "score": 17,
+    "verdict": "approve",
+    "reason_codes": [],
+    "criteria": [
+      {
+        "name": "source_validity",
+        "score": 2,
+        "note": "Original public profile or current public professional source."
+      },
+      {
+        "name": "observation_accuracy",
+        "score": 2,
+        "note": "Observation stays within the source."
+      },
+      {
+        "name": "freshness_and_why_now",
+        "score": 1,
+        "note": "Current terms still need confirmation."
+      },
+      {
+        "name": "bridge_from_signal_to_offer",
+        "score": 2,
+        "note": "The message explains the LocalOS matchmaking role."
+      },
+      {
+        "name": "recipient_specificity",
+        "score": 2,
+        "note": "The profile theme changes the outreach reason."
+      },
+      {
+        "name": "proof_integrity",
+        "score": 2,
+        "note": "No performance promise is made."
+      },
+      {
+        "name": "natural_channel_fit",
+        "score": 2,
+        "note": "Short first touch."
+      },
+      {
+        "name": "single_cta_and_length",
+        "score": 2,
+        "note": "One request for current terms."
+      },
+      {
+        "name": "state_and_suppression_safety",
+        "score": 2,
+        "note": "Draft only; no delivery state."
+      }
+    ]
+  },
+  "approval": {
+    "status": "needs_review",
+    "approved_by": null,
+    "approved_at": null
+  },
+  "campaign": {
+    "status": "research_only",
+    "sender": "LocalOS",
+    "external_send_performed": false
+  },
+  "outcome": {
+    "reply_status": "none",
+    "unsubscribe": false,
+    "suppressed": false
+  },
+  "risks": [
+    "The public contact also handles appointments; confirm that partnership requests are accepted there.",
+    "No external message has been sent."
+  ],
+  "generated_at": "2026-08-24T18:15:00+03:00"
+}

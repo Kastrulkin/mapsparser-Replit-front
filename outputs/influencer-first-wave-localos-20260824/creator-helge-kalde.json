@@ -1,0 +1,143 @@
+{
+  "schema_version": "1.0",
+  "lead_id": "creator-helge-kalde",
+  "motion": "creator_network_intake",
+  "identity": {
+    "company_name": "Helge Kalde",
+    "contact_name": "Helge Kalde",
+    "contact_role": "автор или представитель площадки",
+    "public_urls": [
+      "https://www.instagram.com/helgekalde"
+    ]
+  },
+  "contacts": [
+    {
+      "channel": "email",
+      "value": "helge.kalde1@gmail.com",
+      "source_url": "https://collabstr.com/helgekalde",
+      "observed_at": "2026-08-24T18:15:00+03:00",
+      "confidence": "medium",
+      "email_status": "risky"
+    }
+  ],
+  "qualification": {
+    "segment": "Riderra",
+    "icp_score": 86,
+    "disqualifiers": []
+  },
+  "evidence": [
+    {
+      "evidence_id": "evidence-creator-helge-kalde",
+      "kind": "social_activity",
+      "observation": "A current public creator marketplace presents Helge as a Tallinn creator offering influencer and UGC formats and invites brand partnerships.",
+      "source_url": "https://www.instagram.com/helgekalde",
+      "source_type": "public_professional_profile",
+      "source_date": null,
+      "researched_at": "2026-08-24T18:15:00+03:00",
+      "confidence": "medium",
+      "usable_for_outreach": true
+    }
+  ],
+  "personalization_candidates": [
+    {
+      "personalization_id": "personalization-creator-helge-kalde",
+      "observation": "A current public creator marketplace presents Helge as a Tallinn creator offering influencer and UGC formats and invites brand partnerships.",
+      "evidence_ids": [
+        "evidence-creator-helge-kalde"
+      ],
+      "problem_hypothesis": "Inference: the creator may consider local travel, beauty, fashion, or lifestyle briefs.",
+      "relevance_to_offer": "LocalOS can match confirmed formats with suitable local businesses without promising a placement in advance.",
+      "personalized_opener": "We at LocalOS help local businesses find relevant creators for partnerships. We noticed that you offer both influencer placements and UGC formats from Tallinn. We are mapping current creator terms so we only bring suitable briefs.",
+      "confidence": "medium",
+      "usable": true,
+      "removal_test_passed": true
+    }
+  ],
+  "selected_personalization_id": "personalization-creator-helge-kalde",
+  "touches": [
+    {
+      "touch_no": 1,
+      "channel": "email",
+      "angle": "сбор актуальных условий для сети локальных бизнесов",
+      "body": "Hello Helge,\n\nWe at LocalOS help local businesses find relevant creators for partnerships. We noticed that you offer both influencer placements and UGC formats from Tallinn. We are mapping current creator terms so we only bring suitable briefs.\n\nCould you share your current packages, rates, audience geography, recent sponsored reach, and preferred contact?\n\nIf a business matches, we will return with a specific brief; timing, disclosure, and usage rights will be agreed separately.",
+      "cta": "Could you share your current packages, rates, audience geography, recent sponsored reach, and preferred contact?",
+      "evidence_ids": [
+        "evidence-creator-helge-kalde"
+      ]
+    }
+  ],
+  "quality_gate": {
+    "score": 14,
+    "verdict": "revise",
+    "reason_codes": [
+      "SOURCE_MISSING"
+    ],
+    "criteria": [
+      {
+        "name": "source_validity",
+        "score": 1,
+        "note": "Contact route needs confirmation."
+      },
+      {
+        "name": "observation_accuracy",
+        "score": 2,
+        "note": "Observation stays within the source."
+      },
+      {
+        "name": "freshness_and_why_now",
+        "score": 1,
+        "note": "Current terms still need confirmation."
+      },
+      {
+        "name": "bridge_from_signal_to_offer",
+        "score": 2,
+        "note": "The message explains the LocalOS matchmaking role."
+      },
+      {
+        "name": "recipient_specificity",
+        "score": 2,
+        "note": "The profile theme changes the outreach reason."
+      },
+      {
+        "name": "proof_integrity",
+        "score": 2,
+        "note": "No performance promise is made."
+      },
+      {
+        "name": "natural_channel_fit",
+        "score": 1,
+        "note": "Channel route is cross-source or manual."
+      },
+      {
+        "name": "single_cta_and_length",
+        "score": 2,
+        "note": "One request for current terms."
+      },
+      {
+        "name": "state_and_suppression_safety",
+        "score": 1,
+        "note": "Keep outside delivery until contact is confirmed."
+      }
+    ]
+  },
+  "approval": {
+    "status": "needs_review",
+    "approved_by": null,
+    "approved_at": null
+  },
+  "campaign": {
+    "status": "research_only",
+    "sender": "LocalOS",
+    "external_send_performed": false
+  },
+  "outcome": {
+    "reply_status": "none",
+    "unsubscribe": false,
+    "suppressed": false
+  },
+  "risks": [
+    "The email is cross-source and must be confirmed as the preferred partnership route.",
+    "No external message has been sent."
+  ],
+  "generated_at": "2026-08-24T18:15:00+03:00"
+}
