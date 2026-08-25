@@ -3,6 +3,8 @@ from services.lead_workstream_service import (
     LOCALOS_SALES,
     build_channel_state,
     build_next_action,
+    build_readiness_gate,
+    build_relationship_stage,
     build_room_state,
     lead_kind,
     legacy_workstream,
@@ -106,3 +108,53 @@ def test_saved_campaign_becomes_an_explicit_operator_action():
         "code": "check_campaign",
         "label": "Проверить кампанию",
     }
+
+
+def test_relationship_stage_preserves_touch_number_and_first_response_touch():
+    sent = build_relationship_stage(
+        {"campaign_state": {"last_confirmed_touch": {"touch_number": 2, "channel": "vk"}}}
+    )
+    replied = build_relationship_stage(
+        {
+            "campaign_state": {
+                "last_confirmed_touch": {"touch_number": 3, "channel": "email"},
+                "first_human_response": {"touch_number": 2, "channel": "vk"},
+            }
+        }
+    )
+
+    assert sent["label"] == "2-е касание отправлено"
+    assert replied["label"] == "Ответили после 2-го касания"
+    assert replied["touch_number"] == 2
+
+
+def test_readiness_gate_exposes_every_blocker_before_send():
+    lead = {"email": "owner@example.com"}
+    workstream = {
+        "selected_channel": "email",
+        "selected_recipient": {
+            "value": "owner@example.com",
+            "verification_status": "verified",
+        },
+        "research": {"sources": [{"url": "https://example.com"}], "stale": False},
+        "campaign_state": {
+            "status": "approved",
+            "touches_count": 2,
+            "sequence_has_gap": False,
+            "first_human_response": None,
+        },
+        "active_suppression": None,
+    }
+
+    ready = build_readiness_gate(lead, workstream)
+    assert ready["code"] == "ready"
+    assert ready["blockers"] == []
+
+    workstream["campaign_state"]["sequence_has_gap"] = True
+    workstream["active_suppression"] = {"reason": "unsubscribe"}
+    workstream["duplicate_recipient"] = {"other_workstream_id": "workstream-2"}
+    blocked = build_readiness_gate(lead, workstream)
+    assert blocked["code"] == "needs_attention"
+    assert "history" in blocked["blockers"]
+    assert "unique_recipient" in blocked["blockers"]
+    assert "sequence" in blocked["blockers"]

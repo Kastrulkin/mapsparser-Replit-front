@@ -5,7 +5,12 @@ from services.outreach_reply_tracking_service import (
     business_tracking_enabled,
     normalize_external_peer,
 )
-from services.outreach_yougile_sync_service import _deadline, _find_existing_task
+from services.outreach_yougile_sync_service import (
+    _deadline,
+    _find_existing_task,
+    _target_column_id,
+    _task_description,
+)
 
 
 def test_external_peer_normalization_is_channel_specific():
@@ -62,3 +67,36 @@ def test_yougile_rejects_ambiguous_partial_task_matches():
         assert str(exc) == "yougile_task_ambiguous"
     else:
         raise AssertionError("Ambiguous task matches must stop automatic synchronization")
+
+
+def test_yougile_projects_touch_number_without_creating_another_deal():
+    config = {
+        "touch_column_ids": {"1": "column-first", "2": "column-second"},
+        "conversation_column_id": "column-conversation",
+    }
+
+    assert _target_column_id(
+        config,
+        {"event_kind": "touch_sent", "touch_number": 2},
+    ) == "column-second"
+    assert _target_column_id(
+        {"conversation_column_id": "column-conversation"},
+        {"event_kind": "touch_sent", "touch_number": 2},
+    ) is None
+    assert "2-е касание" in _task_description(
+        {"event_kind": "touch_sent", "touch_number": 2, "channel": "vk"}
+    )
+
+
+def test_yougile_reply_keeps_response_touch_number_in_description():
+    description = _task_description(
+        {
+            "event_kind": "inbound_reply",
+            "touch_number": 3,
+            "channel": "email",
+            "reply_excerpt": "Интересно",
+        }
+    )
+
+    assert "Ответили после 3-го касания" in description
+    assert "Ответ: Интересно" in description

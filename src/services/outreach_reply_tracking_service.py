@@ -217,9 +217,24 @@ def _enqueue_yougile_sync(
     )
     if not cursor.fetchone():
         return
+    cursor.execute(
+        """
+        SELECT touch.id AS touch_id, touch.sequence_index + 1 AS touch_number
+        FROM outreach_inbound_events inbound
+        LEFT JOIN outreach_campaign_touches touch ON touch.id = inbound.touch_id
+        WHERE inbound.id = %s
+        LIMIT 1
+        """,
+        (inbound_event_id,),
+    )
+    touch_row = cursor.fetchone()
+    touch_context = dict(touch_row) if touch_row else {}
     event_id = str(uuid.uuid4())
     event_payload = {
+        "event_kind": "inbound_reply",
         "inbound_event_id": inbound_event_id,
+        "touch_id": str(touch_context.get("touch_id") or "") or None,
+        "touch_number": touch_context.get("touch_number"),
         "workstream_id": str(binding.get("workstream_id") or ""),
         "lead_id": str(binding.get("lead_id") or ""),
         "channel": channel,

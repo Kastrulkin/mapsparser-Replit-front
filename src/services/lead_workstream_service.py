@@ -121,6 +121,102 @@ def build_room_state(workstream: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_relationship_stage(workstream: dict[str, Any]) -> dict[str, Any]:
+    """Describe relationship progress without mixing it with the next action."""
+    campaign_state = workstream.get("campaign_state")
+    campaign = campaign_state if isinstance(campaign_state, dict) else {}
+    response = campaign.get("first_human_response")
+    first_response = response if isinstance(response, dict) else {}
+    response_touch_number = int(first_response.get("touch_number") or 0)
+    if response_touch_number:
+        return {
+            "code": "responded",
+            "label": f"Ответили после {response_touch_number}-го касания",
+            "touch_number": response_touch_number,
+            "channel": first_response.get("channel"),
+            "occurred_at": first_response.get("occurred_at"),
+        }
+    if first_response:
+        return {
+            "code": "response_touch_unknown",
+            "label": "Ответ получен — уточнить номер касания",
+            "touch_number": None,
+            "channel": first_response.get("channel"),
+            "occurred_at": first_response.get("occurred_at"),
+        }
+    last_confirmed_touch = campaign.get("last_confirmed_touch")
+    confirmed = last_confirmed_touch if isinstance(last_confirmed_touch, dict) else {}
+    confirmed_touch_number = int(confirmed.get("touch_number") or 0)
+    if confirmed_touch_number:
+        return {
+            "code": "touch_sent",
+            "label": f"{confirmed_touch_number}-е касание отправлено",
+            "touch_number": confirmed_touch_number,
+            "channel": confirmed.get("channel"),
+            "occurred_at": confirmed.get("sent_at"),
+        }
+    return {
+        "code": "preparing_first_touch",
+        "label": "Подготовка первого касания",
+        "touch_number": 1,
+        "channel": None,
+        "occurred_at": None,
+    }
+
+
+def build_readiness_gate(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[str, Any]:
+    """Return an explainable pre-send gate; never infer missing evidence as ready."""
+    selected_recipient = workstream.get("selected_recipient")
+    recipient = selected_recipient if isinstance(selected_recipient, dict) else {}
+    verification = str(recipient.get("verification_status") or "").strip().lower()
+    recipient_ready = bool(recipient) and verification in {"verified", "confirmed_source"}
+    stale_after = recipient.get("stale_after")
+    if recipient_ready and stale_after:
+        aware_stale_after = stale_after
+        if isinstance(stale_after, str):
+            try:
+                aware_stale_after = datetime.fromisoformat(stale_after.replace("Z", "+00:00"))
+            except ValueError:
+                recipient_ready = False
+        if recipient_ready and hasattr(aware_stale_after, "tzinfo"):
+            if aware_stale_after.tzinfo is None:
+                aware_stale_after = aware_stale_after.replace(tzinfo=timezone.utc)
+            recipient_ready = aware_stale_after > datetime.now(timezone.utc)
+
+    research = workstream.get("research")
+    evidence = research if isinstance(research, dict) else {}
+    evidence_ready = bool(evidence) and not bool(evidence.get("stale")) and bool(evidence.get("sources"))
+    campaign_state = workstream.get("campaign_state")
+    campaign = campaign_state if isinstance(campaign_state, dict) else {}
+    campaign_status = str(campaign.get("status") or "").strip().lower()
+    draft_ready = campaign_status in {"approved", "active", "paused"}
+    sequence_ready = int(campaign.get("touches_count") or 0) > 0 and not bool(
+        campaign.get("sequence_has_gap")
+    )
+    channel_ready = build_channel_state(lead, workstream).get("recipient_available") is True
+    clean_history = not bool(campaign.get("first_human_response")) and not bool(
+        workstream.get("active_suppression")
+    )
+    unique_recipient = not bool(workstream.get("duplicate_recipient"))
+
+    checks = [
+        {"code": "recipient", "label": "Получатель подтверждён", "passed": recipient_ready},
+        {"code": "history", "label": "Нет ответа или запрета", "passed": clean_history},
+        {"code": "unique_recipient", "label": "Адресат не повторяется", "passed": unique_recipient},
+        {"code": "evidence", "label": "Факты актуальны", "passed": evidence_ready},
+        {"code": "draft", "label": "Текст утверждён", "passed": draft_ready},
+        {"code": "channel", "label": "Канал доступен", "passed": channel_ready},
+        {"code": "sequence", "label": "Порядок касаний цел", "passed": sequence_ready},
+    ]
+    blockers = [check["code"] for check in checks if not check["passed"]]
+    return {
+        "code": "ready" if not blockers else "needs_attention",
+        "label": "Готово к отправке" if not blockers else "Нужна проверка",
+        "checks": checks,
+        "blockers": blockers,
+    }
+
+
 def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[str, Any]:
     status = str(workstream.get("status") or "unprocessed").strip().lower()
     campaign_state = workstream.get("campaign_state") if isinstance(workstream.get("campaign_state"), dict) else None
@@ -135,10 +231,21 @@ def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[
         readiness_code = str(readiness.get("code") or "").strip().lower()
     channel_state = build_channel_state(lead, workstream)
     room_state = build_room_state(workstream)
-    if status in {"replied", "responded"}:
+    readiness_gate = workstream.get("readiness_gate")
+    gate = readiness_gate if isinstance(readiness_gate, dict) else {}
+    blockers = gate.get("blockers") if isinstance(gate.get("blockers"), list) else []
+    if status in {"replied", "responded"} or "history" in blockers:
         return {"code": "record_result", "label": "Зафиксировать результат"}
     if status in {"contacted", "waiting_reply", "second_message_sent", "sent", "delivered"}:
         return {"code": "wait_or_follow_up", "label": "Проверить ответ"}
+    if "recipient" in blockers or "channel" in blockers:
+        return {"code": "find_contact", "label": "Найти и проверить контакт"}
+    if "unique_recipient" in blockers:
+        return {"code": "resolve_duplicate", "label": "Разобрать повтор адресата"}
+    if "evidence" in blockers:
+        return {"code": "complete_facts", "label": "Обновить факты"}
+    if "sequence" in blockers:
+        return {"code": "repair_sequence", "label": "Восстановить порядок касаний"}
     if campaign_status == "draft":
         return {"code": "review_draft", "label": "Проверить черновик"}
     if campaign_status in {"approved", "active", "paused"}:
@@ -151,6 +258,8 @@ def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[
         return {"code": "find_contact", "label": "Найти контакт"}
     if readiness_code in {"ready", "review_required"}:
         return {"code": "review_message", "label": "Проверить письмо"}
+    if "draft" in blockers and campaign_state:
+        return {"code": "review_draft", "label": "Проверить черновик"}
     if channel_state["code"] in {"choose_channel", "missing_recipient"}:
         return {"code": "find_contact", "label": "Найти контакт"}
     if room_state["code"] == "missing":
@@ -191,7 +300,8 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     ws.id, ws.lead_id, ws.workstream_type, ws.client_business_id,
                     client_business.name AS client_business_name,
                     client_business.address AS client_business_address,
-                    ws.status, ws.selected_channel, ws.next_action_at,
+                    ws.status, ws.lifecycle_status, ws.status_reason, ws.next_step,
+                    ws.state_changed_at, ws.selected_channel, ws.next_action_at,
                     ws.selected_contact_point_id,
                     ws.last_contact_at, ws.last_contact_channel, ws.last_contact_comment,
                     ws.created_at, ws.updated_at,
@@ -206,6 +316,13 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     campaign.approved_at AS campaign_approved_at,
                     campaign.stop_reason AS campaign_stop_reason,
                     COALESCE(campaign.touches_count, 0)::INT AS campaign_touches_count,
+                    COALESCE(campaign.confirmed_touches_count, 0)::INT AS confirmed_touches_count,
+                    campaign.last_confirmed_touch AS last_confirmed_touch,
+                    campaign.next_pending_touch AS next_pending_touch,
+                    COALESCE(campaign.sequence_has_gap, FALSE) AS sequence_has_gap,
+                    response.first_human_response AS first_human_response,
+                    suppression.active_suppression AS active_suppression,
+                    recipient_history.duplicate_recipient AS duplicate_recipient,
                     research.id AS research_id, research.score AS research_score,
                     research.qualification_stage AS research_stage,
                     research.signal_label AS research_signal_label,
@@ -267,12 +384,84 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                             SELECT COUNT(*)
                             FROM outreach_campaign_touches touch
                             WHERE touch.campaign_id = outreach_campaign.id
-                        ) AS touches_count
+                        ) AS touches_count,
+                        (
+                            SELECT COUNT(*)
+                            FROM outreach_campaign_touches touch
+                            WHERE touch.campaign_id = outreach_campaign.id
+                              AND touch.status IN ('manual_sent', 'sent', 'delivered')
+                        ) AS confirmed_touches_count,
+                        (
+                            SELECT JSONB_BUILD_OBJECT(
+                                'id', touch.id,
+                                'touch_number', touch.sequence_index + 1,
+                                'channel', touch.channel,
+                                'sent_at', touch.updated_at
+                            )
+                            FROM outreach_campaign_touches touch
+                            WHERE touch.campaign_id = outreach_campaign.id
+                              AND touch.status IN ('manual_sent', 'sent', 'delivered')
+                            ORDER BY touch.sequence_index DESC, touch.updated_at DESC
+                            LIMIT 1
+                        ) AS last_confirmed_touch,
+                        (
+                            SELECT JSONB_BUILD_OBJECT(
+                                'id', touch.id,
+                                'touch_number', touch.sequence_index + 1,
+                                'channel', touch.channel,
+                                'status', touch.status,
+                                'scheduled_at', touch.scheduled_at
+                            )
+                            FROM outreach_campaign_touches touch
+                            WHERE touch.campaign_id = outreach_campaign.id
+                              AND touch.status NOT IN ('manual_sent', 'sent', 'delivered', 'cancelled')
+                            ORDER BY touch.sequence_index ASC, touch.created_at ASC
+                            LIMIT 1
+                        ) AS next_pending_touch,
+                        EXISTS (
+                            SELECT 1
+                            FROM outreach_campaign_touches pending_touch
+                            WHERE pending_touch.campaign_id = outreach_campaign.id
+                              AND pending_touch.status NOT IN ('manual_sent', 'sent', 'delivered', 'cancelled')
+                              AND pending_touch.sequence_index < COALESCE((
+                                  SELECT MAX(sent_touch.sequence_index)
+                                  FROM outreach_campaign_touches sent_touch
+                                  WHERE sent_touch.campaign_id = outreach_campaign.id
+                                    AND sent_touch.status IN ('manual_sent', 'sent', 'delivered')
+                              ), -1)
+                        ) AS sequence_has_gap
                     FROM outreach_campaigns outreach_campaign
                     WHERE outreach_campaign.workstream_id = ws.id
                     ORDER BY outreach_campaign.version DESC, outreach_campaign.created_at DESC
                     LIMIT 1
                 ) campaign ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT JSONB_BUILD_OBJECT(
+                        'id', inbound.id,
+                        'touch_number', touch.sequence_index + 1,
+                        'channel', inbound.channel,
+                        'classification', inbound.classification,
+                        'occurred_at', inbound.occurred_at
+                    ) AS first_human_response
+                    FROM outreach_inbound_events inbound
+                    LEFT JOIN outreach_campaign_touches touch ON touch.id = inbound.touch_id
+                    WHERE inbound.workstream_id = ws.id AND inbound.is_human = TRUE
+                    ORDER BY inbound.occurred_at ASC, inbound.created_at ASC
+                    LIMIT 1
+                ) response ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT JSONB_BUILD_OBJECT(
+                        'id', item.id,
+                        'scope', item.scope_type,
+                        'reason', item.reason_code,
+                        'created_at', item.created_at
+                    ) AS active_suppression
+                    FROM outreach_suppressions item
+                    WHERE (item.expires_at IS NULL OR item.expires_at > NOW())
+                      AND (item.workstream_id = ws.id OR item.lead_id = ws.lead_id)
+                    ORDER BY item.created_at DESC
+                    LIMIT 1
+                ) suppression ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT r.*
                     FROM lead_workstream_research r
@@ -340,6 +529,22 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     LIMIT 1
                 ) selected_contact ON TRUE
                 LEFT JOIN LATERAL (
+                    SELECT JSONB_BUILD_OBJECT(
+                        'queue_id', sent.id,
+                        'other_workstream_id', sent.workstream_id,
+                        'sent_at', sent.sent_at,
+                        'channel', sent.channel
+                    ) AS duplicate_recipient
+                    FROM lead_contact_points selected
+                    JOIN outreachsendqueue sent
+                      ON LOWER(BTRIM(sent.recipient_value)) = LOWER(BTRIM(selected.value))
+                    WHERE selected.id = ws.selected_contact_point_id
+                      AND sent.delivery_status IN ('sent', 'delivered')
+                      AND sent.workstream_id IS DISTINCT FROM ws.id
+                    ORDER BY sent.sent_at DESC NULLS LAST, sent.updated_at DESC
+                    LIMIT 1
+                ) recipient_history ON TRUE
+                LEFT JOIN LATERAL (
                     SELECT job.*
                     FROM lead_enrichment_jobs job
                     WHERE job.workstream_id = ws.id
@@ -371,6 +576,11 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                         "status": payload.pop("campaign_status"),
                         "version": int(payload.pop("campaign_version") or 1),
                         "touches_count": int(payload.pop("campaign_touches_count") or 0),
+                        "confirmed_touches_count": int(payload.pop("confirmed_touches_count") or 0),
+                        "last_confirmed_touch": payload.pop("last_confirmed_touch"),
+                        "next_pending_touch": payload.pop("next_pending_touch"),
+                        "sequence_has_gap": bool(payload.pop("sequence_has_gap")),
+                        "first_human_response": payload.pop("first_human_response"),
                         "created_at": payload.pop("campaign_created_at"),
                         "updated_at": payload.pop("campaign_updated_at"),
                         "approved_at": payload.pop("campaign_approved_at"),
@@ -381,6 +591,8 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                         "campaign_id", "campaign_status", "campaign_version",
                         "campaign_touches_count", "campaign_created_at",
                         "campaign_updated_at", "campaign_approved_at", "campaign_stop_reason",
+                        "confirmed_touches_count", "last_confirmed_touch", "next_pending_touch",
+                        "sequence_has_gap", "first_human_response",
                     ):
                         payload.pop(key, None)
                     payload["campaign_state"] = None
@@ -482,6 +694,8 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
             workstream = dict(raw_workstream)
             workstream["channel_state"] = build_channel_state(lead, workstream)
             workstream["room_state"] = build_room_state(workstream)
+            workstream["relationship_stage"] = build_relationship_stage(workstream)
+            workstream["readiness_gate"] = build_readiness_gate(lead, workstream)
             workstream["next_action"] = build_next_action(lead, workstream)
             serialized.append(workstream)
         lead["workstreams"] = serialized

@@ -98,6 +98,27 @@ interface WorkstreamAction {
   label?: string;
 }
 
+interface RelationshipStage {
+  code?: 'preparing_first_touch' | 'touch_sent' | 'responded' | 'response_touch_unknown';
+  label?: string;
+  touch_number?: number;
+  channel?: string | null;
+  occurred_at?: string | null;
+}
+
+interface ReadinessCheck {
+  code?: string;
+  label?: string;
+  passed?: boolean;
+}
+
+interface ReadinessGate {
+  code?: 'ready' | 'needs_attention';
+  label?: string;
+  checks?: ReadinessCheck[];
+  blockers?: string[];
+}
+
 interface ResearchSource {
   title?: string;
   url?: string;
@@ -554,6 +575,8 @@ interface LeadWorkstream {
   channel_state?: WorkstreamState;
   room_state?: WorkstreamState;
   next_action?: WorkstreamAction;
+  relationship_stage?: RelationshipStage;
+  readiness_gate?: ReadinessGate;
   research?: WorkstreamResearch | null;
   contact_points?: ContactPoint[];
   contact_summary?: { found?: number; verified?: number };
@@ -566,6 +589,28 @@ interface LeadWorkstream {
     status?: string;
     version?: number;
     touches_count?: number;
+    confirmed_touches_count?: number;
+    sequence_has_gap?: boolean;
+    last_confirmed_touch?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      sent_at?: string;
+    } | null;
+    next_pending_touch?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      status?: string;
+      scheduled_at?: string;
+    } | null;
+    first_human_response?: {
+      id?: string;
+      touch_number?: number;
+      channel?: string;
+      classification?: string;
+      occurred_at?: string;
+    } | null;
     created_at?: string;
     updated_at?: string;
     approved_at?: string | null;
@@ -2982,9 +3027,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         {signalLabel(research)} · {Number(research.score || 0)}
                       </Badge>
                     )}
-                    {primary?.campaign_state ? (
+                    {primary?.relationship_stage ? (
                       <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
-                        Цепочка · {campaignRegistryStatusLabels[String(primary.campaign_state.status || '')] || 'Создана'}
+                        {primary.relationship_stage.label || 'Подготовка первого касания'}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
@@ -3066,6 +3111,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="bg-slate-50">{workstreamLabel(selectedWorkstream)}</Badge>
                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">{statusLabel(selectedWorkstream)}</Badge>
+                {selectedWorkstream.relationship_stage?.label ? (
+                  <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">
+                    {selectedWorkstream.relationship_stage.label}
+                  </Badge>
+                ) : null}
                 {selectedWorkstream.research && (
                   <Badge variant="outline" className={signalTone(selectedWorkstream.research)}>
                     {signalLabel(selectedWorkstream.research)} · {Number(selectedWorkstream.research.score || 0)}
@@ -3077,6 +3127,30 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </Badge>
                 )}
               </div>
+
+              <section className="grid gap-3 md:grid-cols-3" aria-label="Организация, контакт и рабочий контекст">
+                <div className="rounded-xl bg-slate-50 p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Организация</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">{selectedLead.name || 'Без названия'}</div>
+                  <div className="mt-1 text-xs text-slate-500">{selectedLead.address || selectedLead.city || 'Адрес не указан'}</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Контакт</div>
+                  <div className="mt-1 truncate text-sm font-semibold text-slate-950">{drawerRecipient?.value || 'Не выбран'}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {drawerRecipient
+                      ? [drawerRecipient.person_name, drawerRecipient.role_title].filter(Boolean).join(' · ') || 'Официальный контакт'
+                      : 'Нужно найти и проверить'}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Рабочий контекст</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">{workstreamLabel(selectedWorkstream)}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {selectedWorkstream.relationship_stage?.label || 'Подготовка первого касания'}
+                  </div>
+                </div>
+              </section>
 
               <div className="grid grid-cols-5 gap-1" aria-label="Этапы подготовки цепочки обращений">
                 {['Контакты', 'Получатель', 'Основание', 'Цепочка', 'Проверка'].map((label, index) => {
@@ -3151,6 +3225,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     </Button>
                   )}
                 </div>
+                {selectedWorkstream.readiness_gate?.checks?.length ? (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className={`text-xs font-semibold uppercase tracking-[0.08em] ${selectedWorkstream.readiness_gate.code === 'ready' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {selectedWorkstream.readiness_gate.label || 'Готовность'}
+                      </div>
+                      {selectedWorkstream.readiness_gate.checks.map((check) => (
+                        <div key={check.code || check.label} className={`inline-flex items-center gap-1.5 text-xs font-medium ${check.passed ? 'text-emerald-700' : 'text-amber-800'}`}>
+                          {check.passed ? <Check className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
+                          <span>{check.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {savedCampaignChannelBlockers.length > 0 ? (
                   <div className="mt-3 rounded-xl bg-amber-50 p-3 shadow-[0_0_0_1px_rgba(245,158,11,0.22)]">
                     <div className="text-sm font-semibold text-amber-950">Что мешает утвердить цепочку</div>

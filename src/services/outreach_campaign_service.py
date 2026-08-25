@@ -4549,6 +4549,20 @@ def record_manual_touch(
         """,
         (next_touch_status, Json({"manual_event": event_type, "note": note}), touch_id),
     )
+    if event_type == "sent":
+        cursor.execute(
+            """
+            UPDATE lead_workstreams
+            SET status = 'contacted', lifecycle_status = 'waiting_reply',
+                status_reason = NULL, selected_channel = %s,
+                last_contact_at = NOW(), last_contact_channel = %s,
+                last_contact_comment = NULLIF(%s, ''),
+                next_action_at = NOW() + INTERVAL '4 days',
+                next_step = 'Проверить ответ', state_changed_at = NOW(), updated_at = NOW()
+            WHERE id = %s
+            """,
+            (touch.get("channel"), touch.get("channel"), note.strip(), touch.get("workstream_id")),
+        )
     if event_type == "reply":
         classification = classify_inbound_event({"raw_reply": note})
         if classification["creates_suppression"]:
@@ -4732,6 +4746,24 @@ def record_manual_touch(
             """,
             (campaign_id,),
         )
+    if event_type in {"sent", "reply"}:
+        cursor.execute("SAVEPOINT yougile_manual_projection")
+        try:
+            from services.outreach_yougile_sync_service import enqueue_touch_sent_projection
+
+            enqueue_touch_sent_projection(cursor, touch_id=touch_id)
+            cursor.execute("RELEASE SAVEPOINT yougile_manual_projection")
+        except Exception as projection_error:
+            cursor.execute("ROLLBACK TO SAVEPOINT yougile_manual_projection")
+            cursor.execute("RELEASE SAVEPOINT yougile_manual_projection")
+            record_campaign_event(
+                cursor,
+                campaign_id,
+                "yougile_projection_failed",
+                actor_id=user_id,
+                touch_id=touch_id,
+                payload={"error": str(projection_error)[:500]},
+            )
     return {"campaign_id": campaign_id, "touch_id": touch_id, "event_type": event_type}
 
 

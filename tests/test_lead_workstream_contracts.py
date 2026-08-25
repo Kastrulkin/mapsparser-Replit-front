@@ -80,3 +80,28 @@ def test_partner_deletion_removes_context_before_company():
     assert "DELETE FROM lead_workstreams" in service
     assert "NOT EXISTS (" in service
     assert "SELECT 1 FROM lead_workstreams ws WHERE ws.lead_id = l.id" in service
+
+
+def test_registry_exposes_touch_stage_readiness_and_duplicate_recipient_gate():
+    service = read("src/services/lead_workstream_service.py")
+    frontend = read("frontend/src/components/prospecting/AdminLeadRegistry.tsx")
+
+    assert 'workstream["relationship_stage"] = build_relationship_stage(workstream)' in service
+    assert 'workstream["readiness_gate"] = build_readiness_gate(lead, workstream)' in service
+    assert "recipient_history.duplicate_recipient AS duplicate_recipient" in service
+    assert "Ответили после" in service
+    assert "Организация, контакт и рабочий контекст" in frontend
+    assert "readiness_gate.checks.map" in frontend
+
+
+def test_confirmed_sends_project_one_task_to_touch_number_column():
+    delivery = read("src/api/prospecting/delivery_runtime.py")
+    campaign = read("src/services/outreach_campaign_service.py")
+    projection = read("src/services/outreach_yougile_sync_service.py")
+
+    assert "enqueue_touch_sent_projection(cur, queue_id=queue_id)" in delivery
+    assert "enqueue_touch_sent_projection(cursor, touch_id=touch_id)" in campaign
+    assert "touch_column_ids" in projection
+    assert "UNIQUE(workstream_id, provider)" in read(
+        "alembic_migrations/versions/20260825_add_outreach_reply_tracking.py"
+    )

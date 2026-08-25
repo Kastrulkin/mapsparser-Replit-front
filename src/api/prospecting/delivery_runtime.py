@@ -268,7 +268,7 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
                 sent_at = {sent_at_sql},
                 updated_at = NOW()
             WHERE id = %s
-            RETURNING id, batch_id, lead_id, workstream_id, draft_id, channel, delivery_status,
+            RETURNING id, batch_id, lead_id, workstream_id, draft_id, campaign_touch_id, channel, delivery_status,
                       provider_message_id, error_text, sent_at, created_at, updated_at
             """,
             (delivery_status, provider_message_id, error_text, queue_id),
@@ -319,6 +319,27 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
             event_type="delivery_sent" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else "delivery_failed",
             payload={"queue_id": queue_id, "delivery_status": delivery_status, "provider_message_id": provider_message_id},
         )
+        if (
+            delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED}
+            and payload.get("workstream_id")
+            and payload.get("campaign_touch_id")
+        ):
+            cur.execute("SAVEPOINT yougile_projection")
+            try:
+                from services.outreach_yougile_sync_service import enqueue_touch_sent_projection
+
+                enqueue_touch_sent_projection(cur, queue_id=queue_id)
+                cur.execute("RELEASE SAVEPOINT yougile_projection")
+            except Exception as projection_error:
+                cur.execute("ROLLBACK TO SAVEPOINT yougile_projection")
+                cur.execute("RELEASE SAVEPOINT yougile_projection")
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=str(payload.get("lead_id") or ""),
+                    workstream_id=str(payload.get("workstream_id") or "") or None,
+                    event_type="yougile_projection_failed",
+                    payload={"queue_id": queue_id, "error": str(projection_error)[:500]},
+                )
         conn.commit()
         return payload
     except Exception:
