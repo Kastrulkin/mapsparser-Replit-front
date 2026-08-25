@@ -433,20 +433,34 @@ def _message_datetime(raw_value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def fetch_replies(
+def _sent_mailbox(client: imaplib.IMAP4) -> str:
+    status, data = client.list()
+    if _text(status).upper() != "OK":
+        raise EmailAdapterError("email_sent_label_unavailable", "Sent mailbox list is unavailable")
+    lines = [item for item in (data or []) if isinstance(item, bytes)]
+    names = [_gmail_mailbox_name(line) for line in lines if b"\\Sent" in line]
+    if len(names) != 1:
+        raise EmailAdapterError("email_sent_label_unavailable", "Sent mailbox is unavailable")
+    return names[0]
+
+
+def fetch_mailbox_messages(
     sender_account: dict[str, Any],
     *,
+    mailbox: str,
     since_at: datetime | None = None,
     limit: int = 100,
     timeout: int = 20,
 ) -> list[dict[str, Any]]:
+    """Read normalized Inbox/Sent envelopes without enumerating unrelated mailboxes."""
     config = load_mailbox_config(sender_account)
     sync_since = since_at or datetime.now(timezone.utc) - timedelta(days=DEFAULT_SYNC_LOOKBACK_DAYS)
     safe_limit = max(1, min(int(limit or 100), 500))
     client = None
     try:
         client = _imap_connection(config, timeout=timeout)
-        status, _data = client.select(config.get("imap_folder") or "INBOX", readonly=True)
+        folder = _sent_mailbox(client) if mailbox == "sent" else config.get("imap_folder") or "INBOX"
+        status, _data = client.select(folder, readonly=True)
         if _text(status).upper() != "OK":
             raise EmailAdapterError("email_imap_folder_unavailable", "IMAP folder is unavailable")
         since_token = sync_since.astimezone(timezone.utc).strftime("%d-%b-%Y")
@@ -454,7 +468,7 @@ def fetch_replies(
         if _text(status).upper() != "OK":
             raise EmailAdapterError("email_imap_search_failed", "IMAP search failed", retryable=True)
         raw_ids = data[0].split() if data and data[0] else []
-        replies: list[dict[str, Any]] = []
+        messages: list[dict[str, Any]] = []
         for raw_uid in raw_ids[-safe_limit:]:
             status, fetched = client.uid("fetch", raw_uid, "(RFC822)")
             if _text(status).upper() != "OK" or not fetched:
@@ -470,24 +484,45 @@ def fetch_replies(
             if occurred_at and occurred_at < sync_since - timedelta(days=1):
                 continue
             from_addresses = [normalize_email(address) for _name, address in getaddresses(message.get_all("From", []))]
-            normalized_from = next((address for address in from_addresses if address), "")
+            to_addresses = [normalize_email(address) for _name, address in getaddresses(message.get_all("To", []))]
             uid = raw_uid.decode("ascii", errors="ignore") if isinstance(raw_uid, bytes) else _text(raw_uid)
             references = " ".join(message.get_all("References", []))
-            replies.append({
-                "provider_event_id": f"email:{sender_account.get('id')}:{uid}"[:255],
+            event_prefix = f"email:{sender_account.get('id')}"
+            messages.append({
+                "provider_event_id": (
+                    f"{event_prefix}:{uid}" if mailbox == "inbox" else f"{event_prefix}:sent:{uid}"
+                )[:255],
                 "mailbox_uid": uid,
+                "mailbox": mailbox,
                 "message_id": _text(message.get("Message-ID"))[:255] or None,
                 "in_reply_to": _text(message.get("In-Reply-To"))[:1000] or None,
                 "references": references[:4000] or None,
-                "from_email": normalized_from or None,
+                "from_email": next((address for address in from_addresses if address), "") or None,
+                "to_emails": [address for address in to_addresses if address],
                 "subject": _text(message.get("Subject"))[:500],
                 "body": _message_body(message),
                 "auto_submitted": _text(message.get("Auto-Submitted"))[:100],
                 "precedence": _text(message.get("Precedence"))[:100],
                 "occurred_at": occurred_at or datetime.now(timezone.utc),
             })
-        return replies
+        return messages
     except Exception as exc:
         raise classify_email_exception(exc) from exc
     finally:
         _close_imap(client)
+
+
+def fetch_replies(
+    sender_account: dict[str, Any],
+    *,
+    since_at: datetime | None = None,
+    limit: int = 100,
+    timeout: int = 20,
+) -> list[dict[str, Any]]:
+    return fetch_mailbox_messages(
+        sender_account,
+        mailbox="inbox",
+        since_at=since_at,
+        limit=limit,
+        timeout=timeout,
+    )

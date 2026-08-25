@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -8,7 +9,18 @@ from typing import Any
 from psycopg2.extras import Json
 
 from pg_db_utils import get_db_connection
-from services.outreach_email_adapter import EmailAdapterError, fetch_replies, normalize_email
+from services.outreach_email_adapter import (
+    EmailAdapterError,
+    fetch_mailbox_messages,
+    fetch_replies,
+    normalize_email,
+)
+from services.outreach_reply_tracking_service import (
+    business_tracking_enabled,
+    record_bound_inbound_event,
+    resolve_known_contact_binding,
+    update_binding_cursor,
+)
 from services.outreach_safety_service import classify_inbound_event, record_sender_health_event
 
 
@@ -98,6 +110,101 @@ def _match_queue_item(reply: dict[str, Any], candidates: list[dict[str, Any]]) -
         if recipient and (recipient == from_email or recipient in body_lower):
             return candidate
     return None
+
+
+def _sync_known_email_threads(
+    sender: dict[str, Any],
+    *,
+    since_at: datetime,
+    limit: int,
+) -> dict[str, Any]:
+    """Discover manual Sent threads and import Inbox replies for known leads only."""
+    platform_enabled = (
+        str(sender.get("scope_type") or "") == "platform"
+        and str(os.getenv("OUTREACH_EMAIL_THREAD_SYNC_ENABLED") or "false").strip().lower()
+        in {"1", "true", "yes", "on"}
+        and any(value.strip() for value in os.getenv("OUTREACH_THREAD_SYNC_BUSINESS_IDS", "").split(","))
+    )
+    if not platform_enabled and not business_tracking_enabled(str(sender.get("business_id") or ""), "email"):
+        return {"bound": 0, "imported": 0, "duplicates": 0, "processed_event_ids": set()}
+    sent_messages = fetch_mailbox_messages(
+        sender, mailbox="sent", since_at=since_at, limit=limit,
+    )
+    inbox_messages = fetch_mailbox_messages(
+        sender, mailbox="inbox", since_at=since_at, limit=limit,
+    )
+    sender_id = str(sender.get("id") or "")
+    summary = {"bound": 0, "imported": 0, "duplicates": 0, "processed_event_ids": set()}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        for message in sent_messages:
+            for recipient in message.get("to_emails") or []:
+                binding = resolve_known_contact_binding(
+                    cursor,
+                    sender_account_id=sender_id,
+                    channel="email",
+                    external_peer_id=recipient,
+                    binding_source="sent_message",
+                )
+                if not binding:
+                    continue
+                update_binding_cursor(
+                    cursor,
+                    binding_id=str(binding.get("id") or ""),
+                    provider_event_id=str(message.get("provider_event_id") or ""),
+                    external_thread_id=str(message.get("message_id") or "") or None,
+                )
+                summary["bound"] += 1
+        for message in inbox_messages:
+            provider_event_id = str(message.get("provider_event_id") or "")
+            binding = resolve_known_contact_binding(
+                cursor,
+                sender_account_id=sender_id,
+                channel="email",
+                external_peer_id=str(message.get("from_email") or ""),
+            )
+            if not binding:
+                continue
+            classification = classify_inbound_event({
+                "subject": message.get("subject"),
+                "body": message.get("body"),
+                "raw_reply": message.get("body"),
+                "auto_submitted": message.get("auto_submitted"),
+                "precedence": message.get("precedence"),
+            })
+            status = record_bound_inbound_event(
+                cursor,
+                binding=binding,
+                sender_account_id=sender_id,
+                channel="email",
+                provider_event_id=provider_event_id,
+                raw_reply=str(message.get("body") or message.get("subject") or ""),
+                classification=classification,
+                occurred_at=message.get("occurred_at"),
+                raw_payload={
+                    "subject": message.get("subject"),
+                    "message_id": message.get("message_id"),
+                    "in_reply_to": message.get("in_reply_to"),
+                    "references": message.get("references"),
+                    "mailbox_uid": message.get("mailbox_uid"),
+                    "thread_id": message.get("in_reply_to") or message.get("message_id"),
+                    "auto_submitted": message.get("auto_submitted"),
+                    "precedence": message.get("precedence"),
+                },
+            )
+            summary["processed_event_ids"].add(provider_event_id)
+            if status == "recorded":
+                summary["imported"] += 1
+            elif status == "duplicate":
+                summary["duplicates"] += 1
+        conn.commit()
+        return summary
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _record_sender_sync_event(
@@ -340,6 +447,11 @@ def sync_email_replies(
             since_at = sender.get("last_reply_sync_at")
             if not isinstance(since_at, datetime):
                 since_at = datetime.now(timezone.utc) - timedelta(days=30)
+            known_threads = _sync_known_email_threads(
+                sender,
+                since_at=since_at - timedelta(minutes=10),
+                limit=per_sender_limit,
+            )
             replies = fetch_replies(
                 sender,
                 since_at=since_at - timedelta(minutes=10),
@@ -350,6 +462,8 @@ def sync_email_replies(
             sender_unmatched = 0
             for reply in replies:
                 summary["fetched"] += 1
+                if reply.get("provider_event_id") in known_threads["processed_event_ids"]:
+                    continue
                 queue_item = _match_queue_item(reply, candidates)
                 if not queue_item:
                     summary["unmatched"] += 1
@@ -395,8 +509,9 @@ def sync_email_replies(
                     event_type="reply_sync_succeeded",
                     payload={
                         "fetched": len(replies),
-                        "imported": sender_imported,
+                        "imported": sender_imported + int(known_threads["imported"]),
                         "unmatched": sender_unmatched,
+                        "manual_threads_bound": int(known_threads["bound"]),
                     },
                 )
                 conn.commit()
@@ -409,8 +524,11 @@ def sync_email_replies(
                 "sender_account_id": sender_id,
                 "status": "ok",
                 "fetched": len(replies),
-                "imported": sender_imported,
+                "imported": sender_imported + int(known_threads["imported"]),
+                "manual_threads_bound": int(known_threads["bound"]),
             })
+            summary["imported"] += int(known_threads["imported"])
+            summary["duplicates"] += int(known_threads["duplicates"])
         except Exception as exc:
             summary["failed"] += 1
             error_code = getattr(exc, "code", "email_reply_sync_failed")

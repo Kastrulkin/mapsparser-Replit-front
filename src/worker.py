@@ -1497,6 +1497,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
         from api.admin_prospecting import _sync_telegram_app_replies
         from services.outreach_email_reply_service import sync_email_replies
         from services.outreach_vk_reply_service import sync_vk_replies
+        from services.outreach_yougile_sync_service import process_yougile_outbox
 
         reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
         telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
@@ -1507,6 +1508,13 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
         vk_reply_sync = sync_vk_replies(
             sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
             per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
+        )
+        yougile_sync = (
+            process_yougile_outbox(
+                limit=max(1, min(int(os.getenv("OUTREACH_YOUGILE_SYNC_BATCH_SIZE", "20")), 100)),
+            )
+            if _env_bool("OUTREACH_YOUGILE_SYNC_ENABLED", False)
+            else {"picked": 0, "delivered": 0, "retried": 0}
         )
         reply_sync_failed = (
             int(telegram_reply_sync.get("failed") or 0)
@@ -1527,6 +1535,8 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
                 f"email_imported={int(email_reply_sync.get('imported') or 0)} "
                 f"vk_picked={int(vk_reply_sync.get('picked') or 0)} "
                 f"vk_imported={int(vk_reply_sync.get('imported') or 0)} "
+                f"yougile_delivered={int(yougile_sync.get('delivered') or 0)} "
+                f"yougile_retry={int(yougile_sync.get('retried') or 0)} "
                 f"failed={reply_sync_failed}",
                 flush=True,
             )

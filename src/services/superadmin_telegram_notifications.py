@@ -519,12 +519,20 @@ def collect_pending_outreach_reply_notifications(conn: Any, limit: int = 20) -> 
             inbound.occurred_at,
             lead.name AS lead_name,
             COALESCE(business.name, 'LocalOS') AS business_name,
-            COALESCE(NULLIF(BTRIM(touch.approved_text), ''), touch.generated_text, '') AS outbound_text
+            COALESCE(NULLIF(BTRIM(touch.approved_text), ''), touch.generated_text, '') AS outbound_text,
+            room.slug AS room_slug,
+            external_task.external_url AS yougile_task_url
         FROM outreach_inbound_events inbound
-        JOIN outreach_campaigns campaign ON campaign.id = inbound.campaign_id
+        LEFT JOIN outreach_campaigns campaign ON campaign.id = inbound.campaign_id
+        LEFT JOIN lead_workstreams workstream ON workstream.id = inbound.workstream_id
         JOIN prospectingleads lead ON lead.id = inbound.lead_id
         LEFT JOIN outreach_campaign_touches touch ON touch.id = inbound.touch_id
-        LEFT JOIN businesses business ON business.id = campaign.business_id
+        LEFT JOIN businesses business
+          ON business.id = COALESCE(campaign.business_id, workstream.client_business_id)
+        LEFT JOIN sales_rooms room ON room.workstream_id = inbound.workstream_id
+        LEFT JOIN outreach_external_task_bindings external_task
+          ON external_task.workstream_id = inbound.workstream_id
+         AND external_task.provider = 'yougile' AND external_task.status = 'active'
         WHERE inbound.event_type = 'reply'
           AND inbound.is_human IS TRUE
           AND inbound.created_at >= NOW() - INTERVAL '24 hours'
@@ -555,13 +563,20 @@ def format_outreach_reply_notification(item: dict[str, Any]) -> str:
         if stopped
         else "Кампания требует проверки: автоматическая остановка не применена."
     )
+    room_slug = str(item.get("room_slug") or "").strip()
+    links = []
+    if room_slug:
+        links.append(f"Комната: https://localos.pro/room/{room_slug}")
+    if item.get("yougile_task_url"):
+        links.append(f"YouGile: {item.get('yougile_task_url')}")
+    link_block = "\n" + "\n".join(links) if links else f"\nОткрыть лид: {OUTREACH_URL}"
     return (
         "💬 Пришёл ответ на аутрич\n\n"
         f"{business_name} → {lead_name} · {channel}\n"
         f"На сообщение: «{outbound_text}»\n\n"
         f"Ответ: «{raw_reply}»\n\n"
-        f"Классификация: {classification}. {stop_line}\n"
-        f"Открыть лид: {OUTREACH_URL}"
+        f"Классификация: {classification}. {stop_line}"
+        f"{link_block}"
     )
 
 

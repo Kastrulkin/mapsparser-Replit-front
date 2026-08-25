@@ -1024,6 +1024,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [contactIntelligence, setContactIntelligence] = useState<ContactIntelligence | null>(null);
   const [contactIntelligenceLoading, setContactIntelligenceLoading] = useState(false);
   const [manualContactOpen, setManualContactOpen] = useState(false);
+  const [vkHandoffContact, setVkHandoffContact] = useState(false);
   const [manualContactType, setManualContactType] = useState('telegram');
   const [manualContactValue, setManualContactValue] = useState('');
   const [manualTelegramUsage, setManualTelegramUsage] = useState('recipient');
@@ -1718,6 +1719,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         : 'partner_business',
     );
     setManualContactOpen(false);
+    setVkHandoffContact(false);
     setManualContactValue('');
     setManualContactError('');
     setManualOutreachReason(String(
@@ -2113,6 +2115,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           owner_type: manualOwnerType,
           person_name: manualPersonName,
           role_title: manualRoleTitle,
+          handoff_from_vk: vkHandoffContact,
         }),
       });
       const refreshed = await newAuth.makeRequest(
@@ -2123,6 +2126,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setManualPersonName('');
       setManualRoleTitle('');
       setManualContactOpen(false);
+      setVkHandoffContact(false);
       setNotice(result?.entry_kind === 'telegram_source'
         ? 'Telegram-канал добавлен в источники сигналов. Радар проверит, что канал публичный.'
         : 'Контакт добавлен вручную. Выберите его получателем, когда будете готовы.');
@@ -3709,6 +3713,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       variant="outline"
                       onClick={() => {
                         setManualContactOpen((current) => !current);
+                        setVkHandoffContact(false);
                         setManualContactError('');
                       }}
                       disabled={busyAction === 'manual-contact'}
@@ -3738,6 +3743,34 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     error: contactIntelligence.job.error,
                   } : null))}
                 </p>
+                {['vk', 'vk_manual'].includes(String(selectedWorkstream.selected_channel || ''))
+                  && !drawerContacts.some((contact) => ['email', 'telegram'].includes(contact.type) && ['verified', 'confirmed_source'].includes(String(contact.verification_status || ''))) ? (
+                    <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                      <div className="font-semibold">Запросить рабочий email или Telegram</div>
+                      <p className="mt-1 leading-6 text-sky-800">
+                        Личный VK не сканируется. Получите рабочий контакт в диалоге и сохраните его здесь — дальше LocalOS будет отслеживать ответы.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {['email', 'telegram'].map((channel) => (
+                          <Button
+                            key={channel}
+                            type="button"
+                            variant="outline"
+                            className="min-h-10 bg-white"
+                            onClick={() => {
+                              setManualContactType(channel);
+                              setManualTelegramUsage('recipient');
+                              setVkHandoffContact(true);
+                              setManualContactOpen(true);
+                              setManualContactError('');
+                            }}
+                          >
+                            Сохранить {channel === 'email' ? 'email' : 'Telegram'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 {manualContactOpen && (
                   <div className="mt-3 rounded-md bg-white p-3 shadow-sm shadow-slate-900/5">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -3818,7 +3851,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     </p>
                     {manualContactError ? <div role="alert" className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{manualContactError}</div> : null}
                     <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                      <Button variant="ghost" onClick={() => setManualContactOpen(false)} disabled={busyAction === 'manual-contact'} className="min-h-10">Отмена</Button>
+                      <Button variant="ghost" onClick={() => { setManualContactOpen(false); setVkHandoffContact(false); }} disabled={busyAction === 'manual-contact'} className="min-h-10">Отмена</Button>
                       <Button
                         onClick={() => void saveManualContact()}
                         disabled={busyAction === 'manual-contact' || !manualContactValue.trim()}

@@ -29,6 +29,7 @@ from services.discovered_telegram_source_service import (
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_personalization_ai import generation_contract_current
 from services.lead_preparation_progress_service import record_lead_preparation_step
+from services.outreach_reply_tracking_service import resolve_known_contact_binding
 
 
 def _serialize_job(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -121,6 +122,7 @@ def _save_manual_lead_contact(
     owner_type = str(data.get("owner_type") or "company").strip().lower()
     if owner_type not in {"company", "person"}:
         raise ValueError("Неверный тип владельца контакта")
+    vk_handoff = bool(data.get("handoff_from_vk")) and contact_type in {"email", "telegram"}
     upsert_contact_points(cursor, str(workstream.get("lead_id") or ""), [{
         "contact_type": contact_type,
         "value": normalized_value,
@@ -132,7 +134,7 @@ def _save_manual_lead_contact(
         "source_type": "manual",
         "provider": "manual_entry",
         "confidence": 0.7,
-        "verification_status": "found",
+        "verification_status": "confirmed_source" if vk_handoff else "found",
         "metadata": {
             "entry_method": "manual",
             "added_by": actor_id,
@@ -150,9 +152,31 @@ def _save_manual_lead_contact(
     contact_row = cursor.fetchone()
     if not contact_row:
         raise ValueError("Не удалось сохранить контакт")
+    binding = None
+    if vk_handoff and workstream.get("client_business_id"):
+        cursor.execute(
+            """
+            SELECT id FROM outreach_sender_accounts
+            WHERE (business_id = %s OR scope_type = 'platform')
+              AND channel = %s AND status = 'connected'
+              AND outreach_enabled IS TRUE
+            ORDER BY updated_at DESC LIMIT 2
+            """,
+            (workstream.get("client_business_id"), contact_type),
+        )
+        senders = [str(row.get("id") if hasattr(row, "get") else row[0]) for row in cursor.fetchall()]
+        if len(senders) == 1:
+            binding = resolve_known_contact_binding(
+                cursor,
+                sender_account_id=senders[0],
+                channel=contact_type,
+                external_peer_id=normalized_value,
+                binding_source="manual",
+            )
     return {
         "entry_kind": "contact",
         "contact": serialize_contact_point(dict(contact_row)),
+        "reply_tracking": "active" if binding else "pending_sender" if vk_handoff else "not_requested",
     }
 
 
