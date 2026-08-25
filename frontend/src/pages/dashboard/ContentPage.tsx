@@ -307,6 +307,12 @@ const buildPhotoAnalysisCostMessage = (
   return details.join(' ');
 };
 
+const isInsufficientPhotoCreditsError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.trim().toLowerCase();
+  return normalized.includes('недостаточно кредитов') || normalized.includes('insufficient credit');
+};
+
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
   { key: 'google_business', label: 'Google', mode: 'api' },
@@ -803,6 +809,7 @@ function ContentWorkspace() {
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [mediaError, setMediaError] = useState('');
   const [mediaActionMessage, setMediaActionMessage] = useState('');
+  const [mediaAttentionMessage, setMediaAttentionMessage] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deletePlanOpen, setDeletePlanOpen] = useState(false);
   const [createStep, setCreateStep] = useState<ModalStep>('setup');
@@ -1276,19 +1283,23 @@ function ContentWorkspace() {
     setMediaUploading(true);
     setMediaError('');
     setMediaActionMessage('');
+    setMediaAttentionMessage('');
     setMediaUploadProgress('');
     const uploaded: PhotoAsset[] = [];
     let analyzedCount = 0;
     let chargedCredits = 0;
     let includedAnalyses = 0;
     let cachedAnalyses = 0;
+    let waitingForCreditsCount = 0;
     const failed: string[] = [];
     try {
       for (const [index, file] of files.entries()) {
+        let photoUploaded = false;
         setMediaUploadProgress(`Загружаем ${index + 1} из ${files.length}`);
         try {
           const photo = await uploadSingleMediaPhoto(file);
           uploaded.push(photo);
+          photoUploaded = true;
           setMediaUploadProgress(`Анализируем ${index + 1} из ${files.length}`);
           const analysis = await requestMediaAssetAnalysis(photo?.id);
           analyzedCount += 1;
@@ -1296,14 +1307,22 @@ function ContentWorkspace() {
           if (analysis.billing_source === 'network_photo_quota') includedAnalyses += 1;
           if (analysis.billing_source === 'cache' || analysis.status === 'cached') cachedAnalyses += 1;
         } catch (uploadError) {
-          failed.push(`${file.name}: ${uploadError instanceof Error ? uploadError.message : 'не удалось загрузить'}`);
+          if (photoUploaded && isInsufficientPhotoCreditsError(uploadError)) {
+            waitingForCreditsCount += 1;
+          } else {
+            failed.push(`${file.name}: ${uploadError instanceof Error ? uploadError.message : 'не удалось загрузить'}`);
+          }
         }
       }
       await loadMediaAssets();
+      const resultSummary = `Фото загружены: ${uploaded.length} из ${files.length}. Проанализировано: ${analyzedCount}. ${buildPhotoAnalysisCostMessage(chargedCredits, includedAnalyses, cachedAnalyses)}`;
+      if (waitingForCreditsCount > 0) {
+        setMediaAttentionMessage(`${resultSummary} Кредиты закончились. Ждут анализа: ${waitingForCreditsCount} фото. Файлы сохранены. Пополните баланс и запустите анализ в медиатеке.`);
+      }
       if (failed.length > 0) {
-        setMediaError(`Загружено ${uploaded.length} из ${files.length}, проанализировано ${analyzedCount}. ${buildPhotoAnalysisCostMessage(chargedCredits, includedAnalyses, cachedAnalyses)} Не удалось: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
-      } else {
-        setMediaActionMessage(`Загружено и проанализировано фото: ${analyzedCount}. ${buildPhotoAnalysisCostMessage(chargedCredits, includedAnalyses, cachedAnalyses)}`);
+        setMediaError(`${resultSummary} Не удалось обработать: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
+      } else if (waitingForCreditsCount === 0) {
+        setMediaActionMessage(resultSummary);
       }
     } finally {
       setMediaUploading(false);
@@ -2382,6 +2401,11 @@ function ContentWorkspace() {
         {mediaActionMessage ? (
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {mediaActionMessage}
+          </div>
+        ) : null}
+        {mediaAttentionMessage ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-900">
+            {mediaAttentionMessage}
           </div>
         ) : null}
 

@@ -150,8 +150,51 @@ describe('Content page DOM ownership', () => {
       },
     });
 
-    expect(await screen.findByText(/\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043e \u0438 \u043f\u0440\u043e\u0430\u043d\u0430\u043b\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0444\u043e\u0442\u043e: 2\./)).toHaveTextContent('Списано: 2 кредита.');
+    expect(await screen.findByText(/\u0424\u043e\u0442\u043e \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u044b: 2 \u0438\u0437 2\./)).toHaveTextContent('Списано: 2 кредита.');
     expect(screen.getByText(/\u0412 \u043f\u0430\u043a\u0435\u0442 \u0432\u043e\u0448\u043b\u043e: 1 \u0430\u043d\u0430\u043b\u0438\u0437\./)).toBeInTheDocument();
+  });
+
+  it('explains exhausted photo credits without presenting a technical upload failure', async () => {
+    let uploadIndex = 0;
+    let analysisIndex = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      uploadIndex += 1;
+      return {
+        ok: true,
+        json: async () => ({ success: true, photo: { id: `photo-${uploadIndex}` } }),
+      };
+    }));
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/photos?')) return { photos: [], coverage: null };
+      if (path.includes('/media-intelligence/photos/photo-') && path.endsWith('/analyze')) {
+        analysisIndex += 1;
+        if (analysisIndex === 2) throw new Error('Недостаточно кредитов для анализа фото.');
+        return { success: true, status: 'analyzed', charged_credits: 2, billing_source: 'general_credits' };
+      }
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    const view = renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Медиатека' }));
+    const input = view.container.querySelector<HTMLInputElement>('input[type="file"]');
+
+    fireEvent.change(input!, {
+      target: {
+        files: [
+          new File(['first'], 'first.jpg', { type: 'image/jpeg' }),
+          new File(['second'], 'technical-file-name.jpg', { type: 'image/jpeg' }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText(/Кредиты закончились./)).toHaveTextContent('Ждут анализа: 1 фото. Файлы сохранены.');
+    expect(screen.queryByText(/technical-file-name\.jpg/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Не удалось:/)).not.toBeInTheDocument();
   });
 
   it('keeps the content page usable when a browser translator ignores translate=no', async () => {
