@@ -202,6 +202,11 @@ const outcomeLabels: Record<string, string> = {
   no_response: "Нет ответа",
   hard_no: "Отказ",
 };
+const isHistoricalReconciliationMarker = (value?: string) => {
+  const normalized = String(value || "").trim();
+  return normalized.startsWith("Историческая запись:")
+    && normalized.includes("Точный текст хранится у почтового провайдера");
+};
 
 const Metric = ({
   value,
@@ -1057,11 +1062,13 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           {drafts.length ? (
             <>
               {drafts.map((draft) => {
-                const text =
+                const storedText =
                   draft.approved_text ||
                   draft.edited_text ||
                   draft.generated_text ||
                   "";
+                const historicalRecord = isHistoricalReconciliationMarker(storedText);
+                const text = historicalRecord ? "" : storedText;
                 const checked = selectedDrafts.includes(draft.id);
                 return (
                   <article
@@ -1070,6 +1077,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                   >
                     <div className="flex items-start gap-3">
                       <button
+                        disabled={historicalRecord}
                         onClick={() =>
                           setSelectedDrafts((current) =>
                             checked
@@ -1095,19 +1103,28 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                         </small>
                       </div>
                     </div>
-                    <textarea
-                      value={text}
-                      onChange={(event) =>
-                        setDrafts((current) =>
-                          current.map((item) =>
-                            item.id === draft.id
-                              ? { ...item, approved_text: event.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                      className="mt-3 min-h-40 w-full resize-none rounded-[16px] bg-black/20 p-3 text-xs leading-5 ring-1 ring-inset ring-white/[0.06]"
-                    />
+                    {historicalRecord ? (
+                      <div
+                        role="status"
+                        className="mt-3 rounded-[16px] bg-black/20 p-3 text-xs leading-5 text-zinc-400 ring-1 ring-inset ring-white/[0.06]"
+                      >
+                        Письмо отправлено вручную. Фактический текст сохранён в Gmail.
+                      </div>
+                    ) : (
+                      <textarea
+                        value={text}
+                        onChange={(event) =>
+                          setDrafts((current) =>
+                            current.map((item) =>
+                              item.id === draft.id
+                                ? { ...item, approved_text: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="mt-3 min-h-40 w-full resize-none rounded-[16px] bg-black/20 p-3 text-xs leading-5 ring-1 ring-inset ring-white/[0.06]"
+                      />
+                    )}
                     <div className="mt-3 grid grid-cols-[44px_1fr] gap-2">
                       <button
                         aria-label="Удалить черновик"
@@ -1117,17 +1134,23 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                      <button
-                        disabled={!text.trim() || busy === `draft:${draft.id}`}
-                        onClick={() => void approveDraft(draft)}
-                        className="min-h-11 rounded-[13px] bg-orange-500 text-xs font-semibold disabled:opacity-40"
-                      >
-                        {busy === `draft:${draft.id}`
-                          ? "Сохраняем…"
-                          : draft.status === "approved"
-                            ? "Сохранить изменения"
-                            : "Утвердить письмо"}
-                      </button>
+                      {historicalRecord ? (
+                        <div className="flex min-h-11 items-center rounded-[13px] bg-white/[0.04] px-3 text-xs text-zinc-500">
+                          Отправка подтверждена
+                        </div>
+                      ) : (
+                        <button
+                          disabled={!text.trim() || busy === `draft:${draft.id}`}
+                          onClick={() => void approveDraft(draft)}
+                          className="min-h-11 rounded-[13px] bg-orange-500 text-xs font-semibold disabled:opacity-40"
+                        >
+                          {busy === `draft:${draft.id}`
+                            ? "Сохраняем…"
+                            : draft.status === "approved"
+                              ? "Сохранить изменения"
+                              : "Утвердить письмо"}
+                        </button>
+                      )}
                     </div>
                   </article>
                 );

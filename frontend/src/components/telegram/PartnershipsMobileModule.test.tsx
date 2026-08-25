@@ -113,4 +113,34 @@ describe('PartnershipsMobileModule destructive actions', () => {
     expect(screen.queryByText(/Invalid Date/i)).not.toBeInTheDocument();
     expect(screen.getByText(/дата неизвестна/i)).toBeInTheDocument();
   });
+
+  it('does not present a historical reconciliation marker as the recipient-visible email body', async () => {
+    const historicalMarker = 'Историческая запись: письмо отправлено вручную 25.08.2026 с localosgo@gmail.com; факт подтверждён в папке «Отправленные». Точный текст хранится у почтового провайдера и не подменяется шаблоном LocalOS.';
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/partnership/leads?')) return response({ items: [] });
+      if (url.startsWith('/api/partnership/drafts?')) {
+        return response({
+          drafts: [{
+            id: 'historical-draft-1',
+            lead_id: 'lead-1',
+            lead_name: 'Гимназия 61',
+            channel: 'email',
+            status: 'approved',
+            approved_text: historicalMarker,
+          }],
+        });
+      }
+      if (url.startsWith('/api/partnership/send-batches')) return response({ batches: [], ready_drafts: [], reactions: [] });
+      return response({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Письма' }));
+
+    expect(screen.queryByDisplayValue(historicalMarker)).not.toBeInTheDocument();
+    expect(screen.getByText('Письмо отправлено вручную. Фактический текст сохранён в Gmail.')).toBeInTheDocument();
+  });
 });
