@@ -575,7 +575,7 @@ export const OperatorPage = () => {
           {historyLoading ? (
             <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {copy.loadingHistory}
+              <span translate="no" className="notranslate">{copy.loadingHistory}</span>
             </div>
           ) : messages.length === 0 ? (
             <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
