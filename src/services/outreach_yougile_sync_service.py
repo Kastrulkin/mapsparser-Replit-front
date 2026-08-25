@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -49,6 +50,32 @@ def _deadline(value: str) -> dict[str, Any]:
     return {"deadline": int(parsed.timestamp() * 1000), "withTime": False}
 
 
+def _normalized_task_title(value: Any) -> str:
+    return " ".join(re.sub(r"[^0-9a-zа-яё]+", " ", str(value or "").casefold()).split())
+
+
+def _find_existing_task(tasks: list[dict[str, Any]], lead_name: str) -> dict[str, Any] | None:
+    normalized_lead = _normalized_task_title(lead_name)
+    expected = {
+        normalized_lead,
+        _normalized_task_title(f"Сделка с {lead_name}"),
+    }
+    exact = [task for task in tasks if _normalized_task_title(task.get("title")) in expected]
+    if len(exact) > 1:
+        raise RuntimeError("yougile_task_ambiguous")
+    if exact:
+        return exact[0]
+    if not normalized_lead:
+        return None
+    partial = [
+        task for task in tasks
+        if f" {normalized_lead} " in f" {_normalized_task_title(task.get('title'))} "
+    ]
+    if len(partial) > 1:
+        raise RuntimeError("yougile_task_ambiguous")
+    return partial[0] if partial else None
+
+
 def _load_context(cursor: Any, payload: dict[str, Any]) -> dict[str, Any]:
     cursor.execute(
         """
@@ -80,19 +107,18 @@ def _sync_task(cursor: Any, payload: dict[str, Any]) -> str:
     base_url = str(config.get("api_base") or "https://ru.yougile.com/api-v2")
     task_id = str(context.get("external_task_id") or "")
     lead_name = str(context.get("lead_name") or "Партнёр").strip()
+    task_title = f"Сделка с {lead_name}"
+    if task_id:
+        current_task = _request("GET", f"/tasks/{task_id}", token=token, base_url=base_url)
+        task_title = str(current_task.get("title") or task_title).strip()
     if not task_id:
         query = urllib.parse.urlencode({"limit": 1000, "offset": 0})
         response = _request("GET", f"/tasks?{query}", token=token, base_url=base_url)
         tasks = response.get("content") if isinstance(response.get("content"), list) else []
-        expected_titles = {lead_name.casefold(), f"сделка с {lead_name}".casefold()}
-        matches = [
-            task for task in tasks
-            if str(task.get("title") or "").strip().casefold() in expected_titles
-        ]
-        if len(matches) > 1:
-            raise RuntimeError("yougile_task_ambiguous")
-        if matches:
-            task_id = str(matches[0].get("id") or "")
+        existing_task = _find_existing_task(tasks, lead_name)
+        if existing_task:
+            task_id = str(existing_task.get("id") or "")
+            task_title = str(existing_task.get("title") or task_title).strip()
         else:
             created = _request(
                 "POST", "/tasks", token=token, base_url=base_url,
@@ -132,7 +158,7 @@ def _sync_task(cursor: Any, payload: dict[str, Any]) -> str:
         config.get("refused_column_id") if is_refusal else config.get("conversation_column_id")
     ) or config.get("conversation_column_id")
     update_payload = {
-        "title": f"Сделка с {lead_name}",
+        "title": task_title,
         "columnId": target_column_id,
         "description": description,
         "assigned": [config.get("assignee_id")] if config.get("assignee_id") else [],

@@ -5,7 +5,7 @@ from services.outreach_reply_tracking_service import (
     business_tracking_enabled,
     normalize_external_peer,
 )
-from services.outreach_yougile_sync_service import _deadline
+from services.outreach_yougile_sync_service import _deadline, _find_existing_task
 
 
 def test_external_peer_normalization_is_channel_specific():
@@ -38,3 +38,26 @@ def test_yougile_deadline_is_calendar_day_payload():
     value = _deadline("2026-08-26T10:00:00+00:00")
 
     assert value == {"deadline": 1787738400000, "withTime": False}
+
+
+def test_yougile_finds_one_existing_lead_task_without_renaming_it():
+    tasks = [
+        {"id": "other", "title": "Оценить предложение УК «Старт»"},
+        {"id": "match", "title": "Проверить ответ ЖК START после email-касания"},
+    ]
+
+    assert _find_existing_task(tasks, "ЖК START") == tasks[1]
+
+
+def test_yougile_rejects_ambiguous_partial_task_matches():
+    tasks = [
+        {"id": "one", "title": "Ответ ЖК START"},
+        {"id": "two", "title": "Фоллоу-ап ЖК START"},
+    ]
+
+    try:
+        _find_existing_task(tasks, "ЖК START")
+    except RuntimeError as exc:
+        assert str(exc) == "yougile_task_ambiguous"
+    else:
+        raise AssertionError("Ambiguous task matches must stop automatic synchronization")
