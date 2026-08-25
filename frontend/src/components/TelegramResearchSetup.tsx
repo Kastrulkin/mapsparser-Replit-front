@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronRight, Loader2, MessageSquareText, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { Check, ChevronRight, Loader2, MessageSquareText, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,6 +78,7 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
   const [codeRequested, setCodeRequested] = useState(false);
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [query, setQuery] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -257,6 +258,28 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
     }
   };
 
+  const addSourceByUrl = async () => {
+    if (!businessId || !sourceUrl.trim()) return;
+    setBusy('source-url');
+    setError('');
+    setMessage('');
+    try {
+      const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/community-sources`, {
+        method: 'POST',
+        body: JSON.stringify({ url: sourceUrl.trim(), interval_hours: 24 }),
+      });
+      setSourceUrl('');
+      setMessage(typeof response?.message === 'string'
+        ? response.message
+        : 'Канал добавлен. LocalOS соберёт историю и будет проверять новые публикации раз в день.');
+      await loadStatus();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось добавить канал');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const visibleDialogs = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
     if (!cleanQuery) return dialogs;
@@ -417,9 +440,38 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
                 <p className="mt-1 text-sm text-slate-600">Для новых источников загружаются последние 90 дней, затем новые сообщения проверяются раз в день.</p>
               </div>
             </div>
-            <div className="relative mt-3">
+
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <Label htmlFor="telegram-research-source-url" className="font-semibold text-slate-950">Добавить публичный канал по ссылке</Label>
+              <p className="mt-1 text-xs leading-5 text-slate-600">Вставьте ссылку вида <span className="font-medium text-slate-800">https://t.me/channel</span> или <span className="font-medium text-slate-800">@channel</span>. Личные и закрытые чаты по ссылке не добавляются.</p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id="telegram-research-source-url"
+                  value={sourceUrl}
+                  onChange={(event) => setSourceUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void addSourceByUrl();
+                    }
+                  }}
+                  placeholder="https://t.me/channel"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="min-h-11 flex-1 bg-white"
+                />
+                <Button type="button" onClick={() => void addSourceByUrl()} disabled={busy === 'source-url' || !sourceUrl.trim()} className="min-h-11 shrink-0 bg-slate-950 px-5 text-white transition-transform active:scale-[0.96] hover:bg-slate-800">
+                  {busy === 'source-url' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  {busy === 'source-url' ? 'Проверяем…' : 'Добавить'}
+                </Button>
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm font-semibold text-slate-950">Или выберите из чатов подключённого аккаунта</p>
+            <div className="relative mt-2">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти чат или канал" className="min-h-11 pl-9" />
+              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по доступным чатам" className="min-h-11 pl-9" />
             </div>
           </div>
 

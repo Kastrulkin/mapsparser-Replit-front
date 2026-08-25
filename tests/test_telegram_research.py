@@ -428,6 +428,15 @@ def test_private_message_retention_qualifies_document_metadata_column():
     assert "metadata_json = d.metadata_json - 'reactions'" in source
 
 
+def test_dialog_picker_does_not_disable_sources_added_by_url():
+    source = Path("src/api/telegram_research_api.py").read_text(encoding="utf-8")
+    route = source.split("def save_research_sources", 1)[1].split("def queue_research_backfill", 1)[0]
+
+    assert "FROM telegram_opportunity_sources managed_source" in route
+    assert "managed_source.account_id = %s" in route
+    assert "managed_source.knowledge_source_id = subscription.source_id" in route
+
+
 def test_personal_public_source_subscription_queues_admin_notification_and_both_uses():
     from api.telegram_research_api import _subscribe_public_source
 

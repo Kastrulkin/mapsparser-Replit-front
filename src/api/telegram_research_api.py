@@ -758,9 +758,16 @@ def save_research_sources(business_id: str):
             WHERE source.id = subscription.source_id
               AND subscription.business_id = %s
               AND source.source_type = 'telegram'
+              AND EXISTS (
+                  SELECT 1
+                  FROM telegram_opportunity_sources managed_source
+                  WHERE managed_source.business_id = subscription.business_id
+                    AND managed_source.account_id = %s
+                    AND managed_source.knowledge_source_id = subscription.source_id
+              )
               AND NOT (subscription.source_id = ANY(%s::uuid[]))
             """,
-            (business_id, selected_source_ids or ["00000000-0000-0000-0000-000000000000"]),
+            (business_id, auth_data["account_id"], selected_source_ids or ["00000000-0000-0000-0000-000000000000"]),
         )
         cursor.execute(
             """
