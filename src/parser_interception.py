@@ -688,6 +688,26 @@ class YandexMapsInterceptionParser:
         except Exception:
             print("⚠️ Страница не загрузилась полностью, но продолжаем...")
 
+        if main_http_status in {403, 429}:
+            print(f"❌ Яндекс ограничил нативный парсинг: HTTP {main_http_status}")
+            return {
+                "error": "yandex_rate_limited" if main_http_status == 429 else "yandex_forbidden",
+                "http_status": main_http_status,
+                "url": page.url or url,
+            }
+
+        try:
+            response_text = (page.locator("body").inner_text(timeout=1500) or "").strip().lower()
+        except Exception:
+            response_text = ""
+        if response_text in {"limited", "forbidden"}:
+            print(f"❌ Яндекс ограничил нативный парсинг: {response_text}")
+            return {
+                "error": "yandex_rate_limited" if response_text == "limited" else "yandex_forbidden",
+                "http_status": main_http_status,
+                "url": page.url or url,
+            }
+
         # Double check if we are still stuck on Captcha
         title = _safe_page_title()
         if _is_captcha_page(title):

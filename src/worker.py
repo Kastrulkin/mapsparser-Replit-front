@@ -1284,6 +1284,7 @@ def _parse_yandex_card_with_playwright_fallback(
     session_registry: Optional[Dict[str, BrowserSession]] = None,
     session_id: Optional[str] = None,
     timeout_sec: int = 600,
+    force_subprocess: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """
@@ -1292,7 +1293,6 @@ def _parse_yandex_card_with_playwright_fallback(
     Если sync Playwright падает из-за активного asyncio loop, повторяем парсинг
     в отдельном процессе. Для subprocess fallback не паркуем живую CAPTCHA-сессию.
     """
-    force_subprocess = False
     # По умолчанию сначала пробуем обычный sync путь.
     # Subprocess fallback используем только при реальной ошибке sync-in-async
     # (или при явном флаге окружения).
@@ -1316,7 +1316,7 @@ def _parse_yandex_card_with_playwright_fallback(
         )
     except Exception as exc:
         msg = str(exc)
-        if not _is_playwright_sync_in_async_error(msg):
+        if not force_subprocess and not _is_playwright_sync_in_async_error(msg):
             raise
 
         if session_id:
@@ -3826,6 +3826,39 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
     source_lc = str(source or "").strip().lower()
     business_status = str(card_data.get("business_status") or card_data.get("status") or "").strip().lower()
 
+    if source_lc == "yandex_maps":
+        reported_reviews_count = _normalize_reviews_count(card_data.get("reviews_count"))
+        raw_reviews = card_data.get("reviews")
+        if isinstance(raw_reviews, dict):
+            raw_reviews = raw_reviews.get("items") or raw_reviews.get("reviews") or []
+        if not isinstance(raw_reviews, list):
+            raw_reviews = []
+
+        distinct_reviews = set()
+        for review in raw_reviews:
+            if not isinstance(review, dict):
+                continue
+            review_id = str(review.get("id") or review.get("review_id") or "").strip()
+            author = str(review.get("author") or review.get("author_name") or "").strip()
+            text = str(review.get("text") or review.get("body") or "").strip()
+            if review_id:
+                distinct_reviews.add(("id", review_id))
+            elif author or text:
+                distinct_reviews.add(("content", author, text))
+
+        if reported_reviews_count > 0:
+            tolerance = max(2, (reported_reviews_count + 19) // 20)
+            required_reviews_count = max(1, reported_reviews_count - tolerance)
+            parsed_reviews_count = len(distinct_reviews)
+            if parsed_reviews_count < required_reviews_count:
+                return (
+                    False,
+                    "incomplete_reviews:"
+                    f"parsed={parsed_reviews_count} reported={reported_reviews_count} "
+                    f"required={required_reviews_count}",
+                    validation,
+                )
+
     if source_lc == "apify_yandex" and business_status == "permanent-closed":
         return False, "business_closed:permanent_closed", validation
 
@@ -3887,6 +3920,54 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
             return False, "low_quality_payload:apify_yandex_sparse_payload missing=categories,products", validation
 
     return True, "success", validation
+
+
+def _parse_yandex_native_first_with_fallback(native_parser: Any, apify_parser: Any) -> tuple:
+    """Run a bounded native Yandex attempt and use Apify only when it is unusable."""
+    try:
+        native_card_data = native_parser()
+    except Exception as exc:
+        native_card_data = {
+            "error": "native_parser_exception",
+            "message": str(exc),
+        }
+
+    if not isinstance(native_card_data, dict):
+        native_card_data = {
+            "error": f"parser_returned_{type(native_card_data).__name__}",
+        }
+    elif not native_card_data.get("error"):
+        native_card_data = _promote_nested_card_payload(native_card_data)
+
+    native_success, native_reason, _native_validation = _validate_parsing_result(
+        native_card_data,
+        source="yandex_maps",
+    )
+    if native_success:
+        native_card_data["_parser_route"] = "native_yandex"
+        return native_card_data, False, "success"
+
+    try:
+        apify_card_data = apify_parser()
+    except Exception as exc:
+        apify_card_data = {
+            "error": "apify_fallback_exception",
+            "message": str(exc),
+        }
+    if not isinstance(apify_card_data, dict):
+        apify_card_data = {
+            "error": f"parser_returned_{type(apify_card_data).__name__}",
+        }
+    apify_card_data["_parser_route"] = "apify_yandex_fallback"
+    apify_card_data["_native_failure_reason"] = native_reason
+    return apify_card_data, True, native_reason
+
+
+def _should_try_native_yandex(source_hint: Any, parsed_source: Any) -> bool:
+    return (
+        str(source_hint or "").strip().lower() == "apify_yandex"
+        and str(parsed_source or "").strip().lower() == "yandex_maps"
+    )
 
 
 def _parse_transient_retry_attempt(error_message: Any) -> int:
@@ -4993,9 +5074,12 @@ def process_queue():
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
         use_apify_parser = source_hint in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}
-        active_proxy = None if use_apify_parser else _get_next_proxy_for_playwright()
+        hybrid_yandex_parser = _should_try_native_yandex(source_hint, parsed_source)
+        active_proxy = None if use_apify_parser and not hybrid_yandex_parser else _get_next_proxy_for_playwright()
         if parsed_source == "2gis":
             active_proxy = None
+        used_apify_parser = False
+        native_failure_reason = ""
         proxy_id = str((active_proxy or {}).get("id") or "").strip()
         if active_proxy:
             proxy_country = str((active_proxy or {}).get("country_code") or "base")
@@ -5010,7 +5094,6 @@ def process_queue():
                 card_data = preparsed_card_data
                 print("♻️ Используем уже полученные данные из CAPTCHA flow", flush=True)
             elif use_apify_parser:
-                print(f"🌐 Парсинг через Apify source={source_hint or 'apify_yandex'}", flush=True)
                 business_city = ""
                 if business_id:
                     try:
@@ -5028,28 +5111,79 @@ def process_queue():
                         print(f"⚠️ Не удалось загрузить city для business_id={business_id}: {e}")
                 apify_timeout_profile = _apify_business_timeout_profile(queue_dict)
                 apify_timeout_sec = _effective_apify_business_timeout_sec(queue_dict)
-                print(
-                    f"🕒 Apify timeout profile={apify_timeout_profile} timeout_sec={apify_timeout_sec} "
-                    f"queue_id={queue_dict.get('id')}",
-                    flush=True,
-                )
-                card_data = _parse_card_via_apify_with_timeout(
-                    url,
-                    parsed_source=parsed_source,
-                    source_hint=source_hint,
-                    city=business_city,
-                    timeout_sec=apify_timeout_sec,
-                    debug_bundle_dir=bundle_dir,
-                    debug_context={
-                        "queue_id": queue_dict.get("id"),
-                        "business_id": business_id,
-                        "source_hint": source_hint,
-                        "parsed_source": parsed_source,
-                        "city": business_city,
-                        "timeout_profile": apify_timeout_profile,
-                        "timeout_sec": apify_timeout_sec,
-                    },
-                )
+
+                def _run_apify_parser() -> Dict[str, Any]:
+                    print(f"🌐 Парсинг через Apify source={source_hint or 'apify_yandex'}", flush=True)
+                    print(
+                        f"🕒 Apify timeout profile={apify_timeout_profile} timeout_sec={apify_timeout_sec} "
+                        f"queue_id={queue_dict.get('id')}",
+                        flush=True,
+                    )
+                    return _parse_card_via_apify_with_timeout(
+                        url,
+                        parsed_source=parsed_source,
+                        source_hint=source_hint,
+                        city=business_city,
+                        timeout_sec=apify_timeout_sec,
+                        debug_bundle_dir=bundle_dir,
+                        debug_context={
+                            "queue_id": queue_dict.get("id"),
+                            "business_id": business_id,
+                            "source_hint": source_hint,
+                            "parsed_source": parsed_source,
+                            "city": business_city,
+                            "timeout_profile": apify_timeout_profile,
+                            "timeout_sec": apify_timeout_sec,
+                        },
+                    )
+
+                if hybrid_yandex_parser:
+                    browser_profile = _build_human_browser_profile()
+                    native_timeout_sec = max(
+                        30,
+                        int(os.getenv("NATIVE_YANDEX_ATTEMPT_TIMEOUT_SEC", "180") or 180),
+                    )
+
+                    def _run_native_yandex_parser() -> Dict[str, Any]:
+                        print(
+                            f"🌐 Нативный Yandex first timeout_sec={native_timeout_sec} "
+                            f"queue_id={queue_dict.get('id')}",
+                            flush=True,
+                        )
+                        return _parse_yandex_card_with_playwright_fallback(
+                            url,
+                            keep_open_on_captcha=False,
+                            timeout_sec=native_timeout_sec,
+                            force_subprocess=True,
+                            cookies=cookies,
+                            user_agent=browser_profile["user_agent"],
+                            viewport=browser_profile["viewport"],
+                            launch_args=browser_profile["launch_args"],
+                            init_scripts=browser_profile["init_scripts"],
+                            locale="ru-RU",
+                            timezone_id="Europe/Moscow",
+                            proxy=(active_proxy or {}).get("proxy"),
+                            headless=True,
+                            debug_bundle_id=debug_bundle_id,
+                            **geolocation_kwarg,
+                        )
+
+                    card_data, used_apify_parser, native_failure_reason = (
+                        _parse_yandex_native_first_with_fallback(
+                            _run_native_yandex_parser,
+                            _run_apify_parser,
+                        )
+                    )
+                    if used_apify_parser:
+                        print(
+                            f"↪️ Native Yandex rejected ({native_failure_reason}); fallback to Apify completed",
+                            flush=True,
+                        )
+                    else:
+                        print("✅ Native Yandex result accepted; Apify skipped", flush=True)
+                else:
+                    card_data = _run_apify_parser()
+                    used_apify_parser = True
             else:
                 browser_profile = _build_human_browser_profile()
                 if parsed_source == "2gis":
@@ -5230,7 +5364,9 @@ def process_queue():
                             print(f"❌ Retry without proxy returned error: {retry_err[:140]}", flush=True)
                     except Exception as retry_exc:
                         print(f"❌ Retry without proxy failed: {str(retry_exc)[:180]}", flush=True)
-            if not card_error:
+            if hybrid_yandex_parser and used_apify_parser:
+                _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason[:120])
+            elif not card_error:
                 _mark_proxy_result(proxy_id, success=True, reason="parse_ok")
             elif "captcha" in card_error.lower():
                 _mark_proxy_result(proxy_id, success=False, reason=f"captcha:{card_error[:80]}")
@@ -5239,8 +5375,10 @@ def process_queue():
         
         # Проверяем успешность парсинга (валидация только по данным Яндекса, без fallback из БД)
         validation_source = SOURCE_YANDEX_BUSINESS
-        if source_hint == "apify_yandex":
+        if used_apify_parser and source_hint == "apify_yandex":
             validation_source = "apify_yandex"
+        elif parsed_source == "yandex_maps":
+            validation_source = "yandex_maps"
         elif parsed_source == "2gis":
             validation_source = "2gis"
         elif parsed_source == "google_maps":
@@ -5522,7 +5660,7 @@ def process_queue():
                     _photos = card_data.get("photos") or []
                     if isinstance(_photos, int):
                         _photos = []
-                    sparse_apify_snapshot = bool(use_apify_parser) and (
+                    sparse_apify_snapshot = bool(used_apify_parser) and (
                         not products
                         and not news_list
                         and not _photos
@@ -6109,8 +6247,18 @@ def process_queue():
 
             if use_apify_parser:
                 try:
+                    settlement_payload = apify_debug_payload
+                    if hybrid_yandex_parser and not used_apify_parser:
+                        settlement_payload = {
+                            "cost": 0,
+                            "run_id": f"native-yandex:{queue_dict.get('id')}",
+                        }
                     cursor.execute("SAVEPOINT operator_apify_settlement")
-                    settlement_result = _settle_operator_apify_cost_if_present(cursor, queue_dict, apify_debug_payload)
+                    settlement_result = _settle_operator_apify_cost_if_present(
+                        cursor,
+                        queue_dict,
+                        settlement_payload,
+                    )
                     cursor.execute("RELEASE SAVEPOINT operator_apify_settlement")
                     settlement_status = str(settlement_result.get("status") or "").strip()
                     settlement_reason = str(settlement_result.get("reason") or "").strip()

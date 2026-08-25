@@ -165,6 +165,179 @@ def test_validate_parsing_result_keeps_non_apify_sparse_yandex_payload_as_succes
     assert validation is not None
 
 
+def test_validate_native_yandex_rejects_incomplete_review_collection():
+    card_data = {
+        "title": "Органика",
+        "address": "Санкт-Петербург, проспект Испытателей, 35",
+        "rating": 4.8,
+        "reviews_count": 344,
+        "categories": ["Салон красоты"],
+        "reviews": [
+            {
+                "id": f"review-{index}",
+                "author": f"Автор {index}",
+                "rating": 5,
+                "text": f"Отзыв {index}",
+            }
+            for index in range(5)
+        ],
+    }
+
+    is_successful, reason, validation = worker._validate_parsing_result(
+        card_data,
+        source="yandex_maps",
+    )
+
+    assert is_successful is False
+    assert "incomplete_reviews" in reason
+    assert validation is not None
+
+
+def _complete_native_yandex_card():
+    return {
+        "title": "Органика",
+        "address": "Санкт-Петербург, проспект Испытателей, 35",
+        "rating": 4.8,
+        "reviews_count": 3,
+        "categories": ["Салон красоты"],
+        "reviews": [
+            {"id": f"native-{index}", "author": "Автор", "text": f"Отзыв {index}"}
+            for index in range(3)
+        ],
+    }
+
+
+def test_native_yandex_success_skips_apify():
+    calls = {"native": 0, "apify": 0}
+
+    def native_parser():
+        calls["native"] += 1
+        return _complete_native_yandex_card()
+
+    def apify_parser():
+        calls["apify"] += 1
+        return {"error": "must_not_be_called"}
+
+    result, used_apify, reason = worker._parse_yandex_native_first_with_fallback(
+        native_parser,
+        apify_parser,
+    )
+
+    assert calls == {"native": 1, "apify": 0}
+    assert used_apify is False
+    assert reason == "success"
+    assert result["_parser_route"] == "native_yandex"
+
+
+def test_incomplete_native_yandex_falls_back_to_apify_once():
+    calls = {"apify": 0}
+    incomplete = _complete_native_yandex_card()
+    incomplete["reviews_count"] = 100
+    incomplete["reviews"] = incomplete["reviews"][:1]
+
+    def apify_parser():
+        calls["apify"] += 1
+        return {"title": "Органика", "categories": ["Салон красоты"]}
+
+    result, used_apify, reason = worker._parse_yandex_native_first_with_fallback(
+        lambda: incomplete,
+        apify_parser,
+    )
+
+    assert calls["apify"] == 1
+    assert used_apify is True
+    assert "incomplete_reviews" in reason
+    assert result["_parser_route"] == "apify_yandex_fallback"
+    assert "incomplete_reviews" in result["_native_failure_reason"]
+
+
+def test_native_yandex_error_falls_back_and_preserves_both_failures():
+    result, used_apify, reason = worker._parse_yandex_native_first_with_fallback(
+        lambda: {"error": "yandex_rate_limited", "http_status": 429},
+        lambda: {"error": "apify_empty_dataset"},
+    )
+
+    assert used_apify is True
+    assert "yandex_rate_limited" in reason
+    assert result["error"] == "apify_empty_dataset"
+    assert result["_parser_route"] == "apify_yandex_fallback"
+    assert result["_native_failure_reason"] == reason
+
+
+def test_native_and_apify_exceptions_return_honest_fallback_error():
+    def native_parser():
+        raise TimeoutError("native timeout")
+
+    def apify_parser():
+        raise RuntimeError("provider unavailable")
+
+    result, used_apify, reason = worker._parse_yandex_native_first_with_fallback(
+        native_parser,
+        apify_parser,
+    )
+
+    assert used_apify is True
+    assert "native_parser_exception" in reason
+    assert result["error"] == "apify_fallback_exception"
+    assert "provider unavailable" in result["message"]
+    assert result["_native_failure_reason"] == reason
+
+
+def test_google_and_2gis_never_enter_native_yandex_route():
+    assert worker._should_try_native_yandex("apify_google", "google_maps") is False
+    assert worker._should_try_native_yandex("apify_2gis", "2gis") is False
+    assert worker._should_try_native_yandex("apify_yandex", "yandex_maps") is True
+
+
+def test_forced_native_subprocess_returns_bounded_timeout(monkeypatch):
+    state = {"started": False, "terminated": False, "joins": []}
+
+    class FakeQueue:
+        def empty(self):
+            return True
+
+    class FakeProcess:
+        def start(self):
+            state["started"] = True
+
+        def join(self, timeout=None):
+            state["joins"].append(timeout)
+
+        def is_alive(self):
+            return True
+
+        def terminate(self):
+            state["terminated"] = True
+
+    class FakeContext:
+        def Queue(self, maxsize):
+            assert maxsize == 1
+            return FakeQueue()
+
+        def Process(self, target, args, daemon):
+            assert target is worker._parse_yandex_card_subprocess_entry
+            assert daemon is True
+            return FakeProcess()
+
+    monkeypatch.setattr(worker.multiprocessing, "get_context", lambda method: FakeContext())
+    monkeypatch.setattr(
+        worker,
+        "parse_yandex_card",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("sync path must be skipped")),
+    )
+
+    result = worker._parse_yandex_card_with_playwright_fallback(
+        "https://yandex.ru/maps/org/1/",
+        keep_open_on_captcha=False,
+        timeout_sec=180,
+        force_subprocess=True,
+    )
+
+    assert result["error"] == "parser_subprocess_timeout"
+    assert "180s" in result["message"]
+    assert state == {"started": True, "terminated": True, "joins": [180, 5]}
+
+
 def test_queue_transient_parse_retry_accepts_apify_sparse_quality_gap(monkeypatch):
     captured = {}
 
