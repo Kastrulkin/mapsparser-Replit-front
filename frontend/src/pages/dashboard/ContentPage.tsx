@@ -241,6 +241,14 @@ type PhotoAnalysisQuota = {
   remaining_analyses?: number;
 };
 
+type PhotoAnalysisResult = {
+  success?: boolean;
+  status?: string;
+  charged_credits?: number;
+  billing_source?: string;
+  photo_quota?: PhotoAnalysisQuota | null;
+};
+
 type MediaRecommendation = {
   status?: string;
   title?: string;
@@ -273,6 +281,31 @@ const CONTENT_VIEW_STORAGE_KEY = 'localos_content_view_v1';
 const CONTENT_SECTION_STORAGE_KEY = 'localos_content_section_v1';
 const PLAN_GENERATION_MIN_DURATION_MS = 6500;
 const DEFAULT_PLAN_PERIODS = [30];
+
+const russianCountLabel = (value: number, forms: [string, string, string]) => {
+  const absoluteValue = Math.abs(value);
+  const lastTwoDigits = absoluteValue % 100;
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return forms[2];
+  const lastDigit = absoluteValue % 10;
+  if (lastDigit === 1) return forms[0];
+  if (lastDigit >= 2 && lastDigit <= 4) return forms[1];
+  return forms[2];
+};
+
+const buildPhotoAnalysisCostMessage = (
+  chargedCredits: number,
+  includedAnalyses = 0,
+  cachedAnalyses = 0,
+) => {
+  const details = [`Списано: ${chargedCredits} ${russianCountLabel(chargedCredits, ['кредит', 'кредита', 'кредитов'])}.`];
+  if (includedAnalyses > 0) {
+    details.push(`В пакет вошло: ${includedAnalyses} ${russianCountLabel(includedAnalyses, ['анализ', 'анализа', 'анализов'])}.`);
+  }
+  if (cachedAnalyses > 0) {
+    details.push(`Повторный анализ не потребовался для ${cachedAnalyses} фото.`);
+  }
+  return details.join(' ');
+};
 
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
@@ -1189,17 +1222,24 @@ function ContentWorkspace() {
     }
   };
 
+  const requestMediaAssetAnalysis = async (assetId?: string): Promise<PhotoAnalysisResult> => {
+    if (!currentBusinessId || !assetId) throw new Error('Фото не выбрано');
+    return newAuth.makeRequest(`/media-intelligence/photos/${encodeURIComponent(assetId)}/analyze`, {
+      method: 'POST',
+      body: JSON.stringify({ business_id: currentBusinessId }),
+    });
+  };
+
   const analyzeMediaAsset = async (assetId?: string) => {
     if (!currentBusinessId || !assetId) return;
     setMediaAnalyzingId(assetId);
     setMediaError('');
     try {
-      await newAuth.makeRequest(`/media-intelligence/photos/${encodeURIComponent(assetId)}/analyze`, {
-        method: 'POST',
-        body: JSON.stringify({ business_id: currentBusinessId }),
-      });
+      const result = await requestMediaAssetAnalysis(assetId);
       await loadMediaAssets();
-      setMediaActionMessage('Фото проанализировано. LocalOS учтёт его в рекомендациях к публикациям.');
+      const includedAnalyses = result.billing_source === 'network_photo_quota' ? 1 : 0;
+      const cachedAnalyses = result.billing_source === 'cache' || result.status === 'cached' ? 1 : 0;
+      setMediaActionMessage(`Фото проанализировано. ${buildPhotoAnalysisCostMessage(Number(result.charged_credits || 0), includedAnalyses, cachedAnalyses)}`);
     } catch (analyzeError) {
       setMediaError(analyzeError instanceof Error ? analyzeError.message : 'Не удалось проанализировать фото');
       await loadMediaAssets();
@@ -1238,6 +1278,10 @@ function ContentWorkspace() {
     setMediaActionMessage('');
     setMediaUploadProgress('');
     const uploaded: PhotoAsset[] = [];
+    let analyzedCount = 0;
+    let chargedCredits = 0;
+    let includedAnalyses = 0;
+    let cachedAnalyses = 0;
     const failed: string[] = [];
     try {
       for (const [index, file] of files.entries()) {
@@ -1246,16 +1290,20 @@ function ContentWorkspace() {
           const photo = await uploadSingleMediaPhoto(file);
           uploaded.push(photo);
           setMediaUploadProgress(`Анализируем ${index + 1} из ${files.length}`);
-          await analyzeMediaAsset(photo?.id);
+          const analysis = await requestMediaAssetAnalysis(photo?.id);
+          analyzedCount += 1;
+          chargedCredits += Number(analysis.charged_credits || 0);
+          if (analysis.billing_source === 'network_photo_quota') includedAnalyses += 1;
+          if (analysis.billing_source === 'cache' || analysis.status === 'cached') cachedAnalyses += 1;
         } catch (uploadError) {
           failed.push(`${file.name}: ${uploadError instanceof Error ? uploadError.message : 'не удалось загрузить'}`);
         }
       }
       await loadMediaAssets();
       if (failed.length > 0) {
-        setMediaError(`Загружено ${uploaded.length} из ${files.length}. Не удалось: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
+        setMediaError(`Загружено ${uploaded.length} из ${files.length}, проанализировано ${analyzedCount}. ${buildPhotoAnalysisCostMessage(chargedCredits, includedAnalyses, cachedAnalyses)} Не удалось: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
       } else {
-        setMediaActionMessage(`Загружено и проанализировано фото: ${uploaded.length}. LocalOS учтёт их в рекомендациях к публикациям.`);
+        setMediaActionMessage(`Загружено и проанализировано фото: ${analyzedCount}. ${buildPhotoAnalysisCostMessage(chargedCredits, includedAnalyses, cachedAnalyses)}`);
       }
     } finally {
       setMediaUploading(false);

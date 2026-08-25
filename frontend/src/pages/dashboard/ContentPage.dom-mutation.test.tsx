@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LanguageProvider } from '@/i18n/LanguageContext';
@@ -67,6 +67,10 @@ function deferredResponse<T>() {
 }
 
 describe('Content page DOM ownership', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
     window.localStorage.setItem('language', 'ru');
@@ -104,6 +108,50 @@ describe('Content page DOM ownership', () => {
     }
 
     expect(() => fireEvent.click(generateButton)).not.toThrow();
+  });
+
+  it('shows the credits charged after a batch photo upload', async () => {
+    let uploadIndex = 0;
+    let analysisIndex = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      uploadIndex += 1;
+      return {
+        ok: true,
+        json: async () => ({ success: true, photo: { id: `photo-${uploadIndex}` } }),
+      };
+    }));
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/photos?')) return { photos: [], coverage: null };
+      if (path.includes('/media-intelligence/photos/photo-') && path.endsWith('/analyze')) {
+        analysisIndex += 1;
+        return analysisIndex === 1
+          ? { success: true, status: 'analyzed', charged_credits: 2, billing_source: 'general_credits' }
+          : { success: true, status: 'analyzed', charged_credits: 0, billing_source: 'network_photo_quota' };
+      }
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    const view = renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Медиатека' }));
+    const input = view.container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input!, {
+      target: {
+        files: [
+          new File(['first'], 'first.jpg', { type: 'image/jpeg' }),
+          new File(['second'], 'second.jpg', { type: 'image/jpeg' }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText(/\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043e \u0438 \u043f\u0440\u043e\u0430\u043d\u0430\u043b\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0444\u043e\u0442\u043e: 2\./)).toHaveTextContent('Списано: 2 кредита.');
+    expect(screen.getByText(/\u0412 \u043f\u0430\u043a\u0435\u0442 \u0432\u043e\u0448\u043b\u043e: 1 \u0430\u043d\u0430\u043b\u0438\u0437\./)).toBeInTheDocument();
   });
 
   it('keeps the content page usable when a browser translator ignores translate=no', async () => {
