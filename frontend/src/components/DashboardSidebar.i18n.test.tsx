@@ -30,4 +30,20 @@ describe('DashboardSidebar localization', () => {
     expect(container.textContent).not.toMatch(/\b(?:Operator|Content|Agents|Partner Search)\b/);
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
+
+  it('shows promotion whenever the selected business has the server capability', async () => {
+    window.localStorage.setItem('language', 'ru');
+    render(
+      <MemoryRouter initialEntries={['/dashboard/content']}>
+        <LanguageProvider>
+          <TooltipProvider>
+            <DashboardSidebar creatorPromotionAvailable />
+          </TooltipProvider>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('link', { name: 'Продвижение' })).toHaveAttribute('href', '/dashboard/promotion');
+    expect(screen.queryByRole('link', { name: 'Партнёрские акции' })).not.toBeInTheDocument();
+  });
 });

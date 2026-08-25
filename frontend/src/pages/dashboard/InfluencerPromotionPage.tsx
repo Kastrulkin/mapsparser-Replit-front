@@ -46,12 +46,29 @@ type CreatorResult = {
   platform?: string;
   canonical_url?: string;
   contactability?: string;
+  channel_verification_status?: 'pending' | 'verified' | 'stale' | 'mismatch' | 'inaccessible' | 'excluded';
+  channel_verification_note?: string;
   score?: number;
   result_group?: string;
   shortlist_status?: string;
   reasons?: string[];
   score_breakdown?: Record<string, number>;
   public_metrics?: Record<string, number>;
+  primary_topic?: string;
+  secondary_topics?: string[];
+  content_styles?: string[];
+  observed_formats?: string[];
+  confirmed_formats?: string[];
+  home_city?: string;
+  home_district?: string;
+  metro_stations?: string[];
+  content_geographies?: Array<{ kind?: string; name?: string; confidence?: number }>;
+  audience_geography?: Array<{ kind?: string; name?: string; confidence?: number }>;
+  audience_types?: string[];
+  audience_size_band?: string;
+  taxonomy_confidence?: Record<string, number>;
+  taxonomy_evidence?: Array<{ observed?: string; source_url?: string; confidence?: number }>;
+  classification_status?: string;
   evidence?: Array<{ summary?: string; source_url?: string; observed_at?: string; confidence?: number }>;
 };
 
@@ -92,6 +109,7 @@ type Campaign = {
   constraints?: { usage_rights?: { description?: string } };
   terms_version?: number;
   approved_terms_version?: number | null;
+  sender_mode?: 'partner_business' | 'localos_for_partner';
 };
 
 type OutreachPreview = {
@@ -101,6 +119,7 @@ type OutreachPreview = {
   contact?: { value?: string | null; status?: 'confirmed' | 'public_unverified' | 'source_only' | 'missing'; source_url?: string | null };
   terms_review?: { checks?: Record<string, boolean>; missing?: string[] };
   requires_campaign_approval?: boolean;
+  sender_mode?: 'partner_business' | 'localos_for_partner';
 };
 
 type Deliverable = {
@@ -231,6 +250,23 @@ const nextCollaborationStatus: Record<string, { status: string; label: string }>
 
 const formatNumber = (value: unknown) => new Intl.NumberFormat('ru-RU').format(Number(value || 0));
 const checkpointLabel = { '24h': '24 часа', '7d': '7 дней', '14d': '14 дней' };
+const topicLabel: Record<string, string> = {
+  family_parenting: 'родители и дети', food_cafes: 'кафе и еда', local_places: 'места в городе',
+  events_entertainment: 'события', beauty_wellness: 'красота и уход', travel: 'путешествия',
+  fashion: 'мода', sports_fitness: 'спорт', education: 'образование', auto_transport: 'авто и транспорт',
+  business: 'бизнес', home_design: 'дом и интерьер', pets: 'питомцы',
+};
+const styleLabel: Record<string, string> = {
+  reviews: 'обзоры', guides_and_selections: 'гайды и подборки', expert: 'экспертная подача',
+  personal_lifestyle: 'личный блог', news_and_information: 'новости и информация',
+  deals_and_promotions: 'акции и предложения', visual_ugc: 'визуальный UGC',
+};
+const audienceBandLabel: Record<string, string> = { nano: 'до 10 тыс.', micro: '10–100 тыс.', mid: '100–500 тыс.', macro: 'от 500 тыс.', unknown: 'размер не подтверждён' };
+const geographyNames = (items?: Array<{ kind?: string; name?: string }>, kind?: string) => (items || [])
+  .filter((item) => !kind || item.kind === kind)
+  .map((item) => item.name)
+  .filter(Boolean)
+  .join(', ');
 const emptyDeliverableDraft = (): DeliverableDraft => ({ platform: 'telegram', deliverableType: 'post', publicationUrl: '', destinationUrl: '', promoCode: '', cta: '' });
 
 const WorkspaceTabs = ({ section, onChange }: { section: WorkspaceSection; onChange: (section: WorkspaceSection) => void }) => {
@@ -309,6 +345,11 @@ export const InfluencerPromotionPage = () => {
   const [audience, setAudience] = useState('');
   const [service, setService] = useState('');
   const [formats, setFormats] = useState('обзор, пост');
+  const [contentStyle, setContentStyle] = useState('');
+  const [platforms, setPlatforms] = useState('');
+  const [audienceSizeBands, setAudienceSizeBands] = useState('nano, micro');
+  const [contactRequired, setContactRequired] = useState(true);
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [budget, setBudget] = useState('');
   const [manualName, setManualName] = useState('');
   const [manualUrl, setManualUrl] = useState('');
@@ -381,6 +422,10 @@ export const InfluencerPromotionPage = () => {
             audience,
             service,
             formats: formats.split(',').map((item) => item.trim()).filter(Boolean),
+            content_styles: contentStyle ? [contentStyle] : [],
+            platforms: platforms.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean),
+            audience_size_bands: audienceSizeBands.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean),
+            contact_required: contactRequired,
             budget: budget ? { maximum: Number(budget), currency: 'RUB' } : {},
             goal: 'Получить локальный охват и обращения',
           },
@@ -449,7 +494,13 @@ export const InfluencerPromotionPage = () => {
       const content = await file.text();
       const isJson = file.name.toLowerCase().endsWith('.json');
       const parsed = isJson ? JSON.parse(content) : null;
-      const candidates = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.candidates) ? parsed.candidates : undefined;
+      const candidates = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.candidates)
+          ? parsed.candidates
+          : Array.isArray(parsed?.entities)
+            ? parsed.entities
+            : undefined;
       const response = await newAuth.makeRequest('/promotion/influencers/creators/import', {
         method: 'POST',
         body: JSON.stringify({
@@ -487,11 +538,14 @@ export const InfluencerPromotionPage = () => {
           search_result_ids: shortlisted.map((item) => item.id),
           title: `Локальное продвижение · ${currentBusiness?.name || city || 'кампания'}`,
           goal: 'Получить локальный охват и обращения',
+          sender_mode: 'localos_for_partner',
           geography: { city, area },
           audience: { description: audience },
           formats: formats.split(',').map((item) => item.trim()).filter(Boolean),
-          budget: budget ? { maximum: Number(budget), currency: defaultCampaignCurrency(`${city} ${currentBusiness?.name || ''}`) } : {},
-          offer: { service, compensation_requires_confirmation: true },
+          budget: budget ? { maximum: Number(budget), currency: defaultCampaignCurrency(`${city} ${currentBusiness?.name || ''}`) } : { requires_creator_quote: true },
+          offer: { service, mode: 'creator_terms_intake', compensation_requires_confirmation: true },
+          period: { description: 'Конкретные сроки согласуются после подбора бизнеса и получения брифа.' },
+          constraints: { usage_rights: { description: 'Права на материал согласуются отдельно для каждого конкретного предложения.' } },
         }),
       });
       setSection('campaigns');
@@ -540,7 +594,7 @@ export const InfluencerPromotionPage = () => {
         body: JSON.stringify({
           business_id: currentBusinessId,
           offer: { ...(campaign.offer || {}), details: campaignOffer.trim() },
-          budget: campaignBudget ? { maximum: Number(campaignBudget), currency: campaignCurrency } : {},
+          budget: campaignBudget ? { maximum: Number(campaignBudget), currency: campaignCurrency } : campaign.sender_mode === 'localos_for_partner' ? { requires_creator_quote: true } : {},
           period: { description: campaignPeriod.trim() },
           constraints: {
             ...(campaign.constraints || {}),
@@ -838,12 +892,19 @@ export const InfluencerPromotionPage = () => {
               <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-slate-700 shadow-[0_0_0_1px_rgba(15,23,42,0.06)]"><MapPin className="h-5 w-5" /></span><div><h2 className="text-balance text-xl font-semibold text-slate-950">Кого нужно найти</h2><p className="mt-1 text-pretty text-sm leading-6 text-slate-500">LocalOS начнёт с местных каналов и публикаций о районе, а не с общего каталога блогеров.</p></div></div>
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">Город<Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Санкт-Петербург" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
-                <label className="text-sm font-medium text-slate-700">Район или радиус<Input value={area} onChange={(event) => setArea(event.target.value)} placeholder="Приморский район, до 5 км" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
+                <label className="text-sm font-medium text-slate-700">Район или метро<Input value={area} onChange={(event) => setArea(event.target.value)} placeholder="Выборгский район или Проспект Просвещения" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700 md:col-span-2">Аудитория<Textarea value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Например: родители детей 2–12 лет, живущие рядом" className="mt-2 min-h-24 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Услуга или повод<Input value={service} onChange={(event) => setService(event.target.value)} placeholder="Первая стрижка ребёнка" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
+              </div>
+              <button type="button" aria-expanded={advancedSearchOpen} onClick={() => setAdvancedSearchOpen((current) => !current)} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white hover:text-slate-950"><ChevronRight className={cn('h-4 w-4 transition-transform', advancedSearchOpen && 'rotate-90')} />Уточнить площадки и формат</button>
+              {advancedSearchOpen ? <div className="mt-3 grid gap-4 rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">Подача<select value={contentStyle} onChange={(event) => setContentStyle(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-slate-900"><option value="">Любая</option><option value="reviews">Обзоры мест</option><option value="guides_and_selections">Гайды и подборки</option><option value="expert">Экспертная</option><option value="personal_lifestyle">Личный блог</option><option value="visual_ugc">Визуальный UGC</option></select></label>
+                <label className="text-sm font-medium text-slate-700">Платформы<Input value={platforms} onChange={(event) => setPlatforms(event.target.value)} placeholder="telegram, threads" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
+                <label className="text-sm font-medium text-slate-700">Размер аудитории<Input value={audienceSizeBands} onChange={(event) => setAudienceSizeBands(event.target.value)} placeholder="nano, micro" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Форматы<Input value={formats} onChange={(event) => setFormats(event.target.value)} placeholder="обзор, пост, визит" className="mt-2 min-h-11 rounded-xl bg-white" /></label>
                 <label className="text-sm font-medium text-slate-700">Максимальный бюджет, ₽<Input value={budget} onChange={(event) => setBudget(event.target.value)} inputMode="decimal" placeholder="Можно оставить пустым" className="mt-2 min-h-11 rounded-xl bg-white tabular-nums" /></label>
-              </div>
+                <label className="flex min-h-11 items-center gap-3 self-end rounded-xl bg-slate-50 px-3 text-sm font-medium text-slate-700"><input type="checkbox" checked={contactRequired} onChange={(event) => setContactRequired(event.target.checked)} className="h-4 w-4 rounded border-slate-300 accent-slate-950" />Только с публичным способом связи</label>
+              </div> : null}
               <div className="mt-6 flex flex-wrap items-center gap-3"><Button onClick={() => void runSearch()} disabled={busy === 'search' || !city.trim() || overview?.feature_state?.discovery === false} className="min-h-12 rounded-xl bg-slate-950 px-5 text-white active:scale-[0.96] transition-transform">{busy === 'search' ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Search className="mr-2 h-4 w-4" />}{busy === 'search' ? 'Ищем и проверяем…' : overview?.feature_state?.discovery === false ? 'Поиск пока закрыт' : 'Запустить поиск'}</Button><span className="text-pretty text-xs leading-5 text-slate-500">Поиск использует только разрешённые публичные источники и сохраняет происхождение каждого факта.</span></div>
             </div>
           </section>
@@ -852,7 +913,7 @@ export const InfluencerPromotionPage = () => {
             <div className="text-sm font-semibold text-slate-900">Уже знаете подходящего автора?</div>
             <p className="mt-1 text-pretty text-xs leading-5 text-slate-500">{searchJob ? 'Добавьте публичную ссылку вручную. Площадка не станет получателем сообщения, пока контакт не будет отдельно проверен.' : 'Сначала запустите поиск — затем сможете добавить известную площадку в тот же список для сравнения.'}</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]"><Input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Имя или название площадки" className="min-h-11 rounded-xl" /><Input value={manualUrl} onChange={(event) => setManualUrl(event.target.value)} placeholder="https://t.me/…" className="min-h-11 rounded-xl" /><Button variant="outline" onClick={() => void addManualCreator()} disabled={busy === 'manual-creator' || !searchJob || !manualName.trim() || !manualUrl.trim()} className="min-h-11 rounded-xl">{busy === 'manual-creator' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}Добавить</Button></div>
-            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3"><label className={cn('inline-flex min-h-10 cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50', (!searchJob || busy === 'creator-import') && 'pointer-events-none opacity-50')}><input type="file" accept=".csv,.json,text/csv,application/json" className="sr-only" disabled={!searchJob || busy === 'creator-import'} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCreators(file); event.target.value = ''; }} />{busy === 'creator-import' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}Импорт CSV/JSON</label><span className="text-xs text-slate-500">Поля: display_name, url, city, area, topics, formats.</span></div>
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3"><label className={cn('inline-flex min-h-10 cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50', (!searchJob || busy === 'creator-import') && 'pointer-events-none opacity-50')}><input type="file" accept=".csv,.json,text/csv,application/json" className="sr-only" disabled={!searchJob || busy === 'creator-import'} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCreators(file); event.target.value = ''; }} />{busy === 'creator-import' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}Импорт CSV/JSON</label><span className="text-xs text-slate-500">Расширенный JSON сохраняет каналы, Threads, контакты, метрики, доказательства и дату проверки.</span></div>
           </section>
 
           {results.length ? (
@@ -861,9 +922,12 @@ export const InfluencerPromotionPage = () => {
               {Object.entries(groupedResults).map(([group, items]) => (
                 <div key={group} className="space-y-3"><h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">{groupLabel[group] || group} · <span className="tabular-nums">{items.length}</span></h3><div className="grid gap-3 lg:grid-cols-2">{items.map((result) => (
                   <article key={result.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_8px_24px_-20px_rgba(15,23,42,0.22)]">
-                    <div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-100 text-lg font-semibold text-amber-900">{String(result.display_name || '?').slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><h4 className="text-balance font-semibold text-slate-950">{result.display_name}</h4><p className="mt-1 text-xs text-slate-500">{[result.platform, result.primary_city, result.primary_area].filter(Boolean).join(' · ') || 'География требует проверки'}</p></div><span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white tabular-nums">{result.score || 0}</span></div></div></div>
+                    <div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-100 text-lg font-semibold text-amber-900">{String(result.display_name || '?').slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><h4 className="text-balance font-semibold text-slate-950">{result.display_name}</h4><p className="mt-1 text-xs text-slate-500">{result.platform || 'площадка не определена'}{result.home_city ? ` · автор: ${[result.home_city, result.home_district].filter(Boolean).join(', ')}` : ' · место автора не подтверждено'}</p></div><span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white tabular-nums">{result.score || 0}</span></div></div></div>
+                    <div className="mt-4 flex flex-wrap gap-2">{result.primary_topic ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900">{topicLabel[result.primary_topic] || result.primary_topic}</span> : null}{(result.content_styles || []).slice(0, 2).map((style) => <span key={style} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{styleLabel[style] || style}</span>)}<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{audienceBandLabel[result.audience_size_band || 'unknown'] || result.audience_size_band}</span></div>
+                    {(geographyNames(result.content_geographies) || result.metro_stations?.length || geographyNames(result.audience_geography)) ? <div className="mt-3 grid gap-1 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">{geographyNames(result.content_geographies) ? <span><span className="font-semibold text-slate-800">Пишет про:</span> {geographyNames(result.content_geographies)}</span> : null}{result.metro_stations?.length ? <span><span className="font-semibold text-slate-800">Метро:</span> {result.metro_stations.join(', ')}</span> : null}{geographyNames(result.audience_geography) ? <span><span className="font-semibold text-slate-800">Аудитория:</span> {geographyNames(result.audience_geography)}</span> : null}</div> : <p className="mt-3 text-xs leading-5 text-amber-700">Локальная география пока не подтверждена публичным материалом.</p>}
                     <ul className="mt-4 space-y-2 text-sm leading-5 text-slate-600">{(result.reasons || []).slice(0, 4).map((reason) => <li key={reason} className="flex gap-2 text-pretty"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" /><span>{reason}</span></li>)}</ul>
-                    {result.evidence?.[0]?.summary ? <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-700">Публичное доказательство:</span> {result.evidence[0].summary}</div> : null}
+                    {result.taxonomy_evidence?.[0]?.observed || result.evidence?.[0]?.summary ? <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-700">Публичное доказательство:</span> {result.taxonomy_evidence?.[0]?.observed || result.evidence?.[0]?.summary}</div> : null}
+                    {result.channel_verification_status ? <div className={cn('mt-3 text-xs leading-5', result.channel_verification_status === 'verified' ? 'text-emerald-700' : ['mismatch', 'inaccessible', 'excluded'].includes(result.channel_verification_status) ? 'text-rose-700' : 'text-amber-700')}>Источник: {result.channel_verification_status === 'verified' ? 'проверен' : result.channel_verification_status === 'stale' ? 'нужна повторная проверка' : result.channel_verification_status === 'mismatch' ? 'название или тематика изменились' : result.channel_verification_status === 'inaccessible' ? 'несколько раз недоступен' : result.channel_verification_status === 'excluded' ? 'исключён' : 'ожидает проверки'}{result.channel_verification_note ? ` · ${result.channel_verification_note}` : ''}</div> : null}
                     <div className="mt-5 flex flex-wrap items-center justify-between gap-3">{result.canonical_url ? <a href={result.canonical_url} target="_blank" rel="noreferrer" aria-label={`Открыть источник: ${result.display_name}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900">Открыть источник<ExternalLink className="h-4 w-4" /></a> : <span className="text-xs text-slate-400">Ссылка не подтверждена</span>}<div className="flex gap-2"><Button variant="outline" aria-label={`Не подходит: ${result.display_name}`} onClick={() => void updateShortlist(result, 'rejected')} disabled={busy === `result:${result.id}`} className="min-h-10 rounded-xl active:scale-[0.96] transition-transform">Не подходит</Button><Button aria-label={`${result.shortlist_status === 'shortlisted' ? 'Убрать из shortlist' : 'Добавить в shortlist'}: ${result.display_name}`} onClick={() => void updateShortlist(result, result.shortlist_status === 'shortlisted' ? 'suggested' : 'shortlisted')} disabled={busy === `result:${result.id}`} className={cn('min-h-10 rounded-xl active:scale-[0.96] transition-transform', result.shortlist_status === 'shortlisted' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-950 text-white')}>{result.shortlist_status === 'shortlisted' ? <Check className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}{result.shortlist_status === 'shortlisted' ? 'В shortlist' : 'Добавить'}</Button></div></div>
                   </article>
                 ))}</div></div>
@@ -879,7 +943,7 @@ export const InfluencerPromotionPage = () => {
           <section key={campaign.id} className="rounded-[28px] bg-white p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_10px_30px_-24px_rgba(15,23,42,0.24)]">
             <div className="rounded-2xl bg-slate-50 p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div><span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{statusLabel[campaign.status] || campaign.status}</span><h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{campaign.title}</h2><p className="mt-2 text-pretty text-sm text-slate-600">{campaign.goal}</p></div>
+                <div><span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{statusLabel[campaign.status] || campaign.status}</span><h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{campaign.title}</h2><p className="mt-2 text-pretty text-sm text-slate-600">{campaign.goal}</p>{campaign.sender_mode === 'localos_for_partner' ? <p className="mt-2 text-xs leading-5 text-slate-500">Первый контакт идёт от LocalOS: собираем условия автора, затем предлагаем только подходящие локальные бизнесы.</p> : null}</div>
                 <div className="flex gap-5 text-right"><div><div className="text-2xl font-semibold tabular-nums">{campaign.candidates_count || campaign.candidates?.length || 0}</div><div className="text-xs text-slate-500">авторов</div></div><div><div className="text-2xl font-semibold tabular-nums">{campaign.engaged_count || 0}</div><div className="text-xs text-slate-500">ответили</div></div></div>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500"><span>Версия условий: <span className="tabular-nums">{campaign.terms_version || 1}</span></span><Button variant="outline" onClick={() => startCampaignEdit(campaign)} className="min-h-9 rounded-xl bg-white">Изменить условия</Button></div>

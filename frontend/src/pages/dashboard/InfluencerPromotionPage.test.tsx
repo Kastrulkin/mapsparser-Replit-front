@@ -84,6 +84,35 @@ describe('InfluencerPromotionPage accessibility states', () => {
     expect(newAuth.makeRequest).toHaveBeenCalledTimes(2);
   });
 
+  it('sends structured local filters when launching discovery', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Подходящих авторов ещё не искали' });
+    vi.mocked(newAuth.makeRequest).mockClear();
+
+    await user.type(screen.getByLabelText('Район или метро'), 'Выборгский');
+    await user.type(screen.getByLabelText('Аудитория'), 'родители');
+    await user.click(screen.getByRole('button', { name: 'Уточнить площадки и формат' }));
+    await user.selectOptions(screen.getByLabelText('Подача'), 'reviews');
+    await user.type(screen.getByLabelText('Платформы'), 'telegram, threads');
+    await user.click(screen.getByRole('button', { name: 'Запустить поиск' }));
+
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalled());
+    const searchCall = vi.mocked(newAuth.makeRequest).mock.calls.find(([path]) => path === '/promotion/influencers/searches');
+    const requestBody = searchCall?.[1]?.body;
+    if (typeof requestBody !== 'string') throw new Error('Search request body was not serialized');
+    const payload = JSON.parse(requestBody);
+    expect(payload.brief).toMatchObject({
+      city: 'Санкт-Петербург',
+      area: 'Выборгский',
+      audience: 'родители',
+      content_styles: ['reviews'],
+      platforms: ['telegram', 'threads'],
+      audience_size_bands: ['nano', 'micro'],
+      contact_required: true,
+    });
+  });
+
   it('prioritizes a reviewable first batch instead of rendering the whole catalog', async () => {
     const user = userEvent.setup();
     const results = Array.from({ length: 31 }, (_, index) => ({

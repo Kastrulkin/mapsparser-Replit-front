@@ -126,7 +126,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/chats',
       tooltip: shellCopy.chatsHint,
     },
-    ...(featureFlags.promotionHub && creatorPromotionAvailable ? [{
+    ...(creatorPromotionAvailable ? [{
       id: 'promotion',
       label: navigationCopy.promotion,
       icon: Megaphone,

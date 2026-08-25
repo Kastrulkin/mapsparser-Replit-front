@@ -34,6 +34,8 @@ from services.creator_source_enrichment_service import (
     ENRICHMENT_VERSION,
     infer_creator_source_metadata,
 )
+from services.creator_catalog_service import creator_platform
+from services.creator_profile_revalidation_service import compare_creator_identity
 from services.lead_workstream_service import CREATOR_COLLABORATION, normalize_workstream_type
 
 
@@ -43,6 +45,8 @@ def test_creator_features_are_off_by_default(monkeypatch):
         "INFLUENCER_DISCOVERY_ENABLED",
         "INFLUENCER_OUTREACH_ENABLED",
         "INFLUENCER_METRICS_ENABLED",
+        "INFLUENCER_SOURCE_ENRICHMENT_ENABLED",
+        "INFLUENCER_PROFILE_REVALIDATION_ENABLED",
         "INFLUENCER_BUSINESS_IDS",
     ):
         monkeypatch.delenv(name, raising=False)
@@ -52,6 +56,9 @@ def test_creator_features_are_off_by_default(monkeypatch):
         "discovery": False,
         "outreach": False,
         "metrics": False,
+        "source_enrichment": False,
+        "profile_revalidation": False,
+        "supported_platforms": ["telegram", "vk", "website", "instagram", "threads", "tiktok", "youtube"],
         "pilot_restricted": False,
     }
 
@@ -142,6 +149,62 @@ def test_known_wrong_geography_is_a_hard_exclusion():
             "contactability": "public_contact",
         },
         {"city": "Москва", "formats": ["пост"]},
+    )
+
+    assert result["gates"]["geography_compatible"] is False
+    assert result["result_group"] == "excluded"
+
+
+def test_structured_local_search_uses_content_geography_platform_style_and_contact():
+    result = score_creator_candidate(
+        {
+            "display_name": "Семейный Выборгский",
+            "primary_city": None,
+            "primary_area": None,
+            "content_geographies": [
+                {"kind": "city", "name": "Санкт-Петербург"},
+                {"kind": "district", "name": "Выборгский"},
+            ],
+            "metro_stations": ["Проспект Просвещения"],
+            "audience_types": ["parents_and_families"],
+            "content_styles": ["reviews"],
+            "platforms": ["telegram", "threads"],
+            "audience_size_band": "micro",
+            "formats": ["telegram_post", "short_text_post"],
+            "document_count": 12,
+            "last_observed_at": datetime.now(timezone.utc),
+            "contactability": "public_contact",
+        },
+        {
+            "city": "Санкт-Петербург",
+            "area": "Выборгский",
+            "audience": "родители",
+            "content_styles": ["reviews"],
+            "platforms": ["telegram", "threads"],
+            "audience_size_bands": ["micro"],
+            "contact_required": True,
+        },
+    )
+
+    assert result["gates"]["geography_compatible"] is True
+    assert result["gates"]["platform_compatible"] is True
+    assert result["gates"]["content_style_compatible"] is True
+    assert result["gates"]["public_contact_available"] is True
+    assert result["breakdown"]["locality"] == 30
+
+
+def test_discovery_geography_does_not_satisfy_locality_gate():
+    result = score_creator_candidate(
+        {
+            "display_name": "Автор из Таллинна",
+            "primary_city": "Таллинн",
+            "discovery_geography": [{"kind": "city", "name": "Санкт-Петербург"}],
+            "platforms": ["instagram"],
+            "document_count": 4,
+            "last_observed_at": datetime.now(timezone.utc),
+            "contactability": "public_contact",
+        },
+        {"city": "Санкт-Петербург"},
     )
 
     assert result["gates"]["geography_compatible"] is False
@@ -265,6 +328,37 @@ def test_one_off_city_mention_does_not_create_false_locality():
 
 def test_creator_workstream_alias_is_supported():
     assert normalize_workstream_type("influencer") == CREATOR_COLLABORATION
+
+
+@pytest.mark.parametrize(
+    ("url", "platform"),
+    [
+        ("https://www.threads.com/@local_creator", "threads"),
+        ("https://www.instagram.com/local_creator", "instagram"),
+        ("https://www.youtube.com/@local_creator", "youtube"),
+        ("https://www.tiktok.com/@local_creator", "tiktok"),
+    ],
+)
+def test_creator_catalog_supports_multiplatform_profiles(url, platform):
+    assert creator_platform(url) == platform
+
+
+def test_creator_identity_change_requires_strong_title_and_topic_drift():
+    changed = compare_creator_identity(
+        "Семейный Санкт-Петербург",
+        "Афиша и места для родителей с детьми",
+        "Путь к себе",
+        "Психология и внутренний мир",
+    )
+    same_creator = compare_creator_identity(
+        "BEAUTYHOLIC",
+        "Петербургский блог об уходе и красоте",
+        "BEAUTYHOLIC | Санкт-Петербург",
+        "Уход, beauty и локальные находки",
+    )
+
+    assert changed["mismatch"] is True
+    assert same_creator["mismatch"] is False
 
 
 class ExistingDeliverableCursor:
@@ -410,3 +504,47 @@ def test_outreach_preview_keeps_public_location_clean_and_preserves_goal_case(
 
     assert f"Мы — {expected_identity}." in preview["message"]
     assert f"чтобы {expected_goal}." in preview["message"]
+
+
+def test_localos_sender_collects_creator_terms_without_claiming_a_specific_client():
+    cursor = OutreachPreviewCursor({
+        "id": "candidate-1",
+        "creator_profile_id": "creator-1",
+        "candidate_status": "shortlisted",
+        "score_snapshot_json": {},
+        "campaign_status": "draft",
+        "sender_mode": "localos_for_partner",
+        "goal": "Получить обращения",
+        "formats_json": ["пост"],
+        "offer_json": {"mode": "creator_terms_intake"},
+        "budget_json": {"requires_creator_quote": True},
+        "period_json": {"description": "сроки согласуются после брифа"},
+        "constraints_json": {"usage_rights": {"description": "права согласуются отдельно"}},
+        "display_name": "Локальный автор",
+        "primary_city": "Санкт-Петербург",
+        "primary_area": None,
+        "reasons_json": [],
+        "platform": "threads",
+        "canonical_url": "https://www.threads.com/@local_author",
+        "contactability": "advertising_contact",
+        "preferred_contact": "https://t.me/local_author_ads",
+        "contact_confirmation_status": "observed",
+        "business_name": "Органика",
+        "business_city": "Санкт-Петербург",
+        "business_address": "проспект Испытателей, 35",
+        "evidence_summary": "публичный профиль посвящён локальному beauty-контенту",
+        "evidence_source_url": "https://www.threads.com/@local_author",
+        "evidence_confidence": 0.9,
+    })
+
+    preview = preview_candidate_outreach(
+        cursor,
+        business_id="business-1",
+        campaign_id="campaign-1",
+        candidate_id="candidate-1",
+    )
+
+    assert "Мы в LocalOS" in preview["message"]
+    assert "форматы, цены, географию аудитории, свежие охваты" in preview["message"]
+    assert "Органика" not in preview["message"]
+    assert preview["sender_mode"] == "localos_for_partner"

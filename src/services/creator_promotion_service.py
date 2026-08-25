@@ -13,10 +13,11 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from psycopg2.extras import Json, RealDictCursor
 
+from services.creator_catalog_service import canonical_creator_url, creator_platform, upsert_creator_catalog_entity
 from services.lead_workstream_service import CREATOR_COLLABORATION, create_workstream
 
 
-SCORING_VERSION = "creator-fit-v2"
+SCORING_VERSION = "creator-fit-v3"
 TRUE_VALUES = {"1", "true", "yes", "on"}
 SEARCH_RESULT_GROUPS = {
     "best_fit",
@@ -50,6 +51,13 @@ def creator_feature_state(business_id: str = "") -> dict[str, Any]:
     discovery = str(os.getenv("INFLUENCER_DISCOVERY_ENABLED") or "false").strip().lower() in TRUE_VALUES
     outreach = str(os.getenv("INFLUENCER_OUTREACH_ENABLED") or "false").strip().lower() in TRUE_VALUES
     metrics = str(os.getenv("INFLUENCER_METRICS_ENABLED") or "false").strip().lower() in TRUE_VALUES
+    source_enrichment = str(os.getenv("INFLUENCER_SOURCE_ENRICHMENT_ENABLED") or "false").strip().lower() in TRUE_VALUES
+    profile_revalidation_setting = os.getenv("INFLUENCER_PROFILE_REVALIDATION_ENABLED")
+    profile_revalidation = (
+        str(profile_revalidation_setting).strip().lower() in TRUE_VALUES
+        if profile_revalidation_setting is not None
+        else source_enrichment
+    )
     allowed = {
         item.strip()
         for item in str(os.getenv("INFLUENCER_BUSINESS_IDS") or "").split(",")
@@ -61,6 +69,9 @@ def creator_feature_state(business_id: str = "") -> dict[str, Any]:
         "discovery": master and discovery and eligible,
         "outreach": master and outreach and eligible,
         "metrics": master and metrics and eligible,
+        "source_enrichment": source_enrichment,
+        "profile_revalidation": profile_revalidation,
+        "supported_platforms": ["telegram", "vk", "website", "instagram", "threads", "tiktok", "youtube"],
         "pilot_restricted": bool(allowed),
     }
 
@@ -115,28 +126,32 @@ def _text_list(value: Any) -> list[str]:
     return []
 
 
+def _taxonomy_names(value: Any) -> list[str]:
+    return [
+        str(item.get("name") or "").strip()
+        for item in _json(value, [])
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    ]
+
+
+def _requested_audience_types(brief: dict[str, Any]) -> set[str]:
+    text = " ".join([str(brief.get("audience") or ""), *(_text_list(brief.get("audience_types")))]).casefold().replace("ё", "е")
+    rules = {
+        "parents_and_families": ("родител", "мама", "папа", "семейн", "дети"),
+        "food_and_cafe_visitors": ("кафе", "ресторан", "еда", "кофе"),
+        "local_residents": ("жител", "локальн", "район", "город"),
+        "beauty_and_wellness_audience": ("beauty", "бьюти", "красот", "уход"),
+        "travelers": ("турист", "путешеств", "travel"),
+    }
+    return {name for name, aliases in rules.items() if any(alias in text for alias in aliases)}
+
+
 def _canonical_url(value: Any) -> str:
-    raw = str(value or "").strip().rstrip("/")
-    if raw.startswith("@"):
-        return f"https://t.me/{raw[1:]}"
-    return raw
+    return canonical_creator_url(value)
 
 
 def _platform_for_url(url: str, fallback: str = "other") -> str:
-    lowered = str(url or "").lower()
-    if "t.me/" in lowered or "telegram.me/" in lowered:
-        return "telegram"
-    if "vk.com/" in lowered:
-        return "vk"
-    if "instagram.com/" in lowered:
-        return "instagram"
-    if "tiktok.com/" in lowered:
-        return "tiktok"
-    if "youtube.com/" in lowered or "youtu.be/" in lowered:
-        return "youtube"
-    if lowered.startswith("http"):
-        return "website"
-    return fallback if fallback in {"telegram", "vk", "website", "instagram", "tiktok", "youtube", "other"} else "other"
+    return creator_platform(url, fallback)
 
 
 def _tracking_token(value: Any, fallback: str) -> str:
@@ -197,6 +212,13 @@ def _ensure_measurement_checkpoints(cursor: Any, *, deliverable_id: str, publish
 
 
 def score_creator_candidate(candidate: dict[str, Any], brief: dict[str, Any]) -> dict[str, Any]:
+    content_geography_names = _taxonomy_names(candidate.get("content_geographies"))
+    audience_geography_names = _taxonomy_names(candidate.get("audience_geography"))
+    metro_names = _text_list(candidate.get("metro_stations"))
+    audience_types = set(_text_list(candidate.get("audience_types")))
+    requested_audience_types = _requested_audience_types(brief)
+    content_styles = set(_text_list(candidate.get("content_styles")))
+    requested_styles = set(_text_list(brief.get("content_styles")))
     combined = " ".join(
         [
             str(candidate.get("display_name") or ""),
@@ -205,6 +227,11 @@ def score_creator_candidate(candidate: dict[str, Any], brief: dict[str, Any]) ->
             " ".join(_text_list(candidate.get("evidence_texts"))),
             str(candidate.get("primary_city") or ""),
             str(candidate.get("primary_area") or ""),
+            " ".join(content_geography_names),
+            " ".join(audience_geography_names),
+            " ".join(metro_names),
+            " ".join(audience_types),
+            " ".join(content_styles),
         ]
     ).lower().replace("ё", "е")
     city = str(brief.get("city") or "").strip().lower().replace("ё", "е")
@@ -215,14 +242,29 @@ def score_creator_candidate(candidate: dict[str, Any], brief: dict[str, Any]) ->
 
     candidate_city = str(candidate.get("primary_city") or "").strip().lower().replace("ё", "е")
     candidate_area = str(candidate.get("primary_area") or "").strip().lower().replace("ё", "е")
+    content_geographies = " ".join(content_geography_names).lower().replace("ё", "е")
+    audience_geographies = " ".join(audience_geography_names).lower().replace("ё", "е")
+    candidate_metros = " ".join(metro_names).lower().replace("ё", "е")
     locality = 0
     locality_reasons: list[str] = []
-    if area and candidate_area and (area in candidate_area or candidate_area in area):
+    if area and audience_geographies and area in audience_geographies:
         locality = 30
-        locality_reasons.append(f"Регулярно связан с районом «{brief.get('area') or brief.get('district')}»")
+        locality_reasons.append(f"Аудитория привязана к району «{brief.get('area') or brief.get('district')}»")
+    elif area and (area in content_geographies or area in candidate_metros):
+        locality = 30
+        locality_reasons.append(f"Есть публичный контент про район «{brief.get('area') or brief.get('district')}»")
+    elif area and candidate_area and (area in candidate_area or candidate_area in area):
+        locality = 30
+        locality_reasons.append(f"Подтверждена базовая связь с районом «{brief.get('area') or brief.get('district')}»")
+    elif city and city in audience_geographies:
+        locality = 28
+        locality_reasons.append(f"Подтверждена аудитория в городе «{brief.get('city')}»")
     elif city and candidate_city and city == candidate_city:
         locality = 24
-        locality_reasons.append(f"Есть подтверждённая связь с городом «{brief.get('city')}»")
+        locality_reasons.append(f"Подтверждён город автора «{brief.get('city')}»")
+    elif city and city in content_geographies:
+        locality = 22
+        locality_reasons.append(f"Автор публикует материалы про город «{brief.get('city')}»; место жительства не предполагаем")
     elif candidate_city:
         locality = 6
         locality_reasons.append("География указана, но не совпала с заданной")
@@ -231,6 +273,8 @@ def score_creator_candidate(candidate: dict[str, Any], brief: dict[str, Any]) ->
     topic_matches = topic_tokens.intersection(combined_tokens)
     audience_denominator = max(1, len(audience_tokens.union(topic_tokens)))
     audience_fit = min(25, round(25 * len(audience_matches.union(topic_matches)) / audience_denominator))
+    if requested_audience_types and requested_audience_types.intersection(audience_types):
+        audience_fit = max(audience_fit, 22)
 
     metrics = _json(candidate.get("public_metrics"), {})
     views = int(metrics.get("median_views") or metrics.get("views") or 0)
@@ -267,17 +311,31 @@ def score_creator_candidate(candidate: dict[str, Any], brief: dict[str, Any]) ->
         commercial += 4
     commercial = min(10, commercial)
 
+    requested_platforms = set(_text_list(brief.get("platforms")))
+    requested_size_bands = set(_text_list(brief.get("audience_size_bands")))
+    candidate_platforms = set(_text_list(candidate.get("platforms"))) or {str(candidate.get("platform") or "")}
+    contact_required = brief.get("contact_required") is True
+
     gates = {
         "creator_eligible": candidate.get("creator_eligible") is not False,
         "brand_safety": str(candidate.get("brand_safety_status") or "unknown") != "blocked",
         "active": freshness > 0,
         "contactable": contactability != "not_contactable",
         "geography_known": locality > 0,
-        "geography_compatible": not city or not candidate_city or city == candidate_city,
+        "geography_compatible": not city or locality >= 22,
         "format_compatible": not desired_formats or not candidate_formats or bool(desired_formats.intersection(candidate_formats)),
+        "platform_compatible": not requested_platforms or bool(requested_platforms.intersection(candidate_platforms)),
+        "content_style_compatible": not requested_styles or bool(requested_styles.intersection(content_styles)),
+        "audience_size_compatible": not requested_size_bands or str(candidate.get("audience_size_band") or "unknown") in requested_size_bands,
+        "public_contact_available": not contact_required or contactability in {"public_contact", "advertising_contact"} or bool(candidate.get("preferred_contact")),
     }
     score = min(100, locality + audience_fit + engagement + format_fit + freshness + commercial)
-    if not all((gates["creator_eligible"], gates["brand_safety"], gates["active"], gates["contactable"], gates["geography_compatible"], gates["format_compatible"])):
+    required_gates = (
+        "creator_eligible", "brand_safety", "active", "contactable",
+        "geography_compatible", "format_compatible", "platform_compatible",
+        "content_style_compatible", "audience_size_compatible", "public_contact_available",
+    )
+    if not all(gates[key] for key in required_gates):
         result_group = "excluded"
     elif score >= 78 and locality >= 24:
         result_group = "best_fit"
@@ -296,6 +354,10 @@ def score_creator_candidate(candidate: dict[str, Any], brief: dict[str, Any]) ->
     if audience_matches or topic_matches:
         matches = sorted(audience_matches.union(topic_matches))[:5]
         reasons.append(f"Совпадают темы: {', '.join(matches)}")
+    if requested_audience_types.intersection(audience_types):
+        reasons.append("Совпадает тип аудитории")
+    if requested_styles.intersection(content_styles):
+        reasons.append("Совпадает подача контента")
     if int(candidate.get("document_count") or 0) > 0:
         reasons.append(f"Проанализировано публикаций: {int(candidate.get('document_count') or 0)}")
     if contactability in {"public_contact", "advertising_contact"}:
@@ -365,6 +427,169 @@ def _search_source_candidates(cursor: Any, anchors: list[str] | None = None, lim
         (patterns, patterns, patterns, patterns, patterns, max(1, min(limit, 500))),
     )
     return [_dict(row) for row in cursor.fetchall()]
+
+
+def _search_catalog_candidates(
+    cursor: Any,
+    anchors: list[str] | None = None,
+    limit: int = 500,
+    brief: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    search_brief = brief or {}
+    structured_terms = [
+        *_requested_audience_types(search_brief),
+        *_text_list(search_brief.get("content_styles")),
+        *_text_list(search_brief.get("platforms")),
+        *_text_list(search_brief.get("audience_size_bands")),
+    ]
+    patterns = [f"%{anchor}%" for anchor in [*(anchors or []), *structured_terms] if str(anchor).strip()]
+    if not patterns:
+        patterns = ["%%"]
+    cursor.execute(
+        """
+        SELECT profile.id, profile.display_name, profile.description,
+               COALESCE(taxonomy.home_city, profile.primary_city) AS primary_city,
+               COALESCE(taxonomy.home_district, profile.primary_area) AS primary_area,
+               profile.topics_json, profile.brand_safety_status,
+               profile.metadata_json,
+               channel.platform, channel.canonical_url, channel.contactability,
+               channel.public_metrics_json, channel.last_observed_at,
+               channel.verification_status AS channel_verification_status,
+               commercial.formats_json, commercial.accepts_barter,
+               commercial.price_min, commercial.price_max, commercial.preferred_contact,
+               evidence.evidence_count, evidence.evidence_texts,
+               taxonomy.primary_topic, taxonomy.secondary_topics_json,
+               taxonomy.content_styles_json, taxonomy.observed_formats_json,
+               taxonomy.confirmed_formats_json, taxonomy.metro_stations_json,
+               taxonomy.content_geographies_json, taxonomy.audience_geography_json,
+               taxonomy.audience_types_json, taxonomy.audience_size_band,
+               taxonomy.segment_fit_json, taxonomy.confidence_json,
+               taxonomy.evidence_json AS taxonomy_evidence_json,
+               taxonomy.classification_status, taxonomy.classification_version,
+               profile_channels.platforms
+        FROM creator_profiles profile
+        JOIN LATERAL (
+            SELECT item.* FROM creator_channels item
+            WHERE item.creator_profile_id = profile.id
+            ORDER BY
+                CASE item.verification_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END,
+                item.last_observed_at DESC NULLS LAST,
+                item.created_at
+            LIMIT 1
+        ) channel ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT ARRAY_AGG(DISTINCT item.platform) AS platforms
+            FROM creator_channels item WHERE item.creator_profile_id = profile.id
+        ) profile_channels ON TRUE
+        LEFT JOIN creator_commercial_profiles commercial ON commercial.creator_profile_id = profile.id
+        LEFT JOIN creator_profile_taxonomy taxonomy ON taxonomy.creator_profile_id = profile.id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(item.id)::INT AS evidence_count,
+                   COALESCE(ARRAY_AGG(item.summary_text) FILTER (WHERE item.summary_text IS NOT NULL), ARRAY[]::TEXT[]) AS evidence_texts
+            FROM creator_evidence item WHERE item.creator_profile_id = profile.id
+        ) evidence ON TRUE
+        WHERE profile.verification_status <> 'rejected'
+          AND (
+              profile.display_name ILIKE ANY(%s)
+              OR COALESCE(profile.description, '') ILIKE ANY(%s)
+              OR COALESCE(profile.primary_city, '') ILIKE ANY(%s)
+              OR COALESCE(profile.primary_area, '') ILIKE ANY(%s)
+              OR profile.topics_json::text ILIKE ANY(%s)
+              OR profile.metadata_json::text ILIKE ANY(%s)
+              OR COALESCE(taxonomy.primary_topic, '') ILIKE ANY(%s)
+              OR taxonomy.secondary_topics_json::text ILIKE ANY(%s)
+              OR taxonomy.content_styles_json::text ILIKE ANY(%s)
+              OR taxonomy.content_geographies_json::text ILIKE ANY(%s)
+              OR taxonomy.audience_geography_json::text ILIKE ANY(%s)
+              OR taxonomy.audience_types_json::text ILIKE ANY(%s)
+              OR taxonomy.metro_stations_json::text ILIKE ANY(%s)
+          )
+        ORDER BY
+            CASE channel.verification_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END,
+            evidence.evidence_count DESC,
+            channel.last_observed_at DESC NULLS LAST
+        LIMIT %s
+        """,
+        (
+            patterns, patterns, patterns, patterns, patterns, patterns,
+            patterns, patterns, patterns, patterns, patterns, patterns, patterns,
+            max(1, min(limit, 1000)),
+        ),
+    )
+    candidates: list[dict[str, Any]] = []
+    for row in cursor.fetchall():
+        item = _dict(row)
+        profile_metadata = _json(item.get("metadata_json"), {})
+        channel_status = str(item.get("channel_verification_status") or "pending")
+        profile_topics = _json(item.get("topics_json"), [])
+        taxonomy_topics = [
+            str(item.get("primary_topic") or "").strip(),
+            *_text_list(_json(item.get("secondary_topics_json"), [])),
+        ]
+        commercial_formats = _json(item.get("formats_json"), [])
+        taxonomy_formats = [
+            *_text_list(_json(item.get("observed_formats_json"), [])),
+            *_text_list(_json(item.get("confirmed_formats_json"), [])),
+        ]
+        candidates.append({
+            "id": str(item["id"]),
+            "display_name": item.get("display_name"),
+            "description": item.get("description"),
+            "primary_city": item.get("primary_city"),
+            "primary_area": item.get("primary_area"),
+            "topics": sorted({str(value) for value in [*profile_topics, *taxonomy_topics] if str(value).strip()}),
+            "evidence_texts": _text_list(item.get("evidence_texts")),
+            "document_count": int(item.get("evidence_count") or 0),
+            "public_metrics": _json(item.get("public_metrics_json"), {}),
+            "formats": sorted({str(value) for value in [*commercial_formats, *taxonomy_formats] if str(value).strip()}),
+            "last_observed_at": item.get("last_observed_at"),
+            "contactability": item.get("contactability"),
+            "creator_eligible": channel_status not in {"mismatch", "inaccessible", "excluded"},
+            "brand_safety_status": item.get("brand_safety_status"),
+            "accepts_barter": item.get("accepts_barter"),
+            "price_min": item.get("price_min"),
+            "price_max": item.get("price_max"),
+            "preferred_contact": item.get("preferred_contact"),
+            "catalog_source": profile_metadata.get("import_source"),
+            "channel_verification_status": channel_status,
+            "platform": item.get("platform"),
+            "platforms": _text_list(item.get("platforms")),
+            "primary_topic": item.get("primary_topic"),
+            "content_styles": _json(item.get("content_styles_json"), []),
+            "metro_stations": _json(item.get("metro_stations_json"), []),
+            "content_geographies": _json(item.get("content_geographies_json"), []),
+            "audience_geography": _json(item.get("audience_geography_json"), []),
+            "audience_types": _json(item.get("audience_types_json"), []),
+            "audience_size_band": item.get("audience_size_band") or "unknown",
+            "segment_fit": _json(item.get("segment_fit_json"), {}),
+            "taxonomy_confidence": _json(item.get("confidence_json"), {}),
+            "taxonomy_evidence": _json(item.get("taxonomy_evidence_json"), []),
+            "classification_status": item.get("classification_status"),
+            "classification_version": item.get("classification_version"),
+        })
+    return candidates
+
+
+def _store_creator_search_candidate(cursor: Any, *, job_id: str, candidate: dict[str, Any], brief: dict[str, Any]) -> None:
+    scoring = score_creator_candidate(candidate, brief)
+    cursor.execute(
+        """
+        INSERT INTO creator_search_results (
+            id, search_job_id, creator_profile_id, score, score_json,
+            reasons_json, gates_json, result_group, scoring_version
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (search_job_id, creator_profile_id) DO UPDATE SET
+            score = EXCLUDED.score, score_json = EXCLUDED.score_json,
+            reasons_json = EXCLUDED.reasons_json, gates_json = EXCLUDED.gates_json,
+            result_group = EXCLUDED.result_group, scoring_version = EXCLUDED.scoring_version,
+            updated_at = NOW()
+        """,
+        (
+            str(uuid.uuid4()), job_id, candidate["id"], scoring["score"],
+            Json(scoring["breakdown"]), Json(scoring["reasons"]), Json(scoring["gates"]),
+            scoring["result_group"], SCORING_VERSION,
+        ),
+    )
 
 
 def _creator_from_source(cursor: Any, source: dict[str, Any]) -> dict[str, Any]:
@@ -566,7 +791,9 @@ def process_creator_search_job(cursor: Any, *, business_id: str, job_id: str) ->
         *_text_list(normalized_brief.get("events")),
         *_text_list(normalized_brief.get("competitors")),
     ]
-    sources = _search_source_candidates(cursor, anchors=[item for item in anchors if item])
+    active_anchors = [item for item in anchors if item]
+    sources = _search_source_candidates(cursor, anchors=active_anchors)
+    catalog_candidates = _search_catalog_candidates(cursor, anchors=active_anchors, brief=normalized_brief)
     processed = 0
     errors = 0
     for source in sources:
@@ -578,30 +805,22 @@ def process_creator_search_job(cursor: Any, *, business_id: str, job_id: str) ->
         cursor.execute("SAVEPOINT creator_candidate")
         try:
             candidate = _creator_from_source(cursor, source)
-            scoring = score_creator_candidate(candidate, normalized_brief)
-            cursor.execute(
-                """
-                INSERT INTO creator_search_results (
-                    id, search_job_id, creator_profile_id, score, score_json,
-                    reasons_json, gates_json, result_group, scoring_version
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (search_job_id, creator_profile_id) DO UPDATE SET
-                    score = EXCLUDED.score, score_json = EXCLUDED.score_json,
-                    reasons_json = EXCLUDED.reasons_json, gates_json = EXCLUDED.gates_json,
-                    result_group = EXCLUDED.result_group, scoring_version = EXCLUDED.scoring_version,
-                    updated_at = NOW()
-                """,
-                (
-                    str(uuid.uuid4()), job_id, candidate["id"], scoring["score"],
-                    Json(scoring["breakdown"]), Json(scoring["reasons"]), Json(scoring["gates"]),
-                    scoring["result_group"], SCORING_VERSION,
-                ),
-            )
+            _store_creator_search_candidate(cursor, job_id=job_id, candidate=candidate, brief=normalized_brief)
             cursor.execute("RELEASE SAVEPOINT creator_candidate")
             processed += 1
         except Exception:
             cursor.execute("ROLLBACK TO SAVEPOINT creator_candidate")
             cursor.execute("RELEASE SAVEPOINT creator_candidate")
+            errors += 1
+    for candidate in catalog_candidates:
+        cursor.execute("SAVEPOINT creator_catalog_candidate")
+        try:
+            _store_creator_search_candidate(cursor, job_id=job_id, candidate=candidate, brief=normalized_brief)
+            cursor.execute("RELEASE SAVEPOINT creator_catalog_candidate")
+            processed += 1
+        except Exception:
+            cursor.execute("ROLLBACK TO SAVEPOINT creator_catalog_candidate")
+            cursor.execute("RELEASE SAVEPOINT creator_catalog_candidate")
             errors += 1
     status = "partial" if errors and processed else "failed" if errors and not processed else "ready"
     cursor.execute(
@@ -611,7 +830,12 @@ def process_creator_search_job(cursor: Any, *, business_id: str, job_id: str) ->
             error_json = %s, completed_at = NOW(), updated_at = NOW()
         WHERE id = %s
         """,
-        (status, Json({"found": len(sources), "processed": processed}), Json({"candidate_errors": errors}), job_id),
+        (
+            status,
+            Json({"found": len(sources) + len(catalog_candidates), "source_candidates": len(sources), "catalog_candidates": len(catalog_candidates), "processed": processed}),
+            Json({"candidate_errors": errors}),
+            job_id,
+        ),
     )
     return load_search_job(cursor, business_id=business_id, job_id=job_id)
 
@@ -679,20 +903,36 @@ def load_search_job(cursor: Any, *, business_id: str, job_id: str) -> dict[str, 
                profile.verification_status, profile.brand_safety_status,
                channel.id AS channel_id, channel.platform, channel.canonical_url,
                channel.username, channel.contactability, channel.public_metrics_json,
-               channel.last_observed_at,
+               channel.last_observed_at, channel.verification_status AS channel_verification_status,
+               channel.verified_at AS channel_verified_at, channel.next_check_at AS channel_next_check_at,
+               channel.verification_note AS channel_verification_note,
                commercial.formats_json, commercial.accepts_barter,
                commercial.price_min, commercial.price_max, commercial.currency,
                commercial.media_kit_url, commercial.preferred_contact,
+               taxonomy.primary_topic, taxonomy.secondary_topics_json,
+               taxonomy.content_styles_json, taxonomy.observed_formats_json,
+               taxonomy.confirmed_formats_json, taxonomy.home_city,
+               taxonomy.home_district, taxonomy.metro_stations_json,
+               taxonomy.discovery_geography_json, taxonomy.content_geographies_json,
+               taxonomy.audience_geography_json, taxonomy.audience_types_json,
+               taxonomy.audience_size_band, taxonomy.segment_fit_json,
+               taxonomy.confidence_json AS taxonomy_confidence_json,
+               taxonomy.evidence_json AS taxonomy_evidence_json,
+               taxonomy.classification_status, taxonomy.classification_version,
                evidence.items_json AS evidence_json
         FROM creator_search_results result
         JOIN creator_profiles profile ON profile.id = result.creator_profile_id
         LEFT JOIN LATERAL (
             SELECT * FROM creator_channels candidate
             WHERE candidate.creator_profile_id = profile.id
-            ORDER BY candidate.last_observed_at DESC NULLS LAST, candidate.created_at
+            ORDER BY
+                CASE candidate.verification_status WHEN 'verified' THEN 0 WHEN 'pending' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END,
+                candidate.last_observed_at DESC NULLS LAST,
+                candidate.created_at
             LIMIT 1
         ) channel ON TRUE
         LEFT JOIN creator_commercial_profiles commercial ON commercial.creator_profile_id = profile.id
+        LEFT JOIN creator_profile_taxonomy taxonomy ON taxonomy.creator_profile_id = profile.id
         LEFT JOIN LATERAL (
             SELECT COALESCE(
                 JSONB_AGG(
@@ -721,6 +961,18 @@ def load_search_job(cursor: Any, *, business_id: str, job_id: str) -> dict[str, 
         item["topics"] = _json(item.pop("topics_json", []), [])
         item["public_metrics"] = _json(item.pop("public_metrics_json", {}), {})
         item["formats"] = _json(item.pop("formats_json", []), [])
+        item["secondary_topics"] = _json(item.pop("secondary_topics_json", []), [])
+        item["content_styles"] = _json(item.pop("content_styles_json", []), [])
+        item["observed_formats"] = _json(item.pop("observed_formats_json", []), [])
+        item["confirmed_formats"] = _json(item.pop("confirmed_formats_json", []), [])
+        item["metro_stations"] = _json(item.pop("metro_stations_json", []), [])
+        item["discovery_geography"] = _json(item.pop("discovery_geography_json", []), [])
+        item["content_geographies"] = _json(item.pop("content_geographies_json", []), [])
+        item["audience_geography"] = _json(item.pop("audience_geography_json", []), [])
+        item["audience_types"] = _json(item.pop("audience_types_json", []), [])
+        item["segment_fit"] = _json(item.pop("segment_fit_json", {}), {})
+        item["taxonomy_confidence"] = _json(item.pop("taxonomy_confidence_json", {}), {})
+        item["taxonomy_evidence"] = _json(item.pop("taxonomy_evidence_json", []), [])
         item["score_breakdown"] = _json(item.pop("score_json", {}), {})
         item["reasons"] = _json(item.pop("reasons_json", []), [])
         item["gates"] = _json(item.pop("gates_json", {}), {})
@@ -982,13 +1234,44 @@ def import_creator_candidates(cursor: Any, *, business_id: str, candidates: list
         raise ValueError("За один импорт можно добавить не более 500 кандидатов")
     imported: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    search_brief: dict[str, Any] = {}
+    if search_job_id:
+        cursor.execute(
+            "SELECT brief_json FROM creator_search_jobs WHERE id = %s AND business_id = %s",
+            (search_job_id, business_id),
+        )
+        search_row = _dict(cursor.fetchone())
+        if not search_row:
+            raise LookupError("Поиск для импорта не найден")
+        search_brief = _json(search_row.get("brief_json"), {})
     for index, candidate in enumerate(candidates):
         cursor.execute("SAVEPOINT creator_import_item")
         try:
             item = dict(candidate)
-            if search_job_id:
-                item["search_job_id"] = search_job_id
-            imported.append(upsert_manual_creator(cursor, business_id=business_id, payload=item))
+            if item.get("channels") or item.get("canonical_urls"):
+                catalog_result = upsert_creator_catalog_entity(
+                    cursor,
+                    entity=item,
+                    public_contact=item.get("public_contact") if isinstance(item.get("public_contact"), dict) else None,
+                    import_source="business_file_import",
+                )
+                profile_id = str(catalog_result["profile_id"])
+                if search_job_id:
+                    catalog_candidates = _search_catalog_candidates(
+                        cursor,
+                        anchors=[str(item.get("display_name") or item.get("name") or "")],
+                        limit=50,
+                        brief=search_brief,
+                    )
+                    catalog_candidate = next((entry for entry in catalog_candidates if str(entry.get("id")) == profile_id), None)
+                    if not catalog_candidate:
+                        raise LookupError("Импортированный профиль не удалось добавить в текущий поиск")
+                    _store_creator_search_candidate(cursor, job_id=search_job_id, candidate=catalog_candidate, brief=search_brief)
+                imported.append({"id": profile_id, "display_name": item.get("display_name") or item.get("name"), "search_job_id": search_job_id or None})
+            else:
+                if search_job_id:
+                    item["search_job_id"] = search_job_id
+                imported.append(upsert_manual_creator(cursor, business_id=business_id, payload=item))
             cursor.execute("RELEASE SAVEPOINT creator_import_item")
         except (LookupError, ValueError) as exc:
             cursor.execute("ROLLBACK TO SAVEPOINT creator_import_item")
@@ -1213,7 +1496,7 @@ def preview_candidate_outreach(
         """
         SELECT candidate.id, candidate.creator_profile_id, candidate.status AS candidate_status,
                candidate.score_snapshot_json,
-               campaign.status AS campaign_status, campaign.goal, campaign.formats_json,
+               campaign.status AS campaign_status, campaign.sender_mode, campaign.goal, campaign.formats_json,
                campaign.offer_json, campaign.budget_json, campaign.period_json,
                campaign.constraints_json,
                profile.display_name, profile.primary_city, profile.primary_area,
@@ -1282,14 +1565,23 @@ def preview_candidate_outreach(
         representation += f" ({business_location})"
     goal = str(candidate.get("goal") or "познакомить аудиторию с бизнесом").strip()
     goal_continuation = goal[:1].lower() + goal[1:] if goal else "познакомить аудиторию с бизнесом"
-    message_parts = [
-        "Здравствуйте!",
-        f"Обратили внимание на «{candidate.get('display_name')}»: {personalization}.",
-        f"Мы — {representation}. Ищем локального автора, чтобы {goal_continuation}.",
-        f"Предлагаем обсудить формат: {format_text}." + (f" {offer_text.rstrip('.')}.") if offer_text else f"Предлагаем обсудить формат: {format_text}.",
-        "Если вам это интересно, сначала отдельно согласуем формат, бюджет, даты и права на материал. До подтверждения ничего публиковать не нужно.",
-        "Подскажите, рассматриваете ли вы такие локальные коллаборации?",
-    ]
+    if str(candidate.get("sender_mode") or "partner_business") == "localos_for_partner":
+        message_parts = [
+            "Здравствуйте!",
+            "Мы в LocalOS помогаем локальным бизнесам находить подходящих авторов для сотрудничества.",
+            f"Обратили внимание на «{candidate.get('display_name')}»: {personalization}.",
+            "Сейчас собираем актуальные условия, чтобы предлагать авторам только релевантные проекты. Подскажите, пожалуйста, ваши форматы, цены, географию аудитории, свежие охваты и удобный контакт.",
+            "Если найдём подходящий бизнес, вернёмся с конкретным брифом; размещение, сроки и права на материал согласуем отдельно.",
+        ]
+    else:
+        message_parts = [
+            "Здравствуйте!",
+            f"Обратили внимание на «{candidate.get('display_name')}»: {personalization}.",
+            f"Мы — {representation}. Ищем локального автора, чтобы {goal_continuation}.",
+            f"Предлагаем обсудить формат: {format_text}." + (f" {offer_text.rstrip('.')}.") if offer_text else f"Предлагаем обсудить формат: {format_text}.",
+            "Если вам это интересно, сначала отдельно согласуем формат, бюджет, даты и права на материал. До подтверждения ничего публиковать не нужно.",
+            "Подскажите, рассматриваете ли вы такие локальные коллаборации?",
+        ]
     contact = str(candidate.get("preferred_contact") or "").strip()
     confirmation_status = str(candidate.get("contact_confirmation_status") or "observed")
     candidate_snapshot = _json(candidate.get("score_snapshot_json"), {})
@@ -1336,6 +1628,7 @@ def preview_candidate_outreach(
             "missing": [label for key, label in missing_labels.items() if not checks[key]],
         },
         "campaign_status": candidate.get("campaign_status"),
+        "sender_mode": candidate.get("sender_mode"),
         "requires_campaign_approval": candidate.get("campaign_status") != "approved",
         "writes_performed": 0,
         "external_messages_sent": 0,

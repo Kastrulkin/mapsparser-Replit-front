@@ -10,6 +10,7 @@ import sys
 import multiprocessing
 import asyncio
 import random
+import threading
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
@@ -100,6 +101,7 @@ from services.founder_content_editorial import (
 )
 from services.web_tracking_maintenance import run_web_tracking_maintenance
 from services.creator_promotion_service import process_next_creator_search_job
+from services.creator_profile_revalidation_service import process_creator_profile_revalidation_batch
 from services.creator_source_enrichment_service import process_creator_source_enrichment_batch
 
 # Реестр активных Playwright-сессий для human-in-the-loop
@@ -120,6 +122,8 @@ _LAST_WEB_TRACKING_MAINTENANCE_AT = 0.0
 _LAST_FOUNDER_CONTENT_AT = 0.0
 _LAST_CREATOR_SEARCH_AT = 0.0
 _LAST_CREATOR_SOURCE_ENRICHMENT_AT = 0.0
+_LAST_CREATOR_PROFILE_REVALIDATION_AT = 0.0
+_CREATOR_PROFILE_REVALIDATION_THREAD: threading.Thread | None = None
 
 
 def _record_external_card_change_if_enabled(
@@ -2032,6 +2036,36 @@ def _enrich_creator_sources_if_due() -> None:
         print("[CREATOR_SOURCE_ENRICHMENT] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+
+
+def _run_creator_profile_revalidation() -> None:
+    try:
+        result = process_creator_profile_revalidation_batch()
+        if result and result.get("selected"):
+            print(f"[CREATOR_PROFILE_REVALIDATION] {json.dumps(result, sort_keys=True)}", flush=True)
+    except Exception:
+        print("[CREATOR_PROFILE_REVALIDATION] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _revalidate_creator_profiles_if_due() -> None:
+    global _LAST_CREATOR_PROFILE_REVALIDATION_AT, _CREATOR_PROFILE_REVALIDATION_THREAD
+    if not _env_bool("INFLUENCER_PROFILE_REVALIDATION_ENABLED", False):
+        return
+    if _CREATOR_PROFILE_REVALIDATION_THREAD and _CREATOR_PROFILE_REVALIDATION_THREAD.is_alive():
+        return
+    now = time.time()
+    interval_sec = max(900, int(os.getenv("INFLUENCER_PROFILE_REVALIDATION_INTERVAL_SEC", "21600")))
+    if now - _LAST_CREATOR_PROFILE_REVALIDATION_AT < interval_sec:
+        return
+    _LAST_CREATOR_PROFILE_REVALIDATION_AT = now
+    _CREATOR_PROFILE_REVALIDATION_THREAD = threading.Thread(
+        target=_run_creator_profile_revalidation,
+        name="creator-profile-revalidation",
+        daemon=True,
+    )
+    _CREATOR_PROFILE_REVALIDATION_THREAD.start()
 
 
 def _process_contact_intelligence_if_due() -> None:
@@ -7151,6 +7185,7 @@ if __name__ == "__main__":
             _process_agent_run_queue_if_due()
             _process_operator_async_job_if_due()
             _enrich_creator_sources_if_due()
+            _revalidate_creator_profiles_if_due()
             _process_creator_search_if_due()
             _process_contact_intelligence_if_due()
             _dispatch_social_posts_if_due()
