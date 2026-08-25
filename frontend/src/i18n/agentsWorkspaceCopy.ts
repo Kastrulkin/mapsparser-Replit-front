@@ -74,3 +74,26 @@ export const getAgentsWorkspaceCopy = (language: Language): AgentsWorkspaceCopy 
   ...supplementalCopy[language],
   ...supplementalClarityCopy[language],
 });
+
+type AgentsWorkspaceNavigationCopy = {
+  agentSections: string;
+  overview: string;
+  history: string;
+  scenario: string;
+  settings: string;
+};
+
+const navigationCopy: Record<Language, AgentsWorkspaceNavigationCopy> = {
+  ru: { agentSections: 'Разделы агента', overview: 'Обзор', history: 'История', scenario: 'Сценарий', settings: 'Настройки' },
+  en: { agentSections: 'Agent sections', overview: 'Overview', history: 'History', scenario: 'Scenario', settings: 'Settings' },
+  fr: { agentSections: 'Sections de l’agent', overview: 'Vue d’ensemble', history: 'Historique', scenario: 'Scénario', settings: 'Réglages' },
+  es: { agentSections: 'Secciones del agente', overview: 'Resumen', history: 'Historial', scenario: 'Escenario', settings: 'Ajustes' },
+  el: { agentSections: 'Ενότητες πράκτορα', overview: 'Επισκόπηση', history: 'Ιστορικό', scenario: 'Σενάριο', settings: 'Ρυθμίσεις' },
+  de: { agentSections: 'Agentenbereiche', overview: 'Übersicht', history: 'Verlauf', scenario: 'Ablauf', settings: 'Einstellungen' },
+  th: { agentSections: 'ส่วนของเอเจนต์', overview: 'ภาพรวม', history: 'ประวัติ', scenario: 'ขั้นตอนงาน', settings: 'การตั้งค่า' },
+  ar: { agentSections: 'أقسام الوكيل', overview: 'نظرة عامة', history: 'السجل', scenario: 'السيناريو', settings: 'الإعدادات' },
+  ha: { agentSections: 'Sassan wakili', overview: 'Bayani', history: 'Tarihi', scenario: 'Tsarin aiki', settings: 'Saituna' },
+  tr: { agentSections: 'Ajan bölümleri', overview: 'Genel bakış', history: 'Geçmiş', scenario: 'Senaryo', settings: 'Ayarlar' },
+};
+
+export const getAgentsWorkspaceNavigationCopy = (language: Language) => navigationCopy[language];

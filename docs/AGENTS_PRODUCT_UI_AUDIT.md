@@ -162,3 +162,33 @@ The next `/dashboard/agents` implementation should be accepted only if:
   agents, missing connection, failed run, and pending decision states.
 - Verify that advanced/debug details are reachable but never the default
   explanation of the product.
+
+## First-layer review, 25 August 2026
+
+The production first layer now starts from the user's task instead of the
+template catalog. Existing automated tasks and their next action appear before
+the ready-task gallery. The generic four-card capability explainer was removed
+because it repeated product promises without helping the user complete a task.
+
+The gallery now:
+
+- uses outcome-oriented labels such as `Что поручить LocalOS` and
+  `Создать для проверки`;
+- explicitly states that runs, publication and sending begin only after user
+  review;
+- shows only beta or certified tasks as available actions;
+- collapses unavailable draft tasks into one `В разработке` disclosure;
+- marks one recommended starting task instead of presenting ten equal choices;
+- separates daily and weekly schedules;
+- keeps cards to two columns until very wide screens to improve reading width.
+
+The first-layer gallery, agent navigation and all ten template names and
+business results are localized for `ru`, `en`, `fr`, `es`, `el`, `de`, `th`,
+`ar`, `ha`, and `tr`. Production browser verification covered every language
+and confirmed that non-English locales no longer fall back to English.
+
+The second localization pass covers the selected-agent status, run mode,
+parameters, schedule, history, overview milestones, scenario structure and the
+service-tools entry point in all ten languages. Business-authored names, goals
+and saved results remain in their original language by design; LocalOS does not
+silently rewrite customer data when the interface language changes.

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
+import { useLanguage } from '@/i18n/LanguageContext';
 import {
   Activity,
   AlertTriangle,
@@ -264,6 +265,7 @@ import {
   HumanResultView
 } from './runs';
 import { TimezoneSelect } from './timezone-select';
+import { getAgentDeepCopy } from './agent-deep-copy';
 
 const AgentWorkflowGraph = lazy(() => import('./workflow-graph').then((module) => ({ default: module.AgentWorkflowGraph })));
 
@@ -979,9 +981,9 @@ export const employeeToneClass = {
   slate: 'bg-slate-100 text-slate-700 ring-slate-200',
 };
 
-export const EmployeeStatusPill = ({ status }: { status: EmployeeStatus }) => (
+export const EmployeeStatusPill = ({ status, label }: { status: EmployeeStatus; label?: string }) => (
   <span className={cn('inline-flex min-h-8 items-center rounded-full px-3 py-1 text-xs font-semibold ring-1', employeeToneClass[status.tone])}>
-    {status.label}
+    {label || status.label}
   </span>
 );
 
@@ -1076,7 +1078,10 @@ export const EmployeeAgentsList = ({
   loading: boolean;
   onOpen: (blueprint: AgentBlueprint) => void;
   copy: { title: string; description: string; loading: string; empty: string };
-}) => (
+}) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
+  return (
   <aside className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)] lg:sticky lg:top-4">
     <div className="flex items-center justify-between gap-3 px-1">
       <div>
@@ -1137,7 +1142,7 @@ export const EmployeeAgentsList = ({
                     {blueprint.name}
                   </div>
                   <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', selected ? 'bg-white/10 text-slate-200 ring-white/15' : 'bg-sky-50 text-sky-700 ring-sky-100')}>
-                    {agentExecutionModeLabel(mode)}
+                    {deepCopy.mode[mode]}
                   </span>
                 </div>
                 <div className={cn('mt-1 line-clamp-1 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
@@ -1146,7 +1151,7 @@ export const EmployeeAgentsList = ({
               </div>
               <div className="grid gap-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>{status.label}</span>
+                  <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>{deepCopy.state[state]}</span>
                   <span className={cn('text-[11px] tabular-nums', selected ? 'text-slate-300' : 'text-slate-500')}>{agentNextRunLabel(blueprint, details)}</span>
                 </div>
                 <div className={cn('line-clamp-1 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
@@ -1159,7 +1164,8 @@ export const EmployeeAgentsList = ({
       )}
     </div>
   </aside>
-);
+  );
+};
 
 export const EmployeeAnswerCard = ({
   label,
@@ -1574,22 +1580,27 @@ export const AgentExecutionModePanel = ({
   onTimeChange: (value: string) => void;
   onTimezoneChange: (value: string) => void;
   onSave: () => void;
-}) => (
+}) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
+  const modeKeys: AgentExecutionMode[] = ['one_off', 'manual', 'scheduled'];
+  const localizedOptions = modeKeys.map((value) => ({ value, label: deepCopy.mode[value], description: deepCopy.modeDescription[value] }));
+  return (
   <section className={cn(
     'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
     confirmationRequired ? 'shadow-[0_0_0_2px_rgba(249,115,22,0.25)]' : '',
   )}>
     <div className="max-w-3xl">
-      <div className="text-xs font-semibold uppercase text-slate-500">Как запускается</div>
+      <div className="text-xs font-semibold uppercase text-slate-500">{deepCopy.startType}</div>
       <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">
-        {confirmationRequired ? 'Подтвердите тип агента' : 'Тип запуска'}
+        {confirmationRequired ? deepCopy.confirmType : deepCopy.startType}
       </h2>
       <p className="mt-1 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
-        Выбор меняет только способ запуска. Он не включает агента и не запускает работу.
+        {deepCopy.startTypeHint}
       </p>
     </div>
     <div className="mt-4 grid gap-2 sm:grid-cols-3">
-      {agentExecutionModeOptions.map(({ value, label, description }) => (
+      {localizedOptions.map(({ value, label, description }) => (
         <button
           key={value}
           type="button"
@@ -1607,21 +1618,22 @@ export const AgentExecutionModePanel = ({
     {mode === 'scheduled' ? (
       <div className="mt-4 grid gap-3 sm:grid-cols-[10rem_minmax(0,16rem)]">
         <label className="text-sm font-medium text-slate-800">
-          Время
+          {deepCopy.time}
           <input type="time" value={time} onChange={(event) => onTimeChange(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" />
         </label>
         <div className="text-sm font-medium text-slate-800">
-          Часовой пояс
+          {deepCopy.timezone}
           <TimezoneSelect value={timezone} onChange={onTimezoneChange} className="mt-1" />
         </div>
       </div>
     ) : null}
     <Button type="button" className="mt-4 min-h-10 active:scale-[0.96] transition-transform" onClick={onSave} disabled={actionLoading || (mode === 'scheduled' && (!time || !timezone))}>
       {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-      {confirmationRequired ? 'Подтвердить тип запуска' : 'Сохранить'}
+      {confirmationRequired ? deepCopy.confirm : deepCopy.save}
     </Button>
   </section>
-);
+  );
+};
 
 export const AgentScheduleSetupPanel = ({
   time,
@@ -1637,16 +1649,19 @@ export const AgentScheduleSetupPanel = ({
   onTimeChange: (value: string) => void;
   onTimezoneChange: (value: string) => void;
   onSave: () => void;
-}) => (
+}) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
+  return (
   <section className="rounded-2xl bg-amber-50 p-5 shadow-[0_0_0_1px_rgba(217,119,6,0.2)]">
     <div className="max-w-3xl">
-      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Расписание</div>
-      <h2 className="mt-2 text-xl font-semibold leading-7 text-amber-950 [text-wrap:balance]">Когда агент должен начинать работу</h2>
-      <p className="mt-1 text-sm leading-6 text-amber-900 [text-wrap:pretty]">Время хранится вместе с часовым поясом, поэтому запуск не сдвинется при переходе на летнее время.</p>
+      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">{deepCopy.schedule}</div>
+      <h2 className="mt-2 text-xl font-semibold leading-7 text-amber-950 [text-wrap:balance]">{deepCopy.scheduleTitle}</h2>
+      <p className="mt-1 text-sm leading-6 text-amber-900 [text-wrap:pretty]">{deepCopy.scheduleHint}</p>
     </div>
     <div className="mt-4 grid gap-3 sm:grid-cols-[10rem_minmax(0,16rem)_auto] sm:items-end">
       <label className="block text-sm font-medium text-amber-950">
-        Время
+        {deepCopy.time}
         <input
           type="time"
           value={time}
@@ -1655,16 +1670,17 @@ export const AgentScheduleSetupPanel = ({
         />
       </label>
       <div className="block text-sm font-medium text-amber-950">
-        Часовой пояс
+        {deepCopy.timezone}
         <TimezoneSelect value={timezone} onChange={onTimezoneChange} className="mt-1 focus-visible:ring-2 focus-visible:ring-orange-400" />
       </div>
       <Button type="button" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onSave} disabled={actionLoading || !time || !timezone}>
         {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock3 className="mr-2 h-4 w-4" />}
-        Сохранить расписание
+        {deepCopy.saveSchedule}
       </Button>
     </div>
   </section>
-);
+  );
+};
 
 export const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
   draft: 'Черновик',
@@ -1691,6 +1707,8 @@ export const AgentRunParametersPanel = ({
   errors: Record<string, string>;
   onChange: (key: string, value: unknown) => void;
 }) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
   const fields = Object.entries(schema?.properties || {});
   if (!fields.length) {
     return null;
@@ -1698,8 +1716,8 @@ export const AgentRunParametersPanel = ({
   const required = new Set(schema?.required || []);
   return (
     <section className="rounded-2xl bg-white px-5 py-5 shadow-sm ring-1 ring-slate-200">
-      <div className="text-sm font-semibold text-slate-950">Параметры этой работы</div>
-      <p className="mt-1 text-sm leading-6 text-slate-600">Проверьте значения перед тестом или рабочим запуском.</p>
+      <div className="text-sm font-semibold text-slate-950">{deepCopy.paramsTitle}</div>
+      <p className="mt-1 text-sm leading-6 text-slate-600">{deepCopy.paramsHint}</p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         {fields.map(([key, field]) => {
           const label = field.title || key.replaceAll('_', ' ');
@@ -1713,13 +1731,13 @@ export const AgentRunParametersPanel = ({
               <span className="font-medium text-slate-900">{label}{required.has(key) ? ' *' : ''}</span>
               {field.enum?.length ? (
                 <select className={inputClassName} value={String(value ?? '')} onChange={(event) => onChange(key, event.target.value)}>
-                  <option value="">Выберите</option>
+                  <option value="">{deepCopy.select}</option>
                   {field.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
                 </select>
               ) : field.type === 'boolean' ? (
                 <span className="mt-2 flex min-h-10 items-center gap-2">
                   <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(key, event.target.checked)} />
-                  <span>{value ? 'Да' : 'Нет'}</span>
+                  <span>{value ? deepCopy.yes : deepCopy.no}</span>
                 </span>
               ) : field.format === 'textarea' || field.type === 'array' ? (
                 <textarea
@@ -1774,6 +1792,8 @@ export const EmployeeAgentOverviewPanel = ({
   onOpenAdvanced: () => void;
   onOpenResults: () => void;
 }) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
   const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
   const latestRun = details?.runs?.[0] || null;
   const detailedLatestRun = activeRun?.id && activeRun.id === latestRun?.id ? activeRun : latestRun;
@@ -1796,10 +1816,10 @@ export const EmployeeAgentOverviewPanel = ({
   const enabled = Boolean(details?.execution_contract?.active?.version_id && blueprint.status === 'active');
   const hasWorkRun = Boolean((details?.runs || []).some((run) => isAgentWorkRun(run) && run.status === 'completed'));
   const lifecycle = [
-    { label: 'Описан', done: true },
-    { label: 'Проверен', done: tested },
-    { label: 'Включён', done: enabled },
-    { label: 'Работает', done: hasWorkRun || story.state === 'working' },
+    { label: deepCopy.described, done: true },
+    { label: deepCopy.tested, done: tested },
+    { label: deepCopy.enabled, done: enabled },
+    { label: deepCopy.working, done: hasWorkRun || story.state === 'working' },
   ];
   return (
     <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
@@ -1810,9 +1830,9 @@ export const EmployeeAgentOverviewPanel = ({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <EmployeeStatusPill status={story.status} />
+              <EmployeeStatusPill status={story.status} label={deepCopy.state[story.state]} />
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                {employeeStateTitle(story.state)}
+                {deepCopy.state[story.state]}
               </span>
               <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-100">
                 {userMode.label}
@@ -1846,24 +1866,24 @@ export const EmployeeAgentOverviewPanel = ({
           </div>
         </div>
         <details className="mt-4 border-t border-slate-100 pt-3">
-          <summary className="cursor-pointer text-sm font-medium text-slate-500 hover:text-slate-900">Другие действия</summary>
+          <summary className="cursor-pointer text-sm font-medium text-slate-500 hover:text-slate-900">{deepCopy.otherActions}</summary>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" variant="outline" className="min-h-10" onClick={onCloneAgent} disabled={actionLoading}>
               <Copy className="mr-2 h-4 w-4" />
-              Создать копию агента
+              {deepCopy.clone}
             </Button>
             <Button type="button" variant="outline" className="min-h-10" onClick={onOpenAdvanced}>
-              Открыть настройки
+              {deepCopy.openSettings}
             </Button>
           </div>
         </details>
       </section>
 
-      <EmployeeWorkspaceSection title="Цель агента">
+      <EmployeeWorkspaceSection title={deepCopy.goal}>
         <p className="whitespace-pre-wrap text-base leading-7 text-slate-800 [text-wrap:pretty]">{goal}</p>
       </EmployeeWorkspaceSection>
 
-      <EmployeeWorkspaceSection title="Готовность процесса" tone={problem ? 'attention' : 'quiet'}>
+      <EmployeeWorkspaceSection title={deepCopy.readiness} tone={problem ? 'attention' : 'quiet'}>
         <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {lifecycle.map((item) => (
             <li key={item.label} className={cn('flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium ring-1', item.done ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-slate-50 text-slate-500 ring-slate-200')}>
@@ -1876,31 +1896,31 @@ export const EmployeeAgentOverviewPanel = ({
       </EmployeeWorkspaceSection>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <EmployeeWorkspaceSection title="Последняя работа" tone={healthy ? 'quiet' : 'default'}>
+        <EmployeeWorkspaceSection title={deepCopy.lastWork} tone={healthy ? 'quiet' : 'default'}>
           <div className="text-sm font-semibold leading-6 text-slate-950">{story.latestWork}</div>
         </EmployeeWorkspaceSection>
-        <EmployeeWorkspaceSection title="Следующая работа" tone={healthy ? 'quiet' : 'default'}>
+        <EmployeeWorkspaceSection title={deepCopy.nextWork} tone={healthy ? 'quiet' : 'default'}>
           <div className="text-sm font-semibold leading-6 text-slate-950">{story.nextWork}</div>
         </EmployeeWorkspaceSection>
       </div>
 
       {latestResult ? (
-        <EmployeeWorkspaceSection title="Последний результат" tone="default">
+        <EmployeeWorkspaceSection title={deepCopy.lastResult} tone="default">
           <div className="rounded-xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
-            <p className="line-clamp-3 text-sm leading-6 text-slate-700">{businessResultPrimaryText(latestResult) || 'Результат сохранён и доступен в истории запуска.'}</p>
-            <Button type="button" variant="outline" className="mt-3 min-h-10" onClick={onOpenResults}>Открыть результат</Button>
+            <p className="line-clamp-3 text-sm leading-6 text-slate-700">{businessResultPrimaryText(latestResult) || deepCopy.resultFallback}</p>
+            <Button type="button" variant="outline" className="mt-3 min-h-10" onClick={onOpenResults}>{deepCopy.openResult}</Button>
           </div>
         </EmployeeWorkspaceSection>
       ) : details?.runs?.[0]?.status === 'completed' ? (
-        <EmployeeWorkspaceSection title="Последний результат" tone="attention">
+        <EmployeeWorkspaceSection title={deepCopy.lastResult} tone="attention">
           <div className="text-sm leading-6 text-slate-700">
-            Сотрудник завершил тест, но не сохранил текст результата. Уточните формат результата и запустите тест ещё раз.
+            {deepCopy.missingResult}
           </div>
         </EmployeeWorkspaceSection>
       ) : null}
 
       {story.attention.length ? (
-        <EmployeeWorkspaceSection title="Требует вашего внимания" tone={story.state === 'error' ? 'error' : 'attention'}>
+        <EmployeeWorkspaceSection title={deepCopy.attention} tone={story.state === 'error' ? 'error' : 'attention'}>
           <div className="grid gap-2">
             {story.attention.map((item) => (
               <div key={item.key} className="rounded-xl bg-white/70 px-3 py-3 text-sm leading-6 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
@@ -1929,6 +1949,8 @@ export const EmployeeAgentScenarioPanel = ({
   onRebuildScenario: () => void;
   onGraphCandidateCreated: () => Promise<void>;
 }) => {
+  const { language } = useLanguage();
+  const deepCopy = getAgentDeepCopy(language);
   const contract = details?.execution_contract;
   const working = contract?.candidate || contract?.active;
   const inputs = Object.entries(working?.inputs_schema?.properties || {});
@@ -2084,38 +2106,38 @@ export const EmployeeAgentScenarioPanel = ({
           </div>
           <Button type="button" variant="outline" className="min-h-10 shrink-0 bg-white" onClick={onRebuildScenario} disabled={actionLoading}>
             {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Обновить по цели
+            {deepCopy.updateFromGoal}
           </Button>
         </div>
       ) : (
         <div className="flex justify-end">
           <Button type="button" variant="outline" className="min-h-10" onClick={onRebuildScenario} disabled={actionLoading}>
             {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Обновить сценарий по цели
+            {deepCopy.updateScenario}
           </Button>
         </div>
       )}
-      <EmployeeWorkspaceSection title="Исходное поручение">
+      <EmployeeWorkspaceSection title={deepCopy.originalTask}>
         <p className="whitespace-pre-wrap text-base leading-7 text-slate-800 [text-wrap:pretty]">{contract?.original_request || blueprint.description || 'Полное поручение не сохранилось у этого старого агента.'}</p>
         {!contract?.description_complete ? <p className="mt-2 text-sm text-amber-800">Описание собрано из старой версии и может быть неполным.</p> : null}
       </EmployeeWorkspaceSection>
       <div className="grid gap-4 lg:grid-cols-2">
-        <EmployeeWorkspaceSection title="Рабочая цель">
+        <EmployeeWorkspaceSection title={deepCopy.workGoal}>
           <p className="text-sm leading-6 text-slate-700">{working?.goal || blueprint.active_goal || blueprint.latest_goal || blueprint.description}</p>
         </EmployeeWorkspaceSection>
-        <EmployeeWorkspaceSection title="Когда запускается">
+        <EmployeeWorkspaceSection title={deepCopy.startsWhen}>
           <div className="text-sm font-semibold text-slate-900">{mode.label}</div>
           <div className="mt-1 text-sm leading-6 text-slate-600">{working?.schedule?.time ? `${working.schedule.time} · ${working.schedule.timezone}` : mode.description}</div>
         </EmployeeWorkspaceSection>
       </div>
-      <EmployeeWorkspaceSection title="Источники и доступы">
-        {sources.length ? <div className="flex flex-wrap gap-2">{sources.map((source) => <span key={source} className="rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 ring-1 ring-sky-200">{source}</span>)}</div> : <p className="text-sm text-slate-600">Агент использует данные LocalOS и введённые параметры.</p>}
+      <EmployeeWorkspaceSection title={deepCopy.sources}>
+        {sources.length ? <div className="flex flex-wrap gap-2">{sources.map((source) => <span key={source} className="rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 ring-1 ring-sky-200">{source}</span>)}</div> : <p className="text-sm text-slate-600">{deepCopy.localData}</p>}
       </EmployeeWorkspaceSection>
-      <EmployeeWorkspaceSection title="Как выполняется">
+      <EmployeeWorkspaceSection title={deepCopy.process}>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-600">Схема показывает реальную candidate-версию. Рабочая версия не изменится до теста и включения.</p>
           <Button type="button" variant="outline" className="min-h-10 shrink-0" onClick={() => setEditingOrder((current) => !current)} disabled={graphSaving || !orderedSteps.length}>
-            {editingOrder ? 'Отменить изменение' : 'Настроить процесс'}
+            {editingOrder ? deepCopy.cancelChange : deepCopy.configureProcess}
           </Button>
         </div>
         <Suspense fallback={<div className="h-[360px] animate-pulse rounded-3xl bg-slate-100" aria-label="Загружается схема процесса" />}>
@@ -2125,8 +2147,8 @@ export const EmployeeAgentScenarioPanel = ({
           {orderedSteps.map((step, index) => (
             <div key={step.key || index} className="flex min-h-12 items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
-              <span className="text-sm font-medium text-slate-800">{step.title || `Шаг ${index + 1}`}</span>
-              {step.requires_approval ? <span className="ml-auto text-xs font-medium text-amber-700">Попросит решение</span> : null}
+              <span className="text-sm font-medium text-slate-800">{step.title || `${deepCopy.step} ${index + 1}`}</span>
+              {step.requires_approval ? <span className="ml-auto text-xs font-medium text-amber-700">{deepCopy.asksDecision}</span> : null}
               {editingOrder ? (
                 <div className={cn('flex gap-1', step.requires_approval ? '' : 'ml-auto')}>
                   <Button type="button" size="sm" variant="outline" className="min-h-10 min-w-10 px-2" onClick={() => moveScenarioStep(index, -1)} disabled={index === 0} aria-label={`Поднять шаг ${index + 1}`}>↑</Button>
@@ -2229,14 +2251,14 @@ export const EmployeeAgentScenarioPanel = ({
         ) : null}
       </EmployeeWorkspaceSection>
       <div className="grid gap-4 lg:grid-cols-2">
-        <EmployeeWorkspaceSection title="Что получает на вход">
+        <EmployeeWorkspaceSection title={deepCopy.inputs}>
           {inputs.length ? <ul className="space-y-2 text-sm text-slate-700">{inputs.map(([key, field]) => <li key={key}><span className="font-semibold text-slate-900">{field.title || key}</span>{field.description ? ` — ${field.description}` : ''}</li>)}</ul> : <p className="text-sm text-slate-600">Дополнительные параметры не требуются.</p>}
         </EmployeeWorkspaceSection>
-        <EmployeeWorkspaceSection title="Что сохраняет">
+        <EmployeeWorkspaceSection title={deepCopy.outputs}>
           <p className="text-sm leading-6 text-slate-700">{savedResultDescription}</p>
         </EmployeeWorkspaceSection>
       </div>
-      <EmployeeWorkspaceSection title="Ручной контроль" tone={approvals.length ? 'attention' : 'quiet'}>
+      <EmployeeWorkspaceSection title={deepCopy.manualControl} tone={approvals.length ? 'attention' : 'quiet'}>
         <p className="text-sm leading-6 text-slate-700">{approvals.length ? `Агент остановится перед: ${approvals.map((item) => item.title || 'внешним действием').join(', ')}.` : 'Сценарий не выполняет внешние действия без отдельного подтверждения.'}</p>
       </EmployeeWorkspaceSection>
     </div>

@@ -119,3 +119,23 @@ and downloadable support exports for scheduler events and failed runs.
 
 External publication, sending, payments and destructive actions remain behind
 the existing explicit approval boundary throughout the beta.
+
+## Compiled AI canary gate, 17–23 August 2026
+
+The approved seven-day canary `compiled-ai-canary-20260817-20260823` is
+closed. The final audit on 25 August confirmed all 29 expected scheduler slots
+and all 29 corresponding runs. Every run completed; there were no failures,
+duplicates, stale or active runs, approvals, external actions, synthetic
+backfills, unexpected payer identities, or unexpected schedule slots.
+
+Billing reserved 58 credits against the 64-credit ceiling. Zero credits were
+charged, all 58 were released, and there are no active reservations. The guard
+automatically paused all five canary blueprints after the window closed.
+
+Final evidence is stored at
+`/opt/seo-app/backups/agent_canary_20260816/final_requirement_audit_20260825.json`
+with SHA-256
+`31ce37527d8d25d0f10af354c4dca059a66d09d5a3ea49f404ade878db635400`.
+
+This closes the seven-day technical canary gate. Genuine user feedback remains
+a separate product gate and must not be inferred from scheduler success.

@@ -175,6 +175,112 @@ TEMPLATE_LOCALIZED_CONTENT: Dict[str, Dict[str, Dict[str, str]]] = {
     },
 }
 
+TEMPLATE_ADDITIONAL_LOCALIZED_CONTENT: Dict[str, Dict[str, Dict[str, str]]] = {
+    "daily_owner_digest": {
+        "ru": {"name": "Ежедневная сводка владельцу", "business_result": "К началу дня владелец видит один короткий список отклонений и задач, требующих решения."},
+        "fr": {"name": "Synthèse quotidienne du dirigeant", "business_result": "Le dirigeant commence la journée avec une courte liste d’écarts et de décisions."},
+        "es": {"name": "Resumen diario para el propietario", "business_result": "El propietario empieza el día con una lista breve de excepciones y decisiones."},
+        "el": {"name": "Ημερήσια σύνοψη ιδιοκτήτη", "business_result": "Ο ιδιοκτήτης ξεκινά τη μέρα με μια σύντομη λίστα αποκλίσεων και αποφάσεων."},
+        "de": {"name": "Tägliche Inhaberübersicht", "business_result": "Der Inhaber startet mit einer kurzen Liste von Abweichungen und Entscheidungen in den Tag."},
+        "th": {"name": "สรุปรายวันสำหรับเจ้าของ", "business_result": "เจ้าของเริ่มวันด้วยรายการสั้น ๆ ของข้อยกเว้นและเรื่องที่ต้องตัดสินใจ"},
+        "ar": {"name": "ملخص يومي للمالك", "business_result": "يبدأ المالك يومه بقائمة قصيرة من الاستثناءات والقرارات المطلوبة."},
+        "ha": {"name": "Takaitaccen bayani na yau da kullum ga mai kasuwanci", "business_result": "Mai kasuwanci yana fara rana da gajeren jerin abubuwan da suka bambanta da shawarar da ake bukata."},
+    },
+    "negative_review_reply": {
+        "ru": {"name": "Черновики ответов на негативные отзывы", "business_result": "Менеджер получает готовые черновики ответов и публикует их только после проверки."},
+        "fr": {"name": "Brouillons de réponse aux avis négatifs", "business_result": "Le responsable reçoit des réponses prêtes à vérifier et ne publie qu’après validation."},
+        "es": {"name": "Borradores para reseñas negativas", "business_result": "El responsable recibe respuestas listas para revisar y solo publica tras aprobarlas."},
+        "el": {"name": "Προσχέδια απαντήσεων σε αρνητικές κριτικές", "business_result": "Ο υπεύθυνος λαμβάνει έτοιμες απαντήσεις και δημοσιεύει μόνο μετά την έγκριση."},
+        "de": {"name": "Antwortentwürfe für negative Bewertungen", "business_result": "Die Leitung erhält prüfbereite Antworten und veröffentlicht erst nach Freigabe."},
+        "th": {"name": "ร่างคำตอบสำหรับรีวิวเชิงลบ", "business_result": "ผู้จัดการได้รับคำตอบที่พร้อมตรวจสอบและเผยแพร่หลังอนุมัติเท่านั้น"},
+        "ar": {"name": "مسودات الرد على المراجعات السلبية", "business_result": "يتلقى المدير ردودًا جاهزة للمراجعة ولا ينشرها إلا بعد الموافقة."},
+        "ha": {"name": "Daftarin amsa ga reviews marasa kyau", "business_result": "Manaja yana samun amsoshin da aka shirya don dubawa kuma ba a wallafa sai bayan amincewa."},
+    },
+    "service_seo_cleanup": {
+        "ru": {"name": "SEO-проверка услуг", "business_result": "Владелец получает приоритетный список слабых названий, дублей и пустых описаний."},
+        "fr": {"name": "Contrôle SEO des services", "business_result": "Le dirigeant reçoit une liste priorisée des noms faibles, doublons et descriptions manquantes."},
+        "es": {"name": "Revisión SEO de servicios", "business_result": "El propietario recibe una lista priorizada de nombres débiles, duplicados y descripciones vacías."},
+        "el": {"name": "Έλεγχος SEO υπηρεσιών", "business_result": "Ο ιδιοκτήτης λαμβάνει λίστα προτεραιότητας με αδύναμα ονόματα, διπλότυπα και κενές περιγραφές."},
+        "de": {"name": "SEO-Prüfung der Leistungen", "business_result": "Der Inhaber erhält eine priorisierte Liste schwacher Namen, Duplikate und fehlender Beschreibungen."},
+        "th": {"name": "ตรวจ SEO ของบริการ", "business_result": "เจ้าของได้รับรายการเรียงลำดับความสำคัญของชื่อที่ควรปรับ รายการซ้ำ และคำอธิบายที่ขาดหาย"},
+        "ar": {"name": "فحص تحسين محركات البحث للخدمات", "business_result": "يتلقى المالك قائمة مرتبة بالأسماء الضعيفة والتكرارات والأوصاف الناقصة."},
+        "ha": {"name": "Binciken SEO na ayyuka", "business_result": "Mai kasuwanci yana samun jerin sunaye marasa ƙarfi, kwafi da bayanan da suka ɓace bisa fifiko."},
+    },
+    "card_posts_from_signals": {
+        "ru": {"name": "Новости из бизнес-сигналов", "business_result": "Контент-менеджер получает три черновика новостей на основе реальных данных бизнеса."},
+        "fr": {"name": "Publications issues des signaux du commerce", "business_result": "Le responsable de contenu reçoit trois brouillons fondés sur les données réelles de l’entreprise."},
+        "es": {"name": "Publicaciones a partir de señales del negocio", "business_result": "El responsable de contenido recibe tres borradores basados en datos reales del negocio."},
+        "el": {"name": "Αναρτήσεις από επιχειρηματικά σήματα", "business_result": "Ο υπεύθυνος περιεχομένου λαμβάνει τρία προσχέδια βασισμένα σε πραγματικά δεδομένα."},
+        "de": {"name": "Beiträge aus Geschäftssignalen", "business_result": "Das Content-Team erhält drei Entwürfe auf Basis realer Geschäftsdaten."},
+        "th": {"name": "โพสต์จากสัญญาณธุรกิจ", "business_result": "ผู้ดูแลคอนเทนต์ได้รับร่างสามฉบับที่อ้างอิงข้อมูลธุรกิจจริง"},
+        "ar": {"name": "منشورات من إشارات النشاط", "business_result": "يتلقى مسؤول المحتوى ثلاث مسودات مبنية على بيانات النشاط الفعلية."},
+        "ha": {"name": "Rubuce-rubuce daga alamomin kasuwanci", "business_result": "Mai kula da abun ciki yana samun daftari uku da suka dogara da ainihin bayanan kasuwanci."},
+    },
+    "tomorrow_bookings_check": {
+        "ru": {"name": "Проверка записей на завтра", "business_result": "Администратор заранее видит записи без предоплаты и риски отмены."},
+        "fr": {"name": "Contrôle des réservations de demain", "business_result": "L’administrateur repère à l’avance les acomptes manquants et les risques d’annulation."},
+        "es": {"name": "Revisión de las reservas de mañana", "business_result": "El administrador detecta con antelación anticipos pendientes y riesgos de cancelación."},
+        "el": {"name": "Έλεγχος αυριανών κρατήσεων", "business_result": "Ο διαχειριστής βλέπει έγκαιρα τις ελλείψεις προκαταβολών και τους κινδύνους ακύρωσης."},
+        "de": {"name": "Prüfung der morgigen Termine", "business_result": "Die Verwaltung sieht fehlende Vorauszahlungen und Stornorisiken frühzeitig."},
+        "th": {"name": "ตรวจการจองของวันพรุ่งนี้", "business_result": "ผู้ดูแลเห็นรายการที่ยังไม่ชำระล่วงหน้าและความเสี่ยงในการยกเลิกล่วงหน้า"},
+        "ar": {"name": "فحص حجوزات الغد", "business_result": "يرى المسؤول مسبقًا الدفعات المقدمة الناقصة ومخاطر الإلغاء."},
+        "ha": {"name": "Binciken ajiyar gobe", "business_result": "Mai gudanarwa yana ganin rashin biyan kuɗin farko da haɗarin soke wa tun da wuri."},
+    },
+    "google_sheets_business_result": {
+        "ru": {"name": "Результат из Google Sheets", "business_result": "Ответственный получает нормализованную сводку новых строк таблицы и список исключений."},
+        "fr": {"name": "Résultat métier depuis Google Sheets", "business_result": "Le responsable reçoit une synthèse normalisée des nouvelles lignes et des exceptions."},
+        "es": {"name": "Resultado de negocio desde Google Sheets", "business_result": "El responsable recibe un resumen normalizado de nuevas filas y excepciones."},
+        "el": {"name": "Επιχειρηματικό αποτέλεσμα από Google Sheets", "business_result": "Ο υπεύθυνος λαμβάνει κανονικοποιημένη σύνοψη νέων γραμμών και εξαιρέσεων."},
+        "de": {"name": "Geschäftsergebnis aus Google Sheets", "business_result": "Die zuständige Person erhält eine normalisierte Übersicht neuer Zeilen und Ausnahmen."},
+        "th": {"name": "ผลลัพธ์ธุรกิจจาก Google Sheets", "business_result": "ผู้รับผิดชอบได้รับสรุปแถวใหม่และข้อยกเว้นในรูปแบบมาตรฐาน"},
+        "ar": {"name": "نتيجة العمل من Google Sheets", "business_result": "يتلقى المسؤول ملخصًا موحدًا للصفوف الجديدة والاستثناءات."},
+        "ha": {"name": "Sakamakon kasuwanci daga Google Sheets", "business_result": "Mai alhaki yana samun takaitaccen sabbin layuka da abubuwan da suka bambanta a tsari ɗaya."},
+    },
+    "partnership_outreach_draft": {
+        "ru": {"name": "Черновик партнёрского предложения", "business_result": "Менеджер получает квалифицированный список партнёров и персональные черновики первого контакта."},
+        "fr": {"name": "Brouillon de proposition de partenariat", "business_result": "Le responsable reçoit des partenaires qualifiés et des premiers messages personnalisés."},
+        "es": {"name": "Borrador de propuesta de colaboración", "business_result": "El responsable recibe socios cualificados y borradores personalizados para el primer contacto."},
+        "el": {"name": "Προσχέδιο πρότασης συνεργασίας", "business_result": "Ο υπεύθυνος λαμβάνει κατάλληλους συνεργάτες και εξατομικευμένα προσχέδια πρώτης επαφής."},
+        "de": {"name": "Entwurf eines Partnerschaftsangebots", "business_result": "Die Leitung erhält qualifizierte Partner und personalisierte Entwürfe für den Erstkontakt."},
+        "th": {"name": "ร่างข้อเสนอความร่วมมือ", "business_result": "ผู้จัดการได้รับรายชื่อพันธมิตรที่ผ่านการคัดเลือกและร่างข้อความติดต่อครั้งแรกเฉพาะราย"},
+        "ar": {"name": "مسودة عرض شراكة", "business_result": "يتلقى المدير شركاء مؤهلين ومسودات مخصصة للتواصل الأول."},
+        "ha": {"name": "Daftarin tayin haɗin gwiwa", "business_result": "Manaja yana samun abokan haɗin gwiwa da suka dace da daftarin saƙon farko na musamman."},
+    },
+    "competitor_website_monitor": {
+        "ru": {"name": "Мониторинг сайта конкурента", "business_result": "Владелец получает только значимые изменения цен, акций или меню."},
+        "fr": {"name": "Suivi du site d’un concurrent", "business_result": "Le dirigeant ne voit que les changements importants de prix, promotions ou menu."},
+        "es": {"name": "Monitor del sitio de la competencia", "business_result": "El propietario solo ve cambios relevantes en precios, promociones o menú."},
+        "el": {"name": "Παρακολούθηση ιστοτόπου ανταγωνιστή", "business_result": "Ο ιδιοκτήτης βλέπει μόνο σημαντικές αλλαγές σε τιμές, προσφορές ή μενού."},
+        "de": {"name": "Beobachtung einer Wettbewerber-Website", "business_result": "Der Inhaber sieht nur relevante Änderungen an Preisen, Aktionen oder Sortiment."},
+        "th": {"name": "ติดตามเว็บไซต์คู่แข่ง", "business_result": "เจ้าของเห็นเฉพาะการเปลี่ยนแปลงสำคัญของราคา โปรโมชัน หรือเมนู"},
+        "ar": {"name": "مراقبة موقع منافس", "business_result": "يرى المالك فقط التغييرات المهمة في الأسعار أو العروض أو القائمة."},
+        "ha": {"name": "Sa ido kan shafin abokin hamayya", "business_result": "Mai kasuwanci yana ganin muhimman canje-canjen farashi, talla ko menu kawai."},
+    },
+    "faq_miner": {
+        "ru": {"name": "FAQ из обращений клиентов", "business_result": "Команда получает сгруппированные повторяющиеся вопросы и новые черновики ответов."},
+        "fr": {"name": "FAQ à partir des échanges clients", "business_result": "L’équipe reçoit les questions récurrentes regroupées et de nouveaux brouillons de réponse."},
+        "es": {"name": "FAQ a partir de conversaciones con clientes", "business_result": "El equipo recibe preguntas frecuentes agrupadas y nuevos borradores de respuesta."},
+        "el": {"name": "Συχνές ερωτήσεις από συνομιλίες πελατών", "business_result": "Η ομάδα λαμβάνει ομαδοποιημένες επαναλαμβανόμενες ερωτήσεις και νέα προσχέδια απαντήσεων."},
+        "de": {"name": "FAQ aus Kundengesprächen", "business_result": "Das Team erhält gruppierte wiederkehrende Fragen und neue Antwortentwürfe."},
+        "th": {"name": "คำถามที่พบบ่อยจากบทสนทนากับลูกค้า", "business_result": "ทีมได้รับคำถามซ้ำที่จัดกลุ่มแล้วและร่างคำตอบใหม่"},
+        "ar": {"name": "الأسئلة الشائعة من محادثات العملاء", "business_result": "يتلقى الفريق أسئلة متكررة مجمعة ومسودات إجابات جديدة."},
+        "ha": {"name": "FAQ daga tattaunawar kwastomomi", "business_result": "Ƙungiya tana samun tambayoyin da ake maimaitawa a rukuni da sabbin daftarin amsa."},
+    },
+    "finance_import_assistant": {
+        "ru": {"name": "Подготовка импорта расходов", "business_result": "Финансист получает проверяемые предложения категорий до применения транзакций."},
+        "fr": {"name": "Préparation de l’import des dépenses", "business_result": "La finance reçoit des suggestions de catégories à vérifier avant l’application des transactions."},
+        "es": {"name": "Preparación de la importación de gastos", "business_result": "Finanzas recibe sugerencias de categorías revisables antes de aplicar las transacciones."},
+        "el": {"name": "Προετοιμασία εισαγωγής εξόδων", "business_result": "Το οικονομικό τμήμα λαμβάνει προτάσεις κατηγοριών για έλεγχο πριν εφαρμοστούν οι συναλλαγές."},
+        "de": {"name": "Vorbereitung des Ausgabenimports", "business_result": "Die Finanzabteilung erhält prüfbare Kategorievorschläge, bevor Transaktionen übernommen werden."},
+        "th": {"name": "เตรียมนำเข้าค่าใช้จ่าย", "business_result": "ฝ่ายการเงินได้รับคำแนะนำหมวดหมู่ที่ตรวจสอบได้ก่อนนำธุรกรรมไปใช้"},
+        "ar": {"name": "إعداد استيراد المصروفات", "business_result": "يتلقى قسم المالية اقتراحات فئات قابلة للمراجعة قبل تطبيق المعاملات."},
+        "ha": {"name": "Shirya shigo da kuɗaɗen kashewa", "business_result": "Sashen kuɗi yana samun shawarwarin rukuni don dubawa kafin a aiwatar da ma’amaloli."},
+    },
+}
+
+for template_key, localized_content in TEMPLATE_ADDITIONAL_LOCALIZED_CONTENT.items():
+    TEMPLATE_LOCALIZED_CONTENT[template_key].update(localized_content)
+
 
 FIRST_WAVE_TEMPLATE_PRESETS: Dict[str, Dict[str, Any]] = {
     "daily_owner_digest": {

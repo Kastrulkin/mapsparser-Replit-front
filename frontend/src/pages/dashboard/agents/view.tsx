@@ -13,11 +13,8 @@ import {
   Database,
   Download,
   FileCheck2,
-  FileText,
   LifeBuoy,
   Loader2,
-  Mail,
-  MessageSquareText,
   Play,
   ReceiptText,
   RefreshCw,
@@ -54,7 +51,7 @@ import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
-import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
+import { getAgentsWorkspaceCopy, getAgentsWorkspaceNavigationCopy } from '@/i18n/agentsWorkspaceCopy';
 import type {
   DashboardContext,
   AgentBlueprint,
@@ -446,11 +443,14 @@ import {
   ArtifactItem
 } from './runs';
 import { AgentTemplateGallery } from './template-gallery';
+import { getAgentDeepCopy } from './agent-deep-copy';
 
 
 export const AgentBlueprintsView = ({ scope }) => {
   const { language } = useLanguage();
   const pageCopy = getAgentsWorkspaceCopy(language);
+  const navigationCopy = getAgentsWorkspaceNavigationCopy(language);
+  const deepCopy = getAgentDeepCopy(language);
   const {
     location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails,
     agentDetailsById, activeRun, setActiveRun, loading, actionLoading, error,
@@ -530,28 +530,7 @@ export const AgentBlueprintsView = ({ scope }) => {
         )}
       />
 
-      <section data-tour-target="agents-workspace" className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-5 shadow-sm">
-        <div className="max-w-3xl">
-          <h2 className="text-lg font-semibold text-slate-950">{pageCopy.signalTitle}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{pageCopy.signalDescription}</p>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            [pageCopy.maps, pageCopy.mapsHint, FileText],
-            [pageCopy.social, pageCopy.socialHint, MessageSquareText],
-            [pageCopy.news, pageCopy.newsHint, Mail],
-            [pageCopy.automate, pageCopy.automateHint, Bot],
-          ].map(([title, hint, Icon]) => (
-            <div key={String(title)} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
-              <Icon className="h-4 w-4 text-orange-600" />
-              <div className="mt-2 text-sm font-semibold text-slate-950">{title}</div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">{hint}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {currentBusinessId ? (
+      {currentBusinessId && blueprints.length === 0 ? (
         <AgentTemplateGallery
           language={language}
           templates={agentTemplates}
@@ -848,12 +827,12 @@ export const AgentBlueprintsView = ({ scope }) => {
 
             <main data-tour-target="agents-control" className="min-w-0 space-y-4">
               {selectedBlueprint && selectedEmployeeAction && !runAnimation ? (
-                <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Разделы агента">
+                <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label={navigationCopy.agentSections}>
                   {([
-                    ['overview', 'Обзор'],
-                    ['results', 'История'],
-                    ['scenario', 'Сценарий'],
-                    ['settings', 'Настройки'],
+                    ['overview', navigationCopy.overview],
+                    ['results', navigationCopy.history],
+                    ['scenario', navigationCopy.scenario],
+                    ['settings', navigationCopy.settings],
                   ]).map(([value, label]) => (
                     <button
                       key={value}
@@ -947,11 +926,11 @@ export const AgentBlueprintsView = ({ scope }) => {
                     <section className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">История</div>
-                          <h2 className="mt-1 text-lg font-semibold leading-7 text-slate-950">Запуски агента</h2>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{deepCopy.history}</div>
+                          <h2 className="mt-1 text-lg font-semibold leading-7 text-slate-950">{deepCopy.runs}</h2>
                         </div>
                         <span className="text-xs font-medium tabular-nums text-slate-500">
-                          {(blueprintDetails?.runs || []).length} всего
+                          {(blueprintDetails?.runs || []).length} {deepCopy.total}
                         </span>
                       </div>
                       <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
@@ -970,9 +949,9 @@ export const AgentBlueprintsView = ({ scope }) => {
                               )}
                             >
                               <span className="min-w-0">
-                                <span className="block text-sm font-semibold">{isAgentWorkRun(run) ? 'Рабочий запуск' : 'Проверка'}</span>
+                                <span className="block text-sm font-semibold">{isAgentWorkRun(run) ? deepCopy.workRun : deepCopy.testRun}</span>
                                 <span className={cn('block truncate text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
-                                  {runDate ? formatShortDate(runDate) : 'Дата не сохранена'}
+                                  {runDate ? formatShortDate(runDate) : deepCopy.dateMissing}
                                 </span>
                               </span>
                               <span className={cn('shrink-0 text-xs font-medium', selected ? 'text-slate-200' : 'text-slate-500')}>
@@ -981,7 +960,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                             </button>
                           );
                         }) : (
-                          <div className="px-3 py-4 text-sm text-slate-600">История появится после первого запуска.</div>
+                          <div className="px-3 py-4 text-sm text-slate-600">{deepCopy.historyEmpty}</div>
                         )}
                       </div>
                     </section>
@@ -1256,11 +1235,21 @@ export const AgentBlueprintsView = ({ scope }) => {
         </div>
       ) : null}
 
+      {currentBusinessId && blueprints.length > 0 ? (
+        <AgentTemplateGallery
+          language={language}
+          templates={agentTemplates}
+          loading={templatesLoading}
+          usingTemplateKey={usingTemplateKey}
+          onUse={useAgentTemplate}
+        />
+      ) : null}
+
 
       {currentBusinessId && showAdvancedAgentTools ? (
         <details className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            Служебные инструменты миграции и поддержки
+            {deepCopy.supportTools}
           </summary>
           <div className="mt-4 min-w-0 space-y-5">
             <AgentCockpitPanel

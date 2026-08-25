@@ -743,9 +743,10 @@ def test_agent_template_catalog_is_separate_and_exposes_four_certification_gates
         assert len(template["fixtures"]) == 9
         assert template["certification_evidence"]["certification_decision"] == "pilot_evidence_required"
         assert template["workflow_dsl"]["runtime"]["planner_required"] is False
-        assert set(template["localized_content"]) == {"en", "tr"}
-        assert template["localized_content"]["en"]["name"]
-        assert template["localized_content"]["tr"]["business_result"]
+        assert set(template["localized_content"]) == {"ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr"}
+        for language in template["localized_content"]:
+            assert template["localized_content"][language]["name"]
+            assert template["localized_content"][language]["business_result"]
 
 
 def test_first_wave_templates_keep_business_semantics_and_never_compile_autowrites():
