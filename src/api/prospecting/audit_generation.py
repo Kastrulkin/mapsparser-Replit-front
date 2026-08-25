@@ -154,6 +154,20 @@ TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REP
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
 PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+
+
+def _to_json_compatible(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _to_json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_compatible(item) for item in value]
+    return value
+
+
 PIPELINE_UNPROCESSED = "unprocessed"
 PIPELINE_IN_PROGRESS = "in_progress"
 PIPELINE_POSTPONED = "postponed"

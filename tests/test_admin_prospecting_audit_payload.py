@@ -1,6 +1,8 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import uuid
 
 from src.api import admin_prospecting
+from src.api.prospecting import audit_generation
 from src.api.admin_prospecting import (
     _build_admin_lead_offer_payload,
     _build_deterministic_dense_audit_enrichment,
@@ -1004,6 +1006,24 @@ def test_sync_telegram_app_replies_for_queue_item_records_inbound_reaction(monke
     assert captured["kwargs"]["provider_name"] == "telegram_app"
     assert captured["kwargs"]["provider_message_id"] == "901"
     assert captured["kwargs"]["prefer_ai"] is False
+
+
+def test_telegram_reply_payload_is_json_safe_when_chunk_is_called_directly() -> None:
+    identifier = uuid.uuid4()
+
+    payload = audit_generation._to_json_compatible(
+        {
+            "account_id": identifier,
+            "sent_after": datetime(2026, 8, 25, 10, 0, tzinfo=timezone.utc),
+            "dates": (date(2026, 8, 25),),
+        }
+    )
+
+    assert payload == {
+        "account_id": str(identifier),
+        "sent_after": "2026-08-25T10:00:00+00:00",
+        "dates": ["2026-08-25"],
+    }
 
 
 def test_sync_telegram_app_replies_for_queue_item_counts_duplicate_as_noop(monkeypatch) -> None:
