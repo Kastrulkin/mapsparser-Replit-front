@@ -1,6 +1,8 @@
 from core import card_automation
 from datetime import date
 from services import operator_scope_summary, superadmin_telegram_notifications
+import sys
+import types
 
 
 class _FakeConn:
@@ -13,6 +15,36 @@ class _FakeConn:
 
     def commit(self) -> None:
         self.commit_calls += 1
+
+
+def test_scheduled_review_sync_enqueues_delta_task(monkeypatch):
+    captured = {}
+    fake_module = types.ModuleType("api.admin_prospecting")
+
+    def enqueue(business_id, user_id, source_url, **kwargs):
+        captured.update(
+            {
+                "business_id": business_id,
+                "user_id": user_id,
+                "source_url": source_url,
+                **kwargs,
+            }
+        )
+        return {"id": "queue-1", "existing": False, "source": "apify_yandex", "task_type": kwargs["task_type"]}
+
+    fake_module._enqueue_parse_task_for_business = enqueue
+    monkeypatch.setitem(sys.modules, "api.admin_prospecting", fake_module)
+    monkeypatch.setattr(card_automation, "_business_context", lambda _conn, _business_id: {"owner_id": "owner-1"})
+    monkeypatch.setattr(
+        card_automation,
+        "_map_link_for_business",
+        lambda _conn, _business_id: "https://yandex.ru/maps/org/test/1/",
+    )
+
+    result = card_automation._enqueue_review_sync(_FakeConn(), "business-1")
+
+    assert result["task_type"] == "reviews_delta"
+    assert captured["task_type"] == "reviews_delta"
 
 
 def test_run_card_automation_action_rolls_back_before_error_event(monkeypatch):

@@ -1346,7 +1346,12 @@ def _enqueue_review_sync(conn, business_id: str) -> dict[str, Any]:
         raise ValueError("Для бизнеса не найдена ссылка на карту")
     from api.admin_prospecting import _enqueue_parse_task_for_business
 
-    task = _enqueue_parse_task_for_business(business_id, owner_id, source_url)
+    task = _enqueue_parse_task_for_business(
+        business_id,
+        owner_id,
+        source_url,
+        task_type="reviews_delta",
+    )
     return {
         "task_id": task.get("id"),
         "existing": bool(task.get("existing")),

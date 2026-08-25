@@ -11,8 +11,10 @@ import multiprocessing
 import asyncio
 import random
 import threading
+import requests
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
+from urllib.parse import quote
 from dotenv import load_dotenv
 from psycopg2.extras import Json, RealDictCursor
 
@@ -44,6 +46,7 @@ from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from core.map_url_normalizer import is_google_map_url
 from core.review_response_utils import extract_review_response_text
+from core.sensitive_text import redact_sensitive_text
 from yookassa_integration import run_due_renewals
 from services.outreach_dispatch_service import dispatch_due_outreach_queue
 from services.outreach_campaign_service import expire_manual_touches, finalize_no_reply_campaigns
@@ -103,6 +106,14 @@ from services.web_tracking_maintenance import run_web_tracking_maintenance
 from services.creator_promotion_service import process_next_creator_search_job
 from services.creator_profile_revalidation_service import process_creator_profile_revalidation_batch
 from services.creator_source_enrichment_service import process_creator_source_enrichment_batch
+from services.yandex_full_reviews_sync import apply_complete_review_snapshot, fetch_complete_yandex_reviews
+from services.yandex_review_delta_sync import (
+    apply_yandex_review_delta,
+    load_expected_yandex_reviews_total,
+    load_known_yandex_review_ids,
+    native_delta_completeness,
+    normalize_native_review,
+)
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -462,47 +473,7 @@ def _get_next_proxy_for_playwright() -> Optional[Dict[str, Any]]:
         )
         row = cursor.fetchone()
         if not row:
-            # Self-healing fallback: если нет "рабочих", пробуем активный прокси
-            # (часто помогает при ротируемых residential зонах).
-            cursor.execute(
-                """
-                SELECT id, proxy_type, host, port, username, password
-                FROM proxyservers
-                WHERE is_active = TRUE
-                  AND (
-                        (COALESCE(success_count, 0) + COALESCE(failure_count, 0)) < 8
-                     OR ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) >= %s
-                  )
-                ORDER BY
-                    ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) DESC,
-                    COALESCE(success_count, 0) DESC,
-                    CASE WHEN last_checked_at IS NULL THEN 1 ELSE 0 END,
-                    last_checked_at DESC,
-                    CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
-                    last_used_at ASC,
-                    RANDOM()
-                LIMIT 1
-                """,
-                (min_health_score,),
-            )
-            row = cursor.fetchone()
-        if not row:
-            # Последний fallback: если health-gate отфильтровал всех,
-            # берём любой активный прокси, чтобы не останавливать пайплайн.
-            cursor.execute(
-                """
-                SELECT id, proxy_type, host, port, username, password
-                FROM proxyservers
-                WHERE is_active = TRUE
-                ORDER BY
-                    CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
-                    last_used_at ASC,
-                    RANDOM()
-                LIMIT 1
-                """
-            )
-            row = cursor.fetchone()
-        if not row:
+            print("⚠️ Нет прокси, прошедших health-gate; небезопасный fallback отключён", flush=True)
             return None
 
         if isinstance(row, dict):
@@ -611,21 +582,35 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                     "err_timed_out",
                     "407",
                     "forbidden",
+                    "rate_limited",
+                    "limited",
+                    "captcha",
+                    "empty_body",
+                    "org_id_missing",
                 )
             )
+            min_samples = max(2, int(os.getenv("PROXY_CIRCUIT_BREAKER_MIN_SAMPLES", "8") or 8))
+            try:
+                min_score = float(os.getenv("PROXY_MIN_HEALTH_SCORE", "0.25") or 0.25)
+            except (TypeError, ValueError):
+                min_score = 0.25
             cursor.execute(
                 """
                 UPDATE proxyservers
                 SET failure_count = COALESCE(failure_count, 0) + 1,
                     is_working = CASE
                         WHEN %s THEN FALSE
+                        WHEN (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 1) >= %s
+                         AND ((COALESCE(success_count, 0) + 1.0) /
+                              (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 3.0)) < %s
+                        THEN FALSE
                         ELSE is_working
                     END,
                     last_checked_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 """,
-                (fatal_proxy_reason, proxy_id),
+                (fatal_proxy_reason, min_samples, min_score, proxy_id),
             )
         conn.commit()
     except Exception as e:
@@ -641,6 +626,66 @@ def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = 
                 conn.close()
         except Exception:
             pass
+
+
+def _preflight_yandex_proxy(url: str, active_proxy: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Verify a proxy against the exact organization page before launching Chromium."""
+    started_at = time.monotonic()
+    if not active_proxy:
+        return {"ok": False, "reason": "proxy_unavailable", "elapsed_ms": 0}
+    proxy_payload = active_proxy.get("proxy") if isinstance(active_proxy.get("proxy"), dict) else {}
+    server = str(proxy_payload.get("server") or "").strip()
+    if not server:
+        return {"ok": False, "reason": "proxy_server_missing", "elapsed_ms": 0}
+    username = str(proxy_payload.get("username") or "").strip()
+    password = str(proxy_payload.get("password") or "").strip()
+    if username and password and "://" in server:
+        scheme, host = server.split("://", 1)
+        proxy_url = f"{scheme}://{quote(username, safe='')}:{quote(password, safe='')}@{host}"
+    else:
+        proxy_url = server
+    connect_timeout = max(2, int(os.getenv("PROXY_PREFLIGHT_CONNECT_TIMEOUT_SEC", "4") or 4))
+    read_timeout = max(3, int(os.getenv("PROXY_PREFLIGHT_READ_TIMEOUT_SEC", "8") or 8))
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": random.choice(_HUMAN_USER_AGENTS), "Accept-Language": "ru-RU,ru;q=0.9"},
+            proxies={"http": proxy_url, "https": proxy_url},
+            timeout=(connect_timeout, read_timeout),
+            allow_redirects=True,
+            verify=False,
+        )
+        body = str(response.text or "")[:100000]
+        body_lc = body.strip().lower()
+        final_url = str(response.url or "")
+        org_match = re.search(r"/org/(?:[^/]+/)?(\d+)", url)
+        org_id = str(org_match.group(1) if org_match else "")
+        if response.status_code in {403, 429}:
+            reason = "forbidden" if response.status_code == 403 else "rate_limited"
+        elif body_lc in {"limited", "forbidden"}:
+            reason = body_lc
+        elif "showcaptcha" in final_url.lower() or "smart-captcha" in body_lc:
+            reason = "captcha"
+        elif len(body) < 1000:
+            reason = "empty_body"
+        elif org_id and org_id not in body and org_id not in final_url:
+            reason = "org_id_missing"
+        elif response.status_code >= 400:
+            reason = f"http_{response.status_code}"
+        else:
+            reason = "ok"
+        return {
+            "ok": reason == "ok",
+            "reason": reason,
+            "status": int(response.status_code),
+            "elapsed_ms": round((time.monotonic() - started_at) * 1000),
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "reason": redact_sensitive_text(exc.__class__.__name__ + ":" + str(exc), limit=240),
+            "elapsed_ms": round((time.monotonic() - started_at) * 1000),
+        }
 
 
 def _parse_retry_after(value: Any) -> Optional[datetime]:
@@ -914,8 +959,8 @@ def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dic
         result_queue.put(
             {
                 "error": "parser_subprocess_exception",
-                "message": str(exc),
-                "traceback": traceback.format_exc(),
+                "message": redact_sensitive_text(exc, limit=1200),
+                "traceback": redact_sensitive_text(traceback.format_exc(), limit=8000),
                 "url": url,
             }
         )
@@ -1168,7 +1213,7 @@ def _parse_card_via_apify_subprocess_entry(
     except Exception as exc:
         error_payload = {
             "error": "apify_parser_subprocess_exception",
-            "message": str(exc),
+            "message": redact_sensitive_text(exc, limit=1200),
             "url": url,
         }
         if result_file_path:
@@ -3385,7 +3430,10 @@ def _public_post_identity(business_id: str, source: str, item: dict[str, Any]) -
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
-        normalized_error = with_reason_code_prefix(STATUS_ERROR, error_msg)
+        normalized_error = with_reason_code_prefix(
+            STATUS_ERROR,
+            redact_sensitive_text(error_msg, limit=4000),
+        )
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -4190,7 +4238,7 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
 
     retry_delay = _transient_retry_delay_for_task(queue_dict, attempt_no)
     retry_after = datetime.now() + retry_delay
-    detail = str(reason or "")[:220]
+    detail = redact_sensitive_text(reason, limit=220)
     timeout_profile = ""
     if is_apify_timeout:
         timeout_profile = "slow_lane" if attempt_no >= max(int(os.getenv("APIFY_TIMEOUT_SLOW_LANE_AFTER_ATTEMPT", "1") or 1), 1) else "default"
@@ -4350,6 +4398,180 @@ def _ensure_column_exists(cursor, conn, table_name, column_name, column_type="TE
             conn.commit()
     except Exception as e:
         print(f"⚠️ Ошибка проверки колонки {column_name} в {table_name}: {e}")
+
+
+def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
+    queue_id = str(queue_dict.get("id") or "").strip()
+    business_id = str(queue_dict.get("business_id") or "").strip()
+    url = str(queue_dict.get("url") or "").strip()
+    if not queue_id or not business_id or not url:
+        _handle_worker_error(queue_id, "reviews_delta_missing_queue_business_or_url")
+        return
+
+    requested_task_type = str(queue_dict.get("task_type") or "reviews_delta").strip().lower()
+    native_parse_mode = "reviews_full" if requested_task_type == "reviews_full" else "reviews_delta"
+    metrics: Dict[str, Any] = {
+        "task_type": requested_task_type,
+        "route": "not_started",
+        "fallback_reason": "",
+        "proxy_preflight_ms": 0,
+        "native_ms": 0,
+        "reviews_received": 0,
+    }
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            known_review_ids = load_known_yandex_review_ids(cursor, business_id, limit=100)
+            expected_total = load_expected_yandex_reviews_total(cursor, business_id)
+        finally:
+            cursor.close()
+            conn.close()
+
+        active_proxy = _get_next_proxy_for_playwright()
+        proxy_id = str((active_proxy or {}).get("id") or "").strip()
+        preflight = _preflight_yandex_proxy(url, active_proxy)
+        metrics["proxy_preflight_ms"] = int(preflight.get("elapsed_ms") or 0)
+        metrics["proxy_preflight_reason"] = str(preflight.get("reason") or "")
+        native_data: Dict[str, Any] = {"error": "proxy_preflight_failed"}
+
+        if bool(preflight.get("ok")):
+            browser_profile = _build_human_browser_profile()
+            native_timeout_sec = max(
+                30,
+                int(os.getenv("NATIVE_YANDEX_REVIEWS_DELTA_TIMEOUT_SEC", "90") or 90),
+            )
+            native_started_at = time.monotonic()
+            native_data = _parse_yandex_card_with_playwright_fallback(
+                url,
+                keep_open_on_captcha=False,
+                timeout_sec=native_timeout_sec,
+                force_subprocess=True,
+                parse_mode=native_parse_mode,
+                known_review_ids=known_review_ids if native_parse_mode == "reviews_delta" else [],
+                cookies=get_yandex_cookies(),
+                user_agent=browser_profile["user_agent"],
+                viewport=browser_profile["viewport"],
+                launch_args=browser_profile["launch_args"],
+                init_scripts=browser_profile["init_scripts"],
+                locale="ru-RU",
+                timezone_id="Europe/Moscow",
+                proxy=(active_proxy or {}).get("proxy"),
+                headless=True,
+                block_service_workers=True,
+            )
+            metrics["native_ms"] = round((time.monotonic() - native_started_at) * 1000)
+            complete, completeness_reason = native_delta_completeness(
+                native_data,
+                known_review_ids=known_review_ids if native_parse_mode == "reviews_delta" else [],
+                expected_total=expected_total,
+            )
+            run_meta = native_data.get("_parser_run") if isinstance(native_data.get("_parser_run"), dict) else {}
+            metrics.update(
+                {
+                    "native_stop_reason": str(run_meta.get("review_stop_reason") or completeness_reason),
+                    "native_review_pages": int(run_meta.get("review_api_responses") or 0),
+                    "native_review_scrolls": int(run_meta.get("review_scrolls") or 0),
+                }
+            )
+            if complete:
+                native_reviews = native_data.get("reviews") if isinstance(native_data.get("reviews"), list) else []
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    if native_parse_mode == "reviews_full":
+                        normalized_reviews = [
+                            normalized
+                            for item in native_reviews
+                            if isinstance(item, dict)
+                            for normalized in [normalize_native_review(item)]
+                            if normalized
+                        ]
+                        apply_result = apply_complete_review_snapshot(
+                            cursor,
+                            business_id=business_id,
+                            reviews=normalized_reviews,
+                            expected_total=expected_total,
+                        )
+                        metrics["route"] = "native_reviews_full"
+                        metrics["reviews_received"] = int(apply_result.get("total") or 0)
+                    else:
+                        apply_result = apply_yandex_review_delta(
+                            cursor,
+                            business_id=business_id,
+                            reviews=native_reviews,
+                        )
+                        metrics["route"] = "native_reviews_delta"
+                        metrics["reviews_received"] = int(apply_result.get("normalized") or 0)
+                    warning_text = (
+                        f"review_sync route={metrics['route']}; reviews={metrics['reviews_received']}; "
+                        f"native_ms={metrics['native_ms']}; stop={metrics['native_stop_reason']}"
+                    )
+                    cursor.execute(
+                        """
+                        UPDATE parsequeue
+                        SET status = %s, error_message = NULL, warnings = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                        """,
+                        (STATUS_COMPLETED, warning_text, queue_id),
+                    )
+                    conn.commit()
+                    handle_review_sync_completion(conn, business_id, triggered_by="reviews_delta")
+                    conn.commit()
+                finally:
+                    cursor.close()
+                    conn.close()
+                _mark_proxy_result(proxy_id, success=True, reason="reviews_delta_complete")
+                print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+                return
+            metrics["fallback_reason"] = completeness_reason
+            _mark_proxy_result(proxy_id, success=False, reason=completeness_reason)
+        else:
+            metrics["fallback_reason"] = str(preflight.get("reason") or "proxy_preflight_failed")
+            _mark_proxy_result(proxy_id, success=False, reason=metrics["fallback_reason"])
+
+        fallback_started_at = time.monotonic()
+        complete_reviews = fetch_complete_yandex_reviews(
+            url,
+            timeout_sec=max(60, int(os.getenv("APIFY_YANDEX_REVIEWS_TIMEOUT_SEC", "240") or 240)),
+        )
+        metrics["fallback_ms"] = round((time.monotonic() - fallback_started_at) * 1000)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            apply_result = apply_complete_review_snapshot(
+                cursor,
+                business_id=business_id,
+                reviews=complete_reviews,
+                expected_total=expected_total,
+            )
+            metrics["route"] = "apify_reviews_full"
+            metrics["reviews_received"] = int(apply_result.get("total") or 0)
+            warning_text = (
+                f"review_sync route=apify_reviews_full; reviews={metrics['reviews_received']}; "
+                f"fallback_ms={metrics.get('fallback_ms', 0)}; reason={metrics['fallback_reason']}"
+            )
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s, error_message = NULL, warnings = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (STATUS_COMPLETED, warning_text, queue_id),
+            )
+            conn.commit()
+            handle_review_sync_completion(conn, business_id, triggered_by="reviews_fallback")
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+        print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+    except Exception as exc:
+        metrics["route"] = "failed"
+        metrics["error_type"] = exc.__class__.__name__
+        safe_error = redact_sensitive_text(exc, limit=1200)
+        print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+        _handle_worker_error(queue_id, f"reviews_delta_failed:{safe_error}")
 
 # Используем parser_config для автоматического выбора парсера (interception или legacy)
 from parser_config import parse_yandex_card
@@ -4963,6 +5185,9 @@ def process_queue():
                 conn.close()
 
     # Обрабатываем в зависимости от типа задачи
+    if task_type in {"reviews_delta", "reviews_full"}:
+        _process_yandex_reviews_delta_task(queue_dict)
+        return
     if task_type == "sync_yandex_business":
         # Синхронизация Яндекс.Бизнес
         _process_sync_yandex_business_task(queue_dict)
@@ -5037,7 +5262,7 @@ def process_queue():
         # Генерируем debug_bundle_id и bundle_dir для этого прогона (привязан к бизнесу и задаче)
         debug_bundle_id = None
         bundle_dir = None
-        if business_id:
+        if business_id and _env_bool("PARSER_DEBUG_BUNDLES_ENABLED", False):
             ts_dbg = datetime.now().strftime("%Y%m%d_%H%M%S")
             debug_prefix = "yandex" if parsed_source == "yandex_maps" else "2gis"
             debug_bundle_id = f"{debug_prefix}_{business_id}_{queue_dict['id']}_{ts_dbg}"
@@ -5081,6 +5306,18 @@ def process_queue():
         used_apify_parser = False
         native_failure_reason = ""
         proxy_id = str((active_proxy or {}).get("id") or "").strip()
+        if parsed_source == "yandex_maps" and active_proxy:
+            proxy_preflight = _preflight_yandex_proxy(url, active_proxy)
+            print(
+                f"🌐 Proxy preflight id={proxy_id} ok={bool(proxy_preflight.get('ok'))} "
+                f"reason={proxy_preflight.get('reason')} elapsed_ms={proxy_preflight.get('elapsed_ms')}",
+                flush=True,
+            )
+            if not bool(proxy_preflight.get("ok")):
+                native_failure_reason = f"proxy_preflight:{proxy_preflight.get('reason') or 'failed'}"
+                _mark_proxy_result(proxy_id, success=False, reason=native_failure_reason)
+                active_proxy = None
+                proxy_id = ""
         if active_proxy:
             proxy_country = str((active_proxy or {}).get("country_code") or "base")
             print(
@@ -5137,11 +5374,12 @@ def process_queue():
                         },
                     )
 
-                if hybrid_yandex_parser:
+                allow_direct_native = _env_bool("NATIVE_YANDEX_ALLOW_DIRECT", False)
+                if hybrid_yandex_parser and (active_proxy or allow_direct_native):
                     browser_profile = _build_human_browser_profile()
                     native_timeout_sec = max(
                         30,
-                        int(os.getenv("NATIVE_YANDEX_ATTEMPT_TIMEOUT_SEC", "180") or 180),
+                        int(os.getenv("NATIVE_YANDEX_ATTEMPT_TIMEOUT_SEC", "90") or 90),
                     )
 
                     def _run_native_yandex_parser() -> Dict[str, Any]:
@@ -5165,6 +5403,7 @@ def process_queue():
                             proxy=(active_proxy or {}).get("proxy"),
                             headless=True,
                             debug_bundle_id=debug_bundle_id,
+                            block_service_workers=True,
                             **geolocation_kwarg,
                         )
 
@@ -5181,6 +5420,14 @@ def process_queue():
                         )
                     else:
                         print("✅ Native Yandex result accepted; Apify skipped", flush=True)
+                elif hybrid_yandex_parser:
+                    native_failure_reason = native_failure_reason or "no_healthy_proxy"
+                    print(
+                        f"↪️ Native Yandex skipped ({native_failure_reason}); fallback to Apify",
+                        flush=True,
+                    )
+                    card_data = _run_apify_parser()
+                    used_apify_parser = True
                 else:
                     card_data = _run_apify_parser()
                     used_apify_parser = True

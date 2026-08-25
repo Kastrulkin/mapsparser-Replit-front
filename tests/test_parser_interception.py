@@ -9,8 +9,32 @@ import os
 # Добавляем путь к src
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from parser_interception import parse_yandex_card, YandexMapsInterceptionParser
+from parser_interception import (
+    PARSER_MODE_REVIEWS_DELTA,
+    YandexMapsInterceptionParser,
+    parse_yandex_card,
+)
 import json
+
+
+def test_reviews_delta_parser_tracks_only_review_ids():
+    parser = YandexMapsInterceptionParser(
+        parse_mode=PARSER_MODE_REVIEWS_DELTA,
+        known_review_ids=["review-known"],
+    )
+
+    ids = parser._review_ids_from_payload(
+        {
+            "organization": {"id": "org-1", "rating": 5},
+            "reviews": [
+                {"reviewId": "review-known", "text": "Отлично", "rating": 5},
+                {"id": "review-new", "comment": "Хорошо", "score": 4},
+            ],
+        }
+    )
+
+    assert ids == {"review-known", "review-new"}
+    assert "org-1" not in ids
 
 
 def test_location_info_org_bound_validation():

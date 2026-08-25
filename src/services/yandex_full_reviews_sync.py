@@ -8,6 +8,7 @@ the run passes completeness checks.
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from datetime import datetime
 from typing import Any
@@ -81,6 +82,7 @@ def fetch_complete_yandex_reviews(
     *,
     max_reviews: int = 0,
     actor_id: str | None = None,
+    timeout_sec: int | None = None,
 ) -> list[dict[str, Any]]:
     try:
         from apify_client import ApifyClient
@@ -90,23 +92,54 @@ def fetch_complete_yandex_reviews(
     if not token:
         raise RuntimeError("APIFY_TOKEN is not configured")
     reviews_url = _text(map_url).rstrip("/") + "/reviews/"
-    client = ApifyClient(token)
-    run = client.actor(actor_id or os.environ.get("APIFY_YANDEX_REVIEWS_ACTOR_ID") or DEFAULT_ACTOR_ID).call(
+    total_timeout = max(
+        30,
+        int(timeout_sec or os.environ.get("APIFY_YANDEX_REVIEWS_TIMEOUT_SEC", "240") or 240),
+    )
+    try:
+        client = ApifyClient(token, timeout_secs=min(30, total_timeout), max_retries=3)
+    except TypeError:
+        client = ApifyClient(token, max_retries=3)
+    run = client.actor(actor_id or os.environ.get("APIFY_YANDEX_REVIEWS_ACTOR_ID") or DEFAULT_ACTOR_ID).start(
         run_input={
             "startUrls": [{"url": reviews_url}],
             "maxReviewsPerPlace": max(0, int(max_reviews)),
             "maxPlaces": 1,
             "reviewSort": "newest",
             "language": "ru",
-        }
+        },
+        wait_for_finish=0,
     )
-    if isinstance(run, dict):
-        dataset_id = _text(run.get("defaultDatasetId"))
+    run_id = _text(run.get("id") if isinstance(run, dict) else getattr(run, "id", None))
+    if not run_id:
+        raise RuntimeError("Yandex reviews actor returned no run ID")
+    deadline = time.monotonic() + total_timeout
+    terminal_run: Any = run
+    while time.monotonic() < deadline:
+        current = client.run(run_id).get()
+        if current is not None:
+            terminal_run = current
+            status = _text(
+                current.get("status") if isinstance(current, dict) else getattr(current, "status", None)
+            ).upper()
+            if status == "SUCCEEDED":
+                break
+            if status in {"FAILED", "ABORTED", "TIMED-OUT"}:
+                raise RuntimeError(f"Yandex reviews actor finished with status {status}")
+        time.sleep(2)
     else:
-        dataset_id = _text(getattr(run, "default_dataset_id", None))
-        if not dataset_id:
-            dumped_run = run.model_dump(by_alias=True) if hasattr(run, "model_dump") else {}
-            dataset_id = _text(dumped_run.get("defaultDatasetId"))
+        try:
+            client.run(run_id).abort(gracefully=False)
+        except Exception:
+            pass
+        raise TimeoutError(f"Yandex reviews actor timeout after {total_timeout}s")
+
+    if isinstance(terminal_run, dict):
+        dataset_id = _text(terminal_run.get("defaultDatasetId"))
+    else:
+        dataset_id = _text(getattr(terminal_run, "default_dataset_id", None))
+        if not dataset_id and hasattr(terminal_run, "model_dump"):
+            dataset_id = _text(terminal_run.model_dump(by_alias=True).get("defaultDatasetId"))
     if not dataset_id:
         raise RuntimeError("Yandex reviews actor returned no dataset")
     raw_items = client.dataset(dataset_id).list_items().items

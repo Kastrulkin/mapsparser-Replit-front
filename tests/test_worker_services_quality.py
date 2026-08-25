@@ -5,6 +5,155 @@ import json
 import worker
 
 
+def test_proxy_preflight_accepts_exact_yandex_organization(monkeypatch):
+    class Response:
+        status_code = 200
+        url = "https://yandex.ru/maps/org/test/230326995176/"
+        text = "<html>" + ("x" * 1200) + "230326995176</html>"
+
+    monkeypatch.setattr(worker.requests, "get", lambda *args, **kwargs: Response())
+    result = worker._preflight_yandex_proxy(
+        "https://yandex.ru/maps/org/test/230326995176/",
+        {
+            "proxy": {
+                "server": "http://proxy.example:33335",
+                "username": "user",
+                "password": "secret",
+            }
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["reason"] == "ok"
+
+
+def test_proxy_preflight_rejects_limited_body(monkeypatch):
+    class Response:
+        status_code = 200
+        url = "https://yandex.ru/maps/org/test/230326995176/"
+        text = "limited"
+
+    monkeypatch.setattr(worker.requests, "get", lambda *args, **kwargs: Response())
+    result = worker._preflight_yandex_proxy(
+        "https://yandex.ru/maps/org/test/230326995176/",
+        {"proxy": {"server": "http://proxy.example:33335"}},
+    )
+
+    assert result["ok"] is False
+    assert result["reason"] == "limited"
+
+
+def test_proxy_selection_has_no_unsafe_active_fallback(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.execute_count = 0
+
+        def execute(self, _query, _params=None):
+            self.execute_count += 1
+
+        def fetchone(self):
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def __init__(self):
+            self.cursor_value = Cursor()
+
+        def cursor(self):
+            return self.cursor_value
+
+        def close(self):
+            return None
+
+    connection = Connection()
+    monkeypatch.setattr(worker, "get_db_connection", lambda: connection)
+
+    assert worker._get_next_proxy_for_playwright() is None
+    assert connection.cursor_value.execute_count == 1
+
+
+def test_reviews_delta_task_uses_native_boundary_without_full_fallback(monkeypatch):
+    state = {"updates": [], "applied": 0, "proxy_results": []}
+
+    class Cursor:
+        def execute(self, query, params=None):
+            state["updates"].append((" ".join(str(query).split()), params))
+
+        def close(self):
+            return None
+
+    class Connection:
+        def __init__(self):
+            self.cursor_value = Cursor()
+
+        def cursor(self):
+            return self.cursor_value
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(worker, "load_known_yandex_review_ids", lambda *_args, **_kwargs: ["known-1"])
+    monkeypatch.setattr(worker, "load_expected_yandex_reviews_total", lambda *_args, **_kwargs: 300)
+    monkeypatch.setattr(
+        worker,
+        "_get_next_proxy_for_playwright",
+        lambda: {"id": "proxy-1", "proxy": {"server": "http://proxy.example:33335"}},
+    )
+    monkeypatch.setattr(worker, "_preflight_yandex_proxy", lambda *_args, **_kwargs: {"ok": True, "reason": "ok"})
+    monkeypatch.setattr(worker, "_build_human_browser_profile", lambda: {"user_agent": "ua", "viewport": {}, "launch_args": [], "init_scripts": []})
+    monkeypatch.setattr(worker, "get_yandex_cookies", lambda: [])
+
+    def native_parser(_url, **kwargs):
+        assert kwargs["parse_mode"] == "reviews_delta"
+        assert kwargs["known_review_ids"] == ["known-1"]
+        return {
+            "reviews": [
+                {"id": "new-1", "text": "Новый", "rating": 5},
+                {"id": "known-1", "text": "Известный", "rating": 4},
+            ],
+            "_parser_run": {"delta_boundary_reached": True, "review_stop_reason": "known_review_id"},
+        }
+
+    monkeypatch.setattr(worker, "_parse_yandex_card_with_playwright_fallback", native_parser)
+
+    def apply_delta(_cursor, **kwargs):
+        state["applied"] += 1
+        assert kwargs["business_id"] == "business-1"
+        return {"normalized": 2}
+
+    monkeypatch.setattr(worker, "apply_yandex_review_delta", apply_delta)
+    monkeypatch.setattr(
+        worker,
+        "fetch_complete_yandex_reviews",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full fallback must be skipped")),
+    )
+    monkeypatch.setattr(worker, "handle_review_sync_completion", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        worker,
+        "_mark_proxy_result",
+        lambda proxy_id, **kwargs: state["proxy_results"].append((proxy_id, kwargs["success"])),
+    )
+
+    worker._process_yandex_reviews_delta_task(
+        {
+            "id": "queue-1",
+            "task_type": "reviews_delta",
+            "business_id": "business-1",
+            "url": "https://yandex.ru/maps/org/test/1/",
+        }
+    )
+
+    assert state["applied"] == 1
+    assert state["proxy_results"] == [("proxy-1", True)]
+    assert any(params and params[0] == worker.STATUS_COMPLETED for _query, params in state["updates"])
+
+
 def test_map_card_services_filters_obvious_noise():
     card_data = {
         "products": [

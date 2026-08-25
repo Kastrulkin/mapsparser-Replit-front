@@ -74,6 +74,8 @@ def test_actor_review_normalization_reads_yandex_owner_reply():
 
 def test_complete_review_fetch_accepts_typed_apify_run(monkeypatch):
     class TypedRun:
+        id = "run-1"
+        status = "SUCCEEDED"
         default_dataset_id = "dataset-1"
 
     class Dataset:
@@ -81,11 +83,15 @@ def test_complete_review_fetch_accepts_typed_apify_run(monkeypatch):
             return type("Items", (), {"items": []})()
 
     class Actor:
-        def call(self, **_kwargs):
+        def start(self, **_kwargs):
+            return TypedRun()
+
+    class Run:
+        def get(self):
             return TypedRun()
 
     class Client:
-        def __init__(self, _token):
+        def __init__(self, _token, **_kwargs):
             pass
 
         def actor(self, _actor_id):
@@ -94,6 +100,10 @@ def test_complete_review_fetch_accepts_typed_apify_run(monkeypatch):
         def dataset(self, dataset_id):
             assert dataset_id == "dataset-1"
             return Dataset()
+
+        def run(self, run_id):
+            assert run_id == "run-1"
+            return Run()
 
     monkeypatch.setenv("APIFY_TOKEN", "test-token")
     monkeypatch.setitem(__import__("sys").modules, "apify_client", type("Module", (), {"ApifyClient": Client})())

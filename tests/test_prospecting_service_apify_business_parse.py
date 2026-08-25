@@ -4,6 +4,34 @@ import pytest
 from src.services.prospecting_service import ProspectingService
 
 
+def test_start_run_uses_official_async_client_without_raw_post(monkeypatch) -> None:
+    captured = {}
+
+    class Actor:
+        def start(self, **kwargs):
+            captured.update(kwargs)
+            return {"id": "run-async-1", "defaultDatasetId": "dataset-1", "status": "READY"}
+
+    class Client:
+        def actor(self, actor_id):
+            captured["actor_id"] = actor_id
+            return Actor()
+
+    service = ProspectingService(api_token="test-token", source="apify_yandex")
+    service.client = Client()
+    monkeypatch.setattr(
+        service,
+        "_apify_request",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("raw POST must not be used")),
+    )
+
+    result = service._start_run_with_input({"startUrls": [{"url": "https://example.test"}]})
+
+    assert result["run_id"] == "run-async-1"
+    assert captured["wait_for_finish"] == 0
+    assert captured["run_input"]["startUrls"][0]["url"] == "https://example.test"
+
+
 def test_build_run_input_for_yandex_business_url() -> None:
     service = ProspectingService(api_token="", source="apify_yandex")
     run_input = service._build_run_input_for_map_url("https://yandex.ru/maps/org/vesyolaya_raschyoska/1221240931/")

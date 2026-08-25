@@ -49,6 +49,7 @@ class BrowserSessionManager:
         init_scripts: Optional[list[str]] = None,
         keep_open: bool = False,
         geolocation: Optional[Dict[str, float]] = None,
+        block_service_workers: bool = False,
     ) -> BrowserSession:
         """Создать новую Playwright-сессию (единый источник правды по stealth)."""
         playwright = sync_playwright().start()
@@ -85,6 +86,8 @@ class BrowserSessionManager:
             # Для прокси-поставщиков (в т.ч. residential MITM) возможны TLS цепочки,
             # которые Chromium считает недоверенными. Для парсинга карт это допустимо.
             context_kwargs["ignore_https_errors"] = True
+            if block_service_workers:
+                context_kwargs["service_workers"] = "block"
 
             context = browser.new_context(**context_kwargs)
 
@@ -190,4 +193,3 @@ def default_stealth_scripts() -> list[str]:
         Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU', 'ru']});
         """
     ]
-

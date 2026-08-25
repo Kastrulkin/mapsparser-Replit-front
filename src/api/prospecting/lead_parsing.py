@@ -1142,7 +1142,16 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
     finally:
         conn.close()
 
-def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url: str) -> dict[str, Any]:
+def _enqueue_parse_task_for_business(
+    business_id: str,
+    user_id: str,
+    source_url: str,
+    *,
+    task_type: str = "parse_card",
+) -> dict[str, Any]:
+    normalized_task_type = str(task_type or "parse_card").strip().lower()
+    if normalized_task_type not in {"parse_card", "reviews_delta", "reviews_full"}:
+        raise ValueError(f"Unsupported parser task_type: {normalized_task_type}")
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -1151,7 +1160,7 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
             SELECT id, status, task_type, source, updated_at, retry_after
             FROM parsequeue
             WHERE business_id = %s
-              AND task_type IN ('parse_card', 'sync_yandex_business')
+              AND task_type IN ('parse_card', 'sync_yandex_business', 'reviews_delta', 'reviews_full')
               AND status IN ('pending', 'processing', 'captcha')
             ORDER BY created_at DESC
             LIMIT 1
@@ -1239,11 +1248,21 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
                     requested_by_business_id, force_refresh,
                     task_type, source, status, user_id, url, created_at, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, TRUE, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, 'pending', %s, %s, NOW(), NOW())
                 RETURNING id, status, task_type, source, updated_at, retry_after,
                           company_location_id, external_profile_id
                 """,
-                (task_id, business_id, company_location_id, external_profile_id, requested_by_business_id, parse_source, user_id, source_url),
+                (
+                    task_id,
+                    business_id,
+                    company_location_id,
+                    external_profile_id,
+                    requested_by_business_id,
+                    normalized_task_type,
+                    parse_source,
+                    user_id,
+                    source_url,
+                ),
             )
         else:
             cur.execute(
@@ -1251,10 +1270,10 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
                 INSERT INTO parsequeue (
                     id, business_id, task_type, source, status, user_id, url, created_at, updated_at
                 )
-                VALUES (%s, %s, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, 'pending', %s, %s, NOW(), NOW())
                 RETURNING id, status, task_type, source, updated_at, retry_after
                 """,
-                (task_id, business_id, parse_source, user_id, source_url),
+                (task_id, business_id, normalized_task_type, parse_source, user_id, source_url),
             )
         created = dict(cur.fetchone())
         created["existing"] = False
