@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 from psycopg2.extras import Json, RealDictCursor
 
+from services.community_pulse_sources import load_default_industry_sources
+
 from core.knowledge_policy import redact_text
 from core.telegram_userbot import fetch_message_page, fetch_recent_messages, load_userbot_account
 from services.knowledge_graph_service import add_evidence, upsert_assertion, upsert_concept, upsert_document
@@ -139,6 +141,53 @@ TRAVEL_CONTENT_ANGLES = {
     ),
 }
 
+BEAUTY_INSIGHT_PRESENTATIONS = {
+    "команда и управление": (
+        "Как выстроить работу команды",
+        "Показать на конкретной ситуации, как мастера и администраторы поддерживают единый стандарт сервиса.",
+    ),
+    "новое правило": (
+        "Какие правила меняют работу салонов",
+        "Объяснить одно актуальное изменение и что оно означает для клиента или команды.",
+    ),
+    "обучать команду": (
+        "Как обучать мастеров и администраторов",
+        "Рассказать об одном навыке команды и показать, как он влияет на впечатление клиента.",
+    ),
+    "регулярно измерять": (
+        "Какие показатели важно отслеживать",
+        "Показать один измеримый признак хорошего сервиса: возвраты, ожидание, отзывы или повторную запись.",
+    ),
+    "изменение спроса": (
+        "Как меняется спрос на услуги",
+        "Связать сезонный запрос клиентов с одной подходящей услугой без искусственного ажиотажа.",
+    ),
+    "работать с базой клиентов": (
+        "Как возвращать клиентов",
+        "Подготовить полезное напоминание для тех, кому уже пора повторить услугу или обновить образ.",
+    ),
+    "нестабильная запись": (
+        "Почему запись бывает нестабильной",
+        "Ответить на частое сомнение перед записью и дать один понятный следующий шаг.",
+    ),
+    "деньги и прибыль": (
+        "Как объяснять ценность услуги",
+        "Показать, из чего складывается услуга: время мастера, консультация, материалы и сопровождение.",
+    ),
+    "ручная рутина": (
+        "Что упрощает запись для клиента",
+        "Рассказать, как клиент может выбрать услугу и удобное время без лишних звонков и переписки.",
+    ),
+    "дорого": (
+        "Почему клиент может считать услугу дорогой",
+        "Разобрать стоимость через конкретный результат и состав услуги, не оправдываясь и не обещая лишнего.",
+    ),
+    "рост издержек": (
+        "Что меняется при росте расходов",
+        "Объяснить одно изменение в услуге или цене через качество материалов и работу специалиста.",
+    ),
+}
+
 
 def _row_dict(row: Any) -> dict[str, Any]:
     if isinstance(row, dict):
@@ -224,7 +273,27 @@ def audience_content_angle(label: Any, industry: Any) -> str:
     clean_label = str(label or "").strip()
     if _canonical_industry_key(industry) == "travel" and clean_label in TRAVEL_CONTENT_ANGLES:
         return TRAVEL_CONTENT_ANGLES[clean_label]
+    if _canonical_industry_key(industry) == "beauty" and clean_label in BEAUTY_INSIGHT_PRESENTATIONS:
+        return BEAUTY_INSIGHT_PRESENTATIONS[clean_label][1]
     return f"Раскрыть тему «{clean_label}» на конкретном примере бизнеса."
+
+
+def audience_display_label(label: Any, industry: Any) -> str:
+    clean_label = str(label or "").strip()
+    if _canonical_industry_key(industry) == "beauty" and clean_label in BEAUTY_INSIGHT_PRESENTATIONS:
+        return BEAUTY_INSIGHT_PRESENTATIONS[clean_label][0]
+    return clean_label
+
+
+def default_audience_source_ids(cursor: Any, industry: Any) -> list[str]:
+    industry_key = _canonical_industry_key(industry)
+    if industry_key == "local_business":
+        return []
+    return [
+        str(source.get("id"))
+        for source in load_default_industry_sources(cursor, {industry_key})
+        if source.get("id")
+    ]
 
 
 def raw_engagement(message: dict[str, Any]) -> int:
@@ -794,6 +863,7 @@ def _finish_source(
 def list_audience_insights(conn, *, business_id: str, industry: str, limit: int = 50) -> list[dict[str, Any]]:
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     try:
+        default_source_ids = default_audience_source_ids(cursor, industry)
         cursor.execute(
             """
             SELECT c.id, c.concept_type, c.label, c.industry,
@@ -814,13 +884,16 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
               ON bd.concept_id = c.id AND bd.business_id = %s
             WHERE (c.business_id IS NULL OR c.business_id = %s)
               AND (s.business_id IS NULL OR s.business_id = %s OR s.visibility = 'public')
-              AND EXISTS (
-                  SELECT 1
-                  FROM knowledge_source_subscriptions subscription
-                  WHERE subscription.business_id = %s
-                    AND subscription.source_id = s.id
-                    AND subscription.is_active = TRUE
-                    AND subscription.purposes_json @> '["community_pulse"]'::jsonb
+              AND (
+                  s.id = ANY(%s::uuid[])
+                  OR EXISTS (
+                      SELECT 1
+                      FROM knowledge_source_subscriptions subscription
+                      WHERE subscription.business_id = %s
+                        AND subscription.source_id = s.id
+                        AND subscription.is_active = TRUE
+                        AND subscription.purposes_json @> '["community_pulse"]'::jsonb
+                  )
               )
               AND c.concept_type IN ('pain', 'question', 'objection', 'practice', 'market_signal')
               AND NOT (c.label = ANY(%s))
@@ -832,6 +905,7 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
                 business_id,
                 business_id,
                 business_id,
+                default_source_ids,
                 business_id,
                 list(NON_ACTIONABLE_SIGNAL_LABELS),
                 max(1, min(int(limit or 50), 100)),
@@ -839,6 +913,7 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
         )
         items = [dict(row) for row in cursor.fetchall()]
         for item in items:
+            item["display_label"] = audience_display_label(item.get("label"), item.get("industry") or industry)
             item["content_angle"] = audience_content_angle(item.get("label"), item.get("industry") or industry)
         return items
     finally:
@@ -885,6 +960,7 @@ def decide_audience_insight(
         decision_row = dict(cursor.fetchone())
         updated = dict(concept)
         updated.update(decision_row)
+        updated["display_label"] = audience_display_label(updated.get("label"), updated.get("industry"))
         updated["content_angle"] = audience_content_angle(updated.get("label"), updated.get("industry"))
         if decision == "use_in_plan":
             updated["content_plan_item"] = _add_insight_to_latest_plan(cursor, business_id, updated)

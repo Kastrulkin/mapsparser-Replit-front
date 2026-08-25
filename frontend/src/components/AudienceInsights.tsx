@@ -12,6 +12,7 @@ type AudienceInsight = {
   id: string;
   concept_type?: string;
   label?: string;
+  display_label?: string;
   industry?: string;
   sources_count?: number;
   messages_count?: number;
@@ -127,7 +128,7 @@ export const AudienceInsights = ({ businessId }: { businessId: string }) => {
                 <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">{copy.insightTypes[item.concept_type || ''] || copy.audienceTopic}</span>
                 <span className="text-sm font-semibold tabular-nums text-slate-500">{copy.importance} {Math.round(item.priority_score || 0)}%</span>
               </div>
-              <h3 className="mt-4 text-lg font-semibold leading-7 text-slate-950">{item.label}</h3>
+              <h3 className="mt-4 text-lg font-semibold leading-7 text-slate-950">{item.display_label || item.label}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">{fillContentTemplate(copy.repeated, { messages: item.messages_count || 0, sources: item.sources_count || 0 })}</p>
               <div className="mt-4 border-t border-slate-100 pt-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{language === 'ru' ? 'Что добавить в план' : copy.audienceTopic}</p>

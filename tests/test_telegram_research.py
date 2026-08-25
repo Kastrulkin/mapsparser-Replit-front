@@ -37,6 +37,39 @@ def test_travel_insight_explains_what_will_be_added_to_the_plan():
     assert "подтверждает машину" in angle
 
 
+def test_default_audience_sources_follow_the_business_industry(monkeypatch):
+    import services.telegram_research_service as service
+
+    calls = []
+
+    def fake_load(_cursor, industry_keys):
+        calls.append(industry_keys)
+        return [{"id": "source-1"}, {"id": "source-2"}]
+
+    monkeypatch.setattr(service, "load_default_industry_sources", fake_load)
+
+    assert service.default_audience_source_ids(object(), "beauty") == ["source-1", "source-2"]
+    assert calls == [{"beauty"}]
+
+
+def test_local_business_has_no_implicit_audience_sources(monkeypatch):
+    import services.telegram_research_service as service
+
+    def fail_load(_cursor, _industry_keys):
+        raise AssertionError("The shared catalog must not be used without a known industry")
+
+    monkeypatch.setattr(service, "load_default_industry_sources", fail_load)
+
+    assert service.default_audience_source_ids(object(), "local_business") == []
+
+
+def test_beauty_insight_uses_a_clear_title_and_content_angle():
+    from services.telegram_research_service import audience_content_angle, audience_display_label
+
+    assert audience_display_label("дорого", "beauty") == "Почему клиент может считать услугу дорогой"
+    assert "состав услуги" in audience_content_angle("дорого", "beauty")
+
+
 def test_generic_industry_still_detects_questions_and_pains():
     from services.telegram_research_service import classify_market_signal
 
