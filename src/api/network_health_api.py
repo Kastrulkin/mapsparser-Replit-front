@@ -186,32 +186,27 @@ def get_network_health(current_user):
             params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
+        location_rows = _network_attention_rows(cursor, where_sql, params)
 
         # Для одного бизнеса — используем унифицированные метрики (external → cards → MapParseResults)
         if requested_business_id and not network_id:
             metrics = _get_map_metrics(cursor, business_id)
             avg_rating = round(metrics["rating"] or 0, 1)
             total_reviews = metrics["reviews_count"] or 0
-            cursor.execute("""
-                SELECT COUNT(*) FROM externalbusinessreviews
-                WHERE business_id = %s AND source = 'yandex_business'
-                  AND (response_text IS NULL OR response_text = '' OR response_text = '—')
-            """, (business_id,))
-            unr = cursor.fetchone()
-            unanswered_reviews_count = (unr[0] if isinstance(unr, (list, tuple)) else unr.get('count', 0)) or 0
+            unanswered_reviews_count = (
+                int(location_rows[0].get("unanswered_reviews_count") or 0)
+                if location_rows
+                else 0
+            )
             locations_count = 1
         else:
-            location_rows = _network_attention_rows(cursor, where_sql, params)
             locations_count = len(location_rows)
             ratings = [float(row.get("rating") or 0) for row in location_rows if float(row.get("rating") or 0) > 0]
             avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0
             total_reviews = sum(int(row.get("reviews_count") or 0) for row in location_rows)
             unanswered_reviews_count = sum(int(row.get("unanswered_reviews_count") or 0) for row in location_rows)
 
-        if requested_business_id and not network_id:
-            attention_rows = _network_attention_rows(cursor, where_sql, params)
-        else:
-            attention_rows = location_rows
+        attention_rows = location_rows
 
         locations_with_alerts = sum(
             1
