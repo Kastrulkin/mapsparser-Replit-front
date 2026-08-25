@@ -13,7 +13,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
-  Handshake,
   Bot,
   Radar,
   BarChart3,
@@ -37,7 +36,6 @@ interface DashboardSidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   webTrackingAvailable?: boolean;
-  creatorPromotionAvailable?: boolean;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -46,7 +44,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   collapsed = false,
   onToggleCollapse,
   webTrackingAvailable = false,
-  creatorPromotionAvailable = false,
 }) => {
   const location = useLocation();
   const { t, language } = useLanguage();
@@ -126,19 +123,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/chats',
       tooltip: shellCopy.chatsHint,
     },
-    ...(creatorPromotionAvailable ? [{
+    {
       id: 'promotion',
       label: navigationCopy.promotion,
       icon: Megaphone,
       path: '/dashboard/promotion',
       tooltip: navigationCopy.promotionHint,
-    }] : [{
-      id: 'partnerships',
-      label: navigationCopy.partnerships,
-      icon: Handshake,
-      path: '/dashboard/partnerships',
-      tooltip: navigationCopy.partnershipsHint,
-    }]),
+    },
     {
       id: 'telegram-radar',
       label: demoCopy.telegramRadar,

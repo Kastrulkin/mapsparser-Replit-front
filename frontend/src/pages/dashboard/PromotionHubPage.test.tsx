@@ -14,7 +14,6 @@ const renderHub = (available = true) => render(
       <Route element={available ? <AvailableContext /> : <UnavailableContext />}>
         <Route path="/dashboard/promotion" element={<PromotionHubPage />} />
       </Route>
-      <Route path="/dashboard/partnerships" element={<div>Существующие партнёрства</div>} />
     </Routes>
   </MemoryRouter>,
 );
@@ -29,10 +28,12 @@ describe('PromotionHubPage', () => {
     expect(screen.getByText(/ничего не отправляют/)).toBeInTheDocument();
   });
 
-  it('keeps the hidden pilot on the existing partnerships route', async () => {
+  it('keeps the hub visible while unavailable creator promotion stays non-interactive', () => {
     renderHub(false);
 
-    expect(await screen.findByText('Существующие партнёрства')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Продвижение' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Продвижение' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Партнёрские акции/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Локальные авторы/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Подключаем поэтапно')).toBeInTheDocument();
   });
 });

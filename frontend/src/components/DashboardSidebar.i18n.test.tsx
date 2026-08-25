@@ -26,18 +26,18 @@ describe('DashboardSidebar localization', () => {
     expect(await screen.findByRole('link', { name: 'Χειριστής' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Περιεχόμενο' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Αυτοματοποίηση' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Κοινές ενέργειες' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Προώθηση' })).toHaveAttribute('href', '/dashboard/promotion');
     expect(container.textContent).not.toMatch(/\b(?:Operator|Content|Agents|Partner Search)\b/);
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
-  it('shows promotion whenever the selected business has the server capability', async () => {
+  it('shows promotion without requiring a business capability', async () => {
     window.localStorage.setItem('language', 'ru');
     render(
       <MemoryRouter initialEntries={['/dashboard/content']}>
         <LanguageProvider>
           <TooltipProvider>
-            <DashboardSidebar creatorPromotionAvailable />
+            <DashboardSidebar />
           </TooltipProvider>
         </LanguageProvider>
       </MemoryRouter>,

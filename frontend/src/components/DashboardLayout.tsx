@@ -229,7 +229,6 @@ export const DashboardLayout = () => {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
-        creatorPromotionAvailable={currentBusiness?.creator_promotion_available === true}
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
@@ -286,7 +285,6 @@ export const DashboardLayout = () => {
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
-        creatorPromotionAvailable={currentBusiness?.creator_promotion_available === true}
       />
       </div>
     </GuidedTourProvider>
