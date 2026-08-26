@@ -167,6 +167,8 @@ def query_specs(offset: int, max_queries: int) -> list[tuple[str, str]]:
     specs = [(f"{location} {intent}", location) for location, intent in base]
     specs.extend((f"{intent} {location}", location) for location, intent in base)
     specs.extend((f"{location} {intent} 2025", location) for location, intent in base)
+    specs.extend((f"{location} {intent} 2026", location) for location, intent in base)
+    specs.extend((f"{intent} {location} 2026", location) for location, intent in base)
     start = max(0, offset)
     return specs[start:start + max_queries] if max_queries > 0 else specs[start:]
 
