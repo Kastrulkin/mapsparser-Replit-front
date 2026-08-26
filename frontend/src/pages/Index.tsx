@@ -669,7 +669,7 @@ const Index = () => {
                   </label>
                   <Button className="min-h-12 w-full rounded-xl text-base transition-[box-shadow,scale] active:scale-[0.96]" disabled={isSubmitting} type="submit">
                     {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowRight className="h-5 w-5" aria-hidden="true" />}
-                    {isSubmitting ? copy.submitting : copy.submit}
+                    <span>{isSubmitting ? copy.submitting : copy.submit}</span>
                   </Button>
                 </form>
               </div>

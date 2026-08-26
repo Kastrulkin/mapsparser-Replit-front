@@ -7,6 +7,7 @@ Telegram-бот для управления аккаунтом LocalOS
 - Оптимизация услуг
 - Настройки компании
 """
+import asyncio
 import os
 import json
 import re
@@ -3744,11 +3745,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, bind_token: str, telegram_id: str):
     """Обработка токена привязки"""
     try:
-        # Вызываем API для проверки токена
-        response = requests.post(
+        response = await asyncio.to_thread(
+            requests.post,
             f"{API_BASE_URL}/api/telegram/bind/verify",
             json={"token": bind_token, "telegram_id": telegram_id},
-            timeout=10
+            timeout=10,
         )
         
         if response.status_code == 200:
@@ -3764,9 +3765,25 @@ async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         else:
             error_data = response.json()
             await _reply_effective_message(update, f"❌ Ошибка привязки: {error_data.get('error', 'Неизвестная ошибка')}")
-    except Exception as e:
+    except requests.Timeout:
+        logger.exception("Bind token verification timed out for telegram_id=%s", telegram_id)
+        await _reply_effective_message(
+            update,
+            "❌ Сервер LocalOS не ответил вовремя. "
+            "Создайте новую ссылку привязки в LocalOS и повторите попытку."
+        )
+    except requests.RequestException:
+        logger.exception("Bind token verification request failed for telegram_id=%s", telegram_id)
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось связаться с LocalOS. Попробуйте ещё раз через несколько минут."
+        )
+    except Exception:
         logger.exception("Bind token verification failed for telegram_id=%s", telegram_id)
-        await _reply_effective_message(update, f"❌ Ошибка подключения к серверу: {str(e)}")
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось привязать аккаунт. Создайте новую ссылку привязки и повторите попытку."
+        )
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, telegram_id: str, db_user_id: str = None):
     """Показать главное меню"""
