@@ -621,13 +621,12 @@ def test_deepseek_receives_complete_scoped_contract_for_required_tools() -> None
     tools = {tool["name"]: tool for tool in states[0]["tools"]}
     required = {
         "business.get_profile",
+        "localos.query",
         "maps.get_latest_snapshot",
         "maps.get_status",
         "maps.refresh",
-        "services.list",
         "services.prepare_updates",
         "services.apply_updates",
-        "reviews.list_unanswered",
         "reviews.prepare_replies",
         "content.create_news_draft",
         "content.create_plan",
@@ -639,6 +638,7 @@ def test_deepseek_receives_complete_scoped_contract_for_required_tools() -> None
         "settings.check_connections",
     }
     assert required.issubset(tools)
+    assert {"services.list", "reviews.list_unanswered", "content.list_items"}.isdisjoint(tools)
     for name in required:
         tool = tools[name]
         assert tool["input_schema"]["type"] == "object"

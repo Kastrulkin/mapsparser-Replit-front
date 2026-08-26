@@ -37,6 +37,7 @@ from services.operator_conversations import finish_operator_action, get_operator
 from services.operator_content_history import list_operator_content_history
 from services.operator_mobile_today import build_mobile_progress
 from services.operator_mobile_modules import list_operator_mobile_module
+from services.operator_query import execute_operator_query, operator_query_tool_contract
 from services.operator_scope_summary import build_operator_scope_summary
 from services.operator_tool_loop import run_operator_tool_loop
 from services.operator_tool_billing import run_paid_operator_tool_loop
@@ -56,6 +57,7 @@ class OperatorCapability:
 
 CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("operator.help", "Возможности Оператора", "available", "read_only", "none", "/dashboard/operator", ("Что ты умеешь?",)),
+    OperatorCapability("operator.query", "Поиск по данным LocalOS", "available", "read_only", "none", "/dashboard/operator", ("Покажи услуги нужной категории", "Покажи последний отзыв", "Найди посты за период")),
     OperatorCapability("maps.status", "Состояние карточки", "available", "read_only", "none", "/dashboard/card", ("В каком состоянии карточка?",)),
     OperatorCapability("maps.refresh", "Обновление карточки и отзывов", "available", "paid_external", "credit_policy", "/dashboard/card", ("Обнови карточку", "Проверь новые отзывы")),
     OperatorCapability("reviews.read", "Отзывы без ответа", "available", "read_only", "none", "/dashboard/card?tab=reviews&review_filter=needs_reply", ("Есть отзывы без ответа?",)),
@@ -693,7 +695,14 @@ def _operator_tool_catalog(
     refresh_handler: Callable[..., dict[str, Any]],
     action_orchestrator: ActionOrchestrator | None = None,
 ) -> list[dict[str, Any]]:
+    query_tool = operator_query_tool_contract()
+    query_tool["execute"] = lambda arguments: execute_operator_query(
+        cursor,
+        business_id=business_id,
+        arguments=arguments,
+    )
     tools = [
+        query_tool,
         {
             "name": "business.get_profile",
             "capability": "operator.help",
@@ -725,6 +734,7 @@ def _operator_tool_catalog(
             },
             "risk_class": "read_only",
             "approval_required": False,
+            "planner_visible": False,
             "execute": lambda arguments: _read_services(
                 cursor,
                 business_id=business_id,
@@ -743,6 +753,7 @@ def _operator_tool_catalog(
             },
             "risk_class": "read_only",
             "approval_required": False,
+            "planner_visible": False,
             "execute": lambda arguments: get_unanswered_reviews_status(
                 cursor,
                 business_id=business_id,
@@ -1229,6 +1240,7 @@ def _operator_tool_catalog(
             "input_schema": {"type": "object", "properties": {}},
             "risk_class": "read_only",
             "approval_required": False,
+            "planner_visible": False,
             "execute": lambda _arguments: _read_mobile_module(cursor, business_id=business_id, module="content"),
         },
         {
@@ -1576,6 +1588,7 @@ def route_operator_message(
     action_orchestrator: ActionOrchestrator | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
+    tool_loop_active = _operator_tool_loop_enabled() or tool_planner is not None
     run_refresh = refresh_handler or refresh_reviews_from_operator
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
@@ -1606,9 +1619,9 @@ def route_operator_message(
 
     if _is_service_price_intent(clean_message):
         return _update_one_service_price(cursor, business_id=business_id, message=clean_message)
-    if _is_services_inventory_intent(clean_message):
+    if _is_services_inventory_intent(clean_message) and not tool_loop_active:
         return _read_services_inventory(cursor, business_id=business_id), {}
-    if _is_services_read_intent(clean_message):
+    if _is_services_read_intent(clean_message) and not tool_loop_active:
         return _read_services(
             cursor,
             business_id=business_id,
@@ -1633,7 +1646,7 @@ def route_operator_message(
         )
         result["capability_catalog"] = operator_capability_catalog()
         return standardize_operator_result(result, "operator.help"), {}
-    if classify_unanswered_reviews_status_intent(clean_message):
+    if classify_unanswered_reviews_status_intent(clean_message) and not tool_loop_active:
         return standardize_operator_result(
             get_unanswered_reviews_status(cursor, business_id=business_id, limit=limit),
             "reviews.read",
@@ -1692,10 +1705,10 @@ def route_operator_message(
             "reviews.manual.add",
         ), {}
     manual_capability = _manual_capability(clean_message)
-    if manual_capability and not (_operator_tool_loop_enabled() or tool_planner is not None):
+    if manual_capability and not tool_loop_active:
         return _manual_result(manual_capability), {}
 
-    if _operator_tool_loop_enabled() or tool_planner is not None:
+    if tool_loop_active:
         tools = _operator_tool_catalog(
             cursor,
             business_id=business_id,

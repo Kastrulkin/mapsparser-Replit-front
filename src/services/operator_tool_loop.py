@@ -270,8 +270,14 @@ def run_operator_tool_loop(
             "actor": _clean_actor_context(actor_context),
             "conversation_history": _clean_history(conversation_history),
             "pending_approvals": _clean_pending_approvals(pending_approvals),
-            "tools": [_public_tool(tool) for tool in tool_map.values()],
+            "tools": [
+                _public_tool(tool)
+                for tool in tool_map.values()
+                if bool(tool.get("planner_visible", True))
+            ],
             "observations": observations,
+            "current_time": datetime.now(ZoneInfo("Europe/Moscow")).isoformat(),
+            "current_timezone": "Europe/Moscow",
             "step": step_index + 1,
             "max_steps": safe_max_steps,
         }
@@ -490,6 +496,27 @@ def run_operator_tool_loop(
             "status": str(outcome.get("status") or "completed"),
             "risk_class": str(tool.get("risk_class") or "read_only"),
         })
+        outcome_status = str(outcome.get("status") or "completed").strip().lower()
+        if bool(tool.get("deterministic_response")) and outcome_status not in {
+            "blocked",
+            "denied",
+            "error",
+            "failed",
+            "unavailable",
+        }:
+            return {
+                **last_outcome,
+                "status": str(last_outcome.get("status") or "completed"),
+                "intent": "operator_tool_loop",
+                "executed_intent": str(last_outcome.get("intent") or "operator.query"),
+                "capability": str(tool.get("capability") or tool_name),
+                "chat_response": str(last_outcome.get("chat_response") or "Данные получены."),
+                "tool_trace": trace,
+                "tool_calls": len(trace),
+                "planner_steps": step_index + 1,
+                "compiled_query": arguments,
+                "external_writes_performed": bool(last_outcome.get("external_writes_performed")),
+            }
 
     return {
         "status": "blocked",
