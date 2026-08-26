@@ -12,6 +12,7 @@ import uuid
 import re
 import time
 import random
+from contextvars import ContextVar
 from difflib import SequenceMatcher
 from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
@@ -283,6 +284,10 @@ _IMPLEMENTATIONS = {
     for name, value in vars(module).items()
     if callable(value) and getattr(value, "__module__", "") == module.__name__
 }
+_compatibility_call_depth: ContextVar[int] = ContextVar(
+    "admin_prospecting_compatibility_call_depth",
+    default=0,
+)
 
 
 def _bind_runtime_namespace() -> None:
@@ -298,8 +303,14 @@ def _bind_runtime_namespace() -> None:
 def _compatibility_wrapper(name: str, implementation: Any):
     @wraps(implementation)
     def wrapper(*args: Any, **kwargs: Any):
-        _bind_runtime_namespace()
-        return _IMPLEMENTATIONS[name](*args, **kwargs)
+        depth = _compatibility_call_depth.get()
+        if depth == 0:
+            _bind_runtime_namespace()
+        token = _compatibility_call_depth.set(depth + 1)
+        try:
+            return _IMPLEMENTATIONS[name](*args, **kwargs)
+        finally:
+            _compatibility_call_depth.reset(token)
 
     return wrapper
 

@@ -66,3 +66,29 @@ def test_registry_projection_applies_numeric_contact_and_messenger_filters():
         },
     )
     assert not lead_matches_registry_filters(lead, {"min_rating": 4.8})
+
+
+def test_registry_json_projection_does_not_rebind_for_every_nested_value(monkeypatch):
+    from api import admin_prospecting
+
+    bind_calls = 0
+
+    def count_bind_calls():
+        nonlocal bind_calls
+        bind_calls += 1
+
+    monkeypatch.setattr(admin_prospecting, "_bind_runtime_namespace", count_bind_calls)
+    payload = {
+        "leads": [
+            {
+                "id": str(index),
+                "name": f"Lead {index}",
+                "workstreams": [{"id": f"workstream-{index}", "state": "ready"}],
+            }
+            for index in range(10)
+        ]
+    }
+
+    admin_prospecting._to_json_compatible(payload)
+
+    assert bind_calls == 1
