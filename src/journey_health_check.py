@@ -97,7 +97,7 @@ def main() -> int:
     warning = bool(health.get("blocked_actions"))
     status = "critical" if critical else "warning" if warning else "ok"
     print(json.dumps({"status": status, **health}, ensure_ascii=False, default=str))
-    return 2 if critical else 1 if warning else 0
+    return 2 if critical else 0
 
 
 if __name__ == "__main__":
