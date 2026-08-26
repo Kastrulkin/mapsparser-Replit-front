@@ -746,7 +746,7 @@ export const TelegramControlPage = () => {
       return;
     }
     const navigate = () => {
-      if (isTab(screen) && screen !== 'more') { setModule(''); setTab(screen); return; }
+      if (isTab(screen)) { setModule(''); setTab(screen); return; }
       const moduleTarget = screen === 'analytics' ? 'finance' : screen;
       setTab('more'); setModule(moduleTarget || 'tasks');
     };

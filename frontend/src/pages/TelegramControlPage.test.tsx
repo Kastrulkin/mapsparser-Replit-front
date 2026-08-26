@@ -125,6 +125,40 @@ describe('TelegramControlPage scope integrity', () => {
     expect(screen.getByText(/дата не указана источником/i)).toBeInTheDocument();
   });
 
+  it('opens the Development overview instead of treating more as an unavailable module', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/operator/telegram/bootstrap') {
+        return jsonResponse({
+          success: true,
+          user: { id: 'user-1', name: 'Owner' },
+          web_session_token: 'session',
+          today_v2_enabled: false,
+          selected_scope: { kind: 'business', id: 'business-1', name: 'Весёлая расчёска', business_ids: ['business-1'], can_switch: false },
+          summary: { attention_items: [] },
+          catalog: { businesses: [{ id: 'business-1', name: 'Весёлая расчёска' }], networks: [], total_choices: 1 },
+          navigation: [
+            { key: 'today', label: 'Сегодня', group: 'primary', status: 'available' },
+            { key: 'progress', label: 'Прогресс', group: 'primary', status: 'available' },
+            { key: 'cards', label: 'Карточки', group: 'more', status: 'available' },
+            { key: 'finance', label: 'Финансы', group: 'more', status: 'available' },
+          ],
+        });
+      }
+      if (url.startsWith('/api/operator/mobile/workspace')) return jsonResponse({ items: [], summary: { attention_items: [] } });
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<TelegramControlPage />);
+    await user.click(await screen.findByRole('button', { name: 'Развитие' }));
+
+    expect(await screen.findByRole('heading', { name: 'Развитие' })).toBeInTheDocument();
+    expect(screen.getByText('Больше клиентов из карт')).toBeInTheDocument();
+    expect(screen.queryByText('Раздел пока недоступен')).not.toBeInTheDocument();
+  });
+
   it('does not let a slower response from the previous scope replace the current Today', async () => {
     let resolveBusinessTwo: ((response: Response) => void) | undefined;
     const businessTwoToday = new Promise<Response>((resolve) => { resolveBusinessTwo = resolve; });
