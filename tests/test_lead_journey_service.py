@@ -9,6 +9,7 @@ from services.lead_journey_service import (
     _next_action_spec,
     build_lead_preview,
     load_public_journey,
+    reconcile_map_actions,
     token_hash,
 )
 
@@ -102,6 +103,23 @@ def test_public_journey_lock_targets_only_journey_row():
 
     assert journey["id"] == "journey-1"
     assert "FOR UPDATE OF journey" in cursor.query
+
+
+def test_failed_map_refresh_blocks_comparison_with_provider_error():
+    class Cursor:
+        queries = []
+
+        def execute(self, query, _params):
+            self.queries.append(query)
+
+    cursor = Cursor()
+
+    reconcile_map_actions(cursor, business_ids=["business-1"])
+
+    assert len(cursor.queries) == 2
+    assert "SET status = 'blocked'" in cursor.queries[1]
+    assert "queue.error_message" in cursor.queries[1]
+    assert "queue.status IN ('error', 'failed', 'cancelled')" in cursor.queries[1]
 
 
 def test_lead_preview_uses_only_safe_business_context():

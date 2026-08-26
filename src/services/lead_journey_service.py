@@ -493,9 +493,31 @@ def reconcile_map_actions(cursor: Any, *, business_ids: list[str]) -> None:
         """,
         (business_ids,),
     )
+    cursor.execute(
+        """
+        UPDATE journey_actions action
+        SET status = 'blocked',
+            payload_json = action.payload_json || jsonb_build_object(
+                'verification_status', 'refresh_failed',
+                'refresh_error', COALESCE(queue.error_message, 'map_refresh_failed')
+            ),
+            version = version + 1,
+            updated_at = NOW()
+        FROM parsequeue queue
+        WHERE action.business_id = ANY(%s)
+          AND action.flow_type = 'maps'
+          AND action.action_type = 'compare_snapshot'
+          AND action.status = 'waiting'
+          AND queue.id = action.payload_json->>'refresh_queue_id'
+          AND queue.status IN ('error', 'failed', 'cancelled')
+        """,
+        (business_ids,),
+    )
 
 
 def list_actions(cursor: Any, *, business_id: str, history: bool = False) -> list[dict[str, Any]]:
+    if not history:
+        reconcile_map_actions(cursor, business_ids=[business_id])
     statuses = tuple(sorted(FINAL_ACTION_STATUSES if history else ACTIVE_ACTION_STATUSES))
     cursor.execute(
         """
