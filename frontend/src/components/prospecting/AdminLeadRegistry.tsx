@@ -1046,6 +1046,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [messageStatus, setMessageStatus] = useState('');
   const [messageChannel, setMessageChannel] = useState('');
   const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 50;
   const [clientFilterOptions, setClientFilterOptions] = useState<ClientFilterOption[]>([]);
   const [partnerTypeFilterOptions, setPartnerTypeFilterOptions] = useState<PartnerTypeFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1114,12 +1118,17 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setLoading(true);
     setError('');
     const params = new URLSearchParams({ compact: '1', include_groups: '0', include_timeline: '0' });
+    params.set('page', String(page));
+    params.set('page_size', String(pageSize));
     if (scope !== 'all') params.set('workstream_type', scope);
     if (clientBusinessId) params.set('client_business_id', clientBusinessId);
     if (actionState) params.set('action_state', actionState);
     try {
       const payload = await newAuth.makeRequest(`/admin/prospecting/leads?${params.toString()}`);
       setLeads(Array.isArray(payload?.leads) ? payload.leads : []);
+      setTotalLeads(Number(payload?.total || 0));
+      setTotalPages(Math.max(1, Number(payload?.total_pages || 1)));
+      if (Number(payload?.page || page) !== page) setPage(Number(payload?.page || 1));
       setClientFilterOptions(Array.isArray(payload?.client_options) ? payload.client_options : []);
       setPartnerTypeFilterOptions(
         Array.isArray(payload?.business_category_options)
@@ -1133,7 +1142,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     } finally {
       setLoading(false);
     }
-  }, [scope, clientBusinessId, actionState]);
+  }, [scope, clientBusinessId, actionState, page]);
 
   useEffect(() => {
     loadLeads();
@@ -2786,6 +2795,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 type="button"
                 onClick={() => {
                   setScope(item.id);
+                  setPage(1);
                   if (item.id === 'localos_sales') setClientBusinessId('');
                 }}
                 className={`min-h-8 whitespace-nowrap rounded px-3 text-xs font-semibold transition-colors ${
@@ -2798,7 +2808,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           </div>
           <select
             value={clientBusinessId}
-            onChange={(event) => setClientBusinessId(event.target.value)}
+            onChange={(event) => {
+              setClientBusinessId(event.target.value);
+              setPage(1);
+            }}
             disabled={scope === 'localos_sales'}
             className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Фильтр по клиенту"
@@ -2836,7 +2849,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </select>
               <select
                 value={actionState}
-                onChange={(event) => setActionState(event.target.value)}
+                onChange={(event) => {
+                  setActionState(event.target.value);
+                  setPage(1);
+                }}
                 className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
                 aria-label="Фильтр по следующему действию"
               >
@@ -2957,9 +2973,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <span className="tabular-nums">
                 {loading
                   ? 'Загружаем…'
-                  : filteredLeads.length === leads.length
-                    ? `${filteredLeads.length} компаний`
-                    : `Показано ${filteredLeads.length} из ${leads.length}`}
+                  : `Показано ${filteredLeads.length} на странице · всего ${totalLeads}`}
               </span>
               <button type="button" onClick={loadLeads} className="flex min-h-10 items-center gap-2 px-2 font-medium hover:text-slate-950">
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -3061,6 +3075,29 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             })}
               </div>
             )}
+            {!error && totalPages > 1 ? (
+              <nav className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-4 sm:flex-row" aria-label="Страницы списка лидов">
+                <span className="text-sm tabular-nums text-slate-500">Страница {page} из {totalPages}</span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    Предыдущая
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || page >= totalPages}
+                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  >
+                    Следующая
+                  </Button>
+                </div>
+              </nav>
+            ) : null}
           </>
         )}
       </div>

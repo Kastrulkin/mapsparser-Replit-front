@@ -41,6 +41,27 @@ def test_admin_compact_api_returns_workstream_registry_fields():
     assert "intent" in database
 
 
+def test_registry_uses_server_pagination_in_api_and_ui():
+    runtime = read("src/api/prospecting/delivery_runtime.py")
+    frontend = read("frontend/src/components/prospecting/AdminLeadRegistry.tsx")
+
+    assert 'request.args.get("page")' in runtime
+    assert 'request.args.get("page_size")' in runtime
+    assert '"total_pages": total_pages' in runtime
+    assert "params.set('page', String(page))" in frontend
+    assert "params.set('page_size', String(pageSize))" in frontend
+    assert "Предыдущая" in frontend
+    assert "Следующая" in frontend
+
+
+def test_registry_migration_indexes_repeated_lateral_lookups():
+    migration = read("alembic_migrations/versions/20260826_optimize_lead_registry.py")
+
+    assert "idx_lead_enrichment_jobs_workstream_latest" in migration
+    assert "idx_outreachsendqueue_sent_recipient" in migration
+    assert "idx_outreach_inbound_workstream_human" in migration
+
+
 def test_registry_exposes_latest_campaign_for_processing_filters():
     service = read("src/services/lead_workstream_service.py")
     frontend = read("frontend/src/components/prospecting/AdminLeadRegistry.tsx")

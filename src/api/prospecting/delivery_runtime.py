@@ -1049,6 +1049,8 @@ def get_leads():
         return error
 
     try:
+        page = max(1, int(request.args.get("page") or 1))
+        page_size = max(1, min(100, int(request.args.get("page_size") or 50)))
         filters = {
             "category": (request.args.get("category") or "").strip() or None,
             "city": (request.args.get("city") or "").strip() or None,
@@ -1075,6 +1077,7 @@ def get_leads():
         sales_room_by_lead_id: dict[str, dict[str, Any]] = {}
         group_summary_by_lead_id: dict[str, list[dict[str, Any]]] = {}
         timeline_preview_by_lead_id: dict[str, dict[str, Any]] = {}
+        client_options_by_id: dict[str, dict[str, str]] = {}
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1113,6 +1116,27 @@ def get_leads():
                 group_summary_by_lead_id = _group_summary_for_lead_ids(cur, lead_ids)
             if include_timeline:
                 timeline_preview_by_lead_id = _latest_timeline_preview(cur, lead_ids)
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    client_business.id::text AS id,
+                    client_business.name,
+                    client_business.address
+                FROM lead_workstreams ws
+                JOIN businesses client_business ON client_business.id = ws.client_business_id
+                WHERE ws.workstream_type = 'client_partnership'
+                  AND ws.client_business_id IS NOT NULL
+                """
+            )
+            for row in cur.fetchall() or []:
+                option_id = str(row.get("id") or "").strip()
+                option_name = str(row.get("name") or "").strip()
+                if option_id and option_name:
+                    client_options_by_id[option_id] = {
+                        "id": option_id,
+                        "name": option_name,
+                        "address": str(row.get("address") or "").strip(),
+                    }
         finally:
             conn.close()
         normalized = []
@@ -1167,6 +1191,21 @@ def get_leads():
             if include_timeline:
                 display_lead["timeline_preview"] = timeline_preview_by_lead_id.get(lead_id)
             normalized.append(display_lead)
+        normalized = _deduplicate_registry_leads(normalized)
+        normalized = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
+        unpaginated_normalized = normalized
+
+        deferred_filters = any(
+            str(filters.get(key) or "").strip()
+            for key in ("workstream_type", "client_business_id", "action_state", "group_id")
+        )
+        total = len(normalized)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = min(page, total_pages)
+        if not deferred_filters:
+            page_start = (page - 1) * page_size
+            normalized = normalized[page_start:page_start + page_size]
+
         from services.lead_workstream_service import attach_workstreams
 
         workstream_conn = get_db_connection()
@@ -1179,20 +1218,6 @@ def get_leads():
                 lead.pop("messenger_links_json", None)
                 for workstream in lead.get("workstreams") or []:
                     workstream.pop("contact_points", None)
-        normalized = _deduplicate_registry_leads(normalized)
-        client_options_by_id = {}
-        for lead in normalized:
-            for workstream in lead.get("workstreams") or []:
-                if workstream.get("workstream_type") != "client_partnership":
-                    continue
-                option_id = str(workstream.get("client_business_id") or "").strip()
-                option_name = str(workstream.get("client_business_name") or "").strip()
-                if option_id and option_name:
-                    client_options_by_id[option_id] = {
-                        "id": option_id,
-                        "name": option_name,
-                        "address": str(workstream.get("client_business_address") or "").strip(),
-                    }
         duplicate_client_names = {
             name
             for name in (
@@ -1214,7 +1239,7 @@ def get_leads():
             client_options_by_id.values(),
             key=lambda item: str(item.get("name") or "").casefold(),
         )
-        filtered = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
+        filtered = normalized
         workstream_type = str(filters.get("workstream_type") or "").strip().lower()
         if workstream_type:
             filtered = [
@@ -1248,10 +1273,17 @@ def get_leads():
                 lead for lead in filtered
                 if any(str(group.get("id") or "") == group_id for group in (lead.get("groups") or []))
             ]
+        if deferred_filters:
+            total = len(filtered)
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            page = min(page, total_pages)
+            page_start = (page - 1) * page_size
+            filtered = filtered[page_start:page_start + page_size]
         partner_type_counts: dict[str, int] = {}
-        for lead in filtered:
+        partner_type_source = filtered if deferred_filters else unpaginated_normalized
+        for lead in partner_type_source:
             canonical_categories = lead.get("canonical_categories") or [
-                str(lead.get("partner_type") or "other").strip() or "other"
+                *lead_partner_type_service.partner_types_for_category(lead.get("category"))
             ]
             for canonical_partner_type in dict.fromkeys(canonical_categories):
                 normalized_partner_type = str(canonical_partner_type or "other").strip() or "other"
@@ -1261,6 +1293,10 @@ def get_leads():
             {
                 "leads": filtered,
                 "count": len(filtered),
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
                 "client_options": client_options,
                 "business_category_options": category_options,
                 "partner_type_options": category_options,

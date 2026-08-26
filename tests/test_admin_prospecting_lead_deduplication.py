@@ -104,3 +104,45 @@ def test_admin_registry_collapses_exact_pudra_location_duplicates(monkeypatch):
         "7a1ddd31-1167-4446-8926-48270ba796f4",
         "a759b6a9-0f88-40cb-9497-26f6bd3df922",
     ]
+
+
+def test_admin_registry_paginates_before_attaching_expensive_workstreams(monkeypatch):
+    class PaginatedDatabase(_Database):
+        def get_all_leads_compact(self):
+            return [
+                {
+                    "id": f"lead-{index}",
+                    "name": f"Company {index}",
+                    "category": "Clinic",
+                    "source": "apify_yandex",
+                    "source_external_id": f"company-{index}",
+                    "created_at": f"2026-08-{20 - index:02d}T10:00:00Z",
+                }
+                for index in range(1, 6)
+            ]
+
+    attached_lead_ids = []
+
+    def attach_page(_connection, leads):
+        attached_lead_ids.extend(lead["id"] for lead in leads)
+        return [dict(lead, workstreams=[]) for lead in leads]
+
+    app = Flask(__name__)
+    monkeypatch.setattr(admin_prospecting, "_require_superadmin", lambda: ({"user_id": "admin"}, None))
+    monkeypatch.setattr(admin_prospecting, "DatabaseManager", PaginatedDatabase)
+    monkeypatch.setattr(admin_prospecting, "get_db_connection", _Connection)
+    monkeypatch.setattr(lead_workstream_service, "attach_workstreams", attach_page)
+
+    with app.test_request_context(
+        "/api/admin/prospecting/leads?compact=1&page=2&page_size=2"
+    ):
+        response = admin_prospecting.get_leads()
+
+    payload = response.get_json()
+    assert attached_lead_ids == ["lead-3", "lead-4"]
+    assert [lead["id"] for lead in payload["leads"]] == ["lead-3", "lead-4"]
+    assert payload["count"] == 2
+    assert payload["total"] == 5
+    assert payload["page"] == 2
+    assert payload["page_size"] == 2
+    assert payload["total_pages"] == 3
