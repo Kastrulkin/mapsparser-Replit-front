@@ -663,6 +663,7 @@ export const AdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTabId>(() => (
     isAdminTabId(requestedTab) ? requestedTab : 'businesses'
   ));
+  const shouldLoadUsers = activeTab !== 'prospecting';
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -877,6 +878,10 @@ export const AdminPage: React.FC = () => {
           navigate('/dashboard');
           return;
         }
+        if (!shouldLoadUsers) {
+          setLoading(false);
+          return;
+        }
         loadUsers();
       } catch (error: unknown) {
         console.error('Ошибка проверки доступа:', error);
@@ -888,7 +893,7 @@ export const AdminPage: React.FC = () => {
       }
     };
     checkAccess();
-  }, [loadUsers, navigate, toast]);
+  }, [loadUsers, navigate, shouldLoadUsers, toast]);
 
   useEffect(() => {
     if (activeTab === 'agents') {
@@ -1291,32 +1296,34 @@ export const AdminPage: React.FC = () => {
           )}
         />
 
-        <DashboardCompactMetricsRow
-          items={[
-            {
-              label: 'Пользователи',
-              value: users.length,
-              hint: filteredUsers.length === users.length ? 'Всего в панели' : `Показано ${filteredUsers.length}`,
-            },
-            {
-              label: 'Бизнесы',
-              value: adminStats.businessCount,
-              hint: adminStats.leadBusinessCount > 0 ? `Лид-бизнесы скрыты: ${adminStats.leadBusinessCount}` : 'Рабочие аккаунты',
-              tone: 'positive',
-            },
-            {
-              label: 'Сети',
-              value: adminStats.networkCount,
-              hint: 'Сетевые аккаунты и точки',
-            },
-            {
-              label: 'Требуют внимания',
-              value: adminStats.pausedUserCount,
-              hint: 'Приостановленные пользователи',
-              tone: adminStats.pausedUserCount > 0 ? 'warning' : 'default',
-            },
-          ]}
-        />
+        {shouldLoadUsers ? (
+          <DashboardCompactMetricsRow
+            items={[
+              {
+                label: 'Пользователи',
+                value: users.length,
+                hint: filteredUsers.length === users.length ? 'Всего в панели' : `Показано ${filteredUsers.length}`,
+              },
+              {
+                label: 'Бизнесы',
+                value: adminStats.businessCount,
+                hint: adminStats.leadBusinessCount > 0 ? `Лид-бизнесы скрыты: ${adminStats.leadBusinessCount}` : 'Рабочие аккаунты',
+                tone: 'positive',
+              },
+              {
+                label: 'Сети',
+                value: adminStats.networkCount,
+                hint: 'Сетевые аккаунты и точки',
+              },
+              {
+                label: 'Требуют внимания',
+                value: adminStats.pausedUserCount,
+                hint: 'Приостановленные пользователи',
+                tone: adminStats.pausedUserCount > 0 ? 'warning' : 'default',
+              },
+            ]}
+          />
+        ) : null}
 
         <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-2.5 shadow-sm">
           <div className="flex flex-col gap-2">

@@ -58,6 +58,14 @@ def test_registry_uses_server_pagination_in_api_and_ui():
     assert "lead_matches_registry_filters(lead, filters)" in runtime
 
 
+def test_prospecting_tab_does_not_block_on_full_admin_user_payload():
+    admin_page = read("frontend/src/pages/dashboard/AdminPage.tsx")
+
+    assert "const shouldLoadUsers = activeTab !== 'prospecting';" in admin_page
+    assert "if (!shouldLoadUsers) {" in admin_page
+    assert "setLoading(false);" in admin_page
+
+
 def test_registry_migration_indexes_repeated_lateral_lookups():
     migration = read("alembic_migrations/versions/20260826_optimize_lead_registry.py")
 
