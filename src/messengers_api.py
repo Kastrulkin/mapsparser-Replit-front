@@ -29,6 +29,7 @@ from core.channel_router import (
     get_routing_plan,
     dispatch_with_routing,
 )
+from services.lead_journey_service import JourneyError, journey_enabled, load_public_journey, reserve_journey
 import uuid
 import json
 from datetime import datetime, timedelta
@@ -547,6 +548,7 @@ def register_with_business():
         business_city = data.get('business_city', '').strip()
         business_country = data.get('business_country', 'US').strip()
         audit_slug = data.get('audit_slug', '').strip()
+        journey_token = str(data.get('journey_token') or '').strip()
         
         if not email or not password:
             return jsonify({"error": "Email и пароль обязательны"}), 400
@@ -561,6 +563,17 @@ def register_with_business():
 
         if _looks_like_url(business_city):
             return jsonify({"error": "Поле «Город» не должно содержать ссылку на карту"}), 400
+
+        if journey_token:
+            if not journey_enabled():
+                return jsonify({"error": "Персональная ссылка пока недоступна"}), 404
+            journey_db = DatabaseManager()
+            try:
+                load_public_journey(journey_db.conn.cursor(), journey_token)
+            except JourneyError as exc:
+                return jsonify({"error": str(exc), "code": exc.code}), exc.status_code
+            finally:
+                journey_db.close()
         
         # Создаём пользователя
         from auth_system import create_user
@@ -625,6 +638,14 @@ def register_with_business():
                     SET {', '.join(update_fields)}
                     WHERE id = %s
                 """, update_values)
+
+            if journey_token:
+                reserve_journey(
+                    cursor,
+                    token=journey_token,
+                    user_id=user_id,
+                    business_id=business_id,
+                )
             
             db.conn.commit()
             db.close()
@@ -656,6 +677,7 @@ def register_with_business():
                 "claimed_from_audit_slug": claimed_business.get('claimed_from_audit_slug') if claimed_business else None,
             },
             "timezone": timezone_result.get('timezone', 'UTC'),
+            "journey_pending": bool(journey_token),
         }), 201
         
     except Exception as e:

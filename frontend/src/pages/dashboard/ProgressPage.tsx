@@ -28,6 +28,8 @@ import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
 import type { ControlScope } from '@/components/DashboardLayout';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import type { JourneyAction } from '@/lib/leadJourney';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import {
   localizedAnalyticsLevel,
@@ -297,6 +299,7 @@ export const ProgressPage = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedAuditBusinessId, setSelectedAuditBusinessId] = useState<string | null>(null);
   const [parseStatus, setParseStatus] = useState<ParseStatus>('idle');
+  const [mapJourneyActions, setMapJourneyActions] = useState<JourneyAction[]>([]);
   const parseStatusRef = useRef<ParseStatus>('idle');
   const auditSectionRef = useRef<HTMLElement | null>(null);
   const requestedMapsSection = searchParams.get('section') === 'maps';
@@ -433,6 +436,16 @@ export const ProgressPage = () => {
     trackProductEvent({ eventName: 'progress_open', businessId: currentBusinessId });
   }, [currentBusinessId]);
 
+  useEffect(() => {
+    if (!currentBusinessId || !overview) {
+      setMapJourneyActions([]);
+      return;
+    }
+    void newAuth.makeRequest(`/journey-actions?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' })
+      .then((result: { actions?: JourneyAction[] }) => setMapJourneyActions((result.actions || []).filter((action) => action.flow_type === 'maps')))
+      .catch(() => setMapJourneyActions([]));
+  }, [currentBusinessId, overview, overviewRefreshKey]);
+
   const refreshAll = () => {
     setOverviewRefreshKey((value) => value + 1);
     setAuditRefreshKey((value) => value + 1);
@@ -547,6 +560,8 @@ export const ProgressPage = () => {
           </Button>
         )}
       />
+
+      {mapJourneyActions.length ? <section aria-label="План по картам" className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">На этой неделе</h2><p className="mt-1 text-pretty text-sm text-slate-600">Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнить результат.</p></div>{mapJourneyActions.map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
 
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">

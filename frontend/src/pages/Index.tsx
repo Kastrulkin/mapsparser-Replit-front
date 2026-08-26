@@ -122,7 +122,7 @@ const ruCopy: LandingCopy = {
   intro:
     "LocalOS берёт на себя карты, отзывы, публикации, услуги и показатели. ИИ готовит сценарий, вы подтверждаете, скрипт выполняет. Вы подключаетесь, когда нужно решение.",
   seeTasks: "Посмотреть, что можно передать LocalOS",
-  freeAudit: "Получить бесплатный аудит",
+  freeAudit: "Посмотреть 3 возможности",
   formTitle: "Начните с аудита карт",
   formDescription: "Проверим, как клиенты видят ваш бизнес и что стоит исправить в первую очередь.",
   emailLabel: "Email",
@@ -189,7 +189,7 @@ const enCopy: LandingCopy = {
   title: "Your business needs you for decisions, not routine work",
   intro: "LocalOS watches the work owners usually keep in their heads: listings, reviews, content, services, numbers, and partnerships. The system handles recurring tasks. You step in when something needs a choice, a review, or approval.",
   seeTasks: "See what LocalOS can take over",
-  freeAudit: "Get a free audit",
+  freeAudit: "See 3 opportunities",
   formTitle: "Start with a listings audit",
   formDescription: "See how customers find your business and what should be fixed first.",
   emailLabel: "Email",
@@ -553,9 +553,8 @@ const Index = () => {
               </h1>
               <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">{copy.intro}</p>
               <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <Button className="h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[box-shadow,scale] active:scale-[0.96]" onClick={scrollToAudit} size="lg">
-                  {copy.freeAudit}
-                  <ArrowRight className="h-5 w-5" aria-hidden="true" />
+                <Button asChild className="h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[box-shadow,scale] active:scale-[0.96]" size="lg">
+                  <Link to="/growth">{copy.freeAudit}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
                 </Button>
                 <Link className="group inline-flex min-h-11 items-center gap-2 px-1 text-base font-semibold text-slate-700 transition-colors hover:text-orange-700" to={{ pathname: "/", hash: "#agents" }}>
                   {copy.seeTasks}
@@ -917,7 +916,7 @@ const Index = () => {
             <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">{copy.finalText}</p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild className="min-h-12 rounded-xl bg-orange-500 px-7 text-base text-white shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[background-color,box-shadow,scale] hover:bg-orange-600 active:scale-[0.96]" size="lg">
-                <a href="/demo" rel="noopener noreferrer" target="_blank">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></a>
+                <Link to="/growth">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
               </Button>
               <Button asChild className="min-h-12 rounded-xl border-white/15 bg-white/[0.06] px-7 text-base text-white transition-[background-color,scale] hover:bg-white/[0.12] hover:text-white active:scale-[0.96]" size="lg" variant="outline">
                 <Link to="/contact">{copy.talkExpert}</Link>

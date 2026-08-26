@@ -147,6 +147,7 @@ from api.telegram_research_api import telegram_research_bp
 from api.outreach_campaign_api import outreach_campaign_bp
 from api.material_downloads_api import material_downloads_bp
 from api.creator_promotion_api import creator_promotion_bp
+from api.lead_journey_api import lead_journey_bp
 from api.web_tracking_api import ingestion_rate_limited_response, tracking_rate_limit_key, web_tracking_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
@@ -342,6 +343,7 @@ app.register_blueprint(telegram_research_bp)
 app.register_blueprint(outreach_campaign_bp)
 app.register_blueprint(material_downloads_bp)
 app.register_blueprint(creator_promotion_bp)
+app.register_blueprint(lead_journey_bp)
 app.register_blueprint(web_tracking_bp)
 if limiter:
     _web_tracking_endpoint = "web_tracking_api.receive_tracking_events"

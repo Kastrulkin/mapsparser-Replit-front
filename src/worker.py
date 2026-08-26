@@ -63,6 +63,7 @@ from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.growth_rhythm_notifications import collect_due_growth_rhythm_reminders, mark_growth_rhythm_reminder_sent
+from services.journey_action_notifications import collect_due_journey_action_notifications, mark_journey_action_notification_sent, reconcile_completed_map_refreshes
 from services.content_publish_notifications import (
     collect_due_content_publish_handoffs,
     format_content_publish_handoff,
@@ -1848,6 +1849,19 @@ def _run_card_automation_if_due() -> None:
             else:
                 db.conn.rollback()
                 print(f"[GROWTH_RHYTHM_REMINDER] failed to send telegram reminder to {telegram_id}", flush=True)
+        reconcile_completed_map_refreshes(db.conn)
+        journey_reminders = collect_due_journey_action_notifications(db.conn)
+        for reminder in journey_reminders:
+            telegram_id = str(reminder.get("telegram_id") or "").strip()
+            dedupe_key = str(reminder.get("dedupe_key") or "").strip()
+            message = str(reminder.get("message") or "").strip()
+            if not telegram_id or not dedupe_key or not message:
+                continue
+            if _send_telegram_plain_message(telegram_id, message, reply_markup=reminder.get("reply_markup")):
+                mark_journey_action_notification_sent(db.conn, dedupe_key)
+            else:
+                db.conn.rollback()
+                print(f"[JOURNEY_ACTION_REMINDER] failed to send reminder to {telegram_id}", flush=True)
         content_handoffs = collect_due_content_publish_handoffs(db.conn)
         for handoff in content_handoffs:
             telegram_id = str(handoff.get("telegram_id") or "").strip()

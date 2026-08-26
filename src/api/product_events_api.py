@@ -42,6 +42,12 @@ def create_product_event():
                 **(properties or {}),
                 "object_type": str(payload.get("object_type") or "")[:100],
             },
+            lead_id=str(payload.get("lead_id") or "") or None,
+            journey_id=str(payload.get("journey_id") or "") or None,
+            action_id=str(payload.get("action_id") or "") or None,
+            flow_type=str(payload.get("flow_type") or "") or None,
+            entity_type=str(payload.get("entity_type") or "") or None,
+            entity_id=str(payload.get("entity_id") or "") or None,
         )
         db.conn.commit()
         return jsonify({"success": True, "event_id": event_id}), 201

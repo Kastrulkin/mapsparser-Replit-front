@@ -14,8 +14,8 @@ vi.mock('@/i18n/LanguageContext', () => ({
   useLanguage: () => ({ language: 'ru' }),
 }));
 
-describe('Index demo entry', () => {
-  it('opens the demo in a separate tab without replacing the landing page', () => {
+describe('Index lead journey entry', () => {
+  it('opens the three-direction preview before registration', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <Index />
@@ -23,8 +23,7 @@ describe('Index demo entry', () => {
     );
 
     const demoLink = screen.getByRole('link', { name: 'Посмотреть демо' });
-    expect(demoLink).toHaveAttribute('href', '/demo');
-    expect(demoLink).toHaveAttribute('target', '_blank');
-    expect(demoLink).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(demoLink).toHaveAttribute('href', '/growth');
+    expect(screen.getByRole('link', { name: 'Посмотреть 3 возможности' })).toHaveAttribute('href', '/growth');
   });
 });

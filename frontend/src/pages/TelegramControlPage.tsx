@@ -21,7 +21,8 @@ import { ScopeProvider, useMobileScope, type MobileScope } from '@/components/te
 import { ProgressMobileModule, type ProgressPayload } from '@/components/telegram/ProgressMobileModule';
 import { TodayMobileV2, type TodayPayload } from '@/components/telegram/TodayMobileV2';
 import GrowthNavigation from '@/components/telegram/GrowthNavigation';
-import MobileOnboarding from '@/components/telegram/MobileOnboarding';
+import LeadJourneyOnboarding from '@/components/telegram/LeadJourneyOnboarding';
+import { clearLeadJourneyToken, saveLeadJourneyToken, type LeadJourneyKey } from '@/lib/leadJourney';
 import { cancelMobileJob, confirmMobileAction, loadMobileJob, mobileAuthHeaders, mobileJsonHeaders, mobileScopeQuery, readMobileJson, retryMobileJob, type MobileJob } from '@/lib/mobileDataClient';
 import { resolveMobileRoute } from '@/lib/mobileDeepLinkRouter';
 import { resolveMobileAttentionScreen } from '@/lib/mobileTaskRouter';
@@ -167,6 +168,7 @@ type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'm
 
 type TelegramWebApp = {
   initData?: string;
+  initDataUnsafe?: { start_param?: string };
   ready?: () => void;
   expand?: () => void;
   openTelegramLink?: (url: string) => void;
@@ -280,6 +282,9 @@ const isTab = (value: string | null): value is Tab => Boolean(value && ['today',
 export const TelegramControlPage = () => {
   const preview = isPreview();
   const initData = webApp()?.initData || '';
+  const launchParams = new URLSearchParams(window.location.search);
+  const rawJourneyParam = launchParams.get('journey_token') || launchParams.get('tgWebAppStartParam') || webApp()?.initDataUnsafe?.start_param || '';
+  const journeyToken = rawJourneyParam.startsWith('journey_') ? rawJourneyParam.slice(8) : /^[A-Za-z0-9_-]{32,}$/.test(rawJourneyParam) ? rawJourneyParam : '';
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(preview ? previewBootstrap : null);
   const [workspace, setWorkspace] = useState<Workspace | null>(preview ? { items: previewBootstrap.summary?.attention_items, summary: previewBootstrap.summary } : null);
   const [todayData, setTodayData] = useState<TodayPayload | null>(preview ? previewToday : null);
@@ -417,6 +422,18 @@ export const TelegramControlPage = () => {
       }).then(readJson<Bootstrap>);
       if (catalogOnly && requestVersion !== catalogSearchVersion.current) return;
       if (result.web_session_token) window.sessionStorage.setItem('localos_mini_session', result.web_session_token);
+      if (!catalogOnly && journeyToken && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
+        saveLeadJourneyToken(journeyToken);
+        try {
+          await fetch('/api/journeys/claim', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id }),
+          }).then(readJson<unknown>);
+          clearLeadJourneyToken();
+        } catch {
+          // Keep the token so the same journey can be resumed in web or retried in Mini App.
+        }
+      }
       if (appendCatalog) {
         setBootstrap((current) => ({
           ...current,
@@ -758,6 +775,16 @@ export const TelegramControlPage = () => {
     navigate();
   };
 
+  const completeLeadJourneyOnboarding = (direction?: LeadJourneyKey) => {
+    finishOnboarding();
+    if (direction === 'maps') openMobileTarget('cards');
+    else if (direction === 'partnerships') openMobileTarget('partnerships');
+    else if (direction === 'influencers') {
+      setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
+      openMobileTarget('operator');
+    }
+  };
+
   const createCrmRequest = async ({ crmName, crmUrl, contact, comment }: { crmName: string; crmUrl: string; contact: string; comment: string }) => {
     if (scope?.kind !== 'business' || !scope.id) throw new Error('Для запроса выберите одну точку.');
     if (preview) return;
@@ -903,14 +930,14 @@ export const TelegramControlPage = () => {
       <MobileShell
         header={<TopBar />}
         error={error}
-        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <MobileOnboarding hasSwitcher={hasSwitcher} networkMode={scope?.kind === 'network' || Boolean(scope?.parent_scope?.id)} onFinish={finishOnboarding} /> : null}</>}
+        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <LeadJourneyOnboarding onFinish={completeLeadJourneyOnboarding} /> : null}</>}
         navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' || tab === 'reviews' ? 'more' : tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
-            {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
+            {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}

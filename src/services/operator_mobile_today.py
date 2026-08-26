@@ -14,6 +14,7 @@ from services.community_pulse_sources import (
 )
 from services.growth_overview_service import load_growth_overview, load_growth_overview_for_scope
 from services.operator_scope_summary import build_operator_scope_summary
+from services.lead_journey_service import journey_enabled, serialize_action
 
 
 PLATFORM_RADAR_BUSINESS_ID = "localos-platform-telegram-radar"
@@ -1119,6 +1120,46 @@ def _mobile_progress_areas(progress: dict[str, Any]) -> list[dict[str, Any]]:
     return areas
 
 
+def _load_journey_actions(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
+    if not journey_enabled() or not _table_exists(cursor, "journey_actions"):
+        return []
+    business_ids = [str(value) for value in scope.get("business_ids") or [] if str(value)]
+    if scope.get("kind") == "business" and scope.get("id"):
+        business_ids = [str(scope["id"])]
+    if not business_ids:
+        return []
+    cursor.execute(
+        """
+        SELECT * FROM journey_actions
+        WHERE business_id = ANY(%s)
+          AND status IN ('ready', 'in_progress', 'waiting', 'blocked')
+        ORDER BY CASE WHEN due_at IS NOT NULL AND due_at <= NOW() THEN 0 ELSE 1 END,
+                 priority DESC, due_at NULLS LAST, created_at
+        LIMIT 20
+        """,
+        (business_ids,),
+    )
+    return [serialize_action(_row(cursor, value)) for value in (cursor.fetchall() or [])]
+
+
+def _journey_focus(action: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not action:
+        return None
+    return {
+        "id": action.get("id"),
+        "title": action.get("title"),
+        "reason": action.get("description"),
+        "expected_outcome": "После подтверждения LocalOS зафиксирует результат и покажет следующий шаг.",
+        "expected_result": "После подтверждения LocalOS зафиксирует результат и покажет следующий шаг.",
+        "cta_label": action.get("cta_label"),
+        "screen": "journey_action",
+        "priority": int(action.get("priority") or 0) + 150,
+        "target_scope": {"kind": "business", "id": action.get("business_id")},
+        "source": "lead_journey",
+        "action_id": action.get("id"),
+    }
+
+
 def build_mobile_today(
     cursor: Any,
     *,
@@ -1134,12 +1175,14 @@ def build_mobile_today(
     summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
     progress = _load_progress(scope, growth_loader)
     content_action = _load_story_facts_action(cursor, scope, observed_at)
-    focus = select_daily_focus(summary, progress, scope, content_action)
+    journey_actions = _load_journey_actions(cursor, scope)
+    focus = _journey_focus(journey_actions[0] if journey_actions else None) or select_daily_focus(summary, progress, scope, content_action)
     return {
         "scope": scope,
         "as_of": observed_at.astimezone(timezone.utc).isoformat(),
         "period": {"kind": "rolling_24h", "since": cutoff.isoformat()},
         "focus_action": focus,
+        "journey_actions": journey_actions,
         "growth_loop": progress.get("growth_loop") if isinstance(progress, dict) else None,
         "data_health": progress.get("data_health") if isinstance(progress, dict) else None,
         "analytics_level": progress.get("analytics_level") if isinstance(progress, dict) else None,

@@ -20,6 +20,7 @@ ITEM_SPECS = {
     "operator_result": ("operator", "operatoractions", "business_id"),
     "approval": ("tasks", "operatoractions", "business_id"),
     "task": ("tasks", "operatoractions", "business_id"),
+    "journey_action": ("today", "journey_actions", "business_id"),
     "job": ("tasks", "operator_async_jobs", "business_id"),
     "parse_job": ("cards", "parsequeue", "business_id"),
     "integration_error": ("cards", "parsequeue", "business_id"),

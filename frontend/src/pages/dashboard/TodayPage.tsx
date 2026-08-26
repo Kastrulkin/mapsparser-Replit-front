@@ -9,7 +9,10 @@ import { cn } from '@/lib/utils';
 import type { ControlScope } from '@/components/DashboardLayout';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import { fillTodayTemplate, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
+import { claimLeadJourney, clearLeadJourneyIntent, clearLeadJourneyToken, getLeadJourneyDirection, readLeadJourneyIntent, readLeadJourneyToken } from '@/lib/leadJourney';
 import { localizedFocusAction, localizedGrowthText } from './progressPageCopy';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import type { JourneyAction } from '@/lib/leadJourney';
 
 type DashboardContext = { currentBusinessId?: string | null; controlScope?: ControlScope | null; onControlScopeChange?: (scope: ControlScope) => void; onBusinessChange?: (businessId: string) => void };
 
@@ -18,6 +21,7 @@ type TodayItem = { id: string; title: string; description?: string; stage?: stri
 type ProblemLocation = { business_id: string; business_name: string; problem?: string; data_health_status?: string; focus_action?: Mission | null };
 type TodayOverview = {
   focus_action?: Mission | null;
+  journey_actions?: JourneyAction[];
   data_health?: { status?: string; source?: string; source_label?: string; source_updated_at?: string | null; updated_at?: string | null; last_updated_at?: string | null; stale?: boolean; is_stale?: boolean; missing?: string[] } | null;
   active_work?: TodayItem[];
   changes_24h?: TodayItem[];
@@ -110,6 +114,7 @@ export const TodayPage = () => {
   const [overview, setOverview] = useState<TodayOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [journeyIntent, setJourneyIntent] = useState(() => readLeadJourneyIntent());
   const requestSequence = useRef(0);
 
   const load = () => {
@@ -147,6 +152,22 @@ export const TodayPage = () => {
 
   useEffect(() => { load(); }, [currentBusinessId, controlScope?.id, controlScope?.kind]);
 
+  useEffect(() => {
+    if (!currentBusinessId) return;
+    const token = readLeadJourneyToken();
+    if (!token) return;
+    void claimLeadJourney(token, currentBusinessId)
+      .then(() => {
+        clearLeadJourneyToken();
+        clearLeadJourneyIntent();
+        setJourneyIntent(null);
+        load();
+      })
+      .catch(() => {
+        // Keep the token so a temporary API or connectivity failure can be retried.
+      });
+  }, [currentBusinessId]);
+
   const openItem = (itemMission?: Mission | null, businessId?: string, businessName?: string) => {
     if (businessId && controlScope?.kind === 'network') {
       onBusinessChange?.(businessId);
@@ -165,6 +186,8 @@ export const TodayPage = () => {
   };
 
   const mission = missionCopy(language, overview?.focus_action, copy);
+  const journeyActions = overview?.journey_actions || [];
+  const journeyDirection = getLeadJourneyDirection(journeyIntent);
   const activeWork = useMemo(() => (overview?.active_work || []).slice(0, 3), [overview?.active_work]);
   const changes = overview?.changes_24h?.slice(0, 3) || [];
   const completedResults = overview?.completed_results?.slice(0, 3) || [];
@@ -190,7 +213,16 @@ export const TodayPage = () => {
     <div className="mx-auto max-w-6xl space-y-6 pb-10" data-tour-target="today-overview">
       <DashboardPageHeader eyebrow={controlScope?.kind === 'network' ? copy.networkEyebrow : 'LocalOS'} title={copy.title} description={copy.description} icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />{copy.refresh}</Button>} />
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      {journeyDirection && !journeyActions.length ? (
+        <section className="rounded-3xl border border-orange-200 bg-orange-50 p-5 shadow-sm sm:p-6">
+          <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Вы выбрали до регистрации</div><h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{journeyDirection.resultTitle}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">Продолжите с готового первого действия. После него LocalOS зафиксирует статус или результат и предложит следующий конкретный шаг.</p></div>
+            <Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2">Завершить действие<ArrowRight className="h-4 w-4" /></Button>
+          </div>
+        </section>
+      ) : null}
+
+      {journeyActions.length ? <section aria-label="Текущие действия" className="space-y-3">{journeyActions.slice(0, 3).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={load} />)}</section> : <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)] lg:items-center">
           <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div>
@@ -200,7 +232,13 @@ export const TodayPage = () => {
           </div>
           <Button type="button" onClick={openMission} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{mission?.cta_label || copy.openProgress}<ArrowRight className="h-4 w-4" /></Button>
         </div>
-      </section>
+      </section>}
+
+      <div className="grid gap-2 rounded-2xl bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3" aria-label="Рабочий цикл LocalOS">
+        <span className="rounded-xl bg-white px-3 py-2"><strong className="block text-slate-950">1. Действие</strong>Выполните или подтвердите готовый шаг.</span>
+        <span className="rounded-xl bg-white px-3 py-2"><strong className="block text-slate-950">2. Статус или результат</strong>LocalOS проверит, что произошло.</span>
+        <span className="rounded-xl bg-white px-3 py-2"><strong className="block text-slate-950">3. Следующий шаг</strong>Получите конкретное продолжение по факту.</span>
+      </div>
 
       {controlScope?.kind === 'network' && networkSummary ? (
         <DashboardSection title={copy.locationsTitle} description={copy.locationsHint}>

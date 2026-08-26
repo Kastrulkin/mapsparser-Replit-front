@@ -24,6 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
 
 type DashboardContext = {
   currentBusinessId?: string | null;
@@ -378,11 +380,29 @@ export const InfluencerPromotionPage = () => {
   const [visibleResultLimit, setVisibleResultLimit] = useState(resultsPageSize);
   const [outreachPreviews, setOutreachPreviews] = useState<Record<string, OutreachPreview>>({});
   const [contactConfirmationChecks, setContactConfirmationChecks] = useState<Record<string, boolean>>({});
+  const [journeyActions, setJourneyActions] = useState<JourneyAction[]>([]);
 
   const request = useCallback(async (path: string, options?: RequestInit) => {
     const separator = path.includes('?') ? '&' : '?';
     return newAuth.makeRequest(`${path}${separator}business_id=${encodeURIComponent(currentBusinessId || '')}`, options);
   }, [currentBusinessId]);
+
+  const loadInfluencerJourneyActions = useCallback(async () => {
+    if (!currentBusinessId) {
+      setJourneyActions([]);
+      return;
+    }
+    try {
+      const actions = await loadJourneyActions(currentBusinessId);
+      setJourneyActions(actions.filter((action) => action.flow_type === 'influencer'));
+    } catch {
+      setJourneyActions([]);
+    }
+  }, [currentBusinessId]);
+
+  useEffect(() => {
+    if (overview) void loadInfluencerJourneyActions();
+  }, [overview, loadInfluencerJourneyActions]);
 
   const loadOverview = useCallback(async () => {
     if (!currentBusinessId || currentBusiness?.creator_promotion_available !== true) return;
@@ -881,6 +901,8 @@ export const InfluencerPromotionPage = () => {
         icon={Megaphone}
         actions={<Button onClick={() => setSection('search')} className="min-h-11 rounded-xl bg-slate-950 px-5 text-white active:scale-[0.96] transition-transform"><Search className="mr-2 h-4 w-4" />Найти авторов</Button>}
       />
+
+      {journeyActions.length ? <section aria-label="Текущий шаг по авторам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadInfluencerJourneyActions()} />)}</section> : null}
 
       <section className="rounded-[28px] bg-slate-950 p-3 text-white shadow-[0_16px_44px_-26px_rgba(15,23,42,0.72)]">
         <div className="rounded-2xl bg-white/[0.07] px-5 py-4 sm:flex sm:items-center sm:justify-between sm:gap-6">

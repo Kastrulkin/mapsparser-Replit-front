@@ -192,6 +192,7 @@ const DemoEntryPage = lazy(() => import("./pages/DemoEntryPage"));
 const VeselayaRascheskaOfferPage = lazy(() => import("./pages/VeselayaRascheskaOfferPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const TelegramControlPage = lazy(() => import("./pages/TelegramControlPage"));
+const LeadJourneyPage = lazy(() => import("./pages/LeadJourneyPage"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
   : null;
@@ -257,6 +258,10 @@ const shouldRenderHeader = (pathname: string) => {
   }
 
   if (pathname === "/telegram/control") {
+    return false;
+  }
+
+  if (pathname === "/growth" || pathname.startsWith("/start/")) {
     return false;
   }
 
@@ -336,6 +341,8 @@ const AppShell = () => {
           <Route path="/reset-password" element={<SetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/checkout/return" element={<CheckoutReturn />} />
+          <Route path="/growth" element={<LeadJourneyPage />} />
+          <Route path="/start/:token" element={<LeadJourneyPage />} />
           {IndustryPatternsE2EPage ? (
             <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />
           ) : null}

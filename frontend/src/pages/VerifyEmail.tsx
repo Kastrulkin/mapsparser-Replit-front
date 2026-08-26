@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { readLeadJourneyToken } from '@/lib/leadJourney';
 
 const VerifyEmail: React.FC = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -36,6 +37,11 @@ const VerifyEmail: React.FC = () => {
         }
 
         setStatus('success');
+        if (readLeadJourneyToken()) {
+          setMessage('Email подтверждён. Возвращаемся к выбранному действию...');
+          setTimeout(() => navigate('/dashboard/today', { replace: true }), 1200);
+          return;
+        }
         const selectedTier = localStorage.getItem('selectedTier') || '';
         const selectedTierSource = localStorage.getItem('selectedTierSource') || '';
         const shouldStartPricingCheckout = Boolean(selectedTier && selectedTierSource === 'pricing');

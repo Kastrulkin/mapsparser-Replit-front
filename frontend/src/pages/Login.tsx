@@ -4,6 +4,7 @@ import { Button } from "../components/ui/button";
 import { newAuth } from "../lib/auth_new";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
 
 // Список популярных стран для автодополнения при регистрации
 const COUNTRY_OPTIONS = [
@@ -61,9 +62,12 @@ const Login = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const isRu = language === 'ru';
+  const journeyParam = searchParams.get('journey');
+  const journeyTokenParam = searchParams.get('journey_token') || '';
+  const journey = getLeadJourneyDirection(isLeadJourneyKey(journeyParam) ? journeyParam : null);
   const copy = {
-    loginTitle: isRu ? 'Вход в систему' : 'Sign in',
-    loginSubtitle: isRu ? 'Новые клиенты для вашего бизнеса' : 'New clients for your business',
+    loginTitle: journey && tab === 'register' ? (isRu ? 'Завершите первое действие' : 'Complete your first action') : (isRu ? 'Вход в систему' : 'Sign in'),
+    loginSubtitle: journey && tab === 'register' ? journey.title : (isRu ? 'Новые клиенты для вашего бизнеса' : 'New clients for your business'),
     loginTab: isRu ? 'Вход' : 'Login',
     registerTab: isRu ? 'Регистрация' : 'Register',
     resetTab: isRu ? 'Восстановление' : 'Reset',
@@ -127,6 +131,11 @@ const Login = () => {
       setTab('register');
     }
 
+    if (isLeadJourneyKey(journeyParam)) {
+      saveLeadJourneyIntent(journeyParam);
+    }
+    if (journeyTokenParam) saveLeadJourneyToken(journeyTokenParam);
+
     if (tierFromUrl) {
       // Запоминаем выбранный тариф для последующего редиректа на оплату
       localStorage.setItem('selectedTier', tierFromUrl);
@@ -135,7 +144,7 @@ const Login = () => {
       }
     }
 
-    if (source === 'public_audit') {
+    if (source === 'public_audit' || source === 'lead_journey') {
       const nextBusinessName = searchParams.get('business_name') || '';
       const nextBusinessAddress = searchParams.get('business_address') || '';
       const nextBusinessCity = searchParams.get('business_city') || '';
@@ -148,7 +157,7 @@ const Login = () => {
         business_country: nextBusinessCountry || current.business_country,
       }));
     }
-  }, [searchParams]);
+  }, [journeyParam, journeyTokenParam, searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,7 +182,9 @@ const Login = () => {
         const tierFromUrl = searchParams.get('tier');
         const source = searchParams.get('source');
 
-        if (tierFromUrl && source === 'pricing') {
+        if (readLeadJourneyToken()) {
+          navigate('/dashboard/today');
+        } else if (tierFromUrl && source === 'pricing') {
           localStorage.setItem('selectedTier', tierFromUrl);
           localStorage.setItem('selectedTierSource', 'pricing');
           navigate(`/dashboard/profile?payment=required&source=pricing&autostart=1&tier=${tierFromUrl}#subscription`);
@@ -246,6 +257,7 @@ const Login = () => {
           audit_public_url: searchParams.get('audit_slug')
             ? `${window.location.origin}/${searchParams.get('audit_slug') || ''}`
             : undefined,
+          journey_token: journeyTokenParam || readLeadJourneyToken() || undefined,
         })
       });
 
@@ -430,6 +442,12 @@ const Login = () => {
           {/* Форма регистрации */}
           {tab === 'register' && (
             <form className="space-y-4" onSubmit={handleRegister}>
+              {journey ? (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-slate-700">
+                  <strong className="block text-slate-950">{journey.resultTitle}</strong>
+                  <span className="mt-1 block leading-5">{journey.lockedResult}</span>
+                </div>
+              ) : null}
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">{copy.personalData}</h3>
                 <div className="space-y-4">

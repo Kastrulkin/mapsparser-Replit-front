@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { newAuth } from '@/lib/auth_new';
 import { Button } from '@/components/ui/button';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -789,6 +791,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const requestedLeadId = searchParams.get('lead');
   const requestedFocus = searchParams.get('focus');
   const [loading, setLoading] = useState(false);
+  const [journeyActions, setJourneyActions] = useState<JourneyAction[]>([]);
   const [activeLeadAction, setActiveLeadAction] = useState<{
     leadId: string;
     action: 'parse' | 'enrich' | 'audit' | 'match';
@@ -1008,6 +1011,21 @@ export const PartnershipSearchPage: React.FC = () => {
     setMatchData(null);
     setDraftText('');
   }, [selectedLeadId]);
+
+  const loadPartnershipJourneyActions = async () => {
+    if (!currentBusinessId) {
+      setJourneyActions([]);
+      return;
+    }
+    try {
+      const actions = await loadJourneyActions(currentBusinessId);
+      setJourneyActions(actions.filter((action) => action.flow_type === 'partnership'));
+    } catch {
+      setJourneyActions([]);
+    }
+  };
+
+  useEffect(() => { void loadPartnershipJourneyActions(); }, [currentBusinessId]);
 
   const loadLeads = async (queryOverride?: string, silent = false) => {
     if (!currentBusinessId) return;
@@ -2412,6 +2430,8 @@ export const PartnershipSearchPage: React.FC = () => {
         visibleReactionsCount={visibleReactions.length}
         onWorkspaceChange={(value) => setWorkspaceView(toPartnershipWorkspaceView(value))}
       />
+
+      {currentBusinessId && journeyActions.length ? <section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section> : null}
 
       {!currentBusinessId ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

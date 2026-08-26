@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { GrowthLoopPanel, type AnalyticsLevel, type AnalyticsModule, type DataHealth, type GrowthLoop, type GrowthRhythm, type LocationBreakdown, type NetworkSummary, type ProblemLocation } from '@/components/telegram/GrowthLoopPanel';
 import { ruCountLabel } from '@/lib/ruPlural';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import type { JourneyAction } from '@/lib/leadJourney';
 
 export type TodayFocusAction = {
   id?: string;
@@ -78,6 +80,7 @@ export type TodayPayload = {
   network_summary?: NetworkSummary | null;
   problem_locations?: ProblemLocation[];
   location_breakdown?: LocationBreakdown[];
+  journey_actions?: JourneyAction[];
 };
 
 type TodayMobileV2Props = {
@@ -93,6 +96,7 @@ type TodayMobileV2Props = {
   track: (eventName: string, target?: string) => void;
   trackProduct?: (eventName: 'mission_open' | 'statistics_flow_opened', objectId?: string) => void;
   openFinanceImport?: () => void;
+  refresh?: () => void;
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
@@ -173,6 +177,7 @@ export const TodayMobileV2 = ({
   track,
   trackProduct,
   openFinanceImport,
+  refresh,
 }: TodayMobileV2Props) => {
   if (loading && !data) return <TodaySkeleton slow={slowLoading} />;
 
@@ -185,10 +190,11 @@ export const TodayMobileV2 = ({
   const progress = data?.progress_summary;
   const isPlatform = data?.scope?.kind === 'platform';
   const isNetwork = data?.scope?.kind === 'network';
+  const journeyActions = data?.journey_actions || [];
 
   return (
     <div className="px-4">
-      <motion.section
+      {journeyActions.length ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface="telegram_mini_app" dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
         initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={spring}
@@ -227,7 +233,13 @@ export const TodayMobileV2 = ({
           {focus?.cta_label || (isPlatform ? 'Открыть очередь платформы' : 'Открыть план роста')}
           <ChevronRight className="h-4 w-4" />
         </button>
-      </motion.section>
+      </motion.section>}
+
+      <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-[18px] bg-white/[0.025] p-2 text-center text-[10px] leading-4 text-zinc-600 shadow-[0_0_0_1px_rgba(255,255,255,0.055)]" aria-label="Рабочий цикл LocalOS">
+        <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Действие</b>готовый шаг</span>
+        <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Статус</b>что произошло</span>
+        <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Дальше</b>новый шаг</span>
+      </div>
 
       <section className="mt-3 overflow-hidden rounded-[22px] bg-white/[0.035] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
         <div className="flex min-h-14 items-center gap-3 px-4">
