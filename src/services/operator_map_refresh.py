@@ -11,9 +11,13 @@ from services.operator_paid_preflight import build_paid_action_preflight
 OPERATOR_APIFY_REFRESH_ENABLED = str(os.getenv("OPERATOR_APIFY_REFRESH_ENABLED") or "false").strip().lower() in {
     "1", "true", "yes", "on",
 }
-OPERATOR_MAP_REFRESH_SOURCE = "apify_yandex"
 MAP_REVIEWS_REFRESH_ACTION_KEY = "map_reviews_refresh"
 DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS = int(os.getenv("OPERATOR_MAP_REFRESH_ESTIMATED_CREDITS", "10") or "10")
+
+
+def _map_refresh_source() -> str:
+    configured = str(os.getenv("OPERATOR_MAP_REFRESH_SOURCE") or "apify_yandex").strip().lower()
+    return configured if configured in {"apify_yandex", "yandex_maps"} else "apify_yandex"
 
 
 def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any] | None:
@@ -73,7 +77,7 @@ def build_operator_map_refresh_plan(
         "business_id": business_id,
         "user_id": user_id,
         "url": url,
-        "source": OPERATOR_MAP_REFRESH_SOURCE,
+        "source": _map_refresh_source(),
         "task_type": "parse_card",
         "blocked_reasons": blocked,
         "side_effects": {

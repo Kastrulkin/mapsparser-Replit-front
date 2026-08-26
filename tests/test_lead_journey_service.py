@@ -75,6 +75,18 @@ def test_maps_cycle_moves_through_refresh_and_comparison():
     assert payload["cycle_completed"] is True
 
 
+def test_failed_map_comparison_can_return_to_refresh():
+    next_type, status, _due_at, payload = _next_action_spec(
+        action("compare_snapshot", "maps", {"refresh_error": "quota"}),
+        "retry_refresh",
+        {},
+    )
+
+    assert (next_type, status) == ("refresh_data", "completed")
+    assert payload["verification_status"] == "refresh_retry_requested"
+    assert "refresh_error" not in payload
+
+
 def test_invalid_transition_is_rejected():
     with pytest.raises(JourneyError) as error:
         _next_action_spec(action("send_message"), "add_result", {})

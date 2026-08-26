@@ -93,6 +93,18 @@ def test_map_refresh_enqueue_creates_parsequeue_job_when_flag_enabled(monkeypatc
     assert cursor.inserted_jobs[0][5] == "apify_yandex"
 
 
+def test_map_refresh_can_use_builtin_yandex_parser(monkeypatch) -> None:
+    monkeypatch.setattr(operator_map_refresh, "OPERATOR_APIFY_REFRESH_ENABLED", True)
+    monkeypatch.setenv("OPERATOR_MAP_REFRESH_SOURCE", "yandex_maps")
+    cursor = FakeCursor()
+
+    result = enqueue_operator_map_refresh(cursor, business_id="biz-1", user_id="user-1")
+
+    assert result["status"] == "queued"
+    assert result["source"] == "yandex_maps"
+    assert cursor.inserted_jobs[0][5] == "yandex_maps"
+
+
 def test_map_refresh_plan_requires_map_link() -> None:
     cursor = FakeCursor(map_url="")
 

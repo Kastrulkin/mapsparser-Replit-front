@@ -39,7 +39,7 @@ ACTION_COMMANDS = {
     "select_next_partner": ("start_next_cycle",),
     "complete_map_task": ("complete",),
     "refresh_data": ("complete",),
-    "compare_snapshot": ("complete",),
+    "compare_snapshot": ("complete", "retry_refresh"),
     "start_next_map_plan": ("start_next_cycle",),
     "upgrade": ("open_upgrade",),
 }
@@ -459,7 +459,11 @@ def serialize_action(action: dict[str, Any]) -> dict[str, Any]:
         "cta_label": str(action.get("cta_label") or "Продолжить"),
         "cta_target": target,
         "payload": payload,
-        "allowed_commands": [] if action_type == "compare_snapshot" and action_status == "waiting" else list(ACTION_COMMANDS.get(action_type, ())),
+        "allowed_commands": (
+            [] if action_type == "compare_snapshot" and action_status == "waiting"
+            else ["retry_refresh"] if action_type == "compare_snapshot" and action_status == "blocked"
+            else list(ACTION_COMMANDS.get(action_type, ()))
+        ),
         "result_requirements": result_requirements,
         "version": int(action.get("version") or 1),
         "completed_at": _iso(action.get("completed_at")),
@@ -589,7 +593,11 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
     if action_type == "refresh_data":
         current_payload["refresh_requested"] = True
         return "compare_snapshot", "completed", None, current_payload
-    if action_type == "compare_snapshot":
+    if action_type == "compare_snapshot" and command == "retry_refresh":
+        current_payload["verification_status"] = "refresh_retry_requested"
+        current_payload.pop("refresh_error", None)
+        return "refresh_data", "completed", None, current_payload
+    if action_type == "compare_snapshot" and command == "complete":
         current_payload["cycle_completed"] = True
         return "start_next_map_plan", "completed", None, current_payload
     if action_type == "start_next_map_plan":

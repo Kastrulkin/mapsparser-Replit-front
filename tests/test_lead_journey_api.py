@@ -77,6 +77,16 @@ def test_claim_respects_vertical_kill_switch(monkeypatch):
     assert _Database.latest.closed is True
 
 
+def test_action_list_commits_map_reconciliation(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "list_actions", lambda *_args, **_kwargs: [])
+
+    response = _app().test_client().get("/api/journey-actions?business_id=business-1")
+
+    assert response.status_code == 200
+    assert _Database.latest.conn.commits == 1
+
+
 def test_action_command_forwards_version_idempotency_and_records_funnel_once(monkeypatch):
     _enable_and_authorize(monkeypatch)
     monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)

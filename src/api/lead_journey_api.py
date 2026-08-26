@@ -320,6 +320,7 @@ def actions_list():
         return error
     try:
         actions = list_actions(cursor, business_id=business_id)
+        db.conn.commit()
         return jsonify({"success": True, "focus_action": actions[0] if actions else None, "actions": actions})
     finally:
         db.close()
