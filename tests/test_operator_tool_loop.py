@@ -365,3 +365,101 @@ def test_tool_loop_preserves_successful_read_when_final_planner_response_is_empt
     assert result["planner_error_code"] == "DEEPSEEK_EMPTY_RESPONSE"
     assert result["tool_calls"] == 1
     assert result["external_writes_performed"] is False
+
+
+def test_tool_loop_renders_yesterday_content_in_body_when_planner_claims_catalog_missing():
+    decisions = iter(
+        [
+            {"action": "tool_call", "tool": "content.list_items", "arguments": {}},
+            {
+                "action": "final",
+                "message": "Каталог инструментов не предоставлен. Пожалуйста, передайте список доступных инструментов для выполнения задач.",
+            },
+        ]
+    )
+
+    result = run_operator_tool_loop(
+        business_id="business-1",
+        user_id="user-1",
+        message="покажи мне вчерашние посты из контент-плана",
+        tools=[
+            _tool(
+                "content.list_items",
+                lambda _args: {
+                    "status": "available",
+                    "module": "content",
+                    "items": [
+                        {
+                            "id": "post-yesterday",
+                            "title": "Багаж, коляски и спортинвентарь",
+                            "draft_text": "Укажите число пассажиров и весь нестандартный багаж.",
+                            "scheduled_for": "2026-08-25",
+                            "status": "edited",
+                        },
+                        {
+                            "id": "post-today",
+                            "title": "Детское кресло в трансфере",
+                            "draft_text": "Укажите возраст ребёнка при бронировании.",
+                            "scheduled_for": "2026-08-26",
+                            "status": "edited",
+                        },
+                    ],
+                    "as_of": "2026-08-26T06:50:29+00:00",
+                    "ui_actions": [
+                        {
+                            "action": "open_result",
+                            "label": "Открыть историю контента и черновиков",
+                            "href": "/dashboard/content",
+                        }
+                    ],
+                    "external_writes_performed": False,
+                },
+            )
+        ],
+        planner=lambda _state: next(decisions),
+    )
+
+    assert "Каталог инструментов не предоставлен" not in result["chat_response"]
+    assert "Багаж, коляски и спортинвентарь" in result["chat_response"]
+    assert "Укажите число пассажиров и весь нестандартный багаж." in result["chat_response"]
+    assert "Детское кресло в трансфере" not in result["chat_response"]
+    assert result["ui_actions"][0]["href"] == "/dashboard/content"
+    assert result["tool_calls"] == 1
+    assert result["external_writes_performed"] is False
+
+
+def test_tool_loop_does_not_substitute_other_dates_when_requested_content_day_is_empty():
+    decisions = iter(
+        [
+            {"action": "tool_call", "tool": "content.list_items", "arguments": {}},
+            {"action": "final", "message": "Нашёл записи."},
+        ]
+    )
+
+    result = run_operator_tool_loop(
+        business_id="business-1",
+        user_id="user-1",
+        message="покажи вчерашние посты",
+        tools=[
+            _tool(
+                "content.list_items",
+                lambda _args: {
+                    "status": "available",
+                    "items": [
+                        {
+                            "title": "Пост за другой день",
+                            "draft_text": "Этот текст не должен попасть в ответ.",
+                            "scheduled_for": "2026-08-24",
+                            "status": "edited",
+                        }
+                    ],
+                    "as_of": "2026-08-26T06:50:29+00:00",
+                    "external_writes_performed": False,
+                },
+            )
+        ],
+        planner=lambda _state: next(decisions),
+    )
+
+    assert result["chat_response"] == "В контент-плане нет постов за 2026-08-25."
+    assert "Пост за другой день" not in result["chat_response"]

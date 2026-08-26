@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -111,28 +111,42 @@ def _tool_signature(tool_name: str, arguments: dict[str, Any]) -> str:
     return hashlib.sha256(f"{tool_name}|{payload}".encode("utf-8")).hexdigest()
 
 
+def _requested_content_date(message: str, outcome: dict[str, Any]) -> str:
+    lowered_message = str(message or "").strip().lower()
+    if "сегодня" not in lowered_message and "вчера" not in lowered_message:
+        return ""
+    try:
+        observed_at = datetime.fromisoformat(str(outcome.get("as_of") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    requested_date = observed_at.astimezone(ZoneInfo("Europe/Moscow")).date()
+    if "вчера" in lowered_message:
+        requested_date -= timedelta(days=1)
+    return requested_date.isoformat()
+
+
 def _fallback_read_response(tool_name: str, outcome: dict[str, Any], message: str) -> str:
     items = [item for item in outcome.get("items") or [] if isinstance(item, dict)]
     if tool_name != "content.list_items" or not items:
         return "Данные получены, но Оператор не смог подготовить краткое резюме. Откройте результат, чтобы посмотреть детали."
     selected = items
-    if "сегодня" in str(message or "").strip().lower():
-        try:
-            observed_at = datetime.fromisoformat(str(outcome.get("as_of") or "").replace("Z", "+00:00"))
-            today = observed_at.astimezone(ZoneInfo("Europe/Moscow")).date().isoformat()
-            today_items = [item for item in items if str(item.get("scheduled_for") or "")[:10] == today]
-            if today_items:
-                selected = today_items
-        except ValueError:
-            selected = items
+    requested_date = _requested_content_date(message, outcome)
+    if requested_date:
+        selected = [item for item in items if str(item.get("scheduled_for") or "")[:10] == requested_date]
+        if not selected:
+            return f"В контент-плане нет постов за {requested_date}."
     lines = []
-    for item in selected[:10]:
+    for index, item in enumerate(selected[:10], start=1):
         title = str(item.get("title") or item.get("theme") or "Элемент контент-плана").strip()
         scheduled_for = str(item.get("scheduled_for") or "").strip()
         status = str(item.get("status") or "").strip()
+        body = str(item.get("draft_text") or item.get("subtitle") or item.get("text") or "").strip()
         details = " · ".join(value for value in (scheduled_for, status) if value)
-        lines.append(f"• {title}" + (f" — {details}" if details else ""))
-    return "Нашёл в контент-плане:\n" + "\n".join(lines)
+        line = f"{index}. {title}" + (f" — {details}" if details else "")
+        if body:
+            line += f"\n{body}"
+        lines.append(line)
+    return "Нашёл в контент-плане:\n" + "\n\n".join(lines)
 
 
 def _validate_tool_arguments(tool: dict[str, Any], arguments: dict[str, Any]) -> list[str]:
@@ -269,6 +283,13 @@ def run_operator_tool_loop(
             message_text = str(decision.get("message") or "").strip()
             if not message_text:
                 message_text = "Готово."
+            last_tool_name = str(trace[-1].get("tool") or "") if trace else ""
+            if (
+                last_tool_name == "content.list_items"
+                and isinstance(last_outcome.get("items"), list)
+                and _requested_content_date(message, last_outcome)
+            ):
+                message_text = _fallback_read_response(last_tool_name, last_outcome, message)
             executed_intent = str(last_outcome.get("intent") or "")
             return {
                 **last_outcome,
