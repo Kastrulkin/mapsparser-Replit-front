@@ -80,9 +80,9 @@ class FinanceCursor:
     def execute(self, query, params=None):
         normalized = " ".join(str(query).split()).lower()
         if "from financialtransactions" in normalized:
-            self.description = [("transactions_count",), ("income",), ("expense",)]
+            self.description = [("transactions_count",), ("income",), ("expense",), ("average_ticket",)]
             self.params = params
-            self._row = (4, Decimal("12000"), Decimal("3000"))
+            self._row = (4, Decimal("12000"), Decimal("3000"), Decimal("3000"))
 
     def fetchone(self):
         return self._row
@@ -346,7 +346,8 @@ def test_tool_loop_can_read_finance_inside_selected_business_scope() -> None:
 
     assert result["status"] == "completed"
     assert result["capability"] == "finance.read"
-    assert cursor.params == ("business-1", 30)
+    assert cursor.params[0] == "business-1"
+    assert (cursor.params[2] - cursor.params[1]).days == 29
     assert result["chat_response"] == "За 30 дней баланс составил 9 000 ₽."
     assert pending == {}
 

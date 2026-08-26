@@ -6,9 +6,10 @@ import hashlib
 import os
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from core.action_orchestrator import ActionOrchestrator
 from services.agent_capability_handlers import CANONICAL_CAPABILITIES, build_capability_handlers, capability_runtime_contract
@@ -19,6 +20,11 @@ from services.operator_capabilities import (
     get_unanswered_reviews_status,
 )
 from services.operator_fresh_reviews import classify_fresh_reviews_intent, refresh_reviews_from_operator
+from services.operator_finance_ingest import (
+    build_finance_sales_preview,
+    finance_result_ref,
+    finance_sales_ingest_tool_contract,
+)
 from services.operator_intent_ai_router import classify_operator_intent_with_ai, should_use_ai_intent_router
 from services.operator_manual_review import classify_operator_chat_intent, process_operator_chat_message
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
@@ -77,6 +83,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
     OperatorCapability("finance.prepare_transaction", "Подготовка финансовой операции", "approval_required", "financial_write_request", "separate_confirmation", "/dashboard/finance", ("Добавь расход 5000 на рекламу",), "finance.transaction.apply_operator"),
+    OperatorCapability("finance.sales_import", "Импорт списка продаж", "approval_required", "financial_write_request", "separate_confirmation", "/dashboard/finance", ("Добавь сегодняшние продажи из этого списка",), "finance.sales_import.apply_operator"),
     OperatorCapability("average_ticket.manage", "Средний чек и допродажи", "manual", "read_or_draft", "manual_handoff", "/dashboard/average-ticket", ("Как увеличить средний чек?",)),
     OperatorCapability("average_ticket.read", "Средний чек и допродажи", "available", "read_only", "none", "/dashboard/average-ticket", ("Что со средним чеком?",)),
     OperatorCapability("crm.stats", "Статистика CRM", "available", "read_only", "none", "/dashboard/progress", ("Покажи статистику записей и загрузки",)),
@@ -335,6 +342,63 @@ def _prepare_registered_capability_approval(
     }
 
 
+def _prepare_finance_sales_approval(
+    cursor: Any,
+    *,
+    business_id: str,
+    user_id: str,
+    channel: str,
+    message: str,
+    arguments: Any,
+    orchestrator: ActionOrchestrator | None,
+) -> dict[str, Any]:
+    preview = build_finance_sales_preview(
+        cursor,
+        business_id=business_id,
+        message=message,
+        arguments=arguments,
+    )
+    if preview.get("status") != "ready":
+        return preview
+    prepared = _prepare_registered_capability_approval(
+        capability="finance.sales_import",
+        tool_name="finance.ingest_sales",
+        business_id=business_id,
+        user_id=user_id,
+        channel=channel,
+        message=message,
+        payload={
+            "rows": list(preview.get("rows") or []),
+            "source": "operator_chat",
+            "source_hash": preview.get("source_hash"),
+            "import_batch_id": preview.get("import_batch_id"),
+        },
+        backend_capability="finance.sales_import.apply_operator",
+        orchestrator=orchestrator,
+    )
+    finance_preview = {
+        "rows": list(preview.get("rows") or []),
+        "duplicate_count": int(preview.get("duplicate_count") or 0),
+        "recognized_count": int(preview.get("recognized_count") or 0),
+        "import_count": int(preview.get("import_count") or 0),
+        "total_amount": preview.get("total_amount"),
+    }
+    if prepared.get("status") != "approval_required":
+        return {
+            **prepared,
+            "finance_preview": finance_preview,
+            "result_ref": finance_result_ref(),
+            "external_writes_performed": False,
+        }
+    return {
+        **prepared,
+        "chat_response": preview.get("chat_response"),
+        "finance_preview": finance_preview,
+        "result_ref": finance_result_ref(),
+        "external_writes_performed": False,
+    }
+
+
 def _appointments_payload(message: str, limit: Any) -> dict[str, Any]:
     lowered = message.lower()
     payload: dict[str, Any] = {"limit": max(1, min(int(limit or 5), 50))}
@@ -492,16 +556,19 @@ def _rows_from_cursor(cursor: Any) -> list[dict[str, Any]]:
 
 def _read_finance_summary(cursor: Any, *, business_id: str, days: Any) -> dict[str, Any]:
     clean_days = max(1, min(int(days or 30), 366))
+    period_end = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    period_start = period_end - timedelta(days=clean_days - 1)
     cursor.execute(
         """
         SELECT COUNT(*) AS transactions_count,
                COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'income'), 0) AS income,
-               COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'expense'), 0) AS expense
+               COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'expense'), 0) AS expense,
+               COALESCE(AVG(amount) FILTER (WHERE transaction_type = 'income'), 0) AS average_ticket
         FROM financialtransactions
         WHERE business_id = %s
-          AND transaction_date >= CURRENT_DATE - %s
+          AND transaction_date BETWEEN %s AND %s
         """,
-        (business_id, clean_days),
+        (business_id, period_start, period_end),
     )
     raw = cursor.fetchone()
     columns = [item[0] for item in (getattr(cursor, "description", None) or [])]
@@ -510,6 +577,7 @@ def _read_finance_summary(cursor: Any, *, business_id: str, days: Any) -> dict[s
     }
     income = Decimal(str(row.get("income") or 0))
     expense = Decimal(str(row.get("expense") or 0))
+    average_ticket = Decimal(str(row.get("average_ticket") or 0))
     return {
         "status": "completed",
         "period_days": clean_days,
@@ -517,6 +585,9 @@ def _read_finance_summary(cursor: Any, *, business_id: str, days: Any) -> dict[s
         "income": income,
         "expense": expense,
         "balance": income - expense,
+        "average_ticket": average_ticket,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
         "external_writes_performed": False,
     }
 
@@ -1008,10 +1079,22 @@ def _operator_tool_catalog(
             ),
         },
         {
+            **finance_sales_ingest_tool_contract(),
+            "prepare_approval": lambda arguments: _prepare_finance_sales_approval(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                channel=channel,
+                message=message,
+                arguments=arguments,
+                orchestrator=action_orchestrator,
+            ),
+        },
+        {
             "name": "finance.prepare_transaction",
             "capability": "finance.prepare_transaction",
             "title": "Подготовка финансовой операции",
-            "description": "Готовит финансовую операцию в контуре ActionOrchestrator. Запись не выполняется до отдельного подтверждения.",
+            "description": "Готовит ровно одну финансовую операцию. Для списка продаж всегда используйте finance.ingest_sales. Запись не выполняется до отдельного подтверждения.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -1833,16 +1916,25 @@ def confirm_pending_operator_action(
             decision_reason="Confirmed in LocalOS Operator chat",
         )
         if not execution.get("success"):
+            is_finance_action = capability in {"finance.prepare_transaction", "finance.sales_import"}
             return {
                 "status": "blocked",
                 "capability": capability,
-                "chat_response": "Не удалось подтвердить действие в защищённом контуре LocalOS.",
+                "chat_response": (
+                    "Не удалось записать операции. Откройте раздел «Финансы» и продолжите импорт там."
+                    if is_finance_action
+                    else "Не удалось подтвердить действие в защищённом контуре LocalOS."
+                ),
                 "error_code": str(execution.get("error_code") or "orchestrator_confirmation_failed"),
                 "blocked_reasons": ["orchestrator_confirmation_failed"],
+                "result_ref": _result_ref(capability) if is_finance_action else None,
                 "external_writes_performed": False,
             }, False
         backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if backend_result.get("manual_apply_required") or backend_result.get("apply_state") == "not_applied":
+        backend_chat_response = str(backend_result.get("chat_response") or "").strip()
+        if backend_chat_response:
+            confirmation_message = backend_chat_response
+        elif backend_result.get("manual_apply_required") or backend_result.get("apply_state") == "not_applied":
             confirmation_message = (
                 "Подтверждение принято. LocalOS подготовил проверенный запрос, но запись ещё не применена. "
                 "Для этой capability пока нужен отдельный apply-handler."

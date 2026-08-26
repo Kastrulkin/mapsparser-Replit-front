@@ -86,7 +86,11 @@ def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dic
     if capability == "sheets.append_row_request":
         return {"ok": True, "requires_human": True, "reason": "external spreadsheet write request requires review"}
 
-    if capability == "finance.transaction.create":
+    if capability in {
+        "finance.transaction.create",
+        "finance.transaction.apply_operator",
+        "finance.sales_import.apply_operator",
+    }:
         return {"ok": True, "requires_human": True, "reason": "finance transaction creation requires review"}
 
     if capability == "sales.ingest":

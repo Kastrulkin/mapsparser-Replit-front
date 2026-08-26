@@ -435,6 +435,23 @@ def run_operator_tool_loop(
                         "risk_class": str(tool.get("risk_class") or "write"),
                     })
                     last_outcome = dict(outcome)
+                    if bool(tool.get("deterministic_preparation_response")):
+                        return {
+                            **last_outcome,
+                            "status": str(last_outcome.get("status") or "blocked"),
+                            "intent": "operator_tool_loop",
+                            "executed_intent": str(last_outcome.get("intent") or tool_name),
+                            "capability": str(tool.get("capability") or tool_name),
+                            "chat_response": str(
+                                last_outcome.get("chat_response")
+                                or "Не смог безопасно подготовить действие."
+                            ),
+                            "tool_trace": trace,
+                            "tool_calls": len(trace),
+                            "planner_steps": step_index + 1,
+                            "compiled_query": arguments,
+                            "external_writes_performed": False,
+                        }
                     continue
             trace.append({
                 "step": step_index + 1,

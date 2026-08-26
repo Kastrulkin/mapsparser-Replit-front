@@ -4,9 +4,10 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict
+from zoneinfo import ZoneInfo
 
 from database_manager import DatabaseManager
 from core.finance_imports import normalize_finance_import_rows
@@ -109,6 +110,11 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "creates exactly one approved LocalOS finance transaction for the selected tenant",
         "approval_required": True,
     },
+    "finance.sales_import.apply_operator": {
+        "risk": "localos_finance_bulk_write",
+        "side_effects": "creates up to 100 approved LocalOS sales for the selected tenant and skips duplicate keys",
+        "approval_required": True,
+    },
     "partnership.audit_card": {
         "risk": "localos_partnership_read",
         "side_effects": "none; returns a structured partner-card audit snapshot",
@@ -158,6 +164,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "google_sheets.update_cells": ("production_external_write", True),
     "finance.transaction.create": ("request_only", False),
     "finance.transaction.apply_operator": ("production_internal_write", True),
+    "finance.sales_import.apply_operator": ("production_internal_write", True),
     "billing.reserve": ("manual_only", False),
     "billing.settle": ("manual_only", False),
 }
@@ -238,6 +245,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
         "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
+        "finance.sales_import.apply_operator": _handle_finance_sales_import_apply_operator,
         "partnership.audit_card": _handle_partnership_audit_card,
         "partnership.match_services": _handle_partnership_match_services,
         "partnership.draft_offer": _handle_partnership_draft_offer,
@@ -1582,6 +1590,200 @@ def _handle_finance_transaction_apply_operator(envelope: Dict[str, Any], user_da
         created=bool(inserted),
         localos_write_performed=True,
         provider_write_performed=False,
+    )
+
+
+def _handle_finance_sales_import_apply_operator(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    action_id = str(envelope.get("action_id") or "").strip()
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    if not tenant_id or not action_id or not rows or len(rows) > 100:
+        return _result(
+            "validation_error",
+            error_code="SCOPED_FINANCE_SALES_ROWS_REQUIRED",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+
+    normalized = []
+    for index, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            return _result(
+                "validation_error",
+                error_code=f"FINANCE_SALE_ROW_INVALID:{index}",
+                localos_write_performed=False,
+                provider_write_performed=False,
+            )
+        try:
+            amount = Decimal(str(row.get("amount") or "0"))
+        except (InvalidOperation, ValueError):
+            amount = Decimal("0")
+        transaction_date = str(row.get("transaction_date") or "").strip()
+        try:
+            date.fromisoformat(transaction_date)
+        except ValueError:
+            transaction_date = ""
+        duplicate_key = str(row.get("duplicate_key") or "").strip()
+        title = str(row.get("title") or "").strip()[:300]
+        sale_type = str(row.get("sale_type") or "service").strip().lower()
+        if (
+            not amount.is_finite()
+            or amount <= 0
+            or amount > Decimal("99999999.99")
+            or not transaction_date
+            or not duplicate_key
+            or not title
+            or sale_type not in {"service", "upsell", "cross_sell"}
+        ):
+            return _result(
+                "validation_error",
+                error_code=f"FINANCE_SALE_ROW_INVALID:{index}",
+                localos_write_performed=False,
+                provider_write_performed=False,
+            )
+        normalized.append(
+            {
+                **row,
+                "amount": amount,
+                "transaction_date": transaction_date,
+                "duplicate_key": duplicate_key,
+                "title": title,
+                "sale_type": sale_type,
+            }
+        )
+
+    user_id = _actor_user_id(envelope, user_data)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    created = []
+    duplicate_count = 0
+    try:
+        columns = _table_columns(cursor, "financialtransactions")
+        required_columns = {
+            "id",
+            "business_id",
+            "amount",
+            "transaction_type",
+            "transaction_date",
+            "duplicate_key",
+            "source_hash",
+            "import_batch_id",
+        }
+        if not required_columns.issubset(columns):
+            raise RuntimeError("financialtransactions sales import schema is unavailable")
+        for row in normalized:
+            transaction_id = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"localos:operator-finance-sale:{tenant_id}:{row['duplicate_key']}",
+                )
+            )
+            notes = str(row.get("notes") or "").strip()[:1000]
+            description = f"{row['title']} · {row['sale_type']}" + (f" · {notes}" if notes else "")
+            fields = [
+                "id",
+                "business_id",
+                "amount",
+                "transaction_type",
+                "transaction_date",
+                "duplicate_key",
+                "source_hash",
+                "import_batch_id",
+            ]
+            values = [
+                transaction_id,
+                tenant_id,
+                row["amount"],
+                "income",
+                row["transaction_date"],
+                row["duplicate_key"],
+                str(row.get("source_hash") or payload.get("source_hash") or "") or None,
+                str(row.get("import_batch_id") or payload.get("import_batch_id") or "") or None,
+            ]
+            optional_values = [
+                ("user_id", user_id),
+                ("description", description),
+                ("notes", description),
+                ("source", "operator_chat"),
+                ("services", json.dumps([{"name": row["title"], "sale_type": row["sale_type"]}], ensure_ascii=False)),
+            ]
+            for field, value in optional_values:
+                if field in columns:
+                    fields.append(field)
+                    values.append(value)
+            placeholders = ", ".join(["%s"] * len(fields))
+            cursor.execute(
+                f"INSERT INTO financialtransactions ({', '.join(fields)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING RETURNING id",
+                tuple(values),
+            )
+            inserted = cursor.fetchone()
+            if inserted:
+                created.append(
+                    {
+                        "id": transaction_id,
+                        "transaction_date": row["transaction_date"],
+                        "amount": row["amount"],
+                        "title": row["title"],
+                        "sale_type": row["sale_type"],
+                    }
+                )
+            else:
+                duplicate_count += 1
+
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS transactions_count,
+                   COALESCE(SUM(amount), 0) AS income,
+                   COALESCE(AVG(amount), 0) AS average_ticket
+            FROM financialtransactions
+            WHERE business_id = %s
+              AND transaction_type = 'income'
+              AND transaction_date = %s
+            """,
+            (tenant_id, today),
+        )
+        summary = _row_to_dict(cursor, cursor.fetchone())
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+    created_count = len(created)
+    income = Decimal(str(summary.get("income") or 0))
+    average_ticket = Decimal(str(summary.get("average_ticket") or 0))
+    chat_response = (
+        f"Записано продаж: {created_count}. "
+        f"Выручка за {today.isoformat()}: {income:.2f}. "
+        f"Средний чек: {average_ticket:.2f}."
+    )
+    if duplicate_count:
+        chat_response += f" Дублей пропущено: {duplicate_count}."
+    return _result(
+        "finance_sales_import_completed",
+        capability="finance.sales_import",
+        chat_response=chat_response,
+        transactions=created,
+        created_count=created_count,
+        duplicate_count=duplicate_count,
+        summary={
+            "date": today.isoformat(),
+            "transactions_count": int(summary.get("transactions_count") or 0),
+            "income": income,
+            "average_ticket": average_ticket,
+        },
+        result_ref={
+            "entity_type": "finance.sales_import",
+            "entity_id": str(payload.get("import_batch_id") or "") or None,
+            "label": "Открыть Финансы",
+            "href": "/dashboard/finance",
+        },
+        localos_write_performed=created_count > 0,
+        provider_write_performed=False,
+        external_writes_performed=False,
     )
 
 
