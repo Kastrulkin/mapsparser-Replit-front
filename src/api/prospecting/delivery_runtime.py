@@ -63,6 +63,10 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.prospecting_service import ProspectingService
 from services.outreach_inbound_service import record_campaign_inbound_reaction
 from services.outreach_safety_service import classify_inbound_event, reconcile_reaction_learning_event
+from api.prospecting.partner_discovery import (
+    _lead_matches_filters as _lead_matches_filters_direct,
+    _normalize_lead_for_display as _normalize_lead_for_display_direct,
+)
 from services.lead_workstream_service import (
     CLIENT_PARTNERSHIP,
     LOCALOS_SALES,
@@ -1185,7 +1189,7 @@ def get_leads():
             conn.close()
         normalized = []
         for lead in leads:
-            display_lead = _normalize_lead_for_display(lead)
+            display_lead = _normalize_lead_for_display_direct(lead)
             if not display_lead:
                 continue
             canonical_partner_type = lead_partner_type_service.partner_type_for_category(
@@ -1236,7 +1240,7 @@ def get_leads():
                 display_lead["timeline_preview"] = timeline_preview_by_lead_id.get(lead_id)
             normalized.append(display_lead)
         normalized = _deduplicate_registry_leads(normalized)
-        normalized = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
+        normalized = [lead for lead in normalized if _lead_matches_filters_direct(lead, filters)]
         if scoped_lead_ids is not None:
             normalized = [
                 lead for lead in normalized
