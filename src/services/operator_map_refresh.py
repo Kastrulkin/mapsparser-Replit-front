@@ -8,7 +8,9 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.operator_paid_preflight import build_paid_action_preflight
 
 
-OPERATOR_APIFY_REFRESH_ENABLED = False
+OPERATOR_APIFY_REFRESH_ENABLED = str(os.getenv("OPERATOR_APIFY_REFRESH_ENABLED") or "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
 OPERATOR_MAP_REFRESH_SOURCE = "apify_yandex"
 MAP_REVIEWS_REFRESH_ACTION_KEY = "map_reviews_refresh"
 DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS = int(os.getenv("OPERATOR_MAP_REFRESH_ESTIMATED_CREDITS", "10") or "10")
