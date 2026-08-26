@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from services.operator_core import route_operator_message
+from services.operator_core import route_operator_message, should_route_operator_message
 from services.operator_product_knowledge import (
     FEATURES,
     build_product_catalog_response,
@@ -122,6 +122,8 @@ def test_operator_tool_catalog_routes_neighbor_to_cached_competitors():
     cursor = CompetitorCursor(
         [{"id": "one", "name": "Салон Рядом", "rating": 4.7, "reviews_count": 80}]
     )
+
+    assert should_route_operator_message("Посмотри, как дела у соседа") is True
 
     result, pending = route_operator_message(
         cursor,
