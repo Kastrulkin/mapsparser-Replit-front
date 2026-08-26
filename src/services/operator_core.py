@@ -44,6 +44,11 @@ from services.operator_content_history import list_operator_content_history
 from services.operator_mobile_today import build_mobile_progress
 from services.operator_mobile_modules import list_operator_mobile_module
 from services.operator_query import execute_operator_query, operator_query_tool_contract
+from services.operator_product_knowledge import (
+    build_product_feature_explanation,
+    classify_product_explanation_intent,
+    read_saved_competitors,
+)
 from services.operator_scope_summary import build_operator_scope_summary
 from services.operator_tool_loop import run_operator_tool_loop
 from services.operator_tool_billing import run_paid_operator_tool_loop
@@ -63,9 +68,12 @@ class OperatorCapability:
 
 CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("operator.help", "Возможности Оператора", "available", "read_only", "none", "/dashboard/operator", ("Что ты умеешь?",)),
+    OperatorCapability("operator.product_explain", "Справка по функциям LocalOS", "available", "read_only", "none", "/dashboard/operator", ("Как работает Telegram-радар?", "Что умеет раздел Финансы?")),
     OperatorCapability("operator.query", "Поиск по данным LocalOS", "available", "read_only", "none", "/dashboard/operator", ("Покажи услуги нужной категории", "Покажи последний отзыв", "Найди посты за период")),
     OperatorCapability("maps.status", "Состояние карточки", "available", "read_only", "none", "/dashboard/card", ("В каком состоянии карточка?",)),
     OperatorCapability("maps.refresh", "Обновление карточки и отзывов", "available", "paid_external", "credit_policy", "/dashboard/card", ("Обнови карточку", "Проверь новые отзывы")),
+    OperatorCapability("competitors.read", "Сохранённые конкуренты", "available", "read_only", "none", "/dashboard/card?tab=competitors", ("Посмотри, как дела у соседа", "Покажи сохранённых конкурентов")),
+    OperatorCapability("competitors.manage", "Наблюдение за конкурентами", "manual", "paid_external", "manual_handoff", "/dashboard/card?tab=competitors", ("Добавь конкурента", "Запусти новую проверку конкурента")),
     OperatorCapability("reviews.read", "Отзывы без ответа", "available", "read_only", "none", "/dashboard/card?tab=reviews&review_filter=needs_reply", ("Есть отзывы без ответа?",)),
     OperatorCapability("reviews.reply.draft", "Черновики ответов", "draft_only", "paid_compute", "credit_policy", "/dashboard/card?tab=reviews&review_filter=needs_reply", ("Подготовь ответы на отзывы",)),
     OperatorCapability("reviews.manual.add", "Добавление отзыва и черновика ответа", "available", "write_internal", "explicit_command", "/dashboard/card?tab=reviews&review_filter=needs_reply", ("Добавь отзыв и подготовь ответ",)),
@@ -113,6 +121,7 @@ OPERATOR_ACTION_ORCHESTRATOR = ActionOrchestrator(build_capability_handlers())
 
 
 MANUAL_MATCHERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("competitors.manage", ("конкурент", "сосед")),
     ("finance.manage", ("финанс", "расход", "доход", "выруч", "транзакц")),
     ("average_ticket.manage", ("средн", "допрод", "чек")),
     ("crm.stats", ("бронир", "запис", "визит", "неявк", "загрузк")),
@@ -150,7 +159,18 @@ OPERATOR_ACTION_MARKERS = (
 
 def should_route_operator_message(message: Any) -> bool:
     lowered = str(message or "").strip().lower()
-    conversational_queries = ("что ты умее", "есть отзыв", "сколько отзыв")
+    conversational_queries = (
+        "что ты умее",
+        "есть отзыв",
+        "сколько отзыв",
+        "что такое",
+        "как работает",
+        "расскажи про",
+        "объясни",
+        "для чего",
+        "можно ли",
+        "есть ли в localos",
+    )
     return len(lowered) >= 5 and (
         any(marker in lowered for marker in OPERATOR_ACTION_MARKERS)
         or any(query in lowered for query in conversational_queries)
@@ -1316,6 +1336,24 @@ def _operator_tool_catalog(
             "execute": lambda _arguments: _read_mobile_module(cursor, business_id=business_id, module="cards"),
         },
         {
+            "name": "competitors.list",
+            "capability": "competitors.read",
+            "title": "Сохранённые конкуренты и соседи",
+            "description": "Используйте для вопросов о конкуренте, конкурентах, соседнем бизнесе или «соседе». Читает только последний сохранённый снимок; новую внешнюю проверку не запускает. Если имя не указано и конкурентов несколько, вернёт варианты для уточнения.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"name": {"type": "string", "maxLength": 300}},
+            },
+            "risk_class": "read_only",
+            "approval_required": False,
+            "deterministic_response": True,
+            "execute": lambda arguments: read_saved_competitors(
+                cursor,
+                business_id=business_id,
+                name=arguments.get("name"),
+            ),
+        },
+        {
             "name": "content.list_items",
             "capability": "content.history",
             "title": "Элементы контент-плана",
@@ -1395,6 +1433,26 @@ def _operator_tool_catalog(
             "risk_class": "support_read",
             "approval_required": False,
             "execute": lambda _arguments: _read_scope_status(cursor, business_id=business_id, user_id=user_id),
+        },
+        {
+            "name": "product.explain_feature",
+            "capability": "operator.product_explain",
+            "title": "Объяснение функций LocalOS",
+            "description": "Используйте, когда пользователь спрашивает, что делает функция LocalOS, как работает раздел, поддерживается ли задача или куда перейти. Покрывает карты, конкурентов, услуги, SEO и Wordstat, отзывы, контент, финансы, средний чек, прогресс и CRM-метрики, аналитику сайта, партнёрства и outreach, продвижение, Telegram owner-bot, Telegram-радар, брендированного бота бизнеса, AI-видимость, агентов, чаты, сеть, интеграции, подписку, кредиты и публичные материалы. Возвращает только каноническое описание, ограничения и маршрут из PRODUCT.md и README.md.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "maxLength": 1000},
+                    "feature_key": {"type": "string", "maxLength": 80},
+                },
+            },
+            "risk_class": "read_only",
+            "approval_required": False,
+            "deterministic_response": True,
+            "execute": lambda arguments: build_product_feature_explanation(
+                arguments.get("query") or message,
+                arguments.get("feature_key"),
+            ),
         },
         {
             "name": "operator.get_capabilities",
@@ -1718,15 +1776,13 @@ def route_operator_message(
         return _manual_result("content.publish_external"), {}
     if _is_content_plan_intent(clean_message):
         return _create_content_plan(business_id=business_id, user_id=user_id, message=clean_message), {}
+    if classify_product_explanation_intent(clean_message):
+        return standardize_operator_result(
+            build_product_feature_explanation(clean_message),
+            "operator.product_explain",
+        ), {}
     if classify_operator_help_intent(clean_message):
         result = build_operator_help_response()
-        result["chat_response"] = (
-            "Я управляю LocalOS через единый набор безопасных возможностей. "
-            "Уже выполняю работу с карточкой и отзывами, создаю новости, посты и контент-планы, "
-            "оптимизирую услуги и меняю цену одной точно указанной услуги. "
-            "Статистику CRM показываю в «Прогрессе» и «Финансах». Партнёрства, сеть, агентов и настройки открываю в нужном разделе, "
-            "если безопасный handler ещё не подключён. Внешние публикации и отправки не выполняю без отдельного подтверждения."
-        )
         result["capability_catalog"] = operator_capability_catalog()
         return standardize_operator_result(result, "operator.help"), {}
     if classify_unanswered_reviews_status_intent(clean_message) and not tool_loop_active:

@@ -74,6 +74,10 @@ Code sources of truth:
 - web conversation and audit persistence: `api.operator_api`;
 - runtime flag: `OPERATOR_TOOL_LOOP_ENABLED`.
 
+Product-language knowledge is grounded in `PRODUCT.md` and `README.md`, then exposed through `services.operator_product_knowledge`. The `product.explain_feature` tool returns a canonical purpose, supported work, boundaries, status and dashboard route instead of asking the planner to invent a product description. The coverage matrix is maintained in `docs/OPERATOR_PRODUCT_COVERAGE.md`.
+
+The same catalog includes user-language aliases. For example, `сосед` resolves to the competitors area. `competitors.list` may read the latest saved tenant-scoped competitor snapshot; when several competitors exist it asks which one the user means. It never describes cached data as a fresh external check.
+
 ## Surfaces
 
 ### Web Chat

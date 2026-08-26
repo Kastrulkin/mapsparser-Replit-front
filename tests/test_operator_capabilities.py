@@ -76,7 +76,10 @@ def test_operator_help_lists_supported_chat_scenarios() -> None:
 
     assert result["status"] == "completed"
     assert result["intent"] == "operator_help"
-    assert "Показать отзывы, которые ждут ответа" in result["chat_response"]
+    assert result["feature_count"] >= 19
+    assert "Отзывы и репутация" in result["chat_response"]
+    assert "Конкуренты и соседи" in result["chat_response"]
+    assert "Аналитика сайта" in result["chat_response"]
     assert "read-only" not in result["chat_response"]
-    assert "Составить контент-план" in result["chat_response"]
-    assert "Улучшить названия" in result["chat_response"]
+    assert result["sources"] == ["PRODUCT.md", "README.md"]
+    assert result["external_writes_performed"] is False

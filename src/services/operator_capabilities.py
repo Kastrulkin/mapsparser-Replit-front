@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.operator_manual_review import _build_ui_action, _clean_text, _row_to_dict
+from services.operator_product_knowledge import build_product_catalog_response
 
 
 REVIEWS_URL = "/dashboard/card?tab=reviews&review_filter=needs_reply"
@@ -43,35 +44,16 @@ def classify_unanswered_reviews_status_intent(message: Any) -> bool:
 
 
 def build_operator_help_response() -> dict[str, Any]:
-    commands = [
-        "Показать отзывы, которые ждут ответа.",
-        "Получить свежие данные карточки из Яндекса и 2ГИС.",
-        "Проверить, появились ли новые отзывы.",
-        "Подготовить ответы на отзывы без ответа.",
-        "Добавить присланный отзыв и сразу подготовить ответ.",
-        "Составить контент-план, новость или пост.",
-        "Улучшить названия и описания услуг.",
-        "Помочь с финансами и другими разделами, открыв нужный экран.",
-    ]
+    response = build_product_catalog_response()
     return {
-        "status": "completed",
-        "intent": "operator_help",
-        "chat_response": (
-            "Можно просто описать результат своими словами. Например:\n- "
-            + "\n- ".join(commands)
-            + "\n\nЯ сначала покажу, что будет сделано и сколько это стоит. "
-              "Публикации, отправки и массовые изменения запущу только после вашего подтверждения."
-        ),
-        "capabilities": commands,
+        **response,
+        "capabilities": list(response.get("features") or []),
         "external_calls_performed": False,
-        "external_writes_performed": False,
         "manual_publication_only": True,
-        "paid_actions_performed": False,
-        "credit_charged": False,
         "blocked_reasons": [],
         "ui_actions": [
-            _build_ui_action("open_reviews", "Открыть отзывы", href=REVIEWS_URL),
-            _build_ui_action("open_billing", "Пополнить счёт", href=BILLING_URL),
+            _build_ui_action("open_operator", "Открыть Оператор", href="/dashboard/operator"),
+            _build_ui_action("open_billing", "Открыть подписку и кредиты", href=BILLING_URL),
         ],
     }
 
