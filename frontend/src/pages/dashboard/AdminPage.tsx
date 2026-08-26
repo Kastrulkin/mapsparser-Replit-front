@@ -385,20 +385,20 @@ const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи', icon: User },
   { id: 'companies', label: 'Компании', icon: Building2 },
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
-  { id: 'crmRequests', label: 'CRM-запросы', icon: PlugZap },
-  { id: 'agents', label: 'Агенты', icon: Bot },
-  { id: 'agentApi', label: 'Agent API', icon: KeyRound },
+  { id: 'crmRequests', label: 'CRM', icon: PlugZap },
   { id: 'prospecting', label: 'Лиды', icon: Search },
-  { id: 'knowledge', label: 'Знания рынка', icon: BookOpen },
-  { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
 ];
 
 const toolsAdminTabs: AdminTabConfig[] = [
+  { id: 'agents', label: 'Агенты', icon: Bot },
+  { id: 'agentApi', label: 'Agent API', icon: KeyRound },
+  { id: 'knowledge', label: 'Знания', icon: BookOpen },
+  { id: 'telegramRadar', label: 'Telegram', icon: Radar },
   { id: 'parsing', label: 'Парсинг', icon: MapPin },
   { id: 'proxies', label: 'Прокси', icon: Network },
-  { id: 'prompts', label: 'Промпты анализа', icon: FileText },
+  { id: 'prompts', label: 'Промпты', icon: FileText },
   { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
-  { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
+  { id: 'tokens', label: 'Кредиты', icon: BarChart3 },
   { id: 'webTracking', label: 'Сайты', icon: Activity },
 ];
 
@@ -1285,7 +1285,7 @@ export const AdminPage: React.FC = () => {
           title="Панель администратора"
           description="Единое место для контроля пользователей, бизнесов, агентов, парсинга и операционных настроек."
           icon={Settings}
-          actions={(
+          actions={activeTab === 'businesses' || activeTab === 'companies' ? (
             <Button
               onClick={() => setShowCreateModal(true)}
               className="rounded-2xl bg-slate-950 px-5 text-white shadow-sm hover:bg-slate-800"
@@ -1293,7 +1293,7 @@ export const AdminPage: React.FC = () => {
               <Plus className="mr-2 h-4 w-4" />
               Создать аккаунт
             </Button>
-          )}
+          ) : undefined}
         />
 
         {shouldLoadUsers ? (
@@ -1325,30 +1325,26 @@ export const AdminPage: React.FC = () => {
           />
         ) : null}
 
-        <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-2.5 shadow-sm">
-          <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/95 p-3 shadow-sm sm:p-4">
+          <div className="flex flex-col gap-3">
+            <nav aria-label="Основные разделы администратора" className="grid grid-cols-2 gap-1.5 md:grid-cols-5">
               {primaryAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 const isProspecting = tab.id === 'prospecting';
-                const isTelegramRadar = tab.id === 'telegramRadar';
                 return (
                   <button
                     key={tab.id}
                     onClick={() => selectAdminTab(tab.id)}
-                    className={`flex items-center justify-center gap-2 rounded-[1.4rem] px-4 py-3 text-sm font-semibold transition ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-semibold transition-colors ${
                       isActive
                         ? isProspecting
                           ? 'bg-orange-500 text-white shadow-sm shadow-orange-200'
-                          : isTelegramRadar
-                            ? 'bg-sky-600 text-white shadow-sm shadow-sky-200'
                           : 'bg-slate-950 text-white shadow-sm'
                         : isProspecting
                           ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
-                          : isTelegramRadar
-                            ? 'bg-sky-50 text-sky-700 hover:bg-sky-100'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -1356,27 +1352,31 @@ export const AdminPage: React.FC = () => {
                   </button>
                 );
               })}
-            </div>
+            </nav>
 
-            <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-7">
-              {toolsAdminTabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => selectAdminTab(tab.id)}
-                    className={`flex items-center justify-center gap-2 rounded-[1.2rem] px-3 py-2.5 text-xs font-semibold transition ${
-                      isActive
-                        ? 'bg-slate-900 text-white shadow-sm'
-                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 lg:flex-row lg:items-center">
+              <span className="shrink-0 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Инструменты</span>
+              <nav aria-label="Инструменты администратора" className="flex min-w-0 flex-wrap gap-1.5">
+                {toolsAdminTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => selectAdminTab(tab.id)}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-sm'
+                          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
           </div>
         </div>
