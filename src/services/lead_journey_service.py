@@ -213,7 +213,7 @@ def load_public_journey(cursor: Any, token: str, *, lock: bool = False) -> dict[
         LEFT JOIN prospectingleads lead ON lead.id = journey.prospect_lead_id
         WHERE journey.public_token_hash = %s
         LIMIT 1
-        {"FOR UPDATE" if lock else ""}
+        {"FOR UPDATE OF journey" if lock else ""}
         """,
         (token_hash(token),),
     )

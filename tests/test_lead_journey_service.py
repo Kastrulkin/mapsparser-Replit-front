@@ -8,6 +8,7 @@ from services.lead_journey_service import (
     _clean_public_opportunity,
     _next_action_spec,
     build_lead_preview,
+    load_public_journey,
     token_hash,
 )
 
@@ -83,6 +84,24 @@ def test_token_hash_is_stable_without_storing_raw_token():
     assert token_hash("secret") == token_hash("secret")
     assert token_hash("secret") != "secret"
     assert token_hash("secret") != token_hash("other")
+
+
+def test_public_journey_lock_targets_only_journey_row():
+    class Cursor:
+        query = ""
+
+        def execute(self, query, _params):
+            self.query = query
+
+        def fetchone(self):
+            return {"id": "journey-1", "status": "preview", "expires_at": None}
+
+    cursor = Cursor()
+
+    journey = load_public_journey(cursor, "secret", lock=True)
+
+    assert journey["id"] == "journey-1"
+    assert "FOR UPDATE OF journey" in cursor.query
 
 
 def test_lead_preview_uses_only_safe_business_context():
