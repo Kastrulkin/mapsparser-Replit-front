@@ -171,7 +171,7 @@ def test_admin_registry_prefilters_workstream_scope_before_pagination(monkeypatc
             self.query = query
 
         def fetchall(self):
-            if "SELECT DISTINCT ws.lead_id::text AS lead_id" in self.query:
+            if "ws.lead_id::text AS lead_id" in self.query:
                 return [{"lead_id": "lead-2"}, {"lead_id": "lead-4"}, {"lead_id": "lead-5"}]
             return []
 

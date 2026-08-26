@@ -1141,22 +1141,41 @@ def get_leads():
             requested_workstream_type = str(filters.get("workstream_type") or "").strip()
             requested_client_business_id = str(filters.get("client_business_id") or "").strip()
             if requested_workstream_type or requested_client_business_id:
-                scope_clauses = []
-                scope_params: list[str] = []
-                if requested_workstream_type:
-                    scope_clauses.append("ws.workstream_type = %s")
-                    scope_params.append(requested_workstream_type)
-                if requested_client_business_id:
-                    scope_clauses.append("ws.client_business_id::text = %s")
-                    scope_params.append(requested_client_business_id)
-                cur.execute(
-                    f"""
-                    SELECT DISTINCT ws.lead_id::text AS lead_id
-                    FROM lead_workstreams ws
-                    WHERE {' AND '.join(scope_clauses)}
-                    """,
-                    tuple(scope_params),
-                )
+                if requested_workstream_type == LOCALOS_SALES and not requested_client_business_id:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT scoped.lead_id
+                        FROM (
+                            SELECT ws.lead_id::text AS lead_id
+                            FROM lead_workstreams ws
+                            WHERE ws.workstream_type = 'localos_sales'
+                            UNION ALL
+                            SELECT lead.id::text AS lead_id
+                            FROM prospectingleads lead
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM lead_workstreams existing
+                                WHERE existing.lead_id = lead.id
+                            )
+                        ) scoped
+                        """
+                    )
+                else:
+                    scope_clauses = []
+                    scope_params: list[str] = []
+                    if requested_workstream_type:
+                        scope_clauses.append("ws.workstream_type = %s")
+                        scope_params.append(requested_workstream_type)
+                    if requested_client_business_id:
+                        scope_clauses.append("ws.client_business_id::text = %s")
+                        scope_params.append(requested_client_business_id)
+                    cur.execute(
+                        f"""
+                        SELECT DISTINCT ws.lead_id::text AS lead_id
+                        FROM lead_workstreams ws
+                        WHERE {' AND '.join(scope_clauses)}
+                        """,
+                        tuple(scope_params),
+                    )
                 scoped_lead_ids = {
                     str(row.get("lead_id") or "").strip()
                     for row in cur.fetchall() or []
