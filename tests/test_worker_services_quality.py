@@ -154,6 +154,73 @@ def test_reviews_delta_task_uses_native_boundary_without_full_fallback(monkeypat
     assert any(params and params[0] == worker.STATUS_COMPLETED for _query, params in state["updates"])
 
 
+def test_reviews_delta_apify_fallback_is_bounded_and_applied_as_delta(monkeypatch):
+    state = {"fallback_max_reviews": None, "delta_applied": 0, "snapshot_applied": 0}
+
+    class Cursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(worker, "load_known_yandex_review_ids", lambda *_args, **_kwargs: ["known-1"])
+    monkeypatch.setattr(worker, "load_expected_yandex_reviews_total", lambda *_args, **_kwargs: 630)
+    monkeypatch.setattr(worker, "_get_next_proxy_for_playwright", lambda: None)
+    monkeypatch.setattr(
+        worker,
+        "_preflight_yandex_proxy",
+        lambda *_args, **_kwargs: {"ok": False, "reason": "proxy_unavailable", "elapsed_ms": 0},
+    )
+    monkeypatch.setattr(worker, "_mark_proxy_result", lambda *_args, **_kwargs: None)
+
+    def bounded_fallback(_url, *, max_reviews, **_kwargs):
+        state["fallback_max_reviews"] = max_reviews
+        return [
+            {"external_review_id": "new-1", "text": "Новый", "rating": 5},
+            {"external_review_id": "known-1", "text": "Известный", "rating": 4},
+        ]
+
+    def apply_delta(_cursor, **kwargs):
+        state["delta_applied"] += 1
+        assert kwargs["business_id"] == "business-1"
+        return {"normalized": 2}
+
+    def apply_snapshot(*_args, **_kwargs):
+        state["snapshot_applied"] += 1
+        raise AssertionError("bounded fallback must not replace the complete review snapshot")
+
+    monkeypatch.setattr(worker, "fetch_complete_yandex_reviews", bounded_fallback)
+    monkeypatch.setattr(worker, "apply_yandex_review_delta", apply_delta)
+    monkeypatch.setattr(worker, "apply_complete_review_snapshot", apply_snapshot)
+    monkeypatch.setattr(worker, "handle_review_sync_completion", lambda *_args, **_kwargs: None)
+
+    worker._process_yandex_reviews_delta_task(
+        {
+            "id": "queue-1",
+            "task_type": "reviews_delta",
+            "business_id": "business-1",
+            "url": "https://yandex.ru/maps/org/test/1/",
+        }
+    )
+
+    assert state["fallback_max_reviews"] is not None
+    assert 0 < state["fallback_max_reviews"] <= 50
+    assert state["delta_applied"] == 1
+    assert state["snapshot_applied"] == 0
+
+
 def test_map_card_services_filters_obvious_noise():
     card_data = {
         "products": [

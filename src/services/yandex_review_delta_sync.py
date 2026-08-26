@@ -79,7 +79,9 @@ def load_expected_yandex_reviews_total(cursor: Any, business_id: str) -> int:
 
 
 def normalize_native_review(item: dict[str, Any]) -> dict[str, Any] | None:
-    external_id = _text(item.get("id") or item.get("reviewId") or item.get("review_id"))
+    external_id = _text(
+        item.get("external_review_id") or item.get("id") or item.get("reviewId") or item.get("review_id")
+    )
     review_text = _text(item.get("text") or item.get("comment") or item.get("reviewText"))
     if not external_id or not review_text:
         return None
@@ -176,8 +178,15 @@ def apply_yandex_review_delta(
                 author_name = EXCLUDED.author_name,
                 author_profile_url = EXCLUDED.author_profile_url,
                 text = EXCLUDED.text,
-                response_text = EXCLUDED.response_text,
-                response_at = EXCLUDED.response_at,
+                response_text = COALESCE(
+                    NULLIF(BTRIM(EXCLUDED.response_text), ''),
+                    externalbusinessreviews.response_text
+                ),
+                response_at = CASE
+                    WHEN NULLIF(BTRIM(EXCLUDED.response_text), '') IS NULL
+                        THEN externalbusinessreviews.response_at
+                    ELSE COALESCE(EXCLUDED.response_at, externalbusinessreviews.response_at)
+                END,
                 published_at = EXCLUDED.published_at,
                 raw_payload = EXCLUDED.raw_payload,
                 is_current = TRUE,

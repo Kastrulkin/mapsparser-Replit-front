@@ -4531,25 +4531,42 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
             _mark_proxy_result(proxy_id, success=False, reason=metrics["fallback_reason"])
 
         fallback_started_at = time.monotonic()
+        fallback_max_reviews = 0
+        if native_parse_mode == "reviews_delta":
+            fallback_max_reviews = max(
+                1,
+                min(50, int(os.getenv("APIFY_YANDEX_REVIEWS_DELTA_MAX_REVIEWS", "50") or 50)),
+            )
         complete_reviews = fetch_complete_yandex_reviews(
             url,
+            max_reviews=fallback_max_reviews,
             timeout_sec=max(60, int(os.getenv("APIFY_YANDEX_REVIEWS_TIMEOUT_SEC", "240") or 240)),
         )
         metrics["fallback_ms"] = round((time.monotonic() - fallback_started_at) * 1000)
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            apply_result = apply_complete_review_snapshot(
-                cursor,
-                business_id=business_id,
-                reviews=complete_reviews,
-                expected_total=expected_total,
-            )
-            metrics["route"] = "apify_reviews_full"
-            metrics["reviews_received"] = int(apply_result.get("total") or 0)
+            if native_parse_mode == "reviews_full":
+                apply_result = apply_complete_review_snapshot(
+                    cursor,
+                    business_id=business_id,
+                    reviews=complete_reviews,
+                    expected_total=expected_total,
+                )
+                metrics["route"] = "apify_reviews_full"
+                metrics["reviews_received"] = int(apply_result.get("total") or 0)
+            else:
+                apply_result = apply_yandex_review_delta(
+                    cursor,
+                    business_id=business_id,
+                    reviews=complete_reviews,
+                )
+                metrics["route"] = "apify_reviews_delta"
+                metrics["reviews_received"] = int(apply_result.get("normalized") or 0)
             warning_text = (
-                f"review_sync route=apify_reviews_full; reviews={metrics['reviews_received']}; "
-                f"fallback_ms={metrics.get('fallback_ms', 0)}; reason={metrics['fallback_reason']}"
+                f"review_sync route={metrics['route']}; reviews={metrics['reviews_received']}; "
+                f"fallback_ms={metrics.get('fallback_ms', 0)}; max_reviews={fallback_max_reviews}; "
+                f"reason={metrics['fallback_reason']}"
             )
             cursor.execute(
                 """

@@ -1,0 +1,87 @@
+{
+  "title": "Incremental Yandex review sync erased replies and triggered an unlimited paid fallback",
+  "project": "LocalOS",
+  "generated_at": "2026-08-26",
+  "mode": "prove-fix",
+  "original_report": "The scheduled review parser processed companies outside the requested list, downloaded complete review histories through Apify, and a native delta refresh erased stored owner replies.",
+  "discovery_scope": [
+    "Yandex review delta persistence",
+    "scheduled reviews_delta worker fallback",
+    "production automation settings and queue evidence"
+  ],
+  "candidates": [],
+  "expected": "A delta refresh preserves existing replies and any paid fallback is bounded and applied incrementally.",
+  "actual": "Empty native reply fields overwrote stored replies, while native failure started an unlimited full-history Apify run.",
+  "environment": "Python 3.11 in an ephemeral production-image Docker container; PostgreSQL production verification",
+  "reproduction": "Focused tests simulated an empty reply in an existing review and a native proxy failure before the Apify fallback.",
+  "failure_signal": "Both focused tests failed before the fix for the predicted causal reason.",
+  "root_cause": "The delta UPSERT assigned EXCLUDED.response_text unconditionally. The reviews_delta fallback omitted max_reviews and used apply_complete_review_snapshot.",
+  "fix_summary": "Preserve stored reply fields when an incoming delta has no reply; cap reviews_delta Apify fallback at 50 and persist it through the delta UPSERT. Explicit reviews_full behavior remains unchanged.",
+  "why_causal": "The changed UPSERT controls the destructive overwrite directly, and the worker branch now supplies the paid Actor limit and avoids complete-snapshot replacement for scheduled deltas.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_yandex_review_delta_sync.py",
+      "line": 65,
+      "summary": "Regression test for preserving an existing owner reply."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_worker_services_quality.py",
+      "line": 157,
+      "summary": "Regression test for a bounded incremental Apify fallback."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/yandex_review_delta_sync.py",
+      "line": 85,
+      "summary": "Accept normalized fallback IDs and preserve stored replies during delta UPSERT."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/worker.py",
+      "line": 4533,
+      "summary": "Bound scheduled fallback to 50 reviews and apply it as a delta."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Focused regression tests",
+      "status": "passed",
+      "detail": "2 passed after both failed before the patch."
+    },
+    {
+      "name": "Related parser suite",
+      "status": "passed",
+      "detail": "54 passed in 1.70s."
+    },
+    {
+      "name": "Production smoke",
+      "status": "passed",
+      "detail": "app and worker running; HTTP 200; live parser guard hashes matched."
+    },
+    {
+      "name": "Review data repair",
+      "status": "passed",
+      "detail": "48 replies restored; 142 current reviews, 107 answered, 35 unanswered."
+    },
+    {
+      "name": "Schedule scope",
+      "status": "passed",
+      "detail": "0 enabled Kebab businesses, 5 approved Yandex businesses, no pending reviews_delta tasks."
+    }
+  ],
+  "reproduce": [
+    "python -m pytest -q tests/test_yandex_review_delta_sync.py tests/test_worker_services_quality.py -k 'preserves_existing_reply or apify_fallback_is_bounded'",
+    "python -m pytest -q tests/test_yandex_review_delta_sync.py tests/test_worker_services_quality.py tests/test_review_snapshot_currentness.py tests/test_card_automation.py"
+  ],
+  "limitations": [
+    "The paid fallback intentionally reads at most 50 newest reviews per run."
+  ],
+  "residual_risks": [
+    "More than 50 new reviews between runs require a later run to catch the remainder.",
+    "Riderra, Transfer Ofis and HighSpeed and Go currently lack supported Yandex map cards and remain outside this Yandex schedule."
+  ],
+  "notes": [
+    "No new Apify Actor run was used for the native card refresh or the reply restoration.",
+    "Explicit reviews_full remains available for intentionally requested complete snapshots."
+  ]
+}

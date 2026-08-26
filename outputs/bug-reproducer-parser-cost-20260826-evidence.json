@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "Both parser defects changed from deterministic failures to passing tests, and the broader related suite passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "command": "python -m pytest -q test_yandex_review_delta_sync.py test_worker_services_quality.py -k 'preserves_existing_reply or apify_fallback_is_bounded'",
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 1610,
+    "stdout": "2 failed, 32 deselected in 1.61s\nThe reply-preservation assertion failed because response_text was assigned directly from EXCLUDED. The bounded-fallback test failed because reviews_delta called the Apify helper without max_reviews.",
+    "stderr": ""
+  },
+  "after": {
+    "command": "python -m pytest -q test_yandex_review_delta_sync.py test_worker_services_quality.py -k 'preserves_existing_reply or apify_fallback_is_bounded'",
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 1650,
+    "stdout": "2 passed, 32 deselected in 1.65s",
+    "stderr": ""
+  }
+}

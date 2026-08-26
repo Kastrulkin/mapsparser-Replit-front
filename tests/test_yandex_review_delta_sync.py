@@ -62,6 +62,31 @@ def test_delta_upsert_does_not_deactivate_previous_snapshot():
     assert "set is_current = false" not in cursor.calls[0][0]
 
 
+def test_delta_upsert_preserves_existing_reply_when_incoming_reply_is_empty():
+    cursor = RecordingCursor()
+
+    apply_yandex_review_delta(
+        cursor,
+        business_id="business-1",
+        reviews=[
+            {
+                "id": "review-1",
+                "author": "Анна",
+                "text": "Отлично",
+                "rating": "5",
+                "response_text": None,
+                "date": "2026-08-25T10:00:00Z",
+            }
+        ],
+    )
+
+    query = cursor.calls[0][0]
+    assert "response_text = coalesce(" in query
+    assert "nullif(btrim(excluded.response_text), '')" in query
+    assert "externalbusinessreviews.response_text" in query
+    assert "response_text = excluded.response_text" not in query
+
+
 def test_native_review_normalization_keeps_reply_and_stable_id():
     review = normalize_native_review(
         {
