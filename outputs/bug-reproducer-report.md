@@ -138,6 +138,8 @@ For relative-date content requests, derive today or yesterday in Europe/Moscow, 
 | Targeted tool-loop suite | ✅ passed | 14 tests passed. |
 | Broader Operator suite | ✅ passed | 240 tests passed. |
 | Static validation | ✅ passed | py_compile and git diff --check passed. |
+| Production deployment | ✅ passed | app and worker use SHA-256 feae3bf16cbae4c626c05198c377c9b0ca12942e10634d0f1f9efa00e25797bb; HTTP returned 200 and the in-container dated-content smoke passed. |
+| Billing correction | ✅ passed | One idempotent +1 compensating ledger entry restored the user balance from 40 to 41. |
 
 ## Reproduce
 
@@ -151,17 +153,19 @@ For relative-date content requests, derive today or yesterday in Europe/Moscow, 
 ## Limitations
 
 - Deterministic date filtering currently covers the Russian relative-date words ‘сегодня’ and ‘вчера’.
-- The fix is local only and has not been committed, pushed, or deployed.
+- The paid production request was not repeated because doing so could create another charge.
 
 ## Residual risks
 
 - Other relative date expressions such as ‘позавчера’ or explicit ranges still use the model response unless separately implemented.
-- The already charged production request has not been refunded because no production-data change was authorized.
+- Live provider phrasing remains variable for content requests that do not contain a supported relative-date expression.
 
 ## Notes
 
 - Gate 1 and Gate 2 were explicitly approved by the user.
-- No publication, external send, provider write, deployment, or production data mutation was performed.
+- Commit `5acd125b` was pushed to GitHub and GitVerse and deployed to LocalOS production.
+- Refund ledger entry: `f2ab7194-ff2e-4fd8-b617-888939bb0f57`; original charge remains intact for audit.
+- No publication, external send, or provider write was performed.
 
 ---
 
