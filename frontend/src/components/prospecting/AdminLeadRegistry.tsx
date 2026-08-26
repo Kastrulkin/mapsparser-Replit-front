@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Building2,
@@ -1113,8 +1113,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [campaignSetupDirty, setCampaignSetupDirty] = useState(false);
   const [senderAccounts, setSenderAccounts] = useState<OutreachSenderAccountSummary[]>([]);
   const [senderAccountsLoading, setSenderAccountsLoading] = useState(false);
+  const leadLoadRequestId = useRef(0);
 
   const loadLeads = useCallback(async () => {
+    const requestId = leadLoadRequestId.current + 1;
+    leadLoadRequestId.current = requestId;
     setLoading(true);
     setError('');
     const params = new URLSearchParams({ compact: '1', include_groups: '0', include_timeline: '0' });
@@ -1125,6 +1128,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     if (actionState) params.set('action_state', actionState);
     try {
       const payload = await newAuth.makeRequest(`/admin/prospecting/leads?${params.toString()}`);
+      if (requestId !== leadLoadRequestId.current) return;
       setLeads(Array.isArray(payload?.leads) ? payload.leads : []);
       setTotalLeads(Number(payload?.total || 0));
       setTotalPages(Math.max(1, Number(payload?.total_pages || 1)));
@@ -1138,9 +1142,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             : [],
       );
     } catch (requestError) {
+      if (requestId !== leadLoadRequestId.current) return;
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить лидов');
     } finally {
-      setLoading(false);
+      if (requestId === leadLoadRequestId.current) setLoading(false);
     }
   }, [scope, clientBusinessId, actionState, page]);
 

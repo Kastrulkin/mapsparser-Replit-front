@@ -52,6 +52,8 @@ def test_registry_uses_server_pagination_in_api_and_ui():
     assert "params.set('page_size', String(pageSize))" in frontend
     assert "Предыдущая" in frontend
     assert "Следующая" in frontend
+    assert "leadLoadRequestId.current" in frontend
+    assert "requestId !== leadLoadRequestId.current" in frontend
 
 
 def test_registry_migration_indexes_repeated_lateral_lookups():
