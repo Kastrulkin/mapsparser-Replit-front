@@ -146,3 +146,57 @@ def test_admin_registry_paginates_before_attaching_expensive_workstreams(monkeyp
     assert payload["page"] == 2
     assert payload["page_size"] == 2
     assert payload["total_pages"] == 3
+
+
+def test_admin_registry_prefilters_workstream_scope_before_pagination(monkeypatch):
+    class ScopedDatabase(_Database):
+        def get_all_leads_compact(self):
+            return [
+                {
+                    "id": f"lead-{index}",
+                    "name": f"Company {index}",
+                    "category": "Clinic",
+                    "source": "apify_yandex",
+                    "source_external_id": f"company-{index}",
+                    "created_at": f"2026-08-{20 - index:02d}T10:00:00Z",
+                }
+                for index in range(1, 6)
+            ]
+
+    class ScopeCursor(_Cursor):
+        def __init__(self):
+            self.query = ""
+
+        def execute(self, query, _params=None):
+            self.query = query
+
+        def fetchall(self):
+            if "SELECT DISTINCT ws.lead_id::text AS lead_id" in self.query:
+                return [{"lead_id": "lead-2"}, {"lead_id": "lead-4"}, {"lead_id": "lead-5"}]
+            return []
+
+    class ScopeConnection(_Connection):
+        def cursor(self, **_kwargs):
+            return ScopeCursor()
+
+    attached_lead_ids = []
+
+    def attach_page(_connection, leads):
+        attached_lead_ids.extend(lead["id"] for lead in leads)
+        return [dict(lead, workstreams=[{"workstream_type": "localos_sales"}]) for lead in leads]
+
+    app = Flask(__name__)
+    monkeypatch.setattr(admin_prospecting, "_require_superadmin", lambda: ({"user_id": "admin"}, None))
+    monkeypatch.setattr(admin_prospecting, "DatabaseManager", ScopedDatabase)
+    monkeypatch.setattr(admin_prospecting, "get_db_connection", ScopeConnection)
+    monkeypatch.setattr(lead_workstream_service, "attach_workstreams", attach_page)
+
+    with app.test_request_context(
+        "/api/admin/prospecting/leads?compact=1&page=1&page_size=2&workstream_type=localos_sales"
+    ):
+        response = admin_prospecting.get_leads()
+
+    payload = response.get_json()
+    assert attached_lead_ids == ["lead-2", "lead-4"]
+    assert payload["total"] == 3
+    assert payload["total_pages"] == 2

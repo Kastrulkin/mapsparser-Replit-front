@@ -1078,6 +1078,7 @@ def get_leads():
         group_summary_by_lead_id: dict[str, list[dict[str, Any]]] = {}
         timeline_preview_by_lead_id: dict[str, dict[str, Any]] = {}
         client_options_by_id: dict[str, dict[str, str]] = {}
+        scoped_lead_ids: set[str] | None = None
         conn = get_db_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1137,6 +1138,30 @@ def get_leads():
                         "name": option_name,
                         "address": str(row.get("address") or "").strip(),
                     }
+            requested_workstream_type = str(filters.get("workstream_type") or "").strip()
+            requested_client_business_id = str(filters.get("client_business_id") or "").strip()
+            if requested_workstream_type or requested_client_business_id:
+                scope_clauses = []
+                scope_params: list[str] = []
+                if requested_workstream_type:
+                    scope_clauses.append("ws.workstream_type = %s")
+                    scope_params.append(requested_workstream_type)
+                if requested_client_business_id:
+                    scope_clauses.append("ws.client_business_id::text = %s")
+                    scope_params.append(requested_client_business_id)
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT ws.lead_id::text AS lead_id
+                    FROM lead_workstreams ws
+                    WHERE {' AND '.join(scope_clauses)}
+                    """,
+                    tuple(scope_params),
+                )
+                scoped_lead_ids = {
+                    str(row.get("lead_id") or "").strip()
+                    for row in cur.fetchall() or []
+                    if str(row.get("lead_id") or "").strip()
+                }
         finally:
             conn.close()
         normalized = []
@@ -1193,11 +1218,16 @@ def get_leads():
             normalized.append(display_lead)
         normalized = _deduplicate_registry_leads(normalized)
         normalized = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
+        if scoped_lead_ids is not None:
+            normalized = [
+                lead for lead in normalized
+                if str(lead.get("id") or "").strip() in scoped_lead_ids
+            ]
         unpaginated_normalized = normalized
 
         deferred_filters = any(
             str(filters.get(key) or "").strip()
-            for key in ("workstream_type", "client_business_id", "action_state", "group_id")
+            for key in ("action_state", "group_id")
         )
         total = len(normalized)
         total_pages = max(1, (total + page_size - 1) // page_size)
