@@ -54,8 +54,8 @@ def test_registry_uses_server_pagination_in_api_and_ui():
     assert "Следующая" in frontend
     assert "leadLoadRequestId.current" in frontend
     assert "requestId !== leadLoadRequestId.current" in frontend
-    assert "_normalize_lead_for_display_direct(lead)" in runtime
-    assert "_lead_matches_filters_direct(lead, filters)" in runtime
+    assert "normalize_lead_for_registry(lead)" in runtime
+    assert "lead_matches_registry_filters(lead, filters)" in runtime
 
 
 def test_registry_migration_indexes_repeated_lateral_lookups():
