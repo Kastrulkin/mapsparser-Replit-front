@@ -104,10 +104,16 @@ def _load_module_items(cursor: Any, *, business_id: str, module: str) -> tuple[l
         scope={"kind": "business", "id": business_id, "business_ids": [business_id]},
     )
     items = [dict(item) for item in result.get("items") or [] if isinstance(item, dict)]
+    is_truncated = len(items) >= 200
+    warnings = list(result.get("data_warnings") or [])
+    if is_truncated:
+        warnings.append("Поиск выполнен по первым 200 записям доступного окна.")
     return items, {
         "as_of": result.get("as_of"),
         "freshness": result.get("freshness") or {},
-        "data_warnings": list(result.get("data_warnings") or []),
+        "data_warnings": warnings,
+        "is_truncated": is_truncated,
+        "source_window_limit": 200,
     }
 
 
@@ -144,10 +150,17 @@ def _load_reviews(cursor: Any, *, business_id: str) -> tuple[list[dict[str, Any]
                 "updated_at": _iso(item.get("updated_at")),
             }
         )
+    is_truncated = len(items) >= 500
     return items, {
         "as_of": datetime.now(timezone.utc).isoformat(),
         "freshness": {"status": "stored_snapshot", "latest_seen_at": latest_seen_at},
-        "data_warnings": [],
+        "data_warnings": (
+            ["Поиск выполнен по первым 500 отзывам сохранённого снимка."]
+            if is_truncated
+            else []
+        ),
+        "is_truncated": is_truncated,
+        "source_window_limit": 500,
     }
 
 
@@ -303,18 +316,30 @@ def _render_content(item: dict[str, Any], *, full: bool) -> str:
     return line + (f"\n{body}" if full and body else "")
 
 
-def render_operator_query(query: dict[str, Any], items: list[dict[str, Any]], total_count: int) -> str:
+def render_operator_query(
+    query: dict[str, Any],
+    items: list[dict[str, Any]],
+    total_count: int,
+    *,
+    result_is_partial: bool = False,
+) -> str:
     resource = query["resource"]
     resource_title = RESOURCE_TITLES[resource]
+    location = "в доступном окне " if result_is_partial else ""
     if not items:
-        return f"По заданным условиям не нашёл данные в разделе «{resource_title}»."
+        return f"По заданным условиям {location}не нашёл данные в разделе «{resource_title}»."
     if query["view"] == "count":
+        if result_is_partial:
+            return (
+                f"В доступном окне раздела «{resource_title}» найдено записей: {total_count}. "
+                "Полный итог может быть больше."
+            )
         return f"Найдено записей в разделе «{resource_title}»: {total_count}."
     full = query["view"] == "full" or (query["view"] == "auto" and query["limit"] <= 10)
     renderer = {"services": _render_service, "reviews": _render_review, "content": _render_content}[resource]
     rendered_items = items[:10] if full else items
     lines = [f"{index}. {renderer(item, full=full)}" for index, item in enumerate(rendered_items, start=1)]
-    response = f"Нашёл {total_count} записей в разделе «{resource_title}»:\n\n" + "\n\n".join(lines)
+    response = f"Нашёл {location}{total_count} записей в разделе «{resource_title}»:\n\n" + "\n\n".join(lines)
     if len(items) > len(rendered_items):
         response += f"\n\nПоказал первые {len(rendered_items)} из {len(items)} выбранных записей."
     return response
@@ -342,7 +367,12 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> 
     matched.sort(key=lambda item: _sort_value(item, query["sort_by"])[0])
     total_count = len(matched)
     selected = matched[:query["limit"]]
-    chat_response = render_operator_query(query, selected, total_count)
+    chat_response = render_operator_query(
+        query,
+        selected,
+        total_count,
+        result_is_partial=bool(metadata.get("is_truncated")),
+    )
     if query["resource"] == "reviews":
         latest_seen_at = str((metadata.get("freshness") or {}).get("latest_seen_at") or "").strip()
         freshness_note = (
@@ -365,6 +395,8 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> 
         "as_of": metadata.get("as_of"),
         "freshness": metadata.get("freshness") or {},
         "data_warnings": metadata.get("data_warnings") or [],
+        "result_is_partial": bool(metadata.get("is_truncated")),
+        "source_window_limit": metadata.get("source_window_limit"),
         "provenance": {"source": "localos_stored_data", "business_id": business_id},
         "chat_response": chat_response,
         "result_ref": {

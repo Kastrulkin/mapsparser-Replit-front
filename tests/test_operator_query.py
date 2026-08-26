@@ -204,6 +204,27 @@ def test_full_view_caps_chat_body_without_hiding_result_count():
     assert "Показал первые 10 из 12" in response
 
 
+def test_truncated_source_window_is_not_presented_as_complete_total(monkeypatch):
+    monkeypatch.setattr(
+        operator_query,
+        "list_operator_mobile_module",
+        lambda *_args, **_kwargs: _module_result(
+            [{"id": f"service-{index}", "title": f"Услуга {index}"} for index in range(200)]
+        ),
+    )
+
+    result = execute_operator_query(
+        object(),
+        business_id="business-1",
+        arguments={"resource": "services", "limit": 1, "view": "count"},
+    )
+
+    assert result["result_is_partial"] is True
+    assert result["source_window_limit"] == 200
+    assert "в доступном окне" in result["chat_response"].lower()
+    assert result["data_warnings"]
+
+
 def test_deterministic_query_tool_returns_after_one_compiler_step():
     tool = operator_query_tool_contract()
     tool["execute"] = lambda _arguments: {
