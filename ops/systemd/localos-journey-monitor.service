@@ -1,0 +1,8 @@
+[Unit]
+Description=Check LocalOS lead journey health
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/seo-app
+ExecStart=/usr/bin/docker compose exec -T app python /app/src/journey_health_check.py
