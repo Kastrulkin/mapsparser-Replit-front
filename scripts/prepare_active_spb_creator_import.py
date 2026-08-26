@@ -79,6 +79,7 @@ def main() -> int:
     parser.add_argument("--existing-urls", type=Path, required=True)
     parser.add_argument("--existing-profile-count", type=int, required=True)
     parser.add_argument("--target-profile-count", type=int, default=10_000)
+    parser.add_argument("--keep-all", action="store_true")
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-csv", type=Path, required=True)
     arguments = parser.parse_args()
@@ -100,7 +101,7 @@ def main() -> int:
             continue
         selected.append(entity)
         selected_urls.update(urls)
-        if len(selected) == required:
+        if not arguments.keep_all and len(selected) == required:
             break
     if len(selected) < required:
         print(json.dumps({"status": "insufficient", "required": required, "selected": len(selected), "rejected": rejected}, ensure_ascii=False, sort_keys=True))
@@ -124,6 +125,7 @@ def main() -> int:
             "target_profile_count": arguments.target_profile_count,
             "required_new_profiles": required,
             "selected_new_profiles": len(selected),
+            "selection_mode": "all_valid" if arguments.keep_all else "target_cap",
             "rejected_before_cutoff": rejected,
             "messages_sent": 0,
         },
