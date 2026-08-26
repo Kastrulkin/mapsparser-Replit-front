@@ -4424,13 +4424,19 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
         try:
             known_review_ids = load_known_yandex_review_ids(cursor, business_id, limit=100)
             expected_total = load_expected_yandex_reviews_total(cursor, business_id)
+            use_apify_fallback = bool(get_use_apify_map_parsing(conn))
         finally:
             cursor.close()
             conn.close()
 
         active_proxy = _get_next_proxy_for_playwright()
         proxy_id = str((active_proxy or {}).get("id") or "").strip()
-        preflight = _preflight_yandex_proxy(url, active_proxy)
+        if active_proxy:
+            preflight = _preflight_yandex_proxy(url, active_proxy)
+        elif not use_apify_fallback:
+            preflight = {"ok": True, "reason": "direct_native", "elapsed_ms": 0}
+        else:
+            preflight = _preflight_yandex_proxy(url, active_proxy)
         metrics["proxy_preflight_ms"] = int(preflight.get("elapsed_ms") or 0)
         metrics["proxy_preflight_reason"] = str(preflight.get("reason") or "")
         native_data: Dict[str, Any] = {"error": "proxy_preflight_failed"}
@@ -4529,6 +4535,13 @@ def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
         else:
             metrics["fallback_reason"] = str(preflight.get("reason") or "proxy_preflight_failed")
             _mark_proxy_result(proxy_id, success=False, reason=metrics["fallback_reason"])
+
+        if not use_apify_fallback:
+            metrics["route"] = "native_only_failed"
+            safe_reason = redact_sensitive_text(metrics["fallback_reason"] or "native_incomplete", limit=240)
+            print("[PARSER_METRICS] " + json.dumps(metrics, ensure_ascii=False, default=str), flush=True)
+            _handle_worker_error(queue_id, f"reviews_delta_native_only_failed:{safe_reason}")
+            return
 
         fallback_started_at = time.monotonic()
         fallback_max_reviews = 0

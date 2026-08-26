@@ -98,6 +98,7 @@ def test_reviews_delta_task_uses_native_boundary_without_full_fallback(monkeypat
             return None
 
     monkeypatch.setattr(worker, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(worker, "get_use_apify_map_parsing", lambda _conn: True)
     monkeypatch.setattr(worker, "load_known_yandex_review_ids", lambda *_args, **_kwargs: ["known-1"])
     monkeypatch.setattr(worker, "load_expected_yandex_reviews_total", lambda *_args, **_kwargs: 300)
     monkeypatch.setattr(
@@ -175,6 +176,7 @@ def test_reviews_delta_apify_fallback_is_bounded_and_applied_as_delta(monkeypatc
             return None
 
     monkeypatch.setattr(worker, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(worker, "get_use_apify_map_parsing", lambda _conn: True)
     monkeypatch.setattr(worker, "load_known_yandex_review_ids", lambda *_args, **_kwargs: ["known-1"])
     monkeypatch.setattr(worker, "load_expected_yandex_reviews_total", lambda *_args, **_kwargs: 630)
     monkeypatch.setattr(worker, "_get_next_proxy_for_playwright", lambda: None)
@@ -219,6 +221,124 @@ def test_reviews_delta_apify_fallback_is_bounded_and_applied_as_delta(monkeypatc
     assert 0 < state["fallback_max_reviews"] <= 50
     assert state["delta_applied"] == 1
     assert state["snapshot_applied"] == 0
+
+
+def test_reviews_delta_native_only_runs_directly_without_proxy(monkeypatch):
+    state = {"applied": 0}
+
+    class Cursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(worker, "get_use_apify_map_parsing", lambda _conn: False)
+    monkeypatch.setattr(worker, "load_known_yandex_review_ids", lambda *_args, **_kwargs: ["known-1"])
+    monkeypatch.setattr(worker, "load_expected_yandex_reviews_total", lambda *_args, **_kwargs: 142)
+    monkeypatch.setattr(worker, "_get_next_proxy_for_playwright", lambda: None)
+    monkeypatch.setattr(
+        worker,
+        "_preflight_yandex_proxy",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("proxy preflight must be skipped")),
+    )
+    monkeypatch.setattr(worker, "_build_human_browser_profile", lambda: {"user_agent": "ua", "viewport": {}, "launch_args": [], "init_scripts": []})
+    monkeypatch.setattr(worker, "get_yandex_cookies", lambda: [])
+    monkeypatch.setattr(
+        worker,
+        "_parse_yandex_card_with_playwright_fallback",
+        lambda _url, **_kwargs: {
+            "reviews": [
+                {"id": "new-1", "text": "Новый", "rating": 5},
+                {"id": "known-1", "text": "Известный", "rating": 4},
+            ],
+            "_parser_run": {"delta_boundary_reached": True, "review_stop_reason": "known_review_id"},
+        },
+    )
+    monkeypatch.setattr(
+        worker,
+        "fetch_complete_yandex_reviews",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Apify must stay disabled")),
+    )
+
+    def apply_delta(_cursor, **_kwargs):
+        state["applied"] += 1
+        return {"normalized": 2}
+
+    monkeypatch.setattr(worker, "apply_yandex_review_delta", apply_delta)
+    monkeypatch.setattr(worker, "handle_review_sync_completion", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(worker, "_mark_proxy_result", lambda *_args, **_kwargs: None)
+
+    worker._process_yandex_reviews_delta_task(
+        {
+            "id": "queue-1",
+            "task_type": "reviews_delta",
+            "business_id": "business-1",
+            "url": "https://yandex.ru/maps/org/test/1/",
+        }
+    )
+
+    assert state["applied"] == 1
+
+
+def test_reviews_delta_native_only_never_falls_back_to_apify(monkeypatch):
+    state = {"errors": []}
+
+    class Cursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: Connection())
+    monkeypatch.setattr(worker, "get_use_apify_map_parsing", lambda _conn: False)
+    monkeypatch.setattr(worker, "load_known_yandex_review_ids", lambda *_args, **_kwargs: ["known-1"])
+    monkeypatch.setattr(worker, "load_expected_yandex_reviews_total", lambda *_args, **_kwargs: 142)
+    monkeypatch.setattr(worker, "_get_next_proxy_for_playwright", lambda: None)
+    monkeypatch.setattr(worker, "_build_human_browser_profile", lambda: {"user_agent": "ua", "viewport": {}, "launch_args": [], "init_scripts": []})
+    monkeypatch.setattr(worker, "get_yandex_cookies", lambda: [])
+    monkeypatch.setattr(
+        worker,
+        "_parse_yandex_card_with_playwright_fallback",
+        lambda *_args, **_kwargs: {"error": "captcha_detected"},
+    )
+    monkeypatch.setattr(
+        worker,
+        "fetch_complete_yandex_reviews",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Apify must stay disabled")),
+    )
+    monkeypatch.setattr(worker, "_mark_proxy_result", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(worker, "_handle_worker_error", lambda _queue_id, error: state["errors"].append(error))
+
+    worker._process_yandex_reviews_delta_task(
+        {
+            "id": "queue-1",
+            "task_type": "reviews_delta",
+            "business_id": "business-1",
+            "url": "https://yandex.ru/maps/org/test/1/",
+        }
+    )
+
+    assert state["errors"] == ["reviews_delta_native_only_failed:captcha_detected"]
 
 
 def test_map_card_services_filters_obvious_noise():
