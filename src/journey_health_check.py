@@ -50,9 +50,9 @@ def collect_health(cursor):
         FROM journey_actions action
         LEFT JOIN lead_journeys journey ON journey.id = action.journey_id
         LEFT JOIN creator_collaborations creator
-          ON action.entity_type = 'creator_collaboration' AND creator.id = action.entity_id
+          ON action.entity_type = 'creator_collaboration' AND CONCAT(creator.id) = action.entity_id
         LEFT JOIN lead_workstreams workstream
-          ON action.entity_type = 'lead_workstream' AND workstream.id = action.entity_id
+          ON action.entity_type = 'lead_workstream' AND CONCAT(workstream.id) = action.entity_id
         LEFT JOIN businesses business
           ON action.flow_type = 'maps' AND business.id = action.business_id
         """
