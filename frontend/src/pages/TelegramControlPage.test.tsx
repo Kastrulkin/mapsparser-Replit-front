@@ -119,7 +119,8 @@ describe('TelegramControlPage scope integrity', () => {
     render(<TelegramControlPage />);
 
     expect(await screen.findByRole('heading', { name: 'Отзывы' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Отзывы' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'Отзывы' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Развитие' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'В работе' })).not.toHaveAttribute('aria-current');
     expect(screen.queryByText(/Invalid Date/i)).not.toBeInTheDocument();
     expect(screen.getByText(/дата не указана источником/i)).toBeInTheDocument();
@@ -293,7 +294,8 @@ describe('TelegramControlPage scope integrity', () => {
     await user.click(screen.getByRole('button', { name: /Точка два/ }));
     await user.click(await screen.findByRole('button', { name: /Точка три/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Точка три/ })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Отзывы' }));
+    await user.click(screen.getByRole('button', { name: 'Развитие' }));
+    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     expect(await screen.findByText('Автор три')).toBeInTheDocument();
 
     resolveBusinessTwo?.(new Response(JSON.stringify(reviewsPayload('business-2', 'Автор два')), {
@@ -544,7 +546,8 @@ describe('TelegramControlPage scope integrity', () => {
     expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
-    await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
+    await user.click(await screen.findByRole('button', { name: 'Развитие' }));
+    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     expect(await screen.findByText('Автор два')).toBeInTheDocument();
 
     expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument();
@@ -590,7 +593,8 @@ describe('TelegramControlPage scope integrity', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('location_id=location-old'))).toBe(true));
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
-    await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
+    await user.click(await screen.findByRole('button', { name: 'Развитие' }));
+    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('scope_id=business-2'))).toBe(true));
 
     expect(fetchMock.mock.calls.some(([input]) => {
@@ -725,7 +729,8 @@ describe('TelegramControlPage scope integrity', () => {
       return url.includes('/api/operator/mobile/reviews') && url.includes('scope_id=business-2');
     })).toBe(true));
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Где работаем?' })).not.toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Отзывы' }));
+    await user.click(screen.getByRole('button', { name: 'Развитие' }));
+    await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     await screen.findByRole('heading', { name: 'Отзывы' });
     await user.click(screen.getByRole('button', { name: /^\u0424\u0438\u043b\u044c\u0442\u0440\u044b/ }));
     await user.selectOptions(screen.getByLabelText('\u041e\u0446\u0435\u043d\u043a\u0430'), '5');

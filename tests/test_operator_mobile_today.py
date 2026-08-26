@@ -103,6 +103,21 @@ def test_today_uses_exact_rolling_24_hour_window(monkeypatch):
     assert payload["period"] == {"kind": "rolling_24h", "since": "2026-07-26T09:30:00+00:00"}
 
 
+def test_feed_cursor_round_trip_and_telegram_link_fallback():
+    observed_at = datetime(2026, 8, 26, 8, 30, tzinfo=timezone.utc)
+    encoded = mobile_today._encode_feed_cursor(observed_at, "7b95fa9a-55b4-4f9c-90b4-ef8da8699484")
+
+    assert mobile_today._feed_cursor(encoded) == (observed_at, "7b95fa9a-55b4-4f9c-90b4-ef8da8699484")
+    assert mobile_today._telegram_document_link({
+        "source_url": "https://t.me/local_business",
+        "external_id": "42",
+    }) == "https://t.me/local_business/42"
+    assert mobile_today._telegram_document_link({
+        "source_url": "https://example.com/private",
+        "external_id": "42",
+    }) is None
+
+
 def test_pulse_hides_unconfirmed_topic_and_keeps_provenance():
     single = [{
         "source_id": "source-1",

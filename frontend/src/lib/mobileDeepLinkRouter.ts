@@ -11,14 +11,14 @@ export type MobileResolvedDeepLink = {
 };
 
 export type MobileRoute = {
-  tab: 'today' | 'tasks' | 'reviews' | 'progress' | 'operator' | 'more';
+  tab: 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more';
   module: string;
   itemId: string;
   reviewId: string;
   filters: Record<string, string>;
 };
 
-const primaryTabs = new Set(['today', 'tasks', 'reviews', 'progress', 'operator']);
+const primaryTabs = new Set(['today', 'tasks', 'feed', 'reviews', 'progress', 'operator']);
 
 export const resolveMobileRoute = (
   target: MobileResolvedDeepLink | undefined,
@@ -30,7 +30,7 @@ export const resolveMobileRoute = (
   const canOpen = allowed.has(screen);
   const safeScreen = canOpen ? screen : 'today';
   let tab: MobileRoute['tab'] = 'today';
-  if (safeScreen === 'tasks' || safeScreen === 'reviews' || safeScreen === 'progress' || safeScreen === 'operator') tab = safeScreen;
+  if (safeScreen === 'tasks' || safeScreen === 'feed' || safeScreen === 'reviews' || safeScreen === 'progress' || safeScreen === 'operator') tab = safeScreen;
   else if (!primaryTabs.has(safeScreen) && safeScreen !== 'today') tab = 'more';
   return {
     tab,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
@@ -712,26 +713,7 @@ def _knowledge_pulse_rows(
 ) -> tuple[list[dict[str, Any]], set[str]]:
     if not _table_exists(cursor, "knowledge_sources") or not _table_exists(cursor, "knowledge_documents"):
         return [], set()
-    platform, business_ids = _business_filter(scope)
-    if platform:
-        return [], set()
-    industry_keys = load_business_industry_keys(cursor, business_ids)
-    default_sources = load_default_industry_sources(cursor, industry_keys)
-    source_ids = [str(item.get("id") or "") for item in default_sources if item.get("id")]
-    if _table_exists(cursor, "knowledge_source_subscriptions") and business_ids:
-        cursor.execute(
-            """
-            SELECT DISTINCT source_id
-            FROM knowledge_source_subscriptions
-            WHERE business_id = ANY(%s) AND is_active = TRUE
-            """,
-            (business_ids,),
-        )
-        for value in cursor.fetchall() or []:
-            item = _row(cursor, value)
-            source_id = str(item.get("source_id") or "")
-            if source_id and source_id not in source_ids:
-                source_ids.append(source_id)
+    source_ids, industry_keys = _knowledge_source_ids(cursor, scope)
     if not source_ids:
         return [], industry_keys
     cursor.execute(
@@ -747,6 +729,11 @@ def _knowledge_pulse_rows(
         JOIN knowledge_sources source ON source.id = document.source_id
         WHERE document.source_id = ANY(%s::uuid[])
           AND document.invalidated_at IS NULL
+          AND document.sensitivity_class = 'public'
+          AND source.source_type = 'telegram'
+          AND source.visibility IN ('public', 'platform_public')
+          AND source.sensitivity_class = 'public'
+          AND source.status = 'active'
           AND COALESCE(document.published_at, document.created_at) >= %s
         ORDER BY COALESCE(document.published_at, document.created_at) DESC
         LIMIT 480
@@ -760,6 +747,175 @@ def _knowledge_pulse_rows(
         item["telegram_username"] = canonical_url.rsplit("/", 1)[-1] if canonical_url else ""
         rows.append(item)
     return rows, industry_keys
+
+
+def _knowledge_source_ids(cursor: Any, scope: dict[str, Any]) -> tuple[list[str], set[str]]:
+    """Return public Telegram sources available in the verified control scope."""
+    platform, business_ids = _business_filter(scope)
+    if platform:
+        cursor.execute(
+            """
+            SELECT id
+            FROM knowledge_sources
+            WHERE source_type = 'telegram'
+              AND visibility IN ('public', 'platform_public')
+              AND sensitivity_class = 'public'
+              AND status = 'active'
+            ORDER BY last_collected_at DESC NULLS LAST, id
+            """
+        )
+        return [str(_row(cursor, value).get("id") or "") for value in cursor.fetchall() or [] if _row(cursor, value).get("id")], set()
+    industry_keys = load_business_industry_keys(cursor, business_ids)
+    default_sources = load_default_industry_sources(cursor, industry_keys)
+    source_ids = [str(item.get("id") or "") for item in default_sources if item.get("id")]
+    if _table_exists(cursor, "knowledge_source_subscriptions") and business_ids:
+        cursor.execute(
+            """
+            SELECT DISTINCT subscription.source_id
+            FROM knowledge_source_subscriptions subscription
+            JOIN knowledge_sources source ON source.id = subscription.source_id
+            WHERE subscription.business_id = ANY(%s)
+              AND subscription.is_active = TRUE
+              AND source.source_type = 'telegram'
+              AND source.visibility IN ('public', 'platform_public')
+              AND source.sensitivity_class = 'public'
+              AND source.status = 'active'
+            """,
+            (business_ids,),
+        )
+        for value in cursor.fetchall() or []:
+            item = _row(cursor, value)
+            source_id = str(item.get("source_id") or "")
+            if source_id and source_id not in source_ids:
+                source_ids.append(source_id)
+    return source_ids, industry_keys
+
+
+def _feed_cursor(value: Any) -> tuple[datetime, str] | None:
+    try:
+        payload = json.loads(urlsafe_b64decode(str(value or "") + "===").decode("utf-8"))
+        observed_at = datetime.fromisoformat(str(payload.get("at") or "").replace("Z", "+00:00"))
+        item_id = str(payload.get("id") or "")
+        if observed_at.tzinfo is None:
+            observed_at = observed_at.replace(tzinfo=timezone.utc)
+        return observed_at, item_id
+    except Exception:
+        return None
+
+
+def _encode_feed_cursor(observed_at: Any, item_id: Any) -> str | None:
+    timestamp = _iso(observed_at)
+    if not timestamp or not item_id:
+        return None
+    payload = json.dumps({"at": timestamp, "id": str(item_id)}, separators=(",", ":"), ensure_ascii=True)
+    return urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _telegram_document_link(item: dict[str, Any]) -> str | None:
+    permalink = str(item.get("permalink") or "").strip()
+    if permalink.startswith("https://t.me/"):
+        return permalink
+    source_url = str(item.get("source_url") or "").strip().rstrip("/")
+    external_id = str(item.get("external_id") or "").strip()
+    if source_url.startswith("https://t.me/") and external_id.isdigit():
+        return f"{source_url}/{external_id}"
+    return source_url if source_url.startswith("https://t.me/") else None
+
+
+def build_mobile_feed(
+    cursor: Any,
+    *,
+    scope: dict[str, Any],
+    limit: int = 20,
+    page_cursor: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build the public community feed without trusting client business IDs."""
+    observed_at = now or datetime.now(timezone.utc)
+    if observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=timezone.utc)
+    cutoff = observed_at.astimezone(timezone.utc) - timedelta(hours=24)
+    source_ids, _industry_keys = _knowledge_source_ids(cursor, scope)
+    topics = _load_community_pulse(cursor, scope, cutoff)
+    if not source_ids:
+        return {
+            "scope": scope,
+            "topics": topics,
+            "items": [],
+            "counts": {"returned": 0},
+            "cursor": None,
+            "as_of": observed_at.astimezone(timezone.utc).isoformat(),
+            "freshness": {"status": "empty", "updated_at": None},
+            "data_warnings": [],
+            "available_actions": ["community_sources.manage"] if scope.get("kind") == "business" else [],
+            "filters": {"platforms": ["telegram"]},
+        }
+
+    bounded_limit = min(max(int(limit or 20), 1), 50)
+    decoded_cursor = _feed_cursor(page_cursor)
+    page_filter = ""
+    params: list[Any] = [source_ids]
+    if decoded_cursor and decoded_cursor[1]:
+        page_filter = "AND (COALESCE(document.published_at, document.created_at), document.id) < (%s, %s::uuid)"
+        params.extend([decoded_cursor[0], decoded_cursor[1]])
+    params.append(bounded_limit + 1)
+    cursor.execute(
+        f"""
+        SELECT document.id, document.external_id, document.title,
+               document.content_text, document.permalink,
+               COALESCE(document.published_at, document.created_at) AS published_at,
+               source.id AS source_id, source.title AS source_name,
+               source.canonical_url AS source_url
+        FROM knowledge_documents document
+        JOIN knowledge_sources source ON source.id = document.source_id
+        WHERE document.source_id = ANY(%s::uuid[])
+          AND document.document_type = 'telegram_message'
+          AND document.invalidated_at IS NULL
+          AND document.sensitivity_class = 'public'
+          AND source.source_type = 'telegram'
+          AND source.visibility IN ('public', 'platform_public')
+          AND source.status = 'active'
+          AND LENGTH(BTRIM(document.content_text)) > 0
+          {page_filter}
+        ORDER BY COALESCE(document.published_at, document.created_at) DESC, document.id DESC
+        LIMIT %s
+        """,
+        tuple(params),
+    )
+    raw_items = [_row(cursor, value) for value in cursor.fetchall() or []]
+    has_more = len(raw_items) > bounded_limit
+    raw_items = raw_items[:bounded_limit]
+    items = []
+    for item in raw_items:
+        link = _telegram_document_link(item)
+        if not link:
+            continue
+        items.append({
+            "id": str(item.get("id") or ""),
+            "platform": "telegram",
+            "source_id": str(item.get("source_id") or ""),
+            "source_name": str(item.get("source_name") or "Telegram"),
+            "source_url": item.get("source_url"),
+            "title": item.get("title"),
+            "text": str(item.get("content_text") or "").strip(),
+            "published_at": _iso(item.get("published_at")),
+            "url": link,
+        })
+    last = raw_items[-1] if raw_items else None
+    next_cursor = _encode_feed_cursor(last.get("published_at"), last.get("id")) if has_more and last else None
+    latest_at = items[0].get("published_at") if items else None
+    return {
+        "scope": scope,
+        "topics": topics,
+        "items": items,
+        "counts": {"returned": len(items)},
+        "cursor": next_cursor,
+        "as_of": observed_at.astimezone(timezone.utc).isoformat(),
+        "freshness": {"status": "live" if latest_at else "empty", "updated_at": latest_at},
+        "data_warnings": [],
+        "available_actions": ["community_sources.manage"] if scope.get("kind") == "business" else [],
+        "filters": {"platforms": ["telegram"]},
+    }
 
 
 def _pulse_overview(rows: list[dict[str, Any]], industry_keys: set[str]) -> list[dict[str, Any]]:

@@ -49,7 +49,7 @@ from services.operator_async_jobs import (
     retry_operator_async_job,
 )
 from services.operator_mobile_modules import list_operator_mobile_module
-from services.operator_mobile_today import build_mobile_progress, build_mobile_today
+from services.operator_mobile_today import build_mobile_feed, build_mobile_progress, build_mobile_today
 from services.operator_mobile_jobs import load_mobile_job
 from services.operator_mobile_deep_links import resolve_mobile_deep_link
 from services.product_telemetry_service import record_product_event, validate_product_event
@@ -173,6 +173,7 @@ def _mobile_navigation(
     items = [
         {"key": "today", "label": "Сегодня", "group": "primary", "status": "available", "available_actions": ["open_focus", "delegate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["today"], "version": 2},
         {"key": "tasks", "label": "В работе", "group": "primary", "status": "available", "available_actions": ["open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["task", "job", "approval"], "version": 3},
+        {"key": "feed", "label": "Лента", "group": "primary", "status": "available", "available_actions": ["open_message"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["feed"], "version": 1},
         {"key": "reviews", "label": "Отзывы", "group": "more", "status": "available", "available_actions": ["generate_reply", "edit_draft", "mark_manual_published"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["review", "review_draft"], "version": 3},
         {"key": "operator", "label": "Оператор", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
         {"key": "progress", "label": "Прогресс", "group": "primary", "status": "hidden" if kind == "platform" else "available", "reason": "Выберите бизнес или сеть" if kind == "platform" else "", "available_actions": ["open_next_step"], "supported_scopes": ["business", "network"], "deep_link_targets": ["progress", "growth_step"], "version": 3},
@@ -2273,6 +2274,32 @@ def operator_mobile_today():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/feed", methods=["GET"])
+def operator_mobile_feed():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    try:
+        limit = min(max(int(request.args.get("limit") or 20), 1), 50)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Некорректный размер страницы"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        payload = build_mobile_feed(
+            cursor,
+            scope=scope,
+            limit=limit,
+            page_cursor=str(request.args.get("cursor") or "") or None,
+        )
         return jsonify({"success": True, **payload})
     finally:
         db.close()

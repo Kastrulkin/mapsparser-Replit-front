@@ -3,13 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle, ArrowLeft, BarChart3, Bot, Building2, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, CircleEllipsis,
   ClipboardCheck, Copy, CreditCard, FileText, LayoutGrid, Loader2, MapPinned,
-  MessageCircle, Network, PackageCheck, Pencil, RefreshCw, Search, Send, Settings, ShieldCheck,
+  MessageCircle, Network, PackageCheck, Pencil, Radio, RefreshCw, Search, Send, Settings, ShieldCheck,
   Sparkles, Star, Trash2, TrendingDown, TrendingUp, Upload, Users, WandSparkles, X,
 } from 'lucide-react';
 import localOsLogo from '@/assets/images/logo.png';
 import { PartnershipsMobileModule } from '@/components/telegram/PartnershipsMobileModule';
 import { CompaniesMobileModule } from '@/components/telegram/CompaniesMobileModule';
 import { CommunitySourcesMobileModule } from '@/components/telegram/CommunitySourcesMobileModule';
+import { CommunityFeedMobile } from '@/components/telegram/CommunityFeedMobile';
 import AgentsMobileModule from '@/components/telegram/AgentsMobileModule';
 import DiagnosticsMobileModule from '@/components/telegram/DiagnosticsMobileModule';
 import FinanceCrmMobilePanel from '@/components/telegram/FinanceCrmMobilePanel';
@@ -162,7 +163,7 @@ type FinanceDashboardMobile = {
   workplaces?: Array<Record<string, FinanceValue>>;
 };
 type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences; available_actions?: Array<{ key?: string; label?: string }>; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
-type Tab = 'today' | 'tasks' | 'reviews' | 'progress' | 'operator' | 'more';
+type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more';
 
 type TelegramWebApp = {
   initData?: string;
@@ -274,7 +275,7 @@ const readJson = readMobileJson;
 const scopeQuery = mobileScopeQuery;
 const authHeaders = mobileJsonHeaders;
 const authOnlyHeaders = mobileAuthHeaders;
-const isTab = (value: string | null): value is Tab => Boolean(value && ['today', 'tasks', 'reviews', 'progress', 'operator', 'more'].includes(value));
+const isTab = (value: string | null): value is Tab => Boolean(value && ['today', 'tasks', 'feed', 'reviews', 'progress', 'operator', 'more'].includes(value));
 
 export const TelegramControlPage = () => {
   const preview = isPreview();
@@ -903,7 +904,7 @@ export const TelegramControlPage = () => {
         header={<TopBar />}
         error={error}
         overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <MobileOnboarding hasSwitcher={hasSwitcher} networkMode={scope?.kind === 'network' || Boolean(scope?.parent_scope?.id)} onFinish={finishOnboarding} /> : null}</>}
-        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' ? 'more' : tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
+        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' || tab === 'reviews' ? 'more' : tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
@@ -911,6 +912,7 @@ export const TelegramControlPage = () => {
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
             {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
+            {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
@@ -1702,7 +1704,7 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
 
 const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
-const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'В работе', ClipboardCheck], ['reviews', 'Отзывы', MessageCircle], ['operator', 'Оператор', Bot], ['more', 'Развитие', LayoutGrid]]; return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={current === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
+const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'В работе', ClipboardCheck], ['feed', 'Лента', Radio], ['operator', 'Оператор', Bot], ['more', 'Развитие', LayoutGrid]]; return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={current === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
 
 const Screen = ({ title, subtitle, children, action }: { title: string; subtitle: string; children: React.ReactNode; action?: React.ReactNode }) => <section className="px-4"><div className="mb-5 flex items-start gap-3"><div className="min-w-0 flex-1"><h1 className="text-balance text-2xl font-semibold tracking-[-0.04em]">{title}</h1><p className="mt-1 text-pretty text-sm leading-6 text-zinc-500">{subtitle}</p></div>{action}</div>{children}</section>;
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;

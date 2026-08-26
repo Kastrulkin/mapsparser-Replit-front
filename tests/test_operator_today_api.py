@@ -80,6 +80,46 @@ def test_web_today_rejects_unresolved_scope(monkeypatch):
     assert response.get_json()["error"] == "Раздел недоступен"
 
 
+def test_mobile_feed_uses_verified_scope_and_cursor(monkeypatch):
+    scope = {"kind": "network", "id": "network-1", "name": "Сеть", "business_ids": ["b-1", "b-2"]}
+    captured = {}
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: scope)
+    monkeypatch.setattr(
+        operator_api,
+        "build_mobile_feed",
+        lambda _cursor, **kwargs: captured.update(kwargs) or {
+            "scope": scope,
+            "topics": [],
+            "items": [{"id": "message-1", "url": "https://t.me/channel/1"}],
+            "cursor": None,
+        },
+    )
+
+    response = _app().test_client().get(
+        "/api/operator/mobile/feed?scope_type=network&scope_id=network-1&limit=15&cursor=next-page"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["items"][0]["url"] == "https://t.me/channel/1"
+    assert captured["scope"] == scope
+    assert captured["limit"] == 15
+    assert captured["page_cursor"] == "next-page"
+
+
+def test_mobile_feed_rejects_unresolved_scope(monkeypatch):
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: None)
+
+    response = _app().test_client().get(
+        "/api/operator/mobile/feed?scope_type=business&scope_id=foreign-business"
+    )
+
+    assert response.status_code == 403
+
+
 def test_web_today_requires_authentication(monkeypatch):
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: None)
 

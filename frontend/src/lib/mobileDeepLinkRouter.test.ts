@@ -3,6 +3,7 @@ import { resolveMobileRoute } from './mobileDeepLinkRouter';
 
 const navigation = [
   { key: 'today', status: 'available' },
+  { key: 'feed', status: 'available' },
   { key: 'reviews', status: 'available' },
   { key: 'progress', status: 'available' },
   { key: 'finance', status: 'available' },
@@ -26,5 +27,9 @@ describe('resolveMobileRoute', () => {
 
   it('opens progress as a primary mobile destination', () => {
     expect(resolveMobileRoute({ screen: 'progress' }, navigation)).toMatchObject({ tab: 'progress', module: '' });
+  });
+
+  it('opens the community feed as a primary mobile destination', () => {
+    expect(resolveMobileRoute({ screen: 'feed' }, navigation)).toMatchObject({ tab: 'feed', module: '' });
   });
 });
