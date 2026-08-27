@@ -10,6 +10,15 @@ const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.str
   headers: { 'Content-Type': 'application/json' },
 }));
 
+const openOperator = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('button', { name: 'Ещё' }));
+  await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+};
+
+const openGrowthPaths = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('button', { name: 'Пути роста' }));
+};
+
 describe('TelegramControlPage scope integrity', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/telegram/control');
@@ -74,18 +83,18 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<TelegramControlPage />);
-    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
     expect(await screen.findByText('Секрет точки один')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Точка два/ })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
 
     expect(screen.queryByText('Секрет точки один')).not.toBeInTheDocument();
   });
 
-  it('marks Reviews as the current primary destination instead of Work', async () => {
+  it('marks Growth paths as the current destination for a review deep link', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/operator/telegram/bootstrap') {
@@ -120,8 +129,8 @@ describe('TelegramControlPage scope integrity', () => {
 
     expect(await screen.findByRole('heading', { name: 'Отзывы' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отзывы' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Развитие' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'В работе' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'Пути роста' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Сегодня' })).not.toHaveAttribute('aria-current');
     expect(screen.queryByText(/Invalid Date/i)).not.toBeInTheDocument();
     expect(screen.getByText(/дата не указана источником/i)).toBeInTheDocument();
   });
@@ -153,9 +162,9 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<TelegramControlPage />);
-    await user.click(await screen.findByRole('button', { name: 'Развитие' }));
+    await openGrowthPaths(user);
 
-    expect(await screen.findByRole('heading', { name: 'Развитие' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Пути роста' })).toBeInTheDocument();
     expect(screen.getByText('Больше клиентов из карт')).toBeInTheDocument();
     expect(screen.queryByText('Раздел пока недоступен')).not.toBeInTheDocument();
   });
@@ -294,7 +303,7 @@ describe('TelegramControlPage scope integrity', () => {
     await user.click(screen.getByRole('button', { name: /Точка два/ }));
     await user.click(await screen.findByRole('button', { name: /Точка три/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Точка три/ })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Развитие' }));
+    await openGrowthPaths(user);
     await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     expect(await screen.findByText('Автор три')).toBeInTheDocument();
 
@@ -397,7 +406,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<TelegramControlPage />);
-    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Точка два/ })).toBeInTheDocument());
@@ -405,7 +414,7 @@ describe('TelegramControlPage scope integrity', () => {
     resolveBusinessOne?.(new Response(JSON.stringify({
       items: [{ id: 'late-old-message', role: 'operator', content: 'Старый секрет первой точки', status: 'completed' }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-    await user.click(screen.getByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
 
     await waitFor(() => expect(screen.queryByText('Старый секрет первой точки')).not.toBeInTheDocument());
   });
@@ -546,7 +555,7 @@ describe('TelegramControlPage scope integrity', () => {
     expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
-    await user.click(await screen.findByRole('button', { name: 'Развитие' }));
+    await openGrowthPaths(user);
     await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     expect(await screen.findByText('Автор два')).toBeInTheDocument();
 
@@ -593,7 +602,7 @@ describe('TelegramControlPage scope integrity', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('location_id=location-old'))).toBe(true));
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
-    await user.click(await screen.findByRole('button', { name: 'Развитие' }));
+    await openGrowthPaths(user);
     await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('scope_id=business-2'))).toBe(true));
 
@@ -633,12 +642,12 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<TelegramControlPage />);
-    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
     await user.type(await screen.findByPlaceholderText('Напишите задачу'), 'Проверь первую точку');
     await user.click(screen.getByRole('button', { name: 'Отправить задачу' }));
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
-    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
 
     resolveOldOperator?.(new Response(JSON.stringify({ operator_result: { chat_response: 'Результат первой точки', status: 'completed' } }), {
       status: 200,
@@ -729,7 +738,7 @@ describe('TelegramControlPage scope integrity', () => {
       return url.includes('/api/operator/mobile/reviews') && url.includes('scope_id=business-2');
     })).toBe(true));
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Где работаем?' })).not.toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Развитие' }));
+    await openGrowthPaths(user);
     await user.click(await screen.findByRole('button', { name: 'Ответить на отзывы' }));
     await screen.findByRole('heading', { name: 'Отзывы' });
     await user.click(screen.getByRole('button', { name: /^\u0424\u0438\u043b\u044c\u0442\u0440\u044b/ }));
@@ -794,7 +803,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<TelegramControlPage />);
-    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
     expect(await screen.findByText('Применить изменение цены?')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Подтвердить' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Отклонить' })).toHaveLength(2);
@@ -844,7 +853,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<TelegramControlPage />);
-    await user.click(await screen.findByRole('button', { name: 'Оператор' }));
+    await openOperator(user);
     await user.click(await screen.findByRole('button', { name: 'Подтвердить' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Временно не удалось подтвердить.');

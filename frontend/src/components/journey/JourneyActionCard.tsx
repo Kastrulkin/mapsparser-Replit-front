@@ -12,6 +12,7 @@ const commandLabel: Record<string, string> = {
   mark_sent: 'Сообщение отправлено', record_reply: 'Сохранить ответ', prepare_followup: 'Подготовить follow-up',
   save_terms: 'Сохранить условия', mark_launched: 'Партнёрство запущено', mark_published: 'Размещение вышло',
   add_result: 'Добавить результат', complete: 'Готово', start_next_cycle: 'Начать следующий цикл', open_upgrade: 'Автоматизировать работу',
+  prepare: 'Подготовить черновик', save_draft: 'Сохранить черновик', schedule: 'Добавить в календарь',
 };
 
 const primaryCommand = (action: JourneyAction) => action.allowed_commands.find((item) => item !== 'copy') || action.allowed_commands[0] || '';
@@ -23,6 +24,9 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
   const [details, setDetails] = useState('');
   const [inquiries, setInquiries] = useState('');
   const [sales, setSales] = useState('');
+  const [draftText, setDraftText] = useState(typeof action.payload?.draft_text === 'string' ? action.payload.draft_text : typeof action.payload?.content_excerpt === 'string' ? action.payload.content_excerpt : '');
+  const [scheduledFor, setScheduledFor] = useState(typeof action.payload?.scheduled_for === 'string' ? action.payload.scheduled_for : '');
+  const [views, setViews] = useState('');
   const command = primaryCommand(action);
 
   const execute = async (nextCommand: string) => {
@@ -34,9 +38,18 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
     if (nextCommand === 'save_terms') payload.details = details;
     if (nextCommand === 'mark_launched') payload.mechanic = details || 'other';
     if (nextCommand === 'mark_published') payload.publication_url = details;
+    if (nextCommand === 'save_draft') {
+      payload.draft_text = draftText;
+      if (action.entity_id) payload.content_plan_item_id = action.entity_id;
+    }
+    if (nextCommand === 'schedule') {
+      payload.scheduled_for = scheduledFor;
+      if (action.entity_id) payload.content_plan_item_id = action.entity_id;
+    }
     if (nextCommand === 'add_result') {
       payload.inquiries = Number(inquiries || 0);
       payload.sales = Number(sales || 0);
+      if (action.flow_type === 'content') payload.views = Number(views || 0);
       payload.note = details;
     }
     try {
@@ -64,8 +77,11 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       <div className="flex items-start gap-3"><span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-[14px]', dark ? 'bg-primary/15 text-primary' : 'bg-orange-50 text-orange-700')}><Check className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className={cn('text-xs font-semibold uppercase tracking-[0.12em]', dark ? 'text-primary' : 'text-orange-700')}>Что сделать сейчас</div><h3 className="mt-1 text-balance text-lg font-semibold">{action.title}</h3><p className={cn('mt-2 text-pretty text-sm leading-6', dark ? 'text-zinc-400' : 'text-slate-600')}>{action.description}</p>{action.due_at ? <p className="mt-2 text-xs tabular-nums opacity-60">Срок: {new Date(action.due_at).toLocaleString('ru-RU')}</p> : null}</div></div>
 
       {action.action_type === 'check_reply' ? <div className="mt-4"><Select value={outcome} onValueChange={setOutcome}><SelectTrigger className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-200')}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="interested">Интересно</SelectItem><SelectItem value="paid">Просит оплату</SelectItem><SelectItem value="barter">Готов на бартер</SelectItem><SelectItem value="details">Нужны детали</SelectItem><SelectItem value="refused">Отказал</SelectItem><SelectItem value="other">Другое</SelectItem></SelectContent></Select></div> : null}
-      {['define_terms', 'mark_launched', 'mark_published', 'add_result'].includes(action.action_type) ? <Textarea value={details} onChange={(event) => setDetails(event.target.value)} className={cn('mt-4 min-h-24', dark && 'border-white/10 bg-black/20 text-zinc-100')} placeholder={action.action_type === 'mark_published' ? 'Ссылка на размещение' : 'Условия или комментарий'} /> : null}
+      {['define_terms', 'mark_launched', 'mark_published', 'waiting_for_publication', 'add_result', 'add_content_result'].includes(action.action_type) ? <Textarea value={details} onChange={(event) => setDetails(event.target.value)} className={cn('mt-4 min-h-24', dark && 'border-white/10 bg-black/20 text-zinc-100')} placeholder={['mark_published', 'waiting_for_publication'].includes(action.action_type) ? 'Ссылка на публикацию' : 'Условия или комментарий'} /> : null}
+      {action.action_type === 'review_content' ? <Textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} className={cn('mt-4 min-h-40', dark && 'border-white/10 bg-black/20 text-zinc-100')} placeholder="Проверьте и отредактируйте черновик" /> : null}
+      {action.action_type === 'save_to_calendar' ? <Input type="date" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} className={cn('mt-4 min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} aria-label="Дата публикации" /> : null}
       {action.action_type === 'add_result' ? <div className="mt-3 grid grid-cols-2 gap-2"><Input inputMode="numeric" value={inquiries} onChange={(event) => setInquiries(event.target.value)} placeholder="Обращения" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /><Input inputMode="numeric" value={sales} onChange={(event) => setSales(event.target.value)} placeholder="Продажи" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /></div> : null}
+      {action.action_type === 'add_content_result' ? <div className="mt-3 grid grid-cols-2 gap-2"><Input inputMode="numeric" value={views} onChange={(event) => setViews(event.target.value)} placeholder="Просмотры" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /><Input inputMode="numeric" value={inquiries} onChange={(event) => setInquiries(event.target.value)} placeholder="Обращения" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /></div> : null}
       {error ? <p className={cn('mt-3 text-sm', dark ? 'text-red-300' : 'text-red-700')}>{error}</p> : null}
       <div className="mt-5 flex flex-col gap-2 sm:flex-row">
         {action.allowed_commands.includes('copy') ? <Button type="button" variant="outline" onClick={() => void copyMessage()} disabled={Boolean(busy)} className={cn('min-h-11 gap-2 transition-transform active:scale-[0.96]', dark && 'border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08] hover:text-white')}><Clipboard className="h-4 w-4" />Скопировать</Button> : null}

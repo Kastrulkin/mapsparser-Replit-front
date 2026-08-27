@@ -16,7 +16,9 @@ import {
   Bot,
   Radar,
   BarChart3,
-  Megaphone
+  Megaphone,
+  LayoutGrid,
+  CircleEllipsis,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -52,7 +54,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const shellCopy = getDashboardShellCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
-  const menuItems = [
+  const legacyMenuItems = [
     {
       id: 'today',
       label: shellCopy.today,
@@ -159,6 +161,36 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: shellCopy.settingsHint,
     },
   ];
+  const menuItems = featureFlags.growthPathsNavigation ? [
+    {
+      id: 'today',
+      label: 'Сегодня',
+      icon: Calendar,
+      path: '/dashboard/today',
+      tooltip: 'Главное действие и короткая очередь на сегодня.',
+    },
+    {
+      id: 'growth-paths',
+      label: 'Пути роста',
+      icon: LayoutGrid,
+      path: '/dashboard/growth-paths',
+      tooltip: 'Карты, контент, инфлюенсеры и партнёрства — с одним следующим шагом.',
+    },
+    {
+      id: 'progress',
+      label: 'Результаты',
+      icon: TrendingUp,
+      path: '/dashboard/progress',
+      tooltip: 'Завершённые действия, изменения и динамика показателей.',
+    },
+    {
+      id: 'more',
+      label: 'Ещё',
+      icon: CircleEllipsis,
+      path: '/dashboard/more',
+      tooltip: 'Профиль, финансы, агенты, чаты, интеграции и настройки.',
+    },
+  ] : legacyMenuItems;
 
   const handleLinkClick = () => {
     if (isMobile && onClose) {

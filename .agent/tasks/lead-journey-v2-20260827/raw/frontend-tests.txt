@@ -1,0 +1,17 @@
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run --run src/pages/LeadJourneyPage.test.tsx src/components/journey/JourneyActionCard.test.tsx src/components/telegram/LeadJourneyOnboarding.test.tsx src/pages/dashboard/GrowthPathsPage.test.tsx src/pages/dashboard/JourneyAdminPage.test.tsx src/pages/TelegramControlPage.test.tsx src/pages/dashboard/InfluencerPromotionPage.test.tsx src/lib/mobileDeepLinkRouter.test.ts src/lib/mobileTaskRouter.test.ts
+
+
+ RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  9 passed (9)
+      Tests  44 passed (44)
+   Start at  16:27:50
+   Duration  28.88s (transform 7.36s, setup 7.13s, import 14.85s, tests 35.55s, environment 26.55s)
+
+
+EXIT_CODE=0

@@ -1,4 +1,6 @@
 from legacy_routes import shared as _shared
+from services.lead_journey_service import claim_reserved_journey, journey_enabled
+from services.product_telemetry_service import record_product_event
 
 globals().update(_shared.runtime_namespace)
 
@@ -1446,6 +1448,37 @@ def auth_verify_email():
         if not session_token:
             return jsonify({"error": "Ошибка создания сессии"}), 500
 
+        resumed_action = None
+        if journey_enabled() and journey_enabled("JOURNEY_POST_AUTH_REDIRECT_ENABLED"):
+            journey_db = DatabaseManager()
+            try:
+                journey_cursor = journey_db.conn.cursor()
+                resumed = claim_reserved_journey(journey_cursor, user_id=str(result['id']))
+                if resumed:
+                    resumed_journey, resumed_action = resumed
+                    record_product_event(
+                        journey_cursor, event_name="email_verified", surface="web",
+                        business_id=resumed_action.get("business_id"), user_id=str(result['id']),
+                        lead_id=resumed_journey.get("prospect_lead_id"), journey_id=resumed_journey.get("id"),
+                        action_id=resumed_action.get("id"), flow_type=resumed_action.get("flow_type"),
+                        entity_type=resumed_action.get("entity_type"), entity_id=resumed_action.get("entity_id"),
+                        target="email_verification", properties={"continuity": "reserved_journey"},
+                    )
+                    record_product_event(
+                        journey_cursor, event_name="journey_claimed", surface="web",
+                        business_id=resumed_action.get("business_id"), user_id=str(result['id']),
+                        lead_id=resumed_journey.get("prospect_lead_id"), journey_id=resumed_journey.get("id"),
+                        action_id=resumed_action.get("id"), flow_type=resumed_action.get("flow_type"),
+                        entity_type=resumed_action.get("entity_type"), entity_id=resumed_action.get("entity_id"),
+                        target="email_verification", properties={"source": resumed_journey.get("source")},
+                    )
+                journey_db.conn.commit()
+            except Exception:
+                journey_db.conn.rollback()
+                raise
+            finally:
+                journey_db.close()
+
         return jsonify(
             {
                 "success": True,
@@ -1456,6 +1489,7 @@ def auth_verify_email():
                     "name": result.get('name'),
                     "phone": result.get('phone'),
                 },
+                "journey_action": resumed_action,
             }
         )
     except Exception as e:

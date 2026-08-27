@@ -1,0 +1,35 @@
+{
+  "task_id": "lead-journey-v2-20260827",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Migration, flags, service and shared types accept the four canonical flows."},
+    {"id": "AC2", "status": "PASS", "reason": "Selected flow is required, entity matching is enforced, and public data is allowlisted."},
+    {"id": "AC3", "status": "PASS", "reason": "Token preservation, secure pending claim and exact allowlisted redirect are implemented and exercised."},
+    {"id": "AC4", "status": "PASS", "reason": "Content journey uses existing domain records and transactional transitions with approval boundaries."},
+    {"id": "AC5", "status": "PASS", "reason": "Superadmin wizard creates and revokes deterministic links without SQL."},
+    {"id": "AC6", "status": "PASS", "reason": "Growth Paths and flag-gated four-item IA are implemented while legacy routes remain."},
+    {"id": "AC7", "status": "PASS", "reason": "Shared readable access blocks are used and backend authorization remains authoritative."},
+    {"id": "AC8", "status": "PASS", "reason": "Web and Mini App expose Today, Growth paths, Results and More without losing legacy destinations."},
+    {"id": "AC9", "status": "PASS", "reason": "Both surfaces share the action contract; funnel dimensions and diagnostics are present."},
+    {"id": "AC10", "status": "PASS", "reason": "48 backend and 44 frontend tests plus production build and local browser acceptance passed."}
+  ],
+  "commands_run": [
+    "backend targeted pytest suite: 48 passed",
+    "frontend targeted vitest suite: 44 passed",
+    "frontend npm run build: passed",
+    "Python py_compile: passed",
+    "targeted git diff --check: passed",
+    "local in-app browser acceptance: passed"
+  ],
+  "artifacts_used": [
+    "raw/backend-tests-verbose.txt",
+    "raw/frontend-tests.txt",
+    "raw/frontend-build.txt",
+    "raw/browser-smoke.md",
+    "raw/screenshot-public-content.png",
+    "raw/screenshot-admin-builder.jpg",
+    "raw/screenshot-growth-paths-viewport.jpg",
+    "raw/screenshot-influencer-block-access.jpg",
+    "raw/screenshot-mini-app-viewport.jpg"
+  ]
+}

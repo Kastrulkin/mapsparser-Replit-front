@@ -1,6 +1,6 @@
 import { newAuth } from '@/lib/auth_new';
 
-export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps';
+export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content';
 
 export type LeadJourneyDirection = {
   key: LeadJourneyKey;
@@ -20,7 +20,7 @@ export const LEAD_JOURNEY_STORAGE_KEY = 'localos_lead_journey_intent';
 export const LEAD_JOURNEY_TOKEN_STORAGE_KEY = 'localos_lead_journey_token';
 
 export type JourneyOpportunity = {
-  flow_type: 'influencer' | 'partnership' | 'maps';
+  flow_type: 'influencer' | 'partnership' | 'maps' | 'content';
   entity_type: string;
   entity_id?: string;
   title: string;
@@ -28,6 +28,7 @@ export type JourneyOpportunity = {
   reason: string;
   mechanic?: string;
   message_excerpt?: string;
+  public_url?: string;
   count?: number;
   metrics?: Record<string, string | number | boolean>;
   tasks?: Array<{ title: string; reason?: string }>;
@@ -47,7 +48,7 @@ export type JourneyAction = {
   id: string;
   journey_id?: string | null;
   business_id?: string | null;
-  flow_type: 'influencer' | 'partnership' | 'maps' | 'upgrade';
+  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'upgrade';
   entity_type: string;
   entity_id?: string | null;
   action_type: string;
@@ -109,10 +110,10 @@ export const loadJourneyActions = async (businessId: string): Promise<JourneyAct
   return data.actions || [];
 };
 
-export const claimLeadJourney = async (token: string, businessId: string): Promise<JourneyAction> => {
+export const claimLeadJourney = async (token: string, businessId: string, surface: 'web' | 'telegram_mini_app' = 'web'): Promise<JourneyAction> => {
   const data = await newAuth.makeRequest('/journeys/claim', {
     method: 'POST',
-    body: JSON.stringify({ token, business_id: businessId }),
+    body: JSON.stringify({ token, business_id: businessId, surface }),
   });
   return data.action;
 };
@@ -203,11 +204,75 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     lockedResult: 'После регистрации откроются точный текст изменения, полный план карт и контроль результата по расписанию.',
     dashboardRoute: '/dashboard/card',
   },
+  {
+    key: 'content',
+    eyebrow: 'Контент',
+    title: 'Подготовить материал, который напомнит о вашем бизнесе',
+    preview: 'Покажем одну подходящую тему и короткий фрагмент будущего материала.',
+    detailTitle: 'Тема с понятной целью и следующим шагом',
+    detail: 'LocalOS использует услуги, сезон, отзывы и контекст бизнеса, чтобы предложить не абстрактную идею, а материал для конкретной площадки.',
+    prepareLabel: 'Подготовить черновик',
+    resultTitle: 'Структура первого материала готова',
+    resultPreview: [
+      'Тема и цель публикации для конкретной аудитории',
+      'Короткий черновик в понятном голосе бизнеса',
+      'Проверка, календарь и отдельное подтверждение публикации',
+    ],
+    lockedResult: 'После регистрации откроются полный черновик, редактирование и сохранение в контент-календарь.',
+    dashboardRoute: '/dashboard/content',
+  },
 ];
 
 export const isLeadJourneyKey = (value: string | null): value is LeadJourneyKey => (
-  value === 'influencers' || value === 'partnerships' || value === 'maps'
+  value === 'influencers' || value === 'partnerships' || value === 'maps' || value === 'content'
 );
+
+export const leadJourneyKeyForFlow = (flow: string | null | undefined): LeadJourneyKey | null => {
+  if (flow === 'influencer') return 'influencers';
+  if (flow === 'partnership') return 'partnerships';
+  return isLeadJourneyKey(flow || null) ? flow : null;
+};
+
+export const journeyActionRoute = (action: JourneyAction) => {
+  const screen = action.cta_target?.screen;
+  const routes: Record<string, string> = {
+    influencers: '/dashboard/promotion/influencers',
+    partnerships: '/dashboard/promotion/partnerships',
+    progress: '/dashboard/card',
+    maps: '/dashboard/card',
+    content: '/dashboard/content',
+    settings: '/dashboard/settings',
+    today: '/dashboard/today',
+  };
+  const base = routes[screen || ''] || '/dashboard/today';
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}journey_action=${encodeURIComponent(action.id)}`;
+};
+
+const businessIdFromUser = (user: { businesses?: unknown[] } | null | undefined) => {
+  const businesses = Array.isArray(user?.businesses) ? user.businesses : [];
+  const savedBusinessId = window.localStorage.getItem('selectedBusinessId') || '';
+  const availableIds = businesses.map((business) => {
+    if (!business || typeof business !== 'object' || !('id' in business)) return '';
+    const value = business.id;
+    return typeof value === 'string' ? value : '';
+  }).filter(Boolean);
+  if (savedBusinessId && availableIds.includes(savedBusinessId)) return savedBusinessId;
+  return availableIds[0] || '';
+};
+
+export const resolveStoredLeadJourney = async (preferredBusinessId = '') => {
+  const token = readLeadJourneyToken();
+  if (!token) return null;
+  const user = await newAuth.getCurrentUser();
+  const businessId = preferredBusinessId || businessIdFromUser(user);
+  if (!businessId) throw new Error('Не найден бизнес для продолжения персонального сценария');
+  const action = await claimLeadJourney(token, businessId);
+  const route = journeyActionRoute(action);
+  clearLeadJourneyToken();
+  clearLeadJourneyIntent();
+  return { action, businessId, route };
+};
 
 export const getLeadJourneyDirection = (key: LeadJourneyKey | null | undefined) => (
   leadJourneyDirections.find((direction) => direction.key === key) || null

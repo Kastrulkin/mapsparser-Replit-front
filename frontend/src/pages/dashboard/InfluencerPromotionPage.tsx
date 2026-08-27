@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Link, Navigate, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
   ArrowLeft,
   BarChart3,
@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { AccessBoundary } from '@/components/access/AccessBoundary';
 import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
 
 type DashboardContext = {
@@ -886,7 +887,31 @@ export const InfluencerPromotionPage = () => {
     return <div className="py-16 text-center text-sm text-slate-500">Выберите бизнес для поиска локальных авторов.</div>;
   }
   if (currentBusiness?.creator_promotion_available !== true) {
-    return <Navigate to="/dashboard/partnerships" replace />;
+    return (
+      <div className="space-y-6 pb-12 antialiased">
+        <DashboardPageHeader
+          eyebrow="Путь роста"
+          title="Локальные авторы"
+          description="Персональный шаг по выбранному автору доступен выше. Полный раздел откроет поиск, фильтры и ведение нескольких коллабораций."
+        />
+        <AccessBoundary
+          access={{
+            status: 'payment_required',
+            reason: 'После открытия вы сможете искать авторов по географии и тематике, сравнивать их и вести результаты размещений.',
+            cta_label: 'Выбрать тариф',
+            cta_target: { screen: 'settings' },
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-3">
+            {['Поиск подходящих авторов', 'Проверка причин совпадения', 'Учёт размещений и результата'].map((label) => (
+              <div key={label} className="min-h-28 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-700 shadow-sm">
+                {label}
+              </div>
+            ))}
+          </div>
+        </AccessBoundary>
+      </div>
+    );
   }
 
   return (

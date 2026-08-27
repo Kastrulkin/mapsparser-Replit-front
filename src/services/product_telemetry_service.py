@@ -19,6 +19,9 @@ ALLOWED_PRODUCT_EVENTS = frozenset({
     "action_marked_sent", "followup_created", "reply_recorded", "deal_started",
     "result_added", "map_task_completed", "next_action_opened",
     "recurring_monitoring_enabled", "paywall_viewed", "subscription_started",
+    "email_verified", "journey_claimed", "journey_workspace_opened",
+    "auth_redirect_failed", "stale_action_detected", "orphan_action_detected",
+    "content_draft_saved", "content_scheduled",
 })
 ALLOWED_SURFACES = frozenset({"web", "telegram_mini_app"})
 

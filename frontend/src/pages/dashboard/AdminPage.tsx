@@ -2,8 +2,9 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap, Activity } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap, Activity, Link2 } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
+import { featureFlags } from '../../config/featureFlags';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
@@ -1285,15 +1286,15 @@ export const AdminPage: React.FC = () => {
           title="Панель администратора"
           description="Единое место для контроля пользователей, бизнесов, агентов, парсинга и операционных настроек."
           icon={Settings}
-          actions={activeTab === 'businesses' || activeTab === 'companies' ? (
-            <Button
-              onClick={() => setShowCreateModal(true)}
-              className="rounded-2xl bg-slate-950 px-5 text-white shadow-sm hover:bg-slate-800"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Создать аккаунт
-            </Button>
-          ) : undefined}
+          actions={(
+            <div className="flex flex-wrap gap-2">
+              {featureFlags.journeyAdminBuilder ? <Button type="button" variant="outline" onClick={() => navigate('/dashboard/bazich/journeys')} className="min-h-11 rounded-2xl">
+                <Link2 className="mr-2 h-4 w-4" />
+                Маршрут клиента
+              </Button> : null}
+              {activeTab === 'businesses' || activeTab === 'companies' ? <Button onClick={() => setShowCreateModal(true)} className="min-h-11 rounded-2xl bg-slate-950 px-5 text-white shadow-sm hover:bg-slate-800"><Plus className="mr-2 h-4 w-4" />Создать аккаунт</Button> : null}
+            </div>
+          )}
         />
 
         {shouldLoadUsers ? (

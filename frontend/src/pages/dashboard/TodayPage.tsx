@@ -9,9 +9,10 @@ import { cn } from '@/lib/utils';
 import type { ControlScope } from '@/components/DashboardLayout';
 import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import { fillTodayTemplate, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
-import { claimLeadJourney, clearLeadJourneyIntent, clearLeadJourneyToken, getLeadJourneyDirection, readLeadJourneyIntent, readLeadJourneyToken } from '@/lib/leadJourney';
+import { clearLeadJourneyIntent, getLeadJourneyDirection, readLeadJourneyIntent, readLeadJourneyToken, resolveStoredLeadJourney } from '@/lib/leadJourney';
 import { localizedFocusAction, localizedGrowthText } from './progressPageCopy';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { featureFlags } from '@/config/featureFlags';
 import type { JourneyAction } from '@/lib/leadJourney';
 
 type DashboardContext = { currentBusinessId?: string | null; controlScope?: ControlScope | null; onControlScopeChange?: (scope: ControlScope) => void; onBusinessChange?: (businessId: string) => void };
@@ -153,15 +154,15 @@ export const TodayPage = () => {
   useEffect(() => { load(); }, [currentBusinessId, controlScope?.id, controlScope?.kind]);
 
   useEffect(() => {
-    if (!currentBusinessId) return;
+    if (!featureFlags.journeyPostAuthRedirect || !currentBusinessId) return;
     const token = readLeadJourneyToken();
     if (!token) return;
-    void claimLeadJourney(token, currentBusinessId)
-      .then(() => {
-        clearLeadJourneyToken();
-        clearLeadJourneyIntent();
-        setJourneyIntent(null);
-        load();
+    void resolveStoredLeadJourney(currentBusinessId)
+      .then((resolved) => {
+        if (resolved) {
+          setJourneyIntent(null);
+          navigate(resolved.route, { replace: true });
+        }
       })
       .catch(() => {
         // Keep the token so a temporary API or connectivity failure can be retried.

@@ -63,13 +63,17 @@ def build_operator_map_refresh_plan(
     business_id: str,
     user_id: str,
     explicit_url: Any = None,
+    source_override: Any = None,
     require_runtime_flag: bool = True,
 ) -> dict[str, Any]:
     blocked: list[str] = []
     url = _clean_text(explicit_url) or _load_latest_map_url(cursor, business_id=business_id)
     if not url:
         blocked.append("map_link_required")
-    if require_runtime_flag and not OPERATOR_APIFY_REFRESH_ENABLED:
+    source = _clean_text(source_override).lower() or _map_refresh_source()
+    if source not in {"apify_yandex", "yandex_maps"}:
+        source = _map_refresh_source()
+    if require_runtime_flag and source == "apify_yandex" and not OPERATOR_APIFY_REFRESH_ENABLED:
         blocked.append("operator_apify_refresh_disabled")
 
     return {
@@ -77,7 +81,7 @@ def build_operator_map_refresh_plan(
         "business_id": business_id,
         "user_id": user_id,
         "url": url,
-        "source": _map_refresh_source(),
+        "source": source,
         "task_type": "parse_card",
         "blocked_reasons": blocked,
         "side_effects": {
@@ -95,6 +99,7 @@ def enqueue_operator_map_refresh(
     business_id: str,
     user_id: str,
     explicit_url: Any = None,
+    source_override: Any = None,
     queue_id: str | None = None,
     require_runtime_flag: bool = True,
 ) -> dict[str, Any]:
@@ -103,6 +108,7 @@ def enqueue_operator_map_refresh(
         business_id=business_id,
         user_id=user_id,
         explicit_url=explicit_url,
+        source_override=source_override,
         require_runtime_flag=require_runtime_flag,
     )
     if plan["status"] != "ready":

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { readLeadJourneyToken } from '@/lib/leadJourney';
+import { clearLeadJourneyIntent, clearLeadJourneyToken, journeyActionRoute, readLeadJourneyToken, resolveStoredLeadJourney, type JourneyAction } from '@/lib/leadJourney';
+import { featureFlags } from '@/config/featureFlags';
 
 const VerifyEmail: React.FC = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -37,9 +38,23 @@ const VerifyEmail: React.FC = () => {
         }
 
         setStatus('success');
-        if (readLeadJourneyToken()) {
+        if (data.journey_action && featureFlags.journeyPostAuthRedirect) {
+          const action: JourneyAction = data.journey_action;
+          clearLeadJourneyToken();
+          clearLeadJourneyIntent();
           setMessage('Email подтверждён. Возвращаемся к выбранному действию...');
-          setTimeout(() => navigate('/dashboard/today', { replace: true }), 1200);
+          setTimeout(() => navigate(journeyActionRoute(action), { replace: true }), 1200);
+          return;
+        }
+        if (readLeadJourneyToken() && featureFlags.journeyPostAuthRedirect) {
+          setMessage('Email подтверждён. Возвращаемся к выбранному действию...');
+          try {
+            const resolved = await resolveStoredLeadJourney();
+            setTimeout(() => navigate(resolved?.route || '/dashboard/today', { replace: true }), 1200);
+          } catch (journeyError) {
+            setStatus('error');
+            setMessage(`Email подтверждён, но персональный сценарий пока не открылся: ${journeyError instanceof Error ? journeyError.message : 'повторите попытку'}`);
+          }
           return;
         }
         const selectedTier = localStorage.getItem('selectedTier') || '';

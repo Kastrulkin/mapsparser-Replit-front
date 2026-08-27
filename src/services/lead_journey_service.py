@@ -14,11 +14,12 @@ from psycopg2.extras import Json
 
 ACTIVE_ACTION_STATUSES = {"ready", "in_progress", "waiting", "blocked"}
 FINAL_ACTION_STATUSES = {"completed", "superseded", "cancelled"}
-FLOW_TYPES = {"influencer", "partnership", "maps"}
+FLOW_TYPES = {"influencer", "partnership", "maps", "content"}
 FLOW_FLAGS = {
     "influencer": "INFLUENCER_JOURNEY_ENABLED",
     "partnership": "PARTNERSHIP_JOURNEY_ENABLED",
     "maps": "MAPS_JOURNEY_ENABLED",
+    "content": "CONTENT_JOURNEY_ENABLED",
 }
 PUBLIC_EVENT_NAMES = {
     "lead_link_opened", "opportunity_preview_clicked", "opportunity_list_opened",
@@ -41,6 +42,12 @@ ACTION_COMMANDS = {
     "refresh_data": ("complete",),
     "compare_snapshot": ("complete", "retry_refresh"),
     "start_next_map_plan": ("start_next_cycle",),
+    "prepare_content": ("prepare",),
+    "review_content": ("save_draft",),
+    "save_to_calendar": ("schedule",),
+    "waiting_for_publication": ("mark_published",),
+    "add_content_result": ("add_result",),
+    "start_next_content_cycle": ("start_next_cycle",),
     "upgrade": ("open_upgrade",),
 }
 
@@ -125,6 +132,9 @@ def _clean_public_opportunity(item: dict[str, Any]) -> dict[str, Any]:
         for task in tasks[:12]
         if isinstance(task, dict) and str(task.get("title") or "").strip()
     ]
+    public_url = str(item.get("public_url") or "").strip()
+    if not public_url.startswith(("https://", "http://")):
+        public_url = ""
     return {
         "flow_type": flow,
         "entity_type": str(item.get("entity_type") or flow)[:100],
@@ -134,6 +144,7 @@ def _clean_public_opportunity(item: dict[str, Any]) -> dict[str, Any]:
         "reason": str(item.get("reason") or "")[:800],
         "mechanic": str(item.get("mechanic") or "")[:500],
         "message_excerpt": str(item.get("message_excerpt") or "")[:180],
+        "public_url": public_url[:500],
         "count": max(0, int(item.get("count") or 0)),
         "metrics": safe_metrics,
         "tasks": safe_tasks,
@@ -146,11 +157,12 @@ def _default_opportunities(lead: dict[str, Any]) -> list[dict[str, Any]]:
         {"flow_type": "influencer", "entity_type": "creator_search", "entity_id": "", "title": "Локальный автор", "summary": f"Подберём автора рядом с {business_name} по географии и тематике.", "reason": "Аудитория автора может совпадать с вашими клиентами.", "mechanic": "Начать с бартера или персонального промокода.", "message_excerpt": "Здравствуйте! Увидели ваш материал о…", "count": 0, "metrics": {}},
         {"flow_type": "partnership", "entity_type": "partner_search", "entity_id": "", "title": "Соседский партнёр", "summary": "Найдём бизнес рядом с дополняющей аудиторией.", "reason": "Клиенты могут пользоваться обеими услугами в одном сценарии.", "mechanic": "Взаимная рекомендация клиентов.", "message_excerpt": "Здравствуйте! Мы работаем рядом и хотим предложить…", "count": 0, "metrics": {}},
         {"flow_type": "maps", "entity_type": "card_audit", "entity_id": "", "title": "Возможность на картах", "summary": "Покажем приоритетное отличие от ближайших конкурентов.", "reason": "Конкретная задача помогает улучшить полноту карточки.", "mechanic": "Выполнить первый пункт недельного плана.", "message_excerpt": "", "count": 0, "metrics": {}},
+        {"flow_type": "content", "entity_type": "content_topic", "entity_id": "", "title": "Тема для следующей публикации", "summary": f"Покажем тему и короткий черновик для {business_name} на основе реальных данных бизнеса.", "reason": "Регулярный полезный контент помогает напоминать о бизнесе без постоянного поиска идей.", "mechanic": "Подготовить один материал, проверить его и сохранить в календарь.", "message_excerpt": "Полезный материал для клиентов вашего бизнеса…", "count": 0, "metrics": {}},
     ]
 
 
 def build_lead_preview(lead: dict[str, Any]) -> dict[str, Any]:
-    """Build a safe three-path preview from fields already stored on the lead."""
+    """Build a safe four-path preview from fields already stored on the lead."""
     business_name = str(lead.get("name") or "").strip()
     city = str(lead.get("city") or "").strip()
     address = str(lead.get("address") or "").strip()
@@ -168,6 +180,8 @@ def build_lead_preview(lead: dict[str, Any]) -> dict[str, Any]:
     if isinstance(reviews_count, int):
         map_metrics["reviews_count"] = reviews_count
     opportunities[2]["metrics"] = map_metrics
+    if context:
+        opportunities[3]["reason"] = f"Первая тема будет учитывать: {context}."
     return {
         "business_name": business_name,
         "business_city": city,
@@ -176,16 +190,122 @@ def build_lead_preview(lead: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_lead_preview_from_sources(cursor: Any, lead: dict[str, Any]) -> dict[str, Any]:
+    """Enrich the safe fallback with one real public example from each existing domain."""
+    preview = build_lead_preview(lead)
+    opportunities = preview["opportunities"]
+    city = str(lead.get("city") or "").strip()
+    lead_id = str(lead.get("id") or "").strip()
+    cursor.execute(
+        """
+        SELECT profile.id::text, profile.display_name, profile.description, profile.primary_city,
+               channel.canonical_url, channel.public_metrics_json
+        FROM creator_profiles profile
+        LEFT JOIN LATERAL (
+            SELECT canonical_url, public_metrics_json
+            FROM creator_channels item WHERE item.creator_profile_id = profile.id
+            ORDER BY item.last_observed_at DESC NULLS LAST, item.created_at DESC LIMIT 1
+        ) channel ON TRUE
+        WHERE profile.verification_status <> 'rejected' AND profile.brand_safety_status <> 'blocked'
+        ORDER BY CASE WHEN LOWER(COALESCE(profile.primary_city, '')) = LOWER(%s) THEN 0 ELSE 1 END,
+                 profile.updated_at DESC
+        LIMIT 1
+        """,
+        (city,),
+    )
+    creator = _row(cursor, cursor.fetchone())
+    if creator:
+        opportunities[0].update({
+            "entity_type": "creator_profile", "entity_id": str(creator.get("id") or ""),
+            "title": str(creator.get("display_name") or "Локальный автор"),
+            "summary": str(creator.get("description") or "Публичный профиль локального автора."),
+            "reason": f"Автор найден в городе {creator.get('primary_city') or city or 'клиента'}; соответствие нужно подтвердить перед контактом.",
+            "public_url": str(creator.get("canonical_url") or ""),
+            "metrics": _json_object(creator.get("public_metrics_json")),
+        })
+    cursor.execute(
+        """
+        SELECT id, name, category, city, rating, source_url
+        FROM prospectingleads
+        WHERE id <> %s AND COALESCE(name, '') <> ''
+        ORDER BY CASE WHEN LOWER(COALESCE(city, '')) = LOWER(%s) THEN 0 ELSE 1 END,
+                 rating DESC NULLS LAST, updated_at DESC
+        LIMIT 1
+        """,
+        (lead_id, city),
+    )
+    partner = _row(cursor, cursor.fetchone())
+    if partner:
+        opportunities[1].update({
+            "entity_type": "prospecting_lead", "entity_id": str(partner.get("id") or ""),
+            "title": str(partner.get("name") or "Соседский партнёр"),
+            "summary": f"{partner.get('category') or 'Локальный бизнес'} · {partner.get('city') or city}",
+            "reason": "Это публичный пример соседнего бизнеса; общую аудиторию нужно подтвердить перед предложением.",
+            "public_url": str(partner.get("source_url") or ""),
+            "metrics": {"rating": partner.get("rating")} if isinstance(partner.get("rating"), (int, float)) else {},
+        })
+    cursor.execute(
+        """
+        SELECT item.id, item.theme, item.goal, item.draft_text, item.scheduled_for
+        FROM contentplanitems item
+        WHERE item.business_id IN (
+            SELECT client_business_id FROM lead_workstreams
+            WHERE lead_id = %s AND client_business_id IS NOT NULL
+        )
+          AND item.status IN ('planned', 'draft_generated', 'edited', 'approved')
+        ORDER BY item.scheduled_for, item.updated_at DESC LIMIT 1
+        """,
+        (lead_id,),
+    )
+    content = _row(cursor, cursor.fetchone())
+    if content:
+        opportunities[3].update({
+            "entity_type": "contentplanitem", "entity_id": str(content.get("id") or ""),
+            "title": str(content.get("theme") or "Тема для публикации"),
+            "summary": str(content.get("goal") or "Материал из существующего контент-плана."),
+            "message_excerpt": str(content.get("draft_text") or "")[:180],
+            "metrics": {"scheduled_for": str(content.get("scheduled_for") or "")},
+        })
+    preview["opportunities"] = [_clean_public_opportunity(item) for item in opportunities]
+    return preview
+
+
 def create_lead_journey(
     cursor: Any,
     *,
     prospect_lead_id: str | None,
     preview: dict[str, Any],
     source: str,
+    selected_flow: str,
     expires_in_days: int = 30,
     source_offer_type: str = "lead_offer",
     source_offer_id: str | None = None,
+    selected_entity_type: str | None = None,
+    selected_entity_id: str | None = None,
 ) -> tuple[dict[str, Any], str]:
+    normalized_flow = str(selected_flow or "").strip()
+    if normalized_flow not in FLOW_TYPES:
+        raise JourneyError("Выберите поддерживаемое направление", 400, "flow_not_supported")
+    normalized_preview = dict(preview or {})
+    raw_opportunities = normalized_preview.get("opportunities")
+    if not isinstance(raw_opportunities, list) or not raw_opportunities:
+        raw_opportunities = _default_opportunities(normalized_preview)
+        normalized_preview["opportunities"] = raw_opportunities
+    opportunities = [
+        clean for clean in (_clean_public_opportunity(item) for item in raw_opportunities) if clean
+    ]
+    requested_entity_id = str(selected_entity_id or "").strip()
+    selected = next((
+        item for item in opportunities
+        if item["flow_type"] == normalized_flow
+        and (not requested_entity_id or item["entity_id"] == requested_entity_id)
+    ), None)
+    if not selected:
+        raise JourneyError("Для выбранного направления нет безопасного примера", 400, "selected_opportunity_missing")
+    requested_entity_type = str(selected_entity_type or "").strip()
+    if requested_entity_type and requested_entity_type != str(selected.get("entity_type") or ""):
+        raise JourneyError("Тип выбранного примера не совпадает с безопасным preview", 400, "selected_entity_mismatch")
+    normalized_preview["opportunities"] = opportunities
     raw_token = secrets.token_urlsafe(32)
     journey_id = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=max(1, min(expires_in_days, 90)))
@@ -193,12 +313,14 @@ def create_lead_journey(
         """
         INSERT INTO lead_journeys (
             id, prospect_lead_id, source_offer_type, source_offer_id, public_token_hash,
-            source, preview_json, expires_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            source, preview_json, selected_flow, selected_entity_type, selected_entity_id, expires_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING *
         """,
         (journey_id, prospect_lead_id or None, source_offer_type, source_offer_id or None,
-         token_hash(raw_token), str(source or "outreach")[:100], Json(preview or {}), expires_at),
+         token_hash(raw_token), str(source or "outreach")[:100], Json(normalized_preview), normalized_flow,
+         str(selected.get("entity_type") or normalized_flow)[:100],
+         requested_entity_id or str(selected.get("entity_id") or "") or None, expires_at),
     )
     return serialize_journey(cursor, _row(cursor, cursor.fetchone()), public=True), raw_token
 
@@ -263,6 +385,9 @@ def select_public_opportunity(cursor: Any, *, token: str, flow_type: str, entity
     if flow_type not in FLOW_TYPES:
         raise JourneyError("Направление не поддерживается", 400, "flow_not_supported")
     journey = load_public_journey(cursor, token, lock=True)
+    locked_flow = str(journey.get("selected_flow") or "").strip()
+    if locked_flow and locked_flow != flow_type:
+        raise JourneyError("Ссылка создана для другого направления", 409, "journey_flow_locked")
     public = serialize_journey(cursor, journey, public=True)
     opportunity = next(
         (item for item in public["opportunities"] if item["flow_type"] == flow_type and (not entity_id or item["entity_id"] == entity_id)),
@@ -306,6 +431,12 @@ def _action_copy(flow_type: str, action_type: str, payload: dict[str, Any]) -> t
         "refresh_data": ("Проверить изменения карточки", "Все задачи недели отмечены. Обновите данные карты.", "Обновить данные", 120),
         "compare_snapshot": ("Посмотреть результат недели", "Сравните показатели до и после выполненных задач.", "Посмотреть сравнение", 110),
         "start_next_map_plan": ("Начать следующую неделю", "Следующий план готов после проверки изменений.", "Начать следующую неделю", 70),
+        "prepare_content": (f"Подготовить материал: {name}", "Откройте полный черновик и проверьте его перед сохранением.", "Подготовить черновик", 105),
+        "review_content": (f"Проверить материал: {name}", "Отредактируйте текст и подтвердите итоговую версию.", "Проверить черновик", 120),
+        "save_to_calendar": (f"Запланировать: {name}", "Выберите дату и сохраните материал в существующий контент-календарь.", "Добавить в календарь", 115),
+        "waiting_for_publication": (f"Зафиксировать публикацию: {name}", "Публикация выполняется вручную или через отдельное подтверждение.", "Указать публикацию", 110),
+        "add_content_result": (f"Добавить результат: {name}", "Зафиксируйте только известный результат опубликованного материала.", "Добавить результат", 100),
+        "start_next_content_cycle": ("Подготовить следующий материал", "Используйте результат публикации для выбора следующей темы.", "Выбрать следующую тему", 70),
         "upgrade": ("Автоматизировать повторяющуюся работу", "Вы завершили полезный цикл; LocalOS может поддерживать его постоянно.", "Посмотреть автоматизацию", 40),
     }
     return copies.get(action_type, ("Продолжить работу", "LocalOS подготовил следующий конкретный шаг.", "Продолжить", 50))
@@ -351,7 +482,7 @@ def ensure_action(
 
 
 def _screen_for_flow(flow_type: str) -> str:
-    return {"influencer": "influencers", "partnership": "partnerships", "maps": "progress", "upgrade": "settings"}.get(flow_type, "today")
+    return {"influencer": "influencers", "partnership": "partnerships", "maps": "progress", "content": "content", "upgrade": "settings"}.get(flow_type, "today")
 
 
 def reserve_journey(cursor: Any, *, token: str, user_id: str, business_id: str) -> dict[str, Any]:
@@ -376,8 +507,7 @@ def reserve_journey(cursor: Any, *, token: str, user_id: str, business_id: str) 
     return _row(cursor, cursor.fetchone())
 
 
-def claim_journey(cursor: Any, *, token: str, user_id: str, business_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    journey = load_public_journey(cursor, token, lock=True)
+def _claim_loaded_journey(cursor: Any, *, journey: dict[str, Any], user_id: str, business_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
     claimed_user = str(journey.get("claimed_user_id") or "")
     claimed_business = str(journey.get("claimed_business_id") or "")
     if claimed_user and (claimed_user != user_id or claimed_business != business_id):
@@ -398,6 +528,8 @@ def claim_journey(cursor: Any, *, token: str, user_id: str, business_id: str) ->
     claimed = _row(cursor, cursor.fetchone())
     preview = serialize_journey(cursor, {**journey, **claimed}, public=True)
     opportunity = next((item for item in preview["opportunities"] if item["flow_type"] == flow_type), {})
+    resolved_entity_type = str(journey.get("selected_entity_type") or flow_type)
+    resolved_entity_id = str(journey.get("selected_entity_id") or "") or None
     payload = {
         "entity_name": opportunity.get("title") or "возможность",
         "mechanic": opportunity.get("mechanic"),
@@ -414,16 +546,95 @@ def claim_journey(cursor: Any, *, token: str, user_id: str, business_id: str) ->
             "baseline": opportunity.get("metrics") or {},
         })
         action_type = "complete_map_task"
+    elif flow_type == "content":
+        if resolved_entity_id:
+            cursor.execute(
+                "SELECT id FROM contentplanitems WHERE id = %s AND business_id = %s",
+                (resolved_entity_id, business_id),
+            )
+            if not cursor.fetchone():
+                resolved_entity_id = None
+        if not resolved_entity_id:
+            cursor.execute(
+                """
+                SELECT id FROM contentplanitems
+                WHERE business_id = %s AND status IN ('planned', 'draft_generated', 'edited')
+                ORDER BY scheduled_for, created_at LIMIT 1
+                """,
+                (business_id,),
+            )
+            existing_item = _row(cursor, cursor.fetchone())
+            resolved_entity_id = str(existing_item.get("id") or "") or None
+        if not resolved_entity_id:
+            plan_id = str(uuid.uuid4())
+            resolved_entity_id = str(uuid.uuid4())
+            today = datetime.now(timezone.utc).date()
+            cursor.execute(
+                """
+                INSERT INTO contentplans (
+                    id, business_id, scope_type, title, period_days, period_start, period_end,
+                    plan_status, generation_mode, input_snapshot_json, created_by
+                ) VALUES (%s, %s, 'single_business', %s, 30, %s, %s, 'draft', 'journey', %s, %s)
+                """,
+                (plan_id, business_id, f"Первый материал: {opportunity.get('title') or 'Тема публикации'}", today, today + timedelta(days=29), Json({"source": "lead_journey", "journey_id": journey.get("id")}), user_id),
+            )
+            cursor.execute(
+                """
+                INSERT INTO contentplanitems (
+                    id, plan_id, business_id, scheduled_for, content_type, theme, goal,
+                    source_kind, source_ref, draft_text, status, metadata_json
+                ) VALUES (%s, %s, %s, %s, 'news', %s, %s, 'lead_journey', %s, %s, 'planned', %s)
+                """,
+                (resolved_entity_id, plan_id, business_id, today + timedelta(days=7), opportunity.get("title") or "Тема публикации", opportunity.get("summary") or "", journey.get("id"), opportunity.get("message_excerpt") or "", Json({"journey_id": journey.get("id")})),
+            )
+        resolved_entity_type = "contentplanitem"
+        cursor.execute(
+            "UPDATE lead_journeys SET selected_entity_type = %s, selected_entity_id = %s, updated_at = NOW() WHERE id = %s",
+            (resolved_entity_type, resolved_entity_id, journey["id"]),
+        )
+        payload.update({
+            "content_topic": opportunity.get("title"),
+            "content_excerpt": opportunity.get("message_excerpt"),
+            "domain_summary": opportunity.get("summary"),
+        })
+        action_type = "prepare_content"
     else:
         action_type = "send_message"
     action = ensure_action(
         cursor, journey_id=str(journey["id"]), business_id=business_id, user_id=user_id,
         lead_id=str(journey.get("prospect_lead_id") or "") or None, flow_type=flow_type,
-        entity_type=str(journey.get("selected_entity_type") or flow_type),
-        entity_id=str(journey.get("selected_entity_id") or "") or None,
+        entity_type=resolved_entity_type,
+        entity_id=resolved_entity_id,
         action_type=action_type, payload=payload,
     )
     return serialize_journey(cursor, {**journey, **claimed}, public=False), action
+
+
+def claim_journey(cursor: Any, *, token: str, user_id: str, business_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    journey = load_public_journey(cursor, token, lock=True)
+    return _claim_loaded_journey(cursor, journey=journey, user_id=user_id, business_id=business_id)
+
+
+def claim_reserved_journey(cursor: Any, *, user_id: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Resume a registration-bound journey without putting its public token in email."""
+    cursor.execute(
+        """
+        SELECT * FROM lead_journeys
+        WHERE claimed_user_id = %s AND status = 'registration_pending'
+          AND revoked_at IS NULL AND expires_at > NOW()
+        ORDER BY updated_at DESC
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (user_id,),
+    )
+    journey = _row(cursor, cursor.fetchone())
+    if not journey:
+        return None
+    business_id = str(journey.get("claimed_business_id") or "")
+    if not business_id:
+        raise JourneyError("У персонального сценария потерян бизнес", 409, "journey_business_missing")
+    return _claim_loaded_journey(cursor, journey=journey, user_id=user_id, business_id=business_id)
 
 
 def serialize_action(action: dict[str, Any]) -> dict[str, Any]:
@@ -439,6 +650,10 @@ def serialize_action(action: dict[str, Any]) -> dict[str, Any]:
         "mark_published": ["publication_url"],
         "mark_launched": ["mechanic"],
         "add_result": ["inquiries", "sales", "note"],
+        "review_content": ["draft_text"],
+        "save_to_calendar": ["scheduled_for"],
+        "waiting_for_publication": ["publication_url"],
+        "add_content_result": ["views", "inquiries", "note"],
     }.get(action_type, [])
     return {
         "id": action_id,
@@ -537,6 +752,63 @@ def list_actions(cursor: Any, *, business_id: str, history: bool = False) -> lis
     return [serialize_action(_row(cursor, value)) for value in (cursor.fetchall() or [])]
 
 
+def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: bool) -> list[dict[str, Any]]:
+    """Project journey actions into the four user-facing growth paths."""
+    copy = {
+        "maps": {
+            "title": "Карты",
+            "opportunity": "Исправьте самый заметный барьер в карточке и сравните результат после обновления.",
+            "cta_label": "Открыть план по картам",
+            "screen": "progress",
+        },
+        "content": {
+            "title": "Контент",
+            "opportunity": "Подготовьте полезную публикацию и проведите её до измеримого результата.",
+            "cta_label": "Открыть контент",
+            "screen": "content",
+        },
+        "influencer": {
+            "title": "Инфлюенсеры",
+            "opportunity": "Найдите локального автора и договоритесь о понятном обмене ценностью.",
+            "cta_label": "Найти автора",
+            "screen": "influencers",
+        },
+        "partnership": {
+            "title": "Партнёрства",
+            "opportunity": "Запустите совместную механику с бизнесом, у которого похожая аудитория.",
+            "cta_label": "Найти партнёра",
+            "screen": "partnerships",
+        },
+    }
+    active_by_flow: dict[str, dict[str, Any]] = {}
+    for action in actions:
+        flow_type = str(action.get("flow_type") or "")
+        if flow_type in copy and flow_type not in active_by_flow:
+            active_by_flow[flow_type] = action
+    result: list[dict[str, Any]] = []
+    for flow_type in ("maps", "content", "influencer", "partnership"):
+        base = copy[flow_type]
+        action = active_by_flow.get(flow_type)
+        requires_payment = flow_type == "content" and not automation_allowed
+        access_status = "payment_required" if requires_payment else "available"
+        result.append({
+            "flow_type": flow_type,
+            "title": base["title"],
+            "status": str(action.get("status") or "ready") if action else "not_started",
+            "opportunity": str(action.get("reason") or base["opportunity"]) if action else base["opportunity"],
+            "obstacle": str((action.get("payload") or {}).get("refresh_error") or "") if action and action.get("status") == "blocked" else "",
+            "access": {
+                "status": access_status,
+                "reason": "Полный черновик и календарь открываются на платном тарифе." if requires_payment else "Доступно для текущего бизнеса.",
+                "cta_label": "Выбрать тариф" if requires_payment else str(action.get("cta_label") or base["cta_label"]) if action else base["cta_label"],
+                "cta_target": {"screen": "settings" if requires_payment else base["screen"], "action_id": None if requires_payment else action.get("id") if action else None},
+                "entitlement_source": "subscription" if requires_payment else "account",
+            },
+            "action": action,
+        })
+    return result
+
+
 def load_action(cursor: Any, *, action_id: str, business_id: str, lock: bool = False) -> dict[str, Any]:
     lock_clause = "FOR UPDATE" if lock else ""
     cursor.execute(
@@ -568,8 +840,16 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
             return ("select_next_influencer" if flow == "influencer" else "select_next_partner"), "completed", None, current_payload
         return "define_terms", "completed", None, current_payload
     if action_type == "define_terms" and command == "save_terms":
+        if not str(payload.get("details") or "").strip():
+            raise JourneyError("Зафиксируйте условия договорённости", 400, "terms_required")
         return ("mark_published" if flow == "influencer" else "mark_launched"), "completed", None, current_payload
-    if action_type in {"mark_published", "mark_launched"}:
+    if action_type == "mark_published":
+        if not str(payload.get("publication_url") or "").strip():
+            raise JourneyError("Добавьте ссылку на размещение", 400, "publication_url_required")
+        return "add_result", "completed", None, current_payload
+    if action_type == "mark_launched":
+        if not str(payload.get("mechanic") or "").strip():
+            raise JourneyError("Укажите механику партнёрства", 400, "partnership_mechanic_required")
         return "add_result", "completed", None, current_payload
     if action_type == "add_result":
         current_payload["cycle_completed"] = True
@@ -594,6 +874,9 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
         current_payload["refresh_requested"] = True
         return "compare_snapshot", "completed", None, current_payload
     if action_type == "compare_snapshot" and command == "retry_refresh":
+        refresh_error = str(current_payload.get("refresh_error") or "").lower()
+        if any(marker in refresh_error for marker in ("hard limit", "usage limit", "monthly limit", "quota")):
+            current_payload["refresh_source_override"] = "yandex_maps"
         current_payload["verification_status"] = "refresh_retry_requested"
         current_payload.pop("refresh_error", None)
         return "refresh_data", "completed", None, current_payload
@@ -604,6 +887,29 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
         current_payload["cycle_key"] = str(uuid.uuid4())
         current_payload["task_index"] = 0
         return "complete_map_task", "completed", None, current_payload
+    if action_type == "prepare_content" and command == "prepare":
+        return "review_content", "completed", None, current_payload
+    if action_type == "review_content" and command == "save_draft":
+        if not str(payload.get("draft_text") or "").strip():
+            raise JourneyError("Добавьте текст черновика", 400, "content_draft_required")
+        return "save_to_calendar", "completed", None, current_payload
+    if action_type == "save_to_calendar" and command == "schedule":
+        if not str(payload.get("scheduled_for") or "").strip():
+            raise JourneyError("Выберите дату публикации", 400, "content_schedule_required")
+        return "waiting_for_publication", "completed", None, current_payload
+    if action_type == "waiting_for_publication" and command == "mark_published":
+        if not str(payload.get("publication_url") or "").strip():
+            raise JourneyError("Добавьте ссылку на публикацию", 400, "publication_url_required")
+        return "add_content_result", "completed", None, current_payload
+    if action_type == "add_content_result" and command == "add_result":
+        current_payload["cycle_completed"] = True
+        return "start_next_content_cycle", "completed", None, current_payload
+    if action_type == "start_next_content_cycle" and command == "start_next_cycle":
+        current_payload["cycle_key"] = str(uuid.uuid4())
+        current_payload.pop("draft_text", None)
+        current_payload.pop("scheduled_for", None)
+        current_payload.pop("publication_url", None)
+        return "prepare_content", "completed", None, current_payload
     if action_type == "upgrade" and command == "open_upgrade":
         return None, "in_progress", None, current_payload
     raise JourneyError("Переход не поддерживается", 409, "transition_not_allowed")
@@ -620,6 +926,7 @@ def _update_domain(cursor: Any, action: dict[str, Any], command: str, payload: d
             cursor,
             business_id=str(action.get("business_id") or ""),
             user_id=str(action.get("user_id") or ""),
+            source_override=_json_object(action.get("payload_json")).get("refresh_source_override"),
             require_runtime_flag=True,
         )
         if refresh.get("status") != "queued":
@@ -673,6 +980,60 @@ def _update_domain(cursor: Any, action: dict[str, Any], command: str, payload: d
                 "UPDATE creator_collaborations SET status = %s, updated_at = NOW() WHERE id = %s AND business_id = %s",
                 (status, entity_id, action.get("business_id")),
             )
+    if flow == "content":
+        content_item_id = entity_id or str(payload.get("content_plan_item_id") or "").strip()
+        if command in {"save_draft", "schedule", "mark_published", "add_result"} and not content_item_id:
+            raise JourneyError("Сначала выберите материал в разделе «Контент»", 409, "content_item_required")
+        if content_item_id:
+            if command == "save_draft":
+                cursor.execute(
+                    """
+                    UPDATE contentplanitems
+                    SET draft_text = %s, status = 'edited', updated_at = NOW()
+                    WHERE id = %s AND business_id = %s
+                    RETURNING id
+                    """,
+                    (str(payload.get("draft_text") or ""), content_item_id, action.get("business_id")),
+                )
+            elif command == "schedule":
+                cursor.execute(
+                    """
+                    UPDATE contentplanitems
+                    SET scheduled_for = %s, status = 'approved', updated_at = NOW()
+                    WHERE id = %s AND business_id = %s
+                    RETURNING id
+                    """,
+                    (payload.get("scheduled_for"), content_item_id, action.get("business_id")),
+                )
+            elif command == "mark_published":
+                cursor.execute(
+                    """
+                    UPDATE contentplanitems
+                    SET status = 'published',
+                        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s,
+                        updated_at = NOW()
+                    WHERE id = %s AND business_id = %s
+                    RETURNING id
+                    """,
+                    (Json({"journey_publication": {"url": payload.get("publication_url"), "reported_at": datetime.now(timezone.utc).isoformat()}}), content_item_id, action.get("business_id")),
+                )
+            elif command == "add_result":
+                cursor.execute(
+                    """
+                    UPDATE contentplanitems
+                    SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s,
+                        updated_at = NOW()
+                    WHERE id = %s AND business_id = %s
+                    RETURNING id
+                    """,
+                    (Json({"journey_result": payload}), content_item_id, action.get("business_id")),
+                )
+            if command in {"save_draft", "schedule", "mark_published", "add_result"}:
+                updated = _row(cursor, cursor.fetchone())
+                if not updated:
+                    raise JourneyError("Материал не найден или недоступен", 404, "content_item_not_found")
+            domain_updates["content_plan_item_id"] = content_item_id
+            domain_updates["entity_id"] = content_item_id
     return domain_updates
 
 
@@ -790,7 +1151,7 @@ def execute_command(
             business_id=business_id, user_id=user_id,
             lead_id=str(action.get("lead_id") or "") or None,
             flow_type=str(action.get("flow_type") or ""), entity_type=str(action.get("entity_type") or ""),
-            entity_id=str(action.get("entity_id") or "") or None, action_type=next_type,
+            entity_id=str(merged_payload.get("entity_id") or action.get("entity_id") or "") or None, action_type=next_type,
             payload=merged_payload, source_action_id=action_id,
             status="waiting" if next_type in {"check_reply", "compare_snapshot"} else "ready", due_at=next_due_at,
         )

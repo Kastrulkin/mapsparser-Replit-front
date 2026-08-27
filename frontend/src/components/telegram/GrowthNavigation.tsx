@@ -42,6 +42,7 @@ type Outcome = {
 const outcomes: Outcome[] = [
   { key: 'cards', title: 'Больше клиентов из карт', description: 'Следить за карточками, рейтингом и отзывами.', icon: MapPinned, secondaryKey: 'reviews', secondaryLabel: 'Ответить на отзывы' },
   { key: 'content', title: 'Контент без рутины', description: 'Работать с планом и готовить публикации.', icon: FileText },
+  { key: 'influencers', title: 'Инфлюенсеры рядом', description: 'Найти локальных авторов и подготовить предложение.', icon: Sparkles },
   { key: 'partnerships', title: 'Партнёры рядом', description: 'Находить компании с похожей аудиторией.', icon: Users },
   { key: 'finance', title: 'Больше выручки', description: 'Видеть продажи, загрузку и точки роста.', icon: CreditCard, secondaryKey: 'services', secondaryLabel: 'Улучшить меню услуг' },
   { key: 'agents', title: 'Поручить регулярную работу', description: 'Запускать и проверять работу ИИ-сотрудников.', icon: Bot },

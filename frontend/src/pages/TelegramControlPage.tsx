@@ -22,7 +22,8 @@ import { ProgressMobileModule, type ProgressPayload } from '@/components/telegra
 import { TodayMobileV2, type TodayPayload } from '@/components/telegram/TodayMobileV2';
 import GrowthNavigation from '@/components/telegram/GrowthNavigation';
 import LeadJourneyOnboarding from '@/components/telegram/LeadJourneyOnboarding';
-import { clearLeadJourneyToken, saveLeadJourneyToken, type LeadJourneyKey } from '@/lib/leadJourney';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { clearLeadJourneyToken, saveLeadJourneyToken, type JourneyAction, type LeadJourneyKey } from '@/lib/leadJourney';
 import { cancelMobileJob, confirmMobileAction, loadMobileJob, mobileAuthHeaders, mobileJsonHeaders, mobileScopeQuery, readMobileJson, retryMobileJob, type MobileJob } from '@/lib/mobileDataClient';
 import { resolveMobileRoute } from '@/lib/mobileDeepLinkRouter';
 import { resolveMobileAttentionScreen } from '@/lib/mobileTaskRouter';
@@ -164,7 +165,7 @@ type FinanceDashboardMobile = {
   workplaces?: Array<Record<string, FinanceValue>>;
 };
 type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences; available_actions?: Array<{ key?: string; label?: string }>; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
-type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more';
+type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more' | 'menu';
 
 type TelegramWebApp = {
   initData?: string;
@@ -210,6 +211,8 @@ const previewBootstrap: Bootstrap = {
     { key: 'progress', label: 'Прогресс', group: 'primary', status: 'available' },
     { key: 'cards', label: 'Карточки', group: 'more', status: 'read_only' },
     { key: 'content', label: 'Контент', group: 'more', status: 'available' },
+    { key: 'influencers', label: 'Инфлюенсеры', group: 'more', status: 'available' },
+    { key: 'partnerships', label: 'Партнёрства', group: 'more', status: 'available' },
     { key: 'services', label: 'Услуги', group: 'more', status: 'available' },
     { key: 'finance', label: 'Финансы', group: 'more', status: 'available' },
   ],
@@ -277,7 +280,7 @@ const readJson = readMobileJson;
 const scopeQuery = mobileScopeQuery;
 const authHeaders = mobileJsonHeaders;
 const authOnlyHeaders = mobileAuthHeaders;
-const isTab = (value: string | null): value is Tab => Boolean(value && ['today', 'tasks', 'feed', 'reviews', 'progress', 'operator', 'more'].includes(value));
+const isTab = (value: string | null): value is Tab => Boolean(value && ['today', 'tasks', 'feed', 'reviews', 'progress', 'operator', 'more', 'menu'].includes(value));
 
 export const TelegramControlPage = () => {
   const preview = isPreview();
@@ -328,6 +331,7 @@ export const TelegramControlPage = () => {
   const [restoredJobBusy, setRestoredJobBusy] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [paywall, setPaywall] = useState<NavigationItem | null>(null);
+  const [journeyAction, setJourneyAction] = useState<JourneyAction | null>(null);
   const trackedTodayScope = useRef('');
   const scopeRequestVersion = useRef(0);
   const catalogSearchVersion = useRef(0);
@@ -395,6 +399,12 @@ export const TelegramControlPage = () => {
     }).catch(() => undefined);
   };
 
+  const loadJourneyAction = async (actionId: string, businessId: string) => {
+    if (!actionId || !businessId) return;
+    const response = await fetch(`/api/journey-actions/${encodeURIComponent(actionId)}?business_id=${encodeURIComponent(businessId)}`, { headers: authHeaders() }).then(readJson<{ action?: JourneyAction }>);
+    setJourneyAction(response.action || null);
+  };
+
   const loadBootstrap = async (query = '', cursor = '', appendCatalog = false, catalogOnly = false, requestedVersion?: number) => {
     if (preview) return;
     if (!initData) { setLoading(false); return; }
@@ -425,14 +435,19 @@ export const TelegramControlPage = () => {
       if (!catalogOnly && journeyToken && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
         saveLeadJourneyToken(journeyToken);
         try {
-          await fetch('/api/journeys/claim', {
+          const claimed = await fetch('/api/journeys/claim', {
             method: 'POST', headers: authHeaders(),
-            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id }),
-          }).then(readJson<unknown>);
+            body: JSON.stringify({ token: journeyToken, business_id: result.selected_scope.id, surface: 'telegram_mini_app' }),
+          }).then(readJson<{ action?: JourneyAction }>);
+          setJourneyAction(claimed.action || null);
+          if (claimed.action) result.resolved_deep_link = { screen: 'today', item_type: 'journey_action', item_id: claimed.action.id };
           clearLeadJourneyToken();
         } catch {
           // Keep the token so the same journey can be resumed in web or retried in Mini App.
         }
+      }
+      if (!catalogOnly && result.resolved_deep_link?.item_type === 'journey_action' && result.resolved_deep_link.item_id && result.selected_scope?.kind === 'business' && result.selected_scope.id) {
+        await loadJourneyAction(result.resolved_deep_link.item_id, result.selected_scope.id);
       }
       if (appendCatalog) {
         setBootstrap((current) => ({
@@ -757,6 +772,12 @@ export const TelegramControlPage = () => {
   }, [bootstrap?.selected_scope?.kind, bootstrap?.selected_scope?.id, bootstrap?.resolved_deep_link?.screen]);
 
   const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
+    if (screen === 'influencers') {
+      setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
+      setModule('');
+      setTab('operator');
+      return;
+    }
     const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
     const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
     if (navigationEntry?.status === 'read_only' && navigationEntry.reason?.toLowerCase().includes('оплат')) {
@@ -778,6 +799,7 @@ export const TelegramControlPage = () => {
   const completeLeadJourneyOnboarding = (direction?: LeadJourneyKey) => {
     finishOnboarding();
     if (direction === 'maps') openMobileTarget('cards');
+    else if (direction === 'content') openMobileTarget('content');
     else if (direction === 'partnerships') openMobileTarget('partnerships');
     else if (direction === 'influencers') {
       setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
@@ -931,19 +953,20 @@ export const TelegramControlPage = () => {
         header={<TopBar />}
         error={error}
         overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} />{paywall ? <SubscriptionPaywall item={paywall} close={() => setPaywall(null)} /> : null}{showOnboarding ? <LeadJourneyOnboarding onFinish={completeLeadJourneyOnboarding} /> : null}</>}
-        navigation={!picker && !showOnboarding ? <BottomNav current={tab === 'progress' || tab === 'reviews' ? 'more' : tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
+        navigation={!picker && !showOnboarding ? <BottomNav current={tab} setCurrent={(next) => openMobileTarget(next)} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
-            {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
+            {!picker && tab === 'today' ? <>{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface="telegram_mini_app" dark onUpdated={() => void loadJourneyAction(journeyAction.id, scope.id)} /></div> : null}{bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} />}</> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
+            {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
@@ -1063,8 +1086,18 @@ const Operator = ({ messages, busy, actionBusy, command, setCommand, ask, resolv
 const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен после оплаты"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">{item.label} доступен после оплаты</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href="/dashboard/billing" className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white">Перейти к оплате</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400">Закрыть</button></div></div>;
 
 const More = ({ navigation, onOpen, openProgress, onLocked, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; onLocked: (item: NavigationItem) => void; restartTour: () => void }) => {
-  return <Screen title="Развитие" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
+  return <Screen title="Пути роста" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
     <GrowthNavigation navigation={navigation} onOpen={onOpen} onOpenProgress={openProgress} onLocked={onLocked} onRestartTour={restartTour} />
+  </Screen>;
+};
+
+const UtilityMenu = ({ navigation, onOpen }: { navigation: NavigationItem[]; onOpen: (key: string) => void }) => {
+  const hiddenFromMenu = new Set(['today', 'progress', 'cards', 'content', 'influencers', 'partnerships']);
+  const items = navigation.filter((item) => item.status !== 'hidden' && !hiddenFromMenu.has(item.key));
+  return <Screen title="Ещё" subtitle="Рабочие очереди, управление и настройки.">
+    <div className="space-y-2">
+      {items.map((item) => <button key={item.key} type="button" onClick={() => onOpen(item.key)} className="flex min-h-14 w-full items-center gap-3 rounded-[18px] bg-white/[0.04] px-4 text-left ring-1 ring-inset ring-white/[0.07] transition-[background-color,transform] duration-150 active:scale-[0.96]"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-primary/10 text-primary"><CircleEllipsis className="h-4 w-4" /></span><span className="min-w-0 flex-1"><b className="block text-sm">{item.label}</b>{item.reason ? <small className="mt-0.5 block truncate text-zinc-600">{item.reason}</small> : null}</span><ChevronRight className="h-4 w-4 text-zinc-700" /></button>)}
+    </div>
   </Screen>;
 };
 
@@ -1731,7 +1764,11 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
 
 const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
-const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'В работе', ClipboardCheck], ['feed', 'Лента', Radio], ['operator', 'Оператор', Bot], ['more', 'Развитие', LayoutGrid]]; return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={current === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
+const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => {
+  const activeKey: Tab = current === 'reviews' ? 'more' : current === 'operator' || current === 'feed' ? 'menu' : current === 'tasks' ? 'today' : current;
+  const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['more', 'Пути роста', LayoutGrid], ['progress', 'Результаты', TrendingUp], ['menu', 'Ещё', CircleEllipsis]];
+  return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"><div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={activeKey === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${activeKey === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>;
+};
 
 const Screen = ({ title, subtitle, children, action }: { title: string; subtitle: string; children: React.ReactNode; action?: React.ReactNode }) => <section className="px-4"><div className="mb-5 flex items-start gap-3"><div className="min-w-0 flex-1"><h1 className="text-balance text-2xl font-semibold tracking-[-0.04em]">{title}</h1><p className="mt-1 text-pretty text-sm leading-6 text-zinc-500">{subtitle}</p></div>{action}</div>{children}</section>;
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;

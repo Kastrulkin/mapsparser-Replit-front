@@ -61,6 +61,17 @@ def test_public_event_rejects_non_allowlisted_event_before_database(monkeypatch)
     assert response.get_json()["error"] == "Событие не поддерживается"
 
 
+def test_create_journey_requires_selected_flow_before_database(monkeypatch):
+    monkeypatch.setattr(lead_journey_api, "journey_enabled", lambda _flag="LEAD_JOURNEY_ENABLED": True)
+    monkeypatch.setattr(lead_journey_api, "require_auth_from_request", lambda: {"user_id": "admin-1", "is_superadmin": True})
+    monkeypatch.setattr(lead_journey_api, "DatabaseManager", lambda: (_ for _ in ()).throw(AssertionError("database must not open")))
+
+    response = _app().test_client().post("/api/journeys", json={"source": "test"})
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "selected_flow_required"
+
+
 def test_claim_respects_vertical_kill_switch(monkeypatch):
     _enable_and_authorize(monkeypatch)
     monkeypatch.setattr(lead_journey_api, "load_public_journey", lambda *_args, **_kwargs: {"selected_flow": "influencer"})

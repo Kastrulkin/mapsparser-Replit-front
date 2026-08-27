@@ -4,7 +4,8 @@ import { Button } from "../components/ui/button";
 import { newAuth } from "../lib/auth_new";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/i18n/LanguageContext";
-import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
+import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, resolveStoredLeadJourney, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
+import { featureFlags } from '@/config/featureFlags';
 
 // Список популярных стран для автодополнения при регистрации
 const COUNTRY_OPTIONS = [
@@ -182,8 +183,13 @@ const Login = () => {
         const tierFromUrl = searchParams.get('tier');
         const source = searchParams.get('source');
 
-        if (readLeadJourneyToken()) {
-          navigate('/dashboard/today');
+        if (readLeadJourneyToken() && featureFlags.journeyPostAuthRedirect) {
+          try {
+            const resolved = await resolveStoredLeadJourney();
+            navigate(resolved?.route || '/dashboard/today');
+          } catch (journeyError) {
+            setError(isRu ? `Вход выполнен, но персональный сценарий пока не открылся: ${journeyError instanceof Error ? journeyError.message : 'повторите попытку'}` : 'Signed in, but the personal path could not be opened yet. Please retry.');
+          }
         } else if (tierFromUrl && source === 'pricing') {
           localStorage.setItem('selectedTier', tierFromUrl);
           localStorage.setItem('selectedTierSource', 'pricing');

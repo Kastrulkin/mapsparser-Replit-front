@@ -1,0 +1,60 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.7, pytest-9.0.2, pluggy-1.6.0 -- /usr/local/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре
+configfile: pytest.ini
+plugins: anyio-4.4.0
+collecting ... collected 48 items
+
+tests/test_lead_journey_service.py::test_public_opportunity_drops_private_fields_and_truncates_message PASSED [  2%]
+tests/test_lead_journey_service.py::test_sent_message_waits_four_days_for_reply PASSED [  4%]
+tests/test_lead_journey_service.py::test_refusal_closes_reply_step_and_selects_next_candidate[influencer-select_next_influencer] PASSED [  6%]
+tests/test_lead_journey_service.py::test_refusal_closes_reply_step_and_selects_next_candidate[partnership-select_next_partner] PASSED [  8%]
+tests/test_lead_journey_service.py::test_maps_cycle_moves_through_refresh_and_comparison PASSED [ 10%]
+tests/test_lead_journey_service.py::test_content_cycle_requires_draft_and_schedule_then_records_result PASSED [ 12%]
+tests/test_lead_journey_service.py::test_failed_map_comparison_can_return_to_refresh PASSED [ 14%]
+tests/test_lead_journey_service.py::test_invalid_transition_is_rejected PASSED [ 16%]
+tests/test_lead_journey_service.py::test_token_hash_is_stable_without_storing_raw_token PASSED [ 18%]
+tests/test_lead_journey_service.py::test_public_journey_rejects_revoked_and_expired_links[row0-journey_revoked] PASSED [ 20%]
+tests/test_lead_journey_service.py::test_public_journey_rejects_revoked_and_expired_links[row1-journey_expired] PASSED [ 22%]
+tests/test_lead_journey_service.py::test_claim_rejects_a_journey_reserved_for_another_tenant PASSED [ 25%]
+tests/test_lead_journey_service.py::test_public_journey_lock_targets_only_journey_row PASSED [ 27%]
+tests/test_lead_journey_service.py::test_failed_map_refresh_blocks_comparison_with_provider_error PASSED [ 29%]
+tests/test_lead_journey_service.py::test_lead_preview_uses_only_safe_business_context PASSED [ 31%]
+tests/test_lead_journey_service.py::test_lead_preview_uses_real_public_examples_without_contact_fields PASSED [ 33%]
+tests/test_lead_journey_service.py::test_journey_notifications_follow_existing_tasks_preference PASSED [ 35%]
+tests/test_lead_journey_service.py::test_growth_paths_put_focus_action_on_matching_path_and_lock_paid_content PASSED [ 37%]
+tests/test_lead_journey_service.py::test_reserved_journey_is_resumed_by_bound_user_without_public_token PASSED [ 39%]
+tests/test_lead_journey_service.py::test_journey_creation_rejects_entity_type_outside_safe_preview PASSED [ 41%]
+tests/test_lead_journey_service.py::test_stale_action_is_rejected_before_domain_update PASSED [ 43%]
+tests/test_lead_journey_service.py::test_same_idempotency_key_returns_current_action_without_second_transition PASSED [ 45%]
+tests/test_lead_journey_api.py::test_public_event_rejects_non_allowlisted_event_before_database PASSED [ 47%]
+tests/test_lead_journey_api.py::test_create_journey_requires_selected_flow_before_database PASSED [ 50%]
+tests/test_lead_journey_api.py::test_claim_respects_vertical_kill_switch PASSED [ 52%]
+tests/test_lead_journey_api.py::test_action_list_commits_map_reconciliation PASSED [ 54%]
+tests/test_lead_journey_api.py::test_action_command_forwards_version_idempotency_and_records_funnel_once PASSED [ 56%]
+tests/test_lead_journey_api.py::test_idempotent_action_replay_does_not_duplicate_product_event PASSED [ 58%]
+tests/test_lead_journey_content_migration.py::test_content_journey_migration_is_chained_and_rollback_safe PASSED [ 60%]
+tests/test_operator_map_refresh_native_fallback.py::test_native_map_refresh_does_not_depend_on_apify_runtime_flag PASSED [ 62%]
+tests/test_operator_mobile_deep_links.py::test_review_deep_link_resolves_only_inside_scope PASSED [ 64%]
+tests/test_operator_mobile_deep_links.py::test_review_deep_link_cannot_cross_business_scope PASSED [ 66%]
+tests/test_operator_mobile_deep_links.py::test_legacy_analytics_link_opens_finance PASSED [ 68%]
+tests/test_operator_mobile_deep_links.py::test_hidden_screen_falls_back_to_today PASSED [ 70%]
+tests/test_operator_refresh_retry.py::test_refresh_retry_plan_allows_failed_readonly_job PASSED [ 72%]
+tests/test_operator_refresh_retry.py::test_refresh_retry_plan_blocks_processing_job PASSED [ 75%]
+tests/test_operator_refresh_retry.py::test_refresh_retry_requires_explicit_confirmation PASSED [ 77%]
+tests/test_operator_refresh_retry.py::test_refresh_retry_queues_new_paid_refresh_without_mutating_source PASSED [ 79%]
+tests/test_operator_refresh_result.py::test_refresh_result_counts_new_unanswered_reviews PASSED [ 81%]
+tests/test_operator_refresh_result.py::test_refresh_result_processing_waits_for_worker PASSED [ 83%]
+tests/test_operator_refresh_result.py::test_refresh_result_reports_worker_failure PASSED [ 85%]
+tests/test_operator_refresh_result.py::test_refresh_result_requires_known_queue PASSED [ 87%]
+tests/test_operator_refresh_result.py::test_list_refresh_jobs_summarizes_recent_jobs PASSED [ 89%]
+tests/test_operator_refresh_result.py::test_refresh_result_includes_billing_state_from_reservation_metadata PASSED [ 91%]
+tests/test_operator_refresh_result.py::test_refresh_result_exposes_retry_lineage_from_reservation_metadata PASSED [ 93%]
+tests/test_operator_refresh_result.py::test_parse_reliability_state_explains_captcha_without_external_writes PASSED [ 95%]
+tests/test_operator_refresh_result.py::test_parse_reliability_state_reports_completed_warnings PASSED [ 97%]
+tests/test_operator_refresh_result.py::test_parse_reliability_state_includes_technical_attempt_details PASSED [100%]
+
+============================== 48 passed in 1.03s ==============================
+
+EXIT_CODE=0

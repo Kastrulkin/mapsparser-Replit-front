@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
 import { getAutomationAccessForBusiness } from '../lib/subscriptionAccess';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
+import { featureFlags } from '../config/featureFlags';
 
 type DashboardBusiness = {
   id: string;
@@ -30,7 +31,6 @@ export type ControlScope = {
 
 const paidDashboardSections = [
   { path: '/dashboard/content', title: 'Контент доступен после оплаты', hint: 'Можно посмотреть раздел, но генерация публикаций и контент-планов включается только на платном тарифе.' },
-  { path: '/dashboard/progress', title: 'Прогресс и аналитика доступны после оплаты', hint: 'Аудит, динамика и рекомендации появятся после подключения тарифа.' },
   { path: '/dashboard/finance', title: 'Финансы доступны после оплаты', hint: 'Импорт, разбор показателей и рекомендации по выручке включаются на платном тарифе.' },
   { path: '/dashboard/average-ticket', title: 'Средний чек доступен после оплаты', hint: 'Расчёты и рекомендации по среднему чеку включаются на платном тарифе.' },
   { path: '/dashboard/ai-chat-promotion', title: 'Продвижение в AI-чатах доступно после оплаты', hint: 'Проверки и рекомендации по AI-выдаче включаются на платном тарифе.' },
@@ -219,7 +219,8 @@ export const DashboardLayout = () => {
   const lockedPaidSection = paidDashboardSections.find((section) => (
     location.pathname === section.path || location.pathname.startsWith(`${section.path}/`)
   ));
-  const shouldBlurPaidSection = Boolean(lockedPaidSection && !user.demo_mode && !user.is_superadmin && !automationAccess.automationAllowed);
+  const ownsBlockAccess = featureFlags.blockAccessV2 && location.pathname === '/dashboard/promotion/influencers';
+  const shouldBlurPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !automationAccess.automationAllowed);
 
   return (
     <GuidedTourProvider user={user}>
@@ -245,7 +246,7 @@ export const DashboardLayout = () => {
         <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
-              <div className={shouldBlurPaidSection ? 'pointer-events-none select-none blur-sm' : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
+              <div className={shouldBlurPaidSection ? (featureFlags.blockAccessV2 ? 'pointer-events-none select-none opacity-55' : 'pointer-events-none select-none blur-sm') : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
                 <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
               </div>
               {shouldBlurPaidSection && lockedPaidSection ? (

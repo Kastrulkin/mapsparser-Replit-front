@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { featureFlags } from "./config/featureFlags";
+import { JourneyWorkspaceFocus } from "./components/journey/JourneyWorkspaceFocus";
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
@@ -137,6 +138,21 @@ const SettingsPage = lazy(() =>
 const AdminPage = lazy(() =>
   import("./pages/dashboard/AdminPage").then((module) => ({
     default: module.AdminPage,
+  })),
+);
+const JourneyAdminPage = lazy(() =>
+  import("./pages/dashboard/JourneyAdminPage").then((module) => ({
+    default: module.JourneyAdminPage,
+  })),
+);
+const GrowthPathsPage = lazy(() =>
+  import("./pages/dashboard/GrowthPathsPage").then((module) => ({
+    default: module.GrowthPathsPage,
+  })),
+);
+const MorePage = lazy(() =>
+  import("./pages/dashboard/MorePage").then((module) => ({
+    default: module.MorePage,
   })),
 );
 const ChatsPage = lazy(() =>
@@ -309,8 +325,8 @@ const AppShell = () => {
             <Route index element={<Navigate to="/dashboard/today" replace />} />
             <Route path="today" element={<TodayPage />} />
             <Route path="profile" element={<ProfilePage />} />
-            <Route path="card" element={<CardOverviewPage />} />
-            <Route path="content" element={<ContentPage />} />
+            <Route path="card" element={<JourneyWorkspaceFocus><CardOverviewPage /></JourneyWorkspaceFocus>} />
+            <Route path="content" element={<JourneyWorkspaceFocus><ContentPage /></JourneyWorkspaceFocus>} />
             <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
@@ -318,10 +334,12 @@ const AppShell = () => {
             <Route path="average-ticket" element={<AverageTicketPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
-            <Route path="partnerships" element={<PartnershipSearchPage />} />
+            <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
             <Route path="promotion" element={<PromotionHubPage />} />
-            <Route path="promotion/partnerships" element={<PartnershipSearchPage />} />
-            <Route path="promotion/influencers" element={<InfluencerPromotionPage />} />
+            <Route path="promotion/partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
+            <Route path="promotion/influencers" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
+            <Route path="growth-paths" element={<GrowthPathsPage />} />
+            <Route path="more" element={<MorePage />} />
             <Route path="operator" element={<OperatorPage />} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<AgentBlueprintsPage />} />
@@ -329,6 +347,7 @@ const AppShell = () => {
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />
             <Route path="bazich" element={<AdminPage />} />
+            <Route path="bazich/journeys" element={<JourneyAdminPage />} />
           </Route>
           <Route path="/bazich" element={<AdminPage />} />
           <Route path="/dashboard-old" element={<Dashboard />} />

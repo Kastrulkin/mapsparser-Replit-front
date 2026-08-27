@@ -64,4 +64,26 @@ describe('JourneyActionCard', () => {
 
     expect(runJourneyCommand).toHaveBeenCalledWith(expect.objectContaining({ command: 'prepare_followup' }));
   });
+
+  it('saves an edited content draft through the shared web and Mini App controller', async () => {
+    const contentAction: JourneyAction = {
+      ...action,
+      id: 'content-action', flow_type: 'content', entity_type: 'contentplanitem', entity_id: 'item-1',
+      action_type: 'review_content', title: 'Проверить черновик', description: 'Отредактируйте текст.',
+      payload: { content_excerpt: 'Первый вариант' }, allowed_commands: ['save_draft'], version: 2,
+    };
+    vi.mocked(runJourneyCommand).mockResolvedValue({ action: contentAction, next_action: null });
+    const user = userEvent.setup();
+    render(<JourneyActionCard action={contentAction} businessId="business-1" surface="telegram_mini_app" onUpdated={vi.fn()} />);
+
+    const editor = screen.getByPlaceholderText('Проверьте и отредактируйте черновик');
+    await user.clear(editor);
+    await user.type(editor, 'Проверенный текст');
+    await user.click(screen.getByRole('button', { name: /Сохранить черновик/ }));
+
+    expect(runJourneyCommand).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'save_draft', surface: 'telegram_mini_app',
+      payload: { draft_text: 'Проверенный текст', content_plan_item_id: 'item-1' },
+    }));
+  });
 });
