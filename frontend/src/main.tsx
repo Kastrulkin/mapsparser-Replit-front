@@ -3,6 +3,7 @@ import App from './App.tsx'
 import './index.css'
 
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { installDomOwnershipGuard } from './lib/domOwnershipGuard';
 
 const CHUNK_RELOAD_STORAGE_KEY = 'localos_chunk_reload_attempted';
 
@@ -49,7 +50,14 @@ if (new URL(window.location.href).searchParams.has('__localos_reload')) {
 }
 
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+    throw new Error('LocalOS root element was not found.');
+}
+
+installDomOwnershipGuard(rootElement);
+
+createRoot(rootElement).render(
     <ErrorBoundary>
         <App />
     </ErrorBoundary>
