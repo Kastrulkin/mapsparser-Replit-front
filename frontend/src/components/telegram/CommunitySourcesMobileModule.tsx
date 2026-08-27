@@ -27,10 +27,10 @@ type IndustryPulse = {
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
-const intervalOptions = [['6', 'Каждые 6 часов'], ['12', 'Каждые 12 часов'], ['24', 'Раз в день'], ['72', 'Раз в 3 дня'], ['168', 'Раз в неделю']];
+const intervalOptions = [['0.5', 'Каждые 30 минут'], ['6', 'Каждые 6 часов'], ['12', 'Каждые 12 часов'], ['24', 'Раз в день'], ['72', 'Раз в 3 дня'], ['168', 'Раз в неделю']];
 const topicPresets = ['Цены и затраты', 'Маркетинг', 'Клиенты', 'Конкуренты'];
 const previewSources: CommunitySource[] = [
-  { id: 'preview-ready', title: 'Beauty Business Club', canonical_url: 'https://t.me/beauty_business', sync_status: 'ready', last_collected_at: new Date().toISOString(), next_sync_at: new Date(Date.now() + 86400000).toISOString(), documents_count: 248, embeddings_count: 248, topics_json: ['Маркетинг', 'Клиенты'], schedule_json: { interval_hours: 24 } },
+  { id: 'preview-ready', title: 'Beauty Business Club', canonical_url: 'https://t.me/beauty_business', sync_status: 'ready', last_collected_at: new Date().toISOString(), next_sync_at: new Date(Date.now() + 1800000).toISOString(), documents_count: 248, embeddings_count: 248, topics_json: ['Маркетинг', 'Клиенты'], schedule_json: { interval_hours: 0.5 } },
   { id: 'preview-queued', title: 'Предприниматели Батуми', canonical_url: 'https://t.me/business_batumi', sync_status: 'queued', next_sync_at: new Date().toISOString(), documents_count: 0, embeddings_count: 0, topics_json: ['Цены и затраты'], schedule_json: { interval_hours: 12 } },
 ];
 
@@ -78,7 +78,7 @@ const dateLabel = (value?: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'дата неизвестна' : date.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
-const intervalLabel = (value?: number) => intervalOptions.find(([key]) => key === String(value || 24))?.[1]?.toLowerCase() || 'раз в день';
+const intervalLabel = (value?: number) => intervalOptions.find(([key]) => key === String(value ?? 0.5))?.[1]?.toLowerCase() || 'каждые 30 минут';
 const statusMeta = (item: CommunitySource) => {
   if (item.sync_status === 'failed' || item.last_sync_error) return { label: 'Нужна проверка', dot: 'bg-rose-400', text: 'Не получилось обновить источник' };
   if (['queued', 'running', 'processing'].includes(item.sync_status || '')) return { label: 'Собираем', dot: 'bg-sky-300 motion-safe:animate-pulse', text: 'Новые публичные материалы уже в очереди' };
@@ -92,10 +92,10 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
   const [url, setUrl] = useState('');
   const [topics, setTopics] = useState<string[]>([]);
   const [customTopics, setCustomTopics] = useState('');
-  const [intervalHours, setIntervalHours] = useState('24');
+  const [intervalHours, setIntervalHours] = useState('0.5');
   const [editingId, setEditingId] = useState('');
   const [editTopics, setEditTopics] = useState('');
-  const [editInterval, setEditInterval] = useState('24');
+  const [editInterval, setEditInterval] = useState('0.5');
   const [removeId, setRemoveId] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -158,7 +158,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
   const startEditing = (item: CommunitySource) => {
     setEditingId(item.id);
     setEditTopics((item.topics_json || []).join(', '));
-    setEditInterval(String(item.schedule_json?.interval_hours || 24));
+    setEditInterval(String(item.schedule_json?.interval_hours ?? 0.5));
     setMessage(''); setError('');
   };
 

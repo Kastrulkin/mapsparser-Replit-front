@@ -11,6 +11,10 @@ from core.telegram_userbot import inspect_telegram_entity, load_userbot_account
 from services.knowledge_graph_service import upsert_document
 
 
+DEFAULT_MONITOR_INTERVAL_SECONDS = 1800
+MIN_MONITOR_INTERVAL_SECONDS = 1800
+
+
 def _monitor_enabled() -> bool:
     return str(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_ENABLED") or "").strip().lower() in {
         "1",
@@ -121,21 +125,24 @@ def _inspect_source_entity(conn: Any, source: dict[str, Any]) -> dict[str, Any]:
 def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, Any]:
     if not _monitor_enabled():
         return {"status": "disabled", "sources_checked": 0, "documents_seen": 0}
-    default_interval_seconds = max(21600, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", "86400")))
+    default_interval_seconds = max(
+        MIN_MONITOR_INTERVAL_SECONDS,
+        int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", str(DEFAULT_MONITOR_INTERVAL_SECONDS))),
+    )
     run_id = str(uuid.uuid4())
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute(
         """
         SELECT source.*,
                GREATEST(
-                   21600,
+                   1800,
                    COALESCE(
                        (
                            SELECT MIN(
                                CASE
-                                   WHEN subscription.schedule_json->>'interval_hours' IN ('6', '12', '24', '72', '168')
-                                   THEN (subscription.schedule_json->>'interval_hours')::INTEGER * 3600
-                                   ELSE 86400
+                                   WHEN subscription.schedule_json->>'interval_hours' IN ('0.5', '6', '12', '24', '72', '168')
+                                   THEN (subscription.schedule_json->>'interval_hours')::NUMERIC * 3600
+                                   ELSE 1800
                                END
                            )
                            FROM knowledge_source_subscriptions subscription
@@ -163,14 +170,14 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
               source.last_collected_at IS NULL
               OR source.last_collected_at < NOW() - (
                   GREATEST(
-                      21600,
+                      1800,
                       COALESCE(
                           (
                               SELECT MIN(
                                   CASE
-                                      WHEN subscription.schedule_json->>'interval_hours' IN ('6', '12', '24', '72', '168')
-                                      THEN (subscription.schedule_json->>'interval_hours')::INTEGER * 3600
-                                      ELSE 86400
+                                      WHEN subscription.schedule_json->>'interval_hours' IN ('0.5', '6', '12', '24', '72', '168')
+                                      THEN (subscription.schedule_json->>'interval_hours')::NUMERIC * 3600
+                                      ELSE 1800
                                   END
                               )
                               FROM knowledge_source_subscriptions subscription
@@ -207,7 +214,10 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
     documents_imported = 0
     errors: list[dict[str, str]] = []
     for source in sources:
-        interval_seconds = max(21600, int(source.get("effective_interval_seconds") or default_interval_seconds))
+        interval_seconds = max(
+            MIN_MONITOR_INTERVAL_SECONDS,
+            int(source.get("effective_interval_seconds") or default_interval_seconds),
+        )
         try:
             auto_discovered = bool((source.get("metadata_json") or {}).get("auto_discovered"))
             workstream_ids: list[str] = []

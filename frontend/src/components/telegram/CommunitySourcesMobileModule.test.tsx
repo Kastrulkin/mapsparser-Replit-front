@@ -55,7 +55,7 @@ describe('CommunitySourcesMobileModule destructive actions', () => {
     expect(await screen.findByText('Beauty Owners')).toBeInTheDocument();
     const postCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith('/community-sources') && String(call[1]?.method) === 'POST');
     expect(postCall).toBeTruthy();
-    expect(JSON.parse(String(postCall?.[1]?.body))).toMatchObject({ url: 'https://t.me/beauty_owners', interval_hours: 24 });
+    expect(JSON.parse(String(postCall?.[1]?.body))).toMatchObject({ url: 'https://t.me/beauty_owners', interval_hours: 0.5 });
   });
 
   it('previews subscription removal instead of calling DELETE directly', async () => {

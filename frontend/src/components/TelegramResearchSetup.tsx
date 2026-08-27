@@ -63,7 +63,7 @@ const syncLabel = (source: ResearchSource) => {
   if (source.sync_status === 'partial') return 'История загружается';
   if (source.sync_status === 'failed') return 'Нужно проверить';
   if (source.sync_status === 'needs_account') return 'Нужно переподключить аккаунт';
-  if (source.last_collected_at) return 'Обновляется раз в день';
+  if (source.last_collected_at) return 'Обновляется каждые 30 минут';
   return 'Ожидает первого обновления';
 };
 
@@ -281,12 +281,12 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
     try {
       const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/community-sources`, {
         method: 'POST',
-        body: JSON.stringify({ url: sourceUrl.trim(), interval_hours: 24 }),
+        body: JSON.stringify({ url: sourceUrl.trim(), interval_hours: 0.5 }),
       });
       setSourceUrl('');
       setMessage(typeof response?.message === 'string'
         ? response.message
-        : 'Канал добавлен. LocalOS соберёт историю и будет проверять новые публикации раз в день.');
+        : 'Канал добавлен. LocalOS соберёт историю и будет проверять новые публикации каждые 30 минут.');
       await loadStatus();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось добавить канал');
@@ -497,7 +497,7 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-slate-950">Какие чаты отслеживать</p>
-                <p className="mt-1 text-sm text-slate-600">Для новых источников загружаются последние 90 дней, затем новые сообщения проверяются раз в день.</p>
+                <p className="mt-1 text-sm text-slate-600">Для новых источников загружаются последние 90 дней, затем новые сообщения проверяются каждые 30 минут.</p>
               </div>
             </div>
 

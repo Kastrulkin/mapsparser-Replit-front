@@ -38,6 +38,8 @@ from services.telegram_account_permissions_service import (
 
 
 telegram_research_bp = Blueprint("telegram_research", __name__)
+COMMUNITY_SOURCE_INTERVALS = {0.5, 6.0, 12.0, 24.0, 72.0, 168.0}
+DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS = 0.5
 
 
 def _user_id(user_data: dict[str, Any]) -> str:
@@ -201,7 +203,7 @@ def _subscribe_public_source(
     source_id: str,
     industry_key: str,
     topics: list[str] | None = None,
-    interval_hours: int = 24,
+    interval_hours: float = DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS,
     submitted_by_user_id: str = "",
 ) -> bool:
     cursor.execute(
@@ -218,7 +220,11 @@ def _subscribe_public_source(
         (existing.get("is_active") if hasattr(existing, "get") else existing[0])
         if existing else False
     )
-    schedule = {"interval_hours": interval_hours if interval_hours in {6, 12, 24, 72, 168} else 24}
+    schedule = {
+        "interval_hours": interval_hours
+        if interval_hours in COMMUNITY_SOURCE_INTERVALS
+        else DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS
+    }
     if not was_active:
         schedule.update({
             "superadmin_notification_status": "pending",
@@ -619,7 +625,7 @@ def subscribe_community_catalog_source(business_id: str, source_id: str):
             business_id=business_id,
             source_id=str(source["id"]),
             industry_key=context["industry_key"],
-            interval_hours=24,
+            interval_hours=DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS,
             submitted_by_user_id=_user_id(user_data),
         )
         cursor.execute(
@@ -701,7 +707,7 @@ def add_community_source(business_id: str):
             backfill_days=90,
         )
         topics = [str(item).strip() for item in payload.get("topics", []) if str(item).strip()][:20] if isinstance(payload.get("topics"), list) else []
-        interval_hours = int(payload.get("interval_hours") or 24)
+        interval_hours = float(payload.get("interval_hours") or DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS)
         notify_superadmin = _subscribe_public_source(
             cursor,
             business_id=business_id,
@@ -761,8 +767,8 @@ def update_community_source_subscription(business_id: str, source_id: str):
     payload = request.get_json(silent=True) or {}
     topics = [str(item).strip() for item in payload.get("topics", []) if str(item).strip()][:20] if isinstance(payload.get("topics"), list) else []
     try:
-        interval_hours = int(payload.get("interval_hours") or 24)
-        if interval_hours not in {6, 12, 24, 72, 168}:
+        interval_hours = float(payload.get("interval_hours") or DEFAULT_COMMUNITY_SOURCE_INTERVAL_HOURS)
+        if interval_hours not in COMMUNITY_SOURCE_INTERVALS:
             return jsonify({"success": False, "error": "Выберите доступную частоту обновления"}), 400
         cursor.execute(
             """

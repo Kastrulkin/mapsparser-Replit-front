@@ -214,7 +214,11 @@ def test_public_preview_and_userbot_collection_do_not_overlap():
 
     assert "sync_mode = 'public_preview'" in source
     assert "canonical_url LIKE %s" in source
-    assert "default_interval_seconds = max(21600" in source
+    assert "DEFAULT_MONITOR_INTERVAL_SECONDS = 1800" in source
+    assert "MIN_MONITOR_INTERVAL_SECONDS = 1800" in source
+    assert "default_interval_seconds = max(" in source
+    assert "('0.5', '6', '12', '24', '72', '168')" in source
+    assert "::NUMERIC * 3600" in source
     assert "FROM knowledge_source_subscriptions subscription" in source
     assert "subscription.schedule_json->>'interval_hours'" in source
     assert 'os.getenv("TELEGRAM_HTTP_PROXY")' in source
@@ -508,6 +512,7 @@ def test_catalog_source_subscription_reuses_existing_public_source(monkeypatch):
     assert response.get_json()["source"]["subscribed"] is True
     assert subscriptions[0]["business_id"] == "business-a"
     assert subscriptions[0]["source_id"] == "source-public"
+    assert subscriptions[0]["interval_hours"] == 0.5
     assert "commit" in calls
 
 
@@ -542,7 +547,6 @@ def test_personal_public_source_subscription_queues_admin_notification_and_both_
         source_id="source-a",
         industry_key="beauty",
         topics=["Маркетинг"],
-        interval_hours=24,
         submitted_by_user_id="user-a",
     )
 
@@ -551,6 +555,7 @@ def test_personal_public_source_subscription_queues_admin_notification_and_both_
     assert insert_params[2].adapted == ["community_pulse", "content_ideas"]
     assert insert_params[4].adapted["superadmin_notification_status"] == "pending"
     assert insert_params[4].adapted["submitted_by_user_id"] == "user-a"
+    assert insert_params[4].adapted["interval_hours"] == 0.5
 
 
 def test_community_source_notification_is_actionable_and_marks_delivery():
