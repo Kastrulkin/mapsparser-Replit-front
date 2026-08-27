@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "label": "reproduced-business-comment",
+  "captured_at": "2026-08-27T07:30:00+00:00",
+  "command": [
+    "./venv/bin/pytest",
+    "-q",
+    "tests/test_parser_interception_review_responses.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 0,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "FAILED tests/test_parser_interception_review_responses.py::test_fetch_reviews_business_comment_is_preserved_as_owner_response - AssertionError: businessComment was parsed with org_reply=None, response_text=None, response_date=None and has_response=False",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true,
+  "note": "Recorded from the approved failing test run before the production patch; the original run was not wrapped by capture_command.py."
+}

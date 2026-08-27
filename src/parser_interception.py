@@ -2277,6 +2277,8 @@ class YandexMapsInterceptionParser:
             owner_comment = (
                 item.get('ownerComment') or 
                 item.get('owner_comment') or 
+                item.get('businessComment') or
+                item.get('business_comment') or
                 item.get('response') or 
                 item.get('reply') or
                 item.get('organizationResponse') or

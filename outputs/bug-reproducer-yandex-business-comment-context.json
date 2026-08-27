@@ -1,0 +1,62 @@
+{
+  "title": "Yandex businessComment responses are dropped",
+  "project": "LocalOS",
+  "generated_at": "2026-08-27",
+  "mode": "prove-fix",
+  "original_report": "The internal parser reported August reviews for Весёлая расчёска as unanswered even though the business owner could see responses in Yandex.",
+  "discovery_scope": [
+    "src/parser_interception.py owner-response extraction",
+    "Yandex fetchReviews fixture using businessComment",
+    "existing parser and response utility tests"
+  ],
+  "candidates": [],
+  "expected": "A Yandex review containing businessComment is stored with its organization reply and has_response=true.",
+  "actual": "The parser ignored businessComment and marked the review unanswered.",
+  "environment": "Python 3.11.7, local test environment",
+  "reproduction": "A focused unit test passes a fetchReviews payload whose owner response is stored in businessComment.",
+  "failure_signal": "Before the fix, org_reply, response_text and response_date were None and has_response was false.",
+  "root_cause": "The owner-response extractor accepted legacy response keys but omitted Yandex's current businessComment and business_comment keys.",
+  "fix_summary": "Added businessComment and business_comment to the existing response-key fallback chain.",
+  "why_causal": "The existing normalization logic already handles the object shape; making the current keys reachable preserves the response text, date and has_response flag.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_parser_interception_review_responses.py",
+      "line": 1,
+      "summary": "Focused regression fixture approved at Gate 1."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/parser_interception.py",
+      "line": 2275,
+      "summary": "Recognize current Yandex owner-response keys."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Focused regression",
+      "status": "passed",
+      "detail": "Same test changed from failing to passing."
+    },
+    {
+      "name": "Relevant parser suite",
+      "status": "passed",
+      "detail": "12 parser and response utility tests passed."
+    }
+  ],
+  "reproduce": [
+    "./venv/bin/pytest -q tests/test_parser_interception_review_responses.py",
+    "./venv/bin/pytest -q tests/test_parser_interception.py tests/test_review_response_utils.py"
+  ],
+  "limitations": [
+    "The paid Apify full snapshot remains unavailable because its account hard limit is exceeded.",
+    "The native live parser currently captures only 50 reviews before stagnation, so it cannot immediately recalculate the entire historical count of 142 reviews."
+  ],
+  "residual_risks": [
+    "A live response outside the native parser's first 50 reviews will be corrected only after a complete snapshot becomes available."
+  ],
+  "notes": [
+    "No public API or database schema changed.",
+    "The failing evidence JSON was transcribed from the approved pre-fix test run because that run preceded capture_command instrumentation."
+  ]
+}
