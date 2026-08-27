@@ -85,7 +85,7 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       {error ? <p className={cn('mt-3 text-sm', dark ? 'text-red-300' : 'text-red-700')}>{error}</p> : null}
       <div className="mt-5 flex flex-col gap-2 sm:flex-row">
         {action.allowed_commands.includes('copy') ? <Button type="button" variant="outline" onClick={() => void copyMessage()} disabled={Boolean(busy)} className={cn('min-h-11 gap-2 transition-transform active:scale-[0.96]', dark && 'border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08] hover:text-white')}><Clipboard className="h-4 w-4" />Скопировать</Button> : null}
-        {command ? <Button type="button" onClick={() => void execute(command)} disabled={Boolean(busy)} className="min-h-11 gap-2 transition-transform active:scale-[0.96]">{busy === command ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{commandLabel[command] || action.cta_label}<ArrowRight className="h-4 w-4" /></Button> : null}
+        {command ? <Button type="button" onClick={() => void execute(command)} disabled={Boolean(busy)} className="min-h-11 gap-2 transition-transform active:scale-[0.96]">{busy === command ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{command === 'complete' ? action.cta_label : commandLabel[command] || action.cta_label}<ArrowRight className="h-4 w-4" /></Button> : null}
         {action.action_type === 'check_reply' && action.allowed_commands.includes('prepare_followup') ? <Button type="button" variant="outline" onClick={() => void execute('prepare_followup')} disabled={Boolean(busy)} className={cn('min-h-11 transition-transform active:scale-[0.96]', dark && 'border-white/10 bg-white/[0.04] text-zinc-200')}>Ответа нет — follow-up</Button> : null}
       </div>
     </article>

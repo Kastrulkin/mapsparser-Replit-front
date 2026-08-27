@@ -19,6 +19,8 @@ from services.lead_workstream_service import CREATOR_COLLABORATION, create_works
 
 SCORING_VERSION = "creator-fit-v3"
 TRUE_VALUES = {"1", "true", "yes", "on"}
+CREATOR_AUTOMATION_TIERS = {"starter", "professional", "concierge", "elite", "promo", "basic", "pro", "enterprise"}
+CREATOR_ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
 SEARCH_RESULT_GROUPS = {
     "best_fit",
     "strong_local",
@@ -2421,4 +2423,178 @@ def promotion_overview(cursor: Any, business_id: str) -> dict[str, Any]:
             if jobs and int(jobs[0].get("results_count") or 0) > 0
             else "Запустить первый поиск локальных авторов"
         ),
+    }
+
+
+def creator_automation_allowed(cursor: Any, business_id: str) -> bool:
+    cursor.execute(
+        """
+        SELECT LOWER(COALESCE(subscription_tier, '')) AS subscription_tier,
+               LOWER(COALESCE(subscription_status, '')) AS subscription_status,
+               subscription_ends_at
+        FROM businesses
+        WHERE id = %s AND COALESCE(is_active, TRUE) = TRUE
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    business = _dict(cursor.fetchone())
+    if not business:
+        raise LookupError("Бизнес не найден")
+    ends_at = business.get("subscription_ends_at")
+    current = datetime.now(timezone.utc)
+    if isinstance(ends_at, datetime):
+        normalized_ends_at = ends_at if ends_at.tzinfo else ends_at.replace(tzinfo=timezone.utc)
+        if normalized_ends_at < current:
+            return False
+    return (
+        str(business.get("subscription_tier") or "") in CREATOR_AUTOMATION_TIERS
+        and str(business.get("subscription_status") or "") in CREATOR_ACTIVE_SUBSCRIPTION_STATUSES
+    )
+
+
+def _public_creator_card(item: dict[str, Any]) -> dict[str, Any]:
+    public_metrics = _json(item.get("public_metrics"), {})
+    audience_count = None
+    for key in ("followers", "follower_count", "subscribers", "subscriber_count", "members", "audience_count"):
+        value = public_metrics.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            audience_count = int(value)
+            break
+    evidence = []
+    for source in _json(item.get("evidence"), []):
+        if not isinstance(source, dict):
+            continue
+        evidence.append({
+            "type": source.get("type"),
+            "summary": str(source.get("summary") or "").strip(),
+            "source_url": source.get("source_url"),
+            "observed_at": _json_ready(source.get("observed_at")),
+            "confidence": source.get("confidence"),
+        })
+    return {
+        "id": str(item.get("creator_profile_id") or ""),
+        "result_id": str(item.get("id") or ""),
+        "display_name": str(item.get("display_name") or "Локальный автор"),
+        "description": str(item.get("description") or "").strip(),
+        "profile_type": item.get("profile_type"),
+        "platform": item.get("platform"),
+        "public_url": item.get("canonical_url"),
+        "city": item.get("home_city") or item.get("primary_city"),
+        "area": item.get("home_district") or item.get("primary_area"),
+        "audience_count": audience_count,
+        "audience_size_band": item.get("audience_size_band") or "unknown",
+        "primary_topic": item.get("primary_topic"),
+        "topics": _text_list(item.get("secondary_topics") or item.get("topics")),
+        "content_styles": _text_list(item.get("content_styles")),
+        "formats": sorted({*_text_list(item.get("observed_formats")), *_text_list(item.get("confirmed_formats")), *_text_list(item.get("formats"))}),
+        "accepts_barter": item.get("accepts_barter"),
+        "contactability": item.get("contactability"),
+        "verification_status": item.get("channel_verification_status"),
+        "score": float(item.get("score") or 0),
+        "fit_reasons": _text_list(item.get("reasons")),
+        "shortlist_status": str(item.get("shortlist_status") or "suggested"),
+        "evidence": evidence[:5],
+    }
+
+
+def influencer_workspace(
+    cursor: Any,
+    *,
+    business_id: str,
+    filters: dict[str, Any] | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Build the shared, safe read model used by web and Mini App."""
+    _load_business(cursor, business_id)
+    jobs = list_search_jobs(cursor, business_id)
+    latest_summary = jobs[0] if jobs else None
+    latest_search = None
+    if latest_summary and int(latest_summary.get("results_count") or 0) > 0:
+        latest_search = load_search_job(cursor, business_id=business_id, job_id=str(latest_summary["id"]))
+    elif latest_summary:
+        latest_search = latest_summary
+
+    cards = [_public_creator_card(item) for item in (latest_search or {}).get("results", [])]
+    requested = filters or {}
+    platform = str(requested.get("platform") or "").strip().lower()
+    city = str(requested.get("city") or "").strip().lower()
+    topic = str(requested.get("topic") or "").strip().lower()
+    content_format = str(requested.get("format") or "").strip().lower()
+    audience_size_band = str(requested.get("audience_size_band") or "").strip().lower()
+    shortlisted_only = str(requested.get("shortlisted") or "").strip().lower() in TRUE_VALUES
+    barter_only = str(requested.get("barter") or "").strip().lower() in TRUE_VALUES
+    contactable_only = str(requested.get("contactable") or "").strip().lower() in TRUE_VALUES
+
+    def visible(card: dict[str, Any]) -> bool:
+        searchable_topics = [card.get("primary_topic"), *card.get("topics", []), *card.get("content_styles", []), *card.get("formats", [])]
+        return (
+            (not platform or str(card.get("platform") or "").lower() == platform)
+            and (not city or city in " ".join((str(card.get("city") or ""), str(card.get("area") or ""))).lower())
+            and (not topic or any(topic in str(value or "").lower() for value in searchable_topics))
+            and (not content_format or any(content_format in str(value or "").lower() for value in card.get("formats", [])))
+            and (not audience_size_band or str(card.get("audience_size_band") or "").lower() == audience_size_band)
+            and (not shortlisted_only or card.get("shortlist_status") == "shortlisted")
+            and (not barter_only or card.get("accepts_barter") is True)
+            and (not contactable_only or card.get("contactability") in {"public_contact", "advertising_contact"})
+        )
+
+    filtered = [card for card in cards if visible(card)]
+    bounded_limit = min(max(int(limit or 30), 1), 100)
+    bounded_offset = max(int(offset or 0), 0)
+    page = filtered[bounded_offset:bounded_offset + bounded_limit]
+    next_offset = bounded_offset + bounded_limit if bounded_offset + bounded_limit < len(filtered) else None
+    campaigns = list_campaigns(cursor, business_id)
+    latest_campaign = campaigns[0] if campaigns else None
+    current_offer = _json((latest_campaign or {}).get("offer"), {})
+    if not current_offer:
+        cursor.execute(
+            """
+            SELECT payload_json->'offer' AS offer
+            FROM journey_actions
+            WHERE business_id = %s AND flow_type = 'influencer'
+              AND payload_json ? 'offer'
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (business_id,),
+        )
+        current_offer = _json(_dict(cursor.fetchone()).get("offer"), {})
+    automation_allowed = creator_automation_allowed(cursor, business_id)
+    paid_reason = "Подготовка персональных сообщений, подключение каналов и отправка доступны после оплаты."
+    access = {
+        "discovery": {"status": "available", "reason": "Каталог, фильтры и shortlist доступны после регистрации.", "cta_label": "Смотреть авторов", "cta_target": {"screen": "influencers"}},
+        "offer": {"status": "available", "reason": "Базовое предложение можно проверить до запуска автоматизации.", "cta_label": "Проверить предложение", "cta_target": {"screen": "influencers"}},
+        "message_generation": {"status": "available" if automation_allowed else "payment_required", "reason": "Доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Подготовить сообщения" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}},
+        "sender_setup": {"status": "available" if automation_allowed else "payment_required", "reason": "Доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Подключить канал" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "settings"}},
+        "send": {"status": "approval_required" if automation_allowed else "payment_required", "reason": "Каждая внешняя отправка требует проверки и подтверждения." if automation_allowed else paid_reason, "cta_label": "Проверить и отправить" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}},
+    }
+    return {
+        "feature_state": creator_feature_state(business_id),
+        "next_action": (
+            "Выберите 2–5 подходящих авторов"
+            if cards and not any(card.get("shortlist_status") == "shortlisted" for card in cards)
+            else "Проверьте выбранных авторов"
+            if cards
+            else "Запустите подбор локальных авторов"
+        ),
+        "offer": current_offer,
+        "latest_search": {
+            "id": str((latest_search or {}).get("id") or ""),
+            "status": (latest_search or {}).get("status"),
+            "brief": _json((latest_search or {}).get("brief"), {}),
+            "results_count": int((latest_summary or {}).get("results_count") or len(cards)),
+            "shortlisted_count": int((latest_summary or {}).get("shortlisted_count") or 0),
+        } if latest_search else None,
+        "creators": page,
+        "counts": {"total": len(filtered), "returned": len(page), "shortlisted": sum(1 for card in cards if card.get("shortlist_status") == "shortlisted")},
+        "cursor": str(next_offset) if next_offset is not None else None,
+        "filters": {
+            "platforms": sorted({str(card.get("platform")) for card in cards if card.get("platform")}),
+            "cities": sorted({str(card.get("city")) for card in cards if card.get("city")}),
+            "topics": sorted({str(value) for card in cards for value in [card.get("primary_topic"), *card.get("topics", [])] if value}),
+            "formats": sorted({str(value) for card in cards for value in card.get("formats", []) if value}),
+            "audience_size_bands": sorted({str(card.get("audience_size_band")) for card in cards if card.get("audience_size_band") and card.get("audience_size_band") != "unknown"}),
+        },
+        "access": access,
     }

@@ -120,6 +120,45 @@ def test_mobile_feed_rejects_unresolved_scope(monkeypatch):
     assert response.status_code == 403
 
 
+def test_web_feed_uses_same_verified_scope_and_builder(monkeypatch):
+    scope = {"kind": "business", "id": "business-1", "name": "Бизнес", "business_ids": ["business-1"]}
+    captured = {}
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: scope)
+    monkeypatch.setattr(
+        operator_api,
+        "build_mobile_feed",
+        lambda _cursor, **kwargs: captured.update(kwargs) or {
+            "scope": scope,
+            "topics": [{"id": "topic-1", "title": "Локальный маркетинг"}],
+            "items": [],
+            "cursor": None,
+        },
+    )
+
+    response = _app().test_client().get(
+        "/api/operator/feed?scope_type=business&scope_id=business-1&limit=12"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["topics"][0]["title"] == "Локальный маркетинг"
+    assert captured["scope"] == scope
+    assert captured["limit"] == 12
+
+
+def test_web_feed_rejects_unresolved_scope(monkeypatch):
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: None)
+
+    response = _app().test_client().get(
+        "/api/operator/feed?scope_type=business&scope_id=foreign-business"
+    )
+
+    assert response.status_code == 403
+
+
 def test_web_today_requires_authentication(monkeypatch):
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: None)
 

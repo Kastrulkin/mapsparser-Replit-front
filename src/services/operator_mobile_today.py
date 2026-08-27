@@ -824,6 +824,50 @@ def _telegram_document_link(item: dict[str, Any]) -> str | None:
     return source_url if source_url.startswith("https://t.me/") else None
 
 
+def _load_feed_inbound_items(cursor: Any, scope: dict[str, Any], limit: int = 20) -> list[dict[str, Any]]:
+    business_ids = [str(value) for value in scope.get("business_ids") or [] if value]
+    if scope.get("kind") == "business" and scope.get("id"):
+        business_ids = [str(scope["id"])]
+    if not business_ids:
+        return []
+    cursor.execute("SELECT TO_REGCLASS('public.outreach_inbound_events') AS table_name")
+    existing = _row(cursor, cursor.fetchone())
+    if not existing.get("table_name"):
+        return []
+    cursor.execute(
+        """
+        SELECT inbound.id, inbound.channel, inbound.classification,
+               inbound.raw_payload_json, inbound.occurred_at,
+               lead.name AS sender_name, workstream.workstream_type,
+               workstream.client_business_id AS business_id
+        FROM outreach_inbound_events inbound
+        JOIN lead_workstreams workstream ON workstream.id = inbound.workstream_id
+        LEFT JOIN prospectingleads lead ON lead.id = inbound.lead_id
+        WHERE workstream.client_business_id = ANY(%s)
+          AND inbound.is_human = TRUE
+        ORDER BY inbound.occurred_at DESC, inbound.created_at DESC
+        LIMIT %s
+        """,
+        (business_ids, min(max(int(limit or 20), 1), 50)),
+    )
+    items = []
+    for value in cursor.fetchall() or []:
+        item = _row(cursor, value)
+        raw = _parse_json(item.get("raw_payload_json"))
+        text = next((str(raw.get(key) or "").strip() for key in ("reply", "raw_reply", "text", "message") if str(raw.get(key) or "").strip()), "")
+        items.append({
+            "id": str(item.get("id") or ""),
+            "channel": str(item.get("channel") or ""),
+            "classification": str(item.get("classification") or "human_unknown"),
+            "sender_name": str(item.get("sender_name") or "Новый ответ"),
+            "text": text or "Получен ответ. Откройте рабочую область, чтобы продолжить.",
+            "received_at": _iso(item.get("occurred_at")),
+            "flow_type": "influencer" if str(item.get("workstream_type") or "") == "creator_collaboration" else "partnership",
+            "target": {"screen": "influencers" if str(item.get("workstream_type") or "") == "creator_collaboration" else "partnerships", "item_id": str(item.get("id") or "")},
+        })
+    return items
+
+
 def build_mobile_feed(
     cursor: Any,
     *,
@@ -840,12 +884,14 @@ def build_mobile_feed(
     source_ids, _industry_keys = _knowledge_source_ids(cursor, scope)
     topics = _load_community_pulse(cursor, scope, cutoff)
     topic_trends = load_topic_trends(cursor, source_ids, observed_at)
+    inbound_items = _load_feed_inbound_items(cursor, scope, limit=limit)
     if not source_ids:
         return {
             "scope": scope,
             "topics": topics,
             "topic_trends": topic_trends,
             "items": [],
+            "inbound_items": inbound_items,
             "counts": {"returned": 0},
             "cursor": None,
             "as_of": observed_at.astimezone(timezone.utc).isoformat(),
@@ -913,6 +959,7 @@ def build_mobile_feed(
         "topics": topics,
         "topic_trends": topic_trends,
         "items": items,
+        "inbound_items": inbound_items,
         "counts": {"returned": len(items)},
         "cursor": next_cursor,
         "as_of": observed_at.astimezone(timezone.utc).isoformat(),

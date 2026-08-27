@@ -2306,6 +2306,33 @@ def operator_mobile_feed():
         db.close()
 
 
+@operator_bp.route("/feed", methods=["GET"])
+def operator_feed():
+    """Return the canonical community feed for authenticated product surfaces."""
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    try:
+        limit = min(max(int(request.args.get("limit") or 20), 1), 50)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Некорректный размер страницы"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        payload = build_mobile_feed(
+            cursor,
+            scope=scope,
+            limit=limit,
+            page_cursor=str(request.args.get("cursor") or "") or None,
+        )
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
 @operator_bp.route("/today", methods=["GET"])
 def operator_today():
     """Return the canonical daily brief for authenticated web clients.

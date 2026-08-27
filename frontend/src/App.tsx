@@ -112,6 +112,16 @@ const TodayPage = lazy(() =>
     default: module.TodayPage,
   })),
 );
+const InfluencersPage = lazy(() =>
+  import("./pages/dashboard/InfluencersPage").then((module) => ({
+    default: module.InfluencersPage,
+  })),
+);
+const CommunityFeedPage = lazy(() =>
+  import("./pages/dashboard/CommunityFeedPage").then((module) => ({
+    default: module.CommunityFeedPage,
+  })),
+);
 const FinancePage = lazy(() =>
   import("./pages/dashboard/FinancePage").then((module) => ({
     default: module.FinancePage,
@@ -324,6 +334,7 @@ const AppShell = () => {
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Navigate to="/dashboard/today" replace />} />
             <Route path="today" element={<TodayPage />} />
+            <Route path="feed" element={<CommunityFeedPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="card" element={<JourneyWorkspaceFocus><CardOverviewPage /></JourneyWorkspaceFocus>} />
             <Route path="content" element={<JourneyWorkspaceFocus><ContentPage /></JourneyWorkspaceFocus>} />
@@ -337,7 +348,9 @@ const AppShell = () => {
             <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
             <Route path="promotion" element={<PromotionHubPage />} />
             <Route path="promotion/partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
-            <Route path="promotion/influencers" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
+            <Route path="influencers" element={<JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus>} />
+            <Route path="influencers/operations" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
+            <Route path="promotion/influencers" element={<Navigate to="/dashboard/influencers" replace />} />
             <Route path="growth-paths" element={<GrowthPathsPage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="operator" element={<OperatorPage />} />

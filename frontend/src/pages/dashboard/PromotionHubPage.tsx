@@ -81,7 +81,7 @@ export const PromotionHubPage = () => {
             title="Локальные авторы"
             description="Найдите авторов, районные сообщества и локальные медиа, которые уже влияют на выбор вашей аудитории."
             bullets={['Поиск по географии и темам', 'Объяснимый shortlist вместо каталога подписчиков', 'Коллаборации, материалы и подтверждённые метрики']}
-            href="/dashboard/promotion/influencers"
+            href="/dashboard/influencers"
             icon={Megaphone}
             accent="bg-gradient-to-br from-amber-50 to-orange-100/80"
             available={currentBusiness?.creator_promotion_available === true}

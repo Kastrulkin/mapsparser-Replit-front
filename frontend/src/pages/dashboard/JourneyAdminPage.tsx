@@ -22,8 +22,8 @@ const previewModes: PreviewMode[] = ['public', 'registered', 'paid'];
 
 const flowForKey = (key: LeadJourneyKey) => key === 'influencers' ? 'influencer' : key === 'partnerships' ? 'partnership' : key;
 
-const firstMessage = (flow: LeadJourneyKey, link: string, title: string) => {
-  if (flow === 'influencers') return `Мы подобрали пример локального автора и механику сотрудничества для вашего бизнеса. Посмотрите, почему он подходит: ${link}`;
+const firstMessage = (flow: LeadJourneyKey, link: string, title: string, mechanic: string, examples: string) => {
+  if (flow === 'influencers') return `Мы работаем с микроинфлюенсерами и активными локальными авторами.${examples.trim() ? ` Вот несколько примеров: ${examples.trim().split(/\s+/).join(' ')}` : ''} Для вас подготовили механику: ${mechanic} После регистрации вы сразу попадёте в подборку авторов: ${link}`;
   if (flow === 'partnerships') return `Нашли пример бизнеса с пересекающейся аудиторией и идею партнёрства. Посмотрите предложение: ${link}`;
   if (flow === 'maps') return `Нашли первое изменение карточки, которое стоит сделать сейчас. Посмотрите задачу и объяснение: ${link}`;
   return `Подготовили тему «${title}» и пример первого материала для вашего бизнеса. Посмотрите черновик: ${link}`;
@@ -44,6 +44,13 @@ export const JourneyAdminPage = () => {
   const [reason, setReason] = useState('');
   const [mechanic, setMechanic] = useState('');
   const [excerpt, setExcerpt] = useState('');
+  const [barterService, setBarterService] = useState('');
+  const [barterValue, setBarterValue] = useState('');
+  const [barterThreshold, setBarterThreshold] = useState('3');
+  const [barterReward, setBarterReward] = useState('');
+  const [barterConstraints, setBarterConstraints] = useState('');
+  const [barterValidUntil, setBarterValidUntil] = useState('');
+  const [exampleLinks, setExampleLinks] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('30');
   const [created, setCreated] = useState<CreatedJourney | null>(null);
   const [createdMessage, setCreatedMessage] = useState('');
@@ -94,11 +101,35 @@ export const JourneyAdminPage = () => {
     setReason(opportunity?.reason || 'Этот путь соответствует текущей задаче клиента.');
     setMechanic(opportunity?.mechanic || 'Начать с одного безопасного действия.');
     setExcerpt(opportunity?.message_excerpt || '');
+    setBarterService('');
+    setBarterValue('');
+    setBarterThreshold('3');
+    setBarterReward('');
+    setBarterConstraints('');
+    setBarterValidUntil('');
+    setExampleLinks(opportunity?.public_url || '');
     setStep('preview');
+  };
+
+  const updateBarterService = (service: string) => {
+    setBarterService(service);
+    if (!service.trim()) return;
+    const reward = barterReward.trim() || `${service.trim()} в подарок`;
+    setMechanic(`Автор рассказывает о бизнесе и получает ${reward}, если по его рекомендации приходят ${barterThreshold || '3'} новых клиента.`);
+  };
+
+  const regenerateBarterMechanic = () => {
+    if (!barterService.trim()) return;
+    const reward = barterReward.trim() || `${barterService.trim()} в подарок`;
+    setMechanic(`Автор рассказывает о бизнесе и получает ${reward}, если по его рекомендации приходят ${barterThreshold || '3'} новых клиента.`);
   };
 
   const createJourney = async () => {
     if (!selectedKey || !preview || !selectedLeadId) return;
+    if (selectedKey === 'influencers' && !barterService.trim()) {
+      setError('Укажите услугу, из которой LocalOS подготовит бартерное предложение.');
+      return;
+    }
     setBusy('create');
     setError('');
     const baseOpportunity = selectedOpportunity;
@@ -111,7 +142,18 @@ export const JourneyAdminPage = () => {
       reason: reason.trim(),
       mechanic: mechanic.trim(),
       message_excerpt: excerpt.trim(),
-      metrics: baseOpportunity?.metrics || {},
+      metrics: selectedKey === 'influencers' ? {
+        ...(baseOpportunity?.metrics || {}),
+        offer_service: barterService.trim(),
+        offer_value: barterValue.trim(),
+        offer_threshold: Number(barterThreshold || 3),
+        offer_reward: (barterReward.trim() || `${barterService.trim()} в подарок`).trim(),
+        offer_constraints: barterConstraints.trim(),
+        offer_valid_until: barterValidUntil,
+        offer_version: 1,
+        offer_status: 'approved',
+        example_links: exampleLinks.trim().split(/\s+/).join(' ').slice(0, 160),
+      } : baseOpportunity?.metrics || {},
       tasks: baseOpportunity?.tasks || [],
       count: baseOpportunity?.count || 0,
     };
@@ -132,7 +174,7 @@ export const JourneyAdminPage = () => {
       const publicUrl = String(data.public_url || `${window.location.origin}${data.public_path || ''}`);
       const result = { ...data.journey, public_url: publicUrl, public_path: data.public_path };
       setCreated(result);
-      setCreatedMessage(firstMessage(selectedKey, publicUrl, title));
+      setCreatedMessage(firstMessage(selectedKey, publicUrl, title, mechanic, exampleLinks));
       setStep('link');
       await loadJourneys();
     } catch (caught) {
@@ -176,6 +218,10 @@ export const JourneyAdminPage = () => {
       <div className="grid grid-cols-4 gap-2" aria-label="Этапы создания маршрута">{['Клиент', 'Проблема', 'Предпросмотр', 'Ссылка'].map((label, index) => <div key={label} className={cn('rounded-2xl px-3 py-3 text-center text-xs font-semibold shadow-[0_0_0_1px_rgba(15,23,42,0.07)]', index + 1 <= progress ? 'bg-slate-950 text-white' : 'bg-white text-slate-500')}><span className="tabular-nums">{index + 1}.</span> {label}</div>)}</div>
 
       {error ? <section className="rounded-2xl bg-red-50 p-4 text-sm text-red-800 shadow-[0_0_0_1px_rgba(185,28,28,0.12)]">{error}</section> : null}
+
+      {step === 'preview' && selectedKey === 'influencers' ? <DashboardSection title="Примеры авторов для сообщения" description="Добавьте обычные публичные ссылки. Они попадут в готовый текст; отдельная public-страница не нужна."><label className="block text-sm font-medium text-slate-700">По одной ссылке на строку<Textarea value={exampleLinks} onChange={(event) => setExampleLinks(event.target.value)} placeholder={'https://t.me/example\nhttps://vk.com/example'} className="mt-2 min-h-28" /></label></DashboardSection> : null}
+
+      {step === 'preview' && selectedKey === 'influencers' ? <DashboardSection title="Услуга для бартера" description="Укажите услугу — LocalOS сразу соберёт общую механику сотрудничества."><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><label className="block text-sm font-medium text-slate-700">Название услуги<Input value={barterService} onChange={(event) => updateBarterService(event.target.value)} placeholder="Например, стрижка" className="mt-2 min-h-11" /></label><label className="block text-sm font-medium text-slate-700">Обычная стоимость<Input value={barterValue} onChange={(event) => setBarterValue(event.target.value)} placeholder="2 500 ₽" className="mt-2 min-h-11 tabular-nums" /></label><label className="block text-sm font-medium text-slate-700">Сколько клиентов<Input type="number" min="1" value={barterThreshold} onChange={(event) => setBarterThreshold(event.target.value)} onBlur={regenerateBarterMechanic} className="mt-2 min-h-11 tabular-nums" /></label><label className="block text-sm font-medium text-slate-700">Вознаграждение<Input value={barterReward} onChange={(event) => setBarterReward(event.target.value)} onBlur={regenerateBarterMechanic} placeholder={barterService ? `${barterService} в подарок` : 'Услуга в подарок'} className="mt-2 min-h-11" /></label><label className="block text-sm font-medium text-slate-700">Ограничения<Input value={barterConstraints} onChange={(event) => setBarterConstraints(event.target.value)} placeholder="Будни, один автор" className="mt-2 min-h-11" /></label><label className="block text-sm font-medium text-slate-700">Действует до<Input type="date" value={barterValidUntil} onChange={(event) => setBarterValidUntil(event.target.value)} className="mt-2 min-h-11 tabular-nums" /></label></div><div className="mt-5 rounded-2xl bg-orange-50 p-4 text-pretty text-sm leading-6 text-orange-950"><strong className="block">Подготовленное предложение</strong><span>{mechanic || 'Назовите услугу, чтобы увидеть механику.'}</span></div></DashboardSection> : null}
 
       {step === 'client' ? <DashboardSection title="Для кого создаём маршрут" description="Выберите существующего потенциального клиента. Данные бизнеса используются только для безопасного preview."><Select value={selectedLeadId} onValueChange={setSelectedLeadId}><SelectTrigger className="min-h-12"><SelectValue placeholder="Выберите клиента" /></SelectTrigger><SelectContent>{leads.map((lead) => <SelectItem key={lead.id} value={lead.id}>{[lead.name || 'Без названия', lead.city].filter(Boolean).join(' · ')}</SelectItem>)}</SelectContent></Select><Button type="button" onClick={() => void chooseClient()} disabled={!selectedLeadId || Boolean(busy)} className="mt-5 min-h-11 gap-2 transition-transform active:scale-[0.96]">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRound className="h-4 w-4" />}Выбрать проблему<ArrowRight className="h-4 w-4" /></Button></DashboardSection> : null}
 

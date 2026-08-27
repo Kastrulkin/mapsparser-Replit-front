@@ -27,7 +27,7 @@ type GrowthPathsResponse = {
 const pathMeta = {
   maps: { icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
   content: { icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
-  influencer: { icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/promotion/influencers' },
+  influencer: { icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
   partnership: { icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
 };
 

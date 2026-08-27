@@ -24,7 +24,7 @@ describe('PromotionHubPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Продвижение' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Партнёрские акции/ })).toHaveAttribute('href', '/dashboard/promotion/partnerships');
-    expect(screen.getByRole('link', { name: /Локальные авторы/ })).toHaveAttribute('href', '/dashboard/promotion/influencers');
+    expect(screen.getByRole('link', { name: /Локальные авторы/ })).toHaveAttribute('href', '/dashboard/influencers');
     expect(screen.getByText(/ничего не отправляют/)).toBeInTheDocument();
   });
 

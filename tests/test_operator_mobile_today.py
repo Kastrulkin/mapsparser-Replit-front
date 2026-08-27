@@ -108,6 +108,38 @@ def test_feed_cursor_round_trip_and_telegram_link_fallback():
     encoded = mobile_today._encode_feed_cursor(observed_at, "7b95fa9a-55b4-4f9c-90b4-ef8da8699484")
 
     assert mobile_today._feed_cursor(encoded) == (observed_at, "7b95fa9a-55b4-4f9c-90b4-ef8da8699484")
+
+
+def test_feed_inbound_items_are_tenant_scoped_and_route_by_workstream():
+    class Cursor:
+        def __init__(self):
+            self.params = []
+
+        def execute(self, _query, params=None):
+            self.params.append(params)
+
+        def fetchone(self):
+            return {"table_name": "outreach_inbound_events"}
+
+        def fetchall(self):
+            return [{
+                "id": "reply-1",
+                "channel": "telegram",
+                "classification": "interested",
+                "raw_payload_json": {"reply": "Да, интересно"},
+                "occurred_at": datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc),
+                "sender_name": "Анна про Петербург",
+                "workstream_type": "creator_collaboration",
+                "business_id": "business-1",
+            }]
+
+    cursor = Cursor()
+    items = mobile_today._load_feed_inbound_items(cursor, {"kind": "business", "id": "business-1"})
+
+    assert cursor.params[-1][0] == ["business-1"]
+    assert items[0]["text"] == "Да, интересно"
+    assert items[0]["flow_type"] == "influencer"
+    assert items[0]["target"]["screen"] == "influencers"
     assert mobile_today._telegram_document_link({
         "source_url": "https://t.me/local_business",
         "external_id": "42",

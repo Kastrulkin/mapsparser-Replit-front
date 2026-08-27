@@ -168,7 +168,7 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
       'Один простой вопрос без давления и массовой рассылки',
     ],
     lockedResult: 'После регистрации откроются полный текст, источник персонализации и кнопка «Отметить, что написал».',
-    dashboardRoute: '/dashboard/promotion/influencers',
+    dashboardRoute: '/dashboard/influencers',
   },
   {
     key: 'partnerships',
@@ -236,7 +236,7 @@ export const leadJourneyKeyForFlow = (flow: string | null | undefined): LeadJour
 export const journeyActionRoute = (action: JourneyAction) => {
   const screen = action.cta_target?.screen;
   const routes: Record<string, string> = {
-    influencers: '/dashboard/promotion/influencers',
+    influencers: '/dashboard/influencers',
     partnerships: '/dashboard/promotion/partnerships',
     progress: '/dashboard/card',
     maps: '/dashboard/card',

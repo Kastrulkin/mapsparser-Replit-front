@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import pytest
+import services.creator_promotion_service
 
 from services.creator_promotion_service import (
     SCORING_VERSION,
@@ -11,6 +12,7 @@ from services.creator_promotion_service import (
     build_tracking_plan,
     campaign_terms_review,
     creator_feature_state,
+    influencer_workspace,
     preview_candidate_outreach,
     score_creator_candidate,
 )
@@ -98,6 +100,54 @@ def test_creator_feature_allowlist_is_enforced(monkeypatch):
 
     assert creator_feature_state("business-1")["metrics"] is True
     assert creator_feature_state("business-3")["promotion_hub"] is False
+
+
+def test_influencer_workspace_exposes_safe_cards_and_block_level_access(monkeypatch):
+    monkeypatch.setattr(services.creator_promotion_service, "_load_business", lambda _cursor, _business_id: {"id": "business-1"})
+    monkeypatch.setattr(services.creator_promotion_service, "list_search_jobs", lambda _cursor, _business_id: [{"id": "search-1", "results_count": 1, "shortlisted_count": 0}])
+    monkeypatch.setattr(
+        services.creator_promotion_service,
+        "load_search_job",
+        lambda _cursor, **_kwargs: {
+            "id": "search-1",
+            "status": "completed",
+            "brief": {"city": "Санкт-Петербург"},
+            "results": [{
+                "id": "result-1",
+                "creator_profile_id": "creator-1",
+                "display_name": "Анна про Петербург",
+                "description": "Обзоры локальных мест и услуг",
+                "platform": "telegram",
+                "canonical_url": "https://t.me/anna_spb",
+                "home_city": "Санкт-Петербург",
+                "primary_topic": "local_places",
+                "secondary_topics": ["beauty_wellness"],
+                "content_styles": ["reviews"],
+                "observed_formats": ["обзор"],
+                "public_metrics": {"subscribers": 4200},
+                "preferred_contact": "private@example.test",
+                "contactability": "advertising_contact",
+                "accepts_barter": True,
+                "score": 86,
+                "reasons": ["Пишет о местах Санкт-Петербурга"],
+                "shortlist_status": "suggested",
+                "evidence": [{"type": "public_post", "summary": "Публичный обзор салона", "source_url": "https://t.me/anna_spb/10"}],
+            }],
+        },
+    )
+    monkeypatch.setattr(services.creator_promotion_service, "list_campaigns", lambda _cursor, _business_id: [{"offer": {"barter": True, "service": "Стрижка"}}])
+    monkeypatch.setattr(services.creator_promotion_service, "creator_automation_allowed", lambda _cursor, _business_id: False)
+    monkeypatch.setattr(services.creator_promotion_service, "creator_feature_state", lambda _business_id: {"promotion_hub": True, "discovery": True})
+
+    workspace = influencer_workspace(None, business_id="business-1", filters={"barter": "true"})
+
+    assert workspace["counts"] == {"total": 1, "returned": 1, "shortlisted": 0}
+    assert workspace["offer"]["service"] == "Стрижка"
+    assert workspace["creators"][0]["audience_count"] == 4200
+    assert workspace["creators"][0]["public_url"] == "https://t.me/anna_spb"
+    assert "preferred_contact" not in workspace["creators"][0]
+    assert workspace["access"]["discovery"]["status"] == "available"
+    assert workspace["access"]["message_generation"]["status"] == "payment_required"
 
 
 def test_creator_score_is_weighted_explainable_and_versioned():

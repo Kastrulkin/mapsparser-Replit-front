@@ -19,6 +19,7 @@ import {
   Megaphone,
   LayoutGrid,
   CircleEllipsis,
+  Radio,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -175,6 +176,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       icon: LayoutGrid,
       path: '/dashboard/growth-paths',
       tooltip: 'Карты, контент, инфлюенсеры и партнёрства — с одним следующим шагом.',
+    },
+    {
+      id: 'feed',
+      label: 'Лента',
+      icon: Radio,
+      path: '/dashboard/feed',
+      tooltip: 'Входящие сообщения и новости вашей индустрии.',
     },
     {
       id: 'progress',

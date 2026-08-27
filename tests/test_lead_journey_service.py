@@ -56,6 +56,17 @@ def test_sent_message_waits_four_days_for_reply():
     assert payload["manual"] is True
 
 
+def test_influencer_journey_browses_before_paid_messages():
+    next_type, status, due_at, payload = _next_action_spec(
+        action("browse_creators", payload={"offer": {"service": "Стрижка", "version": 1}}),
+        "complete",
+        {},
+    )
+
+    assert (next_type, status, due_at) == ("send_message", "completed", None)
+    assert payload["offer"] == {"service": "Стрижка", "version": 1}
+
+
 @pytest.mark.parametrize("flow,expected", [("influencer", "select_next_influencer"), ("partnership", "select_next_partner")])
 def test_refusal_closes_reply_step_and_selects_next_candidate(flow, expected):
     next_type, status, _due_at, payload = _next_action_spec(action("check_reply", flow), "record_reply", {"outcome": "refused"})

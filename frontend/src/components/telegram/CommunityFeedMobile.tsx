@@ -3,55 +3,16 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUpRight, BarChart3, CircleAlert, Loader2, MessageSquareText, Plus, Radio, RefreshCw, Send } from 'lucide-react';
 
 import { mobileAuthHeaders, mobileScopeQuery, readMobileJson } from '@/lib/mobileDataClient';
+import {
+  communityFeedTimeLabel,
+  type CommunityFeedItem,
+  type CommunityFeedPayload,
+  type CommunityFeedTopic,
+  type CommunityFeedTrend,
+} from '@/lib/communityFeed';
 import type { MobileScope } from './ScopeProvider';
 
-export type CommunityFeedTopic = {
-  id: string;
-  eyebrow?: string;
-  title?: string;
-  description?: string;
-  message_count?: number | null;
-  sources_count?: number | null;
-  source_name?: string;
-  source_url?: string | null;
-  last_discussed_at?: string;
-};
-
-export type CommunityFeedItem = {
-  id: string;
-  platform: string;
-  source_id?: string;
-  source_name?: string;
-  source_url?: string;
-  title?: string;
-  text: string;
-  published_at?: string;
-  url: string;
-};
-
-export type CommunityFeedTrend = {
-  key: string;
-  label: string;
-  period_days: number;
-  message_count: number;
-  sample_size?: number;
-  topics: Array<{
-    key: string;
-    title: string;
-    message_count: number;
-    percent: number;
-  }>;
-};
-
-export type CommunityFeedPayload = {
-  topics?: CommunityFeedTopic[];
-  topic_trends?: CommunityFeedTrend[];
-  items?: CommunityFeedItem[];
-  cursor?: string | null;
-  as_of?: string;
-  freshness?: { status?: string; updated_at?: string | null };
-  available_actions?: string[];
-};
+export type { CommunityFeedItem, CommunityFeedPayload, CommunityFeedTopic, CommunityFeedTrend } from '@/lib/communityFeed';
 
 const previewPayload: CommunityFeedPayload = {
   topics: [
@@ -85,6 +46,7 @@ const previewPayload: CommunityFeedPayload = {
     { id: 'message-1', platform: 'telegram', source_name: 'Beauty Business Club', text: 'Собрали сравнение цен поставщиков на август и разобрали, как изменения влияют на себестоимость услуг.', published_at: new Date().toISOString(), url: 'https://t.me/beauty_business/101' },
     { id: 'message-2', platform: 'telegram', source_name: 'Салоны России', text: 'Коллеги, кто уже перешёл на новую схему маркировки? Делимся ошибками и решениями.', published_at: new Date(Date.now() - 3600000).toISOString(), url: 'https://t.me/salons/204' },
   ],
+  inbound_items: [{ id: 'reply-1', channel: 'telegram', classification: 'interested', sender_name: 'Анна про Петербург', text: 'Да, интересно обсудить бартер.', received_at: new Date().toISOString(), flow_type: 'influencer', target: { screen: 'influencers', item_id: 'reply-1' } }],
   cursor: null,
   as_of: new Date().toISOString(),
   freshness: { status: 'live', updated_at: new Date().toISOString() },
@@ -92,17 +54,6 @@ const previewPayload: CommunityFeedPayload = {
 };
 
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
-
-const formatTime = (value?: string) => {
-  if (!value) return 'время не указано';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'время не указано';
-  const distance = Date.now() - parsed.getTime();
-  if (distance >= 0 && distance < 60000) return 'только что';
-  if (distance >= 0 && distance < 3600000) return `${Math.max(1, Math.floor(distance / 60000))} мин назад`;
-  if (distance >= 0 && distance < 86400000) return `${Math.floor(distance / 3600000)} ч назад`;
-  return parsed.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-};
 
 const messageCountLabel = (value: number) => {
   const ending = value % 100;
@@ -132,9 +83,10 @@ type CommunityFeedMobileProps = {
   scope?: MobileScope;
   preview?: boolean;
   openSources?: () => void;
+  openTarget?: (target: string) => void;
 };
 
-export const CommunityFeedMobile = ({ scope, preview = false, openSources }: CommunityFeedMobileProps) => {
+export const CommunityFeedMobile = ({ scope, preview = false, openSources, openTarget }: CommunityFeedMobileProps) => {
   const [payload, setPayload] = useState<CommunityFeedPayload | null>(preview ? previewPayload : null);
   const [pending, setPending] = useState<CommunityFeedItem[]>([]);
   const [loading, setLoading] = useState(!preview);
@@ -179,8 +131,9 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
   const topicTrends = payload?.topic_trends || [];
   const activeTrend = topicTrends.find((item) => item.key === trendPeriod) || topicTrends[0];
   const items = payload?.items || [];
+  const inboundItems = payload?.inbound_items || [];
   const canManageSources = Boolean(openSources && (payload?.available_actions || []).includes('community_sources.manage'));
-  const updatedLabel = useMemo(() => formatTime(payload?.as_of), [payload?.as_of]);
+  const updatedLabel = useMemo(() => communityFeedTimeLabel(payload?.as_of), [payload?.as_of]);
 
   const revealNew = () => {
     if (!pending.length) return;
@@ -214,6 +167,8 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
 
     {error ? <div role="alert" className="mb-4 flex gap-3 rounded-[18px] bg-rose-400/10 p-4 text-xs leading-5 text-rose-100 shadow-[0_0_0_1px_rgba(251,113,133,0.2)]"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div> : null}
 
+    {inboundItems.length ? <section aria-labelledby="feed-inbound-mobile-title" className="mb-4 rounded-[26px] bg-primary/[0.09] p-5 shadow-[0_0_0_1px_rgba(255,92,51,0.18)]"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/15 text-primary"><MessageSquareText className="h-5 w-5" /></span><div><h2 id="feed-inbound-mobile-title" className="text-balance text-lg font-semibold">Ответы по кампаниям</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">Ответ останавливает будущие касания и становится новым шагом.</p></div></div><div className="mt-4 divide-y divide-white/[0.07]">{inboundItems.map((item) => <button key={item.id} type="button" onClick={() => openTarget?.(item.flow_type === 'influencer' ? 'influencers' : 'partnerships')} className="min-h-[84px] w-full py-4 text-left transition-transform active:scale-[0.96]"><span className="flex items-center gap-2 text-[10px] text-zinc-600"><strong className="text-zinc-300">{item.sender_name}</strong><span>·</span><span>{item.channel}</span><span>·</span><time className="tabular-nums" dateTime={item.received_at}>{communityFeedTimeLabel(item.received_at)}</time></span><span className="mt-2 line-clamp-3 block text-pretty text-sm leading-6 text-zinc-400">{item.text}</span></button>)}</div></section> : null}
+
     {topicTrends.length ? <section aria-labelledby="feed-trends-title" className="rounded-[26px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]">
       <div className="flex items-start gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/15 text-primary"><BarChart3 className="h-5 w-5" /></span>
@@ -241,7 +196,7 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
       {topics.length ? <div className="mt-5 divide-y divide-white/[0.06]">
         {topics.slice(0, 3).map((topic, index) => <button key={topic.id} type="button" disabled={!topic.source_url} onClick={() => openExternal(topic.source_url)} className="flex min-h-[84px] w-full items-start gap-3 py-4 text-left transition-[opacity,transform] active:scale-[0.96] disabled:active:scale-100">
           <span className="mt-1 font-mono text-xs tabular-nums text-primary/70">0{index + 1}</span>
-          <span className="min-w-0 flex-1"><b className="block text-balance text-sm leading-5">{topic.title || 'Важная тема'}</b><span className="mt-1 block text-pretty text-xs leading-5 text-zinc-500">{topic.description}</span><small className="mt-2 flex flex-wrap items-center gap-x-2 text-[10px] text-zinc-600"><span>{topic.source_name || 'Telegram'}</span>{topic.message_count ? <span className="tabular-nums">{messageCountLabel(topic.message_count)}</span> : null}<span>{formatTime(topic.last_discussed_at)}</span></small></span>
+          <span className="min-w-0 flex-1"><b className="block text-balance text-sm leading-5">{topic.title || 'Важная тема'}</b><span className="mt-1 block text-pretty text-xs leading-5 text-zinc-500">{topic.description}</span><small className="mt-2 flex flex-wrap items-center gap-x-2 text-[10px] text-zinc-600"><span>{topic.source_name || 'Telegram'}</span>{topic.message_count ? <span className="tabular-nums">{messageCountLabel(topic.message_count)}</span> : null}<span>{communityFeedTimeLabel(topic.last_discussed_at)}</span></small></span>
           {topic.source_url ? <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600" /> : null}
         </button>)}
       </div> : <div className="mt-5 rounded-[18px] bg-black/15 px-4 py-5 text-sm leading-6 text-zinc-500"><b className="block text-zinc-300">Темы ещё формируются</b><span className="mt-1 block text-pretty">ЛокалОС покажет тему, когда она повторится в нескольких обсуждениях.</span>{canManageSources ? <button type="button" onClick={openSources} className="mt-3 min-h-11 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-300 transition-[background-color,transform] active:scale-[0.96]">Добавить источник</button> : null}</div>}
@@ -260,7 +215,7 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
     {items.length ? <div className="divide-y divide-white/[0.06]">
       {items.map((item) => <article key={item.id} className="py-5">
         <button type="button" onClick={() => openExternal(item.url)} className="w-full text-left transition-[opacity,transform] active:scale-[0.96]">
-          <span className="flex items-center gap-2 text-[11px] text-zinc-600"><span className="font-semibold text-zinc-400">{item.source_name || 'Telegram'}</span><span>·</span><time dateTime={item.published_at}>{formatTime(item.published_at)}</time></span>
+          <span className="flex items-center gap-2 text-[11px] text-zinc-600"><span className="font-semibold text-zinc-400">{item.source_name || 'Telegram'}</span><span>·</span><time dateTime={item.published_at}>{communityFeedTimeLabel(item.published_at)}</time></span>
           {item.title ? <h3 className="mt-2 text-balance text-[15px] font-semibold leading-5">{item.title}</h3> : null}
           <p className="mt-2 line-clamp-6 whitespace-pre-line text-pretty text-sm leading-6 text-zinc-400">{item.text}</p>
           <span className="mt-3 inline-flex min-h-10 items-center gap-2 text-xs font-semibold text-primary">Открыть сообщение <ArrowUpRight className="h-4 w-4" /></span>

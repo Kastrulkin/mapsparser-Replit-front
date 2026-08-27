@@ -599,6 +599,29 @@ def action_command(action_id: str):
                     "payment_required": True,
                     "billing_url": "/dashboard/profile?focus=subscription#subscription",
                 }), 403
+        if current_action.get("flow_type") == "influencer" and current_action.get("action_type") in {
+            "send_message", "check_reply", "send_followup", "define_terms", "mark_published", "add_result", "select_next_influencer",
+        } and not bool(user_data.get("is_superadmin")):
+            cursor.execute(
+                """
+                SELECT LOWER(COALESCE(subscription_tier, '')) IN
+                           ('starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise')
+                       AND LOWER(COALESCE(subscription_status, '')) IN ('active', 'trialing')
+                       AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
+                       AS automation_allowed
+                FROM businesses WHERE id = %s
+                """,
+                (business_id,),
+            )
+            access_row = cursor.fetchone() or {}
+            if not bool(access_row.get("automation_allowed")):
+                return jsonify({
+                    "success": False,
+                    "error": "Персональные сообщения, подключение канала и отправка доступны после оплаты.",
+                    "code": "payment_required",
+                    "payment_required": True,
+                    "billing_url": "/dashboard/profile?focus=subscription#subscription",
+                }), 402
         result = execute_command(
             cursor, action_id=action_id, business_id=business_id, user_id=_user_id(user_data),
             command=str(payload.get("command") or "").strip(),

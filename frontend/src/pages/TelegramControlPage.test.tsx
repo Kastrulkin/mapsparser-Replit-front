@@ -16,7 +16,7 @@ const openOperator = async (user: ReturnType<typeof userEvent.setup>) => {
 };
 
 const openGrowthPaths = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(await screen.findByRole('button', { name: 'Пути роста' }));
+  await user.click(await screen.findByRole('button', { name: 'Пути' }));
 };
 
 describe('TelegramControlPage scope integrity', () => {
@@ -129,7 +129,7 @@ describe('TelegramControlPage scope integrity', () => {
 
     expect(await screen.findByRole('heading', { name: 'Отзывы' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отзывы' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Пути роста' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Пути' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Сегодня' })).not.toHaveAttribute('aria-current');
     expect(screen.queryByText(/Invalid Date/i)).not.toBeInTheDocument();
     expect(screen.getByText(/дата не указана источником/i)).toBeInTheDocument();

@@ -13,6 +13,7 @@ import { CommunitySourcesMobileModule } from '@/components/telegram/CommunitySou
 import { CommunityFeedMobile } from '@/components/telegram/CommunityFeedMobile';
 import AgentsMobileModule from '@/components/telegram/AgentsMobileModule';
 import DiagnosticsMobileModule from '@/components/telegram/DiagnosticsMobileModule';
+import InfluencersMobileModule from '@/components/telegram/InfluencersMobileModule';
 import FinanceCrmMobilePanel from '@/components/telegram/FinanceCrmMobilePanel';
 import ActionPreviewSheet, { type MobileActionPreview } from '@/components/telegram/ActionPreviewSheet';
 import JobProgressSheet from '@/components/telegram/JobProgressSheet';
@@ -666,7 +667,7 @@ export const TelegramControlPage = () => {
   const loadModule = async (moduleKey = module, quietly = false, requestVersion = scopeRequestVersion.current) => {
     if (!moduleKey || preview) return;
     if (!quietly) setModuleLoading(true);
-    if (moduleKey === 'company' || moduleKey === 'companies' || moduleKey === 'community_sources') { setModuleLoading(false); setError(''); return; }
+    if (moduleKey === 'company' || moduleKey === 'companies' || moduleKey === 'community_sources' || moduleKey === 'influencers') { setModuleLoading(false); setError(''); return; }
     const params = scopeQuery(scope);
     if (moduleKey === 'progress') {
       if (!quietly) setProgressLoading(true);
@@ -772,12 +773,6 @@ export const TelegramControlPage = () => {
   }, [bootstrap?.selected_scope?.kind, bootstrap?.selected_scope?.id, bootstrap?.resolved_deep_link?.screen]);
 
   const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
-    if (screen === 'influencers') {
-      setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
-      setModule('');
-      setTab('operator');
-      return;
-    }
     const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
     const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
     if (navigationEntry?.status === 'read_only' && navigationEntry.reason?.toLowerCase().includes('оплат')) {
@@ -801,10 +796,7 @@ export const TelegramControlPage = () => {
     if (direction === 'maps') openMobileTarget('cards');
     else if (direction === 'content') openMobileTarget('content');
     else if (direction === 'partnerships') openMobileTarget('partnerships');
-    else if (direction === 'influencers') {
-      setCommand('Найди локальных авторов для моего бизнеса и подготовь первый вариант сотрудничества');
-      openMobileTarget('operator');
-    }
+    else if (direction === 'influencers') openMobileTarget('influencers');
   };
 
   const createCrmRequest = async ({ crmName, crmUrl, contact, comment }: { crmName: string; crmUrl: string; contact: string; comment: string }) => {
@@ -961,7 +953,7 @@ export const TelegramControlPage = () => {
             {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true, true)} /> : null}
             {!picker && tab === 'today' ? <>{journeyAction && scope?.kind === 'business' && scope.id ? <div className="px-4 pb-4"><JourneyActionCard action={journeyAction} businessId={scope.id} surface="telegram_mini_app" dark onUpdated={() => void loadJourneyAction(journeyAction.id, scope.id)} /></div> : null}{bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} />}</> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
-            {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} /> : null}
+            {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
@@ -1105,7 +1097,7 @@ const moduleNames: Record<string, [string, string]> = {
   progress: ['Прогресс', 'Выполненные шаги, текущие проблемы и следующее действие.'],
   cards: ['Карточки на картах', 'Данные из Яндекса и 2ГИС, свежесть, ошибки и история обновлений.'], content: ['Контент', 'Календарь, текущий план, черновики и публикации.'], services: ['Услуги', 'Цены, описания, данные с карт и предложения по улучшению.'],
   finance: ['Финансы', 'Выручка, прибыль, средний чек, загрузка и динамика.'], finance_import: ['Загрузить финансовую сводку', 'Сначала проверьте распознанные данные. В аналитику они попадут только после подтверждения.'], analytics: ['Финансы', 'Выручка, заказы и динамика по выбранному периоду.'], partnerships: ['Партнёрства', 'Кандидаты, предложения, отправки, ответы и отчёт.'], company: ['Моя компания', 'Локации, карты, контакты, публичные услуги, аудиты и история.'], companies: ['Компании', 'Клиенты, лиды, партнёры, локации и история публичных данных.'], agents: ['Работа ЛокалОС', 'Запуски, текущие этапы, результаты и ошибки.'], settings: ['Настройки и подключения', 'Уведомления, источники, тариф и доступ.'], diagnostics: ['Диагностика', 'Ошибки парсеров, интеграций и фоновых задач.'],
-  community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'],
+  community_sources: ['Источники Ленты', 'Публичные Telegram-каналы и открытые группы, из которых ЛокалОС собирает ленту и главные темы.'], influencers: ['Инфлюенсеры', 'Подходящие локальные авторы, предложение, сообщения, размещения и результат.'],
 };
 
 type ModuleScreenProps = {
@@ -1126,7 +1118,7 @@ type ModuleScreenProps = {
 const ModuleScreen = ({ module, focusItemId, scope, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
@@ -1765,8 +1757,8 @@ export const NetworkScopePicker = ({ network, currentScope, locations, total, ne
 const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
 const BottomNav = ({ current, setCurrent }: { current: Tab; setCurrent: (tab: Tab) => void }) => {
-  const activeKey: Tab = current === 'reviews' ? 'more' : current === 'operator' || current === 'feed' ? 'menu' : current === 'tasks' ? 'today' : current;
-  const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['more', 'Пути роста', LayoutGrid], ['progress', 'Результаты', TrendingUp], ['menu', 'Ещё', CircleEllipsis]];
+  const activeKey: Tab = current === 'reviews' ? 'more' : current === 'operator' ? 'menu' : current === 'tasks' ? 'today' : current;
+  const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['more', 'Пути', LayoutGrid], ['feed', 'Лента', Radio], ['progress', 'Результаты', TrendingUp], ['menu', 'Ещё', CircleEllipsis]];
   return <nav aria-label="Главное меню" className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"><div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} type="button" aria-current={activeKey === key ? 'page' : undefined} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] ${activeKey === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>;
 };
 

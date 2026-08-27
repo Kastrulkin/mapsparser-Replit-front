@@ -4,7 +4,11 @@ from api import lead_journey_api
 
 
 class _Cursor:
-    pass
+    def execute(self, _query, _params=None):
+        return None
+
+    def fetchone(self):
+        return {"automation_allowed": False}
 
 
 class _Connection:
@@ -132,6 +136,25 @@ def test_action_command_forwards_version_idempotency_and_records_funnel_once(mon
     assert events[0]["event_name"] == "reply_recorded"
     assert events[0]["journey_id"] == "journey-1"
     assert _Database.latest.conn.commits == 1
+
+
+def test_influencer_message_command_is_blocked_without_payment(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
+    action = {
+        "id": "action-1", "flow_type": "influencer", "action_type": "send_message",
+        "entity_type": "creator_campaign", "entity_id": "campaign-1",
+    }
+    monkeypatch.setattr(lead_journey_api, "load_action", lambda *_args, **_kwargs: action)
+    monkeypatch.setattr(lead_journey_api, "execute_command", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("paid command must not run")))
+
+    response = _app().test_client().post(
+        "/api/journey-actions/action-1/commands",
+        json={"business_id": "business-1", "command": "copy", "version": 1, "surface": "web"},
+    )
+
+    assert response.status_code == 402
+    assert response.get_json()["code"] == "payment_required"
 
 
 def test_idempotent_action_replay_does_not_duplicate_product_event(monkeypatch):

@@ -18,9 +18,11 @@ from services.creator_promotion_service import (
     create_campaign,
     create_collaboration,
     create_creator_room,
+    creator_automation_allowed,
     creator_feature_state,
     enqueue_creator_search,
     import_creator_candidates,
+    influencer_workspace,
     list_campaigns,
     list_collaborations,
     list_search_jobs,
@@ -97,6 +99,23 @@ def _require_capability(business_id: str, capability: str):
     return None
 
 
+def _require_creator_automation(cursor: Any, business_id: str):
+    if creator_automation_allowed(cursor, business_id):
+        return None
+    return jsonify(
+        {
+            "success": False,
+            "error": "Подготовка персональных сообщений, подключение каналов и отправка доступны после оплаты.",
+            "code": "payment_required",
+            "access": {
+                "status": "payment_required",
+                "cta_label": "Выбрать тариф",
+                "cta_target": {"screen": "settings", "focus": "subscription"},
+            },
+        }
+    ), 402
+
+
 @creator_promotion_bp.get("/feature-state")
 def feature_state():
     payload: dict[str, Any] = {}
@@ -123,6 +142,43 @@ def overview():
         return jsonify({"success": True, "overview": promotion_overview(cursor, business_id)})
     finally:
         db.close()
+
+
+@creator_promotion_bp.get("/workspace")
+def workspace():
+    db, cursor, _user_data, error = _authorized_cursor()
+    if error:
+        return error
+    business_id = _business_id()
+    try:
+        gate = _require_capability(business_id, "promotion_hub")
+        if gate:
+            return gate
+        try:
+            limit = min(max(int(request.args.get("limit") or 30), 1), 100)
+            offset = max(int(request.args.get("cursor") or 0), 0)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Некорректный cursor или limit"}), 400
+        filters = {
+            "platform": request.args.get("platform"),
+            "city": request.args.get("city"),
+            "topic": request.args.get("topic"),
+            "format": request.args.get("format"),
+            "audience_size_band": request.args.get("audience_size_band"),
+            "shortlisted": request.args.get("shortlisted"),
+            "barter": request.args.get("barter"),
+            "contactable": request.args.get("contactable"),
+        }
+        return jsonify({"success": True, "workspace": influencer_workspace(cursor, business_id=business_id, filters=filters, limit=limit, offset=offset)})
+    except LookupError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.get("/catalog")
+def catalog():
+    return workspace()
 
 
 @creator_promotion_bp.get("/searches")
@@ -349,6 +405,9 @@ def candidate_prepare_outreach(campaign_id: str, candidate_id: str):
         return error
     business_id = _business_id(payload)
     try:
+        access_gate = _require_creator_automation(cursor, business_id)
+        if access_gate:
+            return access_gate
         gate = _require_capability(business_id, "outreach")
         if gate:
             return gate
@@ -379,6 +438,9 @@ def candidate_outreach_preview(campaign_id: str, candidate_id: str):
         return error
     business_id = _business_id()
     try:
+        access_gate = _require_creator_automation(cursor, business_id)
+        if access_gate:
+            return access_gate
         preview = preview_candidate_outreach(
             cursor,
             business_id=business_id,
@@ -400,6 +462,9 @@ def candidate_contact_confirm(campaign_id: str, candidate_id: str):
         return error
     business_id = _business_id(payload)
     try:
+        access_gate = _require_creator_automation(cursor, business_id)
+        if access_gate:
+            return access_gate
         gate = _require_capability(business_id, "outreach")
         if gate:
             return gate

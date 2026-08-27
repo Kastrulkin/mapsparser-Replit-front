@@ -32,6 +32,6 @@ describe('GrowthPathsPage', () => {
     expect(screen.getByText('Подготовить публикацию')).toBeVisible();
     expect(screen.getByText('Полный черновик и календарь открываются на платном тарифе.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');
-    expect(screen.getByRole('link', { name: /Открыть автора/ })).toHaveAttribute('href', '/dashboard/promotion/influencers?journey_action=action-1');
+    expect(screen.getByRole('link', { name: /Открыть автора/ })).toHaveAttribute('href', '/dashboard/influencers?journey_action=action-1');
   });
 });

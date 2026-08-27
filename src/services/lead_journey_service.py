@@ -29,6 +29,7 @@ PUBLIC_EVENT_NAMES = {
 ACTION_COMMANDS = {
     "prepare_offer": ("prepare",),
     "register": ("claim",),
+    "browse_creators": ("complete",),
     "send_message": ("copy", "mark_sent"),
     "check_reply": ("record_reply", "prepare_followup"),
     "send_followup": ("copy", "mark_sent"),
@@ -418,6 +419,7 @@ def select_public_opportunity(cursor: Any, *, token: str, flow_type: str, entity
 def _action_copy(flow_type: str, action_type: str, payload: dict[str, Any]) -> tuple[str, str, str, int]:
     name = str(payload.get("entity_name") or payload.get("title") or "возможность")
     copies = {
+        "browse_creators": ("Выберите 2–5 подходящих авторов", "Посмотрите причины соответствия, добавьте авторов в shortlist и подтвердите выбор.", "Подтвердить выбор", 115),
         "send_message": (f"Написать: {name}", "Сообщение подготовлено. Проверьте его перед ручной отправкой.", "Открыть сообщение", 110),
         "check_reply": (f"Проверить ответ: {name}", "Если ответа нет, LocalOS подготовит follow-up.", "Указать результат", 125),
         "send_followup": (f"Отправить follow-up: {name}", "Короткое продолжение подготовлено без автоматической отправки.", "Открыть follow-up", 120),
@@ -536,6 +538,50 @@ def _claim_loaded_journey(cursor: Any, *, journey: dict[str, Any], user_id: str,
         "message_excerpt": opportunity.get("message_excerpt"),
         "cycle_key": "first",
     }
+    opportunity_metrics = opportunity.get("metrics") if isinstance(opportunity.get("metrics"), dict) else {}
+    if flow_type == "influencer":
+        payload["domain_summary"] = opportunity.get("summary")
+        payload["offer"] = {
+            "service": opportunity_metrics.get("offer_service"),
+            "value": opportunity_metrics.get("offer_value"),
+            "threshold": opportunity_metrics.get("offer_threshold") or 3,
+            "reward": opportunity_metrics.get("offer_reward"),
+            "constraints": opportunity_metrics.get("offer_constraints"),
+            "valid_until": opportunity_metrics.get("offer_valid_until"),
+            "version": opportunity_metrics.get("offer_version") or 1,
+            "status": opportunity_metrics.get("offer_status") or "approved",
+            "mechanic": opportunity.get("mechanic"),
+        }
+        cursor.execute(
+            """
+            SELECT job.id
+            FROM creator_search_jobs job
+            WHERE job.business_id = %s
+              AND EXISTS (SELECT 1 FROM creator_search_results result WHERE result.search_job_id = job.id)
+            ORDER BY job.updated_at DESC LIMIT 1
+            """,
+            (business_id,),
+        )
+        creator_search = _row(cursor, cursor.fetchone())
+        if not creator_search:
+            from services.creator_promotion_service import run_creator_search
+            creator_search = run_creator_search(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                brief={
+                    "city": preview.get("business", {}).get("city") or "",
+                    "service": opportunity_metrics.get("offer_service") or "",
+                    "barter": True,
+                    "result_limit": 30,
+                },
+            )
+        resolved_entity_type = "creator_search"
+        resolved_entity_id = str(creator_search.get("id") or "") or None
+        cursor.execute(
+            "UPDATE lead_journeys SET selected_entity_type = %s, selected_entity_id = %s, updated_at = NOW() WHERE id = %s",
+            (resolved_entity_type, resolved_entity_id, journey["id"]),
+        )
     if flow_type == "maps":
         tasks = opportunity.get("tasks") if isinstance(opportunity.get("tasks"), list) else []
         if not tasks:
@@ -598,6 +644,8 @@ def _claim_loaded_journey(cursor: Any, *, journey: dict[str, Any], user_id: str,
             "domain_summary": opportunity.get("summary"),
         })
         action_type = "prepare_content"
+    elif flow_type == "influencer":
+        action_type = "browse_creators"
     else:
         action_type = "send_message"
     action = ensure_action(
@@ -827,6 +875,8 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
     current_payload = {**_json_object(action.get("payload_json")), **payload}
     if command == "copy":
         return None, "in_progress", None, current_payload
+    if action_type == "browse_creators" and command == "complete":
+        return "send_message", "completed", None, current_payload
     if action_type in {"send_message", "send_followup"} and command == "mark_sent":
         return "check_reply", "completed", datetime.now(timezone.utc) + timedelta(days=4), current_payload
     if action_type == "check_reply" and command == "prepare_followup":
@@ -920,6 +970,21 @@ def _update_domain(cursor: Any, action: dict[str, Any], command: str, payload: d
     entity_type = str(action.get("entity_type") or "")
     entity_id = str(action.get("entity_id") or "")
     flow = str(action.get("flow_type") or "")
+    if flow == "influencer" and str(action.get("action_type") or "") == "browse_creators" and command == "complete":
+        cursor.execute(
+            """
+            SELECT COUNT(*)::INT AS shortlisted_count
+            FROM creator_search_results result
+            JOIN creator_search_jobs job ON job.id = result.search_job_id
+            WHERE job.business_id = %s AND result.shortlist_status = 'shortlisted'
+            """,
+            (action.get("business_id"),),
+        )
+        shortlist = _row(cursor, cursor.fetchone())
+        shortlist_count = int(shortlist.get("shortlisted_count") or 0)
+        if shortlist_count < 1:
+            raise JourneyError("Сначала добавьте в shortlist хотя бы одного автора", 409, "creator_shortlist_required")
+        domain_updates["shortlist_count"] = shortlist_count
     if flow == "maps" and str(action.get("action_type") or "") == "refresh_data" and command == "complete":
         from services.operator_map_refresh import enqueue_operator_map_refresh
         refresh = enqueue_operator_map_refresh(

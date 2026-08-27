@@ -36,6 +36,7 @@ const paidDashboardSections = [
   { path: '/dashboard/ai-chat-promotion', title: 'Продвижение в AI-чатах доступно после оплаты', hint: 'Проверки и рекомендации по AI-выдаче включаются на платном тарифе.' },
   { path: '/dashboard/partnerships', title: 'Поиск партнёров доступен после оплаты', hint: 'Подбор, подготовка и ведение партнёрских контактов включаются на платном тарифе.' },
   { path: '/dashboard/promotion', title: 'Продвижение доступно после оплаты', hint: 'Поиск партнёров и локальных авторов, подготовка контактов и аналитика включаются на платном тарифе.' },
+  { path: '/dashboard/influencers/operations', title: 'Автоматизация работы с инфлюенсерами доступна после оплаты', hint: 'Каталог, фильтры, публичные карточки и shortlist остаются бесплатными. Здесь открываются персональные сообщения, каналы и отправка с подтверждением.' },
   { path: '/dashboard/operator', title: 'Оператор доступен после оплаты', hint: 'Единый рабочий центр задач и запусков включается на платном тарифе.' },
   { path: '/dashboard/telegram-radar', title: 'Telegram-радар доступен после оплаты', hint: 'Мониторинг Telegram и обработка найденных сигналов включаются на платном тарифе.' },
   { path: '/dashboard/agents', title: 'Агенты доступны после оплаты', hint: 'Настройка и запуск автоматизаций включаются на платном тарифе.' },
@@ -219,7 +220,7 @@ export const DashboardLayout = () => {
   const lockedPaidSection = paidDashboardSections.find((section) => (
     location.pathname === section.path || location.pathname.startsWith(`${section.path}/`)
   ));
-  const ownsBlockAccess = featureFlags.blockAccessV2 && location.pathname === '/dashboard/promotion/influencers';
+  const ownsBlockAccess = location.pathname === '/dashboard/promotion/influencers' || location.pathname === '/dashboard/influencers';
   const shouldBlurPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !automationAccess.automationAllowed);
 
   return (
