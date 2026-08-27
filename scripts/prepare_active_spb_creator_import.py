@@ -80,6 +80,7 @@ def main() -> int:
     parser.add_argument("--existing-profile-count", type=int, required=True)
     parser.add_argument("--target-profile-count", type=int, default=10_000)
     parser.add_argument("--keep-all", action="store_true")
+    parser.add_argument("--activity-level", action="append", choices=("frequent", "regular", "observed_once"))
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-csv", type=Path, required=True)
     arguments = parser.parse_args()
@@ -91,6 +92,10 @@ def main() -> int:
     required = max(0, arguments.target_profile_count - arguments.existing_profile_count)
     for entity in [item for report in reports for item in report.get("entities", [])]:
         valid, reason = valid_entity(entity)
+        if valid and arguments.activity_level:
+            activity_level = ((entity.get("research") or {}).get("people_focus") or {}).get("activity_level")
+            if activity_level not in set(arguments.activity_level):
+                valid, reason = False, "activity_level_outside_selection"
         urls = {normalized_url(item.get("canonical_url")) for item in entity.get("channels", [])}
         if valid and urls.intersection(known_urls):
             valid, reason = False, "overlaps_production"
