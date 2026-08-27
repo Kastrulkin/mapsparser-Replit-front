@@ -1,0 +1,31 @@
+{
+  "bug": "React NotFoundError: Failed to execute removeChild on Node",
+  "root_cause": "An external Android/browser translation layer reparents a React-owned text node under a font wrapper. A later React commit removes or inserts the node using its original parent and the browser raises NotFoundError.",
+  "red_evidence": {
+    "test": "frontend/src/components/ErrorBoundary.test.tsx",
+    "scenario": "Wrap the route text node in an external font element, then trigger a React state transition that removes it.",
+    "result_before_fix": "The ErrorBoundary rendered the crash screen with NotFoundError. Existing translate=no metadata and page-local workarounds did not enforce DOM ownership globally."
+  },
+  "green_evidence": {
+    "commit": "e2f64a95",
+    "unit_tests": {
+      "command": "npm test -- --run src/components/ErrorBoundary.test.tsx src/pages/Index.dom-mutation.test.tsx",
+      "result": "2 files, 4 tests passed"
+    },
+    "adjacent_tests": {
+      "command": "npm test -- --run src/pages/dashboard/ProgressPage.dom-mutation.test.tsx src/pages/dashboard/OperatorPage.dom-mutation.test.tsx src/pages/dashboard/ContentPage.dom-mutation.test.tsx",
+      "result": "3 files, 14 tests passed"
+    },
+    "lint": "Passed for domOwnershipGuard.ts, main.tsx, and ErrorBoundary.test.tsx",
+    "build": "Production and public frontend builds passed",
+    "production": {
+      "url": "https://localos.pro/",
+      "bundle": "/assets/index-u3r4eNhk.js",
+      "synthetic_recovery": true,
+      "console_recovery": "[LocalOS] Recovered external DOM ownership conflict during removeChild.",
+      "page_errors": [],
+      "error_screen_count": 0
+    }
+  },
+  "scope_guard": "Recovery applies only when the expected parent and externally moved node are inside a registered LocalOS React root. Native NotFoundError behavior remains unchanged outside that root."
+}
