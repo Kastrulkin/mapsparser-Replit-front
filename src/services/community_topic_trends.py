@@ -487,6 +487,35 @@ def _load_snapshots(cursor: Any, fingerprint: str) -> list[dict[str, Any]]:
     return sorted(result, key=lambda item: order.get(str(item.get("key") or ""), 99))
 
 
+def _load_compatible_snapshots(cursor: Any, source_ids: list[str]) -> list[dict[str, Any]]:
+    clean_source_ids = sorted({str(value) for value in source_ids if str(value)})
+    if not clean_source_ids:
+        return []
+    cursor.execute(
+        """
+        SELECT source_fingerprint
+        FROM community_topic_snapshots
+        WHERE source_ids_json <@ %s::jsonb
+        GROUP BY source_fingerprint, source_ids_json
+        HAVING COUNT(DISTINCT period_key) = %s
+        ORDER BY JSONB_ARRAY_LENGTH(source_ids_json) DESC,
+                 MAX(generated_at) DESC
+        LIMIT 1
+        """,
+        (json.dumps(clean_source_ids), len(PERIODS)),
+    )
+    value = cursor.fetchone()
+    if isinstance(value, dict):
+        fingerprint = str(value.get("source_fingerprint") or "")
+    elif isinstance(value, (list, tuple)) and value:
+        fingerprint = str(value[0] or "")
+    else:
+        fingerprint = ""
+    if not fingerprint:
+        return []
+    return _load_snapshots(cursor, fingerprint)
+
+
 def load_topic_trends(cursor: Any, source_ids: list[str], observed_at: datetime) -> list[dict[str, Any]]:
     clean_source_ids = sorted({str(value) for value in source_ids if str(value)})
     if not clean_source_ids:
@@ -527,10 +556,12 @@ def load_topic_trends(cursor: Any, source_ids: list[str], observed_at: datetime)
             cursor.execute("RELEASE SAVEPOINT community_topic_trends")
             return snapshots_after_lock
         refreshed = refresh_topic_trends(cursor, clean_source_ids, observed_at)
+        compatible = _load_compatible_snapshots(cursor, clean_source_ids) if not refreshed and not snapshots else []
         cursor.execute("RELEASE SAVEPOINT community_topic_trends")
-        return refreshed or snapshots
+        return refreshed or snapshots or compatible
     except Exception:
         cursor.execute("ROLLBACK TO SAVEPOINT community_topic_trends")
         snapshots = _load_snapshots(cursor, fingerprint)
+        compatible = _load_compatible_snapshots(cursor, clean_source_ids) if not snapshots else []
         cursor.execute("RELEASE SAVEPOINT community_topic_trends")
-        return snapshots
+        return snapshots or compatible

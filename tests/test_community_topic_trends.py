@@ -84,3 +84,48 @@ def test_topic_trends_stay_empty_until_snapshot_migration_exists():
     )
 
     assert result == []
+
+
+def test_topic_trends_fall_back_to_compatible_industry_snapshot_when_personal_refresh_fails(monkeypatch):
+    observed_at = datetime(2026, 8, 27, 12, tzinfo=timezone.utc)
+    fallback = [
+        {
+            "key": period_key,
+            "label": period_label,
+            "period_days": period_days,
+            "message_count": 100,
+            "sample_size": 100,
+            "topics": [{"key": "semantic-1", "title": "Работа с записью", "percent": 25}],
+            "analysis_method": "semantic_embeddings",
+            "generated_at": observed_at.isoformat(),
+        }
+        for period_key, period_label, period_days in community_topic_trends.PERIODS
+    ]
+
+    class Cursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def fetchone(self):
+            return ("community_topic_snapshots",)
+
+    monkeypatch.setattr(community_topic_trends, "_load_snapshots", lambda _cursor, _fingerprint: [])
+    monkeypatch.setattr(
+        community_topic_trends,
+        "_load_compatible_snapshots",
+        lambda _cursor, _source_ids: fallback,
+        raising=False,
+    )
+
+    def fail_refresh(_cursor, _source_ids, _observed_at):
+        raise RuntimeError("embedding provider is rate limited")
+
+    monkeypatch.setattr(community_topic_trends, "refresh_topic_trends", fail_refresh)
+
+    result = community_topic_trends.load_topic_trends(
+        Cursor(),
+        ["industry-source", "personal-source"],
+        observed_at,
+    )
+
+    assert result == fallback

@@ -34,6 +34,15 @@ describe('CommunityFeedMobile', () => {
     expect(openTelegramLink).toHaveBeenCalledWith('https://t.me/beauty_business/101');
   });
 
+  it('shows topic statistics before the daily discussion summary', () => {
+    render(<CommunityFeedMobile scope={{ kind: 'business', id: 'preview', name: 'Бизнесс', business_ids: ['preview'] }} preview />);
+
+    const statistics = screen.getByRole('heading', { name: 'Главные темы в динамике' });
+    const dailySummary = screen.getByRole('heading', { name: 'О чём говорят предприниматели' });
+
+    expect(statistics.compareDocumentPosition(dailySummary) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+
   it('loads only the verified scope from the mobile feed endpoint', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({
       success: true,

@@ -214,7 +214,26 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
 
     {error ? <div role="alert" className="mb-4 flex gap-3 rounded-[18px] bg-rose-400/10 p-4 text-xs leading-5 text-rose-100 shadow-[0_0_0_1px_rgba(251,113,133,0.2)]"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div> : null}
 
-    <section aria-labelledby="feed-topics-title" className="rounded-[26px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]">
+    {topicTrends.length ? <section aria-labelledby="feed-trends-title" className="rounded-[26px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]">
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/15 text-primary"><BarChart3 className="h-5 w-5" /></span>
+        <div className="min-w-0"><small className="font-semibold uppercase tracking-[0.12em] text-primary/80">Статистика обсуждений</small><h2 id="feed-trends-title" className="mt-1 text-balance text-lg font-semibold">Главные темы в динамике</h2><p className="mt-1 text-pretty text-[11px] leading-5 text-zinc-600">Пять самых частых тем по смыслу сообщений. Самая обсуждаемая — сверху.</p></div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-1 rounded-[15px] bg-black/20 p-1" role="tablist" aria-label="Период статистики">
+        {topicTrends.map((period) => <button key={period.key} type="button" role="tab" aria-selected={activeTrend?.key === period.key} onClick={() => setTrendPeriod(period.key)} className={`min-h-10 rounded-[11px] px-2 text-[11px] font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${activeTrend?.key === period.key ? 'bg-white/[0.09] text-zinc-100 shadow-[0_6px_18px_rgba(0,0,0,0.18)]' : 'text-zinc-600'}`}>{period.label}</button>)}
+      </div>
+      <AnimatePresence initial={false} mode="wait">
+        {activeTrend ? <motion.div key={activeTrend.key} role="tabpanel" initial={{ opacity: 0, y: 5, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -4 }} transition={spring} className="mt-4 space-y-4">
+          {activeTrend.topics.length ? activeTrend.topics.slice(0, 5).map((topic, index) => <div key={topic.key}>
+            <div className="flex items-baseline justify-between gap-3 text-xs"><span className="flex min-w-0 items-baseline gap-2 text-pretty text-zinc-400"><span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-700">0{index + 1}</span><span>{topic.title}</span></span><b className="shrink-0 tabular-nums text-zinc-200">{topic.percent}%</b></div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]" role="progressbar" aria-label={topic.title} aria-valuenow={topic.percent} aria-valuemin={0} aria-valuemax={100}><span className="block h-full rounded-full bg-primary/75 transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, topic.percent)}%` }} /></div>
+          </div>) : <p className="text-pretty text-xs leading-5 text-zinc-600">За этот период пока мало распознанных тем.</p>}
+          {activeTrend.message_count ? <p className="text-[10px] tabular-nums text-zinc-700">В базе за период: {messageCountLabel(activeTrend.message_count)}{activeTrend.sample_size && activeTrend.sample_size < activeTrend.message_count ? ` · доли рассчитаны по выборке из ${activeTrend.sample_size} сообщений` : ''}</p> : null}
+        </motion.div> : null}
+      </AnimatePresence>
+    </section> : null}
+
+    <section aria-labelledby="feed-topics-title" className="mt-4 rounded-[26px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]">
       <div className="flex items-center gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/15 text-primary"><Radio className="h-5 w-5" /></span>
         <div><small className="font-semibold uppercase tracking-[0.12em] text-primary/80">За последние 24 часа</small><h2 id="feed-topics-title" className="mt-1 text-balance text-lg font-semibold">О чём говорят предприниматели</h2></div>
@@ -227,24 +246,6 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
         </button>)}
       </div> : <div className="mt-5 rounded-[18px] bg-black/15 px-4 py-5 text-sm leading-6 text-zinc-500"><b className="block text-zinc-300">Темы ещё формируются</b><span className="mt-1 block text-pretty">ЛокалОС покажет тему, когда она повторится в нескольких обсуждениях.</span>{canManageSources ? <button type="button" onClick={openSources} className="mt-3 min-h-11 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-300 transition-[background-color,transform] active:scale-[0.96]">Добавить источник</button> : null}</div>}
 
-      {topicTrends.length ? <div className="mt-2 border-t border-white/[0.06] pt-5">
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400"><BarChart3 className="h-4 w-4" /></span>
-          <div className="min-w-0"><h3 className="text-balance text-sm font-semibold">Главные темы в динамике</h3><p className="mt-1 text-pretty text-[11px] leading-5 text-zinc-600">Пять самых частых тем по смыслу сообщений. Самая обсуждаемая — сверху.</p></div>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-1 rounded-[15px] bg-black/20 p-1" role="tablist" aria-label="Период статистики">
-          {topicTrends.map((period) => <button key={period.key} type="button" role="tab" aria-selected={activeTrend?.key === period.key} onClick={() => setTrendPeriod(period.key)} className={`min-h-10 rounded-[11px] px-2 text-[11px] font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${activeTrend?.key === period.key ? 'bg-white/[0.09] text-zinc-100 shadow-[0_6px_18px_rgba(0,0,0,0.18)]' : 'text-zinc-600'}`}>{period.label}</button>)}
-        </div>
-        <AnimatePresence initial={false} mode="wait">
-          {activeTrend ? <motion.div key={activeTrend.key} role="tabpanel" initial={{ opacity: 0, y: 5, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -4 }} transition={spring} className="mt-4 space-y-4">
-            {activeTrend.topics.length ? activeTrend.topics.slice(0, 5).map((topic, index) => <div key={topic.key}>
-              <div className="flex items-baseline justify-between gap-3 text-xs"><span className="flex min-w-0 items-baseline gap-2 text-pretty text-zinc-400"><span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-700">0{index + 1}</span><span>{topic.title}</span></span><b className="shrink-0 tabular-nums text-zinc-200">{topic.percent}%</b></div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]" role="progressbar" aria-label={topic.title} aria-valuenow={topic.percent} aria-valuemin={0} aria-valuemax={100}><span className="block h-full rounded-full bg-primary/75 transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, topic.percent)}%` }} /></div>
-            </div>) : <p className="text-pretty text-xs leading-5 text-zinc-600">За этот период пока мало распознанных тем.</p>}
-            {activeTrend.message_count ? <p className="text-[10px] tabular-nums text-zinc-700">В базе за период: {messageCountLabel(activeTrend.message_count)}{activeTrend.sample_size && activeTrend.sample_size < activeTrend.message_count ? ` · доли рассчитаны по выборке из ${activeTrend.sample_size} сообщений` : ''}</p> : null}
-          </motion.div> : null}
-        </AnimatePresence>
-      </div> : null}
     </section>
 
     <div className="mb-2 mt-7 flex min-h-11 items-center justify-between gap-3 px-1">
