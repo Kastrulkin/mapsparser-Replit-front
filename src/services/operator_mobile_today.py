@@ -27,6 +27,28 @@ TOPIC_STOPWORDS = {
     "уже", "чтобы", "этого", "этой", "это", "business", "localos", "telegram",
 }
 
+FEED_TOPIC_TAXONOMY = (
+    ("taxes_law", "Налоги и законы", r"\b(налог\w*|ндс|усн|патент\w*|самозанят\w*|закон\w*|маркиров\w*|честн\w*\s+знак|касс\w*)\b"),
+    ("retention", "Удержание клиентов", r"\b(удерж\w*|лояльн\w*|отток\w*|возврат\w*\s+клиент\w*|повторн\w*\s+запис\w*|клиентск\w*\s+баз\w*)\b"),
+    ("acquisition", "Привлечение клиентов", r"\b(привлеч\w*|реклам\w*|лид\w*|трафик\w*|продвиж\w*|таргет\w*|контекстн\w*|нов\w*\s+клиент\w*)\b"),
+    ("sales", "Продажи и средний чек", r"\b(средн\w*\s+чек|допродаж\w*|кросс[- ]?продаж\w*|продаж\w*|конверс\w*|выруч\w*)\b"),
+    ("staff", "Команда и найм", r"\b(сотрудник\w*|мастер\w*|администратор\w*|найм\w*|ваканс\w*|зарплат\w*|мотивац\w*|команд\w*)\b"),
+    ("suppliers", "Поставщики и материалы", r"\b(поставщик\w*|материал\w*|красител\w*|оборудован\w*|закуп\w*)\b"),
+    ("automation", "CRM и автоматизация", r"\b(crm|yclients|автоматиз\w*|интеграц\w*|чат[- ]?бот\w*)\b"),
+    ("reputation", "Карты и репутация", r"\b(яндекс\w*\s+карт\w*|2гис|google\s+business|отзыв\w*|рейтинг\w*|карточк\w*)\b"),
+    ("content", "Контент и соцсети", r"\b(контент\w*|пост\w*|соцсет\w*|телеграм\w*|telegram|vkontakte|вконтакт\w*|reels|stories)\b"),
+    ("costs", "Цены и расходы", r"\b(цен\w*|себестоим\w*|расход\w*|аренд\w*|марж\w*|прибыл\w*)\b"),
+    ("operations", "Управление бизнесом", r"\b(загрузк\w*|рабоч\w*\s+мест\w*|кресл\w*|график\w*|управлен\w*|бизнес\w*)\b"),
+)
+
+FEED_TREND_PERIODS = (
+    ("month", "Месяц", 30),
+    ("quarter", "Квартал", 90),
+    ("year", "Год", 365),
+)
+
+_FEED_TOPIC_TRENDS_CACHE: dict[tuple[str, ...], tuple[datetime, list[dict[str, Any]]]] = {}
+
 STORY_FACT_CONTENT_TYPES = {
     "story", "child_story", "author_story", "brand_story", "family_tradition",
     "case", "before_after", "photo_report", "review_social_proof",
@@ -823,6 +845,98 @@ def _telegram_document_link(item: dict[str, Any]) -> str | None:
     return source_url if source_url.startswith("https://t.me/") else None
 
 
+def _serialize_feed_topic_trends(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    labels = {key: label for key, label, _pattern in FEED_TOPIC_TAXONOMY}
+    result = []
+    for period_key, period_label, period_days in FEED_TREND_PERIODS:
+        count_key = f"{period_key}_count"
+        counts = [
+            {
+                "key": str(item.get("category_key") or ""),
+                "title": labels.get(str(item.get("category_key") or ""), "Другие темы"),
+                "message_count": max(0, int(item.get(count_key) or 0)),
+            }
+            for item in rows
+            if int(item.get(count_key) or 0) > 0
+        ]
+        counts.sort(key=lambda item: (-int(item["message_count"]), str(item["title"])))
+        total = sum(int(item["message_count"]) for item in counts)
+        topics = []
+        for item in counts[:3]:
+            percentage = max(1, round(int(item["message_count"]) * 100 / total)) if total else 0
+            topics.append({**item, "percent": percentage})
+        result.append({
+            "key": period_key,
+            "label": period_label,
+            "period_days": period_days,
+            "message_count": total,
+            "topics": topics,
+        })
+    return result
+
+
+def _load_feed_topic_trends(
+    cursor: Any,
+    source_ids: list[str],
+    observed_at: datetime,
+) -> list[dict[str, Any]]:
+    if not source_ids:
+        return _serialize_feed_topic_trends([])
+    cache_key = tuple(sorted(set(source_ids)))
+    cached = _FEED_TOPIC_TRENDS_CACHE.get(cache_key)
+    if cached and observed_at - cached[0] < timedelta(minutes=15):
+        return cached[1]
+
+    cases = []
+    params: list[Any] = [source_ids, observed_at - timedelta(days=365)]
+    for category_key, _label, pattern in FEED_TOPIC_TAXONOMY:
+        cases.append("WHEN searchable ~ %s THEN %s")
+        params.extend([pattern.replace(r"\b", ""), category_key])
+    params.extend([
+        observed_at - timedelta(days=30),
+        observed_at - timedelta(days=90),
+        observed_at - timedelta(days=365),
+    ])
+    cursor.execute(
+        f"""
+        WITH documents AS (
+            SELECT COALESCE(document.published_at, document.created_at) AS observed_at,
+                   LOWER(CONCAT_WS(' ', document.title, document.content_text)) AS searchable
+            FROM knowledge_documents document
+            JOIN knowledge_sources source ON source.id = document.source_id
+            WHERE document.source_id = ANY(%s::uuid[])
+              AND document.document_type = 'telegram_message'
+              AND document.invalidated_at IS NULL
+              AND document.sensitivity_class = 'public'
+              AND source.source_type = 'telegram'
+              AND source.visibility IN ('public', 'platform_public')
+              AND source.sensitivity_class = 'public'
+              AND source.status = 'active'
+              AND COALESCE(document.published_at, document.created_at) >= %s
+              AND LENGTH(BTRIM(document.content_text)) > 0
+        ), categorized AS (
+            SELECT observed_at,
+                   CASE {' '.join(cases)} ELSE NULL END AS category_key
+            FROM documents
+        )
+        SELECT category_key,
+               COUNT(*) FILTER (WHERE observed_at >= %s) AS month_count,
+               COUNT(*) FILTER (WHERE observed_at >= %s) AS quarter_count,
+               COUNT(*) FILTER (WHERE observed_at >= %s) AS year_count
+        FROM categorized
+        WHERE category_key IS NOT NULL
+        GROUP BY category_key
+        """,
+        tuple(params),
+    )
+    trends = _serialize_feed_topic_trends([_row(cursor, value) for value in cursor.fetchall() or []])
+    if len(_FEED_TOPIC_TRENDS_CACHE) >= 128:
+        oldest_key = min(_FEED_TOPIC_TRENDS_CACHE, key=lambda key: _FEED_TOPIC_TRENDS_CACHE[key][0])
+        _FEED_TOPIC_TRENDS_CACHE.pop(oldest_key, None)
+    _FEED_TOPIC_TRENDS_CACHE[cache_key] = (observed_at, trends)
+    return trends
+
+
 def build_mobile_feed(
     cursor: Any,
     *,
@@ -838,10 +952,12 @@ def build_mobile_feed(
     cutoff = observed_at.astimezone(timezone.utc) - timedelta(hours=24)
     source_ids, _industry_keys = _knowledge_source_ids(cursor, scope)
     topics = _load_community_pulse(cursor, scope, cutoff)
+    topic_trends = _load_feed_topic_trends(cursor, source_ids, observed_at)
     if not source_ids:
         return {
             "scope": scope,
             "topics": topics,
+            "topic_trends": topic_trends,
             "items": [],
             "counts": {"returned": 0},
             "cursor": None,
@@ -908,6 +1024,7 @@ def build_mobile_feed(
     return {
         "scope": scope,
         "topics": topics,
+        "topic_trends": topic_trends,
         "items": items,
         "counts": {"returned": len(items)},
         "cursor": next_cursor,

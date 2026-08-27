@@ -118,6 +118,27 @@ def test_feed_cursor_round_trip_and_telegram_link_fallback():
     }) is None
 
 
+def test_feed_topic_trends_rank_each_period_and_keep_real_denominator():
+    trends = mobile_today._serialize_feed_topic_trends([
+        {"category_key": "acquisition", "month_count": 33, "quarter_count": 60, "year_count": 90},
+        {"category_key": "retention", "month_count": 11, "quarter_count": 50, "year_count": 80},
+        {"category_key": "taxes_law", "month_count": 12, "quarter_count": 20, "year_count": 70},
+        {"category_key": "staff", "month_count": 44, "quarter_count": 90, "year_count": 100},
+    ])
+
+    month = trends[0]
+    assert month["key"] == "month"
+    assert month["message_count"] == 100
+    assert [item["title"] for item in month["topics"]] == [
+        "Команда и найм",
+        "Привлечение клиентов",
+        "Налоги и законы",
+    ]
+    assert [item["percent"] for item in month["topics"]] == [44, 33, 12]
+    assert trends[1]["message_count"] == 220
+    assert trends[2]["message_count"] == 340
+
+
 def test_pulse_hides_unconfirmed_topic_and_keeps_provenance():
     single = [{
         "source_id": "source-1",

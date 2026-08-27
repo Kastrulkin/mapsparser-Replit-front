@@ -16,7 +16,7 @@ describe('CommunitySourcesMobileModule destructive actions', () => {
   it('shows the included industry pulse before asking for personal sources', async () => {
     render(<CommunitySourcesMobileModule businessId="preview" />);
 
-    expect(await screen.findByText('Бьюти-пульс уже включён')).toBeInTheDocument();
+    expect(await screen.findByText('Бьюти-источники уже в Ленте')).toBeInTheDocument();
     expect(screen.getByText(/^18$/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Добавить свои источники' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Добавленные вами' })).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUpRight, CircleAlert, Loader2, MessageSquareText, Plus, Radio, RefreshCw, Send } from 'lucide-react';
+import { ArrowUpRight, BarChart3, CircleAlert, Loader2, MessageSquareText, Plus, Radio, RefreshCw, Send } from 'lucide-react';
 
 import { mobileAuthHeaders, mobileScopeQuery, readMobileJson } from '@/lib/mobileDataClient';
 import type { MobileScope } from './ScopeProvider';
@@ -29,8 +29,22 @@ export type CommunityFeedItem = {
   url: string;
 };
 
+export type CommunityFeedTrend = {
+  key: string;
+  label: string;
+  period_days: number;
+  message_count: number;
+  topics: Array<{
+    key: string;
+    title: string;
+    message_count: number;
+    percent: number;
+  }>;
+};
+
 export type CommunityFeedPayload = {
   topics?: CommunityFeedTopic[];
+  topic_trends?: CommunityFeedTrend[];
   items?: CommunityFeedItem[];
   cursor?: string | null;
   as_of?: string;
@@ -60,6 +74,11 @@ const previewPayload: CommunityFeedPayload = {
       source_url: 'https://t.me/salons/204',
       last_discussed_at: new Date().toISOString(),
     },
+  ],
+  topic_trends: [
+    { key: 'month', label: 'Месяц', period_days: 30, message_count: 124, topics: [{ key: 'acquisition', title: 'Привлечение клиентов', message_count: 41, percent: 33 }, { key: 'taxes_law', title: 'Налоги и законы', message_count: 15, percent: 12 }, { key: 'retention', title: 'Удержание клиентов', message_count: 14, percent: 11 }] },
+    { key: 'quarter', label: 'Квартал', period_days: 90, message_count: 356, topics: [{ key: 'acquisition', title: 'Привлечение клиентов', message_count: 103, percent: 29 }, { key: 'staff', title: 'Команда и найм', message_count: 71, percent: 20 }, { key: 'sales', title: 'Продажи и средний чек', message_count: 57, percent: 16 }] },
+    { key: 'year', label: 'Год', period_days: 365, message_count: 1084, topics: [{ key: 'staff', title: 'Команда и найм', message_count: 238, percent: 22 }, { key: 'acquisition', title: 'Привлечение клиентов', message_count: 206, percent: 19 }, { key: 'costs', title: 'Цены и расходы', message_count: 174, percent: 16 }] },
   ],
   items: [
     { id: 'message-1', platform: 'telegram', source_name: 'Beauty Business Club', text: 'Собрали сравнение цен поставщиков на август и разобрали, как изменения влияют на себестоимость услуг.', published_at: new Date().toISOString(), url: 'https://t.me/beauty_business/101' },
@@ -103,7 +122,7 @@ const openExternal = (url?: string | null) => {
 };
 
 const FeedSkeleton = () => <div aria-label="Загружаем ленту" className="space-y-3 px-4">
-  <div className="h-44 animate-pulse rounded-[26px] bg-white/[0.04] motion-reduce:animate-none" />
+  <div className="h-[430px] animate-pulse rounded-[26px] bg-white/[0.04] motion-reduce:animate-none" />
   <div className="h-28 animate-pulse rounded-[22px] bg-white/[0.04] motion-reduce:animate-none" />
   <div className="h-28 animate-pulse rounded-[22px] bg-white/[0.04] motion-reduce:animate-none" />
 </div>;
@@ -120,6 +139,7 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
   const [loading, setLoading] = useState(!preview);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [trendPeriod, setTrendPeriod] = useState('month');
 
   const fetchFeed = useCallback(async (cursor = '') => {
     if (preview) return previewPayload;
@@ -148,13 +168,15 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
         const known = new Set((payload.items || []).map((item) => item.id));
         const next = (result.items || []).filter((item) => !known.has(item.id));
         setPending(next);
-        setPayload((current) => current ? { ...current, topics: result.topics, as_of: result.as_of, freshness: result.freshness } : result);
+        setPayload((current) => current ? { ...current, topics: result.topics, topic_trends: result.topic_trends, as_of: result.as_of, freshness: result.freshness } : result);
       }).catch(() => undefined);
     }, 30000);
     return () => window.clearInterval(timer);
   }, [fetchFeed, payload?.items]);
 
   const topics = payload?.topics || [];
+  const topicTrends = payload?.topic_trends || [];
+  const activeTrend = topicTrends.find((item) => item.key === trendPeriod) || topicTrends[0];
   const items = payload?.items || [];
   const canManageSources = Boolean(openSources && (payload?.available_actions || []).includes('community_sources.manage'));
   const updatedLabel = useMemo(() => formatTime(payload?.as_of), [payload?.as_of]);
@@ -203,6 +225,25 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources }: Com
           {topic.source_url ? <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600" /> : null}
         </button>)}
       </div> : <div className="mt-5 rounded-[18px] bg-black/15 px-4 py-5 text-sm leading-6 text-zinc-500"><b className="block text-zinc-300">Темы ещё формируются</b><span className="mt-1 block text-pretty">ЛокалОС покажет тему, когда она повторится в нескольких обсуждениях.</span>{canManageSources ? <button type="button" onClick={openSources} className="mt-3 min-h-11 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-300 transition-[background-color,transform] active:scale-[0.96]">Добавить источник</button> : null}</div>}
+
+      {topicTrends.length ? <div className="mt-2 border-t border-white/[0.06] pt-5">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400"><BarChart3 className="h-4 w-4" /></span>
+          <div className="min-w-0"><h3 className="text-balance text-sm font-semibold">Главные темы в динамике</h3><p className="mt-1 text-pretty text-[11px] leading-5 text-zinc-600">Доля среди распознанных тем в отслеживаемых источниках.</p></div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-1 rounded-[15px] bg-black/20 p-1" role="tablist" aria-label="Период статистики">
+          {topicTrends.map((period) => <button key={period.key} type="button" role="tab" aria-selected={activeTrend?.key === period.key} onClick={() => setTrendPeriod(period.key)} className={`min-h-10 rounded-[11px] px-2 text-[11px] font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${activeTrend?.key === period.key ? 'bg-white/[0.09] text-zinc-100 shadow-[0_6px_18px_rgba(0,0,0,0.18)]' : 'text-zinc-600'}`}>{period.label}</button>)}
+        </div>
+        <AnimatePresence initial={false} mode="wait">
+          {activeTrend ? <motion.div key={activeTrend.key} role="tabpanel" initial={{ opacity: 0, y: 5, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -4 }} transition={spring} className="mt-4 space-y-4">
+            {activeTrend.topics.length ? activeTrend.topics.map((topic) => <div key={topic.key}>
+              <div className="flex items-baseline justify-between gap-3 text-xs"><span className="min-w-0 text-pretty text-zinc-400">{topic.title}</span><b className="shrink-0 tabular-nums text-zinc-200">{topic.percent}%</b></div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]" role="progressbar" aria-label={topic.title} aria-valuenow={topic.percent} aria-valuemin={0} aria-valuemax={100}><span className="block h-full rounded-full bg-primary/75 transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${Math.min(100, topic.percent)}%` }} /></div>
+            </div>) : <p className="text-pretty text-xs leading-5 text-zinc-600">За этот период пока мало распознанных тем.</p>}
+            {activeTrend.message_count ? <p className="text-[10px] tabular-nums text-zinc-700">Учтено: {messageCountLabel(activeTrend.message_count)}</p> : null}
+          </motion.div> : null}
+        </AnimatePresence>
+      </div> : null}
     </section>
 
     <div className="mb-2 mt-7 flex min-h-11 items-center justify-between gap-3 px-1">

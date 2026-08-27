@@ -22,7 +22,12 @@ describe('CommunityFeedMobile', () => {
 
     expect(screen.getByRole('heading', { name: 'Лента' })).toBeInTheDocument();
     expect(screen.getByText('Растут цены на красители')).toBeInTheDocument();
+    expect(screen.getByText('Главные темы в динамике')).toBeInTheDocument();
+    expect(screen.getByText('33%')).toBeInTheDocument();
     expect(screen.getAllByText('Открыть сообщение')).toHaveLength(2);
+
+    await user.click(screen.getByRole('tab', { name: 'Квартал' }));
+    expect(await screen.findByText('29%')).toBeInTheDocument();
 
     await user.click(screen.getAllByText('Открыть сообщение')[0]);
     expect(openTelegramLink).toHaveBeenCalledWith('https://t.me/beauty_business/101');
@@ -32,6 +37,7 @@ describe('CommunityFeedMobile', () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({
       success: true,
       topics: [],
+      topic_trends: [],
       items: [{ id: 'message-1', platform: 'telegram', source_name: 'Канал', text: 'Новое сообщение', published_at: '2026-08-26T08:00:00Z', url: 'https://t.me/channel/1' }],
       cursor: null,
       as_of: '2026-08-26T08:01:00Z',
