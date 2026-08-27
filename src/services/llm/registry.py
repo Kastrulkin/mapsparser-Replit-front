@@ -145,6 +145,23 @@ OUTREACH_PATTERN_REVIEW_SCHEMA: dict[str, Any] = {
     },
     "required": ["approved", "issues", "safe_message_rules"],
 }
+COMMUNITY_TOPIC_LABEL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "topics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "cluster_id": {"type": "integer"},
+                    "title": {"type": "string"},
+                },
+                "required": ["cluster_id", "title"],
+            },
+        },
+    },
+    "required": ["topics"],
+}
 CONTENT_PLAN_GENERATION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -262,6 +279,19 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         timeout=45,
         prompt_version="outreach_corpus_pattern_review_v1",
         pipeline_stage="review",
+    ),
+    "community_topic_labeling": _task(
+        "community_topic_labeling",
+        provider="gigachat",
+        profile="gigachat_max",
+        data_class="public",
+        response_kind="json",
+        schema=COMMUNITY_TOPIC_LABEL_SCHEMA,
+        max_tokens=1200,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="community_topic_labeling_v1",
+        pipeline_stage="analysis",
     ),
     "lead_audit_enrichment": _task(
         "lead_audit_enrichment",

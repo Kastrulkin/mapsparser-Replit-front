@@ -23,11 +23,12 @@ describe('CommunityFeedMobile', () => {
     expect(screen.getByRole('heading', { name: 'Лента' })).toBeInTheDocument();
     expect(screen.getByText('Растут цены на красители')).toBeInTheDocument();
     expect(screen.getByText('Главные темы в динамике')).toBeInTheDocument();
-    expect(screen.getByText('33%')).toBeInTheDocument();
+    expect(screen.getByText('27%')).toBeInTheDocument();
+    expect(screen.getAllByRole('progressbar')).toHaveLength(5);
     expect(screen.getAllByText('Открыть сообщение')).toHaveLength(2);
 
     await user.click(screen.getByRole('tab', { name: 'Квартал' }));
-    expect(await screen.findByText('29%')).toBeInTheDocument();
+    expect(await screen.findByText('23%')).toBeInTheDocument();
 
     await user.click(screen.getAllByText('Открыть сообщение')[0]);
     expect(openTelegramLink).toHaveBeenCalledWith('https://t.me/beauty_business/101');

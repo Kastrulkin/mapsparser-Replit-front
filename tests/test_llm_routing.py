@@ -55,6 +55,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "outreach_personalization",
         "outreach_corpus_pattern_extract",
         "outreach_corpus_pattern_review",
+        "community_topic_labeling",
         "agent_email_draft",
         "agent_review_replies",
         "ai_agent_booking",
