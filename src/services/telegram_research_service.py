@@ -19,7 +19,7 @@ from services.knowledge_graph_service import add_evidence, upsert_assertion, ups
 
 ANALYSIS_VERSION = "telegram-audience-v1"
 DEFAULT_BACKFILL_DAYS = 90
-SYNC_INTERVAL_MINUTES = 24 * 60
+SYNC_INTERVAL_MINUTES = 30
 RETRY_INTERVAL_MINUTES = 60
 
 TRAVEL_SIGNAL_RULES: tuple[tuple[str, str, int, tuple[str, ...]], ...] = (

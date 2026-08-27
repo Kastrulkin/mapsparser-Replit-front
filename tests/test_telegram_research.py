@@ -150,7 +150,7 @@ def test_market_sync_backfills_90_days_then_schedules_daily_refresh(monkeypatch)
     assert result["sources_checked"] == 1
     assert [message["id"] for message in ingested] == [20]
     assert finished[-1][1]["backfill_completed"] is True
-    assert finished[-1][1]["minutes"] == 24 * 60
+    assert finished[-1][1]["minutes"] == 30
 
 
 def test_market_sync_rolls_back_only_failed_source(monkeypatch):
