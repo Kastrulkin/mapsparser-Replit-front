@@ -1,5 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { newAuth } from '@/lib/auth_new';
@@ -11,6 +11,10 @@ vi.mock('@/i18n/LanguageContext', () => ({ useLanguage: () => ({ language: 'ru' 
 const ContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1' }} />;
 const NetworkContextRoute = () => <Outlet context={{ currentBusinessId: 'business-1', controlScope: { kind: 'network', id: 'network-1', name: 'Сеть' } }} />;
 const renderPage = () => render(<MemoryRouter><Routes><Route element={<ContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
+const LocationProbe = () => {
+  const location = useLocation();
+  return <div>{`${location.pathname}${location.search}`}</div>;
+};
 
 describe('TodayPage', () => {
   beforeEach(() => vi.mocked(newAuth.makeRequest).mockReset());
@@ -50,6 +54,39 @@ describe('TodayPage', () => {
     expect(await screen.findByText('Получен новый отзыв')).toBeInTheDocument();
     expect(screen.getByText('Готово в LocalOS')).toBeInTheDocument();
     expect(screen.getByText('Подготовлен черновик ответа')).toBeInTheDocument();
+  });
+
+  it('keeps the target publication when opening a story-facts action', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      focus_action: {
+        id: 'content_story_facts:item-1',
+        title: 'Добавьте факты для истории',
+        reason: 'Для истории не хватает реального эпизода.',
+        expected_outcome: 'После фактов LocalOS подготовит текст.',
+        cta_label: 'Добавить факты',
+        screen: 'content',
+        plan_id: 'plan-1',
+        item_id: 'item-1',
+      },
+      active_work: [],
+      changes_24h: [],
+      completed_results: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard/today']}>
+        <Routes>
+          <Route element={<ContextRoute />}>
+            <Route path="/dashboard/today" element={<TodayPage />} />
+            <Route path="/dashboard/content" element={<LocationProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить факты' }));
+
+    expect(screen.getByText('/dashboard/content?plan_id=plan-1&item_id=item-1&focus=story_facts')).toBeInTheDocument();
   });
 
   it('loads the neutral today endpoint for the selected network scope', async () => {

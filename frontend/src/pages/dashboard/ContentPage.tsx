@@ -818,6 +818,14 @@ function ContentWorkspace() {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationCards, setGenerationCards] = useState(0);
   const mediaUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const requestedContentTarget = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      planId: params.get('plan_id') || '',
+      itemId: params.get('item_id') || '',
+      focus: params.get('focus') || '',
+    };
+  }, [location.search]);
 
   const demoCalendarThemes = getDemoContentCalendarThemes(language);
   const items = useMemo(() => {
@@ -925,6 +933,15 @@ function ContentWorkspace() {
       : rawItems;
     const plan = rawPlan ? { ...rawPlan, items: visibleItems } : null;
     setCurrentPlan(plan);
+    if (requestedContentTarget.focus === 'story_facts' && requestedContentTarget.itemId) {
+      const requestedItem = visibleItems.find((item) => item.id === requestedContentTarget.itemId);
+      if (requestedItem) {
+        setSelectedItemId(requestedItem.id);
+        setDraftEdits((prev) => ({ ...prev, [requestedItem.id]: String(requestedItem.draft_text || '') }));
+        setThemeEdits((prev) => ({ ...prev, [requestedItem.id]: String(requestedItem.theme || requestedItem.goal || '') }));
+        setDateEdits((prev) => ({ ...prev, [requestedItem.id]: getItemDateKey(requestedItem) }));
+      }
+    }
     if (plan?.id) {
       await loadSocialPosts(plan.id, loadSequence, new Set(visibleItems.map((item) => item.id)));
     }
@@ -955,7 +972,10 @@ function ContentWorkspace() {
       const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
       setPlans(nextPlans);
       if (nextPlans.length > 0) {
-        await loadCurrentPlan(nextPlans[0].id, loadSequence);
+        const requestedPlan = requestedContentTarget.planId
+          ? nextPlans.find((plan) => plan.id === requestedContentTarget.planId)
+          : null;
+        await loadCurrentPlan(requestedPlan?.id || nextPlans[0].id, loadSequence);
       } else {
         setCurrentPlan(null);
         setSocialPosts([]);
@@ -1046,7 +1066,18 @@ function ContentWorkspace() {
 
   useEffect(() => {
     void loadContent();
-  }, [currentBusinessId]);
+  }, [currentBusinessId, requestedContentTarget.focus, requestedContentTarget.itemId, requestedContentTarget.planId]);
+
+  useEffect(() => {
+    if (requestedContentTarget.focus !== 'story_facts' || selectedItemId !== requestedContentTarget.itemId) return;
+    const focusTimer = window.setTimeout(() => {
+      const details = publicationDetailsRef.current;
+      if (!details) return;
+      details.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      details.querySelector<HTMLInputElement>('input')?.focus();
+    }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [requestedContentTarget.focus, requestedContentTarget.itemId, selectedItemId]);
 
   useEffect(() => {
     setChannelDetailsOpen(false);

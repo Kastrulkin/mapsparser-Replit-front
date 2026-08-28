@@ -17,7 +17,7 @@ import type { JourneyAction } from '@/lib/leadJourney';
 
 type DashboardContext = { currentBusinessId?: string | null; controlScope?: ControlScope | null; onControlScopeChange?: (scope: ControlScope) => void; onBusinessChange?: (businessId: string) => void };
 
-type Mission = { id?: string; title: string; reason: string; expected_outcome: string; cta_label: string; screen?: string; cta_url?: string; target_scope?: { kind?: string; id?: string } };
+type Mission = { id?: string; title: string; reason: string; expected_outcome: string; cta_label: string; screen?: string; cta_url?: string; plan_id?: string; item_id?: string; target_scope?: { kind?: string; id?: string } };
 type TodayItem = { id: string; title: string; description?: string; stage?: string; source?: string; occurred_at?: string; progress?: number | null; screen?: string; business_id?: string; business_name?: string };
 type ProblemLocation = { business_id: string; business_name: string; problem?: string; data_health_status?: string; focus_action?: Mission | null };
 type TodayOverview = {
@@ -39,8 +39,15 @@ const screenRoute = (screen?: string) => ({
 }[screen || ''] || '/dashboard/progress');
 
 const missionRoute = (mission?: Mission | null) => {
-  if (mission?.screen) return screenRoute(mission.screen);
   if (mission?.cta_url?.startsWith('/dashboard/')) return mission.cta_url;
+  if (mission?.screen === 'content' && mission.item_id && mission.id?.startsWith('content_story_facts:')) {
+    const params = new URLSearchParams();
+    if (mission.plan_id) params.set('plan_id', mission.plan_id);
+    params.set('item_id', mission.item_id);
+    params.set('focus', 'story_facts');
+    return `/dashboard/content?${params.toString()}`;
+  }
+  if (mission?.screen) return screenRoute(mission.screen);
   return '/dashboard/progress';
 };
 
