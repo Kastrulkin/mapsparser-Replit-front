@@ -1,17 +1,50 @@
 {
-  "classification": "FIX_PROVEN",
-  "scope": "LocalOS content editorial generation, platform adaptation, approval, and queue gates",
-  "reproduction": {
-    "command": "arch -arm64 venv/bin/python -m pytest -q tests/test_content_generation_v2.py::test_candidate_rejects_generic_summary_after_concrete_visit_story tests/test_social_platform_variants.py::test_platform_variant_rejects_generic_summary_and_unsupported_details tests/test_social_post_service.py::test_approve_social_post_rejects_copy_without_current_quality_review",
-    "result": "3 failed",
-    "confirmed": true
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same reproducer changed from failing to passing and broader checks passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "schema_version": 1,
+    "label": "reproduced",
+    "captured_at": "2026-08-28T15:30:34+00:00",
+    "command": [
+      "npm",
+      "test",
+      "--",
+      "src/components/ErrorBoundary.test.tsx"
+    ],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend",
+    "runtime": "Node and Vitest on macOS",
+    "duration_ms": 2700,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "FAIL src/components/ErrorBoundary.test.tsx > ErrorBoundary with externally translated DOM > marks a language-provider version mismatch for one-time runtime recovery\nAssertionError: expected null to be '1'\n\nExpected: \"1\"\nReceived: null\n\nTest Files 1 failed (1)\nTests 1 failed | 3 passed (4)\n",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
   },
-  "fixed": {
-    "same_command_result": "3 passed",
-    "backend_regression_result": "221 passed",
-    "frontend_test_result": "12 passed",
-    "frontend_build_result": "passed"
-  },
-  "rules_version": "content-editorial-v3",
-  "production_deployed": false
+  "after": {
+    "schema_version": 1,
+    "label": "fixed",
+    "captured_at": "2026-08-28T15:33:56.191159+00:00",
+    "command": [
+      "npm",
+      "test",
+      "--",
+      "src/components/ErrorBoundary.test.tsx"
+    ],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend",
+    "runtime": "Python 3.11.7 on Darwin arm64",
+    "duration_ms": 5533.08,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "\n> vite_react_shadcn_ts@0.0.0 test\n> vitest run src/components/ErrorBoundary.test.tsx\n\n\n RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend\n\n\n Test Files  1 passed (1)\n      Tests  4 passed (4)\n   Start at  18:33:53\n   Duration  2.54s (transform 291ms, setup 350ms, import 192ms, tests 242ms, environment 1.13s)\n\n",
+    "stderr": "Error: useLanguage must be used within a LanguageProvider\n    at LanguageProviderVersionMismatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/src/components/ErrorBoundary.test.tsx:26:9)\n    at renderWithHooks (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at HTMLUnknownElement.callCallback (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:4164:14)\n    at HTMLUnknownElement.callTheUserObjectsOperation (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/generated/idl/EventListener.js:26:30)\n    at innerInvokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:360:16)\n    at invokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:296:3)\n    at HTMLUnknownElementImpl._dispatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:243:9)\n    at HTMLUnknownElementImpl.dispatchEvent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:114:17)\nError: useLanguage must be used within a LanguageProvider\n    at LanguageProviderVersionMismatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/src/components/ErrorBoundary.test.tsx:26:9)\n    at renderWithHooks (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at HTMLUnknownElement.callCallback (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:4164:14)\n    at HTMLUnknownElement.callTheUserObjectsOperation (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/generated/idl/EventListener.js:26:30)\n    at innerInvokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:360:16)\n    at invokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:296:3)\n    at HTMLUnknownElementImpl._dispatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:243:9)\n    at HTMLUnknownElementImpl.dispatchEvent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:114:17)\n",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  }
 }

@@ -22,7 +22,31 @@ const TranslatedNavigationHarness = () => {
   );
 };
 
+const LanguageProviderVersionMismatch = () => {
+  throw new Error('useLanguage must be used within a LanguageProvider');
+};
+
 describe('ErrorBoundary with externally translated DOM', () => {
+  it('marks a language-provider version mismatch for one-time runtime recovery', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    window.sessionStorage.clear();
+    vi.useFakeTimers();
+
+    try {
+      render(
+        <ErrorBoundary>
+          <LanguageProviderVersionMismatch />
+        </ErrorBoundary>,
+      );
+
+      expect(window.sessionStorage.getItem('localos_chunk_reload_attempted')).toBe('1');
+    } finally {
+      vi.useRealTimers();
+      consoleError.mockRestore();
+      window.sessionStorage.clear();
+    }
+  });
+
   it('keeps the React tree usable when translated text is replaced during navigation', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

@@ -2082,6 +2082,8 @@ def get_external_summary(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        source_filter_raw = str(request.args.get("source") or "").strip().lower()
+
         # Проверяем, существуют ли таблицы (Postgres)
         cursor.execute("""
             SELECT table_name FROM information_schema.tables
@@ -2102,7 +2104,7 @@ def get_external_summary(business_id):
             reviews_total = 0
             last_parse_date = None
             competitors = None
-            if card_row:
+            if card_row and not source_filter_raw:
                 try:
                     rating = float(card_row.get("rating")) if card_row.get("rating") is not None else None
                 except (TypeError, ValueError):
@@ -2124,7 +2126,6 @@ def get_external_summary(business_id):
             })
 
         requested_scope = str(request.args.get("scope") or "").strip().lower()
-        source_filter_raw = str(request.args.get("source") or "").strip().lower()
         business_row, network_id, aggregate_network = _resolve_network_scope_for_business(cursor, business_id, requested_scope)
 
         stats_query = """
@@ -2310,7 +2311,7 @@ def get_external_summary(business_id):
         #   - сначала metrics_card, если это metrics_update
         #   - затем chosen_card (обычно full)
         metrics_overview = _as_dict_obj(metrics_card.get("overview")) if metrics_card else {}
-        if rating is None:
+        if rating is None and not source_filter_raw:
             if metrics_card and metrics_overview.get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
                 try:
                     rating = float(metrics_card.get("rating"))
@@ -2322,7 +2323,10 @@ def get_external_summary(business_id):
                 except (TypeError, ValueError):
                     rating = None
 
-        if reviews_total == 0:
+        if reviews_total == 0 and stats_row and stats_row.get("reviews_total") is not None:
+            reviews_total = int(stats_row.get("reviews_total") or 0)
+
+        if reviews_total == 0 and not source_filter_raw:
             if metrics_card and metrics_overview.get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
                 reviews_total = int(metrics_card.get("reviews_count") or 0)
             elif parse_row and (parse_row.get("reviews_count") or 0) != 0:

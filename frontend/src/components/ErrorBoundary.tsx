@@ -1,6 +1,9 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from './ui/button';
 
+const CHUNK_RELOAD_STORAGE_KEY = 'localos_chunk_reload_attempted';
+const LANGUAGE_PROVIDER_VERSION_MISMATCH = 'useLanguage must be used within a LanguageProvider';
+
 interface Props {
     children?: ReactNode;
     fallback?: ReactNode;
@@ -25,6 +28,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Uncaught error:', error, errorInfo);
+
+        if (
+            error.message === LANGUAGE_PROVIDER_VERSION_MISMATCH &&
+            window.sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY) !== '1'
+        ) {
+            window.sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, '1');
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.set('__localos_reload', String(Date.now()));
+            window.setTimeout(() => window.location.replace(nextUrl.toString()), 0);
+            return;
+        }
+
         this.setState({ error, errorInfo });
     }
 
