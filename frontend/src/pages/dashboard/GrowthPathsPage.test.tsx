@@ -29,11 +29,14 @@ describe('GrowthPathsPage', () => {
 
     const headings = await screen.findAllByRole('heading', { level: 2 });
     expect(newAuth.makeRequest).toHaveBeenCalledWith('/growth-paths?business_id=business-1');
+    expect(screen.getByRole('heading', { level: 1, name: 'Выберите направление' })).toBeVisible();
+    expect(screen.getByText(/проведёт по следующим шагам/)).toBeVisible();
     expect(headings[0]).toHaveTextContent('Инфлюенсеры рядом');
     expect(screen.getByRole('heading', { name: 'Больше клиентов из карт' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Контент без рутины' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Партнёры рядом' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Автоматизировать работу' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Автоматизировать работу' }).closest('article')).toHaveClass('md:col-span-2', 'md:justify-self-center', 'md:w-[calc(50%-0.5rem)]');
     expect(screen.getByRole('link', { name: 'Настроить автоматизацию' })).toHaveAttribute('href', '/dashboard/agents');
     expect(screen.getByText('Подготовить публикацию')).toBeVisible();
     expect(screen.getByText('Полный черновик и календарь открываются на платном тарифе.')).toBeVisible();

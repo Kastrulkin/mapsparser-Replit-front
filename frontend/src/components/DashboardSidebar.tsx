@@ -182,7 +182,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: 'Пути роста',
       icon: LayoutGrid,
       path: '/dashboard/growth-paths',
-      tooltip: 'Карты, контент, инфлюенсеры и партнёрства — с одним следующим шагом.',
+      tooltip: 'Карты, контент, инфлюенсеры, партнёрства и автоматизация — по понятным сценариям.',
     },
     {
       id: 'feed',
