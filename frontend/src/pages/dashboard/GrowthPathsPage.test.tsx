@@ -28,7 +28,10 @@ describe('GrowthPathsPage', () => {
 
     const headings = await screen.findAllByRole('heading', { level: 2 });
     expect(newAuth.makeRequest).toHaveBeenCalledWith('/growth-paths?business_id=business-1');
-    expect(headings[0]).toHaveTextContent('Инфлюенсеры');
+    expect(headings[0]).toHaveTextContent('Инфлюенсеры рядом');
+    expect(screen.getByRole('heading', { name: 'Больше клиентов из карт' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Контент без рутины' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Партнёры рядом' })).toBeVisible();
     expect(screen.getByText('Подготовить публикацию')).toBeVisible();
     expect(screen.getByText('Полный черновик и календарь открываются на платном тарифе.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');

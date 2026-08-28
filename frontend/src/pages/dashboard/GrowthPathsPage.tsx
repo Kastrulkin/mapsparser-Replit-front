@@ -25,10 +25,10 @@ type GrowthPathsResponse = {
 };
 
 const pathMeta = {
-  maps: { icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
-  content: { icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
-  influencer: { icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
-  partnership: { icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
+  maps: { title: 'Больше клиентов из карт', icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
+  content: { title: 'Контент без рутины', icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
+  influencer: { title: 'Инфлюенсеры рядом', icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
+  partnership: { title: 'Партнёры рядом', icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
 };
 
 const statusCopy = (path: GrowthPath) => {
@@ -98,7 +98,7 @@ export const GrowthPathsPage = () => {
                   <span className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl ring-1', meta.tone)}><Icon className="h-5 w-5" aria-hidden="true" /></span>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{statusCopy(path)}</span>
                 </div>
-                <h2 className="mt-5 text-balance text-xl font-semibold text-slate-950">{path.title}</h2>
+                <h2 className="mt-5 text-balance text-xl font-semibold text-slate-950">{meta.title}</h2>
                 <p className="mt-2 min-h-12 text-pretty text-sm leading-6 text-slate-600">{path.opportunity}</p>
                 {path.obstacle ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Препятствие: {path.obstacle}</p> : null}
                 {locked ? <AccessPreview access={path.access} className="mt-4" /> : (
