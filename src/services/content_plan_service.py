@@ -36,6 +36,7 @@ CONTENT_PLAN_PUBLISHING_CHANNELS = (
     "google_business",
     "telegram",
     "vk",
+    "max",
     "instagram",
     "facebook",
 )

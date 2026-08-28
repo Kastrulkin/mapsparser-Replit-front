@@ -29,13 +29,14 @@ SOCIAL_POST_PLATFORMS = [
     "google_business",
     "telegram",
     "vk",
+    "max",
     "instagram",
     "facebook",
 ]
 CONTENT_PUBLICATION_PLATFORMS = [platform for platform in SOCIAL_POST_PLATFORMS if platform != "two_gis"]
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {

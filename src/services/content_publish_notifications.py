@@ -5,7 +5,6 @@ from datetime import date, datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
-
 TELEGRAM_MINI_APP_URL = "https://localos.pro/telegram/control"
 HANDOFF_PLATFORMS = {"telegram", "vk"}
 HANDOFF_STATUSES = {"approved", "needs_manual_publish"}
@@ -32,6 +31,64 @@ def _json_object(value: Any) -> dict[str, Any]:
         except (TypeError, ValueError):
             return {}
     return {}
+
+
+def _selected_photo(cursor: Any, post: dict[str, Any]) -> dict[str, Any] | None:
+    def normalize(value: Any) -> dict[str, Any] | None:
+        if not isinstance(value, dict):
+            return None
+        versions = _json_object(value.get("versions_json"))
+        original = _json_object(versions.get("original"))
+        upload = _json_object(_json_object(value.get("metadata_json")).get("upload"))
+        asset_id = str(value.get("id") or value.get("asset_id") or value.get("photo_asset_id") or "").strip()
+        storage_path = str(value.get("storage_path") or original.get("storage_path") or value.get("storage_key") or "").strip()
+        if not asset_id and not storage_path:
+            return None
+        return {
+            "id": asset_id,
+            "storage_path": storage_path,
+            "public_url": str(value.get("public_url") or original.get("public_url") or "").strip(),
+            "mime_type": str(value.get("mime_type") or original.get("mime_type") or "image/jpeg").strip(),
+            "original_name": str(value.get("original_name") or upload.get("original_name") or "").strip(),
+        }
+
+    media_json = post.get("media_json")
+    candidates = media_json if isinstance(media_json, list) else [media_json]
+    for candidate in candidates:
+        selected = normalize(candidate)
+        if selected:
+            return selected
+
+    business_id = str(post.get("business_id") or "").strip()
+    target_ids = [
+        value
+        for value in (
+            str(post.get("id") or "").strip(),
+            str(post.get("content_plan_item_id") or "").strip(),
+        )
+        if value
+    ]
+    platform = str(post.get("platform") or "").strip()
+    if not business_id or not target_ids:
+        return None
+    cursor.execute(
+        """
+        SELECT pa.id, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
+               usage.target_platform, usage.created_at
+        FROM photo_asset_usage_events usage
+        JOIN photo_assets pa
+          ON pa.id = usage.photo_asset_id
+         AND pa.business_id = usage.business_id
+        WHERE usage.business_id = %s
+          AND usage.usage_type = 'publication'
+          AND usage.target_id = ANY(%s)
+          AND (usage.target_platform IS NULL OR usage.target_platform = '' OR usage.target_platform = %s)
+        ORDER BY usage.created_at DESC
+        LIMIT 1
+        """,
+        (business_id, target_ids, platform),
+    )
+    return normalize(_row(cursor, cursor.fetchone()))
 
 
 def _enabled_scopes(cursor: Any) -> list[dict[str, str]]:
@@ -101,7 +158,7 @@ def collect_due_content_publish_handoffs(
             if not post_id or identity in seen or deliveries.get(user_id):
                 continue
             seen.add(identity)
-            result.append({**post, **scope})
+            result.append({**post, **scope, "selected_photo": _selected_photo(cursor, post)})
             if len(result) >= max(1, limit):
                 return result
     return result
@@ -145,6 +202,7 @@ def mark_content_publish_handoff_sent(
     post_id: str,
     user_id: str,
     telegram_message_id: int,
+    telegram_photo_message_id: int = 0,
     sent_at: datetime | None = None,
 ) -> bool:
     cursor = conn.cursor()
@@ -158,6 +216,7 @@ def mark_content_publish_handoff_sent(
     deliveries[str(user_id)] = {
         "sent_at": (sent_at or datetime.now(timezone.utc)).isoformat(),
         "telegram_message_id": int(telegram_message_id or 0),
+        "telegram_photo_message_id": int(telegram_photo_message_id or 0),
     }
     metadata["staff_handoff"] = {**handoff, "telegram_deliveries": deliveries}
     cursor.execute(

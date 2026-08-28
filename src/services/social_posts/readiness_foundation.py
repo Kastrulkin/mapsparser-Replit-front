@@ -32,12 +32,13 @@ SOCIAL_POST_PLATFORMS = [
     "google_business",
     "telegram",
     "vk",
+    "max",
     "instagram",
     "facebook",
 ]
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {
@@ -165,6 +166,15 @@ def prepare_social_posts_for_item(
                 item_id=item_id,
                 selected_platforms=requested_platforms,
             )
+        media_selection = {"selected": False, "photo_asset_id": "", "source": "none"}
+        if created_or_updated:
+            from services.media_intelligence import ensure_recommended_photo_usage
+
+            media_selection = ensure_recommended_photo_usage(
+                cursor,
+                business_id=str(item.get("business_id") or item.get("plan_business_id") or "").strip(),
+                content_plan_item_id=item_id,
+            )
         db.conn.commit()
         return {
             "posts": created_or_updated,
@@ -172,6 +182,7 @@ def prepare_social_posts_for_item(
             "selected_platforms": requested_platforms,
             "removed_platforms": removed_platforms,
             "preserved_platforms": preserved_platforms,
+            "media_selection": media_selection,
         }
     except Exception:
         db.conn.rollback()

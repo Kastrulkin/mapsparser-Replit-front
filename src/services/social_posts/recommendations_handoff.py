@@ -27,12 +27,13 @@ SOCIAL_POST_PLATFORMS = [
     "google_business",
     "telegram",
     "vk",
+    "max",
     "instagram",
     "facebook",
 ]
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {
@@ -469,6 +470,7 @@ def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -
         return result[:normalized_limit]
     return result[:normalized_limit]
 
+
 def _media_asset_file(asset: dict[str, Any]) -> dict[str, Any]:
     storage_path = str(asset.get("storage_path") or "").strip()
     content = load_media_file(storage_path) if storage_path else None
@@ -567,6 +569,30 @@ def _telegram_api_call(
         status, provider_status = _telegram_publish_error_state(status_code, description)
         return {"ok": False, "status": status, "provider_status": provider_status, "error": description, "status_code": status_code}
     return {"ok": True, "result": parsed.get("result"), "response": parsed}
+
+
+def send_telegram_photo_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    media_asset: dict[str, Any],
+    caption: str = "",
+) -> dict[str, Any]:
+    file_data = _media_asset_file(media_asset)
+    if not file_data:
+        return {"success": False, "message_id": 0, "reason_code": "media_unavailable"}
+    response = _telegram_api_call(
+        bot_token,
+        "sendPhoto",
+        {"chat_id": str(chat_id or "").strip(), "caption": str(caption or "")[:1024]},
+        [{**file_data, "field_name": "photo"}],
+    )
+    result = response.get("result") if isinstance(response.get("result"), dict) else {}
+    return {
+        "success": bool(response.get("ok")),
+        "message_id": int(result.get("message_id") or 0),
+        "reason_code": str(response.get("provider_status") or response.get("error") or ""),
+    }
 
 def _publish_telegram_media_post(
     *,

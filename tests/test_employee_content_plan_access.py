@@ -165,7 +165,7 @@ def test_content_plan_item_saves_selected_channels_in_metadata(monkeypatch):
     content_plan_service.update_content_plan_item(
         "member-1",
         "item-1",
-        {"selected_channels": ["telegram", "yandex_maps", "telegram", "unknown"]},
+        {"selected_channels": ["telegram", "yandex_maps", "max", "telegram", "unknown"]},
     )
 
     update_params = next(
@@ -178,7 +178,7 @@ def test_content_plan_item_saves_selected_channels_in_metadata(monkeypatch):
         for value in update_params
         if isinstance(value, str) and value.startswith("{")
     ]
-    assert {"selected_channels": ["telegram", "yandex_maps"]} in metadata_payloads
+    assert {"selected_channels": ["telegram", "yandex_maps", "max"]} in metadata_payloads
 
 
 def test_content_plan_item_saves_text_and_channels_with_one_metadata_update(monkeypatch):

@@ -27,12 +27,13 @@ SOCIAL_POST_PLATFORMS = [
     "google_business",
     "telegram",
     "vk",
+    "max",
     "instagram",
     "facebook",
 ]
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
-BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
+BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {
@@ -1265,6 +1266,7 @@ def platform_label(platform: str) -> str:
         "google_business": "Google Business",
         "telegram": "Telegram",
         "vk": "VK",
+        "max": "MAX",
         "instagram": "Instagram",
         "facebook": "Facebook",
     }

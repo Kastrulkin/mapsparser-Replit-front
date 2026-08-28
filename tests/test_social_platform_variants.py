@@ -51,6 +51,81 @@ def test_build_platform_variants_falls_back_per_channel(monkeypatch):
     assert "\n\n" not in variants["yandex_maps"]["text"]
 
 
+def test_max_variant_uses_channel_rules_and_limit(monkeypatch):
+    prompts = []
+
+    def fake_analyze(prompt, **kwargs):
+        prompts.append(prompt)
+        return json.dumps({"variants": {"max": "Первая строка.\n\nКороткий пост для MAX."}}, ensure_ascii=False)
+
+    monkeypatch.setattr(platform_variants, "analyze_text_with_gigachat", fake_analyze)
+
+    variants = platform_variants.build_platform_variants(
+        "Подтверждённый текст публикации.",
+        ["max"],
+        {"business_id": "business-1", "theme": "История визита"},
+    )
+
+    assert "Компактный пост для канала MAX" in prompts[0]
+    assert variants["max"]["text"] == "Первая строка.\n\nКороткий пост для MAX."
+    assert platform_variants.PLATFORM_TEXT_LIMITS["max"] == 4000
+
+
+def test_build_platform_variants_honors_channel_language(monkeypatch):
+    prompts = []
+
+    def fake_analyze(prompt, **kwargs):
+        prompts.append(prompt)
+        return json.dumps(
+            {
+                "variants": {
+                    "google_business": "Tell us how many passengers and bags are travelling.",
+                    "vk": "Укажите число пассажиров и объём багажа.",
+                }
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(platform_variants, "analyze_text_with_gigachat", fake_analyze)
+
+    platform_variants.build_platform_variants(
+        "Укажите число пассажиров и весь нестандартный багаж.",
+        ["google_business", "vk"],
+        {
+            "business_id": "riderra",
+            "metadata_json": {
+                "channel_languages": {
+                    "google_business": "en",
+                    "vk": "ru",
+                }
+            },
+        },
+    )
+
+    assert len(prompts) == 1
+    assert "google_business: write in English" in prompts[0]
+    assert "vk: write in Russian" in prompts[0]
+
+
+def test_configured_channel_language_never_falls_back_to_the_source_language(monkeypatch):
+    monkeypatch.setattr(platform_variants, "analyze_text_with_gigachat", lambda *args, **kwargs: "not-json")
+
+    variants = platform_variants.build_platform_variants(
+        "Укажите число пассажиров и весь нестандартный багаж.",
+        ["google_business"],
+        {
+            "metadata_json": {
+                "channel_languages": {"google_business": "en"},
+            },
+        },
+    )
+
+    assert variants["google_business"]["text"] == ""
+    assert variants["google_business"]["metadata"]["variant_source"] == "unavailable"
+    assert variants["google_business"]["metadata"]["variant_status"] == "needs_regeneration"
+    assert variants["google_business"]["metadata"]["channel_language"] == "en"
+
+
 def test_current_variant_does_not_request_regeneration():
     base_text = "Подтверждённый общий текст."
     existing = {

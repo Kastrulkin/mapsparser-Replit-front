@@ -29,3 +29,9 @@ def test_local_media_storage_blocks_paths_outside_upload_root(tmp_path, monkeypa
     outside_file.write_bytes(b"nope")
 
     assert media_file_storage.load_media_file(str(outside_file)) is None
+
+
+def test_s3_client_uses_outbound_proxy(monkeypatch):
+    monkeypatch.setenv("OUTBOUND_HTTP_PROXY", "http://192.168.0.177:10809")
+
+    assert media_file_storage._outbound_proxy_url() == "http://192.168.0.177:10809"

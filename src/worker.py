@@ -72,7 +72,11 @@ from services.content_publish_notifications import (
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
 from services.operator_async_jobs import process_next_operator_async_job
-from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
+from services.social_post_service import (
+    collect_due_social_post_metrics,
+    dispatch_due_social_posts,
+    send_telegram_photo_message,
+)
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
 from services.knowledge_public_telegram import run_public_telegram_monitor
 from services.telegram_research_service import purge_expired_private_telegram_content, run_userbot_market_sync
@@ -1868,6 +1872,23 @@ def _run_card_automation_if_due() -> None:
             post_id = str(handoff.get("id") or "").strip()
             user_id = str(handoff.get("user_id") or "").strip()
             message, reply_markup = format_content_publish_handoff(handoff)
+            photo_message_id = 0
+            selected_photo = handoff.get("selected_photo")
+            if isinstance(selected_photo, dict) and selected_photo:
+                photo_result = send_telegram_photo_message(
+                    bot_token=(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip(),
+                    chat_id=telegram_id,
+                    media_asset=selected_photo,
+                    caption="Фото для публикации",
+                )
+                photo_message_id = int(photo_result.get("message_id") or 0)
+                if not bool(photo_result.get("success")) or not photo_message_id:
+                    db.conn.rollback()
+                    print(
+                        f"[CONTENT_PUBLISH_HANDOFF] failed to send photo post_id={post_id} telegram_id={telegram_id}",
+                        flush=True,
+                    )
+                    continue
             send_result = _send_telegram_message_result(telegram_id, message, reply_markup=reply_markup)
             message_id = int(send_result.get("message_id") or 0)
             if not bool(send_result.get("success")) or not message_id:
@@ -1879,6 +1900,7 @@ def _run_card_automation_if_due() -> None:
                 post_id=post_id,
                 user_id=user_id,
                 telegram_message_id=message_id,
+                telegram_photo_message_id=photo_message_id,
             ):
                 db.conn.commit()
                 print(f"[CONTENT_PUBLISH_HANDOFF] sent post_id={post_id} telegram_id={telegram_id}", flush=True)

@@ -227,6 +227,52 @@ describe('Content page DOM ownership', () => {
     expect(screen.queryByText(/Unexpected token/)).not.toBeInTheDocument();
   });
 
+  it('retries a photo upload after a temporary storage timeout', async () => {
+    let uploadAttempt = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      uploadAttempt += 1;
+      if (uploadAttempt === 1) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({
+            success: false,
+            error: 'Read timeout on endpoint URL: "https://s3.example.test/photo.jpg"',
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, photo: { id: 'photo-after-retry' } }),
+      };
+    }));
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [], summary: {} };
+      if (path.startsWith('/media-intelligence/photos?')) return { photos: [], coverage: null };
+      if (path === '/media-intelligence/photos/photo-after-retry/analyze') {
+        return { success: true, status: 'analyzed', charged_credits: 2, billing_source: 'general_credits' };
+      }
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    const view = renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Медиатека' }));
+    const input = view.container.querySelector<HTMLInputElement>('input[type="file"]');
+
+    fireEvent.change(input!, {
+      target: { files: [new File(['retry'], 'retry.jpg', { type: 'image/jpeg' })] },
+    });
+
+    expect(await screen.findByText(/Фото загружены: 1 из 1\./)).toHaveTextContent('Списано: 2 кредита.');
+    expect(uploadAttempt).toBe(2);
+    expect(screen.queryByText(/s3\.example\.test/)).not.toBeInTheDocument();
+  });
+
   it('keeps the content page usable when a browser translator ignores translate=no', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -359,6 +405,30 @@ describe('Content page manual photo handoff', () => {
 });
 
 describe('Content page publication settings', () => {
+  it('shows a direct action for reviewing channel-specific texts', async () => {
+    const itemPosts = ['google_business', 'telegram'].map((platform, index) => ({
+      id: `variant-${index + 1}`,
+      content_plan_item_id: 'item-1',
+      platform,
+      status: 'needs_review',
+      platform_text: platform === 'google_business' ? 'English Google text.' : 'Текст для Telegram.',
+    }));
+
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: itemPosts, summary: {} };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+
+    renderContentPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+
+    expect(await screen.findByRole('button', { name: 'Тексты для каналов · 2' })).toBeInTheDocument();
+  });
+
   it('keeps item channels and saves the changed date with the item', async () => {
     const itemPlan = {
       ...plan,

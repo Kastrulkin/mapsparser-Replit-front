@@ -168,6 +168,7 @@ def _load_media_file_s3(storage_path: str) -> bytes | None:
 def _s3_client() -> Any:
     try:
         import boto3
+        from botocore.config import Config
     except ImportError:
         raise RuntimeError("boto3 is required for MEDIA_STORAGE_BACKEND=s3")
 
@@ -177,13 +178,30 @@ def _s3_client() -> Any:
     secret_key = os.environ.get("MEDIA_S3_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
     if not access_key or not secret_key:
         raise RuntimeError("MEDIA_S3_ACCESS_KEY_ID and MEDIA_S3_SECRET_ACCESS_KEY are required")
+    proxy_url = _outbound_proxy_url()
+    client_config = Config(
+        connect_timeout=12,
+        read_timeout=30,
+        retries={"max_attempts": 3, "mode": "standard"},
+        proxies={"http": proxy_url, "https": proxy_url} if proxy_url else None,
+    )
     return boto3.client(
         "s3",
         endpoint_url=endpoint_url,
         region_name=region_name,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
+        config=client_config,
     )
+
+
+def _outbound_proxy_url() -> str:
+    return str(
+        os.environ.get("OUTBOUND_HTTP_PROXY")
+        or os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or ""
+    ).strip()
 
 
 def _required_env(name: str) -> str:

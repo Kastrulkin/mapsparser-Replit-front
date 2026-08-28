@@ -562,3 +562,53 @@ def record_photo_usage(
         """,
         (datetime.now(timezone.utc), photo_asset_id, business_id),
     )
+
+
+def ensure_recommended_photo_usage(
+    cursor: Any,
+    *,
+    business_id: str,
+    content_plan_item_id: str,
+) -> dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT photo_asset_id
+        FROM photo_asset_usage_events
+        WHERE business_id = %s
+          AND usage_type = 'publication'
+          AND target_id = %s
+          AND (target_platform IS NULL OR target_platform = '')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, content_plan_item_id),
+    )
+    existing = _row_to_dict(cursor, cursor.fetchone()) or {}
+    existing_asset_id = _clean_text(existing.get("photo_asset_id"))
+    if existing_asset_id:
+        return {"selected": True, "photo_asset_id": existing_asset_id, "source": "existing"}
+
+    recommendation = recommend_media_for_post(
+        cursor,
+        business_id=business_id,
+        content_plan_item_id=content_plan_item_id,
+    )
+    selected = recommendation.get("selected_asset")
+    if recommendation.get("status") != "ready" or not isinstance(selected, dict):
+        return {"selected": False, "photo_asset_id": "", "source": "none"}
+    photo_asset_id = _clean_text(selected.get("id"))
+    if not photo_asset_id:
+        return {"selected": False, "photo_asset_id": "", "source": "none"}
+    record_photo_usage(
+        cursor,
+        business_id=business_id,
+        photo_asset_id=photo_asset_id,
+        usage_type="publication",
+        target_id=content_plan_item_id,
+        metadata={
+            "source": "automatic_media_planner",
+            "category": _clean_text(selected.get("category")),
+            "rank_score": int(selected.get("rank_score") or 0),
+        },
+    )
+    return {"selected": True, "photo_asset_id": photo_asset_id, "source": "recommendation"}

@@ -313,11 +313,25 @@ const isInsufficientPhotoCreditsError = (error: unknown) => {
   return normalized.includes('недостаточно кредитов') || normalized.includes('insufficient credit');
 };
 
+const isTemporaryPhotoStorageError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.trim().toLowerCase();
+  return normalized.includes('read timeout')
+    || normalized.includes('connect timeout')
+    || normalized.includes('timed out')
+    || normalized.includes('timeout on endpoint url');
+};
+
+const waitForPhotoUploadRetry = (attempt: number) => new Promise<void>((resolve) => {
+  window.setTimeout(resolve, 250 * attempt);
+});
+
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
   { key: 'google_business', label: 'Google', mode: 'api' },
   { key: 'telegram', label: 'Telegram', mode: 'api' },
   { key: 'vk', label: 'VK', mode: 'api' },
+  { key: 'max', label: 'MAX', mode: 'controlled' },
   { key: 'instagram', label: 'Instagram', mode: 'api' },
   { key: 'facebook', label: 'Facebook', mode: 'api' },
 ];
@@ -352,6 +366,7 @@ const DEFAULT_CREATE_DRAFT: CreatePlanDraft = {
     google_business: true,
     telegram: true,
     vk: true,
+    max: false,
     instagram: true,
     facebook: true,
   },
@@ -371,7 +386,7 @@ const plannedPublicationCount = (periodDays: number, frequency: string) => {
 const buildChannelSelection = (selectedChannels?: string[]) => {
   const selected = new Set((selectedChannels || []).map((value) => String(value || '').trim()).filter(Boolean));
   return CHANNELS.reduce<Record<string, boolean>>((result, channel) => {
-    result[channel.key] = selected.size === 0 || selected.has(channel.key);
+    result[channel.key] = selected.size === 0 ? channel.key !== 'max' : selected.has(channel.key);
     return result;
   }, {});
 };
@@ -645,6 +660,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   google_business: 'Google',
   instagram: 'Instagram',
   telegram: 'Telegram',
+  max: 'MAX',
   two_gis: '2ГИС',
   vk: 'VK',
   yandex_maps: 'Яндекс',
@@ -1286,30 +1302,43 @@ function ContentWorkspace() {
     }
   };
 
-  const uploadSingleMediaPhoto = async (file: File) => {
+  const uploadSingleMediaPhoto = async (file: File, onRetry?: (attempt: number) => void) => {
     if (!currentBusinessId) throw new Error('Бизнес не выбран');
-    const formData = new FormData();
-    formData.append('business_id', currentBusinessId);
-    formData.append('file', file);
-    const token = newAuth.getToken() || '';
-    const response = await fetch(`${API_URL}/api/media-intelligence/photos/upload`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: formData,
-    });
-    if (response.status === 413) {
-      throw new Error('Фото слишком большое. Максимальный размер — 10 МБ.');
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const formData = new FormData();
+        formData.append('business_id', currentBusinessId);
+        formData.append('file', file);
+        const token = newAuth.getToken() || '';
+        const response = await fetch(`${API_URL}/api/media-intelligence/photos/upload`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: formData,
+        });
+        if (response.status === 413) {
+          throw new Error('Фото слишком большое. Максимальный размер — 10 МБ.');
+        }
+        let data;
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error('Сервер не принял фото. Попробуйте загрузить его ещё раз.');
+        }
+        if (!response.ok || !data.success) {
+          throw new Error(String(data.error || data.message || `Не удалось загрузить ${file.name}`));
+        }
+        return data.photo && typeof data.photo === 'object' ? data.photo : {};
+      } catch (uploadError) {
+        if (!isTemporaryPhotoStorageError(uploadError)) throw uploadError;
+        if (attempt >= maxAttempts) {
+          throw new Error('Хранилище временно не ответило. Повторите загрузку этого фото.');
+        }
+        onRetry?.(attempt);
+        await waitForPhotoUploadRetry(attempt);
+      }
     }
-    let data;
-    try {
-      data = await response.json();
-    } catch {
-      throw new Error('Сервер не принял фото. Попробуйте загрузить его ещё раз.');
-    }
-    if (!response.ok || !data.success) {
-      throw new Error(String(data.error || data.message || `Не удалось загрузить ${file.name}`));
-    }
-    return data.photo && typeof data.photo === 'object' ? data.photo : {};
+    throw new Error('Не удалось загрузить фото.');
   };
 
   const uploadMediaPhotos = async (fileList?: FileList | null) => {
@@ -1336,7 +1365,9 @@ function ContentWorkspace() {
         let photoUploaded = false;
         setMediaUploadProgress(`Загружаем ${index + 1} из ${files.length}`);
         try {
-          const photo = await uploadSingleMediaPhoto(file);
+          const photo = await uploadSingleMediaPhoto(file, () => {
+            setMediaUploadProgress(`Хранилище временно не ответило. Повторяем загрузку ${index + 1} из ${files.length}`);
+          });
           uploaded.push(photo);
           photoUploaded = true;
           setMediaUploadProgress(`Анализируем ${index + 1} из ${files.length}`);
@@ -2913,6 +2944,17 @@ function ContentWorkspace() {
                       className="mt-2 rounded-2xl"
                     />
                   </label>
+                  {hasPosts ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setChannelDetailsOpen((open) => !open)}
+                      className="mt-4 min-h-11 w-full justify-start rounded-2xl bg-white px-3 text-slate-900"
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      {`Тексты для каналов · ${channelCount}`}
+                    </Button>
+                  ) : null}
                   <div className="mt-4">
                     <button
                       type="button"

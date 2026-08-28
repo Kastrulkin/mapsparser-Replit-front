@@ -20,6 +20,11 @@ PLATFORM_VARIANT_RULES = {
         "Понятный пост для сообщества: 2-4 коротких абзаца, немного больше объяснения, "
         "чем на картах, и один естественный следующий шаг."
     ),
+    "max": (
+        "Компактный пост для канала MAX: главная мысль в первой строке, 2-4 коротких "
+        "абзаца и один понятный следующий шаг. Текст должен сочетаться с одним живым "
+        "фото; без россыпи эмодзи и хештегов."
+    ),
     "google_business": (
         "Короткая фактическая новость для карточки компании: что произошло или чем полезно, "
         "кому это важно и что сделать дальше. До 1500 символов, без хештегов."
@@ -44,9 +49,15 @@ PLATFORM_VARIANT_RULES = {
 
 PLATFORM_TEXT_LIMITS = {
     "telegram": 4096,
+    "max": 4000,
     "google_business": 1500,
     "yandex_maps": 1200,
     "two_gis": 1200,
+}
+
+CHANNEL_LANGUAGE_NAMES = {
+    "en": "English",
+    "ru": "Russian",
 }
 
 
@@ -68,13 +79,15 @@ def build_platform_variants(
     if not str(base_text or "").strip() or not normalized_platforms:
         return {}
 
+    item_payload = item or {}
+    channel_languages = _channel_languages(item_payload, normalized_platforms)
     ai_variants: dict[str, str] = {}
     generation_error = ""
     try:
         raw_result = analyze_text_with_gigachat(
-            _platform_variant_prompt(base_text, normalized_platforms, item or {}),
+            _platform_variant_prompt(base_text, normalized_platforms, item_payload),
             task_type="news_generation",
-            business_id=str((item or {}).get("business_id") or (item or {}).get("plan_business_id") or ""),
+            business_id=str(item_payload.get("business_id") or item_payload.get("plan_business_id") or ""),
         )
         ai_variants = _parse_platform_variants(raw_result, normalized_platforms)
         if not ai_variants:
@@ -86,19 +99,35 @@ def build_platform_variants(
     adapted_at = datetime.now(timezone.utc).isoformat()
     result: dict[str, dict[str, Any]] = {}
     for platform in normalized_platforms:
-        ai_text = _normalize_platform_variant_text(platform, ai_variants.get(platform, ""))
-        source = "ai" if ai_text else "deterministic"
-        text = ai_text or deterministic_platform_variant(platform, base_text)
+        requested_language = channel_languages.get(platform)
+        raw_ai_text = ai_variants.get(platform, "")
+        ai_text = _normalize_platform_variant_text(platform, raw_ai_text)
+        language_matches = _matches_channel_language(ai_text, requested_language)
+        if not language_matches:
+            ai_text = ""
+        if ai_text:
+            source = "ai"
+            text = ai_text
+        elif requested_language:
+            source = "unavailable"
+            text = ""
+        else:
+            source = "deterministic"
+            text = deterministic_platform_variant(platform, base_text)
+        adaptation_error = ""
+        if source != "ai":
+            adaptation_error = "language_mismatch" if raw_ai_text and not language_matches else generation_error
         result[platform] = {
             "text": text,
             "metadata": {
                 "variant_source": source,
-                "variant_status": "current",
+                "variant_status": "current" if text else "needs_regeneration",
                 "base_text_hash": base_hash,
                 "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
+                "channel_language": requested_language or "",
                 "manually_edited": False,
                 "adapted_at": adapted_at,
-                "adaptation_error": "" if source == "ai" else generation_error,
+                "adaptation_error": adaptation_error,
             },
         }
     return result
@@ -115,7 +144,7 @@ def deterministic_platform_variant(platform: str, base_text: str) -> str:
         return _truncate_at_sentence(compact, limit)
     if platform == "instagram":
         return _paragraphize_sentences(sentences, first_paragraph_size=1, paragraph_size=2, max_paragraphs=4)
-    if platform == "telegram":
+    if platform in {"telegram", "max"}:
         return _paragraphize_sentences(sentences, first_paragraph_size=1, paragraph_size=2, max_paragraphs=5)
     if platform in {"vk", "facebook"}:
         return _paragraphize_sentences(sentences, first_paragraph_size=1, paragraph_size=2, max_paragraphs=4)
@@ -132,8 +161,9 @@ def merge_platform_variant_metadata(
 
 
 def _platform_variant_prompt(base_text: str, platforms: list[str], item: dict[str, Any]) -> str:
+    channel_languages = _channel_languages(item, platforms)
     rules = "\n".join(
-        f'- {platform}: {PLATFORM_VARIANT_RULES[platform]}'
+        _platform_prompt_rule(platform, channel_languages.get(platform))
         for platform in platforms
     )
     return (
@@ -154,6 +184,38 @@ def _platform_variant_prompt(base_text: str, platforms: list[str], item: dict[st
         f"Исходный подтверждённый текст:\n{str(base_text or '').strip()}\n\n"
         f"Правила площадок:\n{rules}"
     )
+
+
+def _channel_languages(item: dict[str, Any], platforms: list[str]) -> dict[str, str]:
+    metadata = item.get("metadata_json")
+    raw_languages = metadata.get("channel_languages") if isinstance(metadata, dict) else None
+    if not isinstance(raw_languages, dict):
+        return {}
+    allowed_platforms = set(platforms)
+    return {
+        str(platform).strip(): str(language).strip().lower()
+        for platform, language in raw_languages.items()
+        if str(platform).strip() in allowed_platforms
+        and str(language).strip().lower() in CHANNEL_LANGUAGE_NAMES
+    }
+
+
+def _platform_prompt_rule(platform: str, language: str | None) -> str:
+    language_rule = ""
+    if language:
+        language_rule = f" write in {CHANNEL_LANGUAGE_NAMES[language]};"
+    return f"- {platform}:{language_rule} {PLATFORM_VARIANT_RULES[platform]}"
+
+
+def _matches_channel_language(text: str, language: str | None) -> bool:
+    if not text or not language:
+        return bool(text)
+    cyrillic_count = len(re.findall(r"[А-Яа-яЁё]", text))
+    if language == "en":
+        return cyrillic_count < 4
+    if language == "ru":
+        return cyrillic_count >= 4
+    return True
 
 
 def _parse_platform_variants(raw_result: Any, platforms: list[str]) -> dict[str, str]:
