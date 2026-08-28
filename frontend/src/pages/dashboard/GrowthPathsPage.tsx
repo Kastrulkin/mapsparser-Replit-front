@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
+import { ArrowRight, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { AccessPreview, type BlockAccess } from '@/components/access/AccessBoundary';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { newAuth } from '@/lib/auth_new';
 import { journeyActionRoute, type JourneyAction } from '@/lib/leadJourney';
 import { cn } from '@/lib/utils';
 
-type GrowthFlow = 'maps' | 'content' | 'influencer' | 'partnership';
+type GrowthFlow = 'maps' | 'content' | 'influencer' | 'partnership' | 'automation';
 
 type GrowthPath = {
   flow_type: GrowthFlow;
@@ -29,6 +29,7 @@ const pathMeta = {
   content: { title: 'Контент без рутины', icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
   influencer: { title: 'Инфлюенсеры рядом', icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
   partnership: { title: 'Партнёры рядом', icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
+  automation: { title: 'Автоматизировать работу', icon: Bot, tone: 'bg-orange-50 text-orange-700 ring-orange-100', route: '/dashboard/agents' },
 };
 
 const statusCopy = (path: GrowthPath) => {
@@ -73,7 +74,7 @@ export const GrowthPathsPage = () => {
       <header className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">Пути роста</p>
         <h1 className="mt-2 max-w-3xl text-balance text-3xl font-semibold tracking-tight text-slate-950">Выберите результат, а LocalOS покажет одно следующее действие</h1>
-        <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Карты, контент, инфлюенсеры и партнёрства собраны по задачам бизнеса. Текущий персональный маршрут всегда идёт первым.</p>
+        <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Карты, контент, инфлюенсеры, партнёрства и автоматизация собраны по задачам бизнеса. Текущий персональный маршрут всегда идёт первым.</p>
       </header>
 
       {loading ? (

@@ -295,13 +295,15 @@ def test_growth_paths_put_focus_action_on_matching_path_and_lock_paid_content():
 
     paths = build_growth_paths(actions=actions, automation_allowed=False)
 
-    assert [item["flow_type"] for item in paths] == ["maps", "content", "influencer", "partnership"]
+    assert [item["flow_type"] for item in paths] == ["maps", "content", "influencer", "partnership", "automation"]
     content = next(item for item in paths if item["flow_type"] == "content")
     influencer = next(item for item in paths if item["flow_type"] == "influencer")
     assert content["access"]["status"] == "payment_required"
     assert content["access"]["cta_target"]["screen"] == "settings"
     assert influencer["action"]["id"] == "action-1"
     assert influencer["access"]["status"] == "available"
+    automation = next(item for item in paths if item["flow_type"] == "automation")
+    assert automation["access"]["cta_target"]["screen"] == "agents"
 
 
 def test_reserved_journey_is_resumed_by_bound_user_without_public_token(monkeypatch):

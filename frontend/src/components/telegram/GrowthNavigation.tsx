@@ -45,7 +45,7 @@ const outcomes: Outcome[] = [
   { key: 'influencers', title: 'Инфлюенсеры рядом', description: 'Получите клиентов от местных авторов через взаимовыгодный обмен.', icon: Sparkles },
   { key: 'partnerships', title: 'Партнёры рядом', description: 'Получите новых клиентов через совместные предложения с бизнесами, у которых похожая аудитория.', icon: Users },
   { key: 'finance', title: 'Больше выручки', description: 'Видеть продажи, загрузку и точки роста.', icon: CreditCard, secondaryKey: 'services', secondaryLabel: 'Улучшить меню услуг' },
-  { key: 'agents', title: 'Поручить регулярную работу', description: 'Запускать и проверять работу ИИ-сотрудников.', icon: Bot },
+  { key: 'agents', title: 'Автоматизировать работу', description: 'Поручите ИИ-агентам регулярные задачи и контролируйте результат.', icon: Bot },
 ];
 
 const utilityIcons: Record<string, typeof Sparkles> = {

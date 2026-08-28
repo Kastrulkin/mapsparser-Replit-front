@@ -21,6 +21,7 @@ describe('GrowthPathsPage', () => {
         { flow_type: 'content', title: 'Контент', status: 'not_started', opportunity: 'Подготовить публикацию', access: { status: 'payment_required', reason: 'Полный черновик и календарь открываются на платном тарифе.', cta_label: 'Выбрать тариф', cta_target: { screen: 'settings' } } },
         { flow_type: 'influencer', title: 'Инфлюенсеры', status: 'ready', opportunity: 'Автор уже выбран', access: { status: 'available', reason: 'Доступно', cta_label: 'Открыть автора', cta_target: { screen: 'influencers', action_id: 'action-1' } }, action: { id: 'action-1', flow_type: 'influencer', entity_type: 'creator_profile', action_type: 'send_message', status: 'ready', priority: 100, title: 'Написать автору', description: 'Сообщение готово', cta_label: 'Открыть автора', allowed_commands: ['copy', 'mark_sent'], version: 1, cta_target: { screen: 'influencers' } } },
         { flow_type: 'partnership', title: 'Партнёрства', status: 'not_started', opportunity: 'Найти партнёра', access: { status: 'available', reason: 'Доступно', cta_label: 'Открыть партнёров', cta_target: { screen: 'partnerships' } } },
+        { flow_type: 'automation', title: 'Автоматизация', status: 'not_started', opportunity: 'Поручить задачи ИИ-агентам', access: { status: 'available', reason: 'Доступно', cta_label: 'Настроить автоматизацию', cta_target: { screen: 'agents' } } },
       ],
     });
 
@@ -32,6 +33,8 @@ describe('GrowthPathsPage', () => {
     expect(screen.getByRole('heading', { name: 'Больше клиентов из карт' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Контент без рутины' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Партнёры рядом' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Автоматизировать работу' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Настроить автоматизацию' })).toHaveAttribute('href', '/dashboard/agents');
     expect(screen.getByText('Подготовить публикацию')).toBeVisible();
     expect(screen.getByText('Полный черновик и календарь открываются на платном тарифе.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');

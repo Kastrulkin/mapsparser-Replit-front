@@ -12,6 +12,7 @@ const navigation = [
   { key: 'content', label: 'Контент', status: 'available' },
   { key: 'finance', label: 'Финансы', status: 'available' },
   { key: 'services', label: 'Услуги', status: 'available' },
+  { key: 'agents', label: 'ИИ-агенты', status: 'available' },
   { key: 'settings', label: 'Настройки', status: 'read_only', reason: 'Доступны уведомления' },
 ] satisfies Parameters<typeof GrowthNavigation>[0]['navigation'];
 
@@ -25,6 +26,7 @@ describe('GrowthNavigation', () => {
     expect(screen.getByText('Больше клиентов из карт')).toBeInTheDocument();
     expect(screen.getByText('Контент без рутины')).toBeInTheDocument();
     expect(screen.getByText('Больше выручки')).toBeInTheDocument();
+    expect(screen.getByText('Автоматизировать работу')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Ответить на отзывы/ }));
     expect(open).toHaveBeenCalledWith('reviews');

@@ -801,7 +801,7 @@ def list_actions(cursor: Any, *, business_id: str, history: bool = False) -> lis
 
 
 def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: bool) -> list[dict[str, Any]]:
-    """Project journey actions into the four user-facing growth paths."""
+    """Project journey actions into the user-facing growth paths."""
     copy = {
         "maps": {
             "title": "Карты",
@@ -827,6 +827,12 @@ def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: boo
             "cta_label": "Найти партнёра",
             "screen": "partnerships",
         },
+        "automation": {
+            "title": "Автоматизация",
+            "opportunity": "Поручите ИИ-агентам регулярные задачи и контролируйте результат.",
+            "cta_label": "Настроить автоматизацию",
+            "screen": "agents",
+        },
     }
     active_by_flow: dict[str, dict[str, Any]] = {}
     for action in actions:
@@ -834,7 +840,7 @@ def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: boo
         if flow_type in copy and flow_type not in active_by_flow:
             active_by_flow[flow_type] = action
     result: list[dict[str, Any]] = []
-    for flow_type in ("maps", "content", "influencer", "partnership"):
+    for flow_type in ("maps", "content", "influencer", "partnership", "automation"):
         base = copy[flow_type]
         action = active_by_flow.get(flow_type)
         requires_payment = flow_type == "content" and not automation_allowed
