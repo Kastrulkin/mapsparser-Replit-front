@@ -1,11 +1,11 @@
 # Google Business Profile For LocalOS
 
-Status: `beta / Google Basic API Access review pending`.
+Status: `beta / Google Basic API Access rejected / ready to resubmit`.
 
-Last verified: 14 August 2026. A new access request was submitted using the
-verified LocalOS Business Profile after Google rejected the earlier client
-profile based request because the selected listing ID was associated with a
-different website.
+Last verified: 27 August 2026. Google rejected the 14 August request because
+the website URL in the application did not exactly match the URL publicly shown
+on the LocalOS Business Profile. The public profile URL is recorded as
+`https://localos.pro/`, while the application used `https://localos.pro`.
 
 ## Current Decision
 
@@ -49,8 +49,9 @@ Do not commit the OAuth client secret. Store it only in production environment v
 ## New GBP Allowlist Project
 
 The repeat application uses a separate project for Google Business Profile API
-approval. The current access request uses the verified LocalOS Business Profile
-as the applicant evidence profile because its website is `https://localos.pro`.
+approval. The next access request must use the verified LocalOS Business Profile
+as the applicant evidence profile and must submit the company website exactly as
+shown on the public profile: `https://localos.pro/`.
 
 - Google Cloud project name: `LocalOS GBP`
 - Project ID: `localos-gbp`
@@ -86,7 +87,7 @@ The OAuth client secret is intentionally not documented or committed.
 The LocalOS profile is the applicant evidence profile for API access. Managed
 client profiles remain proof of the agency/SaaS use case, but they should not be
 selected as the applicant profile when the company website field is
-`https://localos.pro`.
+`https://localos.pro/`.
 
 ## Required Environment Variables
 
@@ -110,23 +111,31 @@ Submit the access request from Google Business Profile Help:
 
 `https://support.google.com/business/workflow/16726127?hl=en`
 
-The active repeat application was submitted with:
+The next repeat application should be submitted with:
 
 - request type: `Application For Basic API Access`;
 - signed-in account: `Demyanovap@gmail.com`;
 - Google Cloud project number: `649313441761`;
-- company website: `https://localos.pro`;
+- company website: `https://localos.pro/`;
 - verified applicant profile: `LocalOS`;
 - use case: authorized owners and agencies connect their own Business Profiles
   to LocalOS to manage business information, services, approved posts, reviews,
   and performance data. External writes remain subject to explicit approval.
 
-Submitted on 2026-08-14.
+Rejected application superseded by the next request:
 
-- Google support case ID: `1-0494000040762`.
-- Google-stated review time: approximately 7-10 business days.
+- submitted on 2026-08-14;
+- Google support case ID: `1-0494000040762`;
+- selected evidence profile: `LocalOS`;
+- profile website shown publicly: `https://localos.pro/`;
+- company website submitted in the form: `https://localos.pro`;
+- result on 2026-08-27: rejected because the application website URL did not
+  exactly match the Business Profile website URL.
 
-Rejected application superseded by the current request:
+Google-stated review time for a new request is typically approximately 7-10
+business days.
+
+Rejected application superseded by the LocalOS-profile request:
 
 - submitted on 2026-07-18;
 - Google support case ID recorded in the setup work: `7-6688000041542`;

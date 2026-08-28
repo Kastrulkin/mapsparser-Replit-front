@@ -102,7 +102,7 @@ LocalOS помогает владельцам и управляющим лока
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
 - Для повторной заявки создан отдельный Google Cloud project `localos-gbp` (`649313441761`) и агентская организация `LocalOS`. В группу `Клиенты LocalOS` добавлена подтверждённая карточка клиента «Веселая расческа», проспект Энгельса, 154, с ролью менеджера без передачи основного владения.
-- Повторная заявка на Basic API Access находится на рассмотрении. Номера обращений, дата последней проверки и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. До подтверждённого одобрения новый OAuth-клиент не заменяет текущий production-клиент.
+- Basic API Access пока не одобрен. Последняя заявка была отклонена из-за буквального несовпадения URL сайта в заявке и публичной карточке LocalOS. Следующая подача должна выбирать verified-профиль `LocalOS` и указывать company website точно как в карточке: `https://localos.pro/`. Номера обращений, дата последней проверки и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. До подтверждённого одобрения новый OAuth-клиент не заменяет текущий production-клиент.
 - AI-agent webhooks для Telegram и WhatsApp Business API используют business-level настройки и не обходят policy/approval.
 - Любой publish/send/payment/delete/bulk mutation/provider write требует явного review/approval и должен быть описан как поддержанный только после реализации, тестов и deployment checks.
 
