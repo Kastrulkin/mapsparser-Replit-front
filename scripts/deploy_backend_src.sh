@@ -106,6 +106,13 @@ retry_command() {
   done
 }
 
+runtime_source_is_mounted() {
+  local service="$1"
+  remote_exec "container_id=\$(docker compose ps -q ${service}) && \
+    test -n \"\${container_id}\" && \
+    docker inspect --format '{{range .Mounts}}{{if eq .Destination \"/app/src\"}}{{.Source}}{{end}}{{end}}' \"\${container_id}\" | grep -q ."
+}
+
 echo "Deploying backend source to ${server_host}:${server_project_dir}"
 retry_command "remote temp dir prepare" remote_exec "rm -rf ${remote_tmp} && mkdir -p ${remote_tmp}/src ${remote_tmp}/alembic_migrations"
 retry_command "upload src" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/src/" "${server_host}:${remote_tmp}/src/"
@@ -134,8 +141,16 @@ if [[ "${restart_services}" -eq 1 ]]; then
 fi
 
 echo "Syncing backend source into app and worker containers..."
-retry_command "backend source in app container" remote_exec "docker compose cp ${remote_tmp}/src/. app:/app/src/"
-retry_command "backend source in worker container" remote_exec "docker compose cp ${remote_tmp}/src/. worker:/app/src/"
+if runtime_source_is_mounted app; then
+  echo "app already sees the synchronized host source through /app/src; docker cp skipped."
+else
+  retry_command "backend source in app container" remote_exec "docker compose cp ${remote_tmp}/src/. app:/app/src/"
+fi
+if runtime_source_is_mounted worker; then
+  echo "worker already sees the synchronized host source through /app/src; docker cp skipped."
+else
+  retry_command "backend source in worker container" remote_exec "docker compose cp ${remote_tmp}/src/. worker:/app/src/"
+fi
 if [[ "${restart_services}" -eq 1 ]]; then
   retry_command "restart app and worker after source sync" remote_exec "docker compose restart app worker"
 fi
