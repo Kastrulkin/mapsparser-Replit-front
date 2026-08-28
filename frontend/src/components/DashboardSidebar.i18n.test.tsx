@@ -46,4 +46,23 @@ describe('DashboardSidebar localization', () => {
     expect(await screen.findByRole('link', { name: 'Продвижение' })).toHaveAttribute('href', '/dashboard/promotion');
     expect(screen.queryByRole('link', { name: 'Партнёрские акции' })).not.toBeInTheDocument();
   });
+
+  it('keeps chat-based operator control in the guided navigation', async () => {
+    window.localStorage.setItem('language', 'ru');
+    render(
+      <MemoryRouter initialEntries={['/dashboard/today']}>
+        <LanguageProvider>
+          <TooltipProvider>
+            <DashboardSidebar />
+          </TooltipProvider>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    const links = await screen.findAllByRole('link');
+    const labels = links.map((link) => link.textContent?.trim()).filter(Boolean);
+    expect(screen.getByRole('link', { name: 'Оператор' })).toHaveAttribute('href', '/dashboard/operator');
+    expect(labels.indexOf('Оператор')).toBeGreaterThan(labels.indexOf('Сегодня'));
+    expect(labels.indexOf('Оператор')).toBeLessThan(labels.indexOf('Пути роста'));
+  });
 });

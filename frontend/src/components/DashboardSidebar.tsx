@@ -171,6 +171,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: 'Главное действие и короткая очередь на сегодня.',
     },
     {
+      id: 'operator',
+      label: navigationCopy.operator,
+      icon: Bot,
+      path: '/dashboard/operator',
+      tooltip: navigationCopy.operatorHint,
+    },
+    {
       id: 'growth-paths',
       label: 'Пути роста',
       icon: LayoutGrid,
