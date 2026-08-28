@@ -2554,7 +2554,7 @@ def influencer_workspace(
             SELECT payload_json->'offer' AS offer
             FROM journey_actions
             WHERE business_id = %s AND flow_type = 'influencer'
-              AND payload_json ? 'offer'
+              AND payload_json->'offer' IS NOT NULL
             ORDER BY created_at DESC LIMIT 1
             """,
             (business_id,),

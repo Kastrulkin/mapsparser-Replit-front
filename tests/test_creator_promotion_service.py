@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 import services.creator_promotion_service
 
+from database_manager import DBCursorWrapper
 from services.creator_promotion_service import (
     SCORING_VERSION,
     _candidate_matches_audience_range,
@@ -148,6 +149,27 @@ def test_influencer_workspace_exposes_safe_cards_and_block_level_access(monkeypa
     assert "preferred_contact" not in workspace["creators"][0]
     assert workspace["access"]["discovery"]["status"] == "available"
     assert workspace["access"]["message_generation"]["status"] == "payment_required"
+
+
+def test_influencer_workspace_loads_without_existing_offer(monkeypatch):
+    class StrictRawCursor:
+        def execute(self, query, params=None):
+            if query.count("%s") != len(params or ()):
+                raise IndexError("tuple index out of range")
+
+        def fetchone(self):
+            return None
+
+    monkeypatch.setattr(services.creator_promotion_service, "_load_business", lambda _cursor, _business_id: {"id": "business-1"})
+    monkeypatch.setattr(services.creator_promotion_service, "list_search_jobs", lambda _cursor, _business_id: [])
+    monkeypatch.setattr(services.creator_promotion_service, "list_campaigns", lambda _cursor, _business_id: [])
+    monkeypatch.setattr(services.creator_promotion_service, "creator_automation_allowed", lambda _cursor, _business_id: False)
+    monkeypatch.setattr(services.creator_promotion_service, "creator_feature_state", lambda _business_id: {"promotion_hub": True, "discovery": True})
+
+    workspace = influencer_workspace(DBCursorWrapper(StrictRawCursor()), business_id="business-1")
+
+    assert workspace["offer"] == {}
+    assert workspace["counts"] == {"total": 0, "returned": 0, "shortlisted": 0}
 
 
 def test_creator_score_is_weighted_explainable_and_versioned():

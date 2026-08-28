@@ -5,27 +5,39 @@
 > The same reproducer changed from failing to passing and broader checks passed.
 
 **Project:** LocalOS
-**Bug:** Operator language context mismatch has no automatic recovery
-**Environment:** React 18, Vitest and jsdom on macOS; production asset hashes inspected read-only
+**Bug:** Influencer workspace fails when no existing offer is available
+**Environment:** LocalOS production PostgreSQL and Docker runtime; local Python regression tests on macOS arm64
 **Generated:** 2026-08-28
+
+## Discovery scope
+
+- Influencer web workspace request
+- Production application logs
+- Creator workspace query and database compatibility wrapper
+
+## Ranked and tested candidates
+
+| # | Candidate | Contract evidence | Trigger | Location | Confidence | Outcome |
+|---:|---|---|---|---|---|---|
+| 1 | PostgreSQL JSON existence operator is rewritten as a SQLite placeholder | Not supplied | Not supplied | Not supplied | high | reproduced |
 
 ## Original report
 
-Opening the Operator route displayed: useLanguage must be used within a LanguageProvider.
+Opening the Influencers page displayed tuple index out of range instead of the creator catalog.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | A language-context mismatch caused by a stale frontend runtime triggers one cache-busting reload, then falls back normally if it repeats. | The exact context error remained on the generic ErrorBoundary screen and no version recovery was attempted. |
+| Observed behavior | A registered user can open the influencer workspace even when the business has no campaign offer yet. | The workspace endpoint returned 404 with tuple index out of range and the page showed an error. |
 
 ## Minimal reproduction
 
-A child of the root ErrorBoundary throws the exact useLanguage provider mismatch observed in production.
+Load influencer_workspace for a business with no campaign and no existing influencer offer through DBCursorWrapper.
 
-**Confirming signal:** The one-time recovery key remained null instead of being set to 1.
+**Confirming signal:** DBCursorWrapper rewrote the JSON ? operator into a second %s placeholder and execution raised IndexError.
 
 ### Reproduction files approved at Gate 1
 
-- [ErrorBoundary.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/ErrorBoundary.test.tsx:30>) — Exact production error regression test approved at Gate 1.
+- [test_creator_promotion_service.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_creator_promotion_service.py:153>) — Reproduces the no-offer workspace path through the production cursor wrapper.
 
 ## Red to green evidence
 
@@ -33,96 +45,70 @@ A child of the root ErrorBoundary throws the exact useLanguage provider mismatch
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | 2,700 ms | 5,533.08 ms |
+| Duration | 3,000 ms | 472.248 ms |
 | Same command | — | True |
 | Broader suite | — | passed |
 
 ### Before — failing evidence
 
 ```text
-FAIL src/components/ErrorBoundary.test.tsx > ErrorBoundary with externally translated DOM > marks a language-provider version mismatch for one-time runtime recovery
-AssertionError: expected null to be '1'
-
-Expected: "1"
-Received: null
-
-Test Files 1 failed (1)
-Tests 1 failed | 3 passed (4)
+FAILED tests/test_creator_promotion_service.py::test_influencer_workspace_loads_without_existing_offer - IndexError: tuple index out of range
+1 failed in 0.68s
 ```
 
 ### After — fixed evidence
 
 ```text
-Error: useLanguage must be used within a LanguageProvider
-    at LanguageProviderVersionMismatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/ErrorBoundary.test.tsx:26:9)
-    at renderWithHooks (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:15486:18)
-    at mountIndeterminateComponent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:20103:13)
-    at beginWork (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:21626:16)
-    at HTMLUnknownElement.callCallback (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:4164:14)
-    at HTMLUnknownElement.callTheUserObjectsOperation (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/generated/idl/EventListener.js:26:30)
-    at innerInvokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:360:16)
-    at invokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:296:3)
-    at HTMLUnknownElementImpl._dispatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:243:9)
-    at HTMLUnknownElementImpl.dispatchEvent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:114:17)
-Error: useLanguage must be used within a LanguageProvider
-    at LanguageProviderVersionMismatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/ErrorBoundary.test.tsx:26:9)
-    at renderWithHooks (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:15486:18)
-    at mountIndeterminateComponent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:20103:13)
-    at beginWork (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:21626:16)
-    at HTMLUnknownElement.callCallback (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/cjs/react-dom.development.js:4164:14)
-    at HTMLUnknownElement.callTheUserObjectsOperation (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/generated/idl/EventListener.js:26:30)
-    at innerInvokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:360:16)
-    at invokeEventListeners (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:296:3)
-    at HTMLUnknownElementImpl._dispatch (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:243:9)
-    at HTMLUnknownElementImpl.dispatchEvent (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/.pnpm/jsdom@29.1.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:114:17)
+.                                                                        [100%]
+1 passed in 0.16s
 ```
 
 ## Root cause
 
-Frontend recovery recognized dynamic-import failures but the root ErrorBoundary did not classify the language-context mismatch as a recoverable stale-runtime error.
+The legacy SQLite compatibility wrapper treats any question mark in SQL as a bind placeholder, including PostgreSQL's JSON existence operator.
 
 ## Approved fix
 
-Added exact-match, one-time cache-busting recovery for the language-provider mismatch in the root ErrorBoundary.
+Replaced the JSON existence operator with the equivalent payload_json->'offer' IS NOT NULL predicate in the influencer workspace query.
 
-**Why this is causal:** The ErrorBoundary now intercepts the same error message before leaving the user on the failure screen and uses the existing reload guard to avoid loops.
+**Why this is causal:** The query now has one bind placeholder for one parameter while preserving the requirement that the offer key exists.
 
 ### Production files approved at Gate 2
 
-- [ErrorBoundary.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/ErrorBoundary.tsx:29>) — One-time cache-busting recovery for the language-provider mismatch.
+- [creator_promotion_service.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/creator_promotion_service.py:2557>) — Uses an unambiguous PostgreSQL JSON predicate.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Regression test | ✅ passed | The same test changed from a null recovery key to passing. |
-| Operator and ErrorBoundary tests | ✅ passed | 6 focused localization, DOM ownership, and recovery tests passed. |
-| Frontend build | ✅ passed | Vite production build completed successfully. |
+| Exact regression test | ✅ passed | The same test changed from IndexError to passing. |
+| Creator backend suites | ✅ passed | 34 passed and 1 PostgreSQL integration test was skipped by its existing environment gate. |
+| Influencer frontend suites | ✅ passed | 9 tests passed across the catalog and operations pages. |
 
 ## Reproduce
 
 ```bash
-npm test -- src/components/ErrorBoundary.test.tsx
+arch -arm64 venv/bin/python -m pytest -q tests/test_creator_promotion_service.py::test_influencer_workspace_loads_without_existing_offer
 ```
 ```bash
-npm test -- src/pages/dashboard/OperatorPage.i18n.test.tsx src/pages/dashboard/OperatorPage.dom-mutation.test.tsx src/components/ErrorBoundary.test.tsx
+arch -arm64 venv/bin/python -m pytest -q tests/test_creator_promotion_service.py tests/test_creator_promotion_api.py tests/test_creator_promotion_postgres.py
 ```
 ```bash
-npm run build
+npm test -- src/pages/dashboard/InfluencersPage.test.tsx src/pages/dashboard/InfluencerPromotionPage.test.tsx
 ```
 
 ## Limitations
 
-- The component test proves the recovery gap and fix; it does not recreate an already-open browser tab spanning two deployments.
+- The approved workflow did not deploy the fix or repeat the authenticated browser flow in production.
 
 ## Residual risks
 
-- A genuine provider programming error causes one reload before the normal ErrorBoundary remains visible.
+- Other legacy queries using PostgreSQL question-mark JSON operators may require separate evidence if they surface.
 
 ## Notes
 
-- Fresh production chunks and retained Operator chunk dependencies were internally consistent during diagnosis.
-- The recovery is exact-message scoped and guarded against reload loops.
+- Production data was inspected read-only.
+- The fix is scoped to the proven influencer query and does not change the global database adapter.
 
 ---
 
