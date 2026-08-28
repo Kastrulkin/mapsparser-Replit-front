@@ -35,7 +35,7 @@ type TodayOverview = {
 };
 
 const screenRoute = (screen?: string) => ({
-  cards: '/dashboard/card', reviews: '/dashboard/card?tab=reviews', content: '/dashboard/content', services: '/dashboard/card?tab=services', finance: '/dashboard/finance', partnerships: '/dashboard/partnerships', agents: '/dashboard/agents', settings: '/dashboard/settings', progress: '/dashboard/progress', operator: '/dashboard/operator',
+  cards: '/dashboard/card', reviews: '/dashboard/card?tab=reviews&review_filter=needs_reply', content: '/dashboard/content', services: '/dashboard/card?tab=services', finance: '/dashboard/finance', partnerships: '/dashboard/partnerships', agents: '/dashboard/agents', settings: '/dashboard/settings', progress: '/dashboard/progress', operator: '/dashboard/operator',
 }[screen || ''] || '/dashboard/progress');
 
 const missionRoute = (mission?: Mission | null) => {

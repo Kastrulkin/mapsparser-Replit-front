@@ -15,7 +15,7 @@ const ContextRoute = () => (
   <Outlet context={{
     user: { id: 'demo-user', demo_mode: true },
     currentBusinessId: 'demo-business',
-    currentBusiness: { id: 'demo-business', name: 'Roga i Kopyta', subscription_status: 'active' },
+    currentBusiness: { id: 'demo-business', name: 'Roga i Kopyta', subscription_tier: 'starter', subscription_status: 'active' },
     businesses: [],
     onBusinessChange: vi.fn(),
   }} />
@@ -112,5 +112,24 @@ describe('CardOverviewPage localization', () => {
     const copy = getCardOverviewPageCopy('tr');
     expect(copy.refreshAllHint).toBe('Eklenen tüm harita kayıtlarını yeniler. Kayıt verilerinin miktarına bağlı olarak yaklaşık 10 kredi tutar.');
     expect(copy.refreshAllHint).not.toContain('Refreshes all added map listings');
+  });
+
+  it('opens the reviews workspace with the unanswered filter from the route', async () => {
+    window.localStorage.setItem('language', 'ru');
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=reviews&review_filter=needs_reply']}>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<CardOverviewPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('tab', { name: 'Отзывы' })).toHaveAttribute('data-state', 'active');
+    expect(await screen.findByRole('button', { name: /Без ответа/ })).toHaveClass('bg-slate-900');
   });
 });

@@ -89,6 +89,37 @@ describe('TodayPage', () => {
     expect(screen.getByText('/dashboard/content?plan_id=plan-1&item_id=item-1&focus=story_facts')).toBeInTheDocument();
   });
 
+  it('opens unanswered reviews with the unanswered filter preserved', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      focus_action: {
+        id: 'reviews_unanswered',
+        title: 'Ответьте на отзывы без ответа',
+        reason: 'Клиенты ждут ответа.',
+        expected_outcome: 'Все новые отзывы будут обработаны.',
+        cta_label: 'Открыть отзывы без ответа',
+        screen: 'reviews',
+      },
+      active_work: [],
+      changes_24h: [],
+      completed_results: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard/today']}>
+        <Routes>
+          <Route element={<ContextRoute />}>
+            <Route path="/dashboard/today" element={<TodayPage />} />
+            <Route path="/dashboard/card" element={<LocationProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Открыть отзывы без ответа' }));
+
+    expect(screen.getByText('/dashboard/card?tab=reviews&review_filter=needs_reply')).toBeInTheDocument();
+  });
+
   it('loads the neutral today endpoint for the selected network scope', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     render(<MemoryRouter><Routes><Route element={<NetworkContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
