@@ -58,6 +58,11 @@ outputs/**/preview.png
 outputs/**/*.inspect.ndjson
 output/**/*.inspect.ndjson
 
+# Large local prospecting datasets; keep them outside Git history
+outputs/influencer-spb-active-*
+outputs/influencer-vk-spb-wave2-*
+outputs/creator-existing-urls-*.txt
+
 # Sync conflict backups / duplicate suffix files
 .canon_backup_*/
 .cleanup_backup_*/

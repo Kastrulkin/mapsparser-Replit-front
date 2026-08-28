@@ -1,0 +1,74 @@
+{
+  "title": "«Добавить факты» теряет целевую публикацию",
+  "project": "LocalOS",
+  "generated_at": "2026-08-28",
+  "mode": "prove-fix",
+  "original_report": "На экране «Сегодня» кнопка «Добавить факты» вела на общий экран «Контент». Пользователь не видел, где ввести факты для конкретной истории.",
+  "discovery_scope": [
+    "Today focus-action routing",
+    "Content plan and publication selection from URL parameters",
+    "Story-facts form focus behavior"
+  ],
+  "candidates": [],
+  "expected": "Нажатие «Добавить факты» открывает нужные plan/item, показывает вопрос, поле и CTA «Сохранить и подготовить текст».",
+  "actual": "TodayPage переходил на /dashboard/content без контекста; ContentPage не выбирал план и не открывал публикацию из query parameters.",
+  "environment": "React 18, React Router 6, Vitest 4.1.10, Vite 7.3.6, local macOS arm64",
+  "reproduction": "Первый тест кликает CTA реального TodayPage; второй открывает реальный ContentPage по deep link с фикстурой plan-1/item-1.",
+  "failure_signal": "Маршрут был /dashboard/content вместо точной deep link; форма «Нужно немного конкретики» не появлялась.",
+  "root_cause": "missionRoute обрабатывал screen раньше детального CTA и не передавал plan_id/item_id. ContentPage читал из URL только section, всегда загружал первый план и оставлял selectedItemId пустым.",
+  "fix_summary": "TodayPage теперь сохраняет безопасный cta_url и формирует story-facts deep link. ContentPage разбирает plan_id/item_id/focus, выбирает нужный план, открывает публикацию и фокусирует первое поле.",
+  "why_causal": "Исправлены оба места потери контекста: построение URL и восстановление UI-state из URL.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/TodayPage.test.tsx",
+      "line": 59,
+      "summary": "Проверяет точный URL после CTA «Добавить факты»."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ContentPage.story-facts.test.tsx",
+      "line": 62,
+      "summary": "Проверяет автооткрытие публикации, вопрос и CTA формы."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/TodayPage.tsx",
+      "line": 20,
+      "summary": "Сохраняет детали focus action и строит story-facts deep link."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ContentPage.tsx",
+      "line": 837,
+      "summary": "Восстанавливает plan/item/focus из URL и фокусирует форму."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Exact regression command",
+      "status": "passed",
+      "detail": "Red: 2 failed / 6 passed; green: 8 passed."
+    },
+    {
+      "name": "Adjacent Today and Content suites",
+      "status": "passed",
+      "detail": "3 files, 20 tests passed."
+    },
+    {
+      "name": "Production frontend build",
+      "status": "passed",
+      "detail": "Vite built 3987 modules successfully."
+    }
+  ],
+  "reproduce": [
+    "cd frontend && npm test -- --run src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/ContentPage.story-facts.test.tsx"
+  ],
+  "limitations": [
+    "Проверка выполнена на фикстуре контент-плана; browser smoke с production API не выполнялся."
+  ],
+  "residual_risks": [
+    "Если plan_id/item_id больше недоступны текущему business scope, страница останется на доступном плане без открытой чужой публикации."
+  ],
+  "notes": [
+    "Публичные API и backend не изменялись; production не развёртывался."
+  ]
+}

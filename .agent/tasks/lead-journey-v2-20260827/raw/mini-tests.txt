@@ -1,0 +1,326 @@
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run --run src/pages/TelegramControlPage.test.tsx src/lib/mobileDeepLinkRouter.test.ts
+
+
+ RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ❯ src/pages/TelegramControlPage.test.tsx (16 tests | 1 failed) 20893ms
+     × marks Reviews as the current primary destination instead of Work 554ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/TelegramControlPage.test.tsx > TelegramControlPage scope integrity > marks Reviews as the current primary destination instead of Work
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "В работе"
+
+Here are the accessible roles:
+
+  main:
+
+  Name "":
+  [36m<main[39m
+    [33mclass[39m=[32m"min-h-[100dvh] bg-zinc-950 text-zinc-100 antialiased selection:bg-primary/30"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  banner:
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))]"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  presentation:
+
+  Name "":
+  [36m<img[39m
+    [33malt[39m=[32m""[39m
+    [33mclass[39m=[32m"absolute -left-3 -top-2 h-14 w-14 max-w-none outline outline-1 -outline-offset-1 outline-white/10"[39m
+    [33msrc[39m=[32m"/src/assets/images/logo.png"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "Точка одинВаш бизнес":
+  [36m<button[39m
+    [33mclass[39m=[32m"flex min-h-14 w-full items-center gap-3 rounded-[20px] bg-white/[0.045] px-3 text-left ring-1 ring-inset ring-white/[0.075] transition-[background-color,transform] active:scale-[0.96] disabled:active:scale-100"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Без ответа 1":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-h-11 flex-1 whitespace-nowrap rounded-[14px] px-3 text-xs font-semibold transition-[background-color,color,transform] active:scale-[0.96] bg-zinc-800 text-white shadow-sm"[39m
+  [36m/>[39m
+
+  Name "Черновики 0":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-h-11 flex-1 whitespace-nowrap rounded-[14px] px-3 text-xs font-semibold transition-[background-color,color,transform] active:scale-[0.96] text-zinc-600"[39m
+  [36m/>[39m
+
+  Name "Все":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-h-11 flex-1 whitespace-nowrap rounded-[14px] px-3 text-xs font-semibold transition-[background-color,color,transform] active:scale-[0.96] text-zinc-600"[39m
+  [36m/>[39m
+
+  Name "Фильтры":
+  [36m<button[39m
+    [33mclass[39m=[32m"mb-3 flex min-h-11 w-full items-center justify-between rounded-2xl bg-white/[0.035] px-4 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.06] active:scale-[0.96]"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Выбрать отзыв":
+  [36m<button[39m
+    [33maria-label[39m=[32m"Выбрать отзыв"[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-sm font-bold active:scale-[0.96] bg-amber-400/10 text-amber-300"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Подготовить ответ":
+  [36m<button[39m
+    [33mclass[39m=[32m"mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-primary/12 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 active:scale-[0.96] disabled:opacity-50"[39m
+  [36m/>[39m
+
+  Name "Сегодня":
+  [36m<button[39m
+    [33mclass[39m=[32m"flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] text-zinc-600"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Пути роста":
+  [36m<button[39m
+    [33maria-current[39m=[32m"page"[39m
+    [33mclass[39m=[32m"flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] bg-primary/10 text-primary"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Результаты":
+  [36m<button[39m
+    [33mclass[39m=[32m"flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] text-zinc-600"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Ещё":
+  [36m<button[39m
+    [33mclass[39m=[32m"flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] duration-150 active:scale-[0.96] text-zinc-600"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "Отзывы":
+  [36m<h1[39m
+    [33mclass[39m=[32m"text-balance text-2xl font-semibold tracking-[-0.04em]"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-1 text-pretty text-sm leading-6 text-zinc-500"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-4 whitespace-pre-wrap text-pretty text-sm leading-6 text-zinc-300"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  article:
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"mb-3 rounded-[24px] p-4 ring-1 ring-inset transition-[background-color,box-shadow] bg-white/[0.04] ring-white/[0.07]"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  navigation:
+
+  Name "Главное меню":
+  [36m<nav[39m
+    [33maria-label[39m=[32m"Главное меню"[39m
+    [33mclass[39m=[32m"fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<main[39m
+      [33mclass[39m=[32m"min-h-[100dvh] bg-zinc-950 text-zinc-100 antialiased selection:bg-primary/30"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"pointer-events-none fixed inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,rgba(255,92,51,0.16),transparent_68%)]"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"relative mx-auto min-h-[100dvh] max-w-xl pb-[calc(92px+env(safe-area-inset-bottom))]"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))]"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"mb-4 flex items-center justify-between"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-zinc-500"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"relative h-8 w-8 overflow-hidden rounded-[11px] bg-white shadow-[0_10px_28px_rgba(255,92,51,0.24)] ring-1 ring-inset ring-white/10"[39m
+              [36m>[39m
+                [36m<img[39m
+                  [33malt[39m=[32m""[39m
+                  [33mclass[39m=[32m"absolute -left-3 -top-2 h-14 w-14 max-w-none outline outline-1 -outline-offset-1 outline-white/10"[39m
+                  [33msrc[39m=[32m"/src/assets/images/logo.png"[39m
+                [36m/>[39m
+              [36m</span>[39m
+              [0mЛокалОС[0m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-inset ring-white/[0.07]"[39m
+            [36m>[39m
+              [36m<i[39m
+                [33mclass[39m=[32m"h-1.5 w-1.5 rounded-full bg-emerald-400"[39m
+              [36m/>[39m
+              [0mРаботает[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"flex min-h-14 w-full items-center gap-3 rounded-[20px] bg-white/[0.045] px-3 text-left ring-1 ring-inset ring-white/[0.075] transition-[background-color,transform] active:scale-[0.96] disabled:active:scale-100"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"grid h-11 w-11 place-items-center rounded-[14px] bg-primary/15 text-primary"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-building2 h-5 w-5"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"24"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"24"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M10 6h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M10 10h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M10 14h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M10 18h4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"min-w-0 flex-1"[39m
+            [36m>[39m
+              [36m<b[39m
+                [33mclass[39m=[32m"block truncate text-[15px]"[39m
+              [36m>[39m
+                [0mТочка один[0m
+              [36m</b>[39m
+              [36m<small[39m
+                [33mclass[39m=[32m"text-xs text-zinc-500"[39m
+              [36m>[39m
+                [0mВаш бизнес[0m
+              [36m</small>[39m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"opacity: 0.07002182732881279; transform: translateY(7.439825381369498px);"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"px-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-5 flex items-start gap-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"min-w-0 flex-1"[39m
+              [36m>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"text-balance text-2xl font-semibold tracking-[-0.04em]"[39m
+                [36m>[39m
+                  [0mОтзывы[0m
+                [36m</h1>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"mt-1 text-pretty text-sm leading-6 text-zinc-500"[39m
+                [36m>[39m
+                  [0mКаждое число раскрывается до конкретных клиентов и точек.[0m
+                [36m</p>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-3 grid grid-cols-3 gap-2 rounded-[22px] bg-white/[0.035] p-3 ring-1 ring-inset ring-white/[0.06]"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"min-w-0 px-1 py-1"[39m
+              [36m>[39m
+                [36m<b[39m
+                  [33mclass[39m=[32m"block truncate text-xl tabular-nums text-zinc-200"[39m
+                [36m>[39m
+                  [0m—[0m
+                [36m</b>[39m
+                [36m<small[39m
+                  [33mclass[39m=[32m"block truncate text-[10px] text-zinc-600"[39m
+                [36m>[39m
+                  [0mНа карте[0m
+                [36m</small>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"min-w-0 px-1 py-1"[39m
+              [36m>[39m
+                [36m<b[39m
+                  [33mclass[39m=[32m"block truncate text-xl tabular-nums text-zinc-200"[39m
+                [36m>[39m
+                  [0m1[0m
+                [36m</b>[39m
+                [36m<small[39m
+                  [33mclass[39m=[32m"block truncate text...
+ ❯ Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ getByRole node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/TelegramControlPage.test.tsx:133:19
+    131|     expect(screen.queryByRole('button', { name: 'Отзывы' })).not.toBeI…
+    132|     expect(screen.getByRole('button', { name: 'Пути роста' })).toHaveA…
+    133|     expect(screen.getByRole('button', { name: 'В работе' })).not.toHav…
+       |                   ^
+    134|     expect(screen.queryByText(/Invalid Date/i)).not.toBeInTheDocument(…
+    135|     expect(screen.getByText(/дата не указана источником/i)).toBeInTheD…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 20 passed (21)
+   Start at  16:23:58
+   Duration  25.39s (transform 1.64s, setup 1.06s, import 1.88s, tests 20.93s, environment 2.80s)
+
+
+EXIT_CODE=1

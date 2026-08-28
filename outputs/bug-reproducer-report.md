@@ -2,44 +2,31 @@
 
 ## ✅ FIX_PROVEN — Bug reproduced and fix proven
 
-> Обе воспроизведённые причины устранены; точечные и смежные тесты, а также production build прошли.
+> The same reproducer changed from failing to passing and broader checks passed.
 
-**Project:** LocalOS<br>
-**Bug:** Статистика тем не видна в мобильной Ленте<br>
-**Environment:** Python 3.11.7 arm64, Vitest 4.1.10, Vite 7.3.6<br>
-**Generated:** 2026-08-27
-
-## Discovery scope
-
-- Mobile feed rendering order
-- Community topic snapshot selection for personalized source sets
-- Production source fingerprints for the selected beauty business
-
-## Ranked and tested candidates
-
-| # | Candidate | Contract evidence | Trigger | Location | Confidence | Outcome |
-|---:|---|---|---|---|---|---|
-| 1 | Персональный fingerprint не использует совместимый отраслевой snapshot при ошибке расчёта | Отраслевые темы должны отображаться по умолчанию, а личные источники только дополняют подборку. | У бизнеса 53 отраслевых и один личный источник; персональный snapshot отсутствует, GigaChat временно отвечает 429. | /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/community_topic_trends.py:490 | high | REPRODUCED |
-| 2 | Статистика отрисована после длинного суточного саммари | Статистика за месяц, квартал и год должна быть видна до блока суточных обсуждений. | Открытие мобильной Ленты с непустыми topics и topic_trends. | /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/telegram/CommunityFeedMobile.tsx:214 | high | REPRODUCED |
+**Project:** LocalOS
+**Bug:** «Добавить факты» теряет целевую публикацию
+**Environment:** React 18, React Router 6, Vitest 4.1.10, Vite 7.3.6, local macOS arm64
+**Generated:** 2026-08-28
 
 ## Original report
 
-Пользователь открывает Ленту и сразу видит «О чём говорят предприниматели», но не видит статистику тем.
+На экране «Сегодня» кнопка «Добавить факты» вела на общий экран «Контент». Пользователь не видел, где ввести факты для конкретной истории.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | Сначала видна статистика пяти тем за месяц, квартал и год; при временном сбое персонального расчёта используются доступные отраслевые данные. | Суточное саммари шло первым, а при отсутствии точного персонального snapshot API мог вернуть пустой topic_trends. |
+| Observed behavior | Нажатие «Добавить факты» открывает нужные plan/item, показывает вопрос, поле и CTA «Сохранить и подготовить текст». | TodayPage переходил на /dashboard/content без контекста; ContentPage не выбирал план и не открывал публикацию из query parameters. |
 
 ## Minimal reproduction
 
-Два точечных теста проверяют fallback при ошибке обновления и DOM-порядок заголовков статистики и суточного саммари.
+Первый тест кликает CTA реального TodayPage; второй открывает реальный ContentPage по deep link с фикстурой plan-1/item-1.
 
-**Confirming signal:** Backend получил [] вместо трёх периодов; frontend compareDocumentPosition подтвердил, что статистика шла после суточного блока.
+**Confirming signal:** Маршрут был /dashboard/content вместо точной deep link; форма «Нужно немного конкретики» не появлялась.
 
 ### Reproduction files approved at Gate 1
 
-- [test_community_topic_trends.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_community_topic_trends.py:88>) — Регрессия совместимого отраслевого snapshot, одобренная на Gate 1.
-- [CommunityFeedMobile.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/telegram/CommunityFeedMobile.test.tsx:38>) — Регрессия порядка блоков Ленты, одобренная на Gate 1.
+- [TodayPage.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/TodayPage.test.tsx:59>) — Проверяет точный URL после CTA «Добавить факты».
+- [ContentPage.story-facts.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ContentPage.story-facts.test.tsx:62>) — Проверяет автооткрытие публикации, вопрос и CTA формы.
 
 ## Red to green evidence
 
@@ -47,66 +34,72 @@
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | 4,560 ms | 6,464.749 ms |
+| Duration | 4,880 ms | 6,764.219 ms |
 | Same command | — | True |
 | Broader suite | — | passed |
 
 ### Before — failing evidence
 
 ```text
-2 focused regressions failed for the predicted reasons.
+Both focused regressions failed for the predicted loss-of-context reasons.
 ```
 
 ### After — fixed evidence
 
 ```text
-Backend focused regression: 1 passed. Frontend focused regression: 1 passed. Broader checks: 15 backend tests passed, 3 frontend tests passed, Vite production build passed.
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run --run src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/ContentPage.story-facts.test.tsx
+
+
+ RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
+
+
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+   Start at  11:12:04
+   Duration  4.04s (transform 1.44s, setup 843ms, import 1.98s, tests 1.14s, environment 2.23s)
 ```
 
 ## Root cause
 
-Backend искал только точный fingerprint набора источников и при ошибке обновления возвращал пустой результат. Frontend помещал статистику в конец карточки суточных тем.
+missionRoute обрабатывал screen раньше детального CTA и не передавал plan_id/item_id. ContentPage читал из URL только section, всегда загружал первый план и оставлял selectedItemId пустым.
 
 ## Approved fix
 
-Добавлен выбор самого полного snapshot, чей набор источников входит в разрешённый набор бизнеса. Статистика вынесена в самостоятельную карточку перед суточным саммари.
+TodayPage теперь сохраняет безопасный cta_url и формирует story-facts deep link. ContentPage разбирает plan_id/item_id/focus, выбирает нужный план, открывает публикацию и фокусирует первое поле.
 
-**Why this is causal:** Fallback покрывает точное пустое состояние без смешивания посторонних источников, а новый DOM-порядок непосредственно делает статистику первым содержательным блоком Ленты.
+**Why this is causal:** Исправлены оба места потери контекста: построение URL и восстановление UI-state из URL.
 
 ### Production files approved at Gate 2
 
-- [community_topic_trends.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/community_topic_trends.py:490>) — Совместимый subset-fallback snapshot, одобренный на Gate 2.
-- [CommunityFeedMobile.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/telegram/CommunityFeedMobile.tsx:217>) — Отдельная карточка статистики перед суточными темами, одобренная на Gate 2.
+- [TodayPage.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/TodayPage.tsx:20>) — Сохраняет детали focus action и строит story-facts deep link.
+- [ContentPage.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ContentPage.tsx:837>) — Восстанавливает plan/item/focus из URL и фокусирует форму.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Backend regression | ✅ passed | 6/6 тестов community_topic_trends и 15/15 смежных backend-тестов прошли. |
-| Frontend regression | ✅ passed | 3/3 тестов CommunityFeedMobile прошли. |
-| Production build | ✅ passed | Vite production build завершён успешно. |
+| Exact regression command | ✅ passed | Red: 2 failed / 6 passed; green: 8 passed. |
+| Adjacent Today and Content suites | ✅ passed | 3 files, 20 tests passed. |
+| Production frontend build | ✅ passed | Vite built 3987 modules successfully. |
 
 ## Reproduce
 
 ```bash
-python3 -m pytest -q tests/test_community_topic_trends.py
-```
-```bash
-cd frontend && npm test -- --run src/components/telegram/CommunityFeedMobile.test.tsx
+cd frontend && npm test -- --run src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/ContentPage.story-facts.test.tsx
 ```
 
 ## Limitations
 
-- Визуальная проверка в авторизованном Telegram WebView не выполнялась в этом локальном цикле.
+- Проверка выполнена на фикстуре контент-плана; browser smoke с production API не выполнялся.
 
 ## Residual risks
 
-- Если в базе нет ни точного, ни совместимого snapshot, статистика останется скрыта до первого успешного расчёта.
+- Если plan_id/item_id больше недоступны текущему business scope, страница останется на доступном плане без открытой чужой публикации.
 
 ## Notes
 
-- Fallback выбирает только подмножество уже разрешённых бизнесу источников; источники другого tenant не добавляются.
-- Схема базы и публичные API-контракты не изменялись.
+- Публичные API и backend не изменялись; production не развёртывался.
 
 ---
 

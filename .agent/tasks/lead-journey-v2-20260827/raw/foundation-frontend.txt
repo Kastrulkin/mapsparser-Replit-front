@@ -1,0 +1,12 @@
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run --run src/pages/LeadJourneyPage.test.tsx src/components/telegram/LeadJourneyOnboarding.test.tsx src/components/journey/JourneyActionCard.test.tsx
+
+
+ RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
+
+
+ Test Files  3 passed (3)
+      Tests  6 passed (6)
+   Start at  14:12:15
+   Duration  4.08s (transform 1.31s, setup 1.29s, import 1.70s, tests 2.47s, environment 3.58s)

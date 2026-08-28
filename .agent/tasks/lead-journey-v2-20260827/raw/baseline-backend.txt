@@ -1,0 +1,35 @@
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting tests/test_lead_journey_service.py ______________
+ImportError while importing test module '/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_lead_journey_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_lead_journey_service.py:5: in <module>
+    from services.journey_action_notifications import _tasks_enabled
+src/services/journey_action_notifications.py:9: in <module>
+    from psycopg2.extras import Json
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/__init__.py:51: in <module>
+    from psycopg2._psycopg import (                     # noqa
+E   ImportError: dlopen(/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so, 0x0002): tried: '/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64')), '/System/Volumes/Preboot/Cryptexes/OS/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (no such file), '/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64'))
+_______________ ERROR collecting tests/test_lead_journey_api.py ________________
+ImportError while importing test module '/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_lead_journey_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_lead_journey_api.py:3: in <module>
+    from api import lead_journey_api
+src/api/lead_journey_api.py:7: in <module>
+    from psycopg2.extras import RealDictCursor
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/__init__.py:51: in <module>
+    from psycopg2._psycopg import (                     # noqa
+E   ImportError: dlopen(/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so, 0x0002): tried: '/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64')), '/System/Volumes/Preboot/Cryptexes/OS/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (no such file), '/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/psycopg2/_psycopg.cpython-311-darwin.so' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64'))
+=========================== short test summary info ============================
+ERROR tests/test_lead_journey_service.py
+ERROR tests/test_lead_journey_api.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+2 errors in 0.37s

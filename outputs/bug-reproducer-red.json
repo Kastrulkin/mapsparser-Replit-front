@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "label": "reproduced",
+  "captured_at": "2026-08-28T08:07:00Z",
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--run",
+    "src/pages/dashboard/TodayPage.test.tsx",
+    "src/pages/dashboard/ContentPage.story-facts.test.tsx"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend",
+  "runtime": "Vitest 4.1.10 on macOS arm64",
+  "duration_ms": 4880,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "Test Files 2 failed (2); Tests 2 failed, 6 passed (8). TodayPage navigated to /dashboard/content instead of /dashboard/content?plan_id=plan-1&item_id=item-1&focus=story_facts. ContentPage rendered the publication list but did not open the requested publication or show «Нужно немного конкретики».",
+  "stderr": "Both focused regressions failed for the predicted loss-of-context reasons.",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

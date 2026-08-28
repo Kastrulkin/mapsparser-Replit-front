@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "label": "reproduced",
+  "captured_at": "2026-08-25T20:38:03.379732+00:00",
+  "command": [
+    "env",
+    "PYTHONPATH=src",
+    "arch",
+    "-arm64",
+    "venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_network_health_current_reviews.py"
+  ],
+  "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 375.399,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___________ test_single_business_health_uses_current_review_snapshot ___________\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10238dd90>\n\n    def test_single_business_health_uses_current_review_snapshot(monkeypatch):\n        monkeypatch.setattr(\n            network_health_api,\n            \"verify_session\",\n            lambda _token: [REDACTED] \"owner-1\", \"is_superadmin\": False},\n        )\n        monkeypatch.setattr(network_health_api, \"DatabaseManager\", _Database)\n        monkeypatch.setattr(network_health_api, \"ensure_growth_schema\", lambda _db: None)\n        monkeypatch.setattr(\n            network_health_api,\n            \"_get_map_metrics\",\n            lambda _cursor, _business_id: {\"rating\": 4.9, \"reviews_count\": 345},\n        )\n    \n        app = Flask(__name__)\n        app.register_blueprint(network_health_api.network_health_bp)\n        client = app.test_client()\n    \n        response = client.get(\n            \"/api/network/health?business_id=business-1\",\n            headers={\"Authorization\": \"Bearer test-token\"},\n        )\n    \n        assert response.status_code == 200\n>       assert response.get_json()[\"data\"][\"unanswered_reviews_count\"] == 2\nE       assert 5 == 2\n\ntests/test_network_health_current_reviews.py:76: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_network_health_current_reviews.py::test_single_business_health_uses_current_review_snapshot\n1 failed in 0.13s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

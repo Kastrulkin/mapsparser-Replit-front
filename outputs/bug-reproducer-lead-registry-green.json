@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "label": "fixed",
+  "captured_at": "2026-08-26T08:19:43.396816+00:00",
+  "command": [
+    "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "/tmp/localos-lead-registry-report.0tPZ6Q/test_registry_bind.py"
+  ],
+  "cwd": "/private/tmp/localos-lead-registry-report.0tPZ6Q",
+  "runtime": "Python 3.11.7 on Darwin arm64",
+  "duration_ms": 672.795,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": ".                                                                        [100%]\n1 passed in 0.33s\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same reproducer changed from failing to passing and broader checks passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "schema_version": 1,
+    "label": "reproduced",
+    "captured_at": "2026-08-26T08:19:27.683929+00:00",
+    "command": [
+      "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/venv/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "/tmp/localos-lead-registry-report.0tPZ6Q/test_registry_bind.py"
+    ],
+    "cwd": "/private/tmp/localos-lead-registry-report.0tPZ6Q",
+    "runtime": "Python 3.11.7 on Darwin arm64",
+    "duration_ms": 675.728,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_____ test_registry_json_projection_does_not_rebind_for_every_nested_value _____\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10483cbd0>\n\n    def test_registry_json_projection_does_not_rebind_for_every_nested_value(monkeypatch):\n        from api import admin_prospecting\n    \n        bind_calls = 0\n    \n        def count_bind_calls():\n            nonlocal bind_calls\n            bind_calls += 1\n    \n        monkeypatch.setattr(admin_prospecting, \"_bind_runtime_namespace\", count_bind_calls)\n        payload = {\n            \"leads\": [\n                {\n                    \"id\": str(index),\n                    \"name\": f\"Lead {index}\",\n                    \"workstreams\": [{\"id\": f\"workstream-{index}\", \"state\": \"ready\"}],\n                }\n                for index in range(10)\n            ]\n        }\n    \n        admin_prospecting._to_json_compatible(payload)\n    \n>       assert bind_calls == 1\nE       assert 72 == 1\n\n/tmp/localos-lead-registry-report.0tPZ6Q/test_registry_bind.py:24: AssertionError\n=========================== short test summary info ============================\nFAILED ../../../tmp/localos-lead-registry-report.0tPZ6Q/test_registry_bind.py::test_registry_json_projection_does_not_rebind_for_every_nested_value\n1 failed in 0.34s\n",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  },
+  "after": {
+    "schema_version": 1,
+    "label": "fixed",
+    "captured_at": "2026-08-26T08:19:43.396816+00:00",
+    "command": [
+      "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/venv/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "/tmp/localos-lead-registry-report.0tPZ6Q/test_registry_bind.py"
+    ],
+    "cwd": "/private/tmp/localos-lead-registry-report.0tPZ6Q",
+    "runtime": "Python 3.11.7 on Darwin arm64",
+    "duration_ms": 672.795,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": ".                                                                        [100%]\n1 passed in 0.33s\n",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  }
+}

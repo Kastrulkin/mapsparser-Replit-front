@@ -1,30 +1,54 @@
 {
   "schema_version": 1,
   "status": "FIX_PROVEN",
-  "reason": "Обе воспроизведённые причины устранены; точечные и смежные тесты, а также production build прошли.",
+  "reason": "The same reproducer changed from failing to passing and broader checks passed.",
   "reproduction": "confirmed",
   "full_suite": "passed",
   "same_command": true,
   "before": {
+    "schema_version": 1,
+    "label": "reproduced",
+    "captured_at": "2026-08-28T08:07:00Z",
     "command": [
-      "python3 -m pytest -q tests/test_community_topic_trends.py -k compatible_industry_snapshot",
-      "npm test -- --run src/components/telegram/CommunityFeedMobile.test.tsx -t shows topic statistics before"
+      "npm",
+      "test",
+      "--",
+      "--run",
+      "src/pages/dashboard/TodayPage.test.tsx",
+      "src/pages/dashboard/ContentPage.story-facts.test.tsx"
     ],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend",
+    "runtime": "Vitest 4.1.10 on macOS arm64",
+    "duration_ms": 4880,
     "exit_code": 1,
     "timed_out": false,
-    "duration_ms": 4560,
-    "stdout": "Backend: expected compatible industry snapshot, received []. Frontend: expected statistics to precede daily summary, compareDocumentPosition returned 0 for FOLLOWING.",
-    "stderr": "2 focused regressions failed for the predicted reasons."
+    "stdout": "Test Files 2 failed (2); Tests 2 failed, 6 passed (8). TodayPage navigated to /dashboard/content instead of /dashboard/content?plan_id=plan-1&item_id=item-1&focus=story_facts. ContentPage rendered the publication list but did not open the requested publication or show \u00ab\u041d\u0443\u0436\u043d\u043e \u043d\u0435\u043c\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u0438\u043a\u0438\u00bb.",
+    "stderr": "Both focused regressions failed for the predicted loss-of-context reasons.",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
   },
   "after": {
+    "schema_version": 1,
+    "label": "fixed",
+    "captured_at": "2026-08-28T08:12:08.580544+00:00",
     "command": [
-      "python3 -m pytest -q tests/test_community_topic_trends.py -k compatible_industry_snapshot",
-      "npm test -- --run src/components/telegram/CommunityFeedMobile.test.tsx -t shows topic statistics before"
+      "npm",
+      "test",
+      "--",
+      "--run",
+      "src/pages/dashboard/TodayPage.test.tsx",
+      "src/pages/dashboard/ContentPage.story-facts.test.tsx"
     ],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend",
+    "runtime": "Python 3.11.7 on Darwin x86_64",
+    "duration_ms": 6764.219,
     "exit_code": 0,
     "timed_out": false,
-    "duration_ms": 6464.749,
-    "stdout": "Backend focused regression: 1 passed. Frontend focused regression: 1 passed. Broader checks: 15 backend tests passed, 3 frontend tests passed, Vite production build passed.",
-    "stderr": ""
+    "stdout": "\n> vite_react_shadcn_ts@0.0.0 test\n> vitest run --run src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/ContentPage.story-facts.test.tsx\n\n\n RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/frontend\n\n\n Test Files  2 passed (2)\n      Tests  8 passed (8)\n   Start at  11:12:04\n   Duration  4.04s (transform 1.44s, setup 843ms, import 1.98s, tests 1.14s, environment 2.23s)\n\n",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
   }
 }

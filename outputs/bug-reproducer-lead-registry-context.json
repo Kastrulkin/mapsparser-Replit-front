@@ -1,0 +1,88 @@
+{
+  "title": "Lead registry appears to hang after the 504 fix",
+  "project": "LocalOS",
+  "generated_at": "2026-08-26",
+  "mode": "prove-fix",
+  "original_report": "The production lead registry loads but appears to hang at https://localos.pro/dashboard/bazich?tab=prospecting.",
+  "discovery_scope": [
+    "Production browser timing",
+    "AdminPage blocking requests",
+    "Lead registry endpoint cProfile",
+    "Compatibility wrapper recursion"
+  ],
+  "candidates": [],
+  "expected": "The first 50 lead cards appear promptly without a 504 or a long blocking spinner.",
+  "actual": "The first page took about 6.2 seconds after the original 504 was removed.",
+  "environment": "LocalOS production and Python 3.11 regression tests on Darwin arm64",
+  "reproduction": "A focused test converts a nested ten-lead payload through the real compatibility wrapper and counts namespace bindings.",
+  "failure_signal": "The old wrapper rebound the namespace 72 times instead of once.",
+  "root_cause": "Every nested compatibility-wrapper call repeated a full runtime namespace copy; the lead registry JSON walk amplified this into 14,510 wrapper calls and about 3.2 seconds of avoidable CPU time. The admin page also blocked the lead tab on an unrelated 4.1 MB user/business directory response.",
+  "fix_summary": "Skip the unrelated admin directory on the prospecting tab and track compatibility call depth so only the outer wrapper binds the runtime namespace.",
+  "why_causal": "The first change removes the blocking 4.1 MB request from the lead route. The second removes the measured repeated namespace copies while preserving one bind for every top-level compatibility call.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_lead_registry_projection.py",
+      "line": 73,
+      "summary": "Approved regression test counts compatibility namespace bindings."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_lead_workstream_contracts.py",
+      "line": 61,
+      "summary": "Approved contract test prevents the lead tab from blocking on the admin directory."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/admin_prospecting.py",
+      "line": 289,
+      "summary": "Context-local depth prevents nested runtime namespace rebinding."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/AdminPage.tsx",
+      "line": 663,
+      "summary": "The prospecting tab no longer waits for the full admin directory."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Exact compatibility reproducer",
+      "status": "passed",
+      "detail": "Same command changed from exit 1 to exit 0."
+    },
+    {
+      "name": "Relevant Python suites",
+      "status": "passed",
+      "detail": "185 tests passed."
+    },
+    {
+      "name": "Frontend registry tests and build",
+      "status": "passed",
+      "detail": "2 tests passed and Vite production build succeeded."
+    },
+    {
+      "name": "Production endpoint profile",
+      "status": "passed",
+      "detail": "cProfile improved from 5.46 seconds to 2.30 seconds."
+    },
+    {
+      "name": "Production browser",
+      "status": "passed",
+      "detail": "50 of 2,468 cards appeared in 2.77 seconds; page 2 opened in 0.87 seconds; no 504."
+    }
+  ],
+  "reproduce": [
+    "venv/bin/pytest -q tests/test_lead_registry_projection.py",
+    "venv/bin/pytest -q tests/test_lead_workstream_contracts.py tests/test_admin_prospecting_lead_deduplication.py tests/test_founder_outreach_campaigns.py"
+  ],
+  "limitations": [
+    "The production browser includes extension-injected DOM changes, so the measured 2.77 seconds includes browser and network overhead."
+  ],
+  "residual_risks": [
+    "The endpoint still scans all 2,539 compact lead rows to calculate totals and category counts; further sub-second work would require a separate query-contract change."
+  ],
+  "notes": [
+    "Both approval gates were explicitly granted for both fixes.",
+    "Commits b6a7c3e6 and 7ff24339 were pushed to GitHub and GitVerse and deployed to LocalOS production.",
+    "Existing generic bug-reproducer report files were preserved because they document another bug."
+  ]
+}

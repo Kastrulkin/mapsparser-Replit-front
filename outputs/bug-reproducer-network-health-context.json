@@ -1,0 +1,59 @@
+{
+  "title": "Single-business health used stale unanswered-review source",
+  "project": "LocalOS",
+  "generated_at": "2026-08-25",
+  "mode": "prove-fix",
+  "original_report": "The LocalOS mini-app showed 5 unanswered reviews for Organica after the current Yandex review snapshot contained 2.",
+  "discovery_scope": [
+    "src/api/network_health_api.py",
+    "production externalbusinessreviews current snapshot",
+    "single-business /api/network/health response path"
+  ],
+  "candidates": [],
+  "expected": "The single-business health endpoint returns 2 unanswered reviews from the current Yandex snapshot.",
+  "actual": "The endpoint returned 5 from the legacy yandex_business-only query.",
+  "environment": "Python 3.11.7 on macOS arm64; Flask test client with deterministic database boundary fixture.",
+  "reproduction": "A focused API test supplies a legacy count of 5 and a current attention-row count of 2, then calls /api/network/health for one business.",
+  "failure_signal": "Expected unanswered_reviews_count=2, received 5.",
+  "root_cause": "The single-business branch bypassed the current-snapshot query and counted only source=yandex_business without the is_current filter.",
+  "fix_summary": "Load _network_attention_rows once and use its current unanswered-review count for both single-business and network responses.",
+  "why_causal": "The corrected branch now reads the exact current-snapshot value that previously appeared only in attention rows.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_network_health_current_reviews.py",
+      "line": 49,
+      "summary": "Approved Gate 1 regression test for legacy-versus-current counts."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/network_health_api.py",
+      "line": 189,
+      "summary": "Approved Gate 2 change reusing current attention rows."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Exact regression test",
+      "status": "passed",
+      "detail": "The same command changed from exit 1 to exit 0."
+    },
+    {
+      "name": "Adjacent access and capability tests",
+      "status": "passed",
+      "detail": "22 tests passed."
+    }
+  ],
+  "reproduce": [
+    "PYTHONPATH=src arch -arm64 venv/bin/python -m pytest -q tests/test_network_health_current_reviews.py"
+  ],
+  "limitations": [
+    "The regression fixture validates the API contract without a live authenticated browser session."
+  ],
+  "residual_risks": [
+    "Other review-summary services that do not filter is_current require separate review and approval."
+  ],
+  "notes": [
+    "No schema, permissions, or external-write behavior changed."
+  ]
+}
