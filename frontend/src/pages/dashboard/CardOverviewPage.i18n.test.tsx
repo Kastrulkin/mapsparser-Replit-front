@@ -133,4 +133,23 @@ describe('CardOverviewPage localization', () => {
     expect(await screen.findByRole('button', { name: /Без ответа/ })).toHaveClass('bg-slate-900');
     expect(screen.queryByText('Как работать с данными карточки')).not.toBeInTheDocument();
   });
+
+  it('keeps service settings without repeating the listing refresh timestamp', async () => {
+    window.localStorage.setItem('language', 'ru');
+
+    render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<CardOverviewPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Настройки' })).toBeInTheDocument();
+    expect(screen.queryByText(/^Последнее обновление карточки:/)).not.toBeInTheDocument();
+  });
 });

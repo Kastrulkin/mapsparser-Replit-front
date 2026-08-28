@@ -1194,13 +1194,6 @@ export const CardOverviewPage = () => {
                 ) : null}
                 status={problemRegenerationStatus ? (
                   <span>{problemRegenerationStatus}</span>
-                ) : serviceLastParseDate ? (
-                  <span>{pageCopy.listingUpdated} {new Date(serviceLastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : language === 'el' ? 'el-GR' : 'en-US', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}</span>
                 ) : null}
               />
 
