@@ -25,19 +25,25 @@ describe('TodayPage', () => {
     renderPage();
     expect(screen.getByText('Загружаем новые события и текущие задачи.')).toBeInTheDocument();
     resolveRequest({ active_work: [], changes_24h: [], completed_results: [] });
-    await screen.findByText('Что изменилось');
+    await screen.findByText('Сейчас у LocalOS нет активных задач.');
   });
 
   it('shows an evidence-led empty state without inventing changes or active work', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     renderPage();
-    expect(await screen.findByText('За последние 24 часа новых отзывов, продаж и других подтверждённых событий не найдено.')).toBeInTheDocument();
-    expect(screen.getByText('Сейчас у LocalOS нет активных задач.')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Открыть прогресс' })).toHaveLength(2);
+    expect(await screen.findByText('Сейчас у LocalOS нет активных задач.')).toBeInTheDocument();
+    expect(screen.queryByText('Что изменилось')).not.toBeInTheDocument();
+    expect(screen.queryByText('Что LocalOS делает сейчас')).not.toBeInTheDocument();
+    expect(screen.queryByText('1. Действие')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Открыть прогресс' })).toHaveLength(1);
   });
 
   it('uses a single-column-first responsive layout for narrow screens', async () => {
-    vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      active_work: [{ id: 'work-1', title: 'Подготовить ответ' }],
+      changes_24h: [{ id: 'change-1', title: 'Получен отзыв' }],
+      completed_results: [],
+    });
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByText('Что изменилось')).toBeInTheDocument());
     expect(container.querySelector('.lg\\:grid-cols-2')).toBeInTheDocument();
@@ -123,7 +129,7 @@ describe('TodayPage', () => {
   it('loads the neutral today endpoint for the selected network scope', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     render(<MemoryRouter><Routes><Route element={<NetworkContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
-    await screen.findByText('Что изменилось');
+    await screen.findByText('Сейчас у LocalOS нет активных задач.');
     expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=network&scope_id=network-1', { method: 'GET' });
   });
 
@@ -148,8 +154,10 @@ describe('TodayPage', () => {
     expect(await screen.findByText('Финансовая сводка ещё не загружена.')).toBeInTheDocument();
     expect(screen.getByText('После загрузки здесь появятся выручка, расходы, средний чек и загрузка за выбранный период.')).toBeInTheDocument();
     expect(screen.getByText('Данные за последние 8 недель')).toBeInTheDocument();
+    expect(screen.getByText('Данные за последние 8 недель').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('Сравнение показателей по неделям: загрузите сводку')).toBeInTheDocument();
     expect(screen.getByText('Готово в LocalOS')).toBeInTheDocument();
+    expect(screen.getByText('Готово в LocalOS').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('Источник: история выполненных задач')).toBeInTheDocument();
     expect(screen.getByText('Что обсуждают в ваших источниках')).toBeInTheDocument();
     expect(screen.getByText('Источник финансовых данных:', { exact: false })).toBeInTheDocument();
