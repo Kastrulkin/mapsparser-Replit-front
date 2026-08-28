@@ -131,5 +131,6 @@ describe('CardOverviewPage localization', () => {
 
     expect(await screen.findByRole('tab', { name: 'Отзывы' })).toHaveAttribute('data-state', 'active');
     expect(await screen.findByRole('button', { name: /Без ответа/ })).toHaveClass('bg-slate-900');
+    expect(screen.queryByText('Как работать с данными карточки')).not.toBeInTheDocument();
   });
 });

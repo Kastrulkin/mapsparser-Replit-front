@@ -77,85 +77,6 @@ import {
 } from '@/components/dashboard/cardOverviewApi';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
-const CARD_FIRST_RUN_COPY: Record<string, {
-  title: string;
-  bodyMissingMap: string;
-  statusMissingMap: string;
-  helpMissingMap: string;
-  goToProfile: string;
-}> = {
-  ru: {
-    title: 'Как работать с данными карточки',
-    bodyMissingMap: 'Сохраните ссылку на карту в «Профиль и бизнес». Потом вернитесь сюда и обновите данные.',
-    statusMissingMap: 'Нужна ссылка на карту',
-    helpMissingMap: 'Добавьте ссылку и сохраните изменения.',
-    goToProfile: 'Перейти в «Профиль и бизнес»',
-  },
-  en: {
-    title: 'How card data works',
-    bodyMissingMap: 'Save the map link in “Profile & Business”. Then come back here and refresh the data.',
-    statusMissingMap: 'Map link required',
-    helpMissingMap: 'Add the link and save the changes.',
-    goToProfile: 'Go to Profile & Business',
-  },
-  ar: {
-    title: 'كيفية العمل مع بيانات البطاقة',
-    bodyMissingMap: 'احفظ رابط البطاقة أولاً في «الملف الشخصي والنشاط التجاري». ثم ارجع إلى هنا وحدّث البيانات.',
-    statusMissingMap: 'رابط الخريطة مطلوب',
-    helpMissingMap: 'أضف الرابط واحفظ التغييرات.',
-    goToProfile: 'الانتقال إلى الملف الشخصي والنشاط التجاري',
-  },
-  de: {
-    title: 'So arbeiten Sie mit den Kartendaten',
-    bodyMissingMap: 'Speichern Sie zuerst den Kartenlink unter „Profil & Unternehmen“. Kehren Sie dann hierher zurück und aktualisieren Sie die Daten.',
-    statusMissingMap: 'Kartenlink erforderlich',
-    helpMissingMap: 'Fügen Sie den Link hinzu und speichern Sie die Änderungen.',
-    goToProfile: 'Zu Profil & Unternehmen',
-  },
-  el: {
-    title: 'Πώς να δουλέψετε με τα δεδομένα της κάρτας',
-    bodyMissingMap: 'Αποθηκεύστε πρώτα τον σύνδεσμο χάρτη στο «Προφίλ & Επιχείρηση». Μετά επιστρέψτε εδώ και ενημερώστε τα δεδομένα.',
-    statusMissingMap: 'Απαιτείται σύνδεσμος χάρτη',
-    helpMissingMap: 'Προσθέστε τον σύνδεσμο και αποθηκεύστε τις αλλαγές.',
-    goToProfile: 'Μετάβαση στο Προφίλ & Επιχείρηση',
-  },
-  es: {
-    title: 'Cómo trabajar con los datos de la ficha',
-    bodyMissingMap: 'Guarda primero el enlace del mapa en «Perfil y negocio». Luego vuelve aquí y actualiza los datos.',
-    statusMissingMap: 'Se necesita un enlace del mapa',
-    helpMissingMap: 'Añade el enlace y guarda los cambios.',
-    goToProfile: 'Ir a Perfil y negocio',
-  },
-  fr: {
-    title: 'Comment utiliser les données de la fiche',
-    bodyMissingMap: 'Enregistrez d’abord le lien de la carte dans « Profil et entreprise ». Revenez ensuite ici pour actualiser les données.',
-    statusMissingMap: 'Lien de carte requis',
-    helpMissingMap: 'Ajoutez le lien puis enregistrez les modifications.',
-    goToProfile: 'Aller à Profil et entreprise',
-  },
-  ha: {
-    title: 'Yadda ake aiki da bayanan katin',
-    bodyMissingMap: 'Da farko a ajiye hanyar taswira a cikin “Profile & Business”. Sannan a dawo nan a sabunta bayanan.',
-    statusMissingMap: 'Ana bukatar hanyar taswira',
-    helpMissingMap: 'Ƙara hanyar sannan a ajiye canje-canjen.',
-    goToProfile: 'Je zuwa Profile & Business',
-  },
-  th: {
-    title: 'วิธีใช้งานข้อมูลการ์ดธุรกิจ',
-    bodyMissingMap: 'บันทึกลิงก์แผนที่ใน “Profile & Business” ก่อน แล้วค่อยกลับมาที่นี่เพื่ออัปเดตข้อมูล',
-    statusMissingMap: 'ต้องมีลิงก์แผนที่',
-    helpMissingMap: 'เพิ่มลิงก์และบันทึกการเปลี่ยนแปลง',
-    goToProfile: 'ไปที่ Profile & Business',
-  },
-  tr: {
-    title: 'Kart verileriyle nasıl çalışılır',
-    bodyMissingMap: 'Önce harita bağlantısını “Profil ve İşletme” bölümüne kaydedin. Sonra buraya dönüp verileri güncelleyin.',
-    statusMissingMap: 'Harita bağlantısı gerekli',
-    helpMissingMap: 'Bağlantıyı ekleyin ve değişiklikleri kaydedin.',
-    goToProfile: 'Profil ve İşletme bölümüne git',
-  },
-};
-
 type ServicesSort = 'default' | 'name_asc' | 'name_desc' | 'updated_desc' | 'updated_asc' | 'price_asc' | 'price_desc';
 type CardTabValue = 'services' | 'reviews' | 'news' | 'keywords' | 'competitors';
 type ReviewFocusValue = 'all' | 'negative' | 'needs_reply';
@@ -195,7 +116,6 @@ export const CardOverviewPage = () => {
   const aiLearningTooltip = isRu
     ? 'Система учитывает, как вы редактируете предложения по услугам, отзывам и новостям, и постепенно подстраивает следующие рекомендации под ваш стиль.'
     : 'The system learns from how you edit service, review, and news suggestions and gradually adapts future recommendations to your style.';
-  const firstRunCopy = CARD_FIRST_RUN_COPY[language] ?? CARD_FIRST_RUN_COPY.en;
   const automationAccess = getAutomationAccessForBusiness(currentBusiness);
   const automationLockedMessage = automationAccess.message || pageCopy.automationLocked;
   const initialTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
@@ -236,7 +156,6 @@ export const CardOverviewPage = () => {
   // Состояния для парсера
   // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
   const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'completed' | 'done' | 'error' | 'queued'>('idle');
-  const [parseStatusError, setParseStatusError] = useState<string | null>(null);
   const [refreshingCardData, setRefreshingCardData] = useState(false);
   const [parseRefreshPolicy, setParseRefreshPolicy] = useState<{
     can_refresh: boolean;
@@ -264,7 +183,6 @@ export const CardOverviewPage = () => {
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
   const [isOperationsLearningExpanded, setIsOperationsLearningExpanded] = useState(false);
-  const [isCardDataGuideExpanded, setIsCardDataGuideExpanded] = useState(false);
   const previousParseStatusRef = useRef(parseStatus);
 
   useEffect(() => {
@@ -389,7 +307,6 @@ export const CardOverviewPage = () => {
       const { response, data } = await loadCardParseStatus(currentBusinessId);
       if (response.ok && data.success) {
         const nextStatus = String(data.status || 'idle').trim().toLowerCase();
-        setParseStatusError(String(data.error_message || '').trim() || null);
         setParseRefreshPolicy(normalizeParseRefreshPolicy(data.refresh_policy));
         if (nextStatus === 'completed' || nextStatus === 'done' || nextStatus === 'processing' || nextStatus === 'queued' || nextStatus === 'error') {
           setParseStatus(nextStatus);
@@ -487,7 +404,6 @@ export const CardOverviewPage = () => {
   const [mapSources, setMapSources] = useState<string[]>([]);
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [hasConfiguredMapLink, setHasConfiguredMapLink] = useState(false);
-  const [hasSupportedConfiguredMapLink, setHasSupportedConfiguredMapLink] = useState(false);
 
   const loadMapSources = async () => {
     if (!currentBusinessId) return;
@@ -496,7 +412,6 @@ export const CardOverviewPage = () => {
       const mapState = extractMapSources(data, externalPosts);
       setMapSources(mapState.sources);
       setHasConfiguredMapLink(mapState.hasConfiguredMapLink);
-      setHasSupportedConfiguredMapLink(mapState.hasSupportedConfiguredMapLink);
     } catch (e) { console.error('Error loading map sources', e); }
   };
 
@@ -696,97 +611,6 @@ export const CardOverviewPage = () => {
   const refreshBlockedByPolicy = !parseRefreshPolicy.can_refresh;
   const refreshBlockedByActiveParse = parseStatus === 'processing' || parseStatus === 'queued';
   const canTriggerRefresh = automationAccess.automationAllowed && canRefreshCardData && !refreshBlockedByPolicy && !refreshBlockedByActiveParse;
-
-  const formatRefreshDate = (isoValue: string | null) => {
-    if (!isoValue) {
-      return null;
-    }
-    const parsedDate = new Date(isoValue);
-    if (Number.isNaN(parsedDate.getTime())) {
-      return isoValue;
-    }
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(parsedDate);
-  };
-
-  const parseStatusLabel = useMemo(() => {
-    if (!hasConfiguredMapLink) {
-      return firstRunCopy.statusMissingMap;
-    }
-    if (parseRefreshPolicy.reason === 'active_parse') {
-      return pageCopy.parseAlreadyRunning;
-    }
-    if (parseRefreshPolicy.reason === 'weekly_cooldown' && parseRefreshPolicy.cooldown_until) {
-      const formattedDate = formatRefreshDate(parseRefreshPolicy.cooldown_until);
-      if (formattedDate) {
-        return pageCopy.nextRefresh.replace('{date}', formattedDate);
-      }
-    }
-    switch (parseStatus) {
-      case 'processing':
-        return pageCopy.parseInProgress;
-      case 'queued':
-        return pageCopy.parseQueued;
-      case 'completed':
-      case 'done':
-        return pageCopy.parseDone;
-      case 'error':
-        return pageCopy.parseError;
-      default:
-        return pageCopy.parseIdle;
-    }
-  }, [firstRunCopy.statusMissingMap, hasConfiguredMapLink, pageCopy, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.reason, parseStatus]);
-
-  const parseStatusHelpText = useMemo(() => {
-    if (!hasConfiguredMapLink) {
-      return firstRunCopy.helpMissingMap;
-    }
-    if (!automationAccess.automationAllowed) {
-      return automationLockedMessage;
-    }
-    if (!hasSupportedConfiguredMapLink) {
-      return isRu
-        ? 'Ссылка на карту сохранена, но для обновления данных сейчас поддерживаются только Яндекс, 2ГИС и Google.'
-        : 'A map link is saved, but data refresh is currently supported only for Yandex, 2GIS, and Google.';
-    }
-    if (parseStatus === 'error' && parseStatusError) {
-      const raw = parseStatusError
-        .replace(/^error:\s*/i, '')
-        .replace(/^parsed entity mismatch for source url\s*\|?\s*/i, '')
-        .trim();
-
-      if (raw) {
-        return isRu
-          ? `Не удалось обновить карточку: ссылка ведёт на другую организацию${user?.is_superadmin ? ` (superadmin: ${raw})` : ''}. Проверьте ссылку на карту во вкладке «Профиль и бизнес».`
-          : `We could not update the listing because the map link points to a different business${user?.is_superadmin ? ` (superadmin: ${raw})` : ''}. Check the map link in Profile & Business.`;
-      }
-    }
-    if (parseStatus === 'processing' || parseStatus === 'queued' || parseRefreshPolicy.reason === 'active_parse') {
-      return isRu ? 'Собираем данные. Это может занять несколько минут.' : 'We are collecting data. This may take a few minutes.';
-    }
-    if (parseRefreshPolicy.reason === 'weekly_cooldown') {
-      const formattedDate = formatRefreshDate(parseRefreshPolicy.cooldown_until);
-      if (formattedDate) {
-        return isRu
-          ? `Обновить данные карточки можно раз в неделю. Следующее обновление будет доступно ${formattedDate}. Если пригласить друга, обновление станет доступно раньше.`
-          : `Card data can be refreshed once a week. The next refresh will be available on ${formattedDate}. Inviting a friend unlocks it earlier.`;
-      }
-      return isRu
-        ? 'Обновить данные карточки можно раз в неделю. Если пригласить друга, обновление станет доступно раньше.'
-        : 'Card data can be refreshed once a week. Inviting a friend unlocks it earlier.';
-    }
-    if (parseRefreshPolicy.invite_override_available && parseRefreshPolicy.accepted_invites_count > 0 && parseRefreshPolicy.last_completed_at) {
-      return isRu
-        ? 'У вас уже есть приглашённый друг, поэтому обновление доступно раньше стандартного недельного интервала.'
-        : 'You already invited a friend, so refresh is available earlier than the standard weekly interval.';
-    }
-    return null;
-  }, [automationAccess.automationAllowed, automationLockedMessage, firstRunCopy.helpMissingMap, hasConfiguredMapLink, hasSupportedConfiguredMapLink, isRu, parseRefreshPolicy.accepted_invites_count, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.invite_override_available, parseRefreshPolicy.last_completed_at, parseRefreshPolicy.reason, parseStatus, parseStatusError, user?.is_superadmin]);
 
   const handleRefreshCardData = async () => {
     if (isDemoMode) {
@@ -1081,76 +905,6 @@ export const CardOverviewPage = () => {
               ]}
             />
 
-            <div className="mt-6 rounded-3xl border border-amber-200/80 bg-amber-50/85 p-4 shadow-sm sm:p-5">
-              <button
-                type="button"
-                className="flex w-full flex-col gap-3 text-left sm:flex-row sm:items-center sm:justify-between"
-                onClick={() => setIsCardDataGuideExpanded((value) => !value)}
-                aria-expanded={isCardDataGuideExpanded}
-              >
-                <span className="min-w-0">
-                  <span className="block text-lg font-semibold text-slate-950">{firstRunCopy.title}</span>
-                  <span className="mt-1 block text-sm text-slate-700">
-                    {pageCopy.now}{' '}
-                    <span className="font-semibold">{parseStatusLabel}</span>
-                    {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
-                      ? ` · ${pageCopy.supportedSources}`
-                      : ''}
-                  </span>
-                </span>
-                <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800">
-                  {isCardDataGuideExpanded ? pageCopy.collapse : pageCopy.expand}
-                  {isCardDataGuideExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </span>
-              </button>
-              {isCardDataGuideExpanded ? (
-                <div className="mt-4 border-t border-amber-200/70 pt-4">
-                  <div className="max-w-3xl text-sm leading-7 text-slate-700">
-                    {!hasConfiguredMapLink
-                      ? firstRunCopy.bodyMissingMap
-                      : (isRu ? (
-                        <>
-                          Обновляйте карточку здесь, а аудит и историю изменений проверяйте в <span className="font-semibold">«Прогрессе»</span>.
-                          Если нужно изменить ссылку или точку входа, это делается через <span className="font-semibold">«Профиль и бизнес»</span>.
-                        </>
-                      ) : (
-                        <>
-                          Refresh the listing here, and review the audit and history in <span className="font-semibold">Progress</span>.
-                          If you need to change the source link, do it in <span className="font-semibold">Profile &amp; Business</span>.
-                        </>
-                      ))}
-                  </div>
-                  {parseStatusHelpText ? (
-                    <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3 text-sm text-slate-600 ring-1 ring-black/5">
-                      {parseStatusHelpText}
-                    </div>
-                  ) : null}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {!hasConfiguredMapLink ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => navigate('/dashboard/profile')}
-                        className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-                        title={isRu ? 'Открывает раздел, где нужно сохранить ссылку на карту перед первым аудитом.' : 'Opens the section where you need to save the map link before the first audit.'}
-                      >
-                        <ArrowRight className="mr-2 h-4 w-4" />
-                        {firstRunCopy.goToProfile}
-                      </Button>
-                    ) : (
-                      <a
-                        href="/dashboard/progress?section=maps&audit=open"
-                        title={isRu ? 'Открывает аудит карточки, бизнес-метрики и историю изменений после сбора данных.' : 'Opens the listing audit, business metrics, and change history after data collection.'}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-                      >
-                        <TrendingUp className="h-4 w-4" />
-                        {isRu ? 'Открыть прогресс' : 'Open progress'}
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </div>
           </>
         )}
 
@@ -1170,7 +924,7 @@ export const CardOverviewPage = () => {
 
         {/* Map Source Switcher */}
         {!isContentPlanMode && mapSources.length > 0 && (
-          <div className="mb-6 inline-flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
+          <div className="my-6 inline-flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
             <button
               onClick={() => setSelectedSource('all')}
               className={cn(
