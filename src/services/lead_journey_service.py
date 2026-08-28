@@ -817,13 +817,13 @@ def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: boo
         },
         "influencer": {
             "title": "Инфлюенсеры",
-            "opportunity": "Найдите локального автора и договоритесь о понятном обмене ценностью.",
+            "opportunity": "Получите клиентов от местных авторов через взаимовыгодный обмен.",
             "cta_label": "Найти автора",
             "screen": "influencers",
         },
         "partnership": {
             "title": "Партнёрства",
-            "opportunity": "Запустите совместную механику с бизнесом, у которого похожая аудитория.",
+            "opportunity": "Получите новых клиентов через совместные предложения с бизнесами, у которых похожая аудитория.",
             "cta_label": "Найти партнёра",
             "screen": "partnerships",
         },
