@@ -119,6 +119,13 @@ export const removeManualCompetitor = (businessId: string, competitorId: string)
 
 export const loadCardClientInfo = (businessId: string) => jsonRequest(`/api/client-info?business_id=${businessId}`);
 
+const normalizeMapSource = (source: unknown) => {
+  const normalized = String(source || '').trim().toLowerCase();
+  if (normalized === 'yandex_maps' || normalized === 'yandex_business' || normalized === 'apify_yandex') return 'yandex';
+  if (normalized === 'google_maps' || normalized === 'google_business') return 'google';
+  return normalized;
+};
+
 export const extractMapSources = (data: any, externalPosts: any[]): MapSourcesResult => {
   const sources = new Set<string>();
   let hasConfiguredMapLink = false;
@@ -145,7 +152,7 @@ export const extractMapSources = (data: any, externalPosts: any[]): MapSourcesRe
   }
 
   externalPosts.forEach((post) => {
-    const source = String(post?.source || '').trim().toLowerCase();
+    const source = normalizeMapSource(post?.source);
     if (source) sources.add(source);
   });
 
