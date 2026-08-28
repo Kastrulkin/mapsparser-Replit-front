@@ -6,10 +6,11 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from services.content_editorial_quality import NATURAL_CONTENT_CONTRACT, review_content_text
 from services.llm import analyze_text_with_gigachat
 
 
-PLATFORM_VARIANT_RULES_VERSION = "v1"
+PLATFORM_VARIANT_RULES_VERSION = "v2"
 
 PLATFORM_VARIANT_RULES = {
     "telegram": (
@@ -105,29 +106,45 @@ def build_platform_variants(
         language_matches = _matches_channel_language(ai_text, requested_language)
         if not language_matches:
             ai_text = ""
-        if ai_text:
+        ai_review = review_content_text(ai_text, source_text=base_text, platform=platform) if ai_text else {}
+        ai_failed_quality = bool(ai_text) and not bool(ai_review.get("quality_passed"))
+        if ai_text and not ai_failed_quality:
             source = "ai"
             text = ai_text
+            quality_review = ai_review
+        elif ai_failed_quality:
+            source = "failed"
+            text = ""
+            quality_review = ai_review
         elif requested_language:
             source = "unavailable"
             text = ""
+            quality_review = review_content_text("", source_text=base_text, platform=platform)
         else:
             source = "deterministic"
             text = deterministic_platform_variant(platform, base_text)
+            quality_review = review_content_text(text, source_text=base_text, platform=platform)
+            if not bool(quality_review.get("quality_passed")):
+                source = "failed"
+                text = ""
         adaptation_error = ""
         if source != "ai":
-            adaptation_error = "language_mismatch" if raw_ai_text and not language_matches else generation_error
+            if ai_failed_quality:
+                adaptation_error = "editorial_quality_failed"
+            else:
+                adaptation_error = "language_mismatch" if raw_ai_text and not language_matches else generation_error
         result[platform] = {
             "text": text,
             "metadata": {
                 "variant_source": source,
-                "variant_status": "current" if text else "needs_regeneration",
+                "variant_status": "current" if text else ("failed" if ai_failed_quality or source == "failed" else "needs_regeneration"),
                 "base_text_hash": base_hash,
                 "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
                 "channel_language": requested_language or "",
                 "manually_edited": False,
                 "adapted_at": adapted_at,
                 "adaptation_error": adaptation_error,
+                **quality_review,
             },
         }
     return result
@@ -176,6 +193,7 @@ def _platform_variant_prompt(base_text: str, platforms: list[str], item: dict[st
         "- пиши человеческим языком и короткими абзацами;\n"
         "- не используй внутренние слова: цель публикации, бизнес-задача, контент-план;\n"
         "- не копируй одну и ту же формулировку во все каналы;\n"
+        f"{NATURAL_CONTENT_CONTRACT}\n"
         "- не используй markdown и списки с техническими пояснениями;\n"
         "- верни только JSON-объект без code fence в формате "
         '{"variants":{"telegram":"текст","vk":"текст"}}.\n\n'

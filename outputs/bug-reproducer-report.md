@@ -1,106 +1,36 @@
-# Bug Reproducer
+# Content editorial gate: red-to-green report
 
-## ✅ FIX_PROVEN — Bug reproduced and fix proven
+## Result
 
-> The same reproducer changed from failing to passing and broader checks passed.
+`FIX_PROVEN`
 
-**Project:** LocalOS
-**Bug:** «Добавить факты» теряет целевую публикацию
-**Environment:** React 18, React Router 6, Vitest 4.1.10, Vite 7.3.6, local macOS arm64
-**Generated:** 2026-08-28
-
-## Original report
-
-На экране «Сегодня» кнопка «Добавить факты» вела на общий экран «Контент». Пользователь не видел, где ввести факты для конкретной истории.
-
-| Contract | Expected | Actual |
-|---|---|---|
-| Observed behavior | Нажатие «Добавить факты» открывает нужные plan/item, показывает вопрос, поле и CTA «Сохранить и подготовить текст». | TodayPage переходил на /dashboard/content без контекста; ContentPage не выбирал план и не открывал публикацию из query parameters. |
-
-## Minimal reproduction
-
-Первый тест кликает CTA реального TodayPage; второй открывает реальный ContentPage по deep link с фикстурой plan-1/item-1.
-
-**Confirming signal:** Маршрут был /dashboard/content вместо точной deep link; форма «Нужно немного конкретики» не появлялась.
-
-### Reproduction files approved at Gate 1
-
-- [TodayPage.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/TodayPage.test.tsx:59>) — Проверяет точный URL после CTA «Добавить факты».
-- [ContentPage.story-facts.test.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ContentPage.story-facts.test.tsx:62>) — Проверяет автооткрытие публикации, вопрос и CTA формы.
-
-## Red to green evidence
-
-| Evidence | Before fix | After fix |
-|---|---:|---:|
-| Exit code | 1 | 0 |
-| Timed out | False | False |
-| Duration | 4,880 ms | 6,764.219 ms |
-| Same command | — | True |
-| Broader suite | — | passed |
-
-### Before — failing evidence
-
-```text
-Both focused regressions failed for the predicted loss-of-context reasons.
-```
-
-### After — fixed evidence
-
-```text
-> vite_react_shadcn_ts@0.0.0 test
-> vitest run --run src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/ContentPage.story-facts.test.tsx
-
-
- RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
-
-
- Test Files  2 passed (2)
-      Tests  8 passed (8)
-   Start at  11:12:04
-   Duration  4.04s (transform 1.44s, setup 843ms, import 1.98s, tests 1.14s, environment 2.23s)
-```
+LocalOS accepted generic summaries in the master draft, accepted unsupported details in platform adaptations, and allowed approval without a current editorial review. Three focused tests reproduced those paths before production code changed.
 
 ## Root cause
 
-missionRoute обрабатывал screen раньше детального CTA и не передавал plan_id/item_id. ContentPage читал из URL только section, всегда загружал первый план и оставлял selectedItemId пустым.
+- The content neuroslop check was a finite phrase list rather than a shared editorial contract.
+- Platform adaptation only normalized length, hashtags, and technical markers.
+- Approval and queue flows checked text presence and human approval, but did not recompute editorial quality.
 
-## Approved fix
+## Fix
 
-TodayPage теперь сохраняет безопасный cta_url и формирует story-facts deep link. ContentPage разбирает plan_id/item_id/focus, выбирает нужный план, открывает публикацию и фокусирует первое поле.
+- Added `content-editorial-v3`, shared by master generation and platform variants.
+- Added positive natural-language constraints to both generation prompts.
+- Added checks for generic summaries, abstract benefits, unsupported details, and unsupported business-wide habits.
+- Platform variants that fail receive `variant_status=failed` and are not prepared as ready copy.
+- Manual edits are reviewed immediately.
+- Approval and queue recompute quality from the current text.
+- The Content UI shows `Нужно переписать` and the concrete reasons.
+- Existing unpublished posts are reviewed read-only when the plan is opened. Published posts remain unchanged.
 
-**Why this is causal:** Исправлены оба места потери контекста: построение URL и восстановление UI-state из URL.
+## Evidence
 
-### Production files approved at Gate 2
+- Reproducer before fix: `3 failed`.
+- Same tests after fix: `3 passed`.
+- Backend regression suites: `221 passed`.
+- Content page test: `12 passed`.
+- Production frontend build: passed.
 
-- [TodayPage.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/TodayPage.tsx:20>) — Сохраняет детали focus action и строит story-facts deep link.
-- [ContentPage.tsx](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/pages/dashboard/ContentPage.tsx:837>) — Восстанавливает plan/item/focus из URL и фокусирует форму.
+## Limits
 
-## Verification
-
-| Check | Status | Evidence |
-|---|---|---|
-| Exact regression command | ✅ passed | Red: 2 failed / 6 passed; green: 8 passed. |
-| Adjacent Today and Content suites | ✅ passed | 3 files, 20 tests passed. |
-| Production frontend build | ✅ passed | Vite built 3987 modules successfully. |
-
-## Reproduce
-
-```bash
-cd frontend && npm test -- --run src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/ContentPage.story-facts.test.tsx
-```
-
-## Limitations
-
-- Проверка выполнена на фикстуре контент-плана; browser smoke с production API не выполнялся.
-
-## Residual risks
-
-- Если plan_id/item_id больше недоступны текущему business scope, страница останется на доступном плане без открытой чужой публикации.
-
-## Notes
-
-- Публичные API и backend не изменялись; production не развёртывался.
-
----
-
-Generated by `$bug-reproducer`. A fix is proven only by the same red-to-green reproducer plus relevant broader checks.
+The implementation is complete and verified locally. It has not been deployed or used to rewrite production data in this change.

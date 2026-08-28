@@ -181,6 +181,11 @@ type SocialPost = {
     manually_edited?: boolean;
     platform_rules_version?: string;
     adaptation_error?: string;
+    quality_passed?: boolean;
+    quality_issues?: string[];
+    quality_issue_codes?: string[];
+    quality_rules_version?: string;
+    quality_text_hash?: string;
     platform_rule_readiness?: {
       label?: string;
       message?: string;
@@ -522,9 +527,21 @@ const getChannelStatusLabel = (status?: string) => {
   return getPostStatusLabel(status);
 };
 
+const postNeedsEditorialRewrite = (post: SocialPost) => (
+  String(post.metadata_json?.variant_status || '').toLowerCase() === 'failed'
+  || post.metadata_json?.quality_passed === false
+);
+
+const getPostQualityIssueText = (post: SocialPost) => (
+  (post.metadata_json?.quality_issues || []).filter(Boolean).join(' · ')
+);
+
 const getChannelNextAction = (post: SocialPost) => {
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
+  if (postNeedsEditorialRewrite(post)) {
+    return getPostQualityIssueText(post) || 'Текст не прошёл редакционную проверку. Исправьте его вручную или подготовьте заново.';
+  }
   if (variantStatus === 'stale') return 'Общий текст изменился. Проверьте сохранённую версию этого канала.';
   const readiness = getPostPlatformReadiness(post);
   if (readiness?.message) return readiness.message;
@@ -556,6 +573,7 @@ const getPostPlatformReadiness = (post: SocialPost) => {
 const getChannelStatusDisplay = (post: SocialPost) => {
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
+  if (postNeedsEditorialRewrite(post)) return 'Нужно переписать';
   if (variantStatus === 'stale') return 'Версия устарела';
   const readiness = getPostPlatformReadiness(post);
   const normalized = String(post.status || '').toLowerCase();
@@ -2625,19 +2643,21 @@ function ContentWorkspace() {
     const generationAlternatives = (generation.alternatives || storedAlternatives).filter((variant) => variant.quality_passed !== false);
     const selectedChannelCount = getSelectedCount(publicationChannels);
     const channelCount = hasPosts ? selectedPosts.length : selectedChannelCount;
-    const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
-    const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
+    const needsRewriteChannelCount = selectedPosts.filter(postNeedsEditorialRewrite).length;
+    const needsReviewChannelCount = selectedPosts.filter((post) => !postNeedsEditorialRewrite(post) && getChannelStatusLabel(post.status) === 'Нужно проверить').length;
+    const readyTextChannelCount = selectedPosts.filter((post) => !postNeedsEditorialRewrite(post) && getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
     const scheduledPostCount = selectedPosts.filter((post) => isQueuedOrHandledStatus(post.status)).length;
     const blockedChannelCount = selectedPosts.filter((post) => isAutomaticSendBlockedStatus(post.status)).length;
     const scheduleAlreadyHandled = scheduledPostCount > 0 && approvedPostCount === 0 && needsReviewChannelCount === 0;
-    const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
+    const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0 && needsRewriteChannelCount === 0;
     const queueNeedsAttention = hasPosts && !canQueueSelectedItem && !scheduleAlreadyHandled;
     const needsPlatformPreparation = hasDraftText && (!hasPosts || hasUnsavedItemChanges);
     const canApproveSelectedItem = hasDraftText
       && hasPosts
       && !hasUnsavedItemChanges
-      && needsReviewChannelCount > 0;
+      && needsReviewChannelCount > 0
+      && needsRewriteChannelCount === 0;
     const approveButtonLabel = busyAction === 'approve'
       ? 'Утверждаем...'
       : hasUnsavedDraftChanges && canApproveSelectedItem
@@ -2655,6 +2675,8 @@ function ContentWorkspace() {
       ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
       : !hasPosts
         ? 'Сначала подготовьте версии для каналов, чтобы проверить тексты для каждой площадки.'
+        : needsRewriteChannelCount > 0
+          ? 'Часть версий не прошла редакционную проверку. Откройте канал и исправьте указанные фразы.'
         : needsReviewChannelCount > 0
           ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
           : blockedChannelCount > 0
@@ -2663,7 +2685,9 @@ function ContentWorkspace() {
               ? 'Публикация уже стоит в расписании или ждёт контролируемого размещения.'
               : 'Сейчас нет каналов, готовых к отправке. Подготовьте каналы или проверьте их состояние.';
     const channelSummary = hasPosts
-      ? needsReviewChannelCount > 0
+      ? needsRewriteChannelCount > 0
+        ? `Нужно переписать: ${needsRewriteChannelCount}`
+      : needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
         : readyTextChannelCount > 0
           ? `Текст готов: ${readyTextChannelCount}`

@@ -401,6 +401,39 @@ def test_candidate_blocks_internal_plan_language_and_slop_cliches():
     assert any("Рекламное клише" in issue for issue in scored["issues"])
 
 
+def test_candidate_rejects_generic_summary_after_concrete_visit_story():
+    candidate = {
+        "id": "variant-1",
+        "angle": "История визита",
+        "text": (
+            "Мастер Надежда помогла ребёнку освоиться и включила мультфильм. "
+            "После стрижки ребёнок увлёкся игрушками и не спешил уходить.\n\n"
+            "Такой визит складывается из нескольких шагов: время на знакомство, "
+            "понятный процесс и возможность завершить его без спешки."
+        ),
+        "used_fact_ids": ["review-1"],
+        "unsupported_facts": [],
+    }
+    brief = {
+        "sources": [
+            {
+                "id": "review-1",
+                "fact": (
+                    "Мастер Надежда расположила ребёнка, включила мультфильм. Стрижка "
+                    "получилась аккуратной. После ребёнок увлёкся игрушками и не спешил уходить."
+                ),
+            }
+        ],
+        "confirmed_details": [],
+    }
+
+    scored = _score_content_candidate(candidate, brief, {})
+
+    assert scored["quality_passed"] is False
+    assert scored["editorial_quality_passed"] is False
+    assert any("абстракт" in issue.lower() for issue in scored["issues"])
+
+
 def test_dry_katok_bulletin_does_not_pass_live_voice_gate():
     candidate = {
         "id": "variant-1",

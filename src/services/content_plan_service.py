@@ -26,6 +26,7 @@ from core.industry_pattern_recalibration import (
 from core.seo_keywords import collect_ranked_keywords
 from core.content_plan_generator import build_content_plan_skeleton
 from services.llm import analyze_text_with_gigachat
+from services.content_editorial_quality import NATURAL_CONTENT_CONTRACT, review_content_text
 from services.content_voice_service import load_content_voice_context
 from services.outreach_human_language import SLOP_PATTERNS
 from subscription_manager import get_allowed_content_plan_horizons, get_subscription_access
@@ -4993,11 +4994,14 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         style_issues.append("В текст попала внутренняя формулировка контент-плана")
     style_issues.extend(f"Рекламное клише: {value}" for value in dict.fromkeys(cliche_hits))
     editorial_issues, voice_issues, clarity_issues, story_issues = _editorial_quality_issues(text, voice)
+    natural_review = review_content_text(text, brief=brief)
+    natural_issues = [str(value) for value in natural_review.get("quality_issues") or [] if str(value)]
     story_issues.extend(_confirmed_story_coverage_issues(text, brief))
     style_issues.extend(editorial_issues)
     style_issues.extend(voice_issues)
     style_issues.extend(clarity_issues)
     style_issues.extend(story_issues)
+    style_issues.extend(natural_issues)
     story_source_ids = {str(value) for value in brief.get("story_evidence_source_ids") or [] if str(value)}
     if brief.get("story_objective") and story_source_ids and not used_ids.intersection(story_source_ids):
         style_issues.append("История не опирается на реальный эпизод из источника")
@@ -5017,11 +5021,13 @@ def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], v
         "score": min(score, 100),
         "grounded": grounded,
         "factual_gate_passed": grounded,
-        "neuroslop_passed": not cliche_hits,
-        "editorial_quality_passed": not editorial_issues and not clarity_issues and not story_issues,
+        "neuroslop_passed": not cliche_hits and bool(natural_review.get("quality_passed")),
+        "editorial_quality_passed": not editorial_issues and not clarity_issues and not story_issues and not natural_issues,
         "voice_adherence_passed": not voice_issues,
         "clarity_passed": not clarity_issues,
         "story_passed": not story_issues,
+        "quality_issue_codes": natural_review.get("quality_issue_codes") or [],
+        "quality_rules_version": natural_review.get("quality_rules_version") or "",
         "quality_passed": grounded and score >= 70 and not style_issues,
         "issues": [
             *(unsupported or []),
@@ -5080,6 +5086,7 @@ def _content_generation_v2_prompt(
         "- не используй хэштеги, рекламные клише и больше одного восклицательного знака;\n"
         "- не копируй источник дословно и не имитируй стиль конкретного автора;\n"
         "- не добавляй масштаб, количество клиентов, возраст, родственную роль, оценку характера или достижение, если этого нет в фактах;\n"
+        f"{NATURAL_CONTENT_CONTRACT}\n"
         "- редакционные паттерны ниже описывают только приёмы подачи; не переноси из чужих публикаций факты, героев, названия, цифры или обещания;\n"
         f"- {story_variant_rule}\n"
         "- завершай одним естественным следующим шагом, только если он следует из редакторского брифа.\n"

@@ -34,7 +34,7 @@ def test_build_platform_variants_uses_one_ai_response_for_all_channels(monkeypat
     assert len(calls) == 1
     assert variants["telegram"]["text"] != variants["vk"]["text"]
     assert variants["telegram"]["metadata"]["variant_source"] == "ai"
-    assert variants["google_business"]["metadata"]["platform_rules_version"] == "v1"
+    assert variants["google_business"]["metadata"]["platform_rules_version"] == platform_variants.PLATFORM_VARIANT_RULES_VERSION
 
 
 def test_build_platform_variants_falls_back_per_channel(monkeypatch):
@@ -69,6 +69,46 @@ def test_max_variant_uses_channel_rules_and_limit(monkeypatch):
     assert "Компактный пост для канала MAX" in prompts[0]
     assert variants["max"]["text"] == "Первая строка.\n\nКороткий пост для MAX."
     assert platform_variants.PLATFORM_TEXT_LIMITS["max"] == 4000
+
+
+def test_platform_variant_rejects_generic_summary_and_unsupported_details(monkeypatch):
+    def fake_analyze(prompt, **kwargs):
+        return json.dumps(
+            {
+                "variants": {
+                    "max": (
+                        "Мастер включила любимый мультфильм и объяснила каждый шаг.\n\n"
+                        "Такой визит складывается из понятного процесса и комфортного темпа."
+                    )
+                }
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(platform_variants, "analyze_text_with_gigachat", fake_analyze)
+    variants = platform_variants.build_platform_variants(
+        "Мастер Надежда помогла ребёнку освоиться и включила мультфильм.",
+        ["max"],
+        {
+            "business_id": "business-1",
+            "metadata_json": {
+                "content_brief_v1": {
+                    "sources": [
+                        {
+                            "id": "review-1",
+                            "fact": "Мастер Надежда расположила ребёнка и включила мультфильм.",
+                        }
+                    ],
+                    "confirmed_details": [],
+                }
+            },
+        },
+    )
+
+    assert variants["max"]["text"] == ""
+    assert variants["max"]["metadata"]["variant_status"] == "failed"
+    assert variants["max"]["metadata"]["quality_passed"] is False
+    assert variants["max"]["metadata"]["quality_issues"]
 
 
 def test_build_platform_variants_honors_channel_language(monkeypatch):
@@ -128,14 +168,17 @@ def test_configured_channel_language_never_falls_back_to_the_source_language(mon
 
 def test_current_variant_does_not_request_regeneration():
     base_text = "Подтверждённый общий текст."
+    platform_text = "Версия Telegram."
+    quality_review = platform_variants.review_content_text(platform_text, source_text=base_text, platform="telegram")
     existing = {
         "status": "needs_review",
-        "platform_text": "Версия Telegram.",
+        "platform_text": platform_text,
         "metadata_json": {
             "base_text_hash": platform_variants.platform_variant_base_hash(base_text),
             "variant_status": "current",
-            "platform_rules_version": "v1",
+            "platform_rules_version": platform_variants.PLATFORM_VARIANT_RULES_VERSION,
             "manually_edited": False,
+            **quality_review,
         },
     }
 

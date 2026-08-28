@@ -19,9 +19,11 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.content_editorial_quality import quality_review_is_current, review_content_text
 from services.social_posts.platform_variants import (
     PLATFORM_VARIANT_RULES_VERSION,
     build_platform_variants,
+    deterministic_platform_variant,
     platform_variant_base_hash,
 )
 
@@ -214,6 +216,7 @@ def _platform_variant_needs_generation(
         and str(metadata.get("base_text_hash") or "").strip() == current_hash
         and str(metadata.get("variant_status") or "current").strip() == "current"
         and str(metadata.get("platform_rules_version") or "").strip() == PLATFORM_VARIANT_RULES_VERSION
+        and quality_review_is_current(str(existing.get("platform_text") or ""), metadata)
     )
 
 
@@ -233,18 +236,22 @@ def _platform_variant_for_prepare(
         return {"text": existing_text, "metadata": existing_metadata}
     if bool(existing_metadata.get("manually_edited")) and existing_text:
         metadata = dict(existing_metadata)
+        quality_review = review_content_text(existing_text, source_text=base_text, platform=platform)
         variant_base_hash = str(existing_metadata.get("base_text_hash") or "").strip() or current_hash
         metadata.update(
             {
                 "variant_source": "manual",
                 "variant_status": (
                     "current"
+                    if variant_base_hash == current_hash and bool(quality_review.get("quality_passed"))
+                    else "failed"
                     if variant_base_hash == current_hash
                     else "stale"
                 ),
                 "base_text_hash": variant_base_hash,
                 "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
                 "manually_edited": True,
+                **quality_review,
             }
         )
         return {"text": existing_text, "metadata": metadata}
@@ -252,14 +259,17 @@ def _platform_variant_for_prepare(
         return generated
     if existing_text and str(existing_metadata.get("base_text_hash") or "").strip() == current_hash:
         return {"text": existing_text, "metadata": existing_metadata}
+    fallback_text = deterministic_platform_variant(platform, base_text)
+    quality_review = review_content_text(fallback_text, source_text=base_text, platform=platform)
     return {
-        "text": _platform_text(platform, base_text),
+        "text": fallback_text if bool(quality_review.get("quality_passed")) else "",
         "metadata": {
             "variant_source": "deterministic",
-            "variant_status": "current",
+            "variant_status": "current" if bool(quality_review.get("quality_passed")) else "failed",
             "base_text_hash": current_hash,
             "platform_rules_version": PLATFORM_VARIANT_RULES_VERSION,
             "manually_edited": False,
+            **quality_review,
         },
     }
 
@@ -346,6 +356,20 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             (plan_id,),
         )
         posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
+        for post in posts:
+            if str(post.get("status") or "").strip() in {"queued", "publishing", "published"}:
+                continue
+            platform_text = str(post.get("platform_text") or post.get("base_text") or "")
+            metadata = _json_dict(post.get("metadata_json"))
+            quality_review = review_content_text(
+                platform_text,
+                source_text=str(post.get("base_text") or ""),
+                platform=str(post.get("platform") or ""),
+            )
+            metadata.update(quality_review)
+            if not bool(quality_review.get("quality_passed")):
+                metadata["variant_status"] = "failed"
+            post["metadata_json"] = metadata
         plan_item_count = _content_plan_item_count(cursor, plan_id)
         channel_readiness = _build_channel_readiness(cursor, str(plan.get("business_id") or ""))
         return {

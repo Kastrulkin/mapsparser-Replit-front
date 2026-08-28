@@ -1048,6 +1048,34 @@ def test_approve_social_post_rejects_empty_copy(monkeypatch):
     assert FakeApproveGuardDB.last_conn.rolled_back is True
 
 
+def test_approve_social_post_rejects_copy_without_current_quality_review(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeApproveGuardDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "max",
+            "status": "needs_review",
+            "platform_text": "Такой визит складывается из понятного процесса.",
+            "base_text": "Подтверждённый текст.",
+            "metadata_json": {
+                "variant_status": "current",
+                "quality_passed": False,
+                "quality_issues": ["Абстрактный вывод после конкретной сцены"],
+            },
+        },
+    )
+
+    with pytest.raises(ValueError, match="переписать"):
+        approve_social_post("user-1", "post-unchecked")
+
+    assert FakeApproveGuardDB.last_conn.committed is False
+    assert FakeApproveGuardDB.last_conn.rolled_back is True
+
+
 def test_preview_social_posts_for_item_is_read_only(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakePreparePreviewDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
@@ -3189,6 +3217,8 @@ def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_led
             "publish_mode": "api",
             "status": "approved",
             "approved_at": "2026-06-19T10:00:00+00:00",
+            "base_text": "Рейс задержался. Riderra согласует ожидание водителя.",
+            "platform_text": "Рейс задержался. Riderra согласует ожидание водителя.",
         },
     )
     monkeypatch.setattr(

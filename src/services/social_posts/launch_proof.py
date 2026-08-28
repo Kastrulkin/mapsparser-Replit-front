@@ -19,6 +19,7 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.content_editorial_quality import review_content_text
 from services.social_posts.platform_variants import platform_variant_base_hash
 from core.ai_learning import record_ai_learning_event
 
@@ -970,6 +971,17 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if not _social_post_has_text(post):
             raise ValueError("Перед подтверждением нужно заполнить текст публикации")
+        quality_review = review_content_text(
+            str(post.get("platform_text") or post.get("base_text") or ""),
+            source_text=str(post.get("base_text") or ""),
+            platform=str(post.get("platform") or ""),
+        )
+        if not bool(quality_review.get("quality_passed")):
+            issues = "; ".join(str(value) for value in quality_review.get("quality_issues") or [] if str(value))
+            raise ValueError(f"Текст нужно переписать: {issues}")
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata.update(quality_review)
+        metadata["variant_status"] = "current"
         now = datetime.now(timezone.utc)
         cursor.execute(
             """
@@ -977,12 +989,13 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             SET status = 'approved',
                 approved_at = COALESCE(approved_at, %s),
                 approval_id = COALESCE(NULLIF(approval_id, ''), %s),
+                metadata_json = %s,
                 last_error = NULL,
                 updated_at = NOW()
             WHERE id = %s
             RETURNING *
             """,
-            (now, _new_id(), post_id),
+            (now, _new_id(), _json_dumps(metadata), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         metadata = _json_dict(updated.get("metadata_json"))
@@ -1051,10 +1064,16 @@ def update_social_post_text(
             "approval_reset": current_status == "approved",
         }
         metadata["variant_source"] = "manual"
-        metadata["variant_status"] = "current"
         metadata["manually_edited"] = True
         metadata["base_text_hash"] = platform_variant_base_hash(next_base_text)
-        next_status = _status_after_social_text_edit(current_status, next_text)
+        quality_review = review_content_text(
+            next_text,
+            source_text=next_base_text,
+            platform=str(post.get("platform") or ""),
+        )
+        metadata.update(quality_review)
+        metadata["variant_status"] = "current" if bool(quality_review.get("quality_passed")) else "failed"
+        next_status = _status_after_social_text_edit(current_status, next_text) if bool(quality_review.get("quality_passed")) else "draft"
         cursor.execute(
             """
             UPDATE social_posts
@@ -1097,6 +1116,18 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if status not in {"approved", "queued"} or not post.get("approved_at"):
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
+        quality_review = review_content_text(
+            str(post.get("platform_text") or post.get("base_text") or ""),
+            source_text=str(post.get("base_text") or ""),
+            platform=str(post.get("platform") or ""),
+        )
+        if not bool(quality_review.get("quality_passed")):
+            issues = "; ".join(str(value) for value in quality_review.get("quality_issues") or [] if str(value))
+            raise ValueError(f"Текст нужно переписать перед отправкой: {issues}")
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata.update(quality_review)
+        metadata["variant_status"] = "current"
+        post["metadata_json"] = metadata
         platform = str(post.get("platform") or "").strip()
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
             updated = _create_supervised_publish_task(cursor, post)
