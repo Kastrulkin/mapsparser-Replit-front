@@ -3,6 +3,8 @@ FROM node:20-slim AS frontend-builder
 ARG VITE_PROMOTION_HUB_ENABLED=false
 ENV VITE_PROMOTION_HUB_ENABLED=${VITE_PROMOTION_HUB_ENABLED}
 WORKDIR /app
+
+ARG INSTALL_PLAYWRIGHT_BROWSER=true
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /app/frontend
 RUN npm ci --legacy-peer-deps
@@ -59,8 +61,8 @@ RUN set -eux; \
     --extra-index-url https://pypi.org/simple \
     -r requirements.txt
 
-# Playwright: скачиваем Chromium, а системные зависимости уже установлены выше.
-RUN python -m playwright install chromium
+# Production workers may need the bundled browser; host-driven staging E2E does not.
+RUN if [ "$INSTALL_PLAYWRIGHT_BROWSER" = "true" ]; then python -m playwright install chromium; fi
 
 # Код проекта (src, scripts, tests и т.д.). Папка scripts/ не должна быть в .dockerignore (migrate_sqlite_to_postgres.py, smoke).
 COPY . .

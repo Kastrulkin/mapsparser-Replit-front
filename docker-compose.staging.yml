@@ -1,0 +1,59 @@
+services:
+  redis:
+    restart: "no"
+
+  postgres:
+    restart: "no"
+    environment:
+      POSTGRES_USER: localos_staging
+      POSTGRES_PASSWORD: localos_staging_only
+      POSTGRES_DB: localos_staging
+
+  app:
+    build:
+      args:
+        INSTALL_PLAYWRIGHT_BROWSER: "false"
+    restart: "no"
+    volumes:
+      - ./scripts:/app/scripts:ro
+    ports: !override
+      - "${STAGING_PORT:-18000}:8000"
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql://localos_staging:localos_staging_only@postgres:5432/localos_staging
+      POSTGRES_USER: localos_staging
+      POSTGRES_PASSWORD: localos_staging_only
+      POSTGRES_DB: localos_staging
+      FRONTEND_URL: http://127.0.0.1:${STAGING_PORT:-18000}
+      ALLOWED_ORIGINS: http://127.0.0.1:${STAGING_PORT:-18000}
+      RATE_LIMITING_ENABLED: "false"
+      SMTP_SERVER: localhost
+      SMTP_PORT: "1"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      TELEGRAM_BOT_TOKEN: ""
+      APIFY_TOKEN: ""
+      GIGACHAT_KEYS: ""
+      GIGACHAT_CLIENT_ID: ""
+      GIGACHAT_CLIENT_SECRET: ""
+      DEEPSEEK_API_KEY: ""
+      YOOKASSA_SHOP_ID: ""
+      YOOKASSA_SECRET_KEY: ""
+      OUTREACH_DISPATCH_ENABLED: "false"
+      OUTREACH_EMAIL_THREAD_SYNC_ENABLED: "false"
+      OUTREACH_TELEGRAM_THREAD_SYNC_ENABLED: "false"
+      SOCIAL_POST_DISPATCH_ENABLED: "false"
+      AGENT_ASYNC_RUNS_ENABLED: "false"
+      AGENT_SCHEDULE_DISPATCH_ENABLED: "false"
+      LEAD_JOURNEY_ENABLED: "true"
+      INFLUENCER_JOURNEY_ENABLED: "true"
+      PARTNERSHIP_JOURNEY_ENABLED: "true"
+      MAPS_JOURNEY_ENABLED: "true"
+      CONTENT_JOURNEY_ENABLED: "true"
+      AUTOMATION_JOURNEY_ENABLED: "true"
+      JOURNEY_ADMIN_BUILDER_ENABLED: "true"
+      JOURNEY_POST_AUTH_REDIRECT_ENABLED: "true"
+      GROWTH_PATHS_NAVIGATION_ENABLED: "true"
+      BLOCK_ACCESS_V2_ENABLED: "true"
+      JOURNEY_NOTIFICATIONS_ENABLED: "false"
+      JOURNEY_UPSELL_ENABLED: "false"
