@@ -26,7 +26,7 @@ from services.lead_journey_service import (
     serialize_action,
     serialize_journey,
 )
-from services.product_telemetry_service import record_product_event
+from services.product_telemetry_service import record_product_event, sanitize_public_event_properties
 
 
 lead_journey_bp = Blueprint("lead_journey_api", __name__)
@@ -393,7 +393,7 @@ def public_journey_event(token: str):
             entity_type=str(payload.get("entity_type") or "") or None,
             entity_id=str(payload.get("entity_id") or "") or None,
             target=str(payload.get("target") or ""),
-            properties=payload.get("properties") if isinstance(payload.get("properties"), dict) else {},
+            properties=sanitize_public_event_properties(payload.get("properties")),
         )
         db.conn.commit()
         return jsonify({"success": True, "event_id": event_id}), 201

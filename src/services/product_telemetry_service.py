@@ -24,6 +24,7 @@ ALLOWED_PRODUCT_EVENTS = frozenset({
     "content_draft_saved", "content_scheduled",
 })
 ALLOWED_SURFACES = frozenset({"web", "telegram_mini_app"})
+PUBLIC_EVENT_PROPERTY_KEYS = frozenset({"cta_variant"})
 
 
 def validate_product_event(event_name: object, surface: object) -> tuple[str | None, str | None, str | None]:
@@ -34,6 +35,22 @@ def validate_product_event(event_name: object, surface: object) -> tuple[str | N
     if clean_surface not in ALLOWED_SURFACES:
         return None, None, "Поверхность не поддерживается"
     return clean_event, clean_surface, None
+
+
+def sanitize_public_event_properties(properties: object) -> dict[str, str | int | float | bool]:
+    """Keep guest telemetry anonymous and intentionally narrow."""
+    if not isinstance(properties, dict):
+        return {}
+    sanitized: dict[str, str | int | float | bool] = {}
+    for key in PUBLIC_EVENT_PROPERTY_KEYS:
+        value = properties.get(key)
+        if isinstance(value, bool):
+            sanitized[key] = value
+        elif isinstance(value, (int, float)):
+            sanitized[key] = value
+        elif isinstance(value, str) and len(value) <= 80:
+            sanitized[key] = value
+    return sanitized
 
 
 def record_product_event(cursor: Any, *, event_name: str, surface: str, business_id: str | None,

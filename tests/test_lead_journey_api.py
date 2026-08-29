@@ -65,6 +65,44 @@ def test_public_event_rejects_non_allowlisted_event_before_database(monkeypatch)
     assert response.get_json()["error"] == "Событие не поддерживается"
 
 
+def test_public_event_strips_sensitive_properties_before_recording(monkeypatch):
+    monkeypatch.setattr(lead_journey_api, "journey_enabled", lambda _flag="LEAD_JOURNEY_ENABLED": True)
+    monkeypatch.setattr(lead_journey_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "load_public_journey",
+        lambda *_args, **_kwargs: {
+            "id": "journey-1",
+            "prospect_lead_id": "lead-1",
+            "claimed_business_id": None,
+            "claimed_user_id": None,
+        },
+    )
+    captured = {}
+    monkeypatch.setattr(
+        lead_journey_api,
+        "record_product_event",
+        lambda _cursor, **kwargs: captured.update(kwargs) or "event-1",
+    )
+
+    response = _app().test_client().post(
+        "/api/journeys/public/token/events",
+        json={
+            "event_name": "lead_link_opened",
+            "surface": "web",
+            "properties": {
+                "cta_variant": "primary",
+                "password": "do-not-store",
+                "token": "private-token",
+                "email": "person@example.com",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    assert captured["properties"] == {"cta_variant": "primary"}
+
+
 def test_create_journey_requires_selected_flow_before_database(monkeypatch):
     monkeypatch.setattr(lead_journey_api, "journey_enabled", lambda _flag="LEAD_JOURNEY_ENABLED": True)
     monkeypatch.setattr(lead_journey_api, "require_auth_from_request", lambda: {"user_id": "admin-1", "is_superadmin": True})

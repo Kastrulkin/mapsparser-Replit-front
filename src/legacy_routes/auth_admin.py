@@ -1492,14 +1492,25 @@ def auth_verify_email():
                 "journey_action": resumed_action,
             }
         )
-    except Exception as e:
-        print(f"❌ Ошибка подтверждения email: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception as error:
+        logger.warning("Email verification failed: %s", type(error).__name__)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось подтвердить email",
+            "code": "email_verification_failed",
+        }), 500
 
 @app.route('/api/auth/resend-verification', methods=['POST'])
 @rate_limit_if_available("5 per hour")
 def auth_resend_verification():
     """Повторно отправить письмо подтверждения email."""
+    generic_response = {
+        "success": True,
+        "message": (
+            "Если аккаунт существует и email ещё не подтверждён, "
+            "мы отправили новое письмо."
+        ),
+    }
     try:
         data = request.get_json(silent=True) or {}
         email = normalize_email(data.get('email', ''))
@@ -1508,23 +1519,15 @@ def auth_resend_verification():
 
         result = rotate_verification_token(email)
         if result.get('error'):
-            return jsonify({"error": result['error']}), 400
+            return jsonify(generic_response), 200
 
-        email_sent = send_verification_email(
-            result['email'],
-            result.get('name'),
-            result.get('verification_token'),
+        send_verification_email(
+            result['email'], result.get('name'), result.get('verification_token'),
         )
-        return jsonify(
-            {
-                "success": True,
-                "email_sent": bool(email_sent),
-                "message": "Письмо подтверждения отправлено повторно",
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка повторной отправки подтверждения: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify(generic_response), 200
+    except Exception as error:
+        logger.warning("Verification email resend failed: %s", type(error).__name__)
+        return jsonify(generic_response), 200
 
 @app.route('/api/auth/login', methods=['POST'])
 @rate_limit_if_available("5 per minute")
