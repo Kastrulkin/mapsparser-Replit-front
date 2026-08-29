@@ -17,6 +17,23 @@ def upgrade():
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
     op.execute(
         """
+        CREATE TABLE IF NOT EXISTS sales_room_files (
+          id UUID PRIMARY KEY,
+          room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+          message_id UUID REFERENCES sales_room_messages(id) ON DELETE SET NULL,
+          original_name TEXT NOT NULL,
+          mime_type TEXT,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          storage_path TEXT NOT NULL,
+          public_url TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_sales_room_files_room_created
+          ON sales_room_files(room_id, created_at DESC);
+        """
+    )
+    op.execute(
+        """
         ALTER TABLE sales_room_participants
           ADD COLUMN IF NOT EXISTS access_token_hash TEXT,
           ADD COLUMN IF NOT EXISTS access_token_expires_at TIMESTAMPTZ,
