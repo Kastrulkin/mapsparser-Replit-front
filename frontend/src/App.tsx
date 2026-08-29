@@ -355,7 +355,7 @@ const AppShell = () => {
             <Route path="more" element={<MorePage />} />
             <Route path="operator" element={<OperatorPage />} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
-            <Route path="agents" element={<AgentBlueprintsPage />} />
+            <Route path="agents" element={<JourneyWorkspaceFocus><AgentBlueprintsPage /></JourneyWorkspaceFocus>} />
             <Route path="bookings" element={<Navigate to="/dashboard/progress" replace />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />

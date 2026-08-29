@@ -86,4 +86,26 @@ describe('JourneyActionCard', () => {
       payload: { draft_text: 'Проверенный текст', content_plan_item_id: 'item-1' },
     }));
   });
+
+  it('collects a concrete automation task before preflight on Mini App', async () => {
+    const automationAction: JourneyAction = {
+      ...action,
+      id: 'automation-action', flow_type: 'automation', entity_type: 'automation_use_case', entity_id: 'routine_control',
+      action_type: 'configure_automation', title: 'Настроить первую задачу', description: 'Выберите повторяющуюся работу.',
+      payload: {}, allowed_commands: ['save_configuration'], version: 1,
+    };
+    vi.mocked(runJourneyCommand).mockResolvedValue({ action: automationAction, next_action: null });
+    const user = userEvent.setup();
+    render(<JourneyActionCard action={automationAction} businessId="business-1" surface="telegram_mini_app" onUpdated={vi.fn()} />);
+
+    const result = screen.getByDisplayValue('Подготовленные материалы для проверки');
+    await user.clear(result);
+    await user.type(result, 'Три черновика ответов без публикации');
+    await user.click(screen.getByRole('button', { name: /Сохранить настройку/ }));
+
+    expect(runJourneyCommand).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'save_configuration', surface: 'telegram_mini_app',
+      payload: { use_case: 'reviews_without_reply', expected_result: 'Три черновика ответов без публикации' },
+    }));
+  });
 });

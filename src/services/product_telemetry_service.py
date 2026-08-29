@@ -22,6 +22,7 @@ ALLOWED_PRODUCT_EVENTS = frozenset({
     "email_verified", "journey_claimed", "journey_workspace_opened",
     "auth_redirect_failed", "stale_action_detected", "orphan_action_detected",
     "content_draft_saved", "content_scheduled",
+    "automation_configured", "automation_preflight_approved", "automation_run_linked",
 })
 ALLOWED_SURFACES = frozenset({"web", "telegram_mini_app"})
 PUBLIC_EVENT_PROPERTY_KEYS = frozenset({"cta_variant"})

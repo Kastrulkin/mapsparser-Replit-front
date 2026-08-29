@@ -1,6 +1,6 @@
 import { newAuth } from '@/lib/auth_new';
 
-export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content';
+export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content' | 'automation';
 
 export type LeadJourneyDirection = {
   key: LeadJourneyKey;
@@ -20,7 +20,7 @@ export const LEAD_JOURNEY_STORAGE_KEY = 'localos_lead_journey_intent';
 export const LEAD_JOURNEY_TOKEN_STORAGE_KEY = 'localos_lead_journey_token';
 
 export type JourneyOpportunity = {
-  flow_type: 'influencer' | 'partnership' | 'maps' | 'content';
+  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'automation';
   entity_type: string;
   entity_id?: string;
   title: string;
@@ -48,7 +48,7 @@ export type JourneyAction = {
   id: string;
   journey_id?: string | null;
   business_id?: string | null;
-  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'upgrade';
+  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'automation' | 'upgrade';
   entity_type: string;
   entity_id?: string | null;
   action_type: string;
@@ -221,10 +221,27 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     lockedResult: 'После регистрации откроются полный черновик, редактирование и сохранение в контент-календарь.',
     dashboardRoute: '/dashboard/content',
   },
+  {
+    key: 'automation',
+    eyebrow: 'ИИ-сотрудники',
+    title: 'Поручить LocalOS повторяющуюся задачу',
+    preview: 'Покажем один безопасный сценарий автоматизации и что останется под вашим подтверждением.',
+    detailTitle: 'Одна регулярная задача под контролем',
+    detail: 'LocalOS помогает выбрать повторяющуюся работу, проверить источники данных и ограничения, а затем запустить ИИ-сотрудника через существующий preflight.',
+    prepareLabel: 'Показать сценарий автоматизации',
+    resultTitle: 'Сценарий автоматизации подготовлен',
+    resultPreview: [
+      'Какая повторяющаяся задача будет выполняться',
+      'Какие данные нужны и что проверит LocalOS до запуска',
+      'Какие внешние действия всё равно потребуют ручного подтверждения',
+    ],
+    lockedResult: 'После регистрации откроется настройка ИИ-сотрудника. Проверка плана и запуск доступны после оплаты и отдельного подтверждения.',
+    dashboardRoute: '/dashboard/agents',
+  },
 ];
 
 export const isLeadJourneyKey = (value: string | null): value is LeadJourneyKey => (
-  value === 'influencers' || value === 'partnerships' || value === 'maps' || value === 'content'
+  value === 'influencers' || value === 'partnerships' || value === 'maps' || value === 'content' || value === 'automation'
 );
 
 export const leadJourneyKeyForFlow = (flow: string | null | undefined): LeadJourneyKey | null => {
@@ -241,6 +258,7 @@ export const journeyActionRoute = (action: JourneyAction) => {
     progress: '/dashboard/card',
     maps: '/dashboard/card',
     content: '/dashboard/content',
+    agents: '/dashboard/agents',
     settings: '/dashboard/settings',
     today: '/dashboard/today',
   };

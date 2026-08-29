@@ -46,6 +46,9 @@ COMMAND_EVENT_NAMES = {
     "open_upgrade": "paywall_viewed",
     "save_draft": "content_draft_saved",
     "schedule": "content_scheduled",
+    "save_configuration": "automation_configured",
+    "approve": "automation_preflight_approved",
+    "link_run": "automation_run_linked",
 }
 
 
@@ -618,6 +621,27 @@ def action_command(action_id: str):
                 return jsonify({
                     "success": False,
                     "error": "Персональные сообщения, подключение канала и отправка доступны после оплаты.",
+                    "code": "payment_required",
+                    "payment_required": True,
+                    "billing_url": "/dashboard/profile?focus=subscription#subscription",
+                }), 402
+        if current_action.get("flow_type") == "automation" and current_action.get("action_type") != "configure_automation" and not bool(user_data.get("is_superadmin")):
+            cursor.execute(
+                """
+                SELECT LOWER(COALESCE(subscription_tier, '')) IN
+                           ('starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise')
+                       AND LOWER(COALESCE(subscription_status, '')) IN ('active', 'trialing')
+                       AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
+                       AS automation_allowed
+                FROM businesses WHERE id = %s
+                """,
+                (business_id,),
+            )
+            access_row = cursor.fetchone() or {}
+            if not bool(access_row.get("automation_allowed")):
+                return jsonify({
+                    "success": False,
+                    "error": "Проверка плана и запуск ИИ-сотрудника доступны после оплаты.",
                     "code": "payment_required",
                     "payment_required": True,
                     "billing_url": "/dashboard/profile?focus=subscription#subscription",

@@ -21,9 +21,10 @@ describe('LeadJourneyPage', () => {
     expect(leadJourneyKeyForFlow('partnership')).toBe('partnerships');
     expect(leadJourneyKeyForFlow('maps')).toBe('maps');
     expect(leadJourneyKeyForFlow('content')).toBe('content');
+    expect(leadJourneyKeyForFlow('automation')).toBe('automation');
   });
 
-  it('shows four directions, reveals a result, and carries the choice into registration', async () => {
+  it('shows five directions, reveals a result, and carries the choice into registration', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
 
@@ -31,6 +32,7 @@ describe('LeadJourneyPage', () => {
     expect(screen.getByRole('button', { name: /Бизнесы рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Карты/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Контент/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ИИ-сотрудники/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Карты/ }));
     expect(await screen.findByRole('heading', { name: 'Первое исправление с понятным эффектом' })).toBeInTheDocument();
@@ -67,7 +69,7 @@ describe('LeadJourneyPage', () => {
     render(<MemoryRouter initialEntries={['/start/content-token']}><Routes><Route path="/start/:token" element={<LeadJourneyPage />} /></Routes></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: 'Как сохранить результат процедуры' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Четыре пути к следующему результату' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Выберите задачу для бизнеса' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Подготовить черновик' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Что ещё можно улучшить' })).toBeInTheDocument();
   });
@@ -108,4 +110,30 @@ describe('LeadJourneyPage', () => {
     expect(registrationLink.getAttribute('href')).toContain('business_name=%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F');
     expect(screen.queryByText(/\+7999/)).not.toBeInTheDocument();
   }, 15_000);
+
+  it('opens an operator-selected automation journey and keeps the preview non-technical', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/events')) return { ok: true, json: async () => ({ success: true }) };
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          journey: {
+            id: 'journey-automation', status: 'preview', source: 'admin', selected_flow: 'automation',
+            business: { name: 'Студия' },
+            opportunities: [
+              { flow_type: 'automation', entity_type: 'automation_use_case', entity_id: 'reviews_without_reply', title: 'Не пропускать отзывы без ответа', summary: 'LocalOS соберёт новые отзывы и подготовит черновики.', reason: 'Ответы сейчас приходится проверять вручную.', mechanic: 'Проверка каждый день; публикация только после подтверждения.', message_excerpt: 'Например: подготовить черновики ответов.' },
+            ],
+          },
+        }),
+      };
+    }));
+
+    render(<MemoryRouter initialEntries={['/start/automation-token']}><Routes><Route path="/start/:token" element={<LeadJourneyPage />} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Не пропускать отзывы без ответа' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Показать сценарий автоматизации' })).toBeInTheDocument();
+    expect(screen.queryByText(/prompt|capability|credential/i)).not.toBeInTheDocument();
+  });
 });

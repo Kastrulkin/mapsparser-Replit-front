@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import SeoMeta from '@/components/SeoMeta';
@@ -20,7 +20,7 @@ import {
   type PublicLeadJourney,
 } from '@/lib/leadJourney';
 
-const directionIcon = (key: LeadJourneyKey) => key === 'influencers' ? Megaphone : key === 'partnerships' ? Handshake : key === 'content' ? FilePenLine : MapPinned;
+const directionIcon = (key: LeadJourneyKey) => key === 'influencers' ? Megaphone : key === 'partnerships' ? Handshake : key === 'content' ? FilePenLine : key === 'automation' ? Bot : MapPinned;
 const flowForKey = (key: LeadJourneyKey) => key === 'influencers' ? 'influencer' : key === 'partnerships' ? 'partnership' : key;
 
 const DirectionCard = ({ direction, opportunity, onOpen, secondary = false }: { direction: LeadJourneyDirection; opportunity?: JourneyOpportunity; onOpen: () => void; secondary?: boolean }) => {
@@ -120,7 +120,7 @@ export default function LeadJourneyPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f7f5] px-4 py-10 text-slate-950 sm:px-6 sm:py-16 lg:px-8">
-      <SeoMeta title="Найдите первое действие для новых клиентов — LocalOS" description="Четыре персональных направления роста: локальные авторы, партнёры, карты и контент." path={token ? `/start/${token}` : '/growth'} />
+      <SeoMeta title="Найдите первое действие для новых клиентов — LocalOS" description="Пять персональных направлений: локальные авторы, партнёры, карты, контент и автоматизация." path={token ? `/start/${token}` : '/growth'} />
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           {selected && !journeySelectedKey ? <button type="button" onClick={goBack} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"><ArrowLeft className="h-4 w-4" />Все направления</button> : <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"><ArrowLeft className="h-4 w-4" />На главную</Link>}
@@ -128,7 +128,7 @@ export default function LeadJourneyPage() {
         </div>
 
         {!selected ? <>
-          <section className="mx-auto max-w-4xl pb-10 pt-12 text-center sm:pb-14 sm:pt-16"><span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-700">Персональное превью</span><h1 className="mt-4 text-balance text-4xl font-bold tracking-[-0.045em] sm:text-6xl">Четыре пути к следующему результату</h1><p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-8 text-slate-600">Выберите направление. Сначала покажем конкретную возможность и часть готового результата. Регистрация понадобится только для завершения действия.</p></section>
+          <section className="mx-auto max-w-4xl pb-10 pt-12 text-center sm:pb-14 sm:pt-16"><span className="text-sm font-bold uppercase tracking-[0.16em] text-orange-700">Персональное превью</span><h1 className="mt-4 text-balance text-4xl font-bold tracking-[-0.045em] sm:text-6xl">Выберите задачу для бизнеса</h1><p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-8 text-slate-600">Сначала покажем конкретную возможность и часть готового результата. Регистрация понадобится только для продолжения выбранного сценария.</p></section>
           <section aria-label="Направления роста" className="grid gap-4 md:grid-cols-2">{leadJourneyDirections.map((direction) => <DirectionCard key={direction.key} direction={direction} opportunity={opportunityForKey(direction.key)} onOpen={() => openDirection(direction.key)} />)}</section>
         </> : <section className="mx-auto max-w-4xl pt-10 sm:pt-14">
           <div className="overflow-hidden rounded-[32px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_24px_70px_rgba(15,23,42,0.10)]">

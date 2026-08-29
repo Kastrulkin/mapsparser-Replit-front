@@ -14,12 +14,13 @@ from psycopg2.extras import Json
 
 ACTIVE_ACTION_STATUSES = {"ready", "in_progress", "waiting", "blocked"}
 FINAL_ACTION_STATUSES = {"completed", "superseded", "cancelled"}
-FLOW_TYPES = {"influencer", "partnership", "maps", "content"}
+FLOW_TYPES = {"influencer", "partnership", "maps", "content", "automation"}
 FLOW_FLAGS = {
     "influencer": "INFLUENCER_JOURNEY_ENABLED",
     "partnership": "PARTNERSHIP_JOURNEY_ENABLED",
     "maps": "MAPS_JOURNEY_ENABLED",
     "content": "CONTENT_JOURNEY_ENABLED",
+    "automation": "AUTOMATION_JOURNEY_ENABLED",
 }
 PUBLIC_EVENT_NAMES = {
     "lead_link_opened", "opportunity_preview_clicked", "opportunity_list_opened",
@@ -49,6 +50,11 @@ ACTION_COMMANDS = {
     "waiting_for_publication": ("mark_published",),
     "add_content_result": ("add_result",),
     "start_next_content_cycle": ("start_next_cycle",),
+    "configure_automation": ("save_configuration",),
+    "review_automation_preflight": ("approve",),
+    "run_automation": ("link_run",),
+    "review_automation_result": ("add_result",),
+    "start_next_automation_cycle": ("start_next_cycle",),
     "upgrade": ("open_upgrade",),
 }
 
@@ -159,11 +165,12 @@ def _default_opportunities(lead: dict[str, Any]) -> list[dict[str, Any]]:
         {"flow_type": "partnership", "entity_type": "partner_search", "entity_id": "", "title": "Соседский партнёр", "summary": "Найдём бизнес рядом с дополняющей аудиторией.", "reason": "Клиенты могут пользоваться обеими услугами в одном сценарии.", "mechanic": "Взаимная рекомендация клиентов.", "message_excerpt": "Здравствуйте! Мы работаем рядом и хотим предложить…", "count": 0, "metrics": {}},
         {"flow_type": "maps", "entity_type": "card_audit", "entity_id": "", "title": "Возможность на картах", "summary": "Покажем приоритетное отличие от ближайших конкурентов.", "reason": "Конкретная задача помогает улучшить полноту карточки.", "mechanic": "Выполнить первый пункт недельного плана.", "message_excerpt": "", "count": 0, "metrics": {}},
         {"flow_type": "content", "entity_type": "content_topic", "entity_id": "", "title": "Тема для следующей публикации", "summary": f"Покажем тему и короткий черновик для {business_name} на основе реальных данных бизнеса.", "reason": "Регулярный полезный контент помогает напоминать о бизнесе без постоянного поиска идей.", "mechanic": "Подготовить один материал, проверить его и сохранить в календарь.", "message_excerpt": "Полезный материал для клиентов вашего бизнеса…", "count": 0, "metrics": {}},
+        {"flow_type": "automation", "entity_type": "automation_use_case", "entity_id": "routine_control", "title": "Автоматизировать повторяющуюся работу", "summary": "Выберите регулярную задачу, проверьте план ИИ-сотрудника и контролируйте каждый запуск.", "reason": "Повторяющиеся проверки можно выполнять по расписанию, сохраняя ручное подтверждение важных действий.", "mechanic": "Сначала настроить задачу и проверить preflight. Запуск и внешние действия подтверждаются отдельно.", "message_excerpt": "Например: каждое утро собрать отзывы без ответа и подготовить черновики.", "count": 0, "metrics": {}},
     ]
 
 
 def build_lead_preview(lead: dict[str, Any]) -> dict[str, Any]:
-    """Build a safe four-path preview from fields already stored on the lead."""
+    """Build a safe five-path preview from fields already stored on the lead."""
     business_name = str(lead.get("name") or "").strip()
     city = str(lead.get("city") or "").strip()
     address = str(lead.get("address") or "").strip()
@@ -439,6 +446,11 @@ def _action_copy(flow_type: str, action_type: str, payload: dict[str, Any]) -> t
         "waiting_for_publication": (f"Зафиксировать публикацию: {name}", "Публикация выполняется вручную или через отдельное подтверждение.", "Указать публикацию", 110),
         "add_content_result": (f"Добавить результат: {name}", "Зафиксируйте только известный результат опубликованного материала.", "Добавить результат", 100),
         "start_next_content_cycle": ("Подготовить следующий материал", "Используйте результат публикации для выбора следующей темы.", "Выбрать следующую тему", 70),
+        "configure_automation": ("Настроить первую задачу", "Выберите повторяющуюся работу и ожидаемый результат. Внешние действия пока не запускаются.", "Настроить задачу", 105),
+        "review_automation_preflight": ("Проверить план запуска", "Проверьте источники данных, ограничения и действия, которые потребуют подтверждения.", "Проверить и подтвердить", 120),
+        "run_automation": ("Запустить проверенную задачу", "Откройте ИИ-сотрудника, выполните preflight и запустите задачу вручную.", "Открыть ИИ-сотрудника", 125),
+        "review_automation_result": ("Проверить результат ИИ-сотрудника", "Результат реального запуска готов. Проверьте его перед следующим циклом.", "Зафиксировать результат", 115),
+        "start_next_automation_cycle": ("Запустить следующий цикл", "Сохраните удачную настройку или скорректируйте задачу перед повтором.", "Настроить следующий цикл", 70),
         "upgrade": ("Автоматизировать повторяющуюся работу", "Вы завершили полезный цикл; LocalOS может поддерживать его постоянно.", "Посмотреть автоматизацию", 40),
     }
     return copies.get(action_type, ("Продолжить работу", "LocalOS подготовил следующий конкретный шаг.", "Продолжить", 50))
@@ -484,7 +496,7 @@ def ensure_action(
 
 
 def _screen_for_flow(flow_type: str) -> str:
-    return {"influencer": "influencers", "partnership": "partnerships", "maps": "progress", "content": "content", "upgrade": "settings"}.get(flow_type, "today")
+    return {"influencer": "influencers", "partnership": "partnerships", "maps": "progress", "content": "content", "automation": "agents", "upgrade": "settings"}.get(flow_type, "today")
 
 
 def reserve_journey(cursor: Any, *, token: str, user_id: str, business_id: str) -> dict[str, Any]:
@@ -646,6 +658,15 @@ def _claim_loaded_journey(cursor: Any, *, journey: dict[str, Any], user_id: str,
         action_type = "prepare_content"
     elif flow_type == "influencer":
         action_type = "browse_creators"
+    elif flow_type == "automation":
+        resolved_entity_type = "automation_use_case"
+        resolved_entity_id = resolved_entity_id or "routine_control"
+        payload.update({
+            "use_case": resolved_entity_id,
+            "domain_summary": opportunity.get("summary"),
+            "approval_required": True,
+        })
+        action_type = "configure_automation"
     else:
         action_type = "send_message"
     action = ensure_action(
@@ -966,6 +987,31 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
         current_payload.pop("scheduled_for", None)
         current_payload.pop("publication_url", None)
         return "prepare_content", "completed", None, current_payload
+    if action_type == "configure_automation" and command == "save_configuration":
+        if not str(payload.get("use_case") or "").strip():
+            raise JourneyError("Выберите задачу для ИИ-сотрудника", 400, "automation_use_case_required")
+        if not str(payload.get("expected_result") or "").strip():
+            raise JourneyError("Укажите ожидаемый результат", 400, "automation_result_required")
+        current_payload["approval_required"] = True
+        return "review_automation_preflight", "completed", None, current_payload
+    if action_type == "review_automation_preflight" and command == "approve":
+        if payload.get("confirmed") is not True:
+            raise JourneyError("Подтвердите план запуска", 400, "automation_preflight_confirmation_required")
+        current_payload["preflight_reviewed_at"] = datetime.now(timezone.utc).isoformat()
+        return "run_automation", "completed", None, current_payload
+    if action_type == "run_automation" and command == "link_run":
+        return "review_automation_result", "completed", None, current_payload
+    if action_type == "review_automation_result" and command == "add_result":
+        if not str(payload.get("result_summary") or "").strip():
+            raise JourneyError("Кратко укажите подтверждённый результат", 400, "automation_result_summary_required")
+        current_payload["cycle_completed"] = True
+        return "start_next_automation_cycle", "completed", None, current_payload
+    if action_type == "start_next_automation_cycle" and command == "start_next_cycle":
+        current_payload["cycle_key"] = str(uuid.uuid4())
+        current_payload.pop("run_id", None)
+        current_payload.pop("result_summary", None)
+        current_payload.pop("preflight_reviewed_at", None)
+        return "configure_automation", "completed", None, current_payload
     if action_type == "upgrade" and command == "open_upgrade":
         return None, "in_progress", None, current_payload
     raise JourneyError("Переход не поддерживается", 409, "transition_not_allowed")
@@ -1105,6 +1151,43 @@ def _update_domain(cursor: Any, action: dict[str, Any], command: str, payload: d
                     raise JourneyError("Материал не найден или недоступен", 404, "content_item_not_found")
             domain_updates["content_plan_item_id"] = content_item_id
             domain_updates["entity_id"] = content_item_id
+    if flow == "automation" and command == "link_run":
+        run_id = str(payload.get("run_id") or "").strip()
+        if run_id:
+            cursor.execute(
+                """
+                SELECT id, blueprint_id, status, completed_at
+                FROM agent_runs
+                WHERE id = %s AND business_id = %s
+                LIMIT 1
+                """,
+                (run_id, action.get("business_id")),
+            )
+        else:
+            reviewed_at = _json_object(action.get("payload_json")).get("preflight_reviewed_at")
+            cursor.execute(
+                """
+                SELECT id, blueprint_id, status, completed_at
+                FROM agent_runs
+                WHERE business_id = %s
+                  AND status = 'completed'
+                  AND (%s IS NULL OR completed_at >= %s::timestamptz)
+                ORDER BY completed_at DESC NULLS LAST, updated_at DESC
+                LIMIT 1
+                """,
+                (action.get("business_id"), reviewed_at, reviewed_at),
+            )
+        run = _row(cursor, cursor.fetchone())
+        if not run:
+            raise JourneyError("Сначала завершите запуск ИИ-сотрудника", 409, "automation_run_not_found")
+        if str(run.get("status") or "") != "completed":
+            raise JourneyError("Дождитесь успешного завершения запуска", 409, "automation_run_not_completed")
+        domain_updates.update({
+            "run_id": str(run.get("id") or ""),
+            "blueprint_id": str(run.get("blueprint_id") or ""),
+            "run_status": "completed",
+            "run_completed_at": _iso(run.get("completed_at")),
+        })
     return domain_updates
 
 

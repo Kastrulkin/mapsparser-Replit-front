@@ -138,6 +138,45 @@ def test_content_cycle_requires_draft_and_schedule_then_records_result():
     assert payload["cycle_completed"] is True
 
 
+def test_automation_cycle_requires_configuration_confirmation_and_real_run():
+    with pytest.raises(JourneyError) as missing_use_case:
+        _next_action_spec(action("configure_automation", "automation"), "save_configuration", {"expected_result": "Черновики ответов"})
+    assert missing_use_case.value.code == "automation_use_case_required"
+
+    next_type, status, _due_at, payload = _next_action_spec(
+        action("configure_automation", "automation"),
+        "save_configuration",
+        {"use_case": "reviews_without_reply", "expected_result": "Черновики ответов"},
+    )
+    assert (next_type, status) == ("review_automation_preflight", "completed")
+
+    with pytest.raises(JourneyError) as missing_confirmation:
+        _next_action_spec(action("review_automation_preflight", "automation", payload), "approve", {})
+    assert missing_confirmation.value.code == "automation_preflight_confirmation_required"
+
+    next_type, status, _due_at, payload = _next_action_spec(
+        action("review_automation_preflight", "automation", payload),
+        "approve",
+        {"confirmed": True},
+    )
+    assert (next_type, status) == ("run_automation", "completed")
+
+    next_type, status, _due_at, payload = _next_action_spec(
+        action("run_automation", "automation", payload),
+        "link_run",
+        {},
+    )
+    assert (next_type, status) == ("review_automation_result", "completed")
+
+    next_type, status, _due_at, payload = _next_action_spec(
+        action("review_automation_result", "automation", payload),
+        "add_result",
+        {"result_summary": "Подготовлено 3 черновика, ничего не опубликовано"},
+    )
+    assert (next_type, status) == ("start_next_automation_cycle", "completed")
+    assert payload["cycle_completed"] is True
+
+
 def test_failed_map_comparison_can_return_to_refresh():
     next_type, status, _due_at, payload = _next_action_spec(
         action("compare_snapshot", "maps", {"refresh_error": "quota"}),
@@ -249,10 +288,12 @@ def test_lead_preview_uses_only_safe_business_context():
         "phone": "+79990000000",
     })
 
-    assert len(preview["opportunities"]) == 4
+    assert len(preview["opportunities"]) == 5
     assert preview["opportunities"][2]["metrics"] == {"rating": 4.8, "reviews_count": 42}
     assert preview["opportunities"][3]["flow_type"] == "content"
     assert "Салон красоты" in preview["opportunities"][3]["reason"]
+    assert preview["opportunities"][4]["flow_type"] == "automation"
+    assert "prompt" not in preview["opportunities"][4]
     assert "phone" not in preview
 
 

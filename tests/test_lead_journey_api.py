@@ -195,6 +195,39 @@ def test_influencer_message_command_is_blocked_without_payment(monkeypatch):
     assert response.get_json()["code"] == "payment_required"
 
 
+def test_automation_configuration_is_free_but_preflight_requires_payment(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
+    action = {
+        "id": "action-1", "flow_type": "automation", "action_type": "configure_automation",
+        "entity_type": "automation_use_case", "entity_id": "routine_control",
+    }
+    monkeypatch.setattr(lead_journey_api, "load_action", lambda *_args, **_kwargs: action)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "execute_command",
+        lambda *_args, **_kwargs: {"action": action, "next_action": None, "idempotent_replay": False},
+    )
+    monkeypatch.setattr(lead_journey_api, "record_product_event", lambda *_args, **_kwargs: "event-1")
+
+    response = _app().test_client().post(
+        "/api/journey-actions/action-1/commands",
+        json={
+            "business_id": "business-1", "command": "save_configuration", "version": 1,
+            "surface": "web", "payload": {"use_case": "reviews_without_reply", "expected_result": "Черновики"},
+        },
+    )
+    assert response.status_code == 200
+
+    action["action_type"] = "review_automation_preflight"
+    response = _app().test_client().post(
+        "/api/journey-actions/action-1/commands",
+        json={"business_id": "business-1", "command": "approve", "version": 2, "surface": "web"},
+    )
+    assert response.status_code == 402
+    assert response.get_json()["code"] == "payment_required"
+
+
 def test_idempotent_action_replay_does_not_duplicate_product_event(monkeypatch):
     _enable_and_authorize(monkeypatch)
     monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)

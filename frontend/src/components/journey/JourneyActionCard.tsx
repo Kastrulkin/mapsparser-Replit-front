@@ -13,6 +13,7 @@ const commandLabel: Record<string, string> = {
   save_terms: 'Сохранить условия', mark_launched: 'Партнёрство запущено', mark_published: 'Размещение вышло',
   add_result: 'Добавить результат', complete: 'Готово', start_next_cycle: 'Начать следующий цикл', open_upgrade: 'Автоматизировать работу',
   prepare: 'Подготовить черновик', save_draft: 'Сохранить черновик', schedule: 'Добавить в календарь',
+  save_configuration: 'Сохранить настройку', approve: 'Подтвердить план', link_run: 'Проверить завершённый запуск',
 };
 
 const primaryCommand = (action: JourneyAction) => action.allowed_commands.find((item) => item !== 'copy') || action.allowed_commands[0] || '';
@@ -27,6 +28,8 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
   const [draftText, setDraftText] = useState(typeof action.payload?.draft_text === 'string' ? action.payload.draft_text : typeof action.payload?.content_excerpt === 'string' ? action.payload.content_excerpt : '');
   const [scheduledFor, setScheduledFor] = useState(typeof action.payload?.scheduled_for === 'string' ? action.payload.scheduled_for : '');
   const [views, setViews] = useState('');
+  const [useCase, setUseCase] = useState(typeof action.payload?.use_case === 'string' ? action.payload.use_case : 'reviews_without_reply');
+  const [expectedResult, setExpectedResult] = useState(typeof action.payload?.expected_result === 'string' ? action.payload.expected_result : 'Подготовленные материалы для проверки');
   const command = primaryCommand(action);
 
   const execute = async (nextCommand: string) => {
@@ -35,6 +38,11 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
     setError('');
     const payload: Record<string, unknown> = {};
     if (nextCommand === 'record_reply') payload.outcome = outcome;
+    if (nextCommand === 'save_configuration') {
+      payload.use_case = useCase;
+      payload.expected_result = expectedResult;
+    }
+    if (nextCommand === 'approve') payload.confirmed = true;
     if (nextCommand === 'save_terms') payload.details = details;
     if (nextCommand === 'mark_launched') payload.mechanic = details || 'other';
     if (nextCommand === 'mark_published') payload.publication_url = details;
@@ -51,6 +59,7 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       payload.sales = Number(sales || 0);
       if (action.flow_type === 'content') payload.views = Number(views || 0);
       payload.note = details;
+      if (action.flow_type === 'automation') payload.result_summary = details;
     }
     try {
       await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface });
@@ -80,6 +89,9 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       {['define_terms', 'mark_launched', 'mark_published', 'waiting_for_publication', 'add_result', 'add_content_result'].includes(action.action_type) ? <Textarea value={details} onChange={(event) => setDetails(event.target.value)} className={cn('mt-4 min-h-24', dark && 'border-white/10 bg-black/20 text-zinc-100')} placeholder={['mark_published', 'waiting_for_publication'].includes(action.action_type) ? 'Ссылка на публикацию' : 'Условия или комментарий'} /> : null}
       {action.action_type === 'review_content' ? <Textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} className={cn('mt-4 min-h-40', dark && 'border-white/10 bg-black/20 text-zinc-100')} placeholder="Проверьте и отредактируйте черновик" /> : null}
       {action.action_type === 'save_to_calendar' ? <Input type="date" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} className={cn('mt-4 min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} aria-label="Дата публикации" /> : null}
+      {action.action_type === 'configure_automation' ? <div className="mt-4 grid gap-3"><label className={cn('text-sm font-medium', dark ? 'text-zinc-300' : 'text-slate-700')}>Что поручить<Select value={useCase} onValueChange={setUseCase}><SelectTrigger className={cn('mt-2 min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-200')}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reviews_without_reply">Собирать отзывы без ответа</SelectItem><SelectItem value="content_drafts">Готовить черновики контента</SelectItem><SelectItem value="map_changes">Проверять изменения карточек</SelectItem><SelectItem value="weekly_summary">Собирать недельную сводку</SelectItem></SelectContent></Select></label><label className={cn('text-sm font-medium', dark ? 'text-zinc-300' : 'text-slate-700')}>Что должно получиться<Input value={expectedResult} onChange={(event) => setExpectedResult(event.target.value)} className={cn('mt-2 min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /></label></div> : null}
+      {action.action_type === 'run_automation' ? <p className={cn('mt-4 rounded-2xl p-4 text-sm leading-6', dark ? 'bg-white/[0.05] text-zinc-300' : 'bg-slate-50 text-slate-600')}>Настройте и запустите ИИ-сотрудника в рабочей области ниже. Затем вернитесь к этому шагу и нажмите «Проверить завершённый запуск».</p> : null}
+      {action.action_type === 'review_automation_result' ? <Textarea value={details} onChange={(event) => setDetails(event.target.value)} className={cn('mt-4 min-h-24', dark && 'border-white/10 bg-black/20 text-zinc-100')} placeholder="Что подтверждено результатом запуска" /> : null}
       {action.action_type === 'add_result' ? <div className="mt-3 grid grid-cols-2 gap-2"><Input inputMode="numeric" value={inquiries} onChange={(event) => setInquiries(event.target.value)} placeholder="Обращения" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /><Input inputMode="numeric" value={sales} onChange={(event) => setSales(event.target.value)} placeholder="Продажи" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /></div> : null}
       {action.action_type === 'add_content_result' ? <div className="mt-3 grid grid-cols-2 gap-2"><Input inputMode="numeric" value={views} onChange={(event) => setViews(event.target.value)} placeholder="Просмотры" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /><Input inputMode="numeric" value={inquiries} onChange={(event) => setInquiries(event.target.value)} placeholder="Обращения" className={cn('min-h-11', dark && 'border-white/10 bg-black/20 text-zinc-100')} /></div> : null}
       {error ? <p className={cn('mt-3 text-sm', dark ? 'text-red-300' : 'text-red-700')}>{error}</p> : null}
