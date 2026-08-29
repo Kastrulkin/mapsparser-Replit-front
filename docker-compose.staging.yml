@@ -13,6 +13,11 @@ services:
     build:
       args:
         INSTALL_PLAYWRIGHT_BROWSER: "false"
+        VITE_CONTENT_JOURNEY_ENABLED: "true"
+        VITE_JOURNEY_ADMIN_BUILDER_ENABLED: "true"
+        VITE_JOURNEY_POST_AUTH_REDIRECT_ENABLED: "true"
+        VITE_GROWTH_PATHS_NAVIGATION_ENABLED: "true"
+        VITE_BLOCK_ACCESS_V2_ENABLED: "true"
     restart: "no"
     volumes:
       - ./scripts:/app/scripts:ro
