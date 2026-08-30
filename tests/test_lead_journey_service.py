@@ -16,6 +16,7 @@ from services.lead_journey_service import (
     build_lead_preview_from_sources,
     load_public_journey,
     reconcile_map_actions,
+    serialize_journey,
     token_hash,
 )
 
@@ -44,6 +45,33 @@ def test_public_opportunity_drops_private_fields_and_truncates_message():
     assert "contact" not in result
     assert "full_message" not in result
     assert result["metrics"]["followers"] == 12000
+
+
+def test_public_journey_drops_sensitive_nested_metrics():
+    result = serialize_journey(
+        object(),
+        {
+            "id": "journey-1",
+            "preview_json": {
+                "opportunities": [{
+                    "flow_type": "influencer",
+                    "entity_type": "creator_profile",
+                    "entity_id": "creator-1",
+                    "title": "Анна",
+                    "metrics": {
+                        "followers": 12000,
+                        "phone": "+79990000000",
+                        "email": "hidden@example.test",
+                        "token": "private-token",
+                        "password": "private-password",
+                    },
+                }],
+            },
+        },
+        public=True,
+    )
+
+    assert result["opportunities"][0]["metrics"] == {"followers": 12000}
 
 
 def test_sent_message_waits_four_days_for_reply():

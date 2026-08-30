@@ -103,6 +103,46 @@ def test_public_event_strips_sensitive_properties_before_recording(monkeypatch):
     assert captured["properties"] == {"cta_variant": "primary"}
 
 
+def test_public_event_uses_journey_dimensions_instead_of_guest_values(monkeypatch):
+    monkeypatch.setattr(lead_journey_api, "journey_enabled", lambda _flag="LEAD_JOURNEY_ENABLED": True)
+    monkeypatch.setattr(lead_journey_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "load_public_journey",
+        lambda *_args, **_kwargs: {
+            "id": "journey-1",
+            "prospect_lead_id": "lead-1",
+            "claimed_business_id": None,
+            "claimed_user_id": None,
+            "selected_flow": "maps",
+            "selected_entity_type": "card_audit",
+            "selected_entity_id": "audit-1",
+        },
+    )
+    captured = {}
+    monkeypatch.setattr(
+        lead_journey_api,
+        "record_product_event",
+        lambda _cursor, **kwargs: captured.update(kwargs) or "event-1",
+    )
+
+    response = _app().test_client().post(
+        "/api/journeys/public/token/events",
+        json={
+            "event_name": "lead_link_opened",
+            "surface": "web",
+            "flow_type": "partnership",
+            "entity_type": "prospecting_lead",
+            "entity_id": "foreign-entity",
+        },
+    )
+
+    assert response.status_code == 201
+    assert captured["flow_type"] == "maps"
+    assert captured["entity_type"] == "card_audit"
+    assert captured["entity_id"] == "audit-1"
+
+
 def test_create_journey_requires_selected_flow_before_database(monkeypatch):
     monkeypatch.setattr(lead_journey_api, "journey_enabled", lambda _flag="LEAD_JOURNEY_ENABLED": True)
     monkeypatch.setattr(lead_journey_api, "require_auth_from_request", lambda: {"user_id": "admin-1", "is_superadmin": True})
@@ -112,6 +152,37 @@ def test_create_journey_requires_selected_flow_before_database(monkeypatch):
 
     assert response.status_code == 400
     assert response.get_json()["code"] == "selected_flow_required"
+
+
+def test_create_journey_rejects_invalid_expiry_with_safe_validation_error(monkeypatch):
+    monkeypatch.setattr(lead_journey_api, "journey_enabled", lambda _flag="LEAD_JOURNEY_ENABLED": True)
+    monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
+    monkeypatch.setattr(lead_journey_api, "require_auth_from_request", lambda: {"user_id": "admin-1", "is_superadmin": True})
+    monkeypatch.setattr(lead_journey_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "create_lead_journey",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("invalid expiry must be rejected before creation")),
+    )
+
+    response = _app().test_client().post(
+        "/api/journeys",
+        json={
+            "selected_flow": "maps",
+            "expires_in_days": "tomorrow",
+            "preview": {
+                "opportunities": [{
+                    "flow_type": "maps",
+                    "entity_type": "card_audit",
+                    "entity_id": "audit-1",
+                    "title": "Карта",
+                }],
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_expiry"
 
 
 def test_claim_respects_vertical_kill_switch(monkeypatch):

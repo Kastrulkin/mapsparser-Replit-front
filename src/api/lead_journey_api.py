@@ -190,6 +190,12 @@ def create_journey():
         return jsonify({"success": False, "error": "Выберите маршрут клиента", "code": "selected_flow_required"}), 400
     if not journey_flow_enabled(selected_flow):
         return jsonify({"success": False, "error": "Это направление пока не включено", "code": "flow_disabled"}), 404
+    try:
+        expires_in_days = int(payload.get("expires_in_days") or 30)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Срок ссылки должен быть целым числом от 1 до 90", "code": "invalid_expiry"}), 400
+    if expires_in_days < 1 or expires_in_days > 90:
+        return jsonify({"success": False, "error": "Срок ссылки должен быть от 1 до 90 дней", "code": "invalid_expiry"}), 400
     db = DatabaseManager()
     cursor = db.conn.cursor(cursor_factory=RealDictCursor)
     try:
@@ -211,7 +217,7 @@ def create_journey():
             prospect_lead_id=lead_id,
             preview=preview,
             source=str(payload.get("source") or "outreach"),
-            expires_in_days=int(payload.get("expires_in_days") or 30),
+            expires_in_days=expires_in_days,
             source_offer_type=str(payload.get("source_offer_type") or "lead_offer"),
             source_offer_id=str(payload.get("source_offer_id") or "") or None,
             selected_flow=selected_flow,
@@ -386,15 +392,35 @@ def public_journey_event(token: str):
     cursor = db.conn.cursor(cursor_factory=RealDictCursor)
     try:
         journey = load_public_journey(cursor, token)
+        selected_flow = str(journey.get("selected_flow") or "").strip()
+        selected_entity_type = str(journey.get("selected_entity_type") or "").strip()
+        selected_entity_id = str(journey.get("selected_entity_id") or "").strip()
+        event_flow = selected_flow or str(payload.get("flow_type") or "").strip()
+        event_entity_type = selected_entity_type or str(payload.get("entity_type") or "").strip()
+        event_entity_id = selected_entity_id or str(payload.get("entity_id") or "").strip()
+        if not selected_flow and event_flow:
+            public_journey = serialize_journey(cursor, journey, public=True)
+            matched_opportunity = next((
+                opportunity for opportunity in public_journey.get("opportunities", [])
+                if opportunity.get("flow_type") == event_flow
+                and (not event_entity_id or opportunity.get("entity_id") == event_entity_id)
+            ), None)
+            if matched_opportunity:
+                event_entity_type = str(matched_opportunity.get("entity_type") or "").strip()
+                event_entity_id = str(matched_opportunity.get("entity_id") or "").strip()
+            else:
+                event_flow = ""
+                event_entity_type = ""
+                event_entity_id = ""
         event_id = record_product_event(
             cursor, event_name=event_name, surface=surface,
             business_id=str(journey.get("claimed_business_id") or "") or None,
             user_id=str(journey.get("claimed_user_id") or "") or None,
             lead_id=str(journey.get("prospect_lead_id") or "") or None,
             journey_id=str(journey.get("id") or "") or None,
-            flow_type=str(payload.get("flow_type") or "") or None,
-            entity_type=str(payload.get("entity_type") or "") or None,
-            entity_id=str(payload.get("entity_id") or "") or None,
+            flow_type=event_flow or None,
+            entity_type=event_entity_type or None,
+            entity_id=event_entity_id or None,
             target=str(payload.get("target") or ""),
             properties=sanitize_public_event_properties(payload.get("properties")),
         )

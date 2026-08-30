@@ -27,6 +27,15 @@ PUBLIC_EVENT_NAMES = {
     "action_prepare_clicked", "partial_result_viewed", "registration_started",
 }
 
+PUBLIC_OPPORTUNITY_METRIC_KEYS = {
+    "rating", "reviews_count", "scheduled_for",
+    "followers", "follower_count", "subscribers", "subscriber_count",
+    "members", "audience_count", "views", "avg_views", "engagement_rate",
+    "offer_service", "offer_value", "offer_threshold", "offer_reward",
+    "offer_constraints", "offer_valid_until", "offer_version", "offer_status",
+    "example_links",
+}
+
 ACTION_COMMANDS = {
     "prepare_offer": ("prepare",),
     "register": ("claim",),
@@ -131,7 +140,9 @@ def _clean_public_opportunity(item: dict[str, Any]) -> dict[str, Any]:
     safe_metrics = {
         str(key)[:80]: value
         for key, value in metrics.items()
-        if isinstance(value, (str, int, float, bool)) and len(str(value)) <= 160
+        if str(key) in PUBLIC_OPPORTUNITY_METRIC_KEYS
+        and isinstance(value, (str, int, float, bool))
+        and len(str(value)) <= 160
     }
     tasks = item.get("tasks") if isinstance(item.get("tasks"), list) else []
     safe_tasks = [
