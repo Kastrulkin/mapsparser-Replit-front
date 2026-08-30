@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { newAuth } from "@/lib/auth_new";
+import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
 import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
 import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
@@ -303,7 +304,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setLoading(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/business/${currentBusinessId}/external-accounts`, {
         headers: {
@@ -343,7 +344,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setSocialReadinessLoading(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/business/${currentBusinessId}/social-posts/channel-readiness`, {
         headers: {
@@ -403,7 +404,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const oauthParams = new URLSearchParams({ business_id: currentBusinessId });
       const returnTo = `${window.location.pathname}${window.location.search || ''}`;
       if (returnTo.startsWith('/dashboard/')) {
@@ -437,7 +438,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setGoogleLocationsActionUrl(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/business/${currentBusinessId}/google/locations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -481,7 +482,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/business/${currentBusinessId}/google/bind-location`, {
         method: "POST",
         headers: {
@@ -571,7 +572,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/business/${currentBusinessId}/google/sync`, {
         method: "POST",
         headers: {
@@ -615,7 +616,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setSaving(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/external-accounts/${accountId}`, {
         method: "DELETE",
@@ -665,7 +666,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setSaving(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/business/${currentBusinessId}/external-accounts`, {
         method: "POST",
@@ -728,7 +729,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     setVkBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const groupId = ownerValue.replace(/^-/, '');
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, {
         method: 'POST',

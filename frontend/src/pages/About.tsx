@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, Truck, Wrench } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { newAuth } from "@/lib/auth_new";
+import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
 import { aboutStoryCopy } from "@/content/aboutStoryCopy";
 
 const About = () => {
@@ -19,7 +20,7 @@ const About = () => {
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
 
-    if (!token) {
+    if (!browserAuthenticationAvailable(token)) {
       localStorage.setItem("selectedTier", tierId);
       localStorage.setItem("selectedTierSource", "pricing");
       navigate(`/login?tab=register&source=pricing&tier=${tierId}`);

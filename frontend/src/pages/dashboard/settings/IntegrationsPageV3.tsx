@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { cn } from '@/lib/utils';
 
 import { SettingsDetailSheet } from './SettingsHubComponents';
@@ -389,7 +390,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const oauthParams = new URLSearchParams({ business_id: currentBusinessId });
       const fallbackReturnTo = `/dashboard/settings/integrations?focus=${encodeURIComponent(purpose)}`;
       oauthParams.set('return_to', safeDashboardReturnTo(returnTo) || fallbackReturnTo);
@@ -421,7 +422,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleActionUrl(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/google/locations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -448,7 +449,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/google/bind-location`, {
         method: 'POST',
         headers: {
@@ -483,7 +484,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/google/sync`, {
         method: 'POST',
         headers: {
@@ -514,7 +515,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setVkBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const groupId = vkOwnerId.trim().replace(/^-/, '');
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, {
         method: 'POST',
@@ -560,7 +561,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaMessage(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/oauth/start`, {
         method: 'POST',
         headers: {
@@ -590,7 +591,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaMessage(null);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/assets`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -614,7 +615,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/bind`, {
         method: 'POST',
         headers: {
@@ -642,7 +643,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMetaBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/external-accounts/${encodeURIComponent(metaAccount.id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
@@ -687,7 +688,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setMatonBusy(true);
     try {
       const token = newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, {
         method: 'POST',
         headers: {
