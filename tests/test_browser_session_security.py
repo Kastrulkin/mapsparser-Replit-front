@@ -103,6 +103,28 @@ def test_bearer_session_remains_available_without_csrf(monkeypatch):
     assert response.status_code == 200
 
 
+def test_auth_internal_error_does_not_expose_exception_details(monkeypatch):
+    secret = "postgresql://private-user:private-password@database/internal"
+
+    def fail_logout(_token):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(auth_user_api, "logout_session", fail_logout)
+    response = main.app.test_client().post(
+        "/api/auth/logout",
+        headers={"Authorization": "Bearer miniapp-token", "X-Request-ID": "auth-redaction-test"},
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 500
+    assert payload == {
+        "code": "internal_error",
+        "message": "Не удалось завершить сессию",
+        "request_id": "auth-redaction-test",
+    }
+    assert secret not in response.get_data(as_text=True)
+
+
 def test_email_verification_issues_browser_cookie_without_json_token(monkeypatch):
     enable_cookie_auth(monkeypatch)
     monkeypatch.setattr(
