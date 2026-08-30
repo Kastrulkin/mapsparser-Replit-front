@@ -37,7 +37,10 @@ const loginOwner = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: /^(Войти|Sign in)$/ }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await authenticatedProfile;
-  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('auth_token'))).toBeTruthy();
+  expect(await page.evaluate(() => window.localStorage.getItem('auth_token'))).toBeNull();
+  await expect.poll(async () => (
+    await page.context().cookies()
+  ).some((cookie) => cookie.name === 'localos_session' && cookie.httpOnly)).toBe(true);
   await page.evaluate((selectedBusinessId) => {
     window.localStorage.setItem('selectedBusinessId', selectedBusinessId);
   }, businessId);

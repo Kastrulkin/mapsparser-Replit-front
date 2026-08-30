@@ -70,8 +70,9 @@ for (const scenario of scenarios) {
     const verificationToken = fixtureCommand('verification-token', email);
     await page.goto(`/verify-email?token=${encodeURIComponent(verificationToken)}`);
 
-    await expect(page.getByText('Email подтверждён. Возвращаемся к выбранному действию...')).toBeVisible();
     await expect(page).toHaveURL(scenario.route, { timeout: 10_000 });
-    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeTruthy();
+    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+    const cookies = await page.context().cookies();
+    expect(cookies.some((cookie) => cookie.name === 'localos_session' && cookie.httpOnly)).toBe(true);
   });
 }
