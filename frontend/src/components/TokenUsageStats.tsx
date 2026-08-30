@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
+import { browserAuthenticationAvailable } from '../lib/browserSessionFetch';
 
 interface TokenStats {
   total: {
@@ -50,7 +51,7 @@ export const TokenUsageStats: React.FC = () => {
     try {
       setLoading(true);
       const token = await newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         toast({
           title: 'Ошибка',
           description: 'Требуется авторизация',

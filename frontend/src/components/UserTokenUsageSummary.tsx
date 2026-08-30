@@ -3,6 +3,7 @@ import { BarChart3, Coins, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DESIGN_TOKENS } from '@/lib/design-tokens';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 
 type TokenUsageResponse = {
   success: boolean;
@@ -92,7 +93,7 @@ export const UserTokenUsageSummary = ({
   useEffect(() => {
     const run = async () => {
       const token = localStorage.getItem('auth_token');
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       setLoading(true);
       setError(null);

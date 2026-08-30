@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, ChevronDown, ChevronUp, Bot, Zap, Circle } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { cn } from '@/lib/utils';
 import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
 import { AIAgentsManagement } from './AIAgentsManagement';
@@ -150,7 +151,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   const loadAvailableAgents = async () => {
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const url = businessId
         ? `/api/business/${businessId}/ai-agents/manage`
@@ -205,7 +206,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     setSavingAgentForm(true);
     try {
       const token = await newAuth.getToken();
-      if (!token) throw new Error('Требуется авторизация');
+      if (!browserAuthenticationAvailable(token)) throw new Error('Требуется авторизация');
       const isEdit = Boolean(editingAgentForm.id);
       const url = isEdit
         ? `/api/business/${businessId}/ai-agents/manage/${editingAgentForm.id}`
@@ -239,7 +240,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     if (!ok) return;
     try {
       const token = await newAuth.getToken();
-      if (!token) throw new Error('Требуется авторизация');
+      if (!browserAuthenticationAvailable(token)) throw new Error('Требуется авторизация');
       const response = await fetch(`/api/business/${businessId}/ai-agents/manage/${agentId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -305,7 +306,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     setSaving(true);
     try {
       const token = await newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         toast({ title: t.common.error, description: t.common.error, variant: 'destructive' });
         return;
       }
