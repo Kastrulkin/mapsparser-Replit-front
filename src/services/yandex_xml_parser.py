@@ -3,8 +3,20 @@ Yandex Business XML Parser
 Парсит XML выгрузку из Яндекс.Бизнес (Автоматизация → Выгрузить данные)
 """
 import xml.etree.ElementTree as ET
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+
+MAX_YANDEX_XML_BYTES = 10 * 1024 * 1024
+UNSAFE_XML_DECLARATION = re.compile(r"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
+
+
+def _validate_xml_security(xml_content: str) -> None:
+    if len(xml_content.encode("utf-8")) > MAX_YANDEX_XML_BYTES:
+        raise ValueError("XML слишком большой. Максимальный размер — 10 МБ.")
+    if UNSAFE_XML_DECLARATION.search(xml_content):
+        raise ValueError("XML содержит небезопасные DTD или ENTITY-конструкции.")
 
 
 def parse_yandex_network_xml(xml_content: str) -> List[Dict[str, Any]]:
@@ -44,6 +56,7 @@ def parse_yandex_network_xml(xml_content: str) -> List[Dict[str, Any]]:
           </company>
         </companies>
     """
+    _validate_xml_security(xml_content)
     try:
         tree = ET.fromstring(xml_content)
     except ET.ParseError as e:
@@ -140,6 +153,7 @@ def validate_xml(xml_content: str) -> tuple[bool, str]:
         (is_valid, error_message)
     """
     try:
+        _validate_xml_security(xml_content)
         tree = ET.fromstring(xml_content)
         
         # Проверяем что есть хотя бы одна компания
@@ -149,6 +163,8 @@ def validate_xml(xml_content: str) -> tuple[bool, str]:
         
         return True, f"Найдено {len(companies)} компаний"
     
+    except ValueError as e:
+        return False, str(e)
     except ET.ParseError as e:
         return False, f"Ошибка парсинга XML: {e}"
     except Exception as e:

@@ -658,7 +658,6 @@ def _preflight_yandex_proxy(url: str, active_proxy: Optional[Dict[str, Any]]) ->
             proxies={"http": proxy_url, "https": proxy_url},
             timeout=(connect_timeout, read_timeout),
             allow_redirects=True,
-            verify=False,
         )
         body = str(response.text or "")[:100000]
         body_lc = body.strip().lower()

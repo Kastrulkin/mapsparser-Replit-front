@@ -10,6 +10,9 @@ from xml.etree import ElementTree
 
 MAX_AGENT_SOURCE_FILE_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_TEXT_CHARS = 30000
+MAX_OFFICE_ARCHIVE_ENTRIES = 2000
+MAX_OFFICE_ARCHIVE_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
+MAX_OFFICE_ARCHIVE_COMPRESSION_RATIO = 100
 SUPPORTED_AGENT_SOURCE_EXTENSIONS_HINT = "TXT, CSV, TSV, MD, PDF, DOCX, XLSX"
 SUPPORTED_AGENT_SOURCE_EXTENSIONS = {".txt", ".md", ".csv", ".tsv", ".pdf", ".docx", ".xlsx"}
 SUPPORTED_AGENT_SOURCE_MIME_PREFIXES = {
@@ -80,6 +83,10 @@ def build_agent_source_from_upload(file_storage: Any, preferred_name: str = "") 
 
 def extract_text_from_agent_source_bytes(data: bytes, file_name: str, mime_type: str = "") -> Tuple[str, Dict[str, Any]]:
     extension = _file_extension(file_name)
+    if extension in {".docx", ".xlsx"}:
+        archive_error = _office_archive_safety_error(data)
+        if archive_error:
+            return "", archive_error
     try:
         if extension in {".txt", ".md", ".csv", ".tsv"}:
             return _decode_text(data), {}
@@ -100,6 +107,52 @@ def extract_text_from_agent_source_bytes(data: bytes, file_name: str, mime_type:
     return "", {
         "code": "UNSUPPORTED_FILE_TYPE",
         "message": f"Этот тип файла пока не поддерживается. Загрузите {SUPPORTED_AGENT_SOURCE_EXTENSIONS_HINT}.",
+    }
+
+
+def _office_archive_safety_error(data: bytes) -> Dict[str, Any]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_OFFICE_ARCHIVE_ENTRIES:
+                return _archive_too_large_error()
+
+            total_uncompressed = 0
+            total_compressed = 0
+            for entry in entries:
+                if entry.flag_bits & 0x1:
+                    return {
+                        "code": "UNSAFE_ARCHIVE",
+                        "message": "Защищённые паролем архивы не поддерживаются. Сохраните документ без шифрования.",
+                    }
+                normalized_name = entry.filename.replace("\\", "/")
+                if normalized_name.startswith("/") or ".." in normalized_name.split("/"):
+                    return {
+                        "code": "UNSAFE_ARCHIVE",
+                        "message": "Документ содержит небезопасную структуру файлов.",
+                    }
+                total_uncompressed += max(0, entry.file_size)
+                total_compressed += max(0, entry.compress_size)
+                if total_uncompressed > MAX_OFFICE_ARCHIVE_UNCOMPRESSED_BYTES:
+                    return _archive_too_large_error()
+
+            if total_uncompressed > 0:
+                compression_ratio = total_uncompressed / max(1, total_compressed)
+                if compression_ratio > MAX_OFFICE_ARCHIVE_COMPRESSION_RATIO:
+                    return _archive_too_large_error()
+    except zipfile.BadZipFile:
+        return {
+            "code": "INVALID_ARCHIVE",
+            "message": "Файл повреждён или не является корректным документом Office.",
+        }
+    return {}
+
+
+def _archive_too_large_error() -> Dict[str, Any]:
+    return {
+        "code": "ARCHIVE_TOO_LARGE",
+        "message": "Документ слишком большой после распаковки. Уменьшите файл или загрузите его частями.",
+        "max_uncompressed_bytes": MAX_OFFICE_ARCHIVE_UNCOMPRESSED_BYTES,
     }
 
 

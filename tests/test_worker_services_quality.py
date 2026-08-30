@@ -6,12 +6,18 @@ import worker
 
 
 def test_proxy_preflight_accepts_exact_yandex_organization(monkeypatch):
+    request_kwargs = {}
+
     class Response:
         status_code = 200
         url = "https://yandex.ru/maps/org/test/230326995176/"
         text = "<html>" + ("x" * 1200) + "230326995176</html>"
 
-    monkeypatch.setattr(worker.requests, "get", lambda *args, **kwargs: Response())
+    def fake_get(*_args, **kwargs):
+        request_kwargs.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(worker.requests, "get", fake_get)
     result = worker._preflight_yandex_proxy(
         "https://yandex.ru/maps/org/test/230326995176/",
         {
@@ -25,6 +31,7 @@ def test_proxy_preflight_accepts_exact_yandex_organization(monkeypatch):
 
     assert result["ok"] is True
     assert result["reason"] == "ok"
+    assert request_kwargs.get("verify", True) is True
 
 
 def test_proxy_preflight_rejects_limited_body(monkeypatch):
