@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { runJourneyCommand, type JourneyAction } from '@/lib/leadJourney';
 import { JourneyActionCard } from './JourneyActionCard';
 
-vi.mock('@/lib/leadJourney', () => ({ runJourneyCommand: vi.fn() }));
+vi.mock('@/lib/leadJourney', () => ({
+  createJourneyCommandIdempotencyKey: vi.fn(() => 'stable-command-key'),
+  runJourneyCommand: vi.fn(),
+}));
 
 Object.defineProperties(HTMLElement.prototype, {
   hasPointerCapture: { configurable: true, value: () => false },
@@ -51,6 +54,7 @@ describe('JourneyActionCard', () => {
       command: 'record_reply',
       payload: { outcome: 'barter' },
       surface: 'telegram_mini_app',
+      idempotencyKey: 'stable-command-key',
     });
     expect(updated).toHaveBeenCalledTimes(1);
   });
@@ -107,5 +111,31 @@ describe('JourneyActionCard', () => {
       command: 'save_configuration', surface: 'telegram_mini_app',
       payload: { use_case: 'reviews_without_reply', expected_result: 'Три черновика ответов без публикации' },
     }));
+  });
+
+  it('reuses the command key after a lost response and exposes the replayed next action', async () => {
+    const nextAction: JourneyAction = {
+      ...action,
+      id: 'next-action',
+      action_type: 'define_terms',
+      title: 'Согласовать условия',
+      allowed_commands: ['save_terms'],
+      version: 1,
+    };
+    vi.mocked(runJourneyCommand)
+      .mockRejectedValueOnce(new Error('Ошибка соединения'))
+      .mockResolvedValueOnce({ action, next_action: nextAction, idempotent_replay: true });
+    const updated = vi.fn();
+    const user = userEvent.setup();
+    render(<JourneyActionCard action={action} businessId="business-1" onUpdated={updated} />);
+
+    await user.click(screen.getByRole('button', { name: /Сохранить ответ/ }));
+    expect(await screen.findByText('Ошибка соединения')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: /Сохранить ответ/ }));
+
+    expect(runJourneyCommand).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(runJourneyCommand).mock.calls[0][0].idempotencyKey).toBe('stable-command-key');
+    expect(vi.mocked(runJourneyCommand).mock.calls[1][0].idempotencyKey).toBe('stable-command-key');
+    expect(updated).toHaveBeenCalledWith(nextAction);
   });
 });

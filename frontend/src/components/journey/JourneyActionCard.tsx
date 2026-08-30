@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArrowRight, Check, Clipboard, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { runJourneyCommand, type JourneyAction } from '@/lib/leadJourney';
+import { createJourneyCommandIdempotencyKey, runJourneyCommand, type JourneyAction } from '@/lib/leadJourney';
 import { cn } from '@/lib/utils';
 
 const commandLabel: Record<string, string> = {
@@ -18,9 +18,10 @@ const commandLabel: Record<string, string> = {
 
 const primaryCommand = (action: JourneyAction) => action.allowed_commands.find((item) => item !== 'copy') || action.allowed_commands[0] || '';
 
-export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = false, onUpdated }: { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: () => void }) => {
+export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = false, onUpdated }: { action: JourneyAction; businessId: string; surface?: 'web' | 'telegram_mini_app'; dark?: boolean; onUpdated: (nextAction?: JourneyAction) => void }) => {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const retryKeys = useRef(new Map<string, string>());
   const [outcome, setOutcome] = useState('interested');
   const [details, setDetails] = useState('');
   const [inquiries, setInquiries] = useState('');
@@ -36,6 +37,9 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
     if (!nextCommand || busy) return;
     setBusy(nextCommand);
     setError('');
+    const retryKey = `${action.id}:${action.version}:${nextCommand}`;
+    const idempotencyKey = retryKeys.current.get(retryKey) || createJourneyCommandIdempotencyKey();
+    retryKeys.current.set(retryKey, idempotencyKey);
     const payload: Record<string, unknown> = {};
     if (nextCommand === 'record_reply') payload.outcome = outcome;
     if (nextCommand === 'save_configuration') {
@@ -62,12 +66,13 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       if (action.flow_type === 'automation') payload.result_summary = details;
     }
     try {
-      await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface });
+      const result = await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface, idempotencyKey });
+      retryKeys.current.delete(retryKey);
       if (nextCommand === 'open_upgrade') {
         window.location.assign('/dashboard/settings?tab=subscription');
         return;
       }
-      onUpdated();
+      onUpdated(result.next_action || undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Не удалось сохранить действие');
     } finally {

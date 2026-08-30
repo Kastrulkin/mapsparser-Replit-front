@@ -118,20 +118,25 @@ export const claimLeadJourney = async (token: string, businessId: string, surfac
   return data.action;
 };
 
+export const createJourneyCommandIdempotencyKey = () => (
+  typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+);
+
 export const runJourneyCommand = async ({
   action,
   businessId,
   command,
   payload = {},
   surface = 'web',
+  idempotencyKey = createJourneyCommandIdempotencyKey(),
 }: {
   action: JourneyAction;
   businessId: string;
   command: string;
   payload?: Record<string, unknown>;
   surface?: 'web' | 'telegram_mini_app';
+  idempotencyKey?: string;
 }) => {
-  const idempotencyKey = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
   if (surface === 'web') {
     return newAuth.makeRequest(`/journey-actions/${encodeURIComponent(action.id)}/commands`, {
       method: 'POST',
