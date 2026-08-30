@@ -178,6 +178,24 @@ def reset_journey(flow: str) -> None:
     print(journey_id)
 
 
+def cleanup_admin_journeys() -> None:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        DELETE FROM lead_journeys journey
+        USING prospectingleads lead
+        WHERE journey.prospect_lead_id = lead.id
+          AND journey.source = 'admin_journey_builder'
+          AND lead.source = 'e2e_fixture'
+        """
+    )
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    print(deleted)
+
+
 def telegram_init_data() -> None:
     bot_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     if not bot_token:
@@ -211,6 +229,7 @@ def main() -> None:
     subparsers.add_parser("reset-finance")
     subparsers.add_parser("network-fixture")
     subparsers.add_parser("telegram-init-data")
+    subparsers.add_parser("cleanup-admin-journeys")
     args = parser.parse_args()
 
     if args.command == "verification-token":
@@ -230,6 +249,9 @@ def main() -> None:
         return
     if args.command == "telegram-init-data":
         telegram_init_data()
+        return
+    if args.command == "cleanup-admin-journeys":
+        cleanup_admin_journeys()
         return
     reset_journey(args.flow)
 
