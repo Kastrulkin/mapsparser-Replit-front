@@ -1184,7 +1184,7 @@ class DatabaseManager:
             AND NOT EXISTS (
                 SELECT 1
                 FROM prospectingleads parser_lead
-                WHERE parser_lead.parse_business_id = {business_ref}
+                WHERE CONCAT(parser_lead.parse_business_id) = {business_ref}
             )
         """
     
