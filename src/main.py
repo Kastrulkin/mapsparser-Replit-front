@@ -150,6 +150,7 @@ from api.creator_promotion_api import creator_promotion_bp
 from api.lead_journey_api import lead_journey_bp
 from api.web_tracking_api import ingestion_rate_limited_response, tracking_rate_limit_key, web_tracking_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
+from core.security_headers import register_security_headers
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
 from core.ai_learning import record_ai_learning_event
@@ -242,6 +243,7 @@ except ImportError:
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
 allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
 CORS(app, supports_credentials=True, origins=allowed_origins)
+register_security_headers(app)
 
 # Настройка rate limiting
 if RATE_LIMITER_AVAILABLE:

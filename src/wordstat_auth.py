@@ -5,10 +5,8 @@
 
 import webbrowser
 import requests
-import json
 import sys
 import os
-import time
 
 # Добавляем путь к модулям
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
@@ -73,20 +71,8 @@ def exchange_code_for_token(auth_code):
         print("✅ Токен успешно получен!")
         print(f"⏰ Срок действия: {expires_in} секунд")
         
-        # Сохраняем токен в файл
-        token_file = os.path.join(os.path.dirname(__file__), 'wordstat_token.json')
-        with open(token_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'access_token': access_token,
-                'expires_in': expires_in,
-                'created_at': time.time()
-            }, f, indent=2)
-        
-        print(f"💾 Токен сохранен в {token_file}")
-        
-        # Устанавливаем переменную окружения
-        print("\n🔧 Установите переменную окружения:")
-        print(f"export YANDEX_WORDSTAT_OAUTH_TOKEN={access_token}")
+        print("🔐 Токен не сохраняется в исходниках и не выводится в терминал.")
+        print("Храните YANDEX_WORDSTAT_OAUTH_TOKEN только в secret storage окружения.")
         
         return access_token
         

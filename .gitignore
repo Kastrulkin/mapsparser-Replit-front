@@ -11,6 +11,7 @@ node_modules/
 # Env files
 .env
 .env.*
+src/wordstat_token.json
 
 # Mac
 .DS_Store

@@ -47,6 +47,9 @@ python3 get_wordstat_token.py
 - Обменяет код на OAuth токен
 - Протестирует токен
 
+Токен не сохраняется рядом с исходным кодом и не печатается целиком. Передавайте
+`YANDEX_WORDSTAT_OAUTH_TOKEN` в runtime через secret storage среды и никогда не коммитьте его в Git.
+
 ### 3. Установка legacy OAuth переменных окружения
 
 ```bash
@@ -194,8 +197,7 @@ src/
 ├── wordstat_client.py          # Клиент API
 ├── wordstat_config.py          # Конфигурация
 ├── update_wordstat_data.py     # Скрипт обновления
-├── get_wordstat_token.py       # Получение токена
-└── wordstat_token.json         # Сохраненный токен
+└── get_wordstat_token.py       # Получение токена без сохранения в Git
 
 prompts/
 ├── popular_queries_with_clicks.txt  # Обновляемые данные
