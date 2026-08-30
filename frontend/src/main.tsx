@@ -4,8 +4,11 @@ import './index.css'
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { installDomOwnershipGuard } from './lib/domOwnershipGuard';
+import { installBrowserSessionFetch } from './lib/browserSessionFetch';
 
 const CHUNK_RELOAD_STORAGE_KEY = 'localos_chunk_reload_attempted';
+
+installBrowserSessionFetch();
 
 const isDynamicImportError = (message: string) =>
     /failed to fetch dynamically imported module|importing a module script failed|chunkloaderror|loading chunk/i.test(message);

@@ -21,15 +21,7 @@ export interface AuthResponse {
 }
 
 import { API_URL } from '../config/api';
-
-const browserCookieAuthEnabled = () => import.meta.env.VITE_BROWSER_COOKIE_AUTH_ENABLED === 'true';
-
-const cookieValue = (name: string): string => {
-  if (typeof document === 'undefined') return '';
-  const prefix = `${encodeURIComponent(name)}=`;
-  const item = document.cookie.split('; ').find((value) => value.startsWith(prefix));
-  return item ? decodeURIComponent(item.slice(prefix.length)) : '';
-};
+import { browserCookieAuthEnabled, browserCookieValue } from './browserSessionFetch';
 
 export class NewAuth {
   private static instance: NewAuth;
@@ -121,7 +113,7 @@ export class NewAuth {
       browserCookieAuthEnabled()
       && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(options.method || 'GET').toUpperCase())
     ) {
-      const csrfToken = cookieValue('localos_csrf');
+      const csrfToken = browserCookieValue('localos_csrf');
       if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
     }
 
