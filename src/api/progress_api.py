@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from core.auth_helpers import verify_business_access
+from core.api_errors import internal_error_response
 from progress_calculator import calculate_business_progress
 from core.card_audit import build_card_audit_snapshot
 from core.map_url_normalizer import normalize_map_url
@@ -78,11 +79,8 @@ def get_business_progress(business_id):
             "progress": progress_data
         })
         
-    except Exception as e:
-        print(f"❌ Ошибка получения прогресса: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось получить прогресс бизнеса")
 
 
 @progress_bp.route('/api/business/<business_id>/card-audit', methods=['GET'])
@@ -111,11 +109,8 @@ def get_business_card_audit(business_id):
             "success": True,
             "audit": audit,
         })
-    except Exception as e:
-        print(f"❌ Ошибка получения аудита карточки: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось получить аудит карточки")
 
 
 @progress_bp.route('/api/business/<business_id>/public-audit-links', methods=['GET'])
@@ -245,8 +240,5 @@ def get_business_public_audit_links(business_id):
             "links": links,
             "scope": "network" if is_network_parent else "business",
         })
-    except Exception as e:
-        print(f"❌ Ошибка получения ссылок на public audits: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось получить ссылки на аудит")

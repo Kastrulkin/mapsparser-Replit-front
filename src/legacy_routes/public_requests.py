@@ -1,22 +1,9 @@
-import uuid
-
-from flask import current_app, g
-
 from legacy_routes import shared as _shared
+from core.api_errors import internal_error_response
 from core.auth_helpers import verify_business_access
 from core.browser_session import browser_cookie_auth_enabled, issue_browser_session
 
 globals().update(_shared.runtime_namespace)
-
-
-def _public_internal_error(message):
-    request_id = str(getattr(g, "request_id", "") or request.headers.get("X-Request-ID") or uuid.uuid4())
-    current_app.logger.exception("Public API request failed request_id=%s", request_id)
-    return jsonify({
-        "code": "internal_error",
-        "message": message,
-        "request_id": request_id,
-    }), 500
 
 @app.route('/api/admin/prompts/learning-candidates', methods=['GET', 'OPTIONS'])
 def get_prompt_learning_candidates():
@@ -1316,7 +1303,7 @@ LocalOS
         })
 
     except Exception:
-        return _public_internal_error("Не удалось обработать запрос на восстановление пароля")
+        return internal_error_response("Не удалось обработать запрос на восстановление пароля")
 
 @app.route('/api/auth/set-password', methods=['POST'])
 @rate_limit_if_available("10 per hour")
@@ -1430,7 +1417,7 @@ def auth_set_password():
             payload["token"] = session_token
         return issue_browser_session(jsonify(payload), session_token)
     except Exception:
-        return _public_internal_error("Не удалось установить пароль")
+        return internal_error_response("Не удалось установить пароль")
 
 @app.route('/api/auth/confirm-reset', methods=['POST'])
 @rate_limit_if_available("5 per hour")
@@ -1482,7 +1469,7 @@ def confirm_reset():
         return jsonify({"success": True, "message": "Пароль успешно изменен"})
 
     except Exception:
-        return _public_internal_error("Не удалось подтвердить сброс пароля")
+        return internal_error_response("Не удалось подтвердить сброс пароля")
 
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("10 per hour")
@@ -1571,7 +1558,7 @@ def public_request_report():
         }), 200
 
     except Exception:
-        return _public_internal_error("Не удалось принять заявку на отчёт")
+        return internal_error_response("Не удалось принять заявку на отчёт")
 
 @app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("10 per hour")
@@ -1627,7 +1614,7 @@ Email: {email}
         }), 200
 
     except Exception:
-        return _public_internal_error("Не удалось принять заявку на регистрацию")
+        return internal_error_response("Не удалось принять заявку на регистрацию")
 
 @app.route('/api/telegram/bind', methods=['POST'])
 def generate_telegram_bind_token():
