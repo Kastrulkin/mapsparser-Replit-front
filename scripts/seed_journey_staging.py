@@ -19,6 +19,7 @@ OWNER_EMAIL = "owner@localos-e2e.invalid"
 ADMIN_EMAIL = "admin@localos-e2e.invalid"
 FIXTURE_PASSWORD = "LocalOS-E2E-2026!"
 FLOWS = ("maps", "influencer", "partnership", "content", "automation")
+OWNER_BUSINESS_NAME = "[E2E] Салон Север"
 
 
 def fixture_id(label: str) -> str:
@@ -89,6 +90,7 @@ def ensure_business(owner_id: str, name: str, city: str) -> str:
     updates = []
     values = []
     for column, value in (
+        ("subscription_tier", "starter"),
         ("subscription_status", "active"),
         ("moderation_status", "approved"),
         ("entity_group", "demo"),
@@ -127,6 +129,50 @@ def opportunity(flow: str) -> dict[str, object]:
         "message_excerpt": "",
         "metrics": {},
     }
+
+
+def seed_owner_review(owner_id: str, business_id: str) -> None:
+    review_id = fixture_id("owner-review:unanswered")
+    draft_id = fixture_id("owner-review-draft:unanswered")
+    review_text = "Спасибо мастеру за аккуратную работу. Подскажите, как записаться повторно?"
+    draft_text = "Мария, спасибо за отзыв! Напишите нам в удобном канале, и мы подберём время для повторной записи."
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO externalbusinessreviews (
+            id, business_id, source, external_review_id, rating, author_name, text,
+            response_text, published_at, lang, raw_payload, is_current, last_seen_at
+        ) VALUES (%s, %s, 'yandex', 'localos-e2e-review-1', 5, 'Мария Тестова', %s,
+                  NULL, NOW() - INTERVAL '2 hours', 'ru', '{}', TRUE, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+            business_id = EXCLUDED.business_id,
+            response_text = NULL,
+            is_current = TRUE,
+            last_seen_at = NOW(),
+            updated_at = NOW()
+        """,
+        (review_id, business_id, review_text),
+    )
+    cursor.execute(
+        """
+        INSERT INTO reviewreplydrafts (
+            id, business_id, review_id, user_id, source, rating, author_name,
+            review_text, generated_text, status, tone, prompt_key, prompt_version
+        ) VALUES (%s, %s, %s, %s, 'yandex', 5, 'Мария Тестова', %s, %s,
+                  'draft', 'professional', 'e2e_fixture', '1')
+        ON CONFLICT (review_id) DO UPDATE SET
+            business_id = EXCLUDED.business_id,
+            user_id = EXCLUDED.user_id,
+            review_text = EXCLUDED.review_text,
+            generated_text = EXCLUDED.generated_text,
+            status = 'draft',
+            updated_at = NOW()
+        """,
+        (draft_id, business_id, review_id, owner_id, review_text, draft_text),
+    )
+    conn.commit()
+    conn.close()
 
 
 def seed_journeys() -> dict[str, str]:
@@ -188,8 +234,9 @@ def seed_journeys() -> dict[str, str]:
 def main() -> None:
     owner_id = ensure_user(OWNER_EMAIL, "E2E Владелец")
     admin_id = ensure_user(ADMIN_EMAIL, "E2E Администратор", superadmin=True)
-    business_id = ensure_business(owner_id, "[E2E] Салон Север", "Санкт-Петербург")
+    business_id = ensure_business(owner_id, OWNER_BUSINESS_NAME, "Санкт-Петербург")
     second_business_id = ensure_business(owner_id, "[E2E] Салон Центр", "Санкт-Петербург")
+    seed_owner_review(owner_id, business_id)
     tokens = seed_journeys()
     print(json.dumps({
         "synthetic_only": True,

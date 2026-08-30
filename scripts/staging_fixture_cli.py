@@ -12,6 +12,9 @@ from database_manager import get_db_connection
 
 FIXTURE_NAMESPACE = uuid.UUID("e48b07f6-e923-4d6d-9a70-b1de982d2f11")
 FLOWS = {"maps", "influencer", "partnership", "content", "automation"}
+OWNER_EMAIL = "owner@localos-e2e.invalid"
+OWNER_BUSINESS_NAME = "[E2E] Салон Север"
+FINANCE_FIXTURE_FILE = "localos-e2e-finance.csv"
 
 
 def fixture_id(label: str) -> str:
@@ -38,6 +41,55 @@ def verification_token(email: str) -> None:
     if not row or not row[0]:
         raise RuntimeError("Verification token was not found")
     print(row[0])
+
+
+def owner_business_id() -> str:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT b.id
+        FROM businesses b
+        JOIN users u ON u.id = b.owner_id
+        WHERE lower(u.email) = lower(%s) AND b.name = %s
+        LIMIT 1
+        """,
+        (OWNER_EMAIL, OWNER_BUSINESS_NAME),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise RuntimeError("Synthetic owner business was not found")
+    return str(row[0])
+
+
+def reset_finance() -> None:
+    business_id = owner_business_id()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM finance_import_batches WHERE business_id = %s AND file_name = %s",
+        (business_id, FINANCE_FIXTURE_FILE),
+    )
+    batch_ids = [str(row[0]) for row in cursor.fetchall()]
+    if batch_ids:
+        for table_name in (
+            "finance_entries",
+            "finance_service_metrics",
+            "finance_staff_metrics",
+            "finance_workplace_metrics",
+        ):
+            cursor.execute(
+                f"DELETE FROM {table_name} WHERE business_id = %s AND import_batch_id = ANY(%s)",
+                (business_id, batch_ids),
+            )
+        cursor.execute(
+            "DELETE FROM finance_import_batches WHERE business_id = %s AND id = ANY(%s)",
+            (business_id, batch_ids),
+        )
+    conn.commit()
+    conn.close()
+    print(business_id)
 
 
 def reset_journey(flow: str) -> None:
@@ -73,10 +125,18 @@ def main() -> None:
     token_parser.add_argument("email")
     reset_parser = subparsers.add_parser("reset-journey")
     reset_parser.add_argument("flow", choices=sorted(FLOWS))
+    subparsers.add_parser("owner-business-id")
+    subparsers.add_parser("reset-finance")
     args = parser.parse_args()
 
     if args.command == "verification-token":
         verification_token(args.email)
+        return
+    if args.command == "owner-business-id":
+        print(owner_business_id())
+        return
+    if args.command == "reset-finance":
+        reset_finance()
         return
     reset_journey(args.flow)
 

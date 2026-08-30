@@ -184,15 +184,15 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
         </Button>
       }
     >
-      <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-        <Card className="border-slate-200/80 shadow-sm">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[1fr_0.9fr]">
+        <Card className="min-w-0 border-slate-200/80 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <FileSpreadsheet className="h-4 w-4 text-slate-500" />
               Файл
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="min-w-0 space-y-4">
             <div className="space-y-2">
               <Label>Тип шаблона</Label>
               <Select value={templateProfile} onValueChange={setTemplateProfile}>
@@ -213,6 +213,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
               <Input
                 type="file"
                 aria-label="Файл из CRM"
+                className="min-w-0 w-full"
                 accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={(event) => {
                   const selected = event.target.files && event.target.files.length > 0 ? event.target.files[0] : null;
@@ -247,15 +248,15 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
               </div>
             ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={runPreview} disabled={!file || loading || !currentBusinessId} className="gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button variant="outline" onClick={runPreview} disabled={!file || loading || !currentBusinessId} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] sm:w-auto">
                 <FileSpreadsheet className="h-4 w-4" />
                 Проверить файл
               </Button>
               <Button
                 onClick={runImport}
                 disabled={!file || loading || !currentBusinessId || !preview || mappingDirty || !mappingConfirmed || preview.valid_rows <= 0}
-                className="gap-2"
+                className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] sm:w-auto"
               >
                 <Upload className="h-4 w-4" />
                 Импортировать проверенные строки
@@ -311,7 +312,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 shadow-sm">
+        <Card className="min-w-0 border-slate-200/80 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <History className="h-4 w-4 text-slate-500" />
