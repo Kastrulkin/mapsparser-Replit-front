@@ -12,6 +12,7 @@ from typing import Any
 
 from psycopg2.extras import Json
 
+from core.outbound_network import public_outbound_urlopen
 from services.gigachat_client import get_gigachat_client
 from services.media_file_storage import load_media_file
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -168,7 +169,7 @@ def _download_image_as_base64(url: str) -> str:
     if not clean_url.startswith(("http://", "https://")):
         return ""
     req = urllib.request.Request(clean_url, headers={"User-Agent": "LocalOS Media Intelligence/1.0"})
-    response = urllib.request.urlopen(req, timeout=20)
+    response = public_outbound_urlopen(req, timeout=20)
     try:
         data = response.read(10 * 1024 * 1024 + 1)
     finally:

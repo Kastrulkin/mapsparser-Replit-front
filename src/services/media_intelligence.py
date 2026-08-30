@@ -9,6 +9,7 @@ from typing import Any
 
 from psycopg2.extras import Json
 
+from core.upload_security import upload_content_matches_type
 from services.media_file_storage import store_media_file
 
 
@@ -189,6 +190,8 @@ def create_uploaded_photo_asset(
     extension = _photo_extension(original_name=original_name, mime_type=mime_type)
     if extension not in {"jpg", "jpeg", "png", "webp"}:
         raise ValueError("Поддерживаются JPG, PNG и WebP")
+    if not upload_content_matches_type(extension=extension, mime_type=mime_type, content=content):
+        raise ValueError("содержимое файла не соответствует формату изображения")
     asset_id = str(uuid.uuid4())
     stored = store_media_file(
         business_id=business_id,

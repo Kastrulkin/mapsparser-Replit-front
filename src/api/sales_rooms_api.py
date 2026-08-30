@@ -5,6 +5,7 @@ from flask import Blueprint
 
 from core.ai_learning import record_ai_learning_event
 from core.api_errors import internal_error_response
+from core.upload_security import upload_content_matches_type
 
 from services.sales_room_public_service import (
     AUDIT_OFFER_REQUESTABLE_STATUSES,
@@ -806,6 +807,8 @@ def public_sales_room_file_upload(slug):
             return jsonify({"error": "file is empty"}), 400
         if len(content) > SALES_ROOM_UPLOAD_MAX_BYTES:
             return jsonify({"error": "file is too large"}), 400
+        if not upload_content_matches_type(extension=extension, mime_type=uploaded_file.mimetype or "", content=content):
+            return jsonify({"error": "File content does not match its type"}), 400
         conn = get_db_connection()
         try:
             _ensure_sales_room_tables(conn)
