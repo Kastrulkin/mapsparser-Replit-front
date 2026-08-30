@@ -23,6 +23,7 @@ from flask import Blueprint, current_app, jsonify, redirect, request
 
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from auth_system import verify_session
+from core.api_errors import internal_error_response
 from core.auth_helpers import verify_business_access
 from core.helpers import get_business_owner_id
 from core.map_url_normalizer import is_google_map_url
@@ -1403,14 +1404,8 @@ def get_external_accounts(business_id):
             resp["_debug"] = {"tableName": "externalbusinessaccounts"}
         return jsonify(resp)
 
-    except Exception as e:
-        import traceback
-        err_tb = traceback.format_exc()
-        print(f"❌ Ошибка GET external-accounts: {e}\n{err_tb}")
-        payload = {"error": str(e), "detail": "get_external_accounts"}
-        if getattr(current_app, "debug", False):
-            payload["traceback"] = err_tb
-        return jsonify(payload), 500
+    except Exception:
+        return internal_error_response("Не удалось получить подключения")
 
 @external_accounts_bp.route("/api/business/<business_id>/external-accounts", methods=["POST"])
 def upsert_external_account(business_id):
@@ -1513,11 +1508,9 @@ def upsert_external_account(business_id):
         if auth_data_str:
             try:
                 auth_data_encrypted = encrypt_auth_data(auth_data_str)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
+            except Exception:
                 db.close()
-                return jsonify({"error": f"Ошибка шифрования данных: {str(e)}", "field": "auth_data"}), 500
+                return internal_error_response("Не удалось сохранить подключение")
 
         # SELECT с блокировкой при наличии строки, чтобы избежать гонки update/create
         cursor.execute(
@@ -1612,12 +1605,8 @@ def upsert_external_account(business_id):
             }
         return jsonify(resp)
 
-    except Exception as e:
-        print(f"❌ Ошибка сохранения внешнего аккаунта: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return internal_error_response("Не удалось сохранить подключение")
 
 @external_accounts_bp.route("/api/external-accounts/<account_id>", methods=["DELETE"])
 def delete_external_account(account_id):
