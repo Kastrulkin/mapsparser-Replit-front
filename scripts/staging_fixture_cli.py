@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import uuid
 
@@ -15,6 +16,9 @@ FLOWS = {"maps", "influencer", "partnership", "content", "automation"}
 OWNER_EMAIL = "owner@localos-e2e.invalid"
 OWNER_BUSINESS_NAME = "[E2E] Салон Север"
 FINANCE_FIXTURE_FILE = "localos-e2e-finance.csv"
+OWNER_NETWORK_NAME = "[E2E] Сеть салонов"
+FOREIGN_BUSINESS_NAME = "[E2E] Чужая точка"
+FOREIGN_NETWORK_NAME = "[E2E] Чужая сеть"
 
 
 def fixture_id(label: str) -> str:
@@ -92,6 +96,47 @@ def reset_finance() -> None:
     print(business_id)
 
 
+def network_fixture() -> None:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT n.id, n.name,
+               ARRAY_AGG(b.id ORDER BY b.name) AS business_ids,
+               ARRAY_AGG(b.name ORDER BY b.name) AS business_names
+        FROM networks n
+        JOIN businesses b ON b.network_id = n.id
+        WHERE n.name = %s
+        GROUP BY n.id, n.name
+        """,
+        (OWNER_NETWORK_NAME,),
+    )
+    owner_row = cursor.fetchone()
+    cursor.execute(
+        """
+        SELECT n.id AS network_id, b.id AS business_id
+        FROM networks n
+        JOIN businesses b ON b.network_id = n.id
+        WHERE n.name = %s AND b.name = %s
+        LIMIT 1
+        """,
+        (FOREIGN_NETWORK_NAME, FOREIGN_BUSINESS_NAME),
+    )
+    foreign_row = cursor.fetchone()
+    conn.close()
+    if not owner_row or not foreign_row:
+        raise RuntimeError("Synthetic network fixtures were not found")
+    print(json.dumps({
+        "network_id": str(owner_row[0]),
+        "network_name": str(owner_row[1]),
+        "business_ids": [str(item) for item in owner_row[2]],
+        "business_names": [str(item) for item in owner_row[3]],
+        "foreign_network_id": str(foreign_row[0]),
+        "foreign_business_id": str(foreign_row[1]),
+        "foreign_business_name": FOREIGN_BUSINESS_NAME,
+    }, ensure_ascii=False))
+
+
 def reset_journey(flow: str) -> None:
     if flow not in FLOWS:
         raise RuntimeError("Unknown synthetic journey flow")
@@ -127,6 +172,7 @@ def main() -> None:
     reset_parser.add_argument("flow", choices=sorted(FLOWS))
     subparsers.add_parser("owner-business-id")
     subparsers.add_parser("reset-finance")
+    subparsers.add_parser("network-fixture")
     args = parser.parse_args()
 
     if args.command == "verification-token":
@@ -137,6 +183,9 @@ def main() -> None:
         return
     if args.command == "reset-finance":
         reset_finance()
+        return
+    if args.command == "network-fixture":
+        network_fixture()
         return
     reset_journey(args.flow)
 

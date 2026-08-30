@@ -20,6 +20,11 @@ ADMIN_EMAIL = "admin@localos-e2e.invalid"
 FIXTURE_PASSWORD = "LocalOS-E2E-2026!"
 FLOWS = ("maps", "influencer", "partnership", "content", "automation")
 OWNER_BUSINESS_NAME = "[E2E] Салон Север"
+OWNER_SECOND_BUSINESS_NAME = "[E2E] Салон Центр"
+OWNER_NETWORK_NAME = "[E2E] Сеть салонов"
+FOREIGN_EMAIL = "foreign@localos-e2e.invalid"
+FOREIGN_BUSINESS_NAME = "[E2E] Чужая точка"
+FOREIGN_NETWORK_NAME = "[E2E] Чужая сеть"
 
 
 def fixture_id(label: str) -> str:
@@ -107,6 +112,31 @@ def ensure_business(owner_id: str, name: str, city: str) -> str:
     manager.conn.commit()
     manager.close()
     return business_id
+
+
+def ensure_network(owner_id: str, name: str, business_ids: tuple[str, ...]) -> str:
+    network_id = fixture_id(f"network:{name}")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO networks (id, owner_id, name, description, entity_group)
+        VALUES (%s, %s, %s, 'Синтетическая сеть для изолированных E2E-тестов LocalOS.', 'demo')
+        ON CONFLICT (id) DO UPDATE SET
+            owner_id = EXCLUDED.owner_id,
+            name = EXCLUDED.name,
+            entity_group = 'demo',
+            updated_at = NOW()
+        """,
+        (network_id, owner_id, name),
+    )
+    cursor.execute(
+        "UPDATE businesses SET network_id = %s WHERE id = ANY(%s)",
+        (network_id, list(business_ids)),
+    )
+    conn.commit()
+    conn.close()
+    return network_id
 
 
 def opportunity(flow: str) -> dict[str, object]:
@@ -234,8 +264,12 @@ def seed_journeys() -> dict[str, str]:
 def main() -> None:
     owner_id = ensure_user(OWNER_EMAIL, "E2E Владелец")
     admin_id = ensure_user(ADMIN_EMAIL, "E2E Администратор", superadmin=True)
+    foreign_owner_id = ensure_user(FOREIGN_EMAIL, "E2E Чужой владелец")
     business_id = ensure_business(owner_id, OWNER_BUSINESS_NAME, "Санкт-Петербург")
-    second_business_id = ensure_business(owner_id, "[E2E] Салон Центр", "Санкт-Петербург")
+    second_business_id = ensure_business(owner_id, OWNER_SECOND_BUSINESS_NAME, "Санкт-Петербург")
+    network_id = ensure_network(owner_id, OWNER_NETWORK_NAME, (business_id, second_business_id))
+    foreign_business_id = ensure_business(foreign_owner_id, FOREIGN_BUSINESS_NAME, "Москва")
+    foreign_network_id = ensure_network(foreign_owner_id, FOREIGN_NETWORK_NAME, (foreign_business_id,))
     seed_owner_review(owner_id, business_id)
     tokens = seed_journeys()
     print(json.dumps({
@@ -247,6 +281,9 @@ def main() -> None:
         "admin_id": admin_id,
         "business_id": business_id,
         "second_business_id": second_business_id,
+        "network_id": network_id,
+        "foreign_business_id": foreign_business_id,
+        "foreign_network_id": foreign_network_id,
         "journey_tokens": tokens,
     }, ensure_ascii=False, indent=2))
 
