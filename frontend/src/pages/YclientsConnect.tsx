@@ -13,6 +13,7 @@ import {
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
 
 type YclientsAccount = {
   id?: string;
@@ -169,7 +170,7 @@ const YclientsConnect = () => {
   const [importedCount, setImportedCount] = useState<number | undefined>();
 
   const primaryAccount = accounts[0];
-  const hasAuth = Boolean(token);
+  const hasAuth = browserAuthenticationAvailable(token);
   const hasBusiness = Boolean(businessId);
   const hasSalon = salonIds.length > 0;
   const canConnect = hasAuth && hasBusiness && hasSalon && !isConnecting;
@@ -188,7 +189,7 @@ const YclientsConnect = () => {
   }), [businessId, salonIds, userData, userDataSign]);
 
   const loadStatus = useCallback(async () => {
-    if (!token || !businessId) {
+    if (!hasAuth || !businessId) {
       return;
     }
     setIsLoading(true);
@@ -215,7 +216,7 @@ const YclientsConnect = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [businessId, salonIds, token]);
+  }, [businessId, hasAuth, salonIds, token]);
 
   const connectYclients = async () => {
     if (!canConnect) {
