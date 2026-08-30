@@ -151,6 +151,11 @@ from api.lead_journey_api import lead_journey_bp
 from api.web_tracking_api import ingestion_rate_limited_response, tracking_rate_limit_key, web_tracking_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from core.security_headers import register_security_headers
+from core.browser_session import (
+    browser_cookie_auth_enabled,
+    issue_browser_session,
+    register_browser_session_security,
+)
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
 from core.ai_learning import record_ai_learning_event
@@ -244,6 +249,7 @@ allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127
 allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
 CORS(app, supports_credentials=True, origins=allowed_origins)
 register_security_headers(app)
+register_browser_session_security(app)
 
 # Настройка rate limiting
 if RATE_LIMITER_AVAILABLE:

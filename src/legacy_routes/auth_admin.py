@@ -1479,19 +1479,19 @@ def auth_verify_email():
             finally:
                 journey_db.close()
 
-        return jsonify(
-            {
-                "success": True,
-                "token": session_token,
-                "user": {
-                    "id": result['id'],
-                    "email": result['email'],
-                    "name": result.get('name'),
-                    "phone": result.get('phone'),
-                },
-                "journey_action": resumed_action,
-            }
-        )
+        payload = {
+            "success": True,
+            "user": {
+                "id": result['id'],
+                "email": result['email'],
+                "name": result.get('name'),
+                "phone": result.get('phone'),
+            },
+            "journey_action": resumed_action,
+        }
+        if not browser_cookie_auth_enabled():
+            payload["token"] = session_token
+        return issue_browser_session(jsonify(payload), session_token)
     except Exception as error:
         logger.warning("Email verification failed: %s", type(error).__name__)
         return jsonify({
@@ -1586,16 +1586,18 @@ def login():
             logger.warning("Login session creation failed: %s", type(session_error).__name__)
             return jsonify({"error": "Ошибка создания сессии"}), 500
 
-        return jsonify({
+        payload = {
             "success": True,
             "user": {
                 "id": result['id'],
                 "email": result.get('email', ''),
                 "name": result.get('name', ''),
                 "phone": result.get('phone', '')
-            },
-            "token": session_token
-        })
+            }
+        }
+        if not browser_cookie_auth_enabled():
+            payload["token"] = session_token
+        return issue_browser_session(jsonify(payload), session_token)
 
     except Exception as e:
         logger.warning("Login endpoint failed: %s", type(e).__name__)

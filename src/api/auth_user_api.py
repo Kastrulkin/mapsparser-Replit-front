@@ -5,6 +5,7 @@ import sys
 from flask import Blueprint, current_app, jsonify, request
 
 from auth_system import logout_session, verify_session
+from core.browser_session import browser_cookie_auth_enabled, clear_browser_session
 from database_manager import DatabaseManager
 
 
@@ -169,7 +170,10 @@ def logout():
 
         success = logout_session(token)
         if success:
-            return jsonify({"success": True, "message": "Выход выполнен успешно"})
+            response = jsonify({"success": True, "message": "Выход выполнен успешно"})
+            if browser_cookie_auth_enabled():
+                clear_browser_session(response)
+            return response
         return jsonify({"error": "Ошибка выхода"}), 500
 
     except Exception:

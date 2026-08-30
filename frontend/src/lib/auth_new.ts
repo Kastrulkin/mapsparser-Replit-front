@@ -22,6 +22,15 @@ export interface AuthResponse {
 
 import { API_URL } from '../config/api';
 
+const browserCookieAuthEnabled = () => import.meta.env.VITE_BROWSER_COOKIE_AUTH_ENABLED === 'true';
+
+const cookieValue = (name: string): string => {
+  if (typeof document === 'undefined') return '';
+  const prefix = `${encodeURIComponent(name)}=`;
+  const item = document.cookie.split('; ').find((value) => value.startsWith(prefix));
+  return item ? decodeURIComponent(item.slice(prefix.length)) : '';
+};
+
 export class NewAuth {
   private static instance: NewAuth;
   private currentUser: User | null = null;
@@ -39,6 +48,9 @@ export class NewAuth {
   }
 
   constructor() {
+    if (browserCookieAuthEnabled()) {
+      localStorage.removeItem(this.standardTokenKey);
+    }
     this.token = this.getStoredActiveToken();
     if (this.token) {
       this.getCurrentUser();
@@ -48,6 +60,9 @@ export class NewAuth {
   private getStoredActiveToken(): string | null {
     if (this.isDemoModeActive()) {
       return localStorage.getItem(this.demoTokenKey);
+    }
+    if (browserCookieAuthEnabled()) {
+      return null;
     }
     return localStorage.getItem(this.standardTokenKey);
   }
@@ -81,7 +96,7 @@ export class NewAuth {
     if (clearToken) {
       localStorage.removeItem(this.demoTokenKey);
     }
-    this.token = localStorage.getItem(this.standardTokenKey);
+    this.token = this.getStoredActiveToken();
     this.currentUser = null;
   }
 
@@ -102,11 +117,19 @@ export class NewAuth {
     if (this.token && !(this.isDemoModeActive() && isPublicSalesRoomRequest)) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
+    if (
+      browserCookieAuthEnabled()
+      && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(options.method || 'GET').toUpperCase())
+    ) {
+      const csrfToken = cookieValue('localos_csrf');
+      if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    }
 
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        ...(browserCookieAuthEnabled() ? { credentials: 'include' } : {}),
       });
       responseReceived = true;
 
@@ -182,7 +205,7 @@ export class NewAuth {
         phone: u.phone,
       };
 
-      if (response.token) {
+      if (response.token && !browserCookieAuthEnabled()) {
         this.token = response.token;
         localStorage.setItem(this.standardTokenKey, this.token);
       }
@@ -234,7 +257,7 @@ export class NewAuth {
         phone: u.phone,
       };
 
-      if (response.token) {
+      if (response.token && !browserCookieAuthEnabled()) {
         this.token = response.token;
         localStorage.setItem(this.standardTokenKey, this.token);
       }
@@ -269,7 +292,7 @@ export class NewAuth {
         phone: u2.phone,
       };
 
-      if (response.token) {
+      if (response.token && !browserCookieAuthEnabled()) {
         this.token = response.token;
         localStorage.setItem(this.standardTokenKey, this.token);
       }
@@ -283,7 +306,7 @@ export class NewAuth {
   async signOut(): Promise<void> {
     const signingOutDemo = this.isDemoModeActive();
     try {
-      if (this.token) {
+      if (this.token || browserCookieAuthEnabled()) {
         await this.makeRequest('/auth/logout', {
           method: 'POST',
         });
@@ -303,7 +326,7 @@ export class NewAuth {
 
   async getCurrentUser(): Promise<User | null> {
     this.token = this.getStoredActiveToken();
-    if (!this.token) {
+    if (!this.token && !browserCookieAuthEnabled()) {
       return null;
     }
 
@@ -454,7 +477,7 @@ export class NewAuth {
         phone: response.phone,
       };
 
-      if (response.token) {
+      if (response.token && !browserCookieAuthEnabled()) {
         this.token = response.token;
         localStorage.setItem(this.standardTokenKey, this.token);
       }
@@ -495,7 +518,7 @@ export class NewAuth {
         phone: response.phone,
       };
 
-      if (response.token) {
+      if (response.token && !browserCookieAuthEnabled()) {
         this.token = response.token;
         localStorage.setItem(this.standardTokenKey, this.token);
       }
@@ -507,7 +530,7 @@ export class NewAuth {
   }
 
   isAuthenticated(): boolean {
-    return !!this.token && !!this.currentUser;
+    return !!this.currentUser && (browserCookieAuthEnabled() || !!this.token);
   }
 
   getToken(): string | null {
