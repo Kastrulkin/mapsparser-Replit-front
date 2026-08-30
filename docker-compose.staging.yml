@@ -18,6 +18,7 @@ services:
         VITE_JOURNEY_POST_AUTH_REDIRECT_ENABLED: "true"
         VITE_GROWTH_PATHS_NAVIGATION_ENABLED: "true"
         VITE_BLOCK_ACCESS_V2_ENABLED: "true"
+        VITE_BROWSER_COOKIE_AUTH_ENABLED: "true"
     restart: "no"
     volumes:
       - ./scripts:/app/scripts:ro
@@ -32,16 +33,22 @@ services:
       FRONTEND_URL: http://127.0.0.1:${STAGING_PORT:-18000}
       ALLOWED_ORIGINS: http://127.0.0.1:${STAGING_PORT:-18000}
       RATE_LIMITING_ENABLED: "false"
+      BROWSER_COOKIE_AUTH_ENABLED: "true"
+      BROWSER_COOKIE_AUTH_SECURE: "false"
       SMTP_SERVER: localhost
       SMTP_PORT: "1"
       SMTP_USERNAME: ""
       SMTP_PASSWORD: ""
       TELEGRAM_BOT_TOKEN: "localos-staging-e2e-bot-token"
+      TELEGRAM_REVIEWS_BOT_TOKEN: ""
       APIFY_TOKEN: ""
       GIGACHAT_KEYS: ""
       GIGACHAT_CLIENT_ID: ""
       GIGACHAT_CLIENT_SECRET: ""
       DEEPSEEK_API_KEY: ""
+      YANDEX_WORDSTAT_CLIENT_ID: ""
+      YANDEX_WORDSTAT_CLIENT_SECRET: ""
+      YANDEX_WORDSTAT_OAUTH_TOKEN: ""
       YOOKASSA_SHOP_ID: ""
       YOOKASSA_SECRET_KEY: ""
       OUTREACH_DISPATCH_ENABLED: "false"
@@ -62,3 +69,44 @@ services:
       BLOCK_ACCESS_V2_ENABLED: "true"
       JOURNEY_NOTIFICATIONS_ENABLED: "false"
       JOURNEY_UPSELL_ENABLED: "false"
+
+  worker:
+    restart: "no"
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql://localos_staging:localos_staging_only@postgres:5432/localos_staging
+      POSTGRES_USER: localos_staging
+      POSTGRES_PASSWORD: localos_staging_only
+      POSTGRES_DB: localos_staging
+      SMTP_SERVER: localhost
+      SMTP_PORT: "1"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      TELEGRAM_BOT_TOKEN: "localos-staging-e2e-bot-token"
+      TELEGRAM_REVIEWS_BOT_TOKEN: ""
+      GIGACHAT_KEYS: ""
+      GIGACHAT_CLIENT_ID: ""
+      GIGACHAT_CLIENT_SECRET: ""
+      YANDEX_WORDSTAT_CLIENT_ID: ""
+      YANDEX_WORDSTAT_CLIENT_SECRET: ""
+      YANDEX_WORDSTAT_OAUTH_TOKEN: ""
+      OUTREACH_DISPATCH_ENABLED: "false"
+      OUTREACH_EMAIL_THREAD_SYNC_ENABLED: "false"
+      OUTREACH_TELEGRAM_THREAD_SYNC_ENABLED: "false"
+      SOCIAL_POST_DISPATCH_ENABLED: "false"
+      AGENT_ASYNC_RUNS_ENABLED: "false"
+      AGENT_SCHEDULE_DISPATCH_ENABLED: "false"
+      JOURNEY_NOTIFICATIONS_ENABLED: "false"
+
+  telegram-bot:
+    restart: "no"
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql://localos_staging:localos_staging_only@postgres:5432/localos_staging
+      POSTGRES_USER: localos_staging
+      POSTGRES_PASSWORD: localos_staging_only
+      POSTGRES_DB: localos_staging
+      TELEGRAM_BOT_TOKEN: "localos-staging-e2e-bot-token"
+      GIGACHAT_KEYS: ""
+      GIGACHAT_CLIENT_ID: ""
+      GIGACHAT_CLIENT_SECRET: ""
