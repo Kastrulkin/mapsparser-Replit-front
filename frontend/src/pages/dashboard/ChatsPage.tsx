@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,7 +100,7 @@ export const ChatsPage: React.FC = () => {
   const loadAgents = async () => {
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const response = await fetch(`/api/business/${currentBusinessId}/ai-agents`, {
         headers: {
@@ -127,7 +128,7 @@ export const ChatsPage: React.FC = () => {
   const loadConversations = async () => {
     try {
       const token = await newAuth.getToken();
-      if (!token || !selectedAgentId) return;
+      if (!browserAuthenticationAvailable(token) || !selectedAgentId) return;
 
       const response = await fetch(
         `/api/business/${currentBusinessId}/conversations?agent_id=${selectedAgentId}`,
@@ -153,7 +154,7 @@ export const ChatsPage: React.FC = () => {
   const loadMessages = async () => {
     try {
       const token = await newAuth.getToken();
-      if (!token || !selectedConversationId) return;
+      if (!browserAuthenticationAvailable(token) || !selectedConversationId) return;
 
       const response = await fetch(
         `/api/conversations/${selectedConversationId}/messages`,
@@ -182,7 +183,7 @@ export const ChatsPage: React.FC = () => {
     try {
       setSending(true);
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const response = await fetch(
         `/api/conversations/${selectedConversationId}/send-message`,
@@ -223,7 +224,7 @@ export const ChatsPage: React.FC = () => {
   const handleToggleAgent = async (conversationId: string, pause: boolean) => {
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const response = await fetch(
         `/api/conversations/${conversationId}/toggle-agent`,
@@ -266,7 +267,7 @@ export const ChatsPage: React.FC = () => {
     try {
       setSandboxLoading(true);
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       // Добавляем сообщение пользователя в историю
       const userMessage = { role: 'user' as const, content: sandboxInput };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { newAuth } from "@/lib/auth_new";
+import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MessageCircleMore, RefreshCcw, Send, ShieldCheck } from "lucide-react";
 
@@ -44,7 +45,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
     setLoading(true);
     try {
       const token = newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         return;
       }
       const res = await fetch(`/api/channels/status?business_id=${encodeURIComponent(businessId)}`, {
@@ -92,7 +93,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
     setSendingChannelId(channelId);
     try {
       const token = newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         throw new Error("Нужна авторизация");
       }
       const res = await fetch("/api/channels/test-send", {
@@ -132,7 +133,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
     setSendingChannelId("auto");
     try {
       const token = newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         throw new Error("Нужна авторизация");
       }
       const res = await fetch("/api/channels/test-send", {
