@@ -4,9 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
+import time
 import uuid
+from urllib.parse import urlencode
 
 from database_manager import get_db_connection
 
@@ -14,6 +18,7 @@ from database_manager import get_db_connection
 FIXTURE_NAMESPACE = uuid.UUID("e48b07f6-e923-4d6d-9a70-b1de982d2f11")
 FLOWS = {"maps", "influencer", "partnership", "content", "automation"}
 OWNER_EMAIL = "owner@localos-e2e.invalid"
+OWNER_TELEGRAM_ID = "900000001"
 OWNER_BUSINESS_NAME = "[E2E] Салон Север"
 FINANCE_FIXTURE_FILE = "localos-e2e-finance.csv"
 OWNER_NETWORK_NAME = "[E2E] Сеть салонов"
@@ -64,6 +69,17 @@ def owner_business_id() -> str:
     conn.close()
     if not row:
         raise RuntimeError("Synthetic owner business was not found")
+    return str(row[0])
+
+
+def owner_user_id() -> str:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s) LIMIT 1", (OWNER_EMAIL,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise RuntimeError("Synthetic owner was not found")
     return str(row[0])
 
 
@@ -162,6 +178,26 @@ def reset_journey(flow: str) -> None:
     print(journey_id)
 
 
+def telegram_init_data() -> None:
+    bot_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if not bot_token:
+        raise RuntimeError("Synthetic Telegram bot token is not configured")
+    values = {
+        "auth_date": str(int(time.time())),
+        "query_id": "localos-staging-e2e-query",
+        "user": json.dumps({
+            "id": int(OWNER_TELEGRAM_ID),
+            "first_name": "E2E",
+            "last_name": "Владелец",
+            "username": "localos_e2e_owner",
+        }, ensure_ascii=False, separators=(",", ":")),
+    }
+    data_check_string = "\n".join(f"{key}={values[key]}" for key in sorted(values))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
+    values["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    print(urlencode(values))
+
+
 def main() -> None:
     require_isolated_staging()
     parser = argparse.ArgumentParser()
@@ -171,8 +207,10 @@ def main() -> None:
     reset_parser = subparsers.add_parser("reset-journey")
     reset_parser.add_argument("flow", choices=sorted(FLOWS))
     subparsers.add_parser("owner-business-id")
+    subparsers.add_parser("owner-user-id")
     subparsers.add_parser("reset-finance")
     subparsers.add_parser("network-fixture")
+    subparsers.add_parser("telegram-init-data")
     args = parser.parse_args()
 
     if args.command == "verification-token":
@@ -181,11 +219,17 @@ def main() -> None:
     if args.command == "owner-business-id":
         print(owner_business_id())
         return
+    if args.command == "owner-user-id":
+        print(owner_user_id())
+        return
     if args.command == "reset-finance":
         reset_finance()
         return
     if args.command == "network-fixture":
         network_fixture()
+        return
+    if args.command == "telegram-init-data":
+        telegram_init_data()
         return
     reset_journey(args.flow)
 

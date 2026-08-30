@@ -16,6 +16,7 @@ from database_manager import DatabaseManager, get_db_connection
 
 FIXTURE_NAMESPACE = uuid.UUID("e48b07f6-e923-4d6d-9a70-b1de982d2f11")
 OWNER_EMAIL = "owner@localos-e2e.invalid"
+OWNER_TELEGRAM_ID = "900000001"
 ADMIN_EMAIL = "admin@localos-e2e.invalid"
 FIXTURE_PASSWORD = "LocalOS-E2E-2026!"
 FLOWS = ("maps", "influencer", "partnership", "content", "automation")
@@ -270,6 +271,11 @@ def main() -> None:
     network_id = ensure_network(owner_id, OWNER_NETWORK_NAME, (business_id, second_business_id))
     foreign_business_id = ensure_business(foreign_owner_id, FOREIGN_BUSINESS_NAME, "Москва")
     foreign_network_id = ensure_network(foreign_owner_id, FOREIGN_NETWORK_NAME, (foreign_business_id,))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET telegram_id = %s WHERE id = %s", (OWNER_TELEGRAM_ID, owner_id))
+    conn.commit()
+    conn.close()
     seed_owner_review(owner_id, business_id)
     tokens = seed_journeys()
     print(json.dumps({

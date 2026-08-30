@@ -36,7 +36,7 @@ services:
       SMTP_PORT: "1"
       SMTP_USERNAME: ""
       SMTP_PASSWORD: ""
-      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_BOT_TOKEN: "localos-staging-e2e-bot-token"
       APIFY_TOKEN: ""
       GIGACHAT_KEYS: ""
       GIGACHAT_CLIENT_ID: ""
