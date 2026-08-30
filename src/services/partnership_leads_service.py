@@ -15,6 +15,7 @@ from psycopg2.extras import RealDictCursor
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.api_errors import internal_error_response
 from services.lead_workstream_service import (
     CLIENT_PARTNERSHIP,
     LOCALOS_SALES,
@@ -235,7 +236,7 @@ def partnership_list_leads():
                         pq.id, pq.status, pq.updated_at, pq.created_at, pq.retry_after, pq.error_message
                     FROM parsequeue pq
                     WHERE (
-                            (prospectingleads.parse_business_id IS NOT NULL AND pq.business_id = prospectingleads.parse_business_id)
+                            (prospectingleads.parse_business_id IS NOT NULL AND pq.business_id = prospectingleads.parse_business_id::text)
                             OR (
                                 prospectingleads.parse_business_id IS NULL
                                 AND prospectingleads.source_url IS NOT NULL
@@ -318,7 +319,7 @@ def partnership_list_leads():
         return jsonify({"success": True, "count": len(items), "items": items})
     except Exception as e:
         print(f"Error listing partnership leads: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error_response("Не удалось получить список партнёров")
 
 
 def create_lead_workstream(lead_id):

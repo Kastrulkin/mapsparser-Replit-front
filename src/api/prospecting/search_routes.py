@@ -28,6 +28,7 @@ from core.card_audit import build_lead_card_preview_snapshot
 from core.audit_quality import evaluate_audit_quality
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.api_errors import internal_error_response
 from core.audit_editorial import (
     apply_audit_editorial_pass,
     build_editorial_summary,
@@ -1511,7 +1512,7 @@ def partnership_blockers_summary():
         )
     except Exception as e:
         print(f"Error partnership blockers summary: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error_response("Не удалось получить препятствия по партнёрствам")
 
 @admin_prospecting_bp.route("/api/partnership/outcomes-summary", methods=["GET"])
 def partnership_outcomes_summary():

@@ -27,6 +27,7 @@ from core.card_audit import build_lead_card_preview_snapshot
 from core.audit_quality import evaluate_audit_quality
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.api_errors import internal_error_response
 from core.audit_editorial import (
     apply_audit_editorial_pass,
     build_editorial_summary,
@@ -1158,7 +1159,7 @@ def partnership_ralph_loop_summary():
         )
     except Exception as e:
         print(f"Error partnership Ralph loop summary: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error_response("Не удалось получить сводку по партнёрствам")
 
 def _ensure_partnership_artifacts_table(conn) -> None:
     cur = conn.cursor()

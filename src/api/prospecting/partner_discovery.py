@@ -296,7 +296,7 @@ def _partnership_parse_status_select_sql(lead_alias: str = "l") -> str:
             SELECT pq.status
             FROM parsequeue pq
             WHERE (
-                    ({lead_alias}.parse_business_id IS NOT NULL AND pq.business_id = {lead_alias}.parse_business_id)
+                    ({lead_alias}.parse_business_id IS NOT NULL AND pq.business_id = {lead_alias}.parse_business_id::text)
                     OR (
                         {lead_alias}.parse_business_id IS NULL
                         AND {lead_alias}.source_url IS NOT NULL

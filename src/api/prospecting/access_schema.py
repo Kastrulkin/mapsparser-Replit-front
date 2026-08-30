@@ -499,56 +499,8 @@ def _resolve_business_for_user(cur, user_data: dict, requested_business_id: str 
     return business_id if has_access else None
 
 def _ensure_partnership_columns(conn) -> None:
-    cur = conn.cursor()
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS intent TEXT DEFAULT 'client_outreach'")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partnership_stage TEXT DEFAULT 'imported'")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS pilot_cohort TEXT DEFAULT 'backlog'")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS business_id UUID")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS parse_business_id UUID")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS created_by UUID")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS source_kind TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS source_provider TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS external_place_id TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS external_source_id TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS dedupe_key TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS search_payload_json JSONB")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS enrich_payload_json JSONB")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS matched_sources_json JSONB")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS deferred_reason TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS deferred_until DATE")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS preferred_language TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS enabled_languages JSONB")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partner_source_company_id TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partner_source_company_name TEXT")
-    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partner_source_partner_id TEXT")
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_stage
-        ON prospectingleads (intent, partnership_stage)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_external_source
-        ON prospectingleads (business_id, intent, external_source_id)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_phone
-        ON prospectingleads (business_id, intent, phone)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_prospectingleads_partner_source
-        ON prospectingleads (business_id, intent, partner_source_company_name)
-        """
-    )
-    # DDL в PostgreSQL транзакционный; без commit изменения могут откатиться при закрытии conn.
-    conn.commit()
+    """Compatibility hook; partnership schema is owned by Alembic."""
+    return None
 
 def _ensure_manual_crm_tables(conn) -> None:
     cur = conn.cursor()
