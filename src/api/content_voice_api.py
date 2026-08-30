@@ -5,6 +5,7 @@ import sys
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.api_errors import internal_error_response
 from services.content_voice_service import (
     add_content_voice_example,
     delete_content_voice_example,
@@ -44,7 +45,7 @@ def content_voice_profile():
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось обработать настройки стиля")
 
 
 @content_voice_bp.route("/examples", methods=["POST"])
@@ -71,7 +72,7 @@ def content_voice_example_create():
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось обработать настройки стиля")
 
 
 @content_voice_bp.route("/examples/<example_id>", methods=["DELETE"])
@@ -87,4 +88,4 @@ def content_voice_example_delete(example_id: str):
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось обработать настройки стиля")
