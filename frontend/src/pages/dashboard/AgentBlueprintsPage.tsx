@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import { Bot, Zap } from 'lucide-react';
 import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { api } from '@/services/api';
 import type {
   DashboardContext, AgentBlueprint, AgentRun, AgentServerTodaySummary, AgentBlueprintDetails, AgentLearningLoop,
@@ -462,7 +463,7 @@ const AgentBlueprintsWorkspace = () => {
     }
     try {
       const token = newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         setAvailablePersonaAgents([]);
         return;
       }

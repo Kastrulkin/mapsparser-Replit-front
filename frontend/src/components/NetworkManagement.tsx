@@ -8,6 +8,7 @@ import { Plus, Trash2, Building2, MapPin, Link as LinkIcon } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast';
 import { NetworkXMLImport } from './NetworkXMLImport';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 
 interface Network {
   id: string;
@@ -80,7 +81,7 @@ export const NetworkManagement: React.FC = () => {
     setCreatingNetwork(true);
     try {
       const token = localStorage.getItem('auth_token');
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         throw new Error('Токен авторизации не найден. Пожалуйста, войдите в систему.');
       }
 

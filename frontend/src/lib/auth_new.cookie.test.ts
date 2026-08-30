@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NewAuth } from './auth_new';
+import { browserAuthenticationAvailable } from './browserSessionFetch';
 
 
 const jsonResponse = (payload: object) =>
@@ -17,6 +18,17 @@ describe('browser cookie authentication', () => {
     document.cookie = 'localos_csrf=; Max-Age=0; path=/';
     vi.restoreAllMocks();
     vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'true');
+  });
+
+  it('treats an HttpOnly browser session as available without exposing its token', () => {
+    expect(browserAuthenticationAvailable(null)).toBe(true);
+    expect(browserAuthenticationAvailable('mini-app-token')).toBe(true);
+  });
+
+  it('still requires a bearer token when browser cookie auth is disabled', () => {
+    vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'false');
+    expect(browserAuthenticationAvailable(null)).toBe(false);
+    expect(browserAuthenticationAvailable('mini-app-token')).toBe(true);
   });
 
   it('signs in with credentials without persisting the standard token', async () => {

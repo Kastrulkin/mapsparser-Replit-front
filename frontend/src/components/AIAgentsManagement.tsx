@@ -8,6 +8,7 @@ import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
+import { browserAuthenticationAvailable } from '../lib/browserSessionFetch';
 import { Plus, Edit, Trash2, Save, X, Bot, Send } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
@@ -274,7 +275,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
     try {
       const token = await newAuth.getToken();
-      if (!token) {
+      if (!browserAuthenticationAvailable(token)) {
         throw new Error('Требуется авторизация');
       }
 

@@ -9,6 +9,10 @@ export const browserCookieAuthEnabled = () =>
   import.meta.env.VITE_BROWSER_COOKIE_AUTH_ENABLED === 'true';
 
 
+export const browserAuthenticationAvailable = (bearerToken?: string | null): boolean =>
+  Boolean(bearerToken) || browserCookieAuthEnabled();
+
+
 export const browserCookieValue = (name: string): string => {
   if (typeof document === 'undefined') return '';
   const prefix = `${encodeURIComponent(name)}=`;
