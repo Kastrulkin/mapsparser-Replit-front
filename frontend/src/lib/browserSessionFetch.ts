@@ -64,6 +64,14 @@ export const createBrowserSessionFetch = (baseFetch: typeof fetch): typeof fetch
     }
 
     const headers = mergedHeaders(input, init);
+    for (const key of Object.keys(headers)) {
+      if (
+        key.toLowerCase() === 'authorization'
+        && /^Bearer(?:\s+(?:null|undefined))?\s*$/i.test(headers[key] || '')
+      ) {
+        delete headers[key];
+      }
+    }
     if (UNSAFE_METHODS.has(requestMethod(input, init))) {
       const csrfToken = browserCookieValue('localos_csrf');
       if (csrfToken && !new Headers(headers).has('X-CSRF-Token')) {

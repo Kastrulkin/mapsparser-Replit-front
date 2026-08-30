@@ -40,6 +40,22 @@ describe('browser session fetch transport', () => {
     expect(new Headers(requestOptions?.headers).has('X-CSRF-Token')).toBe(false);
   });
 
+  it('removes only empty legacy bearer placeholders from cookie requests', async () => {
+    const baseFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    const sessionFetch = createBrowserSessionFetch(baseFetch);
+
+    await sessionFetch('/api/dashboard', { headers: { Authorization: 'Bearer null' } });
+
+    const requestOptions = baseFetch.mock.calls[0][1];
+    expect(new Headers(requestOptions?.headers).has('Authorization')).toBe(false);
+
+    await sessionFetch('/api/operator/mobile/today', {
+      headers: { Authorization: 'Bearer miniapp-token' },
+    });
+    const miniAppOptions = baseFetch.mock.calls[1][1];
+    expect(new Headers(miniAppOptions?.headers).get('Authorization')).toBe('Bearer miniapp-token');
+  });
+
   it('keeps the original request untouched while the feature is disabled', async () => {
     vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'false');
     const baseFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));

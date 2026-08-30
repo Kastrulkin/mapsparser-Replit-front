@@ -107,15 +107,12 @@ export const parseAgentConfig = (business?: DashboardContext['currentBusiness'])
 
 export const uploadAgentSource = async (blueprintId: string, file: File, name: string) => {
   const token = newAuth.getToken();
-  if (!token) {
-    throw new Error('Authorization required');
-  }
   const formData = new FormData();
   formData.append('file', file);
   formData.append('name', name || file.name);
   const response = await fetch(`/api/agent-blueprints/${blueprintId}/sources/upload`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: formData,
   });
   const data = await response.json();

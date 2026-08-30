@@ -170,15 +170,12 @@ export async function fetchDashboardBootstrap(user: User): Promise<DashboardBoot
 
 export async function fetchDashboardBusinessData(businessId: string): Promise<DashboardBusinessDataResponse | null> {
   const token = newAuth.getToken();
-  if (!token) {
-    return null;
-  }
 
   const response = await fetch(`/api/business/${businessId}/data`, {
-    headers: {
+    headers: token ? {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-    },
+    } : { 'Content-Type': 'application/json' },
   });
 
   if (!response.ok) {
