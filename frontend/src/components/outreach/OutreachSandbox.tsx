@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 
 type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
 
@@ -126,7 +127,7 @@ const actionLabels: Record<string, string> = {
 
 async function authorizedFetch(url: string, options?: RequestInit): Promise<Response> {
   const token = await newAuth.getToken();
-  if (!token) {
+  if (!browserAuthenticationAvailable(token)) {
     throw new Error('Нужно войти в LocalOS');
   }
   return fetch(url, {

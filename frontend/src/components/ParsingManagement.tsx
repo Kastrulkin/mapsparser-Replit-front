@@ -6,6 +6,7 @@ import { Switch } from './ui/switch';
 import { StickyBottomHorizontalScrollbar } from './ui/sticky-bottom-horizontal-scrollbar';
 import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash, X } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
+import { browserAuthenticationAvailable } from '../lib/browserSessionFetch';
 import { useToast } from '../hooks/use-toast';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -196,7 +197,7 @@ export const ParsingManagement: React.FC = () => {
     setParsingSettingsLoading(true);
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch('/api/admin/parsing/runtime-settings', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -220,7 +221,7 @@ export const ParsingManagement: React.FC = () => {
     setParsingSettingsSaving(true);
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch('/api/admin/parsing/runtime-settings', {
         method: 'POST',
         headers: {
@@ -255,7 +256,7 @@ export const ParsingManagement: React.FC = () => {
     setLoading(true);
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const headers = { 'Authorization': `Bearer ${token}` };
       const timestamp = Date.now();
@@ -311,7 +312,7 @@ export const ParsingManagement: React.FC = () => {
     }
 
     const token = await newAuth.getToken();
-    if (!token) return false;
+    if (!browserAuthenticationAvailable(token)) return false;
 
     const res = await fetch(`/api/admin/parsing/tasks/${taskId}/captcha/resume`, {
       method: 'POST',
@@ -383,7 +384,7 @@ export const ParsingManagement: React.FC = () => {
 
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}/restart`, {
         method: 'POST',
@@ -416,7 +417,7 @@ export const ParsingManagement: React.FC = () => {
 
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}`, {
         method: 'DELETE',
@@ -449,7 +450,7 @@ export const ParsingManagement: React.FC = () => {
 
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}/switch-to-sync`, {
         method: 'POST',
@@ -480,7 +481,7 @@ export const ParsingManagement: React.FC = () => {
   const handleOpenCaptcha = async (task: ParsingTask) => {
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
 
       const res = await fetch(`/api/admin/parsing/tasks/${task.id}/captcha/open`, {
         method: 'POST',
@@ -537,7 +538,7 @@ export const ParsingManagement: React.FC = () => {
     if (!confirm('Сбросить CAPTCHA-сессию и перевести задачу в ошибку?')) return;
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}/captcha/expire`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -565,7 +566,7 @@ export const ParsingManagement: React.FC = () => {
     if (!confirm('Возобновить сетевой парсинг с места ошибки?')) return;
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/resume`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -593,7 +594,7 @@ export const ParsingManagement: React.FC = () => {
     if (!confirm('Поставить batch на паузу? Уже обрабатываемая задача не будет убита, но оставшиеся не стартуют.')) return;
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/pause`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -621,7 +622,7 @@ export const ParsingManagement: React.FC = () => {
     if (!confirm('Вернуть в очередь только ошибочные задачи этого batch?')) return;
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/retry-errors`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -649,7 +650,7 @@ export const ParsingManagement: React.FC = () => {
     if (!confirm('Пропустить проблемную точку и продолжить batch со следующей? Эта точка останется в статусе ошибки.')) return;
     try {
       const token = await newAuth.getToken();
-      if (!token) return;
+      if (!browserAuthenticationAvailable(token)) return;
       const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/skip-failed`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
