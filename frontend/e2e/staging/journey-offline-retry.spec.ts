@@ -20,6 +20,12 @@ const fixtureCommand = (...args: string[]) => execFileSync(
   { cwd: resolve(process.cwd(), '..'), encoding: 'utf8' },
 ).trim();
 
+const csrfHeaders = async (page: import('@playwright/test').Page) => {
+  const csrfCookie = (await page.context().cookies()).find((cookie) => cookie.name === 'localos_csrf');
+  expect(csrfCookie?.value).toBeTruthy();
+  return { 'X-CSRF-Token': csrfCookie?.value || '' };
+};
+
 test('lost command response retries without stale action or duplicate transition', async ({ page }) => {
   fixtureCommand('reset-journey', 'automation');
   const businessId = fixtureCommand('owner-business-id');
@@ -32,9 +38,9 @@ test('lost command response retries without stale action or duplicate transition
   await page.locator('#login-password').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
-  const authToken = await page.evaluate(() => window.localStorage.getItem('auth_token'));
+  const headers = await csrfHeaders(page);
   const claimResponse = await page.request.post('/api/journeys/claim', {
-    headers: { Authorization: `Bearer ${authToken}` },
+    headers,
     data: { token: AUTOMATION_TOKEN, business_id: businessId, surface: 'web' },
   });
   const claimed = await claimResponse.json();

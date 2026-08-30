@@ -11,7 +11,7 @@ CSP_REPORT_ONLY = (
     "img-src 'self' data: blob: https:; "
     "font-src 'self' data: https://fonts.gstatic.com; "
     "connect-src 'self' https: wss:; "
-    "frame-src 'self' https://oauth.telegram.org https://yoomoney.ru https://*.yookassa.ru; "
+    "frame-src 'self' https://oauth.telegram.org https://mc.yandex.ru https://yoomoney.ru https://*.yookassa.ru; "
     "form-action 'self' https:"
 )
 

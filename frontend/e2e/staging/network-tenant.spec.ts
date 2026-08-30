@@ -38,7 +38,10 @@ const loginOwner = async (page: import('@playwright/test').Page, primaryBusiness
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await authenticatedProfile;
-  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('auth_token'))).toBeTruthy();
+  expect(await page.evaluate(() => window.localStorage.getItem('auth_token'))).toBeNull();
+  await expect.poll(async () => (
+    await page.context().cookies()
+  ).some((cookie) => cookie.name === 'localos_session' && cookie.httpOnly)).toBe(true);
 };
 
 test('network owner switches aggregate and location scopes without foreign tenant data', async ({ page }) => {
@@ -89,22 +92,17 @@ test('network owner switches aggregate and location scopes without foreign tenan
   expect((await restoredNetworkToday).status()).toBe(200);
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem('dashboard_control_scope'))).toContain(fixture.network_id);
 
-  const token = await page.evaluate(() => window.localStorage.getItem('auth_token'));
-  const headers = { Authorization: `Bearer ${token}` };
   const foreignBusiness = await page.request.get(
     `/api/operator/today?scope_type=business&scope_id=${fixture.foreign_business_id}`,
-    { headers },
   );
   const foreignNetwork = await page.request.get(
     `/api/operator/today?scope_type=network&scope_id=${fixture.foreign_network_id}`,
-    { headers },
   );
   expect(foreignBusiness.status()).toBe(403);
   expect(foreignNetwork.status()).toBe(403);
 
   const locationsResponse = await page.request.get(
     `/api/operator/mobile/network-locations?network_id=${fixture.network_id}`,
-    { headers },
   );
   expect(locationsResponse.status()).toBe(200);
   const locationsPayload = await locationsResponse.json();

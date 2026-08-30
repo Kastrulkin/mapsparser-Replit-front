@@ -20,6 +20,12 @@ const fixtureCommand = (...args: string[]) => execFileSync(
   { cwd: resolve(process.cwd(), '..'), encoding: 'utf8' },
 ).trim();
 
+const csrfHeaders = async (page: import('@playwright/test').Page) => {
+  const csrfCookie = (await page.context().cookies()).find((cookie) => cookie.name === 'localos_csrf');
+  expect(csrfCookie?.value).toBeTruthy();
+  return { 'X-CSRF-Token': csrfCookie?.value || '' };
+};
+
 const loginOwner = async (page: import('@playwright/test').Page, businessId: string) => {
   await page.addInitScript((selectedBusinessId) => {
     window.localStorage.setItem('language', 'ru');
@@ -34,15 +40,17 @@ const loginOwner = async (page: import('@playwright/test').Page, businessId: str
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await authenticatedProfile;
-  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('auth_token'))).toBeTruthy();
+  expect(await page.evaluate(() => window.localStorage.getItem('auth_token'))).toBeNull();
+  await expect.poll(async () => (
+    await page.context().cookies()
+  ).some((cookie) => cookie.name === 'localos_session' && cookie.httpOnly)).toBe(true);
 };
 
 test('one journey action continues from web to Mini App and back without diverging', async ({ page }) => {
   fixtureCommand('reset-journey', 'automation');
   const businessId = fixtureCommand('owner-business-id');
   await loginOwner(page, businessId);
-  const authToken = await page.evaluate(() => window.localStorage.getItem('auth_token'));
-  const headers = { Authorization: `Bearer ${authToken}` };
+  const headers = await csrfHeaders(page);
   const claimResponse = await page.request.post('/api/journeys/claim', {
     headers,
     data: { token: AUTOMATION_TOKEN, business_id: businessId, surface: 'web' },
@@ -95,7 +103,7 @@ test('one journey action continues from web to Mini App and back without divergi
 
   await page.goto(`/dashboard/agents?journey_action=${miniResult.next_action.id}`);
   await expect(page.getByText('Запустить проверенную задачу').first()).toBeVisible();
-  const actionsResponse = await page.request.get(`/api/journey-actions?business_id=${businessId}`, { headers });
+  const actionsResponse = await page.request.get(`/api/journey-actions?business_id=${businessId}`);
   expect(actionsResponse.status()).toBe(200);
   const actionsPayload = await actionsResponse.json();
   const activeAutomation = actionsPayload.actions.filter((action: { flow_type: string }) => action.flow_type === 'automation');
@@ -107,8 +115,7 @@ test('same idempotency key replays once and an old version is rejected', async (
   fixtureCommand('reset-journey', 'automation');
   const businessId = fixtureCommand('owner-business-id');
   await loginOwner(page, businessId);
-  const authToken = await page.evaluate(() => window.localStorage.getItem('auth_token'));
-  const headers = { Authorization: `Bearer ${authToken}` };
+  const headers = await csrfHeaders(page);
   const claimResponse = await page.request.post('/api/journeys/claim', {
     headers,
     data: { token: AUTOMATION_TOKEN, business_id: businessId, surface: 'web' },

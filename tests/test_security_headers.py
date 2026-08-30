@@ -36,3 +36,15 @@ def test_spa_response_prevents_cross_origin_framing():
 
     assert response.status_code == 200
     assert response.headers.get("X-Frame-Options") in {"DENY", "SAMEORIGIN"}
+
+
+def test_spa_csp_allows_the_configured_yandex_metrika_frame():
+    response = main.app.test_client().get("/")
+
+    assert response.status_code == 200
+    policy = response.headers.get("Content-Security-Policy-Report-Only") or ""
+    frame_sources = next(
+        (directive for directive in policy.split(";") if directive.strip().startswith("frame-src ")),
+        "",
+    )
+    assert "https://mc.yandex.ru" in frame_sources
