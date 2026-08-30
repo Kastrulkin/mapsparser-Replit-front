@@ -8,7 +8,8 @@ from typing import Any, Callable, Dict, List, Optional
 import hashlib
 import hmac
 import os
-import requests
+
+from core.outbound_network import public_pinned_post, validate_public_http_url
 
 from database_manager import DatabaseManager
 from core.action_ledger import ensure_ledger_tables, write_ledger_entry
@@ -214,7 +215,19 @@ class ActionOrchestrator:
                 return f"missing required field: {key}"
         if envelope.get("capability") not in self.handlers:
             return "unsupported capability"
+        callback_url = str((envelope.get("approval") or {}).get("callback_url") or "").strip()
+        if callback_url:
+            try:
+                self._validate_callback_url(callback_url)
+            except ValueError as error:
+                return str(error)
         return None
+
+    def _validate_callback_url(self, callback_url: str) -> str:
+        try:
+            return validate_public_http_url(callback_url)
+        except ValueError as error:
+            raise ValueError("callback_url must be a public HTTP URL") from error
 
     def _read_tokenusage_total(self, cursor, tenant_id: str, user_id: str) -> int:
         try:
@@ -298,6 +311,7 @@ class ActionOrchestrator:
         callback_url = str(callback_url or "").strip()
         if not callback_url:
             return None
+        callback_url = self._validate_callback_url(callback_url)
         outbox_id = str(uuid.uuid4())
         effective_dedupe_key = str(dedupe_key or f"{action_id}:{event_type}")
         cursor.execute(
@@ -438,11 +452,17 @@ class ActionOrchestrator:
                     }
                     if signature:
                         headers["X-LocalOS-Signature"] = signature
-                    response = requests.post(callback_url, data=canonical_body.encode("utf-8"), timeout=5, headers=headers)
+                    callback_url = self._validate_callback_url(callback_url)
+                    response = public_pinned_post(
+                        callback_url,
+                        canonical_body.encode("utf-8"),
+                        headers,
+                        timeout=5,
+                    )
                     duration_ms = int((time.monotonic() - start_ts) * 1000)
                     http_status = int(getattr(response, "status_code", 500))
                     response_excerpt = str(getattr(response, "text", "") or "")[:1000]
-                    if http_status >= 400:
+                    if http_status >= 300:
                         ok = False
                         error_text = f"http_{http_status}"
                 except Exception as exc:

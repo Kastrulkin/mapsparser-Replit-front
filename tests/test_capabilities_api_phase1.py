@@ -1651,13 +1651,13 @@ def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypat
         return _OkResponse()
 
     try:
-        monkeypatch.setattr(orchestrator_mod.requests, "post", _always_fail_post)
+        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _always_fail_post)
         body = _pending_request_body(info["business_id"], info["user_id"])
         body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
         body["approval"] = {
             "mode": "required",
             "ttl_sec": 1200,
-            "callback_url": "https://openclaw.local/callback",
+            "callback_url": "https://callbacks.example.com/openclaw",
         }
         r_exec = info["client"].post(
             "/api/openclaw/capabilities/execute",
@@ -1700,7 +1700,7 @@ def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypat
         conn_force.commit()
         conn_force.close()
 
-        monkeypatch.setattr(orchestrator_mod.requests, "post", _always_ok_post)
+        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _always_ok_post)
         r_dispatch = info["client"].post(
             "/api/openclaw/callbacks/dispatch",
             json={"batch_size": 20},
@@ -1787,13 +1787,13 @@ def test_openclaw_callback_outbox_goes_to_dlq(capabilities_client, monkeypatch):
         return _FailingResponse()
 
     try:
-        monkeypatch.setattr(orchestrator_mod.requests, "post", _always_fail_post)
+        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _always_fail_post)
         body = _pending_request_body(info["business_id"], info["user_id"])
         body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
         body["approval"] = {
             "mode": "required",
             "ttl_sec": 1200,
-            "callback_url": "https://openclaw.local/callback",
+            "callback_url": "https://callbacks.example.com/openclaw",
         }
         r_exec = info["client"].post(
             "/api/openclaw/capabilities/execute",
@@ -2025,11 +2025,11 @@ def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypat
     class _OkResponse:
         status_code = 200
 
-    def _capture_post(url, data=None, timeout=None, headers=None):
+    def _capture_post(url, body, headers, timeout=5):
         captured["urls"].append(url)
         return _OkResponse()
 
-    monkeypatch.setattr(orchestrator_mod.requests, "post", _capture_post)
+    monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _capture_post)
 
     conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
     with conn.cursor() as cur:
@@ -2041,7 +2041,7 @@ def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypat
             cur,
             action_id=own_action,
             tenant_id=info["business_id"],
-            callback_url="https://cb.local/own",
+            callback_url="https://callbacks.example.com/own",
             event_type="completed",
             payload={"own": True},
             dedupe_key=f"{own_action}:completed",
@@ -2050,7 +2050,7 @@ def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypat
             cur,
             action_id=foreign_action,
             tenant_id=info["foreign_business_id"],
-            callback_url="https://cb.local/foreign",
+            callback_url="https://callbacks.example.com/foreign",
             event_type="completed",
             payload={"foreign": True},
             dedupe_key=f"{foreign_action}:completed",
@@ -2068,8 +2068,8 @@ def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypat
     assert ok_body["success"] is True
     assert ok_body["tenant_id"] == info["business_id"]
     assert ok_body["sent"] >= 1
-    assert "https://cb.local/own" in captured["urls"]
-    assert "https://cb.local/foreign" not in captured["urls"]
+    assert "https://callbacks.example.com/own" in captured["urls"]
+    assert "https://callbacks.example.com/foreign" not in captured["urls"]
 
     r_forbidden = info["client"].post(
         "/api/capabilities/callbacks/dispatch",
@@ -2385,7 +2385,7 @@ def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monke
                 cur,
                 action_id=action_id,
                 tenant_id=info["business_id"],
-                callback_url="https://openclaw.local/callback",
+                callback_url="https://callbacks.example.com/openclaw",
                 event_type="completed",
                 payload={"hello": "world"},
                 dedupe_key=f"{action_id}:completed",
@@ -2394,7 +2394,7 @@ def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monke
                 cur,
                 action_id=action_id,
                 tenant_id=info["business_id"],
-                callback_url="https://openclaw.local/callback",
+                callback_url="https://callbacks.example.com/openclaw",
                 event_type="completed",
                 payload={"hello": "world"},
                 dedupe_key=f"{action_id}:completed",
@@ -2413,14 +2413,14 @@ def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monke
 
         import core.action_orchestrator as orchestrator_mod
 
-        monkeypatch.setattr(orchestrator_mod.requests, "post", _capture_post)
+        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _capture_post)
         r_dispatch = info["client"].post(
             "/api/openclaw/callbacks/dispatch",
             json={"batch_size": 10},
             headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
         )
         assert r_dispatch.status_code == 200, r_dispatch.get_json()
-        assert captured.get("url") == "https://openclaw.local/callback"
+        assert captured.get("url") == "https://callbacks.example.com/openclaw"
 
         headers = captured.get("headers") or {}
         event_id = headers.get("X-LocalOS-Event-Id")

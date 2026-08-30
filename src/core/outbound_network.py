@@ -4,7 +4,17 @@ import ipaddress
 import os
 import socket
 import urllib.request as urllib_request
-from urllib.parse import urlsplit
+from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
+
+import certifi
+import urllib3
+
+
+@dataclass(frozen=True)
+class OutboundHttpResponse:
+    status_code: int
+    text: str
 
 
 def resolve_outbound_http_proxy() -> str:
@@ -60,6 +70,70 @@ def validate_public_http_url(value: str) -> str:
         if not ip.is_global:
             raise ValueError("Допустима только публичная HTTP-ссылка")
     return clean_url
+
+
+def _public_addresses_for_url(value: str) -> tuple[str, list[str], int]:
+    clean_url = validate_public_http_url(value)
+    parsed = urlsplit(clean_url)
+    hostname = str(parsed.hostname or "").casefold().rstrip(".")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    public_addresses = []
+    for address in addresses:
+        raw_ip = str(address[4][0] or "").split("%", 1)[0]
+        ip = ipaddress.ip_address(raw_ip)
+        if not ip.is_global:
+            raise ValueError("Допустима только публичная HTTP-ссылка")
+        if raw_ip not in public_addresses:
+            public_addresses.append(raw_ip)
+    if not public_addresses:
+        raise ValueError("Допустима только публичная HTTP-ссылка")
+    return clean_url, public_addresses, port
+
+
+def public_pinned_post(value: str, body: bytes, headers: dict[str, str], timeout: int = 5) -> OutboundHttpResponse:
+    clean_url, public_addresses, port = _public_addresses_for_url(value)
+    parsed = urlsplit(clean_url)
+    hostname = str(parsed.hostname or "").casefold().rstrip(".")
+    request_path = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    default_port = 443 if parsed.scheme == "https" else 80
+    host_header = hostname if port == default_port else f"{hostname}:{port}"
+    request_headers = {**headers, "Host": host_header}
+    pinned_ip = public_addresses[0]
+    if parsed.scheme == "https":
+        pool = urllib3.HTTPSConnectionPool(
+            pinned_ip,
+            port=port,
+            timeout=urllib3.Timeout(total=timeout),
+            retries=False,
+            cert_reqs="CERT_REQUIRED",
+            ca_certs=certifi.where(),
+            assert_hostname=hostname,
+            server_hostname=hostname,
+        )
+    else:
+        pool = urllib3.HTTPConnectionPool(
+            pinned_ip,
+            port=port,
+            timeout=urllib3.Timeout(total=timeout),
+            retries=False,
+        )
+    try:
+        response = pool.urlopen(
+            "POST",
+            request_path,
+            body=body,
+            headers=request_headers,
+            redirect=False,
+            preload_content=False,
+        )
+        try:
+            response_text = response.read(1001).decode("utf-8", errors="replace")[:1000]
+        finally:
+            response.release_conn()
+        return OutboundHttpResponse(status_code=int(response.status), text=response_text)
+    finally:
+        pool.close()
 
 
 class _PublicRedirectHandler(urllib_request.HTTPRedirectHandler):
