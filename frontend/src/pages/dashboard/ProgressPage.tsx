@@ -47,6 +47,7 @@ import {
   progressRuntimeCopyForLanguage,
   type ProgressPageCopy,
 } from './progressPageCopy';
+import { NetworkDashboardPage } from './network/NetworkDashboardPage';
 
 type GrowthAreaKey = 'maps' | 'content' | 'partnerships' | 'automation' | 'upsells';
 type GrowthAreaStatus = 'not_started' | 'in_progress' | 'healthy' | 'needs_attention' | 'unavailable';
@@ -581,6 +582,10 @@ export const ProgressPage = () => {
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700"><span><strong className="tabular-nums text-slate-950">{overview.network_summary.locations_count || 0}</strong> {runtime.networkLocations}</span><span><strong className="tabular-nums text-amber-800">{overview.network_summary.problem_locations_count || 0}</strong> {runtime.attention}</span><span><strong className="tabular-nums text-emerald-700">{overview.network_summary.healthy_locations_count || 0}</strong> {runtime.healthy}</span></div>
           {overview.problem_locations?.length ? <div className="mt-3 flex flex-wrap gap-2">{overview.problem_locations.slice(0, 6).map((location) => <Button key={location.business_id} type="button" variant="outline" className="min-h-11" onClick={() => openProblemLocation(location)}>{location.business_name}<ArrowRight className="ml-2 h-4 w-4" /></Button>)}</div> : null}
         </section>
+      ) : null}
+
+      {scopeKind === 'network' && currentBusinessId ? (
+        <NetworkDashboardPage embedded businessId={currentBusinessId} />
       ) : null}
 
       <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">

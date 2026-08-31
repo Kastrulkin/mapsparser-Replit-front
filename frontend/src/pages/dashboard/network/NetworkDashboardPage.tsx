@@ -1,6 +1,7 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import type { ControlScope } from '@/components/DashboardLayout';
 import { DashboardHeader } from './components/DashboardHeader';
 import { KPIGrid } from './components/KPIGrid';
 import { AnalyticsTimeline, TimelinePeriodPreset } from './components/AnalyticsTimeline';
@@ -13,6 +14,12 @@ import { addDays, format } from "date-fns";
 interface NetworkDashboardPageProps {
     embedded?: boolean;
     businessId?: string | null;
+}
+
+interface NetworkDashboardContext {
+    currentBusinessId?: string | null;
+    onBusinessChange?: (businessId: string) => void;
+    onControlScopeChange?: (scope: ControlScope) => void;
 }
 
 type ReviewDrilldownFilter = 'all' | 'negative' | 'needs_reply';
@@ -69,6 +76,8 @@ interface LocationAlertsResponse {
 
 export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embedded = false, businessId }) => {
     const navigate = useNavigate();
+    const dashboardContext = useOutletContext<NetworkDashboardContext>();
+    const resolvedBusinessId = businessId || dashboardContext.currentBusinessId || null;
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
     const [periodPreset, setPeriodPreset] = useState<TimelinePeriodPreset>('all');
 
@@ -109,7 +118,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
 
     useEffect(() => {
         const loadDashboard = async () => {
-            if (!businessId) {
+            if (!resolvedBusinessId) {
                 setHealth(null);
                 setTimeline([]);
                 setSalons([]);
@@ -120,7 +129,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 const token = browserBearerToken();
                 const headers = { Authorization: `Bearer ${token || ''}` };
 
-                const locationsRes = await fetch(`/api/business/${businessId}/network-locations`, { headers });
+                const locationsRes = await fetch(`/api/business/${resolvedBusinessId}/network-locations`, { headers });
                 const locationsJson: NetworkLocationsResponse = await locationsRes.json().catch(() => ({ success: false, locations: [] }));
                 const locations = (locationsJson.locations || []).filter((location) => !location.is_network_parent);
                 const networkId = String(locationsJson.network_id || '').trim();
@@ -151,7 +160,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                     fetch(
                         isNetworkView
                             ? `/api/network/health?network_id=${encodeURIComponent(networkId)}`
-                            : `/api/network/health?business_id=${businessId}`,
+                            : `/api/network/health?business_id=${resolvedBusinessId}`,
                         { headers }
                     ),
                     fetch(
@@ -161,14 +170,14 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                                 params.set('scope', 'network');
                             }
                             const query = params.toString();
-                            return `/api/business/${businessId}/metrics-history${query ? `?${query}` : ''}`;
+                            return `/api/business/${resolvedBusinessId}/metrics-history${query ? `?${query}` : ''}`;
                         })(),
                         { headers }
                     ),
                     fetch(
                         isNetworkView
                             ? `/api/network/locations-alerts?network_id=${encodeURIComponent(networkId)}`
-                            : `/api/network/locations-alerts?business_id=${businessId}`,
+                            : `/api/network/locations-alerts?business_id=${resolvedBusinessId}`,
                         { headers },
                     ),
                 ]);
@@ -209,7 +218,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                     const avgRating = Number(healthJson.data?.avg_rating || 0);
                     const totalReviews = Number(healthJson.data?.total_reviews || 0);
                     setSalons([{
-                        id: businessId,
+                        id: resolvedBusinessId,
                         name: 'Текущий бизнес',
                         address: '—',
                         lat: NaN,
@@ -233,7 +242,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         };
 
         loadDashboard();
-    }, [businessId, metricsHistoryQuery]);
+    }, [metricsHistoryQuery, resolvedBusinessId]);
 
     const stats: NetworkStats = useMemo(() => {
         const totalSalons = salons.length;
@@ -291,12 +300,26 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
 
     const handleOpenDashboard = (targetBusinessId: string) => {
         if (!targetBusinessId) return;
+        const target = salons.find((salon) => salon.id === targetBusinessId);
+        dashboardContext.onBusinessChange?.(targetBusinessId);
+        dashboardContext.onControlScopeChange?.({
+            kind: 'business',
+            id: targetBusinessId,
+            name: target?.name || 'Точка сети',
+        });
         localStorage.setItem('selectedBusinessId', targetBusinessId);
         navigate('/dashboard/card');
     };
 
     const handleOpenReviewDrilldown = (targetBusinessId: string, filter: ReviewDrilldownFilter) => {
         if (!targetBusinessId) return;
+        const target = salons.find((salon) => salon.id === targetBusinessId);
+        dashboardContext.onBusinessChange?.(targetBusinessId);
+        dashboardContext.onControlScopeChange?.({
+            kind: 'business',
+            id: targetBusinessId,
+            name: target?.name || 'Точка сети',
+        });
         localStorage.setItem('selectedBusinessId', targetBusinessId);
         const params = new URLSearchParams();
         params.set('tab', 'reviews');
@@ -304,8 +327,20 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         navigate(`/dashboard/card?${params.toString()}`);
     };
 
+    if (embedded) {
+        return (
+            <div className="space-y-4" data-tour-target="network-locations-map">
+                <NetworkMap
+                    locations={salons}
+                    onOpenDashboard={handleOpenDashboard}
+                    onOpenReviewDrilldown={handleOpenReviewDrilldown}
+                />
+            </div>
+        );
+    }
+
     return (
-        <div className={embedded ? "space-y-4" : "flex-1 space-y-4 p-8 pt-6"}>
+        <div className="flex-1 space-y-4 p-8 pt-6">
             <DashboardHeader
                 viewMode={viewMode}
                 setViewMode={setViewMode}
