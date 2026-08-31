@@ -160,6 +160,36 @@ def reset_journey(flow: str) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM journey_actions WHERE journey_id = %s", (journey_id,))
+    if flow == "content":
+        cursor.execute(
+            """
+            UPDATE contentplanitems
+            SET draft_text = NULL, status = 'planned', metadata_json = '{"fixture": true}'::jsonb,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (fixture_id("content-item:owner"),),
+        )
+    elif flow == "partnership":
+        cursor.execute(
+            """
+            UPDATE lead_workstreams
+            SET partnership_outcome_json = '{}'::jsonb, partnership_launched_at = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (fixture_id("workstream:partnership"),),
+        )
+    elif flow == "influencer":
+        cursor.execute(
+            "UPDATE creator_search_results SET shortlist_status = 'shortlisted', updated_at = NOW() WHERE id = %s",
+            (fixture_id("creator-result:anna"),),
+        )
+    elif flow == "automation":
+        cursor.execute(
+            "DELETE FROM agent_runs WHERE id LIKE 'localos-e2e-journey-run-%%' AND business_id = %s",
+            (owner_business_id(),),
+        )
     cursor.execute(
         """
         UPDATE lead_journeys
@@ -176,6 +206,134 @@ def reset_journey(flow: str) -> None:
     conn.commit()
     conn.close()
     print(journey_id)
+
+
+def complete_map_refresh() -> None:
+    business_id = owner_business_id()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT action.payload_json->>'refresh_queue_id'
+        FROM journey_actions action
+        WHERE action.business_id = %s AND action.flow_type = 'maps'
+          AND action.action_type = 'compare_snapshot' AND action.status = 'waiting'
+        ORDER BY action.created_at DESC LIMIT 1
+        """,
+        (business_id,),
+    )
+    row = cursor.fetchone()
+    queue_id = str(row[0] or "") if row else ""
+    if not queue_id:
+        conn.close()
+        raise RuntimeError("Waiting synthetic map refresh was not found")
+    cursor.execute(
+        """
+        UPDATE parsequeue
+        SET status = 'completed', error_message = NULL, updated_at = NOW()
+        WHERE id = %s AND business_id = %s
+        """,
+        (queue_id, business_id),
+    )
+    if cursor.rowcount != 1:
+        conn.rollback()
+        conn.close()
+        raise RuntimeError("Synthetic map refresh queue was not found")
+    conn.commit()
+    conn.close()
+    print(queue_id)
+
+
+def complete_automation_run() -> None:
+    business_id = owner_business_id()
+    user_id = owner_user_id()
+    blueprint_id = fixture_id("automation-blueprint:owner")
+    version_id = fixture_id("automation-blueprint-version:owner")
+    run_id = f"localos-e2e-journey-run-{uuid.uuid4()}"
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO agent_runs (
+            id, blueprint_id, blueprint_version_id, business_id, status,
+            input_json, output_json, created_by_user_id, started_at, completed_at, updated_at
+        ) VALUES (%s, %s, %s, %s, 'completed', %s::jsonb, %s::jsonb, %s, NOW(), NOW(), NOW())
+        """,
+        (
+            run_id,
+            blueprint_id,
+            version_id,
+            business_id,
+            json.dumps({"fixture": True}),
+            json.dumps({"summary": "Подготовлены черновики для ручной проверки"}, ensure_ascii=False),
+            user_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    print(run_id)
+
+
+def journey_domain_state(flow: str) -> None:
+    if flow not in FLOWS:
+        raise RuntimeError("Unknown synthetic journey flow")
+    business_id = owner_business_id()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if flow == "maps":
+        cursor.execute(
+            """
+            SELECT action.action_type, action.status, action.payload_json,
+                   queue.status AS queue_status
+            FROM journey_actions action
+            LEFT JOIN parsequeue queue ON queue.id = action.payload_json->>'refresh_queue_id'
+            WHERE action.journey_id = %s
+            ORDER BY action.created_at DESC LIMIT 1
+            """,
+            (fixture_id("journey:maps"),),
+        )
+    elif flow == "influencer":
+        cursor.execute(
+            """
+            SELECT COUNT(*)::INT AS shortlisted_count
+            FROM creator_search_results result
+            JOIN creator_search_jobs job ON job.id = result.search_job_id
+            WHERE job.business_id = %s AND result.shortlist_status = 'shortlisted'
+            """,
+            (business_id,),
+        )
+    elif flow == "partnership":
+        cursor.execute(
+            "SELECT partnership_launched_at, partnership_outcome_json FROM lead_workstreams WHERE id = %s",
+            (fixture_id("workstream:partnership"),),
+        )
+    elif flow == "content":
+        cursor.execute(
+            "SELECT status, draft_text, scheduled_for, metadata_json FROM contentplanitems WHERE id = %s",
+            (fixture_id("content-item:owner"),),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, status, output_json
+            FROM agent_runs
+            WHERE business_id = %s AND id LIKE 'localos-e2e-journey-run-%%'
+            ORDER BY completed_at DESC LIMIT 1
+            """,
+            (business_id,),
+        )
+    row = cursor.fetchone()
+    columns = [description[0] for description in cursor.description or []]
+    conn.close()
+    if not row:
+        raise RuntimeError("Synthetic journey domain state was not found")
+    payload = {}
+    for index, column in enumerate(columns):
+        value = row[index]
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        payload[column] = value
+    print(json.dumps(payload, ensure_ascii=False, default=str))
 
 
 def cleanup_admin_journeys() -> None:
@@ -230,6 +388,10 @@ def main() -> None:
     subparsers.add_parser("network-fixture")
     subparsers.add_parser("telegram-init-data")
     subparsers.add_parser("cleanup-admin-journeys")
+    subparsers.add_parser("complete-map-refresh")
+    subparsers.add_parser("complete-automation-run")
+    domain_parser = subparsers.add_parser("journey-domain-state")
+    domain_parser.add_argument("flow", choices=sorted(FLOWS))
     args = parser.parse_args()
 
     if args.command == "verification-token":
@@ -252,6 +414,15 @@ def main() -> None:
         return
     if args.command == "cleanup-admin-journeys":
         cleanup_admin_journeys()
+        return
+    if args.command == "complete-map-refresh":
+        complete_map_refresh()
+        return
+    if args.command == "complete-automation-run":
+        complete_automation_run()
+        return
+    if args.command == "journey-domain-state":
+        journey_domain_state(args.flow)
         return
     reset_journey(args.flow)
 

@@ -1,7 +1,6 @@
-import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
-
 import { expect, test } from '@playwright/test';
+
+import { fixtureCommand } from './fixtureCommand';
 
 
 const scenarios = [
@@ -32,22 +31,8 @@ const scenarios = [
   },
 ];
 
-const fixtureCommand = (...args: string[]) => execFileSync(
-  'docker',
-  [
-    'compose', '-p', 'localos-staging',
-    '-f', 'docker-compose.yml',
-    '-f', 'docker-compose.staging.yml',
-    'exec', '-T', 'app', 'python', '/app/scripts/staging_fixture_cli.py',
-    ...args,
-  ],
-  { cwd: resolve(process.cwd(), '..'), encoding: 'utf8' },
-).trim();
-
-
 for (const scenario of scenarios) {
-  test(`${scenario.flow}: registration and email verification resume the selected action`, async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'Single-claim continuity is exercised once per flow.');
+  test(`${scenario.flow}: registration and email verification resume the selected action`, async ({ page }) => {
     fixtureCommand('reset-journey', scenario.flow);
     const email = `continuity-${scenario.flow}-${Date.now()}@localos-e2e.invalid`;
 

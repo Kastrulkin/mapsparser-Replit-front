@@ -93,7 +93,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('keeps the first review batch usable on a phone and preserves the approval gate', async ({ page }) => {
-  await page.goto('/dashboard/promotion/influencers');
+  await page.goto('/dashboard/influencers/operations');
 
   await expect(page.getByRole('heading', { name: 'Локальные авторы' })).toBeVisible();
   await expect(page.getByText(/30 из 31/)).toBeVisible();

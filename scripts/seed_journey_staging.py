@@ -149,10 +149,25 @@ def opportunity(flow: str) -> dict[str, object]:
         "automation": ("Разобрать новые отзывы", "LocalOS подготовит черновики, публикация останется ручной."),
     }
     title, summary = content[flow]
+    entity_types = {
+        "maps": "businessmaplink",
+        "influencer": "creator_search",
+        "partnership": "lead_workstream",
+        "content": "contentplanitem",
+        "automation": "automation_use_case",
+    }
+    entity_labels = {
+        "maps": "map-link:owner",
+        "influencer": "creator-search:owner",
+        "partnership": "workstream:partnership",
+        "content": "content-item:owner",
+        "automation": "routine_control",
+    }
+    entity_id = entity_labels[flow] if flow == "automation" else fixture_id(entity_labels[flow])
     return {
         "flow_type": flow,
-        "entity_type": f"e2e_{flow}",
-        "entity_id": fixture_id(f"entity:{flow}"),
+        "entity_type": entity_types[flow],
+        "entity_id": entity_id,
         "title": title,
         "summary": summary,
         "reason": "Синтетический пример для проверки пользовательского пути.",
@@ -160,6 +175,133 @@ def opportunity(flow: str) -> dict[str, object]:
         "message_excerpt": "",
         "metrics": {},
     }
+
+
+def seed_domain_fixtures(owner_id: str, business_id: str) -> None:
+    """Seed only synthetic records needed to prove each journey domain projection."""
+    map_link_id = fixture_id("map-link:owner")
+    search_id = fixture_id("creator-search:owner")
+    creator_id = fixture_id("creator-profile:anna")
+    channel_id = fixture_id("creator-channel:anna")
+    result_id = fixture_id("creator-result:anna")
+    content_plan_id = fixture_id("content-plan:owner")
+    content_item_id = fixture_id("content-item:owner")
+    blueprint_id = fixture_id("automation-blueprint:owner")
+    blueprint_version_id = fixture_id("automation-blueprint-version:owner")
+    today = datetime.now(timezone.utc).date()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO businessmaplinks (id, user_id, business_id, url, map_type)
+        VALUES (%s, %s, %s, 'https://yandex.ru/maps/org/localos_e2e_salon/100000001', 'yandex_maps')
+        ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id,
+            business_id = EXCLUDED.business_id, url = EXCLUDED.url, map_type = EXCLUDED.map_type
+        """,
+        (map_link_id, owner_id, business_id),
+    )
+    cursor.execute(
+        """
+        INSERT INTO creator_profiles (
+            id, display_name, description, primary_city, primary_area,
+            topics_json, verification_status, brand_safety_status, metadata_json
+        ) VALUES (%s, 'Анна про район', 'Пишет о местах, сервисах и жизни района.',
+                  'Санкт-Петербург', 'Петроградский', %s, 'verified', 'clear', %s)
+        ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name,
+            description = EXCLUDED.description, primary_city = EXCLUDED.primary_city,
+            topics_json = EXCLUDED.topics_json, verification_status = 'verified', updated_at = NOW()
+        """,
+        (creator_id, Json(["красота", "места рядом"]), Json({"fixture": True})),
+    )
+    cursor.execute(
+        """
+        INSERT INTO creator_channels (
+            id, creator_profile_id, platform, canonical_url, username, contactability,
+            public_metrics_json, metadata_json, last_observed_at, verification_status, verified_at
+        ) VALUES (%s, %s, 'telegram', 'https://t.me/localos_e2e_anna', 'localos_e2e_anna',
+                  'public_contact', %s, %s, NOW(), 'verified', NOW())
+        ON CONFLICT (id) DO UPDATE SET creator_profile_id = EXCLUDED.creator_profile_id,
+            canonical_url = EXCLUDED.canonical_url, public_metrics_json = EXCLUDED.public_metrics_json,
+            verification_status = 'verified', last_observed_at = NOW(), updated_at = NOW()
+        """,
+        (channel_id, creator_id, Json({"followers": 4200, "average_views": 1600}), Json({"fixture": True})),
+    )
+    cursor.execute(
+        """
+        INSERT INTO creator_search_jobs (
+            id, business_id, created_by, status, phase, brief_json, progress_json, completed_at
+        ) VALUES (%s, %s, %s, 'ready', 'ready', %s, %s, NOW())
+        ON CONFLICT (id) DO UPDATE SET business_id = EXCLUDED.business_id,
+            status = 'ready', phase = 'ready', brief_json = EXCLUDED.brief_json,
+            progress_json = EXCLUDED.progress_json, completed_at = NOW(), updated_at = NOW()
+        """,
+        (search_id, business_id, owner_id, Json({"city": "Санкт-Петербург", "platforms": ["telegram"]}), Json({"found": 1})),
+    )
+    cursor.execute(
+        """
+        INSERT INTO creator_search_results (
+            id, search_job_id, creator_profile_id, score, score_json, reasons_json,
+            gates_json, result_group, shortlist_status
+        ) VALUES (%s, %s, %s, 92, %s, %s, %s, 'best_fit', 'shortlisted')
+        ON CONFLICT (id) DO UPDATE SET search_job_id = EXCLUDED.search_job_id,
+            creator_profile_id = EXCLUDED.creator_profile_id, score = 92,
+            shortlist_status = 'shortlisted', updated_at = NOW()
+        """,
+        (result_id, search_id, creator_id, Json({"local_fit": 96}), Json(["Рядом с бизнесом"]), Json({"public_data": True})),
+    )
+    cursor.execute(
+        """
+        INSERT INTO contentplans (
+            id, business_id, scope_type, title, period_days, period_start, period_end,
+            plan_status, generation_mode, input_snapshot_json, created_by
+        ) VALUES (%s, %s, 'single_business', 'Первая публикация E2E', 30, %s, %s,
+                  'draft', 'journey', %s, %s)
+        ON CONFLICT (id) DO UPDATE SET business_id = EXCLUDED.business_id,
+            period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end,
+            plan_status = 'draft', updated_at = NOW()
+        """,
+        (content_plan_id, business_id, today, today + timedelta(days=29), Json({"fixture": True}), owner_id),
+    )
+    cursor.execute(
+        """
+        INSERT INTO contentplanitems (
+            id, plan_id, business_id, scheduled_for, content_type, theme, goal,
+            source_kind, source_ref, draft_text, status, metadata_json
+        ) VALUES (%s, %s, %s, %s, 'news', 'Как выбрать услугу впервые',
+                  'Помочь клиенту сделать выбор', 'e2e_fixture', 'journey:content', NULL, 'planned', %s)
+        ON CONFLICT (id) DO UPDATE SET plan_id = EXCLUDED.plan_id,
+            business_id = EXCLUDED.business_id, scheduled_for = EXCLUDED.scheduled_for,
+            draft_text = NULL, status = 'planned', metadata_json = EXCLUDED.metadata_json,
+            updated_at = NOW()
+        """,
+        (content_item_id, content_plan_id, business_id, today + timedelta(days=7), Json({"fixture": True})),
+    )
+    cursor.execute(
+        """
+        INSERT INTO agent_blueprints (
+            id, business_id, name, category, description, status, created_by_user_id, metadata_json
+        ) VALUES (%s, %s, 'Разобрать новые отзывы', 'reviews',
+                  'Подготовить черновики без автопубликации.', 'draft', %s, %s)
+        ON CONFLICT (id) DO UPDATE SET business_id = EXCLUDED.business_id,
+            name = EXCLUDED.name, status = 'draft', metadata_json = EXCLUDED.metadata_json,
+            updated_at = NOW()
+        """,
+        (blueprint_id, business_id, owner_id, Json({"fixture": True, "active_version_id": blueprint_version_id})),
+    )
+    cursor.execute(
+        """
+        INSERT INTO agent_blueprint_versions (
+            id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
+            capability_allowlist_json, approval_policy_json, output_schema_json,
+            created_by_user_id, execution_mode, trigger
+        ) VALUES (%s, %s, 1, 'Подготовить черновики ответов', %s, %s, %s, %s, %s, %s, 'manual', 'manual.run')
+        ON CONFLICT (id) DO UPDATE SET goal = EXCLUDED.goal,
+            approval_policy_json = EXCLUDED.approval_policy_json
+        """,
+        (blueprint_version_id, blueprint_id, Json({}), Json([]), Json([]), Json({"external_writes": "manual"}), Json({}), owner_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def seed_owner_review(owner_id: str, business_id: str) -> None:
@@ -206,7 +348,7 @@ def seed_owner_review(owner_id: str, business_id: str) -> None:
     conn.close()
 
 
-def seed_journeys() -> dict[str, str]:
+def seed_journeys(owner_id: str, business_id: str) -> dict[str, str]:
     conn = get_db_connection()
     cursor = conn.cursor()
     tokens = {}
@@ -230,6 +372,20 @@ def seed_journeys() -> dict[str, str]:
             """,
             (lead_id, preview["lead_name"], preview["city"], f"e2e-{flow}"),
         )
+        if flow == "partnership":
+            cursor.execute(
+                """
+                INSERT INTO lead_workstreams (
+                    id, lead_id, workstream_type, client_business_id, status,
+                    created_by, lifecycle_status, partnership_outcome_json
+                ) VALUES (%s, %s, 'client_partnership', %s, 'unprocessed', %s, 'discovered', '{}')
+                ON CONFLICT (id) DO UPDATE SET lead_id = EXCLUDED.lead_id,
+                    client_business_id = EXCLUDED.client_business_id,
+                    workstream_type = 'client_partnership', partnership_outcome_json = '{}',
+                    partnership_launched_at = NULL, updated_at = NOW()
+                """,
+                (fixture_id("workstream:partnership"), lead_id, business_id, owner_id),
+            )
         cursor.execute(
             """
             INSERT INTO lead_journeys (
@@ -277,7 +433,8 @@ def main() -> None:
     conn.commit()
     conn.close()
     seed_owner_review(owner_id, business_id)
-    tokens = seed_journeys()
+    seed_domain_fixtures(owner_id, business_id)
+    tokens = seed_journeys(owner_id, business_id)
     print(json.dumps({
         "synthetic_only": True,
         "owner_email": OWNER_EMAIL,

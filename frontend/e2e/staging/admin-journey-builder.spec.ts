@@ -1,24 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
-
 import { expect, test } from '@playwright/test';
+
+import { fixtureCommand } from './fixtureCommand';
 
 
 const ADMIN_EMAIL = 'admin@localos-e2e.invalid';
 const ADMIN_PASSWORD = 'LocalOS-E2E-2026!';
 const LEAD_NAME = '[E2E] Influencer Journey';
-
-const fixtureCommand = (...args: string[]) => execFileSync(
-  'docker',
-  [
-    'compose', '-p', 'localos-staging',
-    '-f', 'docker-compose.yml',
-    '-f', 'docker-compose.staging.yml',
-    'exec', '-T', 'app', 'python', '/app/scripts/staging_fixture_cli.py',
-    ...args,
-  ],
-  { cwd: resolve(process.cwd(), '..'), encoding: 'utf8' },
-).trim();
 
 const loginAdmin = async (page: import('@playwright/test').Page) => {
   await page.addInitScript(() => window.localStorage.setItem('language', 'ru'));

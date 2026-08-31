@@ -27,6 +27,11 @@ FROM python:3.11-bookworm
 
 ARG INSTALL_PLAYWRIGHT_BROWSER=true
 
+# Keep the runtime identity stable across app, worker and Telegram images. The
+# host-side writable directories must use the same UID/GID when bind-mounted.
+ARG LOCALOS_UID=10001
+ARG LOCALOS_GID=10001
+
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
 RUN set -eux; \
     apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
@@ -73,20 +78,46 @@ RUN set -eux; \
     --extra-index-url https://pypi.org/simple \
     -r requirements.txt
 
+# Keep packaging tooling out of known-vulnerable ranges reported by the image
+# scanner. These packages are not runtime application dependencies, but remain
+# present in the final Python image and therefore must be patched as well.
+RUN set -eux; \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=30 \
+    pip install --no-cache-dir --retries 3 \
+    --index-url https://mirrors.aliyun.com/pypi/simple \
+    --extra-index-url https://pypi.org/simple \
+    "setuptools==84.0.0" \
+    "wheel==0.48.0"
+
 # Production workers may need the bundled browser; host-driven staging E2E does not.
+# A shared path keeps Chromium readable after the process drops root privileges.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN if [ "$INSTALL_PLAYWRIGHT_BROWSER" = "true" ]; then python -m playwright install chromium; fi
+
+RUN set -eux; \
+    groupadd --gid "${LOCALOS_GID}" localos \
+    && useradd --uid "${LOCALOS_UID}" --gid "${LOCALOS_GID}" \
+      --create-home --home-dir /home/localos --shell /usr/sbin/nologin localos
 
 # Код проекта (src, scripts, tests и т.д.). Папка scripts/ не должна быть в .dockerignore (migrate_sqlite_to_postgres.py, smoke).
 COPY . .
 # Подставляем собранный фронтенд из первого этапа (поле «Город» и прочие правки всегда актуальны)
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --chown=localos:localos --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Entrypoint: ждёт Postgres, выполняет flask db upgrade, затем exec CMD
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN set -eux; \
+    chmod +x /app/entrypoint.sh \
+    && mkdir -p /app/debug_data /app/uploads /home/localos/.cache /ms-playwright \
+    && chown -R localos:localos /app/debug_data /app/uploads /home/localos /ms-playwright
 
 # Flask CLI (flask db upgrade) нужен PYTHONPATH с /app для FLASK_APP=src.main:app; приложение — /app/src
 ENV PYTHONPATH=/app:/app/src
+ENV HOME=/home/localos
+ENV XDG_CACHE_HOME=/home/localos/.cache
+
+USER localos:localos
 
 # По умолчанию — backend; в compose переопределяем command для worker
 ENTRYPOINT ["/app/entrypoint.sh"]

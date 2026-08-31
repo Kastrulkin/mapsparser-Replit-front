@@ -1,24 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
-
 import { expect, test } from '@playwright/test';
+
+import { fixtureCommand } from './fixtureCommand';
 
 
 const OWNER_EMAIL = 'owner@localos-e2e.invalid';
 const OWNER_PASSWORD = 'LocalOS-E2E-2026!';
 const AUTOMATION_TOKEN = 'localos-e2e-automation-495c6e64fcd4524aa411da4e93f2d52e';
-
-const fixtureCommand = (...args: string[]) => execFileSync(
-  'docker',
-  [
-    'compose', '-p', 'localos-staging',
-    '-f', 'docker-compose.yml',
-    '-f', 'docker-compose.staging.yml',
-    'exec', '-T', 'app', 'python', '/app/scripts/staging_fixture_cli.py',
-    ...args,
-  ],
-  { cwd: resolve(process.cwd(), '..'), encoding: 'utf8' },
-).trim();
 
 const csrfHeaders = async (page: import('@playwright/test').Page) => {
   const csrfCookie = (await page.context().cookies()).find((cookie) => cookie.name === 'localos_csrf');

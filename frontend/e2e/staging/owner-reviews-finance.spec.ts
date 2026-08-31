@@ -1,7 +1,6 @@
-import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
-
 import { expect, test } from '@playwright/test';
+
+import { fixtureCommand } from './fixtureCommand';
 
 
 const OWNER_EMAIL = 'owner@localos-e2e.invalid';
@@ -13,18 +12,6 @@ const FINANCE_CSV = [
   'entry,2026-08-29,expense,materials,1000,E2E,e2e-expense',
   '',
 ].join('\n');
-
-const fixtureCommand = (...args: string[]) => execFileSync(
-  'docker',
-  [
-    'compose', '-p', 'localos-staging',
-    '-f', 'docker-compose.yml',
-    '-f', 'docker-compose.staging.yml',
-    'exec', '-T', 'app', 'python', '/app/scripts/staging_fixture_cli.py',
-    ...args,
-  ],
-  { cwd: resolve(process.cwd(), '..'), encoding: 'utf8' },
-).trim();
 
 const loginOwner = async (page: import('@playwright/test').Page) => {
   const businessId = fixtureCommand('owner-business-id');

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('daily mobile flow stays native and readable', async ({ page }) => {
   await page.goto('/telegram/control?preview=1');
 
-  await expect(page.getByText('Сейчас важнее всего')).toBeVisible();
+  await expect(page.getByText('Что сделать сейчас')).toBeVisible();
   await expect(page.getByRole('navigation')).toBeVisible();
   await expect(page.locator('a[href*="/dashboard"]')).toHaveCount(0);
   await expect(page.locator('main')).not.toHaveCSS('overflow-x', 'scroll');
@@ -11,8 +11,7 @@ test('daily mobile flow stays native and readable', async ({ page }) => {
 
 test('content calendar opens inside Mini App', async ({ page }) => {
   await page.goto('/telegram/control?preview=1');
-  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
-  await page.getByRole('button', { name: /Контент/ }).click();
+  await page.getByRole('button', { name: /Подготовлено два черновика публикаций/ }).click();
 
   await expect(page.getByText('Контент-календарь')).toBeVisible();
   await expect(page.getByRole('button', { name: /Посты/ })).toBeVisible();
@@ -21,7 +20,7 @@ test('content calendar opens inside Mini App', async ({ page }) => {
 
 test('reviews expose concrete items and a single bulk confirmation', async ({ page }) => {
   await page.goto('/telegram/control?preview=1');
-  await page.getByRole('button', { name: 'Отзывы', exact: true }).click();
+  await page.getByRole('button', { name: 'Открыть отзывы', exact: true }).click();
 
   await expect(page.getByText('Отзыв от', { exact: false }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Выбрать отзыв' }).first().click();
