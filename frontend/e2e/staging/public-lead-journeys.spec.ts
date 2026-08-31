@@ -38,14 +38,13 @@ for (const scenario of scenarios) {
     await page.goto(`/start/${scenario.token}`);
 
     await expect(page.getByRole('heading', { name: scenario.title })).toBeVisible();
-    await expect(page.getByText('Что произойдёт после нажатия')).toBeVisible();
-    const journeySection = page.locator('section').filter({ hasText: 'Что произойдёт после нажатия' }).first();
-    const prepareButton = journeySection.getByRole('button').first();
+    await expect(page.getByRole('heading', { name: 'Как это работает' })).toBeVisible();
+    const prepareButton = page.getByRole('button', { name: /Показать|Подготовить/ }).first();
     await expect(prepareButton).toBeVisible();
     await prepareButton.click();
 
-    await expect(page.getByText('Завершите уже выбранное действие')).toBeVisible();
-    const registrationLink = page.getByRole('link', { name: /Завершить действие/ });
+    await expect(page.getByText('Открыть выбранное направление')).toBeVisible();
+    const registrationLink = page.getByRole('link', { name: 'Продолжить в LocalOS' });
     await expect(registrationLink).toHaveAttribute('href', new RegExp(`journey_token=${scenario.token}`));
     expect(consoleErrors).toEqual([]);
   });

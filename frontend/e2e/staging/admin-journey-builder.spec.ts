@@ -69,7 +69,7 @@ test('superadmin creates, previews and revokes one selected client route', async
 
   await page.goto(created.public_path);
   await expect(page.getByRole('heading', { name: selectedTitle })).toBeVisible();
-  await expect(page.getByText('Что произойдёт после нажатия')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Как это работает' })).toBeVisible();
 
   await page.goto('/dashboard/bazich/journeys');
   const history = page.locator('section').filter({ hasText: 'Последние маршруты' }).first();

@@ -46,8 +46,7 @@ for (const scenario of scenarios) {
   test(`${scenario.flow}: primary action and approval note meet WCAG AA contrast`, async ({ page }) => {
     await page.goto(`/start/${scenario.token}`);
 
-    const journeySection = page.locator('section').filter({ hasText: 'Что произойдёт после нажатия' }).first();
-    const primaryAction = journeySection.getByRole('button').first();
+    const primaryAction = page.getByRole('button', { name: /Показать|Подготовить/ }).first();
     const approvalNote = page.getByText('Внешние отправки и изменения остаются под ручным подтверждением.');
 
     await expect(primaryAction).toBeVisible();

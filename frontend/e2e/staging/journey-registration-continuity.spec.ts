@@ -37,9 +37,8 @@ for (const scenario of scenarios) {
     const email = `continuity-${scenario.flow}-${Date.now()}@localos-e2e.invalid`;
 
     await page.goto(`/start/${scenario.token}`);
-    const journeySection = page.locator('section').filter({ hasText: 'Что произойдёт после нажатия' }).first();
-    await journeySection.getByRole('button').first().click();
-    await page.getByRole('link', { name: /Завершить действие/ }).click();
+    await page.getByRole('button', { name: /Показать|Подготовить/ }).first().click();
+    await page.getByRole('link', { name: 'Продолжить в LocalOS' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/login\\?.*journey_token=${scenario.token}`));
     await page.locator('#register-name').fill('E2E Новый владелец');
