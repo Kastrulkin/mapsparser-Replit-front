@@ -22,9 +22,9 @@ Production содержит существенный drift от Git и след�
 
 Канонический manifest текущего проверенного дерева: `outputs/localos-rollout-manifest-2026-08-31.tsv`.
 
-- SHA-256 самого manifest: `00df16e0bd8d1a4889706d4e70ac95dbae068b97a9dc481528580ff006b6743e`.
+- SHA-256 самого manifest: `1ccc96ccb808e957ad4deb8095112d5bc00d78842ec852bd315353b8aa0e2f40`.
 - `runtime_nonroot`: 2 файла.
-- `backend_security`: 11 файлов.
+- `backend_security`: 12 файлов.
 - `frontend_source`: 49 файлов.
 - `frontend_dist`: 183 файла.
 - Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с dist внутри образа, прошедшего 102/102 E2E. Digest отсортированного списка файлов: `e0d818ecfd7e066ae220d66656af61ce12b1836235f5f438325fed6edcc0c9d0`.
@@ -55,7 +55,7 @@ Safe errors, XML hardening, SSRF transport contract, terminal 402 semantics и s
 
 Пакет разделён по зависимости:
 
-- C1 code-only: `src/core/html_head.py`, `src/core/outbound_network.py`, `src/core/security_headers.py`, `src/legacy_routes/core_public.py`, `src/services/contact_intelligence_service.py`, `src/services/gigachat_client.py`, `src/services/outreach_personalization_ai.py`, `src/services/outreach_reply_tracking_service.py`.
+- C1 code-only: `src/api/wordstat_api.py`, `src/core/html_head.py`, `src/core/outbound_network.py`, `src/core/security_headers.py`, `src/legacy_routes/core_public.py`, `src/services/contact_intelligence_service.py`, `src/services/gigachat_client.py`, `src/services/outreach_personalization_ai.py`, `src/services/outreach_reply_tracking_service.py`.
 - C2 image dependency: `requirements.txt`, `src/services/agent_source_ingestion.py`, `src/services/yandex_xml_parser.py`. `defusedxml` должен присутствовать в immutable image до рестарта этих модулей.
 
 C1 допускает точечный sync в host source и контейнеры app/worker с рестартом только затронутых сервисов. Rollback: вернуть сохранённые файлы и повторить тот же restart. C2 нельзя имитировать временным `pip install` в живой контейнер: нужен проверенный image и сохранённые предыдущие image IDs.

@@ -1,48 +1,92 @@
 {
+  "title": "Wordstat API exposed internal exception text",
   "project": "LocalOS",
-  "title": "SPA head rendering and Telegram reply sync production regressions",
-  "environment": "Local macOS test environment and Docker/PostgreSQL production at localos.pro",
-  "generated_at": "2026-08-29T10:16:00+03:00",
-  "mode": "reproduce-and-fix",
-  "original_report": "Production returned 500 for URL paths containing encoded backslashes, while the worker repeatedly skipped outreach reply synchronization with a string timestamp error.",
-  "expected": "Unknown SPA routes render safely and Telegram subprocess timestamps are accepted as event times.",
-  "actual": "Regex replacement parsed backslashes as escapes and reply scheduling called date() on an ISO timestamp string.",
-  "reproduction": "Run the focused pytest files against the pre-fix implementation; both production failure mechanisms fail deterministically.",
-  "failure_signal": "re.error: bad escape and AttributeError: 'str' object has no attribute 'date'",
-  "reproduction_files": [
-    "tests/test_core_public_spa.py",
-    "tests/test_outreach_reply_tracking.py"
+  "generated_at": "2026-08-31",
+  "mode": "hunt-and-prove",
+  "original_report": "Completion audit found reachable Wordstat API exception handlers returning str(exception), contrary to the standardized safe API error contract.",
+  "discovery_scope": [
+    "src/api/wordstat_api.py error paths",
+    "src/core/api_errors.py safe response contract",
+    "existing API security regression tests"
   ],
-  "root_cause": "Dynamic HTML head values were passed directly as regex replacement templates, and the Telegram subprocess JSON boundary converted datetime values into ISO strings without normalization on receipt.",
-  "fix_summary": "Use callable regex replacements for dynamic head values and normalize datetime or ISO-string inbound event timestamps before scheduling follow-up work.",
-  "why_causal": "The identical focused command changed from the two production-equivalent exceptions to ten passing tests; the full backend suite and production probes also passed.",
+  "candidates": [
+    {
+      "candidate": "GET /api/wordstat/keywords exposes exception text",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:779",
+      "contract": "Internal failures return code, safe message and request_id without exception text.",
+      "trigger": "Authenticated request while keyword collection raises an internal exception.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    },
+    {
+      "candidate": "GET /api/wordstat/search exposes exception text",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:952",
+      "contract": "Internal failures return code, safe message and request_id without exception text.",
+      "trigger": "Authenticated request while search preparation raises an internal exception.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    },
+    {
+      "candidate": "GET /api/wordstat/metadata exposes exception text",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:1137",
+      "contract": "Internal failures return code, safe message and request_id without exception text.",
+      "trigger": "Metadata file read raises an internal exception.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    }
+  ],
+  "expected": "Each 500 response contains only code=internal_error, a safe user message and request_id.",
+  "actual": "Each endpoint returned the full injected internal exception text in its JSON response.",
+  "environment": "LocalOS ARM64 Python 3.11 test environment; no database, provider or production calls",
+  "reproduction": "Focused Flask tests inject a deterministic internal error into the real route handler and assert the shared safe error contract.",
+  "failure_signal": "Before the fix all three tests failed because the injected internal text was present in the response; after the fix all three passed.",
+  "root_cause": "Three catch-all handlers serialized str(exception) directly into client-facing JSON instead of using core.api_errors.internal_error_response.",
+  "fix_summary": "Imported internal_error_response and replaced only the three proven 500 responses with route-specific safe messages.",
+  "why_causal": "The changed statements are the only response construction points reached by the deterministic failing branches; success, validation, authorization and cleanup paths are unchanged.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_wordstat_api_error_redaction.py",
+      "line": 1,
+      "summary": "Three endpoint regressions approved at Gate 1."
+    }
+  ],
   "fix_files": [
-    "src/core/html_head.py",
-    "src/legacy_routes/core_public.py",
-    "src/services/outreach_reply_tracking_service.py"
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py",
+      "line": 14,
+      "summary": "Safe shared error response applied to the three approved branches at Gate 2."
+    }
   ],
   "checks": [
-    {"name": "Focused red-to-green reproducer", "status": "PASS", "evidence": "2 failed before; 10 passed after"},
-    {"name": "Full backend suite", "status": "PASS", "evidence": "2608 passed, 80 skipped"},
-    {"name": "Frontend unit suite", "status": "PASS", "evidence": "361 passed"},
-    {"name": "Browser e2e", "status": "PASS", "evidence": "10 Playwright and 2 Python browser tests passed"},
-    {"name": "Production malformed paths", "status": "PASS", "evidence": "Three encoded-backslash routes returned 200 without traceback"},
-    {"name": "Production worker", "status": "PASS", "evidence": "No reply-sync exception after deployment"}
+    {
+      "name": "Exact reproducer",
+      "status": "passed",
+      "detail": "3 failed before; 3 passed after."
+    },
+    {
+      "name": "Focused Wordstat suite",
+      "status": "passed",
+      "detail": "10 passed."
+    },
+    {
+      "name": "Rollout manifest",
+      "status": "passed",
+      "detail": "246 files verified without mismatch."
+    }
   ],
   "reproduce": [
-    "arch -arm64 venv/bin/python -m pytest -q tests/test_core_public_spa.py tests/test_outreach_reply_tracking.py",
-    "arch -arm64 venv/bin/python -m pytest -q"
+    "PYTHONPATH=src /usr/bin/arch -arm64 venv/bin/python -m pytest -q tests/test_wordstat_api_error_redaction.py",
+    "PYTHONPATH=src /usr/bin/arch -arm64 venv/bin/python -m pytest -q tests/test_wordstat_cloud_client.py tests/test_wordstat_api_error_redaction.py"
   ],
   "limitations": [
-    "Authenticated post-deployment browser re-login was not possible because no test credentials were available.",
-    "GigaChat contact-intelligence calls remain blocked by provider HTTP 402."
+    "This package covers the three approved Wordstat routes only; other legacy API modules require separate candidate batches and approval gates."
   ],
   "residual_risks": [
-    "The first request to an unusual fallback path can be slow while lazy SPA data resolves.",
-    "Large-module ratchets were re-frozen at current sizes and still require later extraction work."
+    "Production deployment and live smoke remain separately gated.",
+    "Provider credential rotation remains separately gated."
   ],
   "notes": [
-    "The automation prompt explicitly authorized reproduction tests and minimal production fixes for this run.",
-    "No production data, schema, credentials, messages, publications, or payments were changed."
+    "No provider API, production service or production data was used or changed.",
+    "Success responses, authorization, tenant checks, rollback and connection close behavior remain unchanged."
   ]
 }

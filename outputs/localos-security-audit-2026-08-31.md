@@ -38,7 +38,8 @@
 - Исправлены доступные имена, контраст, progress labels и минимальные touch targets.
 - Browser cookie migration доведена до staging-ready состояния: прямые чтения стандартных `auth_token`/`token` удалены из production-компонентов, browser transport до первого render очищает legacy browser credentials и не отправляет их как `Authorization`.
 - Scoped bearer сохранён только для Mini App и активной demo session. Исправлен возврат из billing provider: проверка статуса работает с HttpOnly cookie без JavaScript-токена.
-- Rollout ограничен SHA-256 allowlist из 245 файлов: 2 runtime, 11 backend security, 49 frontend source и 183 точных frontend dist artifacts. `scripts/verify_rollout_manifest.py` проверил весь manifest без расхождений.
+- Rollout ограничен SHA-256 allowlist из 246 файлов: 2 runtime, 12 backend security, 49 frontend source и 183 точных frontend dist artifacts. `scripts/verify_rollout_manifest.py` проверил весь manifest без расхождений.
+- Три Wordstat API error path (`keywords`, `search`, `metadata`) были доказанно уязвимы к раскрытию текста внутренних исключений. Один согласованный fix перевёл их на общий `internal_error_response`; тот же reproducer изменился с 3 failures на 3 passes, полный Wordstat suite — 10 passed.
 - Локальный dist с точными feature flags побайтово совпал с dist внутри Docker image, прошедшего 102/102 E2E. Staging/tests/evidence и посторонние `.agent`/Riderra/daily файлы исключены из production allowlist.
 - Подготовлен read-only production preflight без вывода environment и без мутаций. Старый readiness-снимок от 30 августа явно помечен как исторический, чтобы он не противоречил текущему go/no-go.
 - Read-only production preflight затем реально выполнен по восстановленному SSH: app, worker и Telegram работают от root; source и migrations уже read-only. `debug_data` занимает 445 МБ и содержит 1432 файла, почти все принадлежат root; UID 10001 не сможет писать туда без отдельной ownership migration. Production state не менялся.
@@ -50,7 +51,7 @@
 | XML/SSRF/security-header suite | 21 passed |
 | Frontend unit suite (serial) | 393 passed |
 | Browser cookie focused suite | 15 passed |
-| Wordstat Cloud/OAuth precedence suite | 7 passed |
+| Wordstat Cloud/OAuth/error-redaction suite | 10 passed |
 | Playwright journey/UX/a11y | 102 passed |
 | `pip-audit` | 0 vulnerabilities |
 | npm production/full audit | 0 vulnerabilities |

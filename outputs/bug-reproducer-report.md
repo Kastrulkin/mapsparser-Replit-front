@@ -2,30 +2,47 @@
 
 ## ✅ FIX_PROVEN — Bug reproduced and fix proven
 
-> The same reproducer changed from failing to passing and broader checks passed.
+> The same three-endpoint reproducer changed from 3 failed to 3 passed, and the full focused Wordstat suite passed.
 
 **Project:** LocalOS
-**Bug:** SPA head rendering and Telegram reply sync production regressions
-**Environment:** Local macOS test environment and Docker/PostgreSQL production at localos.pro
-**Generated:** 2026-08-29T10:16:00+03:00
+
+**Bug:** Wordstat API exposed internal exception text
+
+**Environment:** LocalOS ARM64 Python 3.11 test environment; no database, provider or production calls
+
+**Generated:** 2026-08-31
+
+## Discovery scope
+
+- src/api/wordstat_api.py error paths
+- src/core/api_errors.py safe response contract
+- existing API security regression tests
+
+## Ranked and tested candidates
+
+| # | Candidate | Contract evidence | Trigger | Location | Confidence | Outcome |
+|---:|---|---|---|---|---|---|
+| 1 | GET /api/wordstat/keywords exposes exception text | Internal failures return code, safe message and request_id without exception text. | Authenticated request while keyword collection raises an internal exception. | /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:779 | high | REPRODUCED |
+| 2 | GET /api/wordstat/search exposes exception text | Internal failures return code, safe message and request_id without exception text. | Authenticated request while search preparation raises an internal exception. | /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:952 | high | REPRODUCED |
+| 3 | GET /api/wordstat/metadata exposes exception text | Internal failures return code, safe message and request_id without exception text. | Metadata file read raises an internal exception. | /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:1137 | high | REPRODUCED |
 
 ## Original report
 
-Production returned 500 for URL paths containing encoded backslashes, while the worker repeatedly skipped outreach reply synchronization with a string timestamp error.
+Completion audit found reachable Wordstat API exception handlers returning str(exception), contrary to the standardized safe API error contract.
 
 | Contract | Expected | Actual |
 |---|---|---|
-| Observed behavior | Unknown SPA routes render safely and Telegram subprocess timestamps are accepted as event times. | Regex replacement parsed backslashes as escapes and reply scheduling called date() on an ISO timestamp string. |
+| Observed behavior | Each 500 response contains only code=internal_error, a safe user message and request_id. | Each endpoint returned the full injected internal exception text in its JSON response. |
 
 ## Minimal reproduction
 
-Run the focused pytest files against the pre-fix implementation; both production failure mechanisms fail deterministically.
+Focused Flask tests inject a deterministic internal error into the real route handler and assert the shared safe error contract.
 
-**Confirming signal:** re.error: bad escape and AttributeError: 'str' object has no attribute 'date'
+**Confirming signal:** Before the fix all three tests failed because the injected internal text was present in the response; after the fix all three passed.
 
 ### Reproduction files approved at Gate 1
 
-- No reproduction files listed.
+- [test_wordstat_api_error_redaction.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_wordstat_api_error_redaction.py:1>) — Three endpoint regressions approved at Gate 1.
 
 ## Red to green evidence
 
@@ -33,203 +50,69 @@ Run the focused pytest files against the pre-fix implementation; both production
 |---|---:|---:|
 | Exit code | 1 | 0 |
 | Timed out | False | False |
-| Duration | 1,660.618 ms | 1,262.606 ms |
+| Duration | 280 ms | 230 ms |
 | Same command | — | True |
 | Broader suite | — | passed |
 
 ### Before — failing evidence
 
 ```text
-F...F.....                                                               [100%]
-=================================== FAILURES ===================================
-________ test_canonical_replacement_treats_backslashes_as_literal_text _________
-
-    def test_canonical_replacement_treats_backslashes_as_literal_text():
-        html = '<html><head><link rel="canonical" href="https://localos.pro/" /></head></html>'
-
->       rendered = _set_canonical(html, "https://localos.pro/foo\\windows")
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-tests/test_core_public_spa.py:7:
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-src/main.py:650: in wrapper
-    return _IMPLEMENTATIONS[name](*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src/legacy_routes/core_public.py:294: in _set_canonical
-    return _replace_or_insert_tag(html_text, r'<link\s+rel="canonical"[^>]*>', replacement)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src/main.py:650: in wrapper
-    return _IMPLEMENTATIONS[name](*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src/legacy_routes/core_public.py:280: in _replace_or_insert_tag
-    updated, count = re.subn(pattern, replacement, html_text, count=1, flags=re.IGNORECASE | re.DOTALL)
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/re/__init__.py:196: in subn
-    return _compile(pattern, flags).subn(repl, string, count)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/re/__init__.py:317: in _subx
-    template = _compile_repl(template, pattern)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/re/__init__.py:308: in _compile_repl
-    return _parser.parse_template(repl, pattern)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-source = '<link rel="canonical" href="https://localos.pro/foo\\windows" />'
-state = re.compile('<link\\s+rel="canonical"[^>]*>', re.IGNORECASE|re.DOTALL)
-
-    def parse_template(source, state):
-        # parse 're' replacement string into list of literals and
-        # group references
-        s = Tokenizer(source)
-        sget = s.get
-        groups = []
-        literals = []
-        literal = []
-        lappend = literal.append
-        def addgroup(index, pos):
-            if index > state.groups:
-                raise s.error("invalid group reference %d" % index, pos)
-            if literal:
-                literals.append(''.join(literal))
-                del literal[:]
-            groups.append((len(literals), index))
-            literals.append(None)
-        groupindex = state.groupindex
-        while True:
-            this = sget()
-
-... [output truncated] ...
-)) from None
-E                           re.error: bad escape \w at position 51
-
-/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/re/_parser.py:1087: error
-___ test_bound_inbound_event_accepts_iso_timestamp_from_telegram_subprocess ____
-
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11a5d8050>
-
-    def test_bound_inbound_event_accepts_iso_timestamp_from_telegram_subprocess(monkeypatch):
-        class Cursor:
-            rowcount = 1
-
-            def execute(self, _query, _params=None):
-                return None
-
-            def fetchone(self):
-                return {"id": "event-1"}
-
-        monkeypatch.setattr(
-            "services.outreach_reply_tracking_service.update_binding_cursor",
-            lambda *_args, **_kwargs: None,
-        )
-        monkeypatch.setattr(
-            "services.outreach_reply_tracking_service.upsert_relationship_from_reply",
-            lambda *_args, **_kwargs: None,
-        )
-        monkeypatch.setattr(
-            "services.outreach_reply_tracking_service._room_for_workstream",
-            lambda *_args, **_kwargs: None,
-        )
-
->       status = record_bound_inbound_event(
-            Cursor(),
-            binding={
-                "id": "binding-1",
-                "lead_id": "lead-1",
-                "workstream_id": "workstream-1",
-                "business_id": "business-1",
-            },
-            sender_account_id="sender-1",
-            channel="telegram",
-            provider_event_id="telegram:1:2",
-            raw_reply="Давайте завтра",
-            classification={
-                "classification": "question",
-                "is_human": True,
-                "stops_campaign": True,
-                "confidence": 1.0,
-            },
-            occurred_at="2026-08-28T10:15:00+00:00",
-        )
-
-tests/test_outreach_reply_tracking.py:67:
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-src/services/outreach_reply_tracking_service.py:357: in record_bound_inbound_event
-    next_action_at = _next_action_at(body, event_time)
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-raw_reply = 'Давайте завтра', occurred_at = '2026-08-28T10:15:00+00:00'
-
-    def _next_action_at(raw_reply: str, occurred_at: datetime) -> datetime:
-        lowered = raw_reply.lower()
-        if "завтра" in lowered:
->           target = occurred_at.date() + timedelta(days=1)
-                     ^^^^^^^^^^^^^^^^
-E           AttributeError: 'str' object has no attribute 'date'
-
-src/services/outreach_reply_tracking_service.py:163: AttributeError
-=========================== short test summary info ============================
-FAILED tests/test_core_public_spa.py::test_canonical_replacement_treats_backslashes_as_literal_text
-FAILED tests/test_outreach_reply_tracking.py::test_bound_inbound_event_accepts_iso_timestamp_from_telegram_subprocess
-
+FFF [100%]
+All three responses contained the injected internal exception text (test secret redacted).
+3 failed in 0.28s
 ```
 
 ### After — fixed evidence
 
 ```text
-..........                                                               [100%]
-10 passed in 0.27s
+... [100%]
+3 passed in 0.23s
 ```
 
 ## Root cause
 
-Dynamic HTML head values were passed directly as regex replacement templates, and the Telegram subprocess JSON boundary converted datetime values into ISO strings without normalization on receipt.
+Three catch-all handlers serialized str(exception) directly into client-facing JSON instead of using core.api_errors.internal_error_response.
 
 ## Approved fix
 
-Use callable regex replacements for dynamic head values and normalize datetime or ISO-string inbound event timestamps before scheduling follow-up work.
+Imported internal_error_response and replaced only the three proven 500 responses with route-specific safe messages.
 
-**Why this is causal:** The identical focused command changed from the two production-equivalent exceptions to ten passing tests; the full backend suite and production probes also passed.
+**Why this is causal:** The changed statements are the only response construction points reached by the deterministic failing branches; success, validation, authorization and cleanup paths are unchanged.
 
 ### Production files approved at Gate 2
 
-- No production files listed.
+- [wordstat_api.py](</Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:14>) — Safe shared error response applied to the three approved branches at Gate 2.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Focused red-to-green reproducer | ⚠️ pass | Not supplied |
-| Full backend suite | ⚠️ pass | Not supplied |
-| Frontend unit suite | ⚠️ pass | Not supplied |
-| Browser e2e | ⚠️ pass | Not supplied |
-| Production malformed paths | ⚠️ pass | Not supplied |
-| Production worker | ⚠️ pass | Not supplied |
+| Exact reproducer | ✅ passed | 3 failed before; 3 passed after. |
+| Focused Wordstat suite | ✅ passed | 10 passed. |
+| Rollout manifest | ✅ passed | 246 files verified without mismatch. |
 
 ## Reproduce
 
 ```bash
-arch -arm64 venv/bin/python -m pytest -q tests/test_core_public_spa.py tests/test_outreach_reply_tracking.py
+PYTHONPATH=src /usr/bin/arch -arm64 venv/bin/python -m pytest -q tests/test_wordstat_api_error_redaction.py
 ```
 ```bash
-arch -arm64 venv/bin/python -m pytest -q
+PYTHONPATH=src /usr/bin/arch -arm64 venv/bin/python -m pytest -q tests/test_wordstat_cloud_client.py tests/test_wordstat_api_error_redaction.py
 ```
 
 ## Limitations
 
-- Authenticated post-deployment browser re-login was not possible because no test credentials were available.
-- GigaChat contact-intelligence calls remain blocked by provider HTTP 402.
+- This package covers the three approved Wordstat routes only; other legacy API modules require separate candidate batches and approval gates.
 
 ## Residual risks
 
-- The first request to an unusual fallback path can be slow while lazy SPA data resolves.
-- Large-module ratchets were re-frozen at current sizes and still require later extraction work.
+- Production deployment and live smoke remain separately gated.
+- Provider credential rotation remains separately gated.
 
 ## Notes
 
-- The automation prompt explicitly authorized reproduction tests and minimal production fixes for this run.
-- No production data, schema, credentials, messages, publications, or payments were changed.
+- No provider API, production service or production data was used or changed.
+- Success responses, authorization, tenant checks, rollback and connection close behavior remain unchanged.
 
 ---
 

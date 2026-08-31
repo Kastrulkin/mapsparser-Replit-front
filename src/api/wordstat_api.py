@@ -11,6 +11,7 @@ import difflib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database_manager import get_db_connection
 from auth_system import verify_session
+from core.api_errors import internal_error_response
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
 from service_categorizer import categorizer
@@ -775,7 +776,7 @@ def get_keywords():
         
     except Exception as e:
         print(f"Error fetching wordstat keywords: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось получить SEO-ключи")
     finally:
         conn.close()
 
@@ -948,7 +949,7 @@ def search_keywords():
         return jsonify({'success': True, 'count': len(items), 'items': items})
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось выполнить поиск SEO-ключей")
     finally:
         conn.close()
 
@@ -1133,7 +1134,7 @@ def get_metadata():
             return jsonify({'success': False, 'error': 'No metadata found'}), 404
             
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось получить метаданные SEO-ключей")
 
 
 @wordstat_bp.route('/negative-keywords', methods=['GET'])
