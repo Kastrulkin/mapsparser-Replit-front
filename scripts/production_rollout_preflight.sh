@@ -15,7 +15,7 @@ echo "compose_sha256=$(docker compose config | sha256sum | awk '{print $1}')"
 
 docker compose ps
 docker compose images
-docker compose exec -T postgres pg_isready
+docker compose exec -T postgres pg_isready < /dev/null
 
 for localos_service in app worker telegram-bot; do
   localos_container_id="$(docker compose ps -q "$localos_service" 2>/dev/null || true)"
@@ -26,7 +26,7 @@ for localos_service in app worker telegram-bot; do
   echo "service=$localos_service container=$localos_container_id"
   docker inspect --format 'image={{.Image}} configured_user={{json .Config.User}}' "$localos_container_id"
   docker inspect --format '{{range .Mounts}}{{println "mount" .Source "->" .Destination "rw=" .RW}}{{end}}' "$localos_container_id"
-  docker exec "$localos_container_id" id
+  docker exec "$localos_container_id" id < /dev/null
 done
 
 for localos_runtime_path in uploads debug_data; do
