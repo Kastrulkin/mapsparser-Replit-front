@@ -44,7 +44,7 @@ test('superadmin creates, previews and revokes one selected client route', async
   await page.getByRole('option', { name: `${LEAD_NAME} · Санкт-Петербург`, exact: true }).click();
   await clientStep.getByRole('button', { name: /Выбрать проблему/ }).click();
 
-  await page.getByRole('button', { name: /Найти автора, которому доверяют ваши клиенты/ }).click();
+  await page.getByRole('button', { name: /Инфлюенсеры рядом/ }).click();
   await page.getByLabel('Название услуги').fill('Укладка');
   await expect(page.getByText(/Автор рассказывает о бизнесе/)).toBeVisible();
 
@@ -69,7 +69,7 @@ test('superadmin creates, previews and revokes one selected client route', async
 
   await page.goto(created.public_path);
   await expect(page.getByRole('heading', { name: selectedTitle })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Как это работает' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Как это работает' })).toBeVisible();
 
   await page.goto('/dashboard/bazich/journeys');
   const history = page.locator('section').filter({ hasText: 'Последние маршруты' }).first();

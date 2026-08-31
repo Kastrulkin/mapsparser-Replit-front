@@ -38,7 +38,7 @@ for (const scenario of scenarios) {
     await page.goto(`/start/${scenario.token}`);
 
     await expect(page.getByRole('heading', { name: scenario.title })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Как это работает' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Как это работает' })).toBeVisible();
     const prepareButton = page.getByRole('button', { name: /Показать|Подготовить/ }).first();
     await expect(prepareButton).toBeVisible();
     await prepareButton.click();
