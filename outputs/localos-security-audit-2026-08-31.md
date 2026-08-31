@@ -62,6 +62,8 @@ Gitleaks проверил текущее дерево и полную Git-ист
 
 В истории подтверждены старые Wordstat credentials и legacy Supabase `service_role` для приостановленного проекта `SEOmaps` (`bvhpvzcvcuswiozhyqlk`). Текущий LocalOS production не использует Supabase. Нельзя добавлять новый Supabase key в LocalOS; сначала нужно определить других потребителей legacy-проекта.
 
+Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; dashboard подтверждает, что `SEOmaps` приостановлен и может быть возобновлён до 15 ноября 2026 года. Wordstat остаётся реальным app/worker consumer через legacy OAuth, причём те же переменные присутствуют в локальном `.env` и backup. Provider state и production не изменялись.
+
 ## Что ещё не завершено
 
 1. Ротация Wordstat и legacy Supabase credentials требует provider consoles и проверки потребителей.

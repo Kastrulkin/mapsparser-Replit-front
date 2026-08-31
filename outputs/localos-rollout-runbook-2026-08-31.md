@@ -78,6 +78,7 @@ Production rollout: dual-stack → internal cohort → cookie-first → набл
 
 ## Ротация credentials
 
+- Точная карта потребителей и approval gates: `outputs/localos-credential-rotation-readiness-2026-08-31.md`.
 - Wordstat: создать новый credential, обновить только реальные consumer env vars, выполнить smoke, затем revoke старого.
 - Supabase `SEOmaps`: сначала определить внешних потребителей. Если их нет — retire/revoke; если есть — обновить и проверить их до revoke.
 - Новый Supabase credential в LocalOS production не добавлять: runtime его не использует.
