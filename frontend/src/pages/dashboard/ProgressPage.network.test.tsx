@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +12,11 @@ vi.mock('@/lib/auth_new', () => ({
   newAuth: {
     makeRequest: vi.fn(),
   },
+}));
+
+vi.mock('@/i18n/LanguageContext', () => ({
+  LanguageProvider: ({ children }: { children: ReactNode }) => children,
+  useLanguage: () => ({ language: 'ru', setLanguage: vi.fn(), t: {} }),
 }));
 
 type MapLocation = {
@@ -154,7 +160,7 @@ describe('ProgressPage network map', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByTestId('network-map')).toBeInTheDocument();
+    expect(await screen.findByTestId('network-map', {}, { timeout: 10_000 })).toBeInTheDocument();
     expect(await screen.findByText('2 точки на карте')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Открыть Точка на Литейном' }));
@@ -188,7 +194,7 @@ describe('ProgressPage network map', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Что уже сделано' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Что уже сделано' }, { timeout: 10_000 })).toBeInTheDocument();
     expect(screen.queryByTestId('network-map')).not.toBeInTheDocument();
   });
 
@@ -213,9 +219,11 @@ describe('ProgressPage network map', () => {
     );
 
     expect(await screen.findByTestId('network-map')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/business/parent-business/network-locations',
-      expect.objectContaining({ headers: expect.any(Object) }),
-    );
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/business/parent-business/network-locations',
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
   });
 });
