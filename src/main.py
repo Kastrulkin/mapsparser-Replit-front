@@ -28,7 +28,6 @@ import requests
 # GigaChat TLS verification is explicit: use GIGACHAT_SSL_VERIFY=false only as a documented provider workaround.
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'true')
 from flask import Flask, g, request, jsonify, render_template_string, send_from_directory, Response
-from flask_cors import CORS
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.exceptions import HTTPException
 
@@ -58,6 +57,7 @@ from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import CONSENT_VERSION, authenticate_user, create_session, normalize_email, verify_email_token, verify_session, rotate_verification_token
 from billing_constants import TARIFFS
 from core.email_delivery import build_password_setup_link, send_email as deliver_email, send_password_setup_email, send_verification_email
+from core.cors_policy import configure_cors
 from init_database_schema import init_database_schema
 from core.default_ai_prompts import get_default_ai_prompts
 from core.beauty_service_optimization import (
@@ -243,11 +243,7 @@ except ImportError:
     db = None
     migrate = None
 
-# Настройка CORS для продакшена и разработки.
-# В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://localos.pro
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
-allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-CORS(app, supports_credentials=True, origins=allowed_origins)
+configure_cors(app)
 register_security_headers(app)
 register_browser_session_security(app)
 
