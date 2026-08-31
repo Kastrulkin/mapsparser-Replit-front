@@ -1,0 +1,591 @@
+{
+  "schema_version": "1.0",
+  "mode": "client-partners",
+  "title": "Авторы для «Весёлой расчёски» — ТРК «Гранд Каньон»",
+  "generated_at": "2026-08-31T14:13:12.456005+00:00",
+  "client_business_id": "cb674174-8b3d-41a3-8277-525c849935f2",
+  "client_location": {
+    "name": "Весёлая расчёска",
+    "address": "Санкт-Петербург, проспект Энгельса, 154",
+    "place": "ТРК «Гранд Каньон»"
+  },
+  "product": {
+    "name": "Весёлая расчёска",
+    "url": "http://raschyoska.ru/",
+    "brief": "Детская парикмахерская; нужен тест локального продвижения через активных семейных авторов."
+  },
+  "icp": {
+    "primary": "Родители и семейные авторы Санкт-Петербурга, желательно Выборгский район и север города",
+    "adjacent": [
+      "будущие родители",
+      "авторы о местах с детьми"
+    ],
+    "disqualifiers": [
+      "нет подтверждённой связи с Санкт-Петербургом",
+      "организация или медиа вместо личного автора",
+      "нет регулярной активности"
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "4468b4fc493629382ed0",
+      "creator_profile_id": "d6d06bb0-9c4d-4404-ab3e-f8f7dfedb1a9",
+      "display_name": "Папа Паша | Места и моменты",
+      "score": 94,
+      "tier": "first_wave",
+      "fit": "Папа из СПб пишет о прогулках с сыном и местах для родителей; есть публикации о МЕГА Парнас и Комендантском проспекте.",
+      "activity_level": "regular",
+      "recent_visible_uploads": 4,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@PAPAehali",
+          "verification_status": "original_profile_opened",
+          "followers": 433
+        },
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/papaehali",
+          "verification_status": "source_verified",
+          "followers": null
+        },
+        {
+          "platform": "telegram",
+          "url": "https://t.me/papaehali",
+          "verification_status": "source_verified",
+          "followers": null
+        }
+      ],
+      "public_contacts": [
+        {
+          "platform": "telegram",
+          "value": "https://t.me/papaehali",
+          "source_url": "https://t.me/papaehali",
+          "observed_at": "2026-08-31T14:13:12.456005+00:00",
+          "confidence": 0.9
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=YNOXohEQOT0",
+          "observed": "Свежая публичная публикация «В Охта Парке не только склон).      #дети #папа #прогулки #сын #игровая #охтапарк» содержит географический маркер «охта»; YouTube показывает давность: 11 месяцев назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:13:07.965826+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=2gSky8WHsSM",
+          "observed": "Свежая публичная публикация «МЕГА Парнас» содержит географический маркер «парнас»; YouTube показывает давность: 2 дня назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:13:07.965826+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=wv-T2RxQPp0",
+          "observed": "Свежая публичная публикация «Знаю как провести время с ребёнком))» содержит географический маркер «комендантский проспект»; YouTube показывает давность: 2 месяца назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:13:07.965826+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=SeQ3sOPRys8",
+          "observed": "Свежая публичная публикация «Это был насыщенный и интересный день)Крестовский остров богат на интересные места)» содержит географический маркер «крестовский остров»; YouTube показывает давность: 2 месяца назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:13:07.965826+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Папа из СПб пишет о прогулках с сыном и местах для родителей; есть публикации о МЕГА Парнас и Комендантском проспекте.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "123136e209135b14641b",
+      "creator_profile_id": "cd5a7145-1969-4eb6-857c-0dab6527347d",
+      "display_name": "Валерия Пална",
+      "score": 88,
+      "tier": "first_wave",
+      "fit": "Петербургская мама, семейные будни и обзоры; аудитория тематически близка родителям маленьких детей.",
+      "activity_level": "frequent",
+      "recent_visible_uploads": 17,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@lerikemec",
+          "verification_status": "original_profile_opened",
+          "followers": 420
+        },
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/lerikemec",
+          "verification_status": "source_verified",
+          "followers": null
+        }
+      ],
+      "public_contacts": [
+        {
+          "platform": "instagram",
+          "value": "https://www.instagram.com/lerikemec",
+          "source_url": "https://www.instagram.com/lerikemec",
+          "observed_at": "2026-08-31T14:13:12.456005+00:00",
+          "confidence": 0.9
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=Yph6uz3xzz0",
+          "observed": "Свежая публичная публикация «одна с тремя детьми! Питер, прогулки, йога, просто жизнь и новый член семьи» содержит географический маркер «питер»; YouTube показывает давность: 3 недели назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T14:43:10.421035+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Петербургская мама, семейные будни и обзоры; аудитория тематически близка родителям маленьких детей.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "7e5ee60785c1cfb6240a",
+      "creator_profile_id": "e366bda4-d37b-4f73-a4b5-96a9d2e2013f",
+      "display_name": "Фиолетовая Софа",
+      "score": 87,
+      "tier": "first_wave",
+      "fit": "Живёт в СПб, воспитывает сына, публикует семейный лайфстайл и материалы о местах с детьми; доступны Telegram и Instagram.",
+      "activity_level": "frequent",
+      "recent_visible_uploads": 8,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@lunamerch",
+          "verification_status": "original_profile_opened",
+          "followers": 226
+        },
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/luna_sofa",
+          "verification_status": "source_verified",
+          "followers": null
+        },
+        {
+          "platform": "telegram",
+          "url": "https://t.me/lunasofa",
+          "verification_status": "source_verified",
+          "followers": null
+        }
+      ],
+      "public_contacts": [
+        {
+          "platform": "telegram",
+          "value": "https://t.me/lunasofa",
+          "source_url": "https://t.me/lunasofa",
+          "observed_at": "2026-08-31T14:13:12.456005+00:00",
+          "confidence": 0.9
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=2sln4VUU3yE",
+          "observed": "Свежая публичная публикация «В Охта парке 💗 #питер #кудасходитьсдетьми» содержит географический маркер «питер»; YouTube показывает давность: 1 месяц назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T19:59:53.871027+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Живёт в СПб, воспитывает сына, публикует семейный лайфстайл и материалы о местах с детьми; доступны Telegram и Instagram.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "814ab27b1f70acad5ad8",
+      "creator_profile_id": "9b97c700-a058-4af9-a89e-ef6eb59e9941",
+      "display_name": "Anastasia Kiru",
+      "score": 86,
+      "tier": "shortlist",
+      "fit": "Семья с сыном живёт в Санкт-Петербурге; регулярные личные влоги и публичный Telegram.",
+      "activity_level": "frequent",
+      "recent_visible_uploads": 29,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@anasteisha_996",
+          "verification_status": "original_profile_opened",
+          "followers": 658
+        },
+        {
+          "platform": "telegram",
+          "url": "https://t.me/anastasiakiru",
+          "verification_status": "source_verified",
+          "followers": null
+        }
+      ],
+      "public_contacts": [
+        {
+          "platform": "telegram",
+          "value": "https://t.me/anastasiakiru",
+          "source_url": "https://t.me/anastasiakiru",
+          "observed_at": "2026-08-31T14:13:12.456005+00:00",
+          "confidence": 0.9
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=MDRPfbo1TYo",
+          "observed": "Свежая публичная публикация «VLOGMAS: NEW YEAR | МАНЕЖНАЯ ПЛОЩАДЬ | ПОДАРКИ» содержит географический маркер «манежная площадь»; YouTube показывает давность: 1 год назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:25:18.801339+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=jBKnCDHrlPk",
+          "observed": "Свежая публичная публикация «VLOG: ПАРЕНЬ ОСУЩЕСТВИЛ МОЮ МЕЧТУ | ГУЛЯЮ ПО ПИТЕРУ | РОМА ВПЕРВЫЕ В КИНОТЕАТРЕ» содержит географический маркер «питер»; YouTube показывает давность: 2 недели назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:25:18.801339+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=FmlePHFDu7A",
+          "observed": "Свежая публичная публикация «VLOG: МОЙ ДЕНЬ РОЖДЕНИЯ | СЕННОЙ РЫНОК | ПРОГУЛКА ПО ЦЕНТРУ ГОРОДА» содержит географический маркер «сенной рынок»; YouTube показывает давность: 3 месяца назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:25:18.801339+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=1loitKo6sEQ",
+          "observed": "Свежая публичная публикация «VLOG: ПОЯВИЛСЯ УХАЖЕР Я В ШОКЕ | ДЕНЬ РОЖДЕНИЯ РОМЫ» содержит географический маркер «сенной рынок»; YouTube показывает давность: 3 недели назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:25:18.801339+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Семья с сыном живёт в Санкт-Петербурге; регулярные личные влоги и публичный Telegram.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "8dbb1bcd18d21f0ed41d",
+      "creator_profile_id": "8d1b5256-247a-4f5d-87dc-3e5422e992a7",
+      "display_name": "Анастасия Васильева",
+      "score": 84,
+      "tier": "shortlist",
+      "fit": "Молодая мама из Петербурга, контент о материнстве и семейной жизни; доступен Telegram.",
+      "activity_level": "frequent",
+      "recent_visible_uploads": 9,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@nastyushka_vasileva",
+          "verification_status": "original_profile_opened",
+          "followers": 197
+        },
+        {
+          "platform": "telegram",
+          "url": "https://t.me/nastyushka_vasileva",
+          "verification_status": "source_verified",
+          "followers": null
+        }
+      ],
+      "public_contacts": [
+        {
+          "platform": "telegram",
+          "value": "https://t.me/nastyushka_vasileva",
+          "source_url": "https://t.me/nastyushka_vasileva",
+          "observed_at": "2026-08-31T14:13:12.456005+00:00",
+          "confidence": 0.9
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=OMiZFlKykY8",
+          "observed": "Свежая публичная публикация «Я за безопасность… #декрет #семья #материнство #рекомендации #мем #спб #питер #беременность #дети» содержит географический маркер «питер»; YouTube показывает давность: 1 год назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T14:42:20.245985+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=iWZ9kcjDSdA",
+          "observed": "Свежая публичная публикация «Девочки, знакомо? 😂 #декрет #материнство #девушки #стиль #деньмамы #питер #спб #буднисмалышом #юмор» содержит географический маркер «питер»; YouTube показывает давность: 1 год назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T14:42:20.245985+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Молодая мама из Петербурга, контент о материнстве и семейной жизни; доступен Telegram.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "bea2298ea5aeb7daca14",
+      "creator_profile_id": "ea4adb0b-182f-4ae1-90bb-281c996bfe72",
+      "display_name": "katerina_talk",
+      "score": 80,
+      "tier": "needs_contact",
+      "fit": "Мама двух малышей, пишет для мам и публикует подборки мест для прогулок с детьми в Петербурге.",
+      "activity_level": "regular",
+      "recent_visible_uploads": 2,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@katerina_talk",
+          "verification_status": "original_profile_opened",
+          "followers": 122
+        }
+      ],
+      "public_contacts": [],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=atQh0bF_CqU",
+          "observed": "Свежая публичная публикация «Место для перегазгрузки» содержит географический маркер «парк екатерингоф»; YouTube показывает давность: 2 месяца назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T20:01:08.185224+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=O85rCFpavIo",
+          "observed": "Свежая публичная публикация «5 мест для прогулок с детьми #мамампитера #мамаспю #мамавдекрете» содержит географический маркер «питер»; YouTube показывает давность: 3 месяца назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T20:01:08.185224+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Мама двух малышей, пишет для мам и публикует подборки мест для прогулок с детьми в Петербурге.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "3fa5f1e38f9072f62d17",
+      "creator_profile_id": "033b762e-cb8f-4919-8b60-8555c8a2552d",
+      "display_name": "Переехали в Питер",
+      "score": 79,
+      "tier": "needs_contact",
+      "fit": "Свежий семейный влог о жизни с ребёнком в Санкт-Петербурге; прямой внешний контакт пока не найден.",
+      "activity_level": "regular",
+      "recent_visible_uploads": 2,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@Pereehalivpiter",
+          "verification_status": "original_profile_opened",
+          "followers": 2180
+        }
+      ],
+      "public_contacts": [],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=Itsf7_MO2iw",
+          "observed": "Свежая публичная публикация «#дочь #мамаблог #семья #буднисмалышом #санктпетербург #развитие #развлечения #дети #настроение #юмор» содержит географический маркер «петербург»; YouTube показывает давность: 4 дня назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:34:36.337939+00:00"
+        },
+        {
+          "source_url": "https://www.youtube.com/watch?v=YQj5lrK-a_M",
+          "observed": "Свежая публичная публикация «#дочь #мамаблог #семья #буднисмалышом #домашнийвлог #санктпетербург #атмосфера #сребенком #дети #мы» содержит географический маркер «петербург»; YouTube показывает давность: 5 дней назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T15:34:36.337939+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Свежий семейный влог о жизни с ребёнком в Санкт-Петербурге; прямой внешний контакт пока не найден.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    },
+    {
+      "candidate_id": "da8b6d4690744eed0f86",
+      "creator_profile_id": "d5daf846-a07f-45b0-a5c1-e02623182e01",
+      "display_name": "Уля LYUVA [ лю́ва ]",
+      "score": 72,
+      "tier": "adjacent",
+      "fit": "Петербургский lifestyle об ожидании малыша; может подойти для аудитории будущих родителей.",
+      "activity_level": "frequent",
+      "recent_visible_uploads": 11,
+      "public_channels": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@ulyalyuva",
+          "verification_status": "original_profile_opened",
+          "followers": 54
+        },
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/ulya.lyuva",
+          "verification_status": "source_verified",
+          "followers": null
+        },
+        {
+          "platform": "telegram",
+          "url": "https://t.me/jbullet23",
+          "verification_status": "source_verified",
+          "followers": null
+        }
+      ],
+      "public_contacts": [
+        {
+          "platform": "instagram",
+          "value": "https://www.instagram.com/ulya.lyuva",
+          "source_url": "https://www.instagram.com/ulya.lyuva",
+          "observed_at": "2026-08-31T14:13:12.456005+00:00",
+          "confidence": 0.9
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://www.youtube.com/watch?v=56pJlVcV8wM",
+          "observed": "Свежая публичная публикация «Vlog #6 | будни | приезд подруги | Питерские крыши» содержит географический маркер «петербург»; YouTube показывает давность: 1 месяц назад.",
+          "source_type": "recent_public_video",
+          "researched_at": "2026-08-26T20:01:33.707843+00:00"
+        }
+      ],
+      "missing_inputs": [
+        "Район проживания и доля аудитории около ТРК «Гранд Каньон»",
+        "Возраст детей аудитории",
+        "Условия, охваты и готовность к бартеру"
+      ],
+      "message_brief": {
+        "segment": "родители и семейная аудитория Санкт-Петербурга",
+        "buyer_persona": "автор семейного контента",
+        "kpi": "визиты и записи в детскую парикмахерскую",
+        "pain": "",
+        "pain_strength": 0,
+        "awareness": "unknown",
+        "signal": "Петербургский lifestyle об ожидании малыша; может подойти для аудитории будущих родителей.",
+        "result": "тестовый визит или обзор детской стрижки",
+        "proof": "публичная активность и тематическая близость",
+        "angle": "полезный локальный опыт для родителей",
+        "cta": "Уточнить район аудитории и условия сотрудничества"
+      },
+      "suggested_opener": "",
+      "limitations": [
+        "Пригодность к кампании не означает согласие автора.",
+        "Перед контактом требуется ручная проверка источников, аудитории, brand safety и условий."
+      ]
+    }
+  ],
+  "limitations": [
+    "Район аудитории не выводится из одного посещённого места — его нужно уточнять у автора.",
+    "Никакие сообщения, кампании или очереди отправки не создавались."
+  ]
+}
