@@ -74,7 +74,7 @@ Production rollout: dual-stack → internal cohort → cookie-first → набл
 
 Локальный образ проверен с `uid=10001`. Перед production нужно инвентаризировать writable mounts, подготовить ownership только runtime paths, оставить source/migrations/assets read-only и проверить Alembic, parsers, uploads, worker и Telegram. Не объединять с migration или credential rotation.
 
-Текущий Dockerfile одновременно включает C2 dependency и non-root runtime. Поэтому production image rebuild разрешён только после F-preflight. Если C2 нужно выпустить раньше, требуется отдельный промежуточный immutable image из C2-коммита до non-root-коммита; собирать произвольный Dockerfile из live drift запрещено. Rollback: вернуть сохранённые image IDs и исходный ownership runtime-каталогов, затем проверить app/worker/Telegram отдельно.
+Текущий Dockerfile одновременно включает C2 dependency и non-root runtime. Поэтому production image rebuild разрешён только после F-preflight. Если C2 нужно выпустить раньше, промежуточный immutable image собирается из `67cd05e2` (`Harden LocalOS backend security boundaries`); non-root/staging пакет начинается с `c6cbe63d` (`Add isolated Docker staging and full journey E2E`). Собирать произвольный Dockerfile из live drift запрещено. Rollback: вернуть сохранённые image IDs и исходный ownership runtime-каталогов, затем проверить app/worker/Telegram отдельно.
 
 Read-only live preflight от 31 августа:
 
@@ -92,9 +92,9 @@ F-rollout обязан сначала сохранить NUL-safe snapshot `uid/
 ## Ротация credentials
 
 - Точная карта потребителей и approval gates: `outputs/localos-credential-rotation-readiness-2026-08-31.md`.
-- Wordstat: создать новый credential, обновить только реальные consumer env vars, выполнить smoke, затем revoke старого.
+- Wordstat: production `app` и `worker` уже выбирают Cloud Search API; создать/подтвердить scoped Cloud credential, обновить только эти два consumer runtime, выполнить минимальный approved smoke, затем удалить и отозвать legacy OAuth fallback.
 - Supabase `SEOmaps`: сначала определить внешних потребителей. Если их нет — retire/revoke; если есть — обновить и проверить их до revoke.
-- Новый Supabase credential в LocalOS production не добавлять: runtime его не использует.
+- Новый Supabase credential в LocalOS production не добавлять: read-only production presence-check подтвердил отсутствие `SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY` в `app` и `worker`.
 - Значения не передавать через command arguments, Git, отчёты или логи.
 
 ## Серверная дисциплина

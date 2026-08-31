@@ -50,6 +50,7 @@
 | XML/SSRF/security-header suite | 21 passed |
 | Frontend unit suite (serial) | 393 passed |
 | Browser cookie focused suite | 15 passed |
+| Wordstat Cloud/OAuth precedence suite | 7 passed |
 | Playwright journey/UX/a11y | 102 passed |
 | `pip-audit` | 0 vulnerabilities |
 | npm production/full audit | 0 vulnerabilities |
@@ -63,11 +64,11 @@ Gitleaks проверил текущее дерево и полную Git-ист
 
 В истории подтверждены старые Wordstat credentials и legacy Supabase `service_role` для приостановленного проекта `SEOmaps` (`bvhpvzcvcuswiozhyqlk`). Текущий LocalOS production не использует Supabase. Нельзя добавлять новый Supabase key в LocalOS; сначала нужно определить других потребителей legacy-проекта.
 
-Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; dashboard подтверждает, что `SEOmaps` приостановлен и может быть возобновлён до 15 ноября 2026 года. Wordstat остаётся реальным app/worker consumer через legacy OAuth, причём те же переменные присутствуют в локальном `.env` и backup. Provider state и production не изменялись.
+Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; production `app`/`worker` не содержат Supabase variables; dashboard подтверждает, что `SEOmaps` приостановлен и может быть возобновлён до 15 ноября 2026 года. Wordstat остаётся реальным app/worker consumer, но production использует Cloud Search API: `auth_mode()` возвращает `cloud` в обоих runtime, а legacy OAuth variables лишь продолжают присутствовать как исторический fallback. Provider state и production не изменялись.
 
 ## Что ещё не завершено
 
-1. Ротация Wordstat и legacy Supabase credentials требует provider consoles и проверки потребителей.
+1. Для Wordstat подтверждён текущий Cloud path, но остаются удаление/отзыв исторического OAuth fallback и controlled Cloud credential rotation. Для legacy Supabase `service_role` требуется provider-console revoke после проверки внешних потребителей.
 2. Browser cookie migration реализована и проверена на staging. Остался совместимый production rollout: dual-stack/internal cohort, cookie-first и отзыв старых browser sessions после наблюдения; Mini App и Agent API сохраняют scoped bearer.
 3. Production существенно расходится с Git из-за hot deploys. Нужен точный manifest и reconciliation, не `git pull`/reset/full rsync.
 4. Production пока работает root-контейнерами. Реальные mounts проверены: перед non-root rollout нужен ownership snapshot и контролируемая смена владельца только `debug_data`; `setfacl` на host отсутствует.

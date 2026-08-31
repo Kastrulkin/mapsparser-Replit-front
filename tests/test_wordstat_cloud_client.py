@@ -1,6 +1,7 @@
 import pytest
 
 from wordstat_client import WordstatClient, WordstatTemporaryUnavailable
+from wordstat_config import WordstatConfig
 from update_wordstat_data import _extract_queries
 
 
@@ -68,6 +69,43 @@ def test_cloud_wordstat_client_calls_search_api_v2(monkeypatch):
     assert calls[0]["json"]["phrase"] == "стрижка"
     assert calls[0]["json"]["regions"] == ["213"]
     assert calls[0]["json"]["devices"] == ["DEVICE_ALL"]
+
+
+def test_cloud_wordstat_credentials_take_precedence_over_legacy_oauth(monkeypatch):
+    calls = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return _OkResponse()
+
+    monkeypatch.setattr("wordstat_client.requests.post", fake_post)
+
+    client = WordstatClient(
+        client_id="legacy-client",
+        client_secret="legacy-secret",
+        api_key="cloud-key",
+        folder_id="cloud-folder",
+    )
+    client.set_access_token("legacy-token")
+    client.get_popular_queries(["стрижка"], 213)
+
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://searchapi.api.cloud.yandex.net/v2/wordstat/topRequests"
+    assert calls[0]["headers"]["Authorization"] == "Api-Key cloud-key"
+
+
+def test_wordstat_config_reports_cloud_when_both_auth_modes_are_present(monkeypatch):
+    monkeypatch.setenv("YANDEX_WORDSTAT_CLIENT_ID", "legacy-client")
+    monkeypatch.setenv("YANDEX_WORDSTAT_CLIENT_SECRET", "legacy-secret")
+    monkeypatch.setenv("YANDEX_WORDSTAT_OAUTH_TOKEN", "legacy-token")
+    monkeypatch.setenv("YANDEX_WORDSTAT_API_KEY", "cloud-key")
+    monkeypatch.setenv("YANDEX_WORDSTAT_FOLDER_ID", "cloud-folder")
+
+    runtime_config = WordstatConfig()
+
+    assert runtime_config.is_oauth_configured() is True
+    assert runtime_config.is_cloud_configured() is True
+    assert runtime_config.auth_mode() == "cloud"
 
 
 def test_extract_queries_supports_cloud_results_section():
