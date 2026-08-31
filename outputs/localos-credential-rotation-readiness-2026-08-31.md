@@ -20,7 +20,7 @@
 - В обоих production runtime `WordstatConfig.auth_mode()` возвращает `cloud`. Реализация `WordstatClient._make_request()` также отдаёт Cloud Search API безусловный приоритет, если заданы API key и folder ID; наличие legacy OAuth не меняет выбранный endpoint.
 - В production DB сохранены 5 747 общих и 544 пользовательских Wordstat-записи. Последние `updated_at` — 8 июля 2026 года, поэтому наличие данных не считается свежим provider smoke.
 - Внешний Wordstat-запрос во время аудита намеренно не выполнялся: он расходует provider quota. Выбранный auth path доказан конфигурацией обоих runtime и текущей реализацией; работоспособность нового/ротированного credential проверяется отдельным approved smoke после замены.
-- Добавлены regression-тесты для одновременного наличия Cloud и OAuth credentials: config и HTTP client обязаны выбрать Cloud endpoint. В тот же focused-набор включены три доказанные проверки redaction внутренних API-ошибок; после согласованного fix полный Wordstat suite прошёл: **10 passed**.
+- Добавлены regression-тесты для одновременного наличия Cloud и OAuth credentials: config и HTTP client обязаны выбрать Cloud endpoint. В тот же focused-набор включены шесть доказанных проверок redaction внутренних API-ошибок; после двух согласованных fix-пакетов полный Wordstat suite прошёл: **13 passed**.
 
 Безопасный порядок ротации:
 

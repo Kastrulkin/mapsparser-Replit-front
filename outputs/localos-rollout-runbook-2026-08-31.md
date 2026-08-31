@@ -22,7 +22,7 @@ Production содержит существенный drift от Git и след�
 
 Канонический manifest текущего проверенного дерева: `outputs/localos-rollout-manifest-2026-08-31.tsv`.
 
-- SHA-256 самого manifest: `1ccc96ccb808e957ad4deb8095112d5bc00d78842ec852bd315353b8aa0e2f40`.
+- SHA-256 самого manifest: `7fd22695783e5ed3cea165e0d8a190748c32c2f1272b97f1ce8b8200bdcec348`.
 - `runtime_nonroot`: 2 файла.
 - `backend_security`: 12 файлов.
 - `frontend_source`: 49 файлов.

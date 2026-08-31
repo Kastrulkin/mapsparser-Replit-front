@@ -1018,7 +1018,7 @@ def trigger_update():
     except Exception as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось обновить SEO-ключи")
     finally:
         if conn is not None:
             conn.close()
@@ -1064,7 +1064,7 @@ def exclude_keyword():
         })
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось исключить SEO-ключ")
     finally:
         conn.close()
 
@@ -1114,7 +1114,7 @@ def add_custom_keyword():
         return jsonify({'success': True, 'message': 'Ключевой запрос добавлен'})
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return internal_error_response("Не удалось добавить SEO-ключ")
     finally:
         conn.close()
 

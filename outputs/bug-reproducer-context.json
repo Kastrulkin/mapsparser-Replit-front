@@ -1,9 +1,9 @@
 {
-  "title": "Wordstat API exposed internal exception text",
+  "title": "Six Wordstat API routes exposed internal exception text",
   "project": "LocalOS",
   "generated_at": "2026-08-31",
   "mode": "hunt-and-prove",
-  "original_report": "Completion audit found reachable Wordstat API exception handlers returning str(exception), contrary to the standardized safe API error contract.",
+  "original_report": "Completion audit found two approved batches of reachable Wordstat API exception handlers returning str(exception), contrary to the standardized safe API error contract.",
   "discovery_scope": [
     "src/api/wordstat_api.py error paths",
     "src/core/api_errors.py safe response contract",
@@ -33,15 +33,39 @@
       "trigger": "Metadata file read raises an internal exception.",
       "confidence": "high",
       "outcome": "REPRODUCED"
+    },
+    {
+      "candidate": "POST /api/wordstat/update exposes exception text",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:1019",
+      "contract": "Internal failures return code, safe message and request_id without exception text.",
+      "trigger": "Authenticated refresh request while domain refresh raises an internal exception.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    },
+    {
+      "candidate": "DELETE /api/wordstat/keywords exposes exception text",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:1065",
+      "contract": "Internal failures return code, safe message and request_id without exception text.",
+      "trigger": "Authenticated exclusion request while persistence raises an internal exception.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    },
+    {
+      "candidate": "POST /api/wordstat/keywords/custom exposes exception text",
+      "location": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/api/wordstat_api.py:1115",
+      "contract": "Internal failures return code, safe message and request_id without exception text.",
+      "trigger": "Authenticated custom-keyword request while persistence raises an internal exception.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
     }
   ],
   "expected": "Each 500 response contains only code=internal_error, a safe user message and request_id.",
-  "actual": "Each endpoint returned the full injected internal exception text in its JSON response.",
+  "actual": "All six endpoints returned the full injected internal exception text in their JSON responses before their approved batch fix.",
   "environment": "LocalOS ARM64 Python 3.11 test environment; no database, provider or production calls",
   "reproduction": "Focused Flask tests inject a deterministic internal error into the real route handler and assert the shared safe error contract.",
-  "failure_signal": "Before the fix all three tests failed because the injected internal text was present in the response; after the fix all three passed.",
-  "root_cause": "Three catch-all handlers serialized str(exception) directly into client-facing JSON instead of using core.api_errors.internal_error_response.",
-  "fix_summary": "Imported internal_error_response and replaced only the three proven 500 responses with route-specific safe messages.",
+  "failure_signal": "Batch one changed from 3 failed to 3 passed. Batch two changed from 3 failed plus 3 passed to all 6 passed.",
+  "root_cause": "Six catch-all handlers serialized str(exception) directly into client-facing JSON instead of using core.api_errors.internal_error_response.",
+  "fix_summary": "Imported internal_error_response and replaced only the six proven 500 responses with route-specific safe messages in two approved batches.",
   "why_causal": "The changed statements are the only response construction points reached by the deterministic failing branches; success, validation, authorization and cleanup paths are unchanged.",
   "reproduction_files": [
     {
@@ -61,12 +85,12 @@
     {
       "name": "Exact reproducer",
       "status": "passed",
-      "detail": "3 failed before; 3 passed after."
+      "detail": "Batch one: 3 failed to 3 passed. Batch two: 3 failed plus 3 passed to 6 passed."
     },
     {
       "name": "Focused Wordstat suite",
       "status": "passed",
-      "detail": "10 passed."
+      "detail": "13 passed."
     },
     {
       "name": "Rollout manifest",
@@ -79,7 +103,7 @@
     "PYTHONPATH=src /usr/bin/arch -arm64 venv/bin/python -m pytest -q tests/test_wordstat_cloud_client.py tests/test_wordstat_api_error_redaction.py"
   ],
   "limitations": [
-    "This package covers the three approved Wordstat routes only; other legacy API modules require separate candidate batches and approval gates."
+    "This package covers the six approved Wordstat routes only; other legacy API modules require separate candidate batches and approval gates."
   ],
   "residual_risks": [
     "Production deployment and live smoke remain separately gated.",

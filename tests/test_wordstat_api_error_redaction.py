@@ -127,3 +127,88 @@ def test_metadata_internal_error_is_redacted(monkeypatch):
         "wordstat-metadata-redaction",
         "Не удалось получить метаданные SEO-ключей",
     )
+
+
+def test_update_internal_error_is_redacted(monkeypatch):
+    connection = _Connection()
+    _authorize(monkeypatch)
+    monkeypatch.setattr(wordstat_api, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(wordstat_api.config, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        wordstat_api,
+        "_refresh_business_wordstat_keywords",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError(INTERNAL_ERROR)),
+    )
+
+    response = _app().test_client().post(
+        "/api/wordstat/update",
+        json={"business_id": "business-1"},
+        headers={
+            "Authorization": "Bearer session-token",
+            "X-Request-ID": "wordstat-update-redaction",
+        },
+    )
+
+    _assert_redacted(
+        response,
+        "wordstat-update-redaction",
+        "Не удалось обновить SEO-ключи",
+    )
+    assert connection.rolled_back is True
+    assert connection.closed is True
+
+
+def test_exclude_keyword_internal_error_is_redacted(monkeypatch):
+    connection = _Connection()
+    _authorize(monkeypatch)
+    monkeypatch.setattr(wordstat_api, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(
+        wordstat_api,
+        "_ensure_excluded_table",
+        lambda _cursor: (_ for _ in ()).throw(RuntimeError(INTERNAL_ERROR)),
+    )
+
+    response = _app().test_client().delete(
+        "/api/wordstat/keywords",
+        json={"business_id": "business-1", "keyword": "стрижка"},
+        headers={
+            "Authorization": "Bearer session-token",
+            "X-Request-ID": "wordstat-exclude-redaction",
+        },
+    )
+
+    _assert_redacted(
+        response,
+        "wordstat-exclude-redaction",
+        "Не удалось исключить SEO-ключ",
+    )
+    assert connection.rolled_back is True
+    assert connection.closed is True
+
+
+def test_add_custom_keyword_internal_error_is_redacted(monkeypatch):
+    connection = _Connection()
+    _authorize(monkeypatch)
+    monkeypatch.setattr(wordstat_api, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(
+        wordstat_api,
+        "_ensure_custom_table",
+        lambda _cursor: (_ for _ in ()).throw(RuntimeError(INTERNAL_ERROR)),
+    )
+
+    response = _app().test_client().post(
+        "/api/wordstat/keywords/custom",
+        json={"business_id": "business-1", "keyword": "стрижка", "views": 10},
+        headers={
+            "Authorization": "Bearer session-token",
+            "X-Request-ID": "wordstat-custom-redaction",
+        },
+    )
+
+    _assert_redacted(
+        response,
+        "wordstat-custom-redaction",
+        "Не удалось добавить SEO-ключ",
+    )
+    assert connection.rolled_back is True
+    assert connection.closed is True
