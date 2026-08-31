@@ -25,6 +25,7 @@ import { Link, useLocation } from "react-router-dom";
 
 import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
+import { PublicBrandBackdrop } from "@/components/PublicBrandBackdrop";
 import { Button } from "@/components/ui/button";
 import { useLocalizedCases } from "@/content/useLocalizedCollections";
 import { Language, useLanguage } from "@/i18n/LanguageContext";
@@ -540,8 +541,7 @@ const Index = () => {
 
       <main>
         <section className="relative isolate px-4 pb-12 pt-12 sm:px-6 sm:pb-16 sm:pt-16 lg:px-8 lg:pb-20 lg:pt-20">
-          <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[44rem] bg-[radial-gradient(circle_at_18%_10%,rgba(249,115,22,0.14),transparent_32%),radial-gradient(circle_at_82%_18%,rgba(251,191,36,0.10),transparent_28%)]" aria-hidden="true" />
-          <div className="pointer-events-none absolute inset-x-0 top-0 -z-20 h-[44rem] bg-[linear-gradient(to_right,rgba(15,23,42,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.035)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_88%)]" aria-hidden="true" />
+          <PublicBrandBackdrop />
           <div className="mx-auto grid max-w-7xl items-start gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(440px,1.05fr)] lg:gap-16">
             <div className="pt-4 lg:sticky lg:top-28 lg:pt-10">
               <div className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white/75 px-4 py-2 text-sm font-semibold text-orange-700 shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur">

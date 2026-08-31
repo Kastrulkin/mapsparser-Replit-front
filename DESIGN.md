@@ -15,6 +15,22 @@ LocalOS has two different surface types:
 
 Product surfaces must be quiet, direct, and operational. They should prioritize scanning, comparison, and safe action over expressive visuals.
 
+## Canonical Public Background
+
+The homepage and every `/growth` state — direction selection, direction detail,
+personal preview, and result — belong to one public acquisition surface and
+must use the same LocalOS background:
+
+- warm off-white base `#f7f7f5`;
+- a subtle `48px` slate grid;
+- restrained orange and gold radial light near the top;
+- decorative layers must remain non-interactive and hidden from assistive technology.
+
+Reuse `frontend/src/components/PublicBrandBackdrop.tsx`. Do not recreate the
+grid, change its spacing, or introduce a separate grey background for an
+individual `/growth` route. Content cards remain solid enough to preserve text
+contrast over the grid.
+
 ## Operating Principles
 
 ### Agents Are Employees, Not Workflows

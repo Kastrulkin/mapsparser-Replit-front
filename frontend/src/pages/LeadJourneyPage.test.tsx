@@ -25,8 +25,9 @@ describe('LeadJourneyPage', () => {
   });
 
   it('explains influencer promotion briefly without a four-step process', () => {
-    render(<MemoryRouter initialEntries={['/growth?direction=influencers&step=detail']}><LeadJourneyPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter initialEntries={['/growth?direction=influencers&step=detail']}><LeadJourneyPage /></MemoryRouter>);
 
+    expect(container.querySelector('[data-brand-background="localos-grid"]')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Продвижение через местных авторов' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Авторы и публикации' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Всё под вашим контролем' })).toBeInTheDocument();

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Bot, Check, FilePenLine, Handshake, Loader2, Map
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import SeoMeta from '@/components/SeoMeta';
+import { PublicBrandBackdrop } from '@/components/PublicBrandBackdrop';
 import { Button } from '@/components/ui/button';
 import {
   getLeadJourneyDirection,
@@ -116,11 +117,12 @@ export default function LeadJourneyPage() {
   if (journey?.business?.address) registrationParams.set('business_address', journey.business.address);
   const registrationUrl = `/login?${registrationParams.toString()}`;
 
-  if (journeyLoading) return <main className="grid min-h-screen place-items-center bg-[#f7f7f5]"><div className="text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-amber-600" /><p className="mt-3 text-sm text-slate-600">Загружаем персональные возможности…</p></div></main>;
-  if (journeyError && !journey) return <main className="grid min-h-screen place-items-center bg-[#f7f7f5] px-4"><section className="max-w-xl rounded-[28px] bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.10)]"><h1 className="text-balance text-2xl font-semibold">Персональная ссылка недоступна</h1><p className="mt-3 text-pretty text-sm leading-6 text-slate-600">{journeyError}</p><Button asChild className="mt-6 min-h-11"><Link to="/">Вернуться на LocalOS</Link></Button></section></main>;
+  if (journeyLoading) return <main className="relative isolate grid min-h-screen overflow-hidden bg-[#f7f7f5]"><PublicBrandBackdrop fullHeight /><div className="place-self-center text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-amber-600" /><p className="mt-3 text-sm text-slate-600">Загружаем персональные возможности…</p></div></main>;
+  if (journeyError && !journey) return <main className="relative isolate grid min-h-screen overflow-hidden bg-[#f7f7f5] px-4"><PublicBrandBackdrop fullHeight /><section className="max-w-xl place-self-center rounded-[28px] bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.10)]"><h1 className="text-balance text-2xl font-semibold">Персональная ссылка недоступна</h1><p className="mt-3 text-pretty text-sm leading-6 text-slate-600">{journeyError}</p><Button asChild className="mt-6 min-h-11"><Link to="/">Вернуться на LocalOS</Link></Button></section></main>;
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5] px-4 py-10 text-slate-950 sm:px-6 sm:py-16 lg:px-8">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[#f7f7f5] px-4 py-10 text-slate-950 sm:px-6 sm:py-16 lg:px-8">
+      <PublicBrandBackdrop fullHeight />
       <SeoMeta title="Три способа привлечь новых клиентов — LocalOS" description="Три понятных направления: локальные авторы, соседние бизнесы и карты." path={token ? `/start/${token}` : '/growth'} />
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
