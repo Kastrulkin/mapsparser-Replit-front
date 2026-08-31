@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
+import logo from '@/assets/images/logo.png';
 import SeoMeta from '@/components/SeoMeta';
 import { PublicBrandBackdrop } from '@/components/PublicBrandBackdrop';
 import { Button } from '@/components/ui/button';
@@ -127,7 +128,9 @@ export default function LeadJourneyPage() {
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           {selected && !journeySelectedKey ? <button type="button" onClick={goBack} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft className="h-4 w-4" />Все направления</button> : <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"><ArrowLeft className="h-4 w-4" />На главную</Link>}
-          <span className="inline-flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-amber-500" />LocalOS</span>
+          <Link to="/" className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl transition-[opacity,scale] hover:opacity-75 active:scale-[0.96]">
+            <img src={logo} alt="LocalOS" className="h-12 w-12 object-contain" />
+          </Link>
         </div>
 
         {!selected ? <>

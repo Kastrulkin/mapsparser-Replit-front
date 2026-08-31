@@ -15,6 +15,14 @@ LocalOS has two different surface types:
 
 Product surfaces must be quiet, direct, and operational. They should prioritize scanning, comparison, and safe action over expressive visuals.
 
+## Canonical Logo
+
+Use the approved LocalOS logo from
+`frontend/src/assets/images/logo.png` on every product and brand surface.
+Do not recreate the mark with a generic icon, emoji, generated symbol, or an
+icon-plus-text wordmark. Size and crop the existing asset for its context, but
+do not redraw or substitute it.
+
 ## Canonical Public Background
 
 The homepage and every `/growth` state — direction selection, direction detail,

@@ -28,6 +28,7 @@ describe('LeadJourneyPage', () => {
     const { container } = render(<MemoryRouter initialEntries={['/growth?direction=influencers&step=detail']}><LeadJourneyPage /></MemoryRouter>);
 
     expect(container.querySelector('[data-brand-background="localos-grid"]')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'LocalOS' })).toHaveAttribute('src', expect.stringContaining('logo.png'));
     expect(screen.getByRole('heading', { name: 'Продвижение через местных авторов' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Авторы и публикации' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Всё под вашим контролем' })).toBeInTheDocument();
