@@ -24,11 +24,24 @@ describe('LeadJourneyPage', () => {
     expect(leadJourneyKeyForFlow('automation')).toBe('automation');
   });
 
+  it('explains influencer promotion briefly without a four-step process', () => {
+    render(<MemoryRouter initialEntries={['/growth?direction=influencers&step=detail']}><LeadJourneyPage /></MemoryRouter>);
+
+    expect(screen.getByRole('heading', { name: 'Продвижение через местных авторов' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Авторы и публикации' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Всё под вашим контролем' })).toBeInTheDocument();
+    expect(screen.getByText('Подбор по городу, тематике и аудитории')).toBeInTheDocument();
+    expect(screen.getByText('Любое обращение отправляется только после вашего подтверждения')).toBeInTheDocument();
+    expect(screen.getByText('Начать подбор')).toBeInTheDocument();
+    expect(screen.getByText(/Укажите бизнес и город/)).toBeInTheDocument();
+    expect(screen.queryByText('Задаём рамки')).not.toBeInTheDocument();
+  });
+
   it('shows exactly three directions, explains the selected mechanic, and carries the choice into registration', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
 
-    expect(screen.getByRole('button', { name: /Локальные авторы/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Инфлюенсеры рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Бизнесы рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Карты/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Контент/ })).not.toBeInTheDocument();
