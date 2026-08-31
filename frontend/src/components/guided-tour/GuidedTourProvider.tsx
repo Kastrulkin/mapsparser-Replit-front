@@ -519,7 +519,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             >
               <Button
                 type="button"
-                className="min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
+                className="min-h-12 w-full gap-2 btn-iridescent sm:w-auto sm:min-w-56"
                 onClick={() => void startFromWelcome()}
                 disabled={welcomeTransitioning}
               >
@@ -689,7 +689,7 @@ export function DemoModeBanner() {
     <div className="border-b border-orange-200 bg-orange-50 px-4 py-2 text-orange-950">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 text-sm">
         <span className="font-medium">{copy.banner.notice}</span>
-        <a href="/login?tab=register&source=interactive_demo" onClick={register} className={cn('inline-flex min-h-10 items-center rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm', 'transition-[background-color,box-shadow,transform] hover:bg-orange-700 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2')}>
+        <a href="/login?tab=register&source=interactive_demo" onClick={register} className={cn('btn-iridescent inline-flex min-h-10 items-center rounded-lg px-4 text-sm', 'active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2')}>
           {copy.banner.createAccount}
         </a>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { newAuth } from '../lib/auth_new';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 const SetPassword: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -179,13 +180,13 @@ const SetPassword: React.FC = () => {
               </span>
             </label>
           )}
-          <button
+          <Button
             type="submit"
             disabled={loading || (!isResetFlow && !personalDataConsent)}
-            className="bg-primary text-white rounded px-4 py-2 font-semibold hover:bg-primary/90 transition disabled:opacity-50"
+            className="w-full btn-iridescent"
           >
             {loading ? 'Сохраняем...' : 'Установить пароль'}
-          </button>
+          </Button>
         </form>
       )}
       
@@ -193,20 +194,23 @@ const SetPassword: React.FC = () => {
         <div className="bg-red-50 border border-red-200 rounded p-3">
           <p className="text-red-600 text-sm mb-3">{error}</p>
           <div className="flex flex-col gap-2">
-            <button
+            <Button
+              type="button"
               onClick={handleSetPassword}
               disabled={loading}
-              className="w-full bg-red-600 text-white rounded px-3 py-2 text-sm hover:bg-red-700 transition disabled:opacity-50"
+              className="w-full btn-iridescent"
             >
               {loading ? 'Отправляем...' : 'Восстановить пароль через email'}
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setShowAlternativeReset(true)}
               disabled={loading}
-              className="w-full bg-blue-600 text-white rounded px-3 py-2 text-sm hover:bg-blue-700 transition disabled:opacity-50"
+              className="w-full"
             >
               Альтернативное восстановление пароля
-            </button>
+            </Button>
           </div>
         </div>
       )}

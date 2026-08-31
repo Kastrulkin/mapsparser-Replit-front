@@ -106,7 +106,7 @@ const Login = () => {
     sendReset: isRu ? 'Восстановить пароль' : 'Reset password',
     sendingReset: isRu ? 'Отправка...' : 'Sending...',
   };
-  const tabButtonClass = "min-h-10 flex-1 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
+  const tabButtonClass = "min-h-10 flex-1 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
 
   const looksLikeUrl = (value: string) => {
     const text = value.trim().toLowerCase();
@@ -364,8 +364,8 @@ const Login = () => {
               aria-pressed={tab === 'login'}
               onClick={() => setTab('login')}
               className={`${tabButtonClass} ${tab === 'login'
-                  ? 'bg-indigo-100 text-indigo-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-slate-950 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                 }`}
             >
               {copy.loginTab}
@@ -375,8 +375,8 @@ const Login = () => {
               aria-pressed={tab === 'register'}
               onClick={() => setTab('register')}
               className={`${tabButtonClass} ${tab === 'register'
-                  ? 'bg-indigo-100 text-indigo-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-slate-950 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                 }`}
             >
               {copy.registerTab}
@@ -386,8 +386,8 @@ const Login = () => {
               aria-pressed={tab === 'reset'}
               onClick={() => setTab('reset')}
               className={`${tabButtonClass} ${tab === 'reset'
-                  ? 'bg-indigo-100 text-indigo-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-slate-950 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                 }`}
             >
               {copy.resetTab}
@@ -598,7 +598,7 @@ const Login = () => {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full btn-iridescent"
                 disabled={loading || !registerForm.personal_data_consent}
               >
                 {loading ? copy.signingUp : copy.signUp}
@@ -641,7 +641,7 @@ const Login = () => {
               </div>
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full btn-iridescent"
                 disabled={loading}
               >
                 {loading ? copy.sendingReset : copy.sendReset}
