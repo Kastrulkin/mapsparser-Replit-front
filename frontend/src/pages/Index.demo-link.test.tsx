@@ -28,6 +28,8 @@ describe('Index lead journey entry', () => {
     expect(demoLink).toHaveClass('btn-iridescent');
     const opportunitiesLink = screen.getByRole('link', { name: 'Посмотреть 3 возможности' });
     expect(opportunitiesLink).toHaveAttribute('href', '/growth');
-    expect(opportunitiesLink).toHaveClass('btn-iridescent');
+    expect(opportunitiesLink).toHaveClass('btn-iridescent', 'min-h-20', 'w-full', 'justify-between');
+    const tasksLink = screen.getByRole('link', { name: 'Посмотреть, что можно передать LocalOS' });
+    expect(tasksLink).toHaveClass('min-h-20', 'w-full', 'justify-between');
   }, 15_000);
 });

@@ -552,13 +552,13 @@ const Index = () => {
                 {copy.title}
               </h1>
               <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">{copy.intro}</p>
-              <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <Button asChild className="btn-iridescent h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base" size="lg">
-                  <Link to="/growth">{copy.freeAudit}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
+              <div className="mt-9 grid w-full gap-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)]">
+                <Button asChild className="btn-iridescent h-auto min-h-20 w-full justify-between gap-4 whitespace-normal rounded-xl px-6 py-4 text-left text-base leading-6">
+                  <Link to="/growth">{copy.freeAudit}<ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" /></Link>
                 </Button>
-                <Link className="group inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-5 text-base font-semibold text-white transition-[background-color,scale] hover:bg-slate-800 active:scale-[0.96]" to={{ pathname: "/", hash: "#agents" }}>
+                <Link className="group inline-flex min-h-20 w-full items-center justify-between gap-4 whitespace-normal rounded-xl bg-slate-950 px-6 py-4 text-left text-base font-semibold leading-6 text-white transition-[background-color,scale] hover:bg-slate-800 active:scale-[0.96]" to={{ pathname: "/", hash: "#agents" }}>
                   {copy.seeTasks}
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                  <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
               </div>
               <div className="mt-10 flex items-start gap-3 border-l-2 border-orange-300 pl-4 text-sm leading-6 text-slate-600">
