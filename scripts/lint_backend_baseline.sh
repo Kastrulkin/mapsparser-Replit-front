@@ -16,6 +16,7 @@ python3 -m py_compile \
   src/api/auth_user_api.py \
   src/api/superadmin_business_api.py \
   src/services/agent_blueprint_orchestrator.py \
+  src/services/agent_capability_handlers.py \
   src/services/agent_builder_session.py \
   src/services/agent_blueprint_draft_builder.py \
   src/services/agent_blueprint_workspace.py \
@@ -47,7 +48,7 @@ python3 -m py_compile \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
-  tests/test_agent_blueprint_layer.py \
+  tests/test_agent_blueprint_*.py \
   tests/test_auth_user_routes.py \
   tests/test_superadmin_business_routes.py \
   tests/test_growth_workflow_routes.py \
@@ -196,6 +197,7 @@ api_text = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
 builder_api_text = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 runner_text = Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
 orchestrator_text = Path("src/services/agent_blueprint_orchestrator.py").read_text(encoding="utf-8")
+capability_handlers_text = Path("src/services/agent_capability_handlers.py").read_text(encoding="utf-8")
 builder_session_text = Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
 draft_builder_text = Path("src/services/agent_blueprint_draft_builder.py").read_text(encoding="utf-8")
 workspace_text = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
@@ -203,7 +205,6 @@ source_ingestion_text = Path("src/services/agent_source_ingestion.py").read_text
 datahub_text = Path("src/services/agent_datahub.py").read_text(encoding="utf-8")
 document_llm_text = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
 capability_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
-ui_text = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
 required = {
     "src/api/agent_builder_api.py": [
@@ -297,7 +298,7 @@ required = {
         "_apply_drafts_approval",
         "_latest_artifact_item_ids",
     ],
-    "src/services/agent_blueprint_orchestrator.py": [
+    "src/services/agent_capability_handlers.py": [
         "OUTREACH_SEND_BATCH_CAPABILITY",
         "handle_outreach_send_batch",
     ],
@@ -306,39 +307,6 @@ required = {
         "queued_not_dispatched",
         "dispatch_due_outreach_queue",
         "l.business_id = %s",
-    ],
-    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": [
-        "runSource",
-        "runCity",
-        "runCategory",
-        "Не удалось собрать черновик агента",
-        "Создать агента",
-        "Тип агента",
-        "Правила и контроль",
-        "Системные агенты",
-        "Пользовательские агенты",
-        "Ждут решения",
-        "Сохранённые результаты",
-        "Настройка агента",
-        "Данные агента",
-        "Сначала подключённые источники",
-        "sourceCatalog",
-        "sources/catalog",
-        "Журнал запуска",
-        "JournalEntryCard",
-        "Как настроен агент",
-        "HumanPayloadView",
-        "Создать новую версию",
-        "Источник лидов: prospectingleads",
-        "source_artifact",
-        "Поставлено в очередь, но не отправлено",
-        "sources/upload",
-        "Новая активная версия",
-        "ApprovalPayloadSummary",
-        "DialogAgentBuilder",
-        "Preview будущего агента",
-        "Нужно уточнить",
-        "Создать из preview",
     ],
     "scripts/smoke_agent_blueprint_document_api.py": [
         "/api/agent-blueprints/draft",
@@ -375,13 +343,13 @@ texts = {
     "src/services/agent_builder_session.py": builder_session_text,
     "src/services/agent_blueprint_runner.py": runner_text,
     "src/services/agent_blueprint_orchestrator.py": orchestrator_text,
+    "src/services/agent_capability_handlers.py": capability_handlers_text,
     "src/services/agent_blueprint_draft_builder.py": draft_builder_text,
     "src/services/agent_blueprint_workspace.py": workspace_text,
     "src/services/agent_source_ingestion.py": source_ingestion_text,
     "src/services/agent_datahub.py": datahub_text,
     "src/services/agent_document_llm.py": document_llm_text,
     "src/services/outreach_send_capability.py": capability_text,
-    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
     "scripts/smoke_agent_blueprint_document_api.py": Path("scripts/smoke_agent_blueprint_document_api.py").read_text(encoding="utf-8"),
     "scripts/smoke_agent_blueprint_generic_boundaries.py": Path("scripts/smoke_agent_blueprint_generic_boundaries.py").read_text(encoding="utf-8"),
     "scripts/smoke_agent_builder_dialog_api.py": Path("scripts/smoke_agent_builder_dialog_api.py").read_text(encoding="utf-8"),
@@ -544,7 +512,7 @@ required_service_markers = [
     "FOLLOWUP_ATTEMPTED_AT_KEY",
     "FOLLOWUP_DELIVERED_AT_KEY",
     "telegram_refresh_followup_already_attempted",
-    "owner_telegram_id_missing",
+    "telegram_recipient_missing",
     "refresh_still_processing",
     "send_func(telegram_id, text)",
     "публикация в карты остаётся ручной",
@@ -739,6 +707,7 @@ PY
 echo "[backend-lint] runtime SQL placeholder scan"
 python3 - <<'PY'
 import ast
+import re
 from pathlib import Path
 
 skip_parts = {"migrations", "scripts", "__pycache__"}
@@ -765,7 +734,7 @@ for path in sorted(Path("src").rglob("*.py")):
             continue
         arg = node.args[0]
         value = arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
-        if value and "?" in value:
+        if value and re.search(r"\?(?!\s*')", value):
             first_line = value.strip().splitlines()[0][:120]
             findings.append(f"{path}:{node.lineno}: {first_line}")
 

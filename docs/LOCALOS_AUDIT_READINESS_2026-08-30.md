@@ -1,5 +1,19 @@
 # LocalOS audit readiness — 2026-08-30
 
+> **Исторический снимок, не использовать для текущего go/no-go.** После этого
+> документа Docker был безопасно восстановлен, полный security toolchain
+> повторно запущен, а все десять сценариев прошли на точном Docker staging.
+> Актуальные источники решения от 31 августа 2026 года:
+> `outputs/localos-security-audit-2026-08-31.md`,
+> `outputs/localos-rollout-runbook-2026-08-31.md` и
+> `outputs/localos-rollout-manifest-2026-08-31.tsv`.
+>
+> Текущий итог: 102/102 Playwright на desktop/laptop/mobile, 393/393 frontend
+> unit tests, 0 HIGH/CRITICAL в повторённых security gates. Production не
+> изменялся и остаётся `NO-GO` до live drift reconciliation, ротации
+> исторически раскрытых credentials, non-root ownership preflight и отдельного
+> разрешения на каждый production-пакет.
+
 ## Scope and release decision
 
 This document records the current evidence for the ten user scenarios and the
