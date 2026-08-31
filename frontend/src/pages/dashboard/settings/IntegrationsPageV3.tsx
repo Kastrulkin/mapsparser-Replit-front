@@ -41,7 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { newAuth } from '@/lib/auth_new';
-import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 import { cn } from '@/lib/utils';
 
 import { SettingsDetailSheet } from './SettingsHubComponents';
@@ -178,7 +178,7 @@ const serviceGroup = (serviceId: string): ServiceGroupKey => {
 };
 
 const authHeaders = () => {
-  const token = newAuth.getToken() || localStorage.getItem('auth_token');
+  const token = newAuth.getToken() || browserBearerToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 

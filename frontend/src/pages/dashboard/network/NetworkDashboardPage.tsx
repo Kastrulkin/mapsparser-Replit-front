@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardHeader } from './components/DashboardHeader';
@@ -116,7 +117,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
             }
 
             try {
-                const token = localStorage.getItem('auth_token');
+                const token = browserBearerToken();
                 const headers = { Authorization: `Bearer ${token || ''}` };
 
                 const locationsRes = await fetch(`/api/business/${businessId}/network-locations`, { headers });

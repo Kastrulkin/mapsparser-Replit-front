@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -320,7 +321,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     setLoading(true);
     setMessage(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const params = new URLSearchParams({ business_id: currentBusinessId });
       if (periodPreset === 'all_time') {
         params.set('range', 'all');
@@ -367,7 +368,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     if (!currentBusinessId) return;
     setHistoryMonths(months);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(`/api/finance/history?business_id=${currentBusinessId}&months=${months}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -446,7 +447,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     };
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/finance/manual-entry', {
         method: 'POST',
         headers: {

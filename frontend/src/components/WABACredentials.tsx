@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,7 +50,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/business/profile', {
         method: 'PUT',
         headers: {

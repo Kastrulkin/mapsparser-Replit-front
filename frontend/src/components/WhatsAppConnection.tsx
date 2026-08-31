@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -43,7 +44,7 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
     setSuccess(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/business/whatsapp/verify', {
         method: 'POST',
         headers: {

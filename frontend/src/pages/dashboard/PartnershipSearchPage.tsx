@@ -1113,7 +1113,7 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const loadLearningMetrics = async () => {
-    if (user?.demo_mode) {
+    if (user?.demo_mode || user?.is_superadmin !== true) {
       setLearningMetrics([]);
       return;
     }

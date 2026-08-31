@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -76,7 +77,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const baseUrl = window.location.origin;
       const businessParam = currentBusinessId ? `&business_id=${currentBusinessId}` : '';
 

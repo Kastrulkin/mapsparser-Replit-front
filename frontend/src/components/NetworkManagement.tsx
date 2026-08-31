@@ -8,7 +8,7 @@ import { Plus, Trash2, Building2, MapPin, Link as LinkIcon } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast';
 import { NetworkXMLImport } from './NetworkXMLImport';
 import { useLanguage } from '@/i18n/LanguageContext';
-import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 
 interface Network {
   id: string;
@@ -52,7 +52,7 @@ export const NetworkManagement: React.FC = () => {
 
   const loadNetworks = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/networks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -80,7 +80,7 @@ export const NetworkManagement: React.FC = () => {
 
     setCreatingNetwork(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       if (!browserAuthenticationAvailable(token)) {
         throw new Error('Токен авторизации не найден. Пожалуйста, войдите в систему.');
       }
@@ -205,7 +205,7 @@ export const NetworkManagement: React.FC = () => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
 
       for (const location of validLocations) {
         const response = await fetch(`/api/networks/${selectedNetworkId}/businesses`, {
@@ -275,7 +275,7 @@ export const NetworkManagement: React.FC = () => {
                 // Если есть текущий бизнес и есть сеть - добавляем бизнес в сеть
                 if (currentBusinessId && selectedNetworkId) {
                   try {
-                    const token = localStorage.getItem('auth_token');
+                    const token = browserBearerToken();
                     const response = await fetch(`/api/networks/${selectedNetworkId}/businesses`, {
                       method: 'POST',
                       headers: {

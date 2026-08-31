@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Button } from './ui/button';
@@ -35,7 +36,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const url = new URL(`${window.location.origin}/api/finance/transactions`);
       url.searchParams.set('limit', '100');
       if (currentBusinessId) {
@@ -79,7 +80,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
     if (!editingId) return;
     try {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const body: any = {
         transaction_date: form.transaction_date || null,
         amount: parseFloat(form.amount || '0') || 0,
@@ -117,7 +118,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
     if (!window.confirm(t.dashboard.finance.transactions.deleteConfirm)) return;
     try {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/finance/transaction/${id}`, {
         method: 'DELETE',
         headers: {

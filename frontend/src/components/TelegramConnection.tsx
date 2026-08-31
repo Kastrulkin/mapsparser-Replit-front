@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -37,7 +38,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
     }
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const url = new URL(`${window.location.origin}/api/telegram/bind/status`);
       url.searchParams.append('business_id', currentBusinessId);
 
@@ -73,7 +74,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
     setSuccess(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(`${window.location.origin}/api/telegram/bind`, {
         method: 'POST',
         headers: {

@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Button } from './ui/button';
@@ -39,7 +40,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const formDataToSend = new FormData();
 
       if (file) {
@@ -91,7 +92,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(getApiEndpoint('/api/finance/transaction'), {
         method: 'POST',
         headers: {

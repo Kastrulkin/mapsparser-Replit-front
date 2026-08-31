@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { newAuth, type User } from "@/lib/auth_new";
 import type {
   DashboardBusiness,
@@ -71,7 +72,7 @@ const isDashboardClientInfoResponse = (value: unknown): value is DashboardClient
   typeof value === 'object' && value !== null;
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('auth_token');
+  const token = browserBearerToken();
   return {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -81,7 +82,7 @@ const getAuthHeaders = () => {
 export async function fetchDashboardNetworks(): Promise<DashboardNetwork[]> {
   const response = await fetch(`${window.location.origin}/api/networks`, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+      'Authorization': `Bearer ${browserBearerToken()}`,
     },
   });
   const payload: unknown = await response.json();
@@ -94,7 +95,7 @@ export async function fetchDashboardNetworks(): Promise<DashboardNetwork[]> {
 export async function fetchDashboardServices(): Promise<DashboardService[]> {
   const response = await fetch(`${window.location.origin}/api/services/list`, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+      'Authorization': `Bearer ${browserBearerToken()}`,
     },
   });
   const payload: unknown = await response.json();
@@ -107,7 +108,7 @@ export async function fetchDashboardServices(): Promise<DashboardService[]> {
 export async function fetchDashboardBusinesses(): Promise<DashboardBusiness[]> {
   const response = await fetch('/api/auth/me', {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+      'Authorization': `Bearer ${browserBearerToken()}`,
     },
   });
 
@@ -126,7 +127,7 @@ export async function fetchDashboardBusinesses(): Promise<DashboardBusiness[]> {
 export async function fetchDashboardClientInfo(): Promise<DashboardClientInfo | null> {
   const response = await fetch(`${window.location.origin}/api/client-info`, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+      'Authorization': `Bearer ${browserBearerToken()}`,
     },
   });
 
@@ -221,7 +222,7 @@ export async function addDashboardService(
 export async function deleteDashboardService(serviceId: string): Promise<{ success: boolean; error?: string }> {
   const response = await fetch(`${window.location.origin}/api/services/delete/${serviceId}`, {
     method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
+    headers: { 'Authorization': `Bearer ${browserBearerToken()}` },
   });
 
   const payload: unknown = await response.json();

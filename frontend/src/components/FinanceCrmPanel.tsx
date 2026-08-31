@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Cable, CheckCircle2, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
 
@@ -70,7 +71,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
   const [credentials, setCredentials] = useState<Record<string, CrmCredentials>>({});
   const [previews, setPreviews] = useState<Record<string, CrmPreview>>({});
 
-  const token = localStorage.getItem('auth_token');
+  const token = browserBearerToken();
 
   const loadProviders = useCallback(async () => {
     if (!currentBusinessId) return;

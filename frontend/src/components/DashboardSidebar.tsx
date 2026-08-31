@@ -165,10 +165,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const menuItems = featureFlags.growthPathsNavigation ? [
     {
       id: 'today',
-      label: 'Сегодня',
+      label: shellCopy.today,
       icon: Calendar,
       path: '/dashboard/today',
-      tooltip: 'Главное действие и короткая очередь на сегодня.',
+      tooltip: shellCopy.todayHint,
     },
     {
       id: 'operator',
@@ -179,31 +179,31 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'growth-paths',
-      label: 'Пути роста',
+      label: shellCopy.growthPaths,
       icon: LayoutGrid,
       path: '/dashboard/growth-paths',
-      tooltip: 'Карты, контент, инфлюенсеры, партнёрства и автоматизация — по понятным сценариям.',
+      tooltip: shellCopy.growthPathsHint,
     },
     {
       id: 'feed',
-      label: 'Лента',
+      label: shellCopy.feed,
       icon: Radio,
       path: '/dashboard/feed',
-      tooltip: 'Входящие сообщения и новости вашей индустрии.',
+      tooltip: shellCopy.feedHint,
     },
     {
       id: 'progress',
-      label: 'Результаты',
+      label: shellCopy.results,
       icon: TrendingUp,
       path: '/dashboard/progress',
-      tooltip: 'Завершённые действия, изменения и динамика показателей.',
+      tooltip: shellCopy.resultsHint,
     },
     {
       id: 'more',
-      label: 'Ещё',
+      label: shellCopy.more,
       icon: CircleEllipsis,
       path: '/dashboard/more',
-      tooltip: 'Профиль, финансы, агенты, чаты, интеграции и настройки.',
+      tooltip: shellCopy.moreHint,
     },
   ] : legacyMenuItems;
 
@@ -359,6 +359,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           variant="ghost"
           size="icon"
           className="md:hidden"
+          aria-label={isOpen ? navigationCopy.collapse : navigationCopy.expand}
           onClick={() => setIsOpen(!isOpen)}
         >
           {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

@@ -60,4 +60,8 @@ describe('demo language coverage', () => {
       expect(localized.sidebar.upsells).not.toBe(english.sidebar.upsells);
     }
   });
+
+  it.each(supportedLanguages)('%s names the currency control', (language) => {
+    expect(getDashboardShellCopy(language).currency.trim()).not.toBe('');
+  });
 });

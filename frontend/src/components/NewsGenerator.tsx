@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -88,7 +89,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       return;
     }
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const params = new URLSearchParams();
       if (businessId) {
         params.set('business_id', businessId);
@@ -110,7 +111,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     }
     (async () => {
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = browserBearerToken();
         const res = await fetch(`${window.location.origin}/api/news/ab-mode/availability`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -132,7 +133,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     }
     (async () => {
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = browserBearerToken();
         const res = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await res.json();
         if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
@@ -145,7 +146,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     if (!businessId) return;
     setLoadingTransactions(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/finance/transactions?business_id=${businessId}&limit=20`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -170,7 +171,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     if (!businessId) return;
     setLoadingSeoKeywords(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/wordstat/keywords?business_id=${encodeURIComponent(businessId)}&use_city=1`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -197,7 +198,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     setError('');
     setLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/news/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -231,7 +232,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   };
 
   const approve = async (id: string) => {
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const res = await fetch(`${window.location.origin}/api/news/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -242,7 +243,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   };
 
   const saveEdited = async (id: string, text: string) => {
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const res = await fetch(`${window.location.origin}/api/news/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -254,7 +255,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
 
   const deleteNews = async (id: string) => {
     if (!confirm(t.dashboard.card.newsGenerator.deleteConfirm)) return;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const res = await fetch(`${window.location.origin}/api/news/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -267,7 +268,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const addExample = async () => {
     const text = exampleInput.trim();
     if (!text) return;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const res = await fetch(`${window.location.origin}/api/news-examples`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ text })
     });
@@ -281,7 +282,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   };
 
   const deleteExample = async (id: string) => {
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const res = await fetch(`${window.location.origin}/api/news-examples/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
     const data = await res.json();
     if (data.success) {

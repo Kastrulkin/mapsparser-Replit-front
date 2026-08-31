@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -36,7 +37,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(getApiEndpoint('/api/finance/roi'), {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -72,7 +73,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(getApiEndpoint('/api/finance/roi'), {
         method: 'POST',
         headers: {

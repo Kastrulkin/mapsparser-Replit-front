@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { newAuth } from '@/lib/auth_new';
 
 export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content' | 'automation';
@@ -104,7 +105,7 @@ export const preparePublicOpportunity = async (token: string, opportunity: Journ
 
 export const loadJourneyActions = async (businessId: string): Promise<JourneyAction[]> => {
   const response = await fetch(`/api/journey-actions?business_id=${encodeURIComponent(businessId)}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` },
+    headers: { Authorization: `Bearer ${browserBearerToken() || ''}` },
   });
   const data = await readJson(response);
   return data.actions || [];

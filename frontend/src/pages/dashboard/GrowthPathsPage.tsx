@@ -72,7 +72,7 @@ export const GrowthPathsPage = () => {
   return (
     <div className="space-y-6 pb-10">
       <header className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">Пути роста</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">Пути роста</p>
         <h1 className="mt-2 max-w-3xl text-balance text-3xl font-semibold tracking-tight text-slate-950">Выберите направление</h1>
         <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">В каждом направлении LocalOS покажет, с чего начать, и проведёт по следующим шагам. Ваш текущий маршрут всегда идёт первым.</p>
       </header>

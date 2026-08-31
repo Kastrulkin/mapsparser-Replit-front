@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { getApiEndpoint } from '../config/api';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -45,7 +46,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(getApiEndpoint(`/api/networks/${networkId}/stats?period=${period}`), {
         headers: {
           'Authorization': `Bearer ${token}`

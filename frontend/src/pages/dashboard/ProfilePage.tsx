@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useLocation, useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -520,7 +521,7 @@ export const ProfilePage = () => {
     try {
       const response = await fetch(`${window.location.origin}/api/business/${effectiveBusinessId}/parse-status`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
+          'Authorization': `Bearer ${browserBearerToken() || ''}`,
           'Content-Type': 'application/json',
         },
       });

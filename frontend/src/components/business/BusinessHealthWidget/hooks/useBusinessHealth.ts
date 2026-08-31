@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { BusinessHealthData, BusinessLocationWithAlerts } from '../types';
-import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 
 const fetchWithAuth = async <T>(url: string): Promise<T> => {
-    const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     if (!browserAuthenticationAvailable(token)) throw new Error('No auth token');
 
     const response = await fetch(url, {

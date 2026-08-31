@@ -13,7 +13,7 @@ import {
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
+import { browserAuthenticationAvailable, browserBearerToken } from "@/lib/browserSessionFetch";
 
 type YclientsAccount = {
   id?: string;
@@ -78,7 +78,7 @@ const getSalonIds = (params: URLSearchParams): string[] => {
   return values.filter((value, index) => values.indexOf(value) === index);
 };
 
-const getAuthToken = () => localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
+const getAuthToken = () => browserBearerToken() || "";
 
 const getSelectedBusinessId = () =>
   localStorage.getItem("selectedBusinessId") || localStorage.getItem("admin_selected_business_id") || "";

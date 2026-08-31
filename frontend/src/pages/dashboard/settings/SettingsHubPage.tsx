@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { Cable, ClipboardCheck, Settings } from 'lucide-react';
@@ -54,7 +55,7 @@ const emptyLoadState: HubLoadState = {
 };
 
 const authHeaders = () => {
-  const token = newAuth.getToken() || localStorage.getItem('auth_token');
+  const token = newAuth.getToken() || browserBearerToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 

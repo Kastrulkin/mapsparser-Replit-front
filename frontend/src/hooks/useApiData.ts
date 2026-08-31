@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useEffect, useRef, useState } from 'react';
 
 interface UseApiDataOptions<T> {
@@ -51,7 +52,7 @@ export function useApiData<T>(
       ...requestOptions
     } = options || {};
 
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     fetch(endpoint, {
       headers: { Authorization: `Bearer ${token || ''}` },
       ...requestOptions,

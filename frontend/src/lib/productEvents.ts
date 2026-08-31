@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 type ProductEvent = {
   eventName: 'progress_open' | 'mission_open' | 'statistics_flow_opened' | 'crm_request_created';
   businessId?: string | null;
@@ -24,7 +25,7 @@ export const trackProductEvent = ({ eventName, businessId, objectType, objectId,
     void fetch('/api/product/events', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+        Authorization: `Bearer ${browserBearerToken() || ''}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),

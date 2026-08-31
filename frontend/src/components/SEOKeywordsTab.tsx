@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, RefreshCw, Search, Trash2, TrendingUp, X } from 'lucide-react';
@@ -138,7 +139,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             return;
         }
         try {
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const qs = businessId
                 ? `?business_id=${encodeURIComponent(businessId)}&use_city=1&include_blocked=${showBlocked ? '1' : '0'}`
                 : '';
@@ -171,7 +172,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         }
         setNegativeLoading(true);
         try {
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(
                 `${window.location.origin}/api/wordstat/negative-keywords?business_id=${encodeURIComponent(businessId)}`,
                 { headers: { 'Authorization': `Bearer ${token}` } },
@@ -199,7 +200,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         }
         try {
             setError(null);
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`${window.location.origin}/api/wordstat/negative-keywords`, {
                 method: 'POST',
                 headers: {
@@ -235,7 +236,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         }
         try {
             setError(null);
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`${window.location.origin}/api/wordstat/negative-keywords/bulk`, {
                 method: 'POST',
                 headers: {
@@ -266,7 +267,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         if (!businessId) return;
         try {
             setError(null);
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`${window.location.origin}/api/wordstat/negative-keywords`, {
                 method: 'DELETE',
                 headers: {
@@ -291,7 +292,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         setError(null);
         setSuccess(null);
         try {
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`${window.location.origin}/api/wordstat/update`, {
                 method: 'POST',
                 headers: {
@@ -327,7 +328,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
 
         try {
             setError(null);
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`${window.location.origin}/api/wordstat/keywords`, {
                 method: 'DELETE',
                 headers: {
@@ -371,7 +372,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         setHasSearchedSuggestions(true);
         setError(null);
         try {
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(
                 `${window.location.origin}/api/wordstat/search?business_id=${encodeURIComponent(businessId)}&q=${encodeURIComponent(q)}&limit=10`,
                 { headers: { 'Authorization': `Bearer ${token}` } },
@@ -392,7 +393,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const addKeyword = async (item: Keyword) => {
         if (!businessId) return;
         try {
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`${window.location.origin}/api/wordstat/keywords/custom`, {
                 method: 'POST',
                 headers: {

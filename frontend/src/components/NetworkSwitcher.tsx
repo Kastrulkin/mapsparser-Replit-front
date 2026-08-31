@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { getApiEndpoint } from '../config/api';
 import { ChevronDown, Building2, Network } from 'lucide-react';
@@ -47,7 +48,7 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(getApiEndpoint(`/api/networks/${networkId}/locations`), {
         headers: {
           'Authorization': `Bearer ${token}`

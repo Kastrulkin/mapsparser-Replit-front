@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Download, FileSpreadsheet, History, Upload } from 'lucide-react';
 
@@ -62,7 +63,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const token = localStorage.getItem('auth_token');
+  const token = browserBearerToken();
 
   const loadImports = useCallback(async () => {
     if (!currentBusinessId) return;

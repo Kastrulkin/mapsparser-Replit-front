@@ -52,6 +52,16 @@ describe('browser cookie authentication', () => {
     );
   });
 
+  it('clears both legacy standard browser token keys in cookie mode', () => {
+    window.localStorage.setItem('auth_token', 'legacy-token');
+    window.localStorage.setItem('token', 'legacy-alias');
+
+    new NewAuth();
+
+    expect(window.localStorage.getItem('auth_token')).toBeNull();
+    expect(window.localStorage.getItem('token')).toBeNull();
+  });
+
   it('restores a browser session from the cookie without a JavaScript token', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

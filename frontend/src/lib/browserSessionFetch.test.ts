@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createBrowserSessionFetch } from './browserSessionFetch';
+import { clearLegacyBrowserCredentials, createBrowserSessionFetch } from './browserSessionFetch';
 
 
 describe('browser session fetch transport', () => {
   beforeEach(() => {
     document.cookie = 'localos_csrf=; Max-Age=0; path=/';
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'true');
   });
 
@@ -40,20 +42,43 @@ describe('browser session fetch transport', () => {
     expect(new Headers(requestOptions?.headers).has('X-CSRF-Token')).toBe(false);
   });
 
-  it('removes only empty legacy bearer placeholders from cookie requests', async () => {
+  it('removes empty and non-empty legacy browser bearer headers from cookie requests', async () => {
     const baseFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     const sessionFetch = createBrowserSessionFetch(baseFetch);
 
     await sessionFetch('/api/dashboard', { headers: { Authorization: 'Bearer null' } });
+    await sessionFetch('/api/dashboard', { headers: { Authorization: 'Bearer legacy-browser-token' } });
 
-    const requestOptions = baseFetch.mock.calls[0][1];
-    expect(new Headers(requestOptions?.headers).has('Authorization')).toBe(false);
+    expect(new Headers(baseFetch.mock.calls[0][1]?.headers).has('Authorization')).toBe(false);
+    expect(new Headers(baseFetch.mock.calls[1][1]?.headers).has('Authorization')).toBe(false);
+  });
 
+  it('preserves only an explicit Mini App session bearer', async () => {
+    window.sessionStorage.setItem('localos_mini_session', 'miniapp-token');
+    const baseFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    const sessionFetch = createBrowserSessionFetch(baseFetch);
     await sessionFetch('/api/operator/mobile/today', {
       headers: { Authorization: 'Bearer miniapp-token' },
     });
-    const miniAppOptions = baseFetch.mock.calls[1][1];
+    const miniAppOptions = baseFetch.mock.calls[0][1];
     expect(new Headers(miniAppOptions?.headers).get('Authorization')).toBe('Bearer miniapp-token');
+  });
+
+  it('preserves an active demo session bearer without retaining standard browser tokens', async () => {
+    window.sessionStorage.setItem('localos_demo_mode', '1');
+    window.localStorage.setItem('demo_auth_token', 'demo-token');
+    window.localStorage.setItem('auth_token', 'legacy-browser-token');
+    window.localStorage.setItem('token', 'legacy-browser-alias');
+    const baseFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    const sessionFetch = createBrowserSessionFetch(baseFetch);
+
+    clearLegacyBrowserCredentials();
+    await sessionFetch('/api/dashboard', { headers: { Authorization: 'Bearer demo-token' } });
+
+    expect(window.localStorage.getItem('auth_token')).toBeNull();
+    expect(window.localStorage.getItem('token')).toBeNull();
+    expect(window.localStorage.getItem('demo_auth_token')).toBe('demo-token');
+    expect(new Headers(baseFetch.mock.calls[0][1]?.headers).get('Authorization')).toBe('Bearer demo-token');
   });
 
   it('keeps the original request untouched while the feature is disabled', async () => {

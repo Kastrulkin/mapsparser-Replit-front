@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,7 +81,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
       }
       try {
         setLoadingStatus(true);
-        const token = localStorage.getItem('auth_token');
+        const token = browserBearerToken();
         const response = await fetch(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(businessId)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -134,7 +135,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const payload: { business_id: string; telegram_chat_id: string; telegram_bot_token?: string } = {
         business_id: businessId,
         telegram_chat_id: chatId.trim(),
@@ -189,7 +190,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
     try {
       setLoadingStatus(true);
       setPublishTargetProbe(null);
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/business/telegram-bot/publish-target-probe', {
         method: 'POST',
         headers: {

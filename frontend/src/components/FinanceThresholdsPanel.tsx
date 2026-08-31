@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
 
@@ -89,7 +90,7 @@ export const FinanceThresholdsPanel: React.FC<FinanceThresholdsPanelProps> = ({ 
     setLoading(true);
     setMessage(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch(`/api/finance/thresholds?business_id=${currentBusinessId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -126,7 +127,7 @@ export const FinanceThresholdsPanel: React.FC<FinanceThresholdsPanelProps> = ({ 
     setSaving(true);
     setMessage(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const payload = {
         business_id: currentBusinessId,
         thresholds: orderedKeys.map((metricKey) => ({
@@ -162,7 +163,7 @@ export const FinanceThresholdsPanel: React.FC<FinanceThresholdsPanelProps> = ({ 
     setSaving(true);
     setMessage(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/finance/thresholds/reset', {
         method: 'POST',
         headers: {

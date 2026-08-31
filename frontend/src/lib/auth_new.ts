@@ -42,6 +42,7 @@ export class NewAuth {
   constructor() {
     if (browserCookieAuthEnabled()) {
       localStorage.removeItem(this.standardTokenKey);
+      localStorage.removeItem('token');
     }
     this.token = this.getStoredActiveToken();
     if (this.token) {

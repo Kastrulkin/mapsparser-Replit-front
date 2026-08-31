@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -37,7 +38,7 @@ export const AddMetricModal: React.FC<AddMetricModalProps> = ({
         setLoading(true);
 
         try {
-            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+            const token = browserBearerToken();
             const response = await fetch(`/api/business/${businessId}/metrics-history`, {
                 method: 'POST',
                 headers: {

@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -89,7 +90,7 @@ export default function ServiceOptimizer({
 
   const loadExamples = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/examples`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -106,7 +107,7 @@ export default function ServiceOptimizer({
     const text = exampleInput.trim();
     if (!text) return;
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/examples`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -126,7 +127,7 @@ export default function ServiceOptimizer({
 
   const deleteExample = async (id: string) => {
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const res = await fetch(`${window.location.origin}/api/examples/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -148,7 +149,7 @@ export default function ServiceOptimizer({
     setSuccess(null);
     setResult(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
       let response: Response;
       if (mode === 'file') {
@@ -256,7 +257,7 @@ export default function ServiceOptimizer({
     const editable = editableValues.get(serviceIndex) || {};
     
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       // Получаем business_id из пропсов или из localStorage
       const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
       if (!currentBusinessId) {

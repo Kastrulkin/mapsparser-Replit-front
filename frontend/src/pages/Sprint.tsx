@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ const Sprint = () => {
       }
 
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = browserBearerToken();
         const response = await fetch(`/api/business/${businessId}/sprint`, {
           headers: {
             'Authorization': `Bearer ${token}`

@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState } from 'react';
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -77,7 +78,7 @@ export function NetworkXMLImport({ networkId, onImportComplete }: NetworkXMLImpo
         formData.append('file', file);
 
         try {
-            const token = localStorage.getItem('auth_token');
+            const token = browserBearerToken();
             const response = await fetch(`/api/networks/${networkId}/import-xml`, {
                 method: 'POST',
                 headers: {

@@ -131,7 +131,7 @@ export const InfluencersPage = () => {
         </div>
       </section>
 
-      <nav className="flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="Работа с инфлюенсерами">{sections.map((item) => <button key={item.key} type="button" role="tab" aria-selected={section === item.key} onClick={() => setSection(item.key)} className={cn('min-h-11 shrink-0 rounded-xl px-4 text-sm font-semibold transition-[background-color,box-shadow,color,transform] active:scale-[0.96] lg:flex-1', section === item.key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500')}>{item.label}</button>)}</nav>
+      <nav className="flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="Работа с инфлюенсерами">{sections.map((item) => <button key={item.key} type="button" role="tab" aria-selected={section === item.key} onClick={() => setSection(item.key)} className={cn('min-h-11 shrink-0 rounded-xl px-4 text-sm font-semibold transition-[background-color,box-shadow,color,transform] active:scale-[0.96] lg:flex-1', section === item.key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600')}>{item.label}</button>)}</nav>
 
       {error ? <div role="alert" className="flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div> : null}
 

@@ -23,15 +23,17 @@ describe('DashboardSidebar localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('link', { name: 'Χειριστής' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Περιεχόμενο' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Αυτοματοποίηση' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Προώθηση' })).toHaveAttribute('href', '/dashboard/promotion');
-    expect(container.textContent).not.toMatch(/\b(?:Operator|Content|Agents|Partner Search)\b/);
+    expect(await screen.findByRole('link', { name: 'Σήμερα' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Χειριστής' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Διαδρομές ανάπτυξης' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ροή' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Αποτελέσματα' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Περισσότερα' })).toHaveAttribute('href', '/dashboard/more');
+    expect(container.textContent).not.toMatch(/\b(?:Today|Operator|Growth paths|Feed|Results|More)\b/);
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
-  it('shows promotion without requiring a business capability', async () => {
+  it('shows the guided more entry without requiring a business capability', async () => {
     window.localStorage.setItem('language', 'ru');
     render(
       <MemoryRouter initialEntries={['/dashboard/content']}>
@@ -43,8 +45,8 @@ describe('DashboardSidebar localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('link', { name: 'Продвижение' })).toHaveAttribute('href', '/dashboard/promotion');
-    expect(screen.queryByRole('link', { name: 'Партнёрские акции' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Ещё' })).toHaveAttribute('href', '/dashboard/more');
+    expect(screen.queryByRole('link', { name: 'Продвижение' })).not.toBeInTheDocument();
   });
 
   it('keeps chat-based operator control in the guided navigation', async () => {

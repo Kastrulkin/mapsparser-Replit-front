@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,7 +49,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
     const fetchHistory = async () => {
         try {
             setLoading(true);
-            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+            const token = browserBearerToken();
             const response = await fetch(`/api/business/${businessId}/metrics-history`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -80,7 +81,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
         if (!confirm(t.common.confirmDelete)) return;
 
         try {
-            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+            const token = browserBearerToken();
             const response = await fetch(`/api/business/${businessId}/metrics-history/${metricId}`, {
                 method: 'DELETE',
                 headers: {

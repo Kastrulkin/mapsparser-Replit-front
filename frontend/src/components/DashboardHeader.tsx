@@ -174,7 +174,10 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           <div className="hidden sm:block">
             <Select value={currency} onValueChange={(value) => setCurrency(value as 'RUB' | 'USD' | 'EUR')}>
-              <SelectTrigger className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
+              <SelectTrigger
+                aria-label={shellCopy.currency}
+                className="min-h-10 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0"
+              >
                 <span className="text-base font-medium text-slate-700">
                   {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}
                 </span>
@@ -205,6 +208,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
+                aria-label="Выйти"
                 className="text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500"
               >
                 <LogOut className="w-5 h-5" />

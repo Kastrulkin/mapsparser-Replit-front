@@ -776,6 +776,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                   type="search"
                   value={agentSearch}
                   onChange={(event) => setAgentSearch(event.target.value)}
+                  aria-label={pageCopy.search}
                   placeholder={pageCopy.search}
                   className="min-h-10 w-full rounded-lg bg-slate-50 pl-10 pr-3 text-sm text-slate-950 outline-none shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.55)]"
                 />
@@ -791,7 +792,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                     key={value}
                     type="button"
                     onClick={() => setAgentRegistryFilter(value === 'working' || value === 'attention' || value === 'completed' ? value : 'all')}
-                    className={cn('min-h-9 rounded-lg px-3 text-xs font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', agentRegistryFilter === value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
+                    className={cn('min-h-10 rounded-lg px-3 text-xs font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', agentRegistryFilter === value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
                   >
                     {label}
                   </button>

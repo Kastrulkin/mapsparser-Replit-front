@@ -1,3 +1,4 @@
+import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCcw, Wrench } from 'lucide-react';
 
@@ -494,7 +495,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (!businessId) return;
     setAuditTimelineLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const params = new URLSearchParams();
       params.set('tenant_id', businessId);
       params.set('limit', String(auditTimelinePageSize));
@@ -526,7 +527,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (!businessId || auditTimelineLoading || auditTimeline.length >= auditTimelineTotal) return;
     setAuditTimelineLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const params = new URLSearchParams();
       params.set('tenant_id', businessId);
       params.set('limit', String(auditTimelinePageSize));
@@ -669,7 +670,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const [healthRes, trendRes, billingRes, actionsRes, recoveryHistoryRes, supportSendHistoryRes, auditTimelineRes] = await Promise.all([
         fetch(
           `/api/capabilities/health?tenant_id=${encodeURIComponent(businessId)}&window_minutes=60`,
@@ -776,7 +777,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       }
     setTimelineLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const params = buildTimelineParams({ includeOffset: true });
       const response = await fetch(
         `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/timeline?${params.toString()}`,
@@ -835,7 +836,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
     setActionSnapshotLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const [statusRes, billingRes, lifecycleRes] = await Promise.all([
         fetch(
           `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}?tenant_id=${encodeURIComponent(businessId)}`,
@@ -892,7 +893,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
     setActionAttemptsLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const params = new URLSearchParams();
       params.set('limit', '20');
       params.set('offset', String(attemptsOffset));
@@ -967,7 +968,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setRecoveryReport(null);
     setError(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/capabilities/callbacks/recovery-report', {
         method: 'POST',
         headers: {
@@ -1011,7 +1012,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setSupportSending(true);
     setError(null);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const response = await fetch('/api/capabilities/support-export/send', {
         method: 'POST',
         headers: {
@@ -1204,7 +1205,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchDiagnosticsBundle = useCallback(async (format?: 'json' | 'markdown') => {
     if (!selectedActionId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const params = buildTimelineParams({ includeOffset: false });
     params.set('full', 'true');
     params.set('attempts_full', 'true');
@@ -1224,7 +1225,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchIncidentReport = useCallback(async () => {
     if (!selectedActionId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const response = await fetch(
       `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/incident-report`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -1238,7 +1239,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchIncidentSnapshot = useCallback(async () => {
     if (!selectedActionId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const response = await fetch(
       `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/incident-snapshot`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -1427,7 +1428,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchRecoveryHistoryExport = useCallback(async (format: 'json' | 'markdown') => {
     if (!businessId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const response = await fetch(
       `/api/capabilities/callbacks/recovery-history/export?tenant_id=${encodeURIComponent(businessId)}&limit=10&format=${format}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -1441,7 +1442,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchSupportExport = useCallback(async (format: 'json' | 'markdown') => {
     if (!businessId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const params = new URLSearchParams();
     params.set('tenant_id', businessId);
     params.set('format', format);
@@ -1460,7 +1461,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchSupportSendHistoryExport = useCallback(async (format: 'json' | 'markdown') => {
     if (!businessId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const response = await fetch(
       `/api/capabilities/support-export/send-history/export?tenant_id=${encodeURIComponent(businessId)}&limit=10&format=${format}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -1474,7 +1475,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const fetchAuditTimelineExport = useCallback(async (format: 'json' | 'markdown') => {
     if (!businessId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const params = new URLSearchParams();
     params.set('tenant_id', businessId);
     params.set('limit', '50');
@@ -1502,7 +1503,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     format: 'json' | 'markdown',
   ) => {
     if (!businessId) return null;
-    const token = localStorage.getItem('auth_token');
+    const token = browserBearerToken();
     const params = new URLSearchParams();
     params.set('tenant_id', businessId);
     params.set('event_id', String(item.event_id || ''));

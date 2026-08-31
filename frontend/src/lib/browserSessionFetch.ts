@@ -2,6 +2,7 @@ import { API_URL } from '../config/api';
 
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const LEGACY_BROWSER_TOKEN_KEYS = ['auth_token', 'token'];
 let installed = false;
 
 
@@ -18,6 +19,54 @@ export const browserCookieValue = (name: string): string => {
   const prefix = `${encodeURIComponent(name)}=`;
   const item = document.cookie.split('; ').find((value) => value.startsWith(prefix));
   return item ? decodeURIComponent(item.slice(prefix.length)) : '';
+};
+
+
+const storageValue = (kind: 'localStorage' | 'sessionStorage', key: string): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window[kind].getItem(key) || '';
+  } catch {
+    return '';
+  }
+};
+
+
+export const browserBearerToken = (): string => {
+  if (typeof window === 'undefined') return '';
+  if (storageValue('sessionStorage', 'localos_demo_mode') === '1') {
+    return storageValue('localStorage', 'demo_auth_token');
+  }
+  if (browserCookieAuthEnabled()) return '';
+  return storageValue('localStorage', 'auth_token') || storageValue('localStorage', 'token');
+};
+
+
+export const clearLegacyBrowserCredentials = (): void => {
+  if (typeof window === 'undefined' || !browserCookieAuthEnabled()) return;
+  for (const key of LEGACY_BROWSER_TOKEN_KEYS) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Storage may be unavailable in a restricted browser context.
+    }
+  }
+};
+
+
+const explicitScopedBearer = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  const miniSession = storageValue('sessionStorage', 'localos_mini_session');
+  const demoSession = storageValue('sessionStorage', 'localos_demo_mode') === '1'
+    ? storageValue('localStorage', 'demo_auth_token')
+    : '';
+  return [miniSession, demoSession].filter(Boolean);
+};
+
+
+const bearerToken = (value: string): string => {
+  const match = value.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || '';
 };
 
 
@@ -69,12 +118,9 @@ export const createBrowserSessionFetch = (baseFetch: typeof fetch): typeof fetch
 
     const headers = mergedHeaders(input, init);
     for (const key of Object.keys(headers)) {
-      if (
-        key.toLowerCase() === 'authorization'
-        && /^Bearer(?:\s+(?:null|undefined))?\s*$/i.test(headers[key] || '')
-      ) {
-        delete headers[key];
-      }
+      if (key.toLowerCase() !== 'authorization') continue;
+      const token = bearerToken(headers[key] || '');
+      if (!token || !explicitScopedBearer().includes(token)) delete headers[key];
     }
     if (UNSAFE_METHODS.has(requestMethod(input, init))) {
       const csrfToken = browserCookieValue('localos_csrf');
@@ -93,6 +139,7 @@ export const createBrowserSessionFetch = (baseFetch: typeof fetch): typeof fetch
 
 export const installBrowserSessionFetch = (): void => {
   if (installed || !browserCookieAuthEnabled() || typeof window === 'undefined') return;
+  clearLegacyBrowserCredentials();
   window.fetch = createBrowserSessionFetch(window.fetch.bind(window));
   installed = true;
 };

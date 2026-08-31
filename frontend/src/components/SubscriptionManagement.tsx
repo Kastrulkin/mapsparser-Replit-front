@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { DESIGN_TOKENS } from '@/lib/design-tokens';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 import { Check, Crown, Zap, Shield, Star, Rocket, CreditCard, CalendarClock, Link2Off, RefreshCw } from 'lucide-react';
 
 interface SubscriptionTier {
@@ -195,7 +196,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     ];
   }, [language, t]);
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const token = typeof window !== 'undefined' ? browserBearerToken() : null;
 
   const formatDateTime = (value?: string | null) => {
     if (!value) return language === 'ru' ? '—' : '—';
@@ -230,7 +231,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   };
 
   const loadBillingStatus = async (options?: { silent?: boolean }) => {
-    if (!businessId || !token) return;
+    if (!businessId || !browserAuthenticationAvailable(token)) return;
     if (!options?.silent) {
       setBillingLoading(true);
     }
@@ -273,7 +274,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     const isReturnPage = window.location.pathname.endsWith('/billing/return') || searchParams.get('yookassa_return') === '1';
     if (!isReturnPage || !businessId) return;
 
-    if (!token) return;
+    if (!browserAuthenticationAvailable(token)) return;
 
     let aborted = false;
     (async () => {
@@ -363,7 +364,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
     setProcessing(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = browserBearerToken();
       const selectedTier = tiers.find((tier) => tier.id === tierId);
       const paymentProvider = await paymentProviderForTier(selectedTier);
 

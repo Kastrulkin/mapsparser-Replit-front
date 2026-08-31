@@ -2246,10 +2246,10 @@ function ContentWorkspace() {
               key={key}
               className={cn(
                 'min-w-0 overflow-hidden min-h-[150px] bg-white p-2',
-                !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-400' : '',
+                !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-600' : '',
               )}
             >
-              <div className="mb-2 text-xs font-semibold text-slate-500">
+              <div className="mb-2 text-xs font-semibold text-slate-600">
                 {day.getDate()}
               </div>
               <div className="space-y-2">
@@ -2345,7 +2345,11 @@ function ContentWorkspace() {
           </div>
           <div className="text-sm font-medium text-slate-500">{generationProgress}%</div>
         </div>
-        <Progress value={generationProgress} className="mt-5 h-3 bg-slate-100" />
+        <Progress
+          value={generationProgress}
+          aria-label="Подготовка контент-плана"
+          className="mt-5 h-3 bg-slate-100"
+        />
         <div className="mt-6 grid grid-cols-7 gap-2">
           {Array.from({ length: 35 }, (_, index) => {
             const filled = index < generationCards;
@@ -3456,7 +3460,7 @@ function ContentWorkspace() {
             onClick={() => setSection(key === 'media' || key === 'audience' ? key : 'calendar')}
             className={cn(
               'inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
-              section === key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-950',
+              section === key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950',
             )}
           >
             <Icon className="h-4 w-4" />
@@ -3501,7 +3505,11 @@ function ContentWorkspace() {
                   <div className="mt-4 max-w-xl text-lg text-slate-300">
                     {fillContentCalendarTemplate(calendarCopy.filledDays, { filled: filledDays, total: totalDays })}
                   </div>
-                  <Progress value={Math.min(100, Math.round((filledDays / Math.max(totalDays, 1)) * 100))} className="mt-5 h-3 bg-white/10" />
+                  <Progress
+                    value={Math.min(100, Math.round((filledDays / Math.max(totalDays, 1)) * 100))}
+                    aria-label={filledDays > 0 ? calendarCopy.contentReady : calendarCopy.preparingCalendar}
+                    className="mt-5 h-3 bg-white/10"
+                  />
                 </div>
                 <div className="rounded-3xl bg-white/10 px-5 py-4">
                   <div className="text-sm text-slate-400">{calendarCopy.nextPublication}</div>
@@ -3578,8 +3586,8 @@ function ContentWorkspace() {
                     type="button"
                     onClick={() => setView(key === 'week' ? 'week' : key === 'list' ? 'list' : 'month')}
                     className={cn(
-                      'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
-                      view === key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-950',
+                      'inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
+                      view === key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950',
                     )}
                   >
                     <Icon className="h-4 w-4" />
