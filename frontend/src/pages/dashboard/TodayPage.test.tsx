@@ -3,6 +3,7 @@ import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-d
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { newAuth } from '@/lib/auth_new';
+import { LEAD_JOURNEY_STORAGE_KEY } from '@/lib/leadJourney';
 import { TodayPage } from './TodayPage';
 
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));
@@ -17,7 +18,34 @@ const LocationProbe = () => {
 };
 
 describe('TodayPage', () => {
-  beforeEach(() => vi.mocked(newAuth.makeRequest).mockReset());
+  beforeEach(() => {
+    vi.mocked(newAuth.makeRequest).mockReset();
+    window.localStorage.clear();
+  });
+
+  it('shows a concrete maps task instead of registration journey copy', async () => {
+    window.localStorage.setItem(LEAD_JOURNEY_STORAGE_KEY, 'maps');
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard/today']}>
+        <Routes>
+          <Route element={<ContextRoute />}>
+            <Route path="/dashboard/today" element={<TodayPage />} />
+            <Route path="/dashboard/card" element={<LocationProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Проверьте карточку на картах' })).toBeInTheDocument();
+    expect(screen.getByText(/Добавьте ссылку на карточку/)).toBeInTheDocument();
+    expect(screen.queryByText('Вы выбрали до регистрации')).not.toBeInTheDocument();
+    expect(screen.queryByText(/зафиксирует статус или результат/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить карточку' }));
+    expect(screen.getByText('/dashboard/card')).toBeInTheDocument();
+  });
 
   it('keeps a loading state until the operational summary is available', async () => {
     let resolveRequest: (value: unknown) => void = () => undefined;

@@ -225,8 +225,8 @@ export const TodayPage = () => {
       {journeyDirection && !journeyActions.length ? (
         <section className="rounded-3xl border border-orange-200 bg-orange-50 p-5 shadow-sm sm:p-6">
           <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Вы выбрали до регистрации</div><h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{journeyDirection.resultTitle}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">Продолжите с готового первого действия. После него LocalOS зафиксирует статус или результат и предложит следующий конкретный шаг.</p></div>
-            <Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2">Завершить действие<ArrowRight className="h-4 w-4" /></Button>
+            <div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Первое действие</div><h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{journeyDirection.today.title}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{journeyDirection.today.description}</p></div>
+            <Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2 transition-transform active:scale-[0.96]">{journeyDirection.today.cta}<ArrowRight className="h-4 w-4" /></Button>
           </div>
         </section>
       ) : null}

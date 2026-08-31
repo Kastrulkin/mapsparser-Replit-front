@@ -14,6 +14,7 @@ export type LeadJourneyDirection = {
   detailSections?: Array<{ title: string; items: string[] }>;
   continueTitle?: string;
   continueText?: string;
+  today: { title: string; description: string; cta: string };
   businessRole: string;
   localosRole: string;
   prepareLabel: string;
@@ -198,6 +199,11 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     ],
     continueTitle: 'Начать подбор',
     continueText: 'Укажите бизнес и город — откроется список местных авторов. Ничего не отправляется без подтверждения.',
+    today: {
+      title: 'Найдите местных авторов',
+      description: 'Укажите город и аудиторию. LocalOS покажет подходящих авторов и доступные форматы сотрудничества.',
+      cta: 'Открыть подбор',
+    },
     businessRole: 'Вы утверждаете автора, условия, текст обращения и любую внешнюю отправку.',
     localosRole: 'LocalOS собирает открытые данные, объясняет подбор и хранит ход договорённостей.',
     prepareLabel: 'Показать персональное превью',
@@ -225,6 +231,11 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     ],
     businessRole: 'Вы выбираете партнёра, условия теста и подтверждаете обращение.',
     localosRole: 'LocalOS помогает сравнить кандидатов и собрать предложение без массовой рассылки.',
+    today: {
+      title: 'Найдите партнёров рядом',
+      description: 'Выберите услугу и тип соседнего бизнеса. LocalOS покажет компании с похожей аудиторией.',
+      cta: 'Открыть подбор',
+    },
     prepareLabel: 'Подготовить предложение партнёру',
     resultTitle: 'Предложение партнёру подготовлено',
     resultPreview: [
@@ -250,6 +261,11 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     ],
     businessRole: 'Вы проверяете данные и отдельно подтверждаете каждое изменение.',
     localosRole: 'LocalOS проводит аудит, расставляет приоритеты и сохраняет историю проверки.',
+    today: {
+      title: 'Проверьте карточку на картах',
+      description: 'Добавьте ссылку на карточку. LocalOS проверит услуги, фото, публикации и отзывы и покажет, что исправить первым.',
+      cta: 'Проверить карточку',
+    },
     prepareLabel: 'Показать первое исправление',
     resultTitle: 'Первое исправление определено',
     resultPreview: [
@@ -275,6 +291,11 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     ],
     businessRole: 'Вы отвечаете за факты, финальную редактуру и решение о публикации.',
     localosRole: 'LocalOS предлагает тему, собирает черновик и помогает держать календарь.',
+    today: {
+      title: 'Выберите тему первой публикации',
+      description: 'Укажите площадку и задачу публикации. LocalOS предложит тему на основе услуг, сезона и отзывов.',
+      cta: 'Открыть контент',
+    },
     prepareLabel: 'Подготовить черновик',
     resultTitle: 'Структура первого материала готова',
     resultPreview: [
@@ -300,6 +321,11 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     ],
     businessRole: 'Вы задаёте правила и подтверждаете публикации, отправки и другие внешние действия.',
     localosRole: 'LocalOS выполняет согласованную внутреннюю работу и показывает результат и статус.',
+    today: {
+      title: 'Выберите повторяющуюся задачу',
+      description: 'Откройте список ИИ-сотрудников и выберите работу, которую LocalOS будет выполнять регулярно.',
+      cta: 'Открыть ИИ-сотрудников',
+    },
     prepareLabel: 'Показать сценарий автоматизации',
     resultTitle: 'Сценарий автоматизации подготовлен',
     resultPreview: [
