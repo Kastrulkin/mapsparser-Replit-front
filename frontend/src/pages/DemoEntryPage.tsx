@@ -97,7 +97,7 @@ export default function DemoEntryPage() {
         {error ? (
           <div className="mt-6 rounded-lg border border-rose-200 bg-white p-4 text-left">
             <p className="text-sm text-rose-700">{error}</p>
-            <Button type="button" className="mt-4 w-full gap-2" onClick={() => setAttempt((value) => value + 1)}>
+            <Button type="button" className="btn-iridescent mt-4 w-full gap-2" onClick={() => setAttempt((value) => value + 1)}>
               <RefreshCw className="h-4 w-4" />
               {copy.entry.retry}
             </Button>

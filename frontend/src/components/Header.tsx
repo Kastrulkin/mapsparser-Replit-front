@@ -180,7 +180,7 @@ const Header = () => {
                 <span>{t.header.login}</span>
               </Link>
             </Button>
-            <Button asChild className="min-h-10 rounded-xl px-4 shadow-[0_8px_22px_rgba(249,115,22,0.18)] transition-[box-shadow,scale] active:scale-[0.96]">
+            <Button asChild className="btn-iridescent min-h-10 rounded-xl px-4">
               <a href="/demo" rel="noopener noreferrer" target="_blank">{t.header.tryFree}</a>
             </Button>
           </div>

@@ -40,6 +40,7 @@ describe('Header agents navigation', () => {
       expect(link).toHaveAttribute('href', '/demo');
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(link).toHaveClass('btn-iridescent');
     }
   });
 

@@ -553,7 +553,7 @@ const Index = () => {
               </h1>
               <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">{copy.intro}</p>
               <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <Button asChild className="h-auto min-h-12 whitespace-normal rounded-xl bg-amber-400 px-6 py-3 text-base text-slate-950 shadow-[0_12px_30px_rgba(180,130,20,0.22)] transition-[background-color,box-shadow,scale] hover:bg-amber-300 active:scale-[0.96]" size="lg">
+                <Button asChild className="btn-iridescent h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base" size="lg">
                   <Link to="/growth">{copy.freeAudit}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
                 </Button>
                 <Link className="group inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-5 text-base font-semibold text-white transition-[background-color,scale] hover:bg-slate-800 active:scale-[0.96]" to={{ pathname: "/", hash: "#agents" }}>
@@ -667,7 +667,7 @@ const Index = () => {
                     <span className="mb-2 block text-sm font-semibold text-slate-700">{copy.mapsLabel}</span>
                     <input className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-slate-950 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100" name="yandexUrl" placeholder={copy.mapsPlaceholder} required type="url" />
                   </label>
-                  <Button className="min-h-12 w-full rounded-xl text-base transition-[box-shadow,scale] active:scale-[0.96]" disabled={isSubmitting} type="submit">
+                  <Button className="btn-iridescent min-h-12 w-full rounded-xl text-base" disabled={isSubmitting} type="submit">
                     {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowRight className="h-5 w-5" aria-hidden="true" />}
                     <span>{isSubmitting ? copy.submitting : copy.submit}</span>
                   </Button>
@@ -903,7 +903,7 @@ const Index = () => {
               <h2 className="text-balance text-3xl font-bold tracking-[-0.035em] sm:text-4xl">{copy.auditTitle}</h2>
               <p className="mt-4 text-pretty text-lg leading-8 text-slate-600">{copy.auditText}</p>
             </div>
-            <Button className="min-h-12 shrink-0 rounded-xl px-6 shadow-[0_12px_30px_rgba(249,115,22,0.20)] transition-[box-shadow,scale] active:scale-[0.96]" onClick={scrollToAudit} size="lg">
+            <Button className="btn-iridescent min-h-12 shrink-0 rounded-xl px-6" onClick={scrollToAudit} size="lg">
               {copy.submit}<ArrowRight className="h-5 w-5" aria-hidden="true" />
             </Button>
           </div>
@@ -915,8 +915,8 @@ const Index = () => {
             <h2 className="text-balance text-3xl font-bold tracking-[-0.04em] sm:text-4xl lg:text-6xl">{copy.finalTitle}</h2>
             <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">{copy.finalText}</p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild className="min-h-12 rounded-xl bg-orange-500 px-7 text-base text-white shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[background-color,box-shadow,scale] hover:bg-orange-600 active:scale-[0.96]" size="lg">
-                <Link to="/growth">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
+              <Button asChild className="btn-iridescent min-h-12 rounded-xl px-7 text-base" size="lg">
+                <a href="/demo" rel="noopener noreferrer" target="_blank">{copy.tryFree}<ArrowRight className="h-5 w-5" aria-hidden="true" /></a>
               </Button>
               <Button asChild className="min-h-12 rounded-xl border-white/15 bg-white/[0.06] px-7 text-base text-white transition-[background-color,scale] hover:bg-white/[0.12] hover:text-white active:scale-[0.96]" size="lg" variant="outline">
                 <Link to="/contact">{copy.talkExpert}</Link>

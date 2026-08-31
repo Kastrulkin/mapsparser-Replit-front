@@ -23,7 +23,11 @@ describe('Index lead journey entry', () => {
     );
 
     const demoLink = screen.getByRole('link', { name: 'Посмотреть демо' });
-    expect(demoLink).toHaveAttribute('href', '/growth');
-    expect(screen.getByRole('link', { name: 'Посмотреть 3 возможности' })).toHaveAttribute('href', '/growth');
+    expect(demoLink).toHaveAttribute('href', '/demo');
+    expect(demoLink).toHaveAttribute('target', '_blank');
+    expect(demoLink).toHaveClass('btn-iridescent');
+    const opportunitiesLink = screen.getByRole('link', { name: 'Посмотреть 3 возможности' });
+    expect(opportunitiesLink).toHaveAttribute('href', '/growth');
+    expect(opportunitiesLink).toHaveClass('btn-iridescent');
   }, 15_000);
 });
