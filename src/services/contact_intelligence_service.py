@@ -125,9 +125,10 @@ class PersonalizationGenerationError(RuntimeError):
 
     retryable = True
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, *, retryable: bool = True):
         super().__init__(message)
         self.code = code
+        self.retryable = retryable
 
 
 class MessageQualityError(RuntimeError):
@@ -2532,6 +2533,7 @@ def prepare_first_message(
             raise PersonalizationGenerationError(
                 str(generation.get("error_code") or "ai_generation_failed"),
                 str(generation.get("error") or "AI не вернул проверяемый персонализированный текст"),
+                retryable=bool(generation.get("retryable", True)),
             )
         touches = generation.get("touches") or []
         reviews = generation.get("semantic_reviews") or []

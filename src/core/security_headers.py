@@ -1,5 +1,7 @@
 """Central browser security headers for LocalOS responses."""
 
+import os
+
 
 CSP_REPORT_ONLY = (
     "default-src 'self'; "
@@ -18,6 +20,7 @@ CSP_REPORT_ONLY = (
 PERMISSIONS_POLICY = (
     "camera=(), microphone=(), geolocation=(self), payment=(self), usb=()"
 )
+HSTS_POLICY = "max-age=31536000; includeSubDomains"
 
 
 def register_security_headers(app):
@@ -30,6 +33,8 @@ def register_security_headers(app):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = PERMISSIONS_POLICY
         response.headers["Content-Security-Policy-Report-Only"] = CSP_REPORT_ONLY
+        if str(os.getenv("APP_ENV", "") or "").strip().lower() == "production":
+            response.headers["Strict-Transport-Security"] = HSTS_POLICY
         return response
 
     return app

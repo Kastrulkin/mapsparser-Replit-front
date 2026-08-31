@@ -112,7 +112,10 @@ def public_pinned_post(value: str, body: bytes, headers: dict[str, str], timeout
             server_hostname=hostname,
         )
     else:
-        pool = urllib3.HTTPConnectionPool(
+        # Plain HTTP remains supported for public callback endpoints. The
+        # destination is DNS-resolved, rejected unless globally routable and
+        # pinned to that validated IP before this connection is created.
+        pool = urllib3.HTTPConnectionPool(  # nosemgrep: python.lang.security.audit.network.http-not-https-connection.http-not-https-connection
             pinned_ip,
             port=port,
             timeout=urllib3.Timeout(total=timeout),

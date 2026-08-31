@@ -1,7 +1,7 @@
 from flask import Flask
 import pytest
 
-from src.api import social_posts_api
+from api import social_posts_api
 
 
 @pytest.fixture(autouse=True)

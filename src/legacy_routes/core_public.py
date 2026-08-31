@@ -1,6 +1,7 @@
 from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
+from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
 
 globals().update(_shared.runtime_namespace)
 
@@ -276,12 +277,6 @@ def _schema_for_route(route_path: str, route_seo: Dict[str, Any]) -> Any:
         return _route_article_schema(route_path, route_seo)
     return None
 
-def _replace_or_insert_tag(html_text: str, pattern: str, replacement: str) -> str:
-    updated, count = re.subn(pattern, replacement, html_text, count=1, flags=re.IGNORECASE | re.DOTALL)
-    if count:
-        return updated
-    return html_text.replace("</head>", f"  {replacement}\n</head>", 1)
-
 def _set_named_meta(html_text: str, attribute: str, key: str, content: str) -> str:
     escaped_content = _escape_head_value(content)
     escaped_key = re.escape(key)
@@ -300,7 +295,7 @@ def _set_jsonld(html_text: str, schema: Any) -> str:
     script = f'<script id="localos-jsonld" type="application/ld+json">{jsonld}</script>'
     updated, count = re.subn(
         r'<script\s+id="localos-jsonld"\s+type="application/ld\+json">.*?</script>',
-        script,
+        lambda _match: script,
         html_text,
         count=1,
         flags=re.IGNORECASE | re.DOTALL,
@@ -327,7 +322,7 @@ def _render_spa_index(path: str = ""):
 
     index_html = re.sub(
         r"<title>.*?</title>",
-        f"<title>{_escape_head_value(title)}</title>",
+        lambda _match: f"<title>{_escape_head_value(title)}</title>",
         index_html,
         count=1,
         flags=re.IGNORECASE | re.DOTALL,

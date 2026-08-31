@@ -1,6 +1,6 @@
 from flask import Flask
 
-from src.api.admin_prospecting import (
+from api.admin_prospecting import (
     SALES_ROOM_DATA_AUDITED,
     SALES_ROOM_DATA_TEMPLATE,
     SALES_ROOM_MODE_CLIENT,

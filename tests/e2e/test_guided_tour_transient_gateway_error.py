@@ -1,9 +1,45 @@
+import os
 import re
+import signal
+import subprocess
+import time
+from pathlib import Path
+from urllib.request import urlopen
 
 from playwright.sync_api import expect, sync_playwright
+import pytest
 
 
 APP_URL = "http://127.0.0.1:4173/dashboard/operator"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _wait_for_app() -> None:
+    for _ in range(80):
+        try:
+            with urlopen(APP_URL, timeout=0.25) as response:
+                if response.status == 200:
+                    return
+        except Exception:
+            time.sleep(0.1)
+    raise AssertionError("Vite preview did not start")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def vite_app():
+    server = subprocess.Popen(
+        ["npm", "--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1", "--port", "4173"],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        _wait_for_app()
+        yield
+    finally:
+        os.killpg(server.pid, signal.SIGTERM)
+        server.wait(timeout=10)
 
 
 def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502():
@@ -103,16 +139,16 @@ def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_5
         expect(start_button).to_be_visible()
         start_button.click()
 
-        step_indicator = page.get_by_text("Шаг 2 из 38", exact=True)
+        step_indicator = page.get_by_text("Шаг 2 из 44", exact=True)
         expect(step_indicator).to_be_visible()
         page.get_by_role("button", name="Дальше").click()
 
         page.wait_for_timeout(100)
-        rendered_step = page.get_by_text(re.compile(r"^Шаг \d+ из 38$"))
+        rendered_step = page.get_by_text(re.compile(r"^Шаг \d+ из 44$"))
         assert not page_errors, f"Unexpected unhandled errors: {page_errors}"
-        expect(rendered_step).to_have_text("Шаг 3 из 38")
+        expect(rendered_step).to_have_text("Шаг 3 из 44")
         expect(page.get_by_text("Не удалось сохранить прогресс. Попробуйте ещё раз.", exact=True)).to_have_count(0)
-        local_progress = page.evaluate("Object.values(sessionStorage).find(value => value.includes('operator-overview'))")
+        local_progress = page.evaluate("Object.values(sessionStorage).find(value => value.includes('today-overview'))")
         assert local_progress
 
         context.close()

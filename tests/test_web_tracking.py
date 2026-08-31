@@ -350,10 +350,12 @@ def test_external_rate_limit_uses_safe_ingestion_telemetry_path(monkeypatch):
 def test_unknown_or_disabled_tracker_has_same_public_response(monkeypatch):
     _Database.cursor = _Cursor([None])
     monkeypatch.setattr(web_tracking_api, "DatabaseManager", _Database)
+    event = _event()
+    event["timestamp"] = datetime.now(timezone.utc).isoformat()
 
     response = _app().test_client().post(
         "/api/tracking/events",
-        json={"tracker_id": "pub_public-not-secret", "events": [_event()]},
+        json={"tracker_id": "pub_public-not-secret", "events": [event]},
     )
 
     assert response.status_code == 404
@@ -364,10 +366,11 @@ def test_public_ingestion_accepts_beacon_text_payload(monkeypatch):
     _Database.cursor = _Cursor([{"id": "tracker-1", "business_id": "business-1", "public_tracker_id": "pub_public-not-secret", "allowed_domains": ["example.com"]}])
     monkeypatch.setattr(web_tracking_api, "DatabaseManager", _Database)
     monkeypatch.setattr(web_tracking_api, "ingest_events", lambda _cursor, _tracker, events: {"accepted": len(events), "duplicates": 0})
+    current_timestamp = datetime.now(timezone.utc).isoformat()
     payload = (
         '{"tracker_id":"pub_public-not-secret","events":['
         '{"visitor_id":"v_0123456789abcdef01234567","session_id":"s_0123456789abcdef01234567",'
-        '"event":"page_view","timestamp":"2026-08-16T09:00:00+00:00",'
+        f'"event":"page_view","timestamp":"{current_timestamp}",'
         '"page":{"hostname":"example.com","path":"/"}}]}'
     )
     response = _app().test_client().post(

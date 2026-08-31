@@ -1,9 +1,9 @@
 from datetime import date, datetime, timezone
 import uuid
 
-from src.api import admin_prospecting
-from src.api.prospecting import audit_generation
-from src.api.admin_prospecting import (
+from api import admin_prospecting
+from api.prospecting import audit_generation
+from api.admin_prospecting import (
     _build_admin_lead_offer_payload,
     _build_deterministic_dense_audit_enrichment,
     _build_compact_outreach_payload,

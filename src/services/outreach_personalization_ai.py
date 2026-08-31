@@ -220,7 +220,12 @@ def generate_personalized_sequence(
             "error": None,
         }
     except Exception as exc:
-        return _failed("ai_generation_invalid", str(exc))
+        provider_code = str(getattr(exc, "code", "") or "").strip()
+        return _failed(
+            provider_code or "ai_generation_invalid",
+            str(exc),
+            retryable=bool(getattr(exc, "retryable", True)),
+        )
 
 
 def _request_record(
@@ -942,7 +947,7 @@ def _default_generator(prompt: str, *, business_id: str = "", user_id: str = "")
     )
 
 
-def _failed(code: str, message: str) -> dict[str, Any]:
+def _failed(code: str, message: str, *, retryable: bool = True) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "failed",
@@ -953,6 +958,7 @@ def _failed(code: str, message: str) -> dict[str, Any]:
         "semantic_reviews": [],
         "error_code": code,
         "error": re.sub(r"\s+", " ", str(message or "")).strip()[:500],
+        "retryable": retryable,
     }
 
 

@@ -4,6 +4,7 @@ from services.outreach_reply_tracking_service import (
     _next_action_at,
     business_tracking_enabled,
     normalize_external_peer,
+    record_bound_inbound_event,
 )
 from services.outreach_yougile_sync_service import (
     _deadline,
@@ -38,6 +39,53 @@ def test_next_action_defaults_to_next_calendar_day_and_honours_agreed_date():
     assert _next_action_at("Давайте встретимся 28.08", occurred_at) == datetime(
         2026, 8, 28, 10, 0, tzinfo=timezone.utc,
     )
+
+
+def test_bound_inbound_event_accepts_iso_timestamp_from_telegram_subprocess(monkeypatch):
+    class Cursor:
+        rowcount = 1
+
+        def execute(self, _query, _params=None):
+            return None
+
+        def fetchone(self):
+            return {"id": "event-1"}
+
+    monkeypatch.setattr(
+        "services.outreach_reply_tracking_service.update_binding_cursor",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "services.outreach_reply_tracking_service.upsert_relationship_from_reply",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "services.outreach_reply_tracking_service._room_for_workstream",
+        lambda *_args, **_kwargs: None,
+    )
+
+    status = record_bound_inbound_event(
+        Cursor(),
+        binding={
+            "id": "binding-1",
+            "lead_id": "lead-1",
+            "workstream_id": "workstream-1",
+            "business_id": "business-1",
+        },
+        sender_account_id="sender-1",
+        channel="telegram",
+        provider_event_id="telegram:1:2",
+        raw_reply="Давайте завтра",
+        classification={
+            "classification": "question",
+            "is_human": True,
+            "stops_campaign": True,
+            "confidence": 1.0,
+        },
+        occurred_at="2026-08-28T10:15:00+00:00",
+    )
+
+    assert status == "recorded"
 
 
 def test_yougile_deadline_is_calendar_day_payload():

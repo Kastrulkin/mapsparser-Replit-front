@@ -184,6 +184,18 @@ def _next_action_at(raw_reply: str, occurred_at: datetime) -> datetime:
     return datetime.combine(target, time(hour=10), tzinfo=occurred_at.tzinfo or timezone.utc)
 
 
+def _normalize_event_time(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    raw = str(value or "").strip()
+    if raw:
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
+
+
 def _room_for_workstream(cursor: Any, workstream_id: str) -> dict[str, Any] | None:
     cursor.execute(
         "SELECT id, slug FROM sales_rooms WHERE workstream_id = %s ORDER BY created_at LIMIT 1",
@@ -289,14 +301,14 @@ def record_bound_inbound_event(
     provider_event_id: str,
     raw_reply: str,
     classification: dict[str, Any],
-    occurred_at: datetime | None = None,
+    occurred_at: datetime | str | None = None,
     raw_payload: dict[str, Any] | None = None,
 ) -> str:
     """Atomically persist a known-lead inbound event and all LocalOS projections."""
     body = str(raw_reply or "").strip()
     if not body or not provider_event_id:
         return "unmatched"
-    event_time = occurred_at or datetime.now(timezone.utc)
+    event_time = _normalize_event_time(occurred_at)
     event_id = str(uuid.uuid4())
     classification_name = str(classification.get("classification") or "human_unknown")
     is_human = bool(classification.get("is_human"))

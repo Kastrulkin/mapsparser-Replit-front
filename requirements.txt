@@ -12,6 +12,7 @@ requests
 stripe
 beautifulsoup4
 dnspython
+defusedxml
 phonenumbers
 playwright
 openai

@@ -13,6 +13,17 @@ import json
 from datetime import datetime, timedelta
 from gigachat_config import get_gigachat_config
 
+
+class GigaChatProviderError(RuntimeError):
+    """Safe provider failure that preserves retry semantics without response bodies."""
+
+    def __init__(self, *, code: str, status_code: int, retryable: bool):
+        super().__init__(f"GigaChat request rejected (HTTP {status_code})")
+        self.code = code
+        self.status_code = status_code
+        self.retryable = retryable
+
+
 class GigaChatClient:
     def __init__(self):
         """Инициализация с поддержкой ротации ключей"""
@@ -131,7 +142,19 @@ class GigaChatClient:
                     last_error = RuntimeError(f"Auth failed for key {self.current_index + 1}: {response.status_code}")
                     self._rotate_credentials()
                     continue
-                
+                if response.status_code == 402:
+                    raise GigaChatProviderError(
+                        code="gigachat_payment_required",
+                        status_code=402,
+                        retryable=False,
+                    )
+                if 400 <= response.status_code < 500:
+                    raise GigaChatProviderError(
+                        code="gigachat_auth_rejected",
+                        status_code=response.status_code,
+                        retryable=response.status_code in {408, 425, 429},
+                    )
+
                 response.raise_for_status()
                 token_data = response.json()
                 self.access_token = token_data["access_token"]
@@ -140,6 +163,12 @@ class GigaChatClient:
                 print(f"✅ GigaChat токен получен (ключ {self.current_index + 1})")
                 return self.access_token
                 
+            except GigaChatProviderError as e:
+                if not e.retryable:
+                    raise
+                last_error = e
+                time.sleep(0.5 * (2 ** attempt) + random.random() * 0.25)
+                self._rotate_credentials()
             except Exception as e:
                 last_error = e
                 # Экспоненциальная задержка с джиттером
@@ -157,23 +186,64 @@ class GigaChatClient:
             try:
                 response = requests.post(url, json=json_body, headers=headers, timeout=timeout, verify=self.verify_tls)
                 
-                # Если лимиты/авторизация — пробуем ротацию ключа и повтор
-                if response.status_code in (401, 403, 429, 503):
-                    last_error = RuntimeError(f"HTTP {response.status_code}")
+                status_code = int(response.status_code or 0)
+                if 200 <= status_code < 300:
+                    return response.json()
+                if status_code == 402:
+                    raise GigaChatProviderError(
+                        code="gigachat_payment_required",
+                        status_code=status_code,
+                        retryable=False,
+                    )
+                if 400 <= status_code < 500 and status_code not in {408, 425, 429}:
+                    raise GigaChatProviderError(
+                        code="gigachat_request_rejected",
+                        status_code=status_code,
+                        retryable=False,
+                    )
+
+                last_error = GigaChatProviderError(
+                    code="gigachat_temporarily_unavailable",
+                    status_code=status_code,
+                    retryable=True,
+                )
+                # Для лимитов/авторизации пробуем следующий ключ и новый токен.
+                if status_code in (401, 403, 429, 503):
                     # Сменим ключ и обновим токен
                     self._rotate_credentials()
                     headers["Authorization"] = f"Bearer {self.get_access_token()}"
-                else:
-                    response.raise_for_status()
-                    return response.json()
-                    
-            except Exception as e:
+            except GigaChatProviderError as e:
+                if not e.retryable:
+                    raise
                 last_error = e
+            except (requests.Timeout, requests.ConnectionError) as e:
+                last_error = e
+            except requests.RequestException as e:
+                status_code = int(e.response.status_code or 0) if e.response is not None else 0
+                if 400 <= status_code < 500 and status_code not in {408, 425, 429}:
+                    raise GigaChatProviderError(
+                        code="gigachat_payment_required" if status_code == 402 else "gigachat_request_rejected",
+                        status_code=status_code,
+                        retryable=False,
+                    ) from None
+                last_error = e
+            except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+                raise GigaChatProviderError(
+                    code="gigachat_invalid_response",
+                    status_code=502,
+                    retryable=False,
+                ) from None
             
             # Бэк-офф с джиттером
             time.sleep(0.75 * (2 ** attempt) + random.random() * 0.3)
         
-        raise RuntimeError(f"Запрос к GigaChat не удался после повторов: {last_error}")
+        if isinstance(last_error, GigaChatProviderError):
+            raise last_error
+        raise GigaChatProviderError(
+            code="gigachat_temporarily_unavailable",
+            status_code=503,
+            retryable=True,
+        ) from None
     
     def upload_file_simple(self, file_data: bytes, filename: str) -> str:
         """Простая загрузка файла в GigaChat"""

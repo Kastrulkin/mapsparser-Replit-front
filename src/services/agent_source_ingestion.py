@@ -5,7 +5,8 @@ import io
 import sys
 import zipfile
 from typing import Any, Dict, Tuple
-from xml.etree import ElementTree
+
+from defusedxml import ElementTree
 
 
 MAX_AGENT_SOURCE_FILE_BYTES = 10 * 1024 * 1024

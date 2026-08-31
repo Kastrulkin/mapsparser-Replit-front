@@ -2,10 +2,11 @@
 Yandex Business XML Parser
 Парсит XML выгрузку из Яндекс.Бизнес (Автоматизация → Выгрузить данные)
 """
-import xml.etree.ElementTree as ET
 import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+from defusedxml import ElementTree as ET
 
 
 MAX_YANDEX_XML_BYTES = 10 * 1024 * 1024
@@ -72,7 +73,7 @@ def parse_yandex_network_xml(xml_content: str) -> List[Dict[str, Any]]:
     return companies
 
 
-def _parse_company_element(company: ET.Element) -> Optional[Dict[str, Any]]:
+def _parse_company_element(company: Any) -> Optional[Dict[str, Any]]:
     """Парсит один элемент company из XML"""
     
     # Извлекаем название (приоритет русскому языку)

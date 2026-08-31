@@ -85,7 +85,7 @@ def test_public_sales_room_participant_registration_requires_personal_data_conse
     if "src" not in sys.path:
         sys.path.insert(0, "src")
 
-    from src.api.sales_rooms_api import sales_rooms_bp
+    from api.sales_rooms_api import sales_rooms_bp
 
     app = Flask(__name__)
     app.register_blueprint(sales_rooms_bp)

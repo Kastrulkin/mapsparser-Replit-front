@@ -1,4 +1,4 @@
-from src.api.admin_prospecting import (
+from api.admin_prospecting import (
     PARTNER_KIND_BUSINESS,
     PARTNER_KIND_RESIDENTIAL_COMPLEX,
     _build_partner_source_label,

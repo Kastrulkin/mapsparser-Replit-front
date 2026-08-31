@@ -48,3 +48,19 @@ def test_spa_csp_allows_the_configured_yandex_metrika_frame():
         "",
     )
     assert "https://mc.yandex.ru" in frame_sources
+
+
+def test_production_response_enables_hsts(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+
+    response = main.app.test_client().get("/")
+
+    assert response.headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
+
+
+def test_nonproduction_response_does_not_enable_hsts(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "staging")
+
+    response = main.app.test_client().get("/")
+
+    assert "Strict-Transport-Security" not in response.headers

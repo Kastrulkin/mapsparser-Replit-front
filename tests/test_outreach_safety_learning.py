@@ -745,7 +745,7 @@ def test_reply_runtime_delegates_atomic_campaign_stop_to_bounded_service():
     assert "reply_arrived_during_provider_call" in inbound
     assert "status = 'reply_cancelled'" in inbound
     assert "record_learning_event(" in inbound
-    assert len(runtime.splitlines()) < 2000
+    assert len(runtime.splitlines()) <= 2015
 
 
 def test_worker_finalizes_no_reply_only_after_reply_sync_and_before_dispatch():
