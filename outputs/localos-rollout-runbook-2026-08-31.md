@@ -76,6 +76,19 @@ Production rollout: dual-stack → internal cohort → cookie-first → набл
 
 Текущий Dockerfile одновременно включает C2 dependency и non-root runtime. Поэтому production image rebuild разрешён только после F-preflight. Если C2 нужно выпустить раньше, требуется отдельный промежуточный immutable image из C2-коммита до non-root-коммита; собирать произвольный Dockerfile из live drift запрещено. Rollback: вернуть сохранённые image IDs и исходный ownership runtime-каталогов, затем проверить app/worker/Telegram отдельно.
 
+Read-only live preflight от 31 августа:
+
+- production Git HEAD: `c728015c95e47880120c025deed70c6c88657963`;
+- Compose checksum: `59893bdb870263432afde759ed8a1f3ff6206fd4fa9d5948b5c185e6b7069a7b`;
+- app/worker image: `sha256:9ef456892909839202f564eea9ca79ff6de42dac0437c48b634701f77e2f4b4b`;
+- Telegram image: `sha256:0b93edee0489d72ff52abe6fe745481795ed411e18c947cb93e0a3dbcbd8d7c7`;
+- app, worker и Telegram runtime UID: `0`;
+- `src`, `alembic_migrations` и entrypoint смонтированы read-only;
+- `debug_data`: 445 МБ, 1432 файла; 1591 entries принадлежат `root:root`, 4 — `501:staff`; host не имеет `setfacl`;
+- свободно 8.3 ГБ, PostgreSQL healthy, localhost HTTP 200.
+
+F-rollout обязан сначала сохранить NUL-safe snapshot `uid/gid/path` для каждого entry в `debug_data`, затем изменить владельца только этого explicit path на `10001:10001`. Нельзя применять recursive ownership к `/opt/seo-app`, frontend, source, migrations или database volumes. После recreate отдельно проверить запись app и worker в `debug_data`; при rollback вернуть предыдущие image IDs и ownership из snapshot. Эта ownership mutation требует отдельного разрешения непосредственно перед выполнением.
+
 ## Ротация credentials
 
 - Точная карта потребителей и approval gates: `outputs/localos-credential-rotation-readiness-2026-08-31.md`.

@@ -41,6 +41,7 @@
 - Rollout ограничен SHA-256 allowlist из 245 файлов: 2 runtime, 11 backend security, 49 frontend source и 183 точных frontend dist artifacts. `scripts/verify_rollout_manifest.py` проверил весь manifest без расхождений.
 - Локальный dist с точными feature flags побайтово совпал с dist внутри Docker image, прошедшего 102/102 E2E. Staging/tests/evidence и посторонние `.agent`/Riderra/daily файлы исключены из production allowlist.
 - Подготовлен read-only production preflight без вывода environment и без мутаций. Старый readiness-снимок от 30 августа явно помечен как исторический, чтобы он не противоречил текущему go/no-go.
+- Read-only production preflight затем реально выполнен по восстановленному SSH: app, worker и Telegram работают от root; source и migrations уже read-only. `debug_data` занимает 445 МБ и содержит 1432 файла, почти все принадлежат root; UID 10001 не сможет писать туда без отдельной ownership migration. Production state не менялся.
 
 | Проверка | Результат |
 |---|---|
@@ -69,7 +70,7 @@ Read-only consumer audit завершён в `outputs/localos-credential-rotatio
 1. Ротация Wordstat и legacy Supabase credentials требует provider consoles и проверки потребителей.
 2. Browser cookie migration реализована и проверена на staging. Остался совместимый production rollout: dual-stack/internal cohort, cookie-first и отзыв старых browser sessions после наблюдения; Mini App и Agent API сохраняют scoped bearer.
 3. Production существенно расходится с Git из-за hot deploys. Нужен точный manifest и reconciliation, не `git pull`/reset/full rsync.
-4. Production пока работает root-контейнерами; non-root rollout требует проверки ownership реальных bind mounts.
+4. Production пока работает root-контейнерами. Реальные mounts проверены: перед non-root rollout нужен ownership snapshot и контролируемая смена владельца только `debug_data`; `setfacl` на host отсутствует.
 5. После отдельного разрешения нужно проверить security headers на live edge `https://localos.pro`.
 6. CSP enforcement и SRI/COOP/COEP остаются отдельным hardening-пакетом.
 
