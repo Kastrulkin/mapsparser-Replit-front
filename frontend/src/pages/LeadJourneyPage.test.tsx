@@ -39,15 +39,18 @@ describe('LeadJourneyPage', () => {
     expect(screen.queryByText('Задаём рамки')).not.toBeInTheDocument();
   });
 
-  it('shows exactly three directions, explains the selected mechanic, and carries the choice into registration', async () => {
+  it('shows five directions, explains the selected mechanic, and carries the choice into registration', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
 
     expect(screen.getByRole('button', { name: /Инфлюенсеры рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Бизнесы рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Карты/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Контент/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /ИИ-сотрудники/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Контент/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ИИ-сотрудники/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Клиенты' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Контент и автоматизация' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Посмотреть возможность/ })).toHaveLength(5);
 
     await user.click(screen.getByRole('button', { name: /Карты/ }));
     expect(await screen.findByRole('heading', { name: 'Первое исправление с понятным эффектом' })).toBeInTheDocument();

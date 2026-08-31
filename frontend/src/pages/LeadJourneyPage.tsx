@@ -24,7 +24,8 @@ import {
 
 const directionIcon = (key: LeadJourneyKey) => key === 'influencers' ? Megaphone : key === 'partnerships' ? Handshake : key === 'content' ? FilePenLine : key === 'automation' ? Bot : MapPinned;
 const flowForKey = (key: LeadJourneyKey) => key === 'influencers' ? 'influencer' : key === 'partnerships' ? 'partnership' : key;
-const publicLeadJourneyDirections = leadJourneyDirections.filter((direction) => direction.key === 'influencers' || direction.key === 'partnerships' || direction.key === 'maps');
+const customerDirections = leadJourneyDirections.filter((direction) => direction.key === 'influencers' || direction.key === 'partnerships' || direction.key === 'maps');
+const workDirections = leadJourneyDirections.filter((direction) => direction.key === 'content' || direction.key === 'automation');
 
 const DirectionCard = ({ direction, opportunity, onOpen, secondary = false }: { direction: LeadJourneyDirection; opportunity?: JourneyOpportunity; onOpen: () => void; secondary?: boolean }) => {
   const Icon = directionIcon(direction.key);
@@ -124,7 +125,7 @@ export default function LeadJourneyPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[#f7f7f5] px-4 py-10 text-slate-950 sm:px-6 sm:py-16 lg:px-8">
       <PublicBrandBackdrop fullHeight />
-      <SeoMeta title="Три способа привлечь новых клиентов — LocalOS" description="Три понятных направления: локальные авторы, соседние бизнесы и карты." path={token ? `/start/${token}` : '/growth'} />
+      <SeoMeta title="Пять направлений LocalOS для бизнеса" description="Выберите одно из пяти направлений: авторы, бизнесы рядом, карты, контент или автоматизация." path={token ? `/start/${token}` : '/growth'} />
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           {selected && !journeySelectedKey ? <button type="button" onClick={goBack} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft className="h-4 w-4" />Все направления</button> : <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950"><ArrowLeft className="h-4 w-4" />На главную</Link>}
@@ -134,8 +135,16 @@ export default function LeadJourneyPage() {
         </div>
 
         {!selected ? <>
-          <section className="mx-auto max-w-4xl pb-10 pt-12 text-center sm:pb-14 sm:pt-16"><span className="text-sm font-bold uppercase tracking-[0.16em] text-amber-700">Три возможности</span><h1 className="mt-4 text-balance text-4xl font-bold tracking-[-0.045em] sm:text-6xl">Выберите, откуда привести новых клиентов</h1><p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-8 text-slate-600">Откройте направление, чтобы увидеть механику, свою роль и следующий шаг. Никаких действий от вашего имени на этой странице не происходит.</p></section>
-          <section aria-label="Направления роста" className="grid gap-4 lg:grid-cols-3">{publicLeadJourneyDirections.map((direction) => <DirectionCard key={direction.key} direction={direction} opportunity={opportunityForKey(direction.key)} onOpen={() => openDirection(direction.key)} />)}</section>
+          <section className="mx-auto max-w-4xl pb-10 pt-12 text-center sm:pb-14 sm:pt-16"><span className="text-sm font-bold uppercase tracking-[0.16em] text-amber-700">5 направлений</span><h1 className="mt-4 text-balance text-4xl font-bold tracking-[-0.045em] sm:text-6xl">Выберите направление</h1><p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-8 text-slate-600">Откройте направление, чтобы увидеть, как оно работает и с чего начать.</p></section>
+          <section aria-labelledby="customer-directions-title">
+            <h2 id="customer-directions-title" className="text-balance text-2xl font-bold tracking-[-0.025em]">Клиенты</h2>
+            <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Авторы, бизнесы рядом и карты.</p>
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">{customerDirections.map((direction) => <DirectionCard key={direction.key} direction={direction} opportunity={opportunityForKey(direction.key)} onOpen={() => openDirection(direction.key)} />)}</div>
+          </section>
+          <section aria-labelledby="work-directions-title" className="mt-12">
+            <h2 id="work-directions-title" className="text-balance text-2xl font-bold tracking-[-0.025em]">Контент и автоматизация</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">{workDirections.map((direction) => <DirectionCard key={direction.key} direction={direction} opportunity={opportunityForKey(direction.key)} onOpen={() => openDirection(direction.key)} />)}</div>
+          </section>
         </> : <section className="mx-auto max-w-4xl pt-10 sm:pt-14">
           <div className="overflow-hidden rounded-[32px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_24px_70px_rgba(15,23,42,0.10)]">
             <div className="bg-slate-950 p-6 text-white sm:p-10"><span className="text-sm font-bold uppercase tracking-[0.14em] text-amber-400">{selected.eyebrow}</span><h1 className="mt-3 text-balance text-3xl font-bold tracking-[-0.035em] sm:text-5xl">{prepared ? selected.resultTitle : selectedOpportunity?.title || selected.detailTitle}</h1><p className="mt-5 max-w-2xl text-pretty text-base leading-7 text-slate-300">{prepared ? 'Это превью состава результата, а не уже выполненная работа.' : selectedOpportunity?.reason || selected.detail}</p></div>

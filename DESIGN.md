@@ -39,6 +39,19 @@ grid, change its spacing, or introduce a separate grey background for an
 individual `/growth` route. Content cards remain solid enough to preserve text
 contrast over the grid.
 
+## Public Growth Choice
+
+The homepage pain-point section explains why owners use LocalOS. It is not a
+second product taxonomy. The primary homepage CTA leads to one `/growth`
+choice with five directions:
+
+- clients: local creators, nearby businesses, and maps;
+- ongoing work: content and automation.
+
+Keep all five directions available on the first `/growth` screen. Do not label
+this route as three opportunities or reduce the whole product to customer
+acquisition.
+
 ## Operating Principles
 
 ### Agents Are Employees, Not Workflows
