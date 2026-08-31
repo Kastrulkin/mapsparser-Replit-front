@@ -24,23 +24,24 @@ describe('LeadJourneyPage', () => {
     expect(leadJourneyKeyForFlow('automation')).toBe('automation');
   });
 
-  it('shows five directions, reveals a result, and carries the choice into registration', async () => {
+  it('shows exactly three directions, explains the selected mechanic, and carries the choice into registration', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
 
     expect(screen.getByRole('button', { name: /Локальные авторы/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Бизнесы рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Карты/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Контент/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /ИИ-сотрудники/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Контент/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ИИ-сотрудники/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Карты/ }));
     expect(await screen.findByRole('heading', { name: 'Первое исправление с понятным эффектом' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Показать первое исправление' }));
-    expect(await screen.findByRole('heading', { name: 'Первое исправление определено' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Как это работает' })).toBeInTheDocument();
+    expect(screen.getByText('Читаем карточку как клиент')).toBeInTheDocument();
+    expect(screen.queryByText('Что произойдёт после нажатия')).not.toBeInTheDocument();
 
-    const registrationLink = screen.getByRole('link', { name: /Завершить действие/ });
+    const registrationLink = screen.getByRole('link', { name: /Продолжить в LocalOS/ });
     expect(registrationLink).toHaveAttribute('href', '/login?tab=register&source=lead_journey&journey=maps');
     await user.click(registrationLink);
     expect(window.localStorage.getItem(LEAD_JOURNEY_STORAGE_KEY)).toBe('maps');
@@ -102,10 +103,10 @@ describe('LeadJourneyPage', () => {
     render(<MemoryRouter initialEntries={['/start/public-token']}><Routes><Route path="/start/:token" element={<LeadJourneyPage />} /></Routes></MemoryRouter>);
 
     await user.click(await screen.findByRole('button', { name: /Автор Анна/ }));
-    await user.click(screen.getByRole('button', { name: 'Подготовить сообщение автору' }));
+    await user.click(screen.getByRole('button', { name: 'Показать персональное превью' }));
 
     expect(await screen.findByText('Бартер')).toBeInTheDocument();
-    const registrationLink = screen.getByRole('link', { name: /Завершить действие/ });
+    const registrationLink = screen.getByRole('link', { name: /Продолжить в LocalOS/ });
     expect(registrationLink.getAttribute('href')).toContain('journey_token=public-token');
     expect(registrationLink.getAttribute('href')).toContain('business_name=%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F');
     expect(screen.queryByText(/\+7999/)).not.toBeInTheDocument();

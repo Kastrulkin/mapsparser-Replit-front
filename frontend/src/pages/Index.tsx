@@ -553,10 +553,10 @@ const Index = () => {
               </h1>
               <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">{copy.intro}</p>
               <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <Button asChild className="h-auto min-h-12 whitespace-normal rounded-xl px-6 py-3 text-base shadow-[0_12px_30px_rgba(249,115,22,0.22)] transition-[box-shadow,scale] active:scale-[0.96]" size="lg">
+                <Button asChild className="h-auto min-h-12 whitespace-normal rounded-xl bg-amber-400 px-6 py-3 text-base text-slate-950 shadow-[0_12px_30px_rgba(180,130,20,0.22)] transition-[background-color,box-shadow,scale] hover:bg-amber-300 active:scale-[0.96]" size="lg">
                   <Link to="/growth">{copy.freeAudit}<ArrowRight className="h-5 w-5" aria-hidden="true" /></Link>
                 </Button>
-                <Link className="group inline-flex min-h-11 items-center gap-2 px-1 text-base font-semibold text-slate-700 transition-colors hover:text-orange-700" to={{ pathname: "/", hash: "#agents" }}>
+                <Link className="group inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-5 text-base font-semibold text-white transition-[background-color,scale] hover:bg-slate-800 active:scale-[0.96]" to={{ pathname: "/", hash: "#agents" }}>
                   {copy.seeTasks}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
