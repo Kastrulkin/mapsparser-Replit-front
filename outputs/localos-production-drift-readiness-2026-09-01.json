@@ -54,6 +54,20 @@
       "supabase": "absent"
     }
   },
+  "non_root_preflight": {
+    "ownership_snapshot_location": "local_private_tmp",
+    "snapshot_sha256": "f9f5710aa6322c8a8bd7f691fb949b6115d4949876da617ae0e13bee01da950c",
+    "entries": 1618,
+    "root_owned": 1614,
+    "host_user_owned": 4,
+    "production_ownership_changed": false
+  },
+  "browser_cookie_auth": {
+    "app_flag": "not_set",
+    "worker_flag": "not_set",
+    "effective_default": false,
+    "production_changed": false
+  },
   "decision": "NO_GO_FOR_BLANKET_DEPLOY",
   "next_boundary": "Deploy only an explicitly approved, backed-up partial package after credential and ownership gates are closed."
 }

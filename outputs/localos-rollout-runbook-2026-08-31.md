@@ -46,6 +46,8 @@ python3 scripts/verify_rollout_manifest.py
 
 Read-only comparison 1 сентября подтверждает production drift: 97 файлов совпадают, 102 отсутствуют и 53 отличаются. Внутри `app` и `worker` совпадают 15/17 backend-security файлов; две последние media/social error-redaction правки ещё не выпущены. Полный отчёт: `outputs/localos-production-drift-readiness-2026-09-01.md`.
 
+Повторный non-root preflight сохранил NUL-safe ownership snapshot только локально: 1618 entries, из них 1614 `root:root`. Production ownership не менялся. Cookie-auth flags в текущих `app`/`worker` не заданы и эффективный backend default остаётся выключенным; cookie rollout нельзя объединять с non-root или credential rotation.
+
 ## Пакеты rollout
 
 ### A. Staging и audit infrastructure

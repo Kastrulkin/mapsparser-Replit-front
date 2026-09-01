@@ -38,6 +38,14 @@ Production Git HEAD: `c728015c95e47880120c025deed70c6c88657963`.
 - `app` и `worker`: Supabase variables отсутствуют.
 - Значения переменных не читались и не выводились.
 
+## Non-root и cookie preflight
+
+- NUL-safe ownership snapshot `debug_data` передан только в локальный private temp и не добавлен в Git.
+- Snapshot SHA-256: `f9f5710aa6322c8a8bd7f691fb949b6115d4949876da617ae0e13bee01da950c`.
+- 1618 entries: 1614 принадлежат `root:root`, 4 — host user; ownership production не менялся.
+- `BROWSER_COOKIE_AUTH_ENABLED` и совместимые cookie/CSRF flags не заданы в production `app`/`worker`; эффективный backend default остаётся `false`.
+- Non-root ownership migration и cookie-auth cohort остаются отдельными rollout packages.
+
 ## Решение
 
 - Полный `git pull`, reset, blanket rsync и смешивание frontend assets запрещены.
