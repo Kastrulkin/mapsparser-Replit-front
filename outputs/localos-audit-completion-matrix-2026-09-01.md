@@ -5,8 +5,8 @@
 - Exact Docker image `localos-staging-app:latest`, отдельные PostgreSQL и Redis, только синтетические fixtures.
 - Runtime: непривилегированный `uid=10001`, исходный код read-only, writable только runtime-каталоги.
 - Внешние provider credentials, отправки, публикации, платежи и фоновые внешние dispatch отключены.
-- `http://127.0.0.1:18000` отвечает 200; smoke проверяет пять flow: maps, influencer, partnership, content и automation.
-- Финальный Playwright run на исправленном image: **102/102**, 11 файлов, desktop 1440×1000, laptop 1024×768, mobile/Mini App 393×852.
+- Текущий exact image собран из commit `9bda6a53`; `http://127.0.0.1:8000` отвечает 200, smoke проверяет пять flow: maps, influencer, partnership, content и automation.
+- Текущая Playwright-проверка: два полных запуска по **101/102** и успешный точечный повтор каждого разного сбоя. Оба сбоя были случайными `page.goto(..., waitUntil='load')` timeout до бизнес-логики. Функциональное покрытие 102/102 получено, но single-run reliability gate остаётся открытым.
 
 ## Десять пользовательских сценариев
 
@@ -49,7 +49,7 @@
 | Git history | 620 redacted matches в 29 commits; исторические Wordstat и Supabase credentials требуют provider-side rotation/revoke |
 | Static analysis | Последний Semgrep ERROR-gate: 0 findings; текущий дополнительный diff затрагивает только системный пакет Docker image и audit evidence |
 | Dynamic baseline | Последний OWASP ZAP baseline: 61 pass, 0 fail, 0 high/critical |
-| Rollout integrity | 247 allowlisted files; manifest SHA-256 `58794de25a9c3a293ab5770197c1fd6ced06ff76116c0537393b28f31fb2da7e`; verifier 247/247 |
+| Rollout integrity | 252 allowlisted files; manifest SHA-256 `234b333d076930b82c24f0f70429e84cbbb96a6ec5e000773d082f76600bdfee`; verifier 252/252 |
 
 ## Approval-инварианты
 
@@ -61,7 +61,7 @@
 
 ## Что завершено, а что нет
 
-Функциональный и security-аудит проверенного staging-пакета завершён: 10/10 сценариев зелёные, открытых P0/P1 и HIGH/CRITICAL в exact image нет.
+Функциональный охват 10/10 сценариев зелёный, открытых P0/P1 и HIGH/CRITICAL в exact image нет. Reliability-gate пока не закрыт: нужен один непрерывный Playwright run 102/102 либо отдельное согласованное исправление ожидания полной загрузки страницы в E2E harness.
 
 Production rollout остаётся отдельной работой и сейчас **NO-GO** до выполнения следующих gates:
 

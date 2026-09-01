@@ -22,6 +22,21 @@
     ]
   },
   "compile_check": "passed",
+  "exact_staging": {
+    "commit": "9bda6a53",
+    "image": "localos-staging-app:latest",
+    "runtime": "uid=10001, source read-only, synthetic fixtures, provider credentials disabled",
+    "health": "postgres and redis healthy; app HTTP 200; five-flow smoke passed",
+    "source_hashes_match_container": true,
+    "playwright": {
+      "first_full_run": "101 passed, 1 page.goto load timeout before business logic",
+      "first_failed_test_retry": "passed",
+      "second_full_run": "101 passed, 1 different page.goto load timeout before business logic",
+      "second_failed_test_retry": "passed",
+      "functional_coverage": "102 of 102 scenarios passed across the full runs and focused retries",
+      "single_run_release_gate": "not yet satisfied"
+    }
+  },
   "behavior": {
     "generic_500": "returns code, safe message, and request_id",
     "client_errors": "unchanged",
