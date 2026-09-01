@@ -2231,38 +2231,40 @@ function ContentWorkspace() {
 
   const renderCalendar = () => (
     <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200">
-        {calendarCopy.weekdays.map((day) => (
-          <div key={day} className="min-w-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            {day}
-          </div>
-        ))}
-        {visibleDays.map((day) => {
-          const key = toIsoDate(day);
-          const dayItems = calendarItemsByDate[key] || [];
-          const isCurrentMonth = day.getMonth() === new Date().getMonth();
-          return (
-            <div
-              key={key}
-              className={cn(
-                'min-w-0 overflow-hidden min-h-[150px] bg-white p-2',
-                !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-600' : '',
-              )}
-            >
-              <div className="mb-2 text-xs font-semibold text-slate-600">
-                {day.getDate()}
-              </div>
-              <div className="space-y-2">
-                {dayItems.slice(0, 3).map(renderCalendarCard)}
-                {dayItems.length > 3 ? (
-                  <div className="rounded-xl bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                    {calendarCopy.more} {dayItems.length - 3}
-                  </div>
-                ) : null}
-              </div>
+      <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-2">
+        <div className="grid min-w-[700px] grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:min-w-0">
+          {calendarCopy.weekdays.map((day) => (
+            <div key={day} className="min-w-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              {day}
             </div>
-          );
-        })}
+          ))}
+          {visibleDays.map((day) => {
+            const key = toIsoDate(day);
+            const dayItems = calendarItemsByDate[key] || [];
+            const isCurrentMonth = day.getMonth() === new Date().getMonth();
+            return (
+              <div
+                key={key}
+                className={cn(
+                  'min-w-0 overflow-hidden min-h-[150px] bg-white p-2',
+                  !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-600' : '',
+                )}
+              >
+                <div className="mb-2 text-xs font-semibold text-slate-600">
+                  {day.getDate()}
+                </div>
+                <div className="space-y-2">
+                  {dayItems.slice(0, 3).map(renderCalendarCard)}
+                  {dayItems.length > 3 ? (
+                    <div className="rounded-xl bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                      {calendarCopy.more} {dayItems.length - 3}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

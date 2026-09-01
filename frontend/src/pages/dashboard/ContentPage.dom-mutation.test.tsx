@@ -17,6 +17,17 @@ vi.mock('@/lib/auth_new', () => ({
   },
 }));
 
+const currentMonthDate = (day: number) => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-${String(day).padStart(2, '0')}`;
+};
+
+const planDate = currentMonthDate(8);
+const earlierDate = currentMonthDate(7);
+const updatedDate = currentMonthDate(10);
+
 const plan = {
   id: 'plan-1',
   period_days: 30,
@@ -24,7 +35,7 @@ const plan = {
     id: 'item-1',
     theme: 'Тестовая тема публикации',
     draft_text: 'Готовый текст публикации.',
-    scheduled_for: '2026-08-08',
+    scheduled_for: planDate,
     metadata_json: { generation_source: 'manual' },
   }],
 };
@@ -303,12 +314,12 @@ describe('Content page DOM ownership', () => {
     const oldPlan = {
       ...plan,
       id: 'plan-old',
-      items: [{ ...plan.items[0], id: 'item-old', theme: 'Старая точка — 7 августа', scheduled_for: '2026-08-07' }],
+      items: [{ ...plan.items[0], id: 'item-old', theme: 'Старая точка — 7 августа', scheduled_for: earlierDate }],
     };
     const newPlan = {
       ...plan,
       id: 'plan-new',
-      items: [{ ...plan.items[0], id: 'item-new', theme: 'Текущая точка — 10 августа', scheduled_for: '2026-08-10' }],
+      items: [{ ...plan.items[0], id: 'item-new', theme: 'Текущая точка — 10 августа', scheduled_for: updatedDate }],
     };
 
     vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
@@ -367,8 +378,8 @@ describe('Content page DOM ownership', () => {
     const networkPlan = {
       ...plan,
       items: [
-        { ...plan.items[0], id: 'item-other', business_id: 'business-other', theme: 'Другая точка — 7 августа', scheduled_for: '2026-08-07' },
-        { ...plan.items[0], id: 'item-1', business_id: 'business-1', theme: 'Выбранная точка — 10 августа', scheduled_for: '2026-08-10' },
+        { ...plan.items[0], id: 'item-other', business_id: 'business-other', theme: 'Другая точка — 7 августа', scheduled_for: earlierDate },
+        { ...plan.items[0], id: 'item-1', business_id: 'business-1', theme: 'Выбранная точка — 10 августа', scheduled_for: updatedDate },
       ],
     };
     const posts = [
@@ -462,7 +473,7 @@ describe('Content page publication settings', () => {
             ...itemPlan,
             items: [{
               ...itemPlan.items[0],
-              scheduled_for: '2026-08-10',
+              scheduled_for: updatedDate,
             }],
           },
         };
@@ -482,7 +493,7 @@ describe('Content page publication settings', () => {
     expect(screen.getByRole('button', { name: 'VK' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: 'Instagram' })).toHaveAttribute('aria-pressed', 'false');
 
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-08-10' } });
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: updatedDate } });
     fireEvent.click(await screen.findByRole('button', { name: 'Обновить версии для каналов' }));
 
     await waitFor(() => {
@@ -490,7 +501,7 @@ describe('Content page publication settings', () => {
         method: 'PUT',
         body: JSON.stringify({
           theme: 'Тестовая тема публикации',
-          scheduled_for: '2026-08-10',
+          scheduled_for: updatedDate,
           draft_text: 'Готовый текст публикации.',
           selected_channels: ['yandex_maps', 'telegram'],
         }),
