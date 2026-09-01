@@ -24,7 +24,7 @@
 | 9 | Web ↔ Mini App | Общий action, stale version, idempotency и offline retry |
 | 10 | Администратор — journey | Пять маршрутов, preview, token, revoke и безопасный public payload |
 
-Финальный запуск на точном текущем дереве после browser-cookie migration: `npx playwright test -c playwright.journey-staging.config.ts` — **102 passed (6.1m)**.
+Повторный финальный запуск 1 сентября 2026 года на точном Docker-образе после исправления мобильного календаря: `npx playwright test -c playwright.journey-staging.config.ts` — **102 passed (5.1m)**.
 
 ## Исправления и security gates
 
@@ -36,9 +36,10 @@
 - HSTS включается только при `APP_ENV=production`; staging по HTTP не объявляет ложную политику.
 - GigaChat HTTP 402 классифицируется как терминальная provider-ошибка без повторов.
 - Исправлены доступные имена, контраст, progress labels и минимальные touch targets.
+- Мобильный календарь контента больше не сжимает семиколоночную сетку: она прокручивается горизонтально и сохраняет touch-target не меньше 40 px; профильный mobile suite прошёл 6/6.
 - Browser cookie migration доведена до staging-ready состояния: прямые чтения стандартных `auth_token`/`token` удалены из production-компонентов, browser transport до первого render очищает legacy browser credentials и не отправляет их как `Authorization`.
 - Scoped bearer сохранён только для Mini App и активной demo session. Исправлен возврат из billing provider: проверка статуса работает с HttpOnly cookie без JavaScript-токена.
-- Rollout ограничен SHA-256 allowlist из 246 файлов: 2 runtime, 12 backend security, 49 frontend source и 183 точных frontend dist artifacts. `scripts/verify_rollout_manifest.py` проверил весь manifest без расхождений.
+- Rollout ограничен SHA-256 allowlist из 247 файлов: 2 runtime, 12 backend security, 49 frontend source и 184 точных frontend dist artifacts. `scripts/verify_rollout_manifest.py` проверил весь manifest без расхождений.
 - Шесть Wordstat API error path (`keywords`, `search`, `metadata`, `update`, `exclude`, `custom`) были двумя согласованными пакетами доказанно уязвимы к раскрытию текста внутренних исключений. Все шесть переведены на общий `internal_error_response`; оба reproducer-перехода доказаны red-to-green, полный Wordstat suite — 13 passed.
 - Локальный dist с точными feature flags побайтово совпал с dist внутри Docker image, прошедшего 102/102 E2E. Staging/tests/evidence и посторонние `.agent`/Riderra/daily файлы исключены из production allowlist.
 - Подготовлен read-only production preflight без вывода environment и без мутаций. Старый readiness-снимок от 30 августа явно помечен как исторический, чтобы он не противоречил текущему go/no-go.
@@ -49,7 +50,7 @@
 | Focused backend security suite | 65 passed |
 | GigaChat/contact-intelligence suite | 88 passed |
 | XML/SSRF/security-header suite | 21 passed |
-| Frontend unit suite (serial) | 393 passed |
+| Frontend unit suite | 403 passed |
 | Browser cookie focused suite | 15 passed |
 | Wordstat Cloud/OAuth/error-redaction suite | 13 passed |
 | Playwright journey/UX/a11y | 102 passed |

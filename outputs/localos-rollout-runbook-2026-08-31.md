@@ -22,16 +22,23 @@ Production содержит существенный drift от Git и след�
 
 Канонический manifest текущего проверенного дерева: `outputs/localos-rollout-manifest-2026-08-31.tsv`.
 
-- SHA-256 самого manifest: `7fd22695783e5ed3cea165e0d8a190748c32c2f1272b97f1ce8b8200bdcec348`.
+- SHA-256 самого manifest: `d172bc02c6b266d58fdf1c28771367d58dc363e654cf6c53b2a4b8847a6e7675`.
 - `runtime_nonroot`: 2 файла.
 - `backend_security`: 12 файлов.
 - `frontend_source`: 49 файлов.
-- `frontend_dist`: 183 файла.
-- Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с dist внутри образа, прошедшего 102/102 E2E. Digest отсортированного списка файлов: `e0d818ecfd7e066ae220d66656af61ce12b1836235f5f438325fed6edcc0c9d0`.
+- `frontend_dist`: 184 файла.
+- Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с dist внутри образа, прошедшего 102/102 E2E 1 сентября 2026 года. Digest отсортированного списка файлов: `6ef99e3e233fe3ae9d7093eedef943f4b2354476bda1eeeb5b61576c94aded72`.
 
 Перед упаковкой и перед отправкой файлов выполнить:
 
 ```bash
+python3 scripts/verify_rollout_manifest.py
+```
+
+После новой проверенной frontend-сборки manifest обновляется детерминированно:
+
+```bash
+python3 scripts/refresh_rollout_manifest.py
 python3 scripts/verify_rollout_manifest.py
 ```
 
