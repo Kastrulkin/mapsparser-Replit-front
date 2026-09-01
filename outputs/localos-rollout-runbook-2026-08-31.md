@@ -3,7 +3,7 @@
 ## Проверенная база
 
 - Канонический тестовый runtime: Docker Compose + отдельная PostgreSQL staging DB.
-- Текущий staging-пакет прошёл 102/102 Playwright, backend security suites, frontend build, dependency scans, Semgrep, Trivy и ZAP baseline.
+- Текущий staging-пакет прошёл 108/108 Playwright одним непрерывным запуском, backend security suites, frontend build, dependency scans, Semgrep, Trivy и ZAP baseline.
 - Внешние credentials и действия в staging отключены. Production не изменялся.
 
 ## Почему нельзя делать полный deploy репозитория
@@ -22,12 +22,12 @@ Production содержит существенный drift от Git и след�
 
 Канонический manifest текущего проверенного дерева: `outputs/localos-rollout-manifest-2026-08-31.tsv`.
 
-- SHA-256 самого manifest: `234b333d076930b82c24f0f70429e84cbbb96a6ec5e000773d082f76600bdfee`.
+- SHA-256 самого manifest: `828916fe94c515dd8fa5e95b4c3e99edbfa6a05e9efd71009b94bcd3cc87c79a`.
 - `runtime_nonroot`: 2 файла.
-- `backend_security`: 12 файлов.
+- `backend_security`: 17 файлов.
 - `frontend_source`: 49 файлов.
 - `frontend_dist`: 184 файла.
-- Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с dist внутри образа, прошедшего E2E 1 сентября 2026 года. Канонический `LC_ALL=C` digest отсортированного списка файлов: `794e427aff387aa2b5d158031c41932579301de44f0a54b89bddfc8a2e1e4daf`.
+- Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с 184/184 файлами внутри образа `557f1a6e`, прошедшего E2E 1 сентября 2026 года. Канонический `LC_ALL=C` digest отсортированного списка файлов: `bb54aeae499579ed97568292cd9772a43d30056f7d63be851122c370d1a33d63`.
 
 Перед упаковкой и перед отправкой файлов выполнить:
 
@@ -43,6 +43,8 @@ python3 scripts/verify_rollout_manifest.py
 ```
 
 Любой отсутствующий файл или SHA mismatch означает `NO-GO`: manifest нужно пересоздать и повторить профильные тесты. Файлы вне allowlist не входят в production rollout. В частности, staging compose, fixtures, E2E, audit outputs, `.agent/`, Riderra-материалы и локальные daily reports не копируются на сервер.
+
+Read-only comparison 1 сентября подтверждает production drift: 97 файлов совпадают, 102 отсутствуют и 53 отличаются. Внутри `app` и `worker` совпадают 15/17 backend-security файлов; две последние media/social error-redaction правки ещё не выпущены. Полный отчёт: `outputs/localos-production-drift-readiness-2026-09-01.md`.
 
 ## Пакеты rollout
 

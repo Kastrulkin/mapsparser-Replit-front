@@ -50,7 +50,7 @@
 | Git history | 620 redacted matches в 29 commits; исторические Wordstat и Supabase credentials требуют provider-side rotation/revoke |
 | Static analysis | Последний Semgrep ERROR-gate: 0 findings; текущий дополнительный diff затрагивает только системный пакет Docker image и audit evidence |
 | Dynamic baseline | Последний OWASP ZAP baseline: 61 pass, 0 fail, 0 high/critical |
-| Rollout integrity | 252 allowlisted files; manifest SHA-256 `a14ebeb00f324cbc956911d99774e5f69425cdecf4ba1f823bd849da99f9a08b`; verifier 252/252 |
+| Rollout integrity | 252 allowlisted files; manifest SHA-256 `828916fe94c515dd8fa5e95b4c3e99edbfa6a05e9efd71009b94bcd3cc87c79a`; verifier 252/252; exact staging dist совпадает 184/184 |
 
 ## Approval-инварианты
 
@@ -68,7 +68,7 @@ Production rollout остаётся отдельной работой и сей�
 
 1. Проверить внешних потребителей legacy Supabase `SEOmaps`, затем отозвать старый `service_role`; новый Supabase key в LocalOS не добавлять.
 2. Контролируемо ротировать Wordstat Cloud credential для app/worker, выполнить один минимальный provider smoke и удалить legacy OAuth fallback.
-3. Сверить production drift с exact manifest; не использовать полный `git pull`, reset или blanket rsync.
+3. Использовать завершённую read-only drift-сверку (`97 match / 102 missing / 53 mismatch`) для отдельных partial packages; не использовать полный `git pull`, reset или blanket rsync.
 4. Перед non-root image rollout сохранить ownership snapshot и отдельно согласовать смену владельца только production `debug_data`.
 5. Выпустить browser cookie migration по dual-stack/internal-cohort схеме и после наблюдения отозвать старые browser sessions.
 6. После отдельного разрешения проверить live edge headers и выполнить production smoke без автоматических отправок, публикаций или платежей.

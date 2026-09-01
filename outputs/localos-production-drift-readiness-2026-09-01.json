@@ -1,0 +1,59 @@
+{
+  "date": "2026-09-01",
+  "mode": "read_only",
+  "production_changed": false,
+  "ssh": "available",
+  "production_git_head": "c728015c95e47880120c025deed70c6c88657963",
+  "rollout_manifest": {
+    "path": "outputs/localos-rollout-manifest-2026-08-31.tsv",
+    "sha256": "828916fe94c515dd8fa5e95b4c3e99edbfa6a05e9efd71009b94bcd3cc87c79a",
+    "files": 252,
+    "local_verification": "252/252"
+  },
+  "exact_staging_dist": {
+    "local_files": 184,
+    "container_files": 184,
+    "missing_local": 0,
+    "extra_local": 0,
+    "hash_mismatches": 0,
+    "canonical_digest": "bb54aeae499579ed97568292cd9772a43d30056f7d63be851122c370d1a33d63"
+  },
+  "production_host_comparison": {
+    "match": 97,
+    "missing": 102,
+    "mismatch": 53,
+    "total": 252
+  },
+  "production_container_backend_comparison": {
+    "app": {
+      "match": 15,
+      "total": 17,
+      "mismatches": [
+        "src/api/media_intelligence_api.py",
+        "src/api/social_posts_api.py"
+      ]
+    },
+    "worker": {
+      "match": 15,
+      "total": 17,
+      "mismatches": [
+        "src/api/media_intelligence_api.py",
+        "src/api/social_posts_api.py"
+      ]
+    }
+  },
+  "credential_presence": {
+    "app": {
+      "wordstat_cloud": "present",
+      "wordstat_legacy_oauth": "present",
+      "supabase": "absent"
+    },
+    "worker": {
+      "wordstat_cloud": "present",
+      "wordstat_legacy_oauth": "present",
+      "supabase": "absent"
+    }
+  },
+  "decision": "NO_GO_FOR_BLANKET_DEPLOY",
+  "next_boundary": "Deploy only an explicitly approved, backed-up partial package after credential and ownership gates are closed."
+}

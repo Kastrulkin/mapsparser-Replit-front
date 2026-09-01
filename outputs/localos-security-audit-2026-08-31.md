@@ -1,5 +1,7 @@
 # LocalOS: итог комплексного staging- и security-аудита — 2026-08-31
 
+> Актуализация 1 сентября 2026 года: reliability-gap закрыт точечным external-script fix и одним непрерывным Playwright run 108/108. Exact rollout manifest теперь содержит 252 файла и сверён с production read-only. Текущий источник go/no-go: `outputs/localos-audit-completion-matrix-2026-09-01.md`.
+
 ## Итог
 
 - Все десять пользовательских сценариев прошли в изолированном Docker staging: **102/102 Playwright-тестов** на desktop, узком laptop и mobile/Mini App viewport.
