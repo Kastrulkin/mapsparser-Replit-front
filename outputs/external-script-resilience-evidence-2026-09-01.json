@@ -1,0 +1,41 @@
+{
+  "status": "FIX_PROVEN",
+  "date": "2026-09-01",
+  "commit": "557f1a6e",
+  "environment": {
+    "base_url": "http://127.0.0.1:8000",
+    "docker_project": "localos-staging",
+    "synthetic_fixtures_only": true,
+    "runtime_uid": 10001,
+    "source_read_only": true
+  },
+  "reproducer": {
+    "file": "frontend/e2e/staging/external-script-resilience.spec.ts",
+    "command": "JOURNEY_STAGING_BASE_URL=http://127.0.0.1:8000 npm run test:e2e -- -c playwright.journey-staging.config.ts e2e/staging/external-script-resilience.spec.ts --project=desktop",
+    "before_fix": {
+      "exit_code": 1,
+      "passed": 0,
+      "failed": 2,
+      "signals": [
+        "The login form was not visible within 3 seconds while the Telegram SDK response was delayed for 7 seconds.",
+        "A request to mc.yandex.ru occurred on /login while window.localosTrackingConsent was false."
+      ]
+    },
+    "after_fix": {
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "duration_seconds": 2.1
+    }
+  },
+  "broader_verification": {
+    "python_tests": "47 passed",
+    "frontend_tests": "403 passed",
+    "frontend_build": "passed",
+    "eslint": "0 errors; 535 pre-existing warnings",
+    "staging_smoke": "passed for maps, influencer, partnership, content and automation",
+    "continuous_playwright": "108 passed in 2.9 minutes across desktop, laptop and mobile",
+    "staging_http_status": 200
+  },
+  "production_changed": false
+}

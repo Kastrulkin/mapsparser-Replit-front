@@ -5,8 +5,9 @@
 - Exact Docker image `localos-staging-app:latest`, отдельные PostgreSQL и Redis, только синтетические fixtures.
 - Runtime: непривилегированный `uid=10001`, исходный код read-only, writable только runtime-каталоги.
 - Внешние provider credentials, отправки, публикации, платежи и фоновые внешние dispatch отключены.
-- Текущий exact image собран из commit `9bda6a53`; `http://127.0.0.1:8000` отвечает 200, smoke проверяет пять flow: maps, influencer, partnership, content и automation.
-- Текущая Playwright-проверка: два полных запуска по **101/102** и успешный точечный повтор каждого разного сбоя. Оба сбоя были случайными `page.goto(..., waitUntil='load')` timeout до бизнес-логики. Функциональное покрытие 102/102 получено, но single-run reliability gate остаётся открытым.
+- Текущий exact image собран из commit `557f1a6e`; `http://127.0.0.1:8000` отвечает 200, smoke проверяет пять flow: maps, influencer, partnership, content и automation.
+- Reliability gap воспроизведён двумя отдельными тестами: глобальный синхронный Telegram SDK блокировал обычный web, а Yandex Metrika загружалась на приватном `/login` без consent. После точечного фикса reproducer проходит 2/2.
+- Текущая Playwright-проверка: один непрерывный запуск **108/108** за 2,9 минуты на desktop, laptop и mobile. Single-run reliability gate закрыт.
 
 ## Десять пользовательских сценариев
 
@@ -34,7 +35,7 @@
 | Mobile touch targets | Все видимые controls на проверенных маршрутах не меньше 40×40 px |
 | Public CTA contrast | Пять flow проходят WCAG AA contrast-check |
 | Mobile content calendar | Семиколоночная сетка не сжимается; доступен горизонтальный scroll и сохраняются touch targets |
-| Runtime stability | Console errors и неожиданные API 4xx/5xx отсутствуют в проверяемых flows |
+| Runtime stability | Console errors и неожиданные API 4xx/5xx отсутствуют в проверяемых flows; ordinary web не зависит от Telegram CDN; Metrika не загружается на приватном `/login` без consent |
 
 ## Security evidence
 
@@ -49,7 +50,7 @@
 | Git history | 620 redacted matches в 29 commits; исторические Wordstat и Supabase credentials требуют provider-side rotation/revoke |
 | Static analysis | Последний Semgrep ERROR-gate: 0 findings; текущий дополнительный diff затрагивает только системный пакет Docker image и audit evidence |
 | Dynamic baseline | Последний OWASP ZAP baseline: 61 pass, 0 fail, 0 high/critical |
-| Rollout integrity | 252 allowlisted files; manifest SHA-256 `234b333d076930b82c24f0f70429e84cbbb96a6ec5e000773d082f76600bdfee`; verifier 252/252 |
+| Rollout integrity | 252 allowlisted files; manifest SHA-256 `a14ebeb00f324cbc956911d99774e5f69425cdecf4ba1f823bd849da99f9a08b`; verifier 252/252 |
 
 ## Approval-инварианты
 
@@ -61,7 +62,7 @@
 
 ## Что завершено, а что нет
 
-Функциональный охват 10/10 сценариев зелёный, открытых P0/P1 и HIGH/CRITICAL в exact image нет. Reliability-gate пока не закрыт: нужен один непрерывный Playwright run 102/102 либо отдельное согласованное исправление ожидания полной загрузки страницы в E2E harness.
+Функциональный охват 10/10 сценариев зелёный, открытых P0/P1 и HIGH/CRITICAL в exact image нет. Reliability-gate закрыт одним непрерывным Playwright run 108/108; оба новых external-script regression-теста проходят на всех трёх viewport-профилях.
 
 Production rollout остаётся отдельной работой и сейчас **NO-GO** до выполнения следующих gates:
 
