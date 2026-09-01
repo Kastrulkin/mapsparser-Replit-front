@@ -9,6 +9,8 @@
 - LocalOS production Supabase не использует. Новый Supabase key в LocalOS добавлять нельзя.
 - Ключи не просматривались, проект не возобновлялся, credentials не создавались и не отзывались.
 
+Повторная provider-проверка 1 сентября подтвердила ту же страницу: `SEOmaps` в организации Riderra приостановлен, resume доступен до 14 ноября 2026 года. Кнопки `Resume project` и `Download backups` доступны; до resume API/key settings отключены. Страница оставлена открытой на точке action-time confirmation, без изменения проекта.
+
 Следующее внешнее действие требует action-time подтверждения: возобновить paused-проект, проверить список active API keys и затем отозвать legacy `service_role`, если внешний consumer не обнаружен. Перед resume нужно отдельно решить, требуется ли скачать backup; это не часть обычного LocalOS rollout.
 
 ## Yandex Wordstat
@@ -22,6 +24,13 @@
 - Внешний Wordstat-запрос во время аудита намеренно не выполнялся: он расходует provider quota. Выбранный auth path доказан конфигурацией обоих runtime и текущей реализацией; работоспособность нового/ротированного credential проверяется отдельным approved smoke после замены.
 - Добавлены regression-тесты для одновременного наличия Cloud и OAuth credentials: config и HTTP client обязаны выбрать Cloud endpoint. В тот же focused-набор включены шесть доказанных проверок redaction внутренних API-ошибок; после двух согласованных fix-пакетов полный Wordstat suite прошёл: **13 passed**.
 
+Авторизованная Yandex Cloud console доступна. В текущем production folder найден service account `ai-studio-893ac7` с ролью `search-api.webSearch.user`. У него два API key:
+
+- scoped `LocalOS Wordstat Search API key` с областью `yc.search-api.execute`, создан 8 июля 2026 года и последний раз использован 31 августа 2026 года;
+- более широкий legacy key `Ключ вордстат для локалос`, создан 8 июля 2026 года и не имеющий даты последнего использования.
+
+Значения ключей не открывались и не копировались. Console подготовлена до выбора `Создать API-ключ`; создание persistent credential, запись нового значения в production и удаление старых ключей требуют action-time confirmation.
+
 Безопасный порядок ротации:
 
 1. Считать Cloud Search API текущим production path; не переключать runtime обратно на legacy OAuth.
@@ -32,4 +41,4 @@
 
 ## Статус
 
-Карта потребителей и активный production auth path подтверждены read-only. Production и provider state не изменялись. Ротация остаётся внешним approval gate и не блокирует проверенный staging package, но блокирует production go-live security decision.
+Карта потребителей, активный production auth path и provider-side объекты подтверждены read-only. Production и provider state не изменялись. Ротация остаётся внешним approval gate и не блокирует проверенный staging package, но блокирует production go-live security decision.

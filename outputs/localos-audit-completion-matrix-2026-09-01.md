@@ -71,6 +71,6 @@ Production rollout остаётся отдельной работой и сей�
 3. Использовать завершённую read-only drift-сверку (`97 match / 102 missing / 53 mismatch`) для отдельных partial packages; не использовать полный `git pull`, reset или blanket rsync.
 4. Перед non-root image rollout сохранить ownership snapshot и отдельно согласовать смену владельца только production `debug_data`.
 5. Выпустить browser cookie migration по dual-stack/internal-cohort схеме и после наблюдения отозвать старые browser sessions.
-6. После отдельного разрешения проверить live edge headers и выполнить production smoke без автоматических отправок, публикаций или платежей.
+6. Live edge headers проверены read-only: HSTS/nosniff/frame/referrer/permissions присутствуют, CSP остаётся report-only; production smoke выполняется отдельно после каждого разрешённого пакета без автоматических отправок, публикаций или платежей.
 
 До этих действий production не изменяется.
