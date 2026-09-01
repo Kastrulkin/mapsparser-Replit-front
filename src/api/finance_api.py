@@ -15,6 +15,7 @@ from flask import Blueprint, Response, jsonify, request
 from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from auth_system import verify_session
 from core import finance_crm, finance_imports
+from core.api_errors import internal_error_response
 from core.finance_kpis import calculate_finance_snapshot, default_period_range, get_default_finance_thresholds
 from core.auth_helpers import verify_business_access
 from core.helpers import get_business_id_from_user, get_business_owner_id
@@ -1421,7 +1422,7 @@ def preview_finance_import():
             "errors": normalized.get("errors", [])[:20],
         })
     except Exception:
-        return jsonify({"error": f"Ошибка preview импорта: {str(sys.exc_info()[1])}"}), 500
+        return internal_error_response("Не удалось подготовить импорт финансов")
 
 
 @finance_bp.route('/api/finance/import-file', methods=['POST', 'OPTIONS'])

@@ -4,6 +4,7 @@ import sys
 
 from flask import Blueprint, Response, jsonify, request
 
+from core.api_errors import internal_error_response
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
 from services.ai_runtime import (
@@ -254,7 +255,7 @@ def media_photo_upload():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось загрузить фотографию")
     finally:
         db.close()
 

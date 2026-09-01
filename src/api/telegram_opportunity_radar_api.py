@@ -8,6 +8,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.api_errors import internal_error_response
 from core.helpers import get_business_owner_id
 from database_manager import DatabaseManager
 from services.telegram_opportunity_radar import (
@@ -156,9 +157,9 @@ def ingest_from_openclaw():
     except ValueError as exc:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 400
-    except Exception as exc:
+    except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(exc)}), 500
+        return internal_error_response("Не удалось сохранить возможность")
     finally:
         db.close()
 
