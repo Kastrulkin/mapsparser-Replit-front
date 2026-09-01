@@ -11,6 +11,7 @@ from typing import Deque
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.api_errors import internal_error_response
 from core.telegram_network import resolve_telegram_http_proxy, telegram_urlopen
 from services.social_post_service import (
     apply_social_post_recommendation,
@@ -374,7 +375,7 @@ def social_posts_prepare(item_id: str):
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось подготовить публикацию")
 
 
 @social_posts_bp.route("/api/content-plans/items/<item_id>/social-posts/prepare-preview", methods=["POST"])
@@ -420,7 +421,7 @@ def social_posts_bulk_prepare():
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось подготовить публикации")
 
 
 @social_posts_bp.route("/api/content-plans/<plan_id>/social-posts", methods=["GET"])

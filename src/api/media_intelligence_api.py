@@ -298,7 +298,7 @@ def media_photo_file(asset_id: str):
         mime_type = str(variant_data.get("mime_type") or "image/jpeg")
         return Response(content, mimetype=mime_type)
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить файл фотографии")
     finally:
         db.close()
 

@@ -5,12 +5,13 @@ import json
 
 from flask import Flask
 
-from api import finance_api, media_intelligence_api, telegram_opportunity_radar_api
+from api import finance_api, media_intelligence_api, social_posts_api, telegram_opportunity_radar_api
 
 
 FINANCE_INTERNAL_ERROR = "postgresql://private-user:private-password@database/internal"
 MEDIA_INTERNAL_ERROR = "storage-key=private-media-secret"
 RADAR_INTERNAL_ERROR = "postgresql://private-radar-password@database/internal"
+SOCIAL_INTERNAL_ERROR = "postgresql://private-social-password@database/internal"
 
 
 class _Connection:
@@ -112,6 +113,109 @@ def test_media_photo_upload_internal_error_is_redacted(monkeypatch):
     )
     assert database.conn.rolled_back is True
     assert database.closed is True
+
+
+def test_media_photo_file_internal_error_is_redacted(monkeypatch):
+    class _Cursor:
+        description = None
+
+        def execute(self, *_args, **_kwargs):
+            return None
+
+        def fetchone(self):
+            return {
+                "business_id": "business-1",
+                "storage_key": "business-1/private-photo.jpg",
+                "versions_json": {},
+            }
+
+    database = _Database()
+    database.conn.cursor = lambda: _Cursor()
+    monkeypatch.setattr(media_intelligence_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(
+        media_intelligence_api,
+        "require_auth_from_request",
+        lambda: {"user_id": "owner-1"},
+    )
+    monkeypatch.setattr(media_intelligence_api, "_require_business", lambda *_args: (True, None))
+    monkeypatch.setattr(
+        media_intelligence_api,
+        "load_media_file",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError(MEDIA_INTERNAL_ERROR)),
+    )
+
+    response = _app(media_intelligence_api.media_intelligence_bp).test_client().get(
+        "/api/media-intelligence/photos/asset-1/file",
+        headers={"X-Request-ID": "media-photo-file-redaction"},
+    )
+
+    _assert_redacted(
+        response,
+        "media-photo-file-redaction",
+        "Не удалось получить файл фотографии",
+        MEDIA_INTERNAL_ERROR,
+    )
+    assert database.closed is True
+
+
+def test_social_post_prepare_internal_error_is_redacted(monkeypatch):
+    social_posts_api._WRITE_RATE_BUCKETS.clear()
+    monkeypatch.setattr(
+        social_posts_api,
+        "verify_session",
+        lambda *_args: {"user_id": "owner-1"},
+    )
+    monkeypatch.setattr(
+        social_posts_api,
+        "prepare_social_posts_for_item",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError(SOCIAL_INTERNAL_ERROR)),
+    )
+
+    response = _app(social_posts_api.social_posts_bp).test_client().post(
+        "/api/content-plans/items/item-1/social-posts/prepare",
+        json={"platforms": ["telegram"]},
+        headers={
+            "Authorization": "Bearer synthetic-session",
+            "X-Request-ID": "social-post-prepare-redaction",
+        },
+    )
+
+    _assert_redacted(
+        response,
+        "social-post-prepare-redaction",
+        "Не удалось подготовить публикацию",
+        SOCIAL_INTERNAL_ERROR,
+    )
+
+
+def test_social_posts_bulk_prepare_internal_error_is_redacted(monkeypatch):
+    social_posts_api._WRITE_RATE_BUCKETS.clear()
+    monkeypatch.setattr(
+        social_posts_api,
+        "verify_session",
+        lambda *_args: {"user_id": "owner-1"},
+    )
+    monkeypatch.setattr(
+        social_posts_api,
+        "prepare_social_posts_for_items",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError(SOCIAL_INTERNAL_ERROR)),
+    )
+
+    response = _app(social_posts_api.social_posts_bp).test_client().post(
+        "/api/content-plans/social-posts/bulk-prepare",
+        json={"item_ids": ["item-1"], "platforms": ["telegram"]},
+        headers={
+            "Authorization": "Bearer synthetic-session",
+            "X-Request-ID": "social-post-bulk-prepare-redaction",
+        },
+    )
+
+    _assert_redacted(
+        response,
+        "social-post-bulk-prepare-redaction",
+        "Не удалось подготовить публикации",
+        SOCIAL_INTERNAL_ERROR,
+    )
 
 
 def test_media_settings_get_internal_error_is_redacted(monkeypatch):

@@ -1,0 +1,32 @@
+{
+  "date": "2026-09-01",
+  "scope": "media file and social post preparation API error redaction",
+  "status": "FIX_PROVEN",
+  "reproducer": {
+    "command": "venv/bin/python -m pytest -q tests/test_remaining_api_error_redaction.py",
+    "before": "3 failed, 12 passed",
+    "after": "15 passed",
+    "failures_proved": [
+      "GET /api/media-intelligence/photos/:asset_id/file exposed an internal storage error",
+      "POST /api/content-plans/items/:item_id/social-posts/prepare exposed an internal database error",
+      "POST /api/content-plans/social-posts/bulk-prepare exposed an internal database error"
+    ]
+  },
+  "regression_suite": {
+    "result": "247 passed",
+    "coverage": [
+      "media file storage and download",
+      "media validation, upload signatures, and SSRF",
+      "social posts API and service",
+      "all accumulated API error-redaction regression tests"
+    ]
+  },
+  "compile_check": "passed",
+  "behavior": {
+    "generic_500": "returns code, safe message, and request_id",
+    "client_errors": "unchanged",
+    "authorization_and_tenant_checks": "unchanged",
+    "external_action_approval_boundaries": "unchanged"
+  },
+  "production_changed": false
+}
