@@ -37,6 +37,8 @@ RUN set -eux; \
     apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true install -y --no-install-recommends \
     libpq-dev \
+    libexpat1 \
+    libexpat1-dev \
     gcc \
     postgresql-client \
     fonts-liberation \

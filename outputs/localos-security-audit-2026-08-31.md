@@ -24,7 +24,7 @@
 | 9 | Web ↔ Mini App | Общий action, stale version, idempotency и offline retry |
 | 10 | Администратор — journey | Пять маршрутов, preview, token, revoke и безопасный public payload |
 
-Повторный финальный запуск 1 сентября 2026 года на точном Docker-образе после исправления мобильного календаря: `npx playwright test -c playwright.journey-staging.config.ts` — **102 passed (5.1m)**.
+Повторный финальный запуск 1 сентября 2026 года на точном Docker-образе после исправления мобильного календаря: `npx playwright test -c playwright.journey-staging.config.ts` — **102 passed (5.1m)**. После обновления `libexpat` exact image был пересобран, вновь прошёл smoke всех пяти flow и повторный полный набор: `.last-run.json` содержит `status: passed`, а `--list` подтверждает **102 tests in 11 files**.
 
 ## Исправления и security gates
 
@@ -37,6 +37,7 @@
 - GigaChat HTTP 402 классифицируется как терминальная provider-ошибка без повторов.
 - Исправлены доступные имена, контраст, progress labels и минимальные touch targets.
 - Мобильный календарь контента больше не сжимает семиколоночную сетку: она прокручивается горизонтально и сохраняет touch-target не меньше 40 px; профильный mobile suite прошёл 6/6.
+- Повторный Trivy scan 1 сентября обнаружил `CVE-2026-56408` в унаследованной Debian-библиотеке `libexpat` версии `2.5.0-1+deb12u2`. Runtime image теперь явно устанавливает `libexpat1` и `libexpat1-dev` из актуального Bookworm security channel; пересобранный контейнер содержит `2.5.0-1+deb12u3`, а повторный image scan показывает 0 HIGH/CRITICAL. Trivy config по текущему tracked tree также показывает 0 HIGH/CRITICAL.
 - Browser cookie migration доведена до staging-ready состояния: прямые чтения стандартных `auth_token`/`token` удалены из production-компонентов, browser transport до первого render очищает legacy browser credentials и не отправляет их как `Authorization`.
 - Scoped bearer сохранён только для Mini App и активной demo session. Исправлен возврат из billing provider: проверка статуса работает с HttpOnly cookie без JavaScript-токена.
 - Rollout ограничен SHA-256 allowlist из 247 файлов: 2 runtime, 12 backend security, 49 frontend source и 184 точных frontend dist artifacts. `scripts/verify_rollout_manifest.py` проверил весь manifest без расхождений.
@@ -62,7 +63,7 @@
 
 ## Секреты
 
-Gitleaks проверил текущее дерево и полную Git-историю в redacted-режиме. В текущем дереве 18 real credentials находятся только в игнорируемых `.env` и `.env.bak.2026-03-21-173649`; оба файла имеют mode `0600`. Значения не выводились и не изменялись. Остальные совпадения подтверждены как UUID, idempotency/domain keys, placeholders и test fixtures.
+Gitleaks повторно проверил tracked HEAD и полную Git-историю в redacted-режиме 1 сентября. В tracked HEAD осталось 10 совпадений, и все они классифицированы как ложные срабатывания: idempotency/domain keys, стабильные seed keys, placeholder `Bearer` и test fixtures. Полный history scan вернул 620 redacted-совпадений в 29 commits; значения не выводились. Игнорируемые локальные `.env` не входят в tracked HEAD и не добавляются в rollout.
 
 В истории подтверждены старые Wordstat credentials и legacy Supabase `service_role` для приостановленного проекта `SEOmaps` (`bvhpvzcvcuswiozhyqlk`). Текущий LocalOS production не использует Supabase. Нельзя добавлять новый Supabase key в LocalOS; сначала нужно определить других потребителей legacy-проекта.
 

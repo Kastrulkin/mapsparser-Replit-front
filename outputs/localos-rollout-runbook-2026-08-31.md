@@ -22,12 +22,12 @@ Production содержит существенный drift от Git и след�
 
 Канонический manifest текущего проверенного дерева: `outputs/localos-rollout-manifest-2026-08-31.tsv`.
 
-- SHA-256 самого manifest: `d172bc02c6b266d58fdf1c28771367d58dc363e654cf6c53b2a4b8847a6e7675`.
+- SHA-256 самого manifest: `58794de25a9c3a293ab5770197c1fd6ced06ff76116c0537393b28f31fb2da7e`.
 - `runtime_nonroot`: 2 файла.
 - `backend_security`: 12 файлов.
 - `frontend_source`: 49 файлов.
 - `frontend_dist`: 184 файла.
-- Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с dist внутри образа, прошедшего 102/102 E2E 1 сентября 2026 года. Digest отсортированного списка файлов: `6ef99e3e233fe3ae9d7093eedef943f4b2354476bda1eeeb5b61576c94aded72`.
+- Локальный `frontend/dist` пересобран с точными staging feature flags и побайтово совпал с dist внутри образа, прошедшего E2E 1 сентября 2026 года. Канонический `LC_ALL=C` digest отсортированного списка файлов: `794e427aff387aa2b5d158031c41932579301de44f0a54b89bddfc8a2e1e4daf`.
 
 Перед упаковкой и перед отправкой файлов выполнить:
 
