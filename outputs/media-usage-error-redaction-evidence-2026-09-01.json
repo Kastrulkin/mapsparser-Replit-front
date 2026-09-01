@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "Media usage, coverage and recommendation endpoints changed from deterministic disclosure failures to the shared redacted contract; all 28 focused media tests pass.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "label": "reproduced",
+    "command": ["/usr/bin/arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_remaining_api_error_redaction.py"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64",
+    "duration_ms": 290,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "........FFF. [100%]\nThe three approved media usage responses contained injected internal exception text (test value redacted).\n3 failed, 9 passed in 0.29s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  },
+  "after": {
+    "label": "fixed",
+    "command": ["/usr/bin/arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_remaining_api_error_redaction.py"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64",
+    "duration_ms": 290,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "............ [100%]\n12 passed in 0.29s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  }
+}

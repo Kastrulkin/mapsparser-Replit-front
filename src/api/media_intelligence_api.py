@@ -110,7 +110,7 @@ def media_settings_get():
             }
         )
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить настройки фотографий")
     finally:
         db.close()
 
@@ -141,7 +141,7 @@ def media_settings_post():
         return jsonify({"success": True, "setting": setting})
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось сохранить настройки фотографий")
     finally:
         db.close()
 
@@ -167,7 +167,7 @@ def media_photos_list():
             }
         )
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить фотографии")
     finally:
         db.close()
 
@@ -209,7 +209,7 @@ def media_photos_create():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось добавить фотографию")
     finally:
         db.close()
 
@@ -345,7 +345,7 @@ def media_photo_analyze(asset_id: str):
         return jsonify(result), status_code
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось проанализировать фотографию")
     finally:
         db.close()
 
@@ -379,7 +379,7 @@ def media_photo_new_version(asset_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось создать версию фотографии")
     finally:
         db.close()
 
@@ -428,7 +428,7 @@ def media_photo_usage(asset_id: str):
         )
     except Exception:
         db.conn.rollback()
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось сохранить использование фотографии")
     finally:
         db.close()
 
@@ -462,7 +462,7 @@ def media_coverage_get():
             return error_response
         return jsonify({"success": True, "coverage": build_photo_coverage(cursor, business_id)})
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось получить покрытие фотографиями")
     finally:
         db.close()
 
@@ -484,6 +484,6 @@ def media_post_recommendation(item_id: str):
     except ValueError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
-        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+        return internal_error_response("Не удалось подобрать фотографию для публикации")
     finally:
         db.close()
