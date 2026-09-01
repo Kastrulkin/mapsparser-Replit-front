@@ -7,6 +7,9 @@ import { installDomOwnershipGuard } from './lib/domOwnershipGuard';
 import { installBrowserSessionFetch } from './lib/browserSessionFetch';
 
 const CHUNK_RELOAD_STORAGE_KEY = 'localos_chunk_reload_attempted';
+const TELEGRAM_CONTROL_PATH = '/telegram/control';
+const TELEGRAM_SDK_URL = 'https://telegram.org/js/telegram-web-app.js?63';
+const TELEGRAM_SDK_TIMEOUT_MS = 5_000;
 
 installBrowserSessionFetch();
 
@@ -60,8 +63,45 @@ if (!rootElement) {
 
 installDomOwnershipGuard(rootElement);
 
-createRoot(rootElement).render(
-    <ErrorBoundary>
-        <App />
-    </ErrorBoundary>
-);
+const renderApplication = () => {
+    createRoot(rootElement).render(
+        <ErrorBoundary>
+            <App />
+        </ErrorBoundary>
+    );
+};
+
+const isTelegramControlRoute = () => window.location.pathname === TELEGRAM_CONTROL_PATH;
+
+const loadTelegramSdk = () => new Promise<void>((resolve) => {
+    if (window.Telegram?.WebApp) {
+        resolve();
+        return;
+    }
+
+    let settled = false;
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        resolve();
+    };
+    const timeoutId = window.setTimeout(finish, TELEGRAM_SDK_TIMEOUT_MS);
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${TELEGRAM_SDK_URL}"]`);
+    const script = existing || document.createElement('script');
+    script.addEventListener('load', finish, { once: true });
+    script.addEventListener('error', finish, { once: true });
+    if (!existing) {
+        script.src = TELEGRAM_SDK_URL;
+        script.async = true;
+        script.dataset.localosTelegramSdk = 'true';
+        document.head.appendChild(script);
+    }
+});
+
+const startApplication = async () => {
+    if (isTelegramControlRoute()) await loadTelegramSdk();
+    renderApplication();
+};
+
+void startApplication();
