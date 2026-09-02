@@ -98,6 +98,11 @@ type NavigationItem = {
   group: 'primary' | 'more';
   status: 'available' | 'read_only' | 'hidden';
   reason?: string;
+  capability?: string;
+  required_tier?: string;
+  required_tier_name?: string;
+  billing_url?: string;
+  preview_available?: boolean;
   available_actions?: string[];
   supported_scopes?: string[];
   deep_link_targets?: string[];
@@ -165,7 +170,7 @@ type FinanceDashboardMobile = {
   staff?: Array<Record<string, FinanceValue>>;
   workplaces?: Array<Record<string, FinanceValue>>;
 };
-type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences; available_actions?: Array<{ key?: string; label?: string }>; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
+type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; access?: NavigationItem; preview?: { title?: string; summary?: string; skeleton_count?: number }; preferences?: NotificationPreferences; available_actions?: Array<{ key?: string; label?: string }>; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
 type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operator' | 'more' | 'menu';
 
 type TelegramWebApp = {
@@ -619,6 +624,7 @@ export const TelegramControlPage = () => {
   };
 
   const loadReviews = async (status = reviewStatus, append = false, requestVersion = scopeRequestVersion.current) => {
+    if (bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only') return;
     if (preview) { setReviews({ items: previewReviews, counts: { total: 164, unanswered: 50, drafts: 12 } }); return; }
     setReviewsLoading(true);
     try {
@@ -642,7 +648,7 @@ export const TelegramControlPage = () => {
   useEffect(() => { if (tab === 'reviews') void loadReviews(reviewStatus); }, [tab, reviewStatus, reviewSource, reviewRating, reviewLocation, scope?.kind, scope?.id]);
 
   const loadOperatorHistory = async () => {
-    if (preview || !scope?.kind) return;
+    if (preview || !scope?.kind || bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only') return;
     const scopeKey = `${scope.kind}:${scope.id || 'all'}`;
     if (historyLoadedFor === scopeKey) return;
     try {
@@ -666,6 +672,15 @@ export const TelegramControlPage = () => {
 
   const loadModule = async (moduleKey = module, quietly = false, requestVersion = scopeRequestVersion.current) => {
     if (!moduleKey || preview) return;
+    const navigationKey = moduleKey === 'finance_import' || moduleKey === 'analytics' ? 'finance' : moduleKey;
+    const navigationEntry = bootstrap?.navigation?.find((item) => item.key === navigationKey);
+    if (navigationEntry?.status === 'read_only' && navigationEntry.preview_available && !['influencers', 'partnerships'].includes(navigationKey)) {
+      setModuleData({ status: 'payment_required', access: navigationEntry, items: [], preview: { title: 'Посмотрите, как работает раздел', summary: navigationEntry.reason, skeleton_count: 3 } });
+      setModuleLoading(false);
+      setProgressLoading(false);
+      setError('');
+      return;
+    }
     if (!quietly) setModuleLoading(true);
     if (moduleKey === 'company' || moduleKey === 'companies' || moduleKey === 'community_sources' || moduleKey === 'influencers') { setModuleLoading(false); setError(''); return; }
     const params = scopeQuery(scope);
@@ -753,7 +768,7 @@ export const TelegramControlPage = () => {
     if (!bootstrap) return;
     const requestedScreen = bootstrap.resolved_deep_link?.screen === 'analytics' ? 'finance' : bootstrap.resolved_deep_link?.screen;
     const requestedEntry = bootstrap.navigation?.find((item) => item.key === requestedScreen);
-    if (requestedEntry?.status === 'read_only' && requestedEntry.reason?.toLowerCase().includes('оплат')) {
+    if (requestedEntry?.status === 'read_only' && !requestedEntry.preview_available && requestedEntry.reason?.toLowerCase().includes('тариф')) {
       setPaywall(requestedEntry);
       setTab('today');
       setModule('');
@@ -775,7 +790,7 @@ export const TelegramControlPage = () => {
   const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
     const destination = screen === 'analytics' || screen === 'finance_import' ? 'finance' : screen;
     const navigationEntry = bootstrap?.navigation?.find((item) => item.key === destination);
-    if (navigationEntry?.status === 'read_only' && navigationEntry.reason?.toLowerCase().includes('оплат')) {
+    if (navigationEntry?.status === 'read_only' && !navigationEntry.preview_available && navigationEntry.reason?.toLowerCase().includes('тариф')) {
       setPaywall(navigationEntry);
       return;
     }
@@ -957,13 +972,13 @@ export const TelegramControlPage = () => {
               void loadToday(scope, true, true);
             }} /></div> : null}{bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} trackProduct={trackProductEvent} openFinanceImport={() => openMobileTarget('finance_import')} refresh={() => void loadToday(scope, true, true)} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} />}</> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
-            {!picker && tab === 'feed' ? <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
-            {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
-            {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие."><ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} /></Screen> : null}
-            {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
+            {!picker && tab === 'feed' ? bootstrap?.navigation?.find((item) => item.key === 'feed')?.status === 'read_only' ? <Screen title="Лента" subtitle="Главные темы и сигналы из вашей индустрии."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'feed')} /></Screen> : <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
+            {!picker && tab === 'reviews' ? bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only' ? <Screen title="Отзывы" subtitle="Новые отзывы и подготовленные ответы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'reviews')} /></Screen> : <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
+            {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
+            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
       </MobileShell>
@@ -1079,7 +1094,16 @@ const Operator = ({ messages, busy, actionBusy, command, setCommand, ask, resolv
   <form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></form>
 </Screen>;
 
-const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен после оплаты"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">{item.label} доступен после оплаты</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href="/dashboard/billing" className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white">Перейти к оплате</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400">Закрыть</button></div></div>;
+const billingHref = (item?: NavigationItem) => {
+  const target = item?.billing_url || '/dashboard/profile?focus=subscription#subscription';
+  const [base, hash] = target.split('#');
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}return_to=${encodeURIComponent(`/telegram/control?screen=${item?.key || 'today'}`)}${hash ? `#${hash}` : ''}`;
+};
+
+const SubscriptionPaywall = ({ item, close }: { item: NavigationItem; close: () => void }) => <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Раздел доступен на другом тарифе"><div className="w-full rounded-[28px] bg-zinc-900 p-5 shadow-2xl ring-1 ring-inset ring-white/[0.08]"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 text-primary"><CreditCard className="h-5 w-5" /></span><h2 className="mt-4 text-xl font-semibold">Нужен тариф «{item.required_tier_name || 'Управление'}»</h2><p className="mt-2 text-sm leading-6 text-zinc-500">{item.reason || 'Подключите тариф для выбранной точки.'}</p><a href={billingHref(item)} className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold text-white transition-transform duration-150 active:scale-[0.96]">Выбрать тариф</a><button type="button" onClick={close} className="mt-2 min-h-12 w-full rounded-2xl bg-white/[0.04] text-sm font-semibold text-zinc-400 transition-transform duration-150 active:scale-[0.96]">Закрыть</button></div></div>;
+
+const LockedModulePreview = ({ item }: { item?: NavigationItem }) => <section className="overflow-hidden rounded-[24px] bg-gradient-to-b from-primary/[0.10] to-white/[0.035] p-5 shadow-[0_18px_54px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,92,51,0.14)]"><span className="text-xs font-semibold text-primary">Доступно на тарифе «{item?.required_tier_name || 'Управление'}»</span><h2 className="mt-3 text-balance text-xl font-semibold">Посмотрите, какой результат даст раздел</h2><p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">{item?.reason || 'Полные данные и действия откроются после повышения тарифа.'}</p><div className="mt-5 space-y-2" aria-hidden="true">{[0, 1, 2].map((index) => <div key={index} className="rounded-[18px] bg-black/20 p-4 blur-[3px] select-none"><div className="h-3 w-2/3 rounded-full bg-white/15" /><div className="mt-3 h-2 w-full rounded-full bg-white/[0.08]" /><div className="mt-2 h-2 w-4/5 rounded-full bg-white/[0.08]" /></div>)}</div><a href={billingHref(item)} className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-center text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.22)] transition-transform duration-150 active:scale-[0.96]">Открыть раздел — тариф «{item?.required_tier_name || 'Управление'}»</a></section>;
 
 const More = ({ navigation, onOpen, openProgress, onLocked, restartTour }: { navigation: NavigationItem[]; onOpen: (key: string) => void; openProgress: () => void; onLocked: (item: NavigationItem) => void; restartTour: () => void }) => {
   return <Screen title="Пути роста" subtitle="Выберите цель. Внутри будет первое действие и текущие данные.">
@@ -1105,7 +1129,7 @@ const moduleNames: Record<string, [string, string]> = {
 };
 
 type ModuleScreenProps = {
-  module: string; focusItemId?: string; scope?: MobileScope; data: ModuleData; loading: boolean; progressData?: ProgressPayload | null; progressLoading: boolean; saving: boolean; actionBusy: string;
+  module: string; focusItemId?: string; scope?: MobileScope; access?: NavigationItem; data: ModuleData; loading: boolean; progressData?: ProgressPayload | null; progressLoading: boolean; saving: boolean; actionBusy: string;
   saveNotifications: (preferences: NotificationPreferences) => Promise<void>;
   updateService: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>;
   generateContentDraft: (item: ModuleItem) => Promise<void>;
@@ -1119,10 +1143,10 @@ type ModuleScreenProps = {
   back: () => void;
 };
 
-const ModuleScreen = ({ module, focusItemId, scope, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
+const ModuleScreen = ({ module, focusItemId, scope, access, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, trackProduct, openTasks, requestCrm, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Данные и доступные действия.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'influencers' ? <InfluencersMobileModule scope={scope} focusItemId={focusItemId} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : access?.status === 'read_only' || data.status === 'payment_required' ? <LockedModulePreview item={access || data.access} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} trackProduct={trackProduct} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' || module === 'finance_import' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} requestCrm={requestCrm} initialSection={module === 'finance_import' ? 'import' : 'overview'} trackProduct={trackProduct} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 

@@ -30,7 +30,7 @@ describe('InfluencersMobileModule', () => {
 
     expect(await screen.findByRole('heading', { name: 'Анна про Петербург' })).toBeInTheDocument();
     expect(screen.getByText('4 200')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');
+    expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', expect.stringContaining('screen%3Dinfluencers'));
     await user.click(screen.getByRole('button', { name: 'Выбрать' }));
     expect(fetch).toHaveBeenCalledWith('/api/promotion/influencers/search-results/result-1', expect.objectContaining({ method: 'PATCH' }));
   });

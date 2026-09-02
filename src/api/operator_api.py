@@ -93,38 +93,66 @@ from services.llm import analyze_text_with_gigachat
 from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS, enqueue_paid_operator_map_refresh
 from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
-from subscription_manager import build_subscription_capabilities, get_allowed_content_plan_horizons
+from subscription_manager import build_subscription_capabilities, capability_access_payload, get_allowed_content_plan_horizons
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 logger = logging.getLogger(__name__)
 
 
-MOBILE_PAID_NAVIGATION_KEYS = {"operator", "progress", "content", "finance", "partnerships", "agents"}
-MOBILE_PAID_MODULES = {"content", "finance", "analytics", "partnerships", "agents"}
-MOBILE_PAID_ACTION_PREFIXES = ("content.", "finance.", "partnerships.", "agents.")
-MOBILE_PAYMENT_REQUIRED_MESSAGE = "Оператор и бизнес-автоматизация входят в тариф «Управление»."
+MOBILE_NAVIGATION_CAPABILITIES = {
+    "feed": "telegram_radar",
+    "reviews": "maps.reviews",
+    "operator": "operator",
+    "progress": "progress",
+    "cards": "maps",
+    "content": "social_content",
+    "services": "maps.services",
+    "finance": "finance",
+    "partnerships": "partnerships",
+    "influencers": "influencers",
+    "agents": "agents",
+    "community_sources": "telegram_radar",
+}
+MOBILE_MODULE_CAPABILITIES = {
+    "cards": "maps",
+    "content": "social_content",
+    "services": "maps.services",
+    "finance": "finance",
+    "analytics": "finance",
+    "partnerships": "partnerships",
+    "agents": "agents",
+}
+MOBILE_ACTION_CAPABILITIES = {
+    "cards.": "maps",
+    "content.": "social_content",
+    "finance.": "finance",
+    "partnerships.": "partnerships",
+    "agents.": "agents",
+    "reviews.": "maps.reviews",
+    "services.": "maps.services",
+    "community_sources.": "telegram_radar",
+}
 
 
-def _inline_scope_automation_allowed(scope: dict) -> bool | None:
+def _inline_scope_subscription_access(scope: dict) -> dict | None:
     if "subscription_tier" not in scope and "subscription_status" not in scope:
         return None
-    access = build_subscription_capabilities(
+    return build_subscription_capabilities(
         tier=str(scope.get("subscription_tier") or ""),
         status=str(scope.get("subscription_status") or ""),
         subscription_ends_at=scope.get("subscription_ends_at"),
     )
-    return "operator" in set(access.get("capabilities") or [])
 
 
-def _scope_automation_allowed(cursor, scope: dict, is_superadmin: bool = False) -> bool:
+def _scope_subscription_access(cursor, scope: dict, is_superadmin: bool = False) -> dict:
     if is_superadmin or scope.get("kind") == "platform":
-        return True
+        return build_subscription_capabilities(tier="concierge", status="active", is_superadmin=True)
     business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
     if not business_ids and scope.get("kind") == "business" and scope.get("id"):
         business_ids = [str(scope.get("id"))]
     if not business_ids:
-        return False
+        return build_subscription_capabilities(tier="none", status="inactive")
     cursor.execute(
         """
         SELECT id, subscription_tier, subscription_status, subscription_ends_at
@@ -135,40 +163,100 @@ def _scope_automation_allowed(cursor, scope: dict, is_superadmin: bool = False) 
         (business_ids,),
     )
     rows = [dict(row) for row in (cursor.fetchall() or [])]
-    return len(rows) == len(business_ids) and all(
-        "operator" in set(build_subscription_capabilities(
+    if len(rows) != len(business_ids):
+        return build_subscription_capabilities(tier="none", status="inactive")
+    row_access = [
+        build_subscription_capabilities(
             tier=str(row.get("subscription_tier") or ""),
             status=str(row.get("subscription_status") or ""),
             subscription_ends_at=row.get("subscription_ends_at"),
-        ).get("capabilities") or [])
+        )
         for row in rows
-    )
+    ]
+    shared_capabilities = set(row_access[0].get("capabilities") or []) if row_access else set()
+    for access in row_access[1:]:
+        shared_capabilities.intersection_update(access.get("capabilities") or [])
+    return {
+        "tier": str(row_access[0].get("tier") or "none") if len(row_access) == 1 else "network",
+        "tier_name": str(row_access[0].get("tier_name") or "Без тарифа") if len(row_access) == 1 else "Сеть",
+        "status": str(row_access[0].get("status") or "inactive") if len(row_access) == 1 else "mixed",
+        "active": bool(shared_capabilities),
+        "capabilities": sorted(shared_capabilities),
+    }
 
 
-def _mobile_payment_required_response():
+def _scope_capability_access(cursor, scope: dict, capability: str, is_superadmin: bool = False) -> dict:
+    return capability_access_payload(_scope_subscription_access(cursor, scope, is_superadmin), capability)
+
+
+def _mobile_payment_required_response(access: dict):
     return jsonify({
         "success": False,
         "error": "payment_required",
         "payment_required": True,
-        "capability": "operator",
-        "required_tier": "concierge",
-        "required_tier_name": "Управление",
-        "reason": MOBILE_PAYMENT_REQUIRED_MESSAGE,
-        "billing_url": "/dashboard/profile?focus=subscription#subscription",
+        **access,
+        "billing_url": str((access.get("cta_target") or {}).get("url") or "/dashboard/profile?focus=subscription#subscription"),
         "return_to": request.full_path.rstrip("?"),
     }), 402
+
+
+def _mobile_capability_for_action(action: str) -> str | None:
+    normalized = str(action or "").strip().lower()
+    for prefix, capability in MOBILE_ACTION_CAPABILITIES.items():
+        if normalized.startswith(prefix):
+            return capability
+    return None
+
+
+def _mobile_payload_item_capability(item: dict) -> str | None:
+    cta = item.get("cta") if isinstance(item.get("cta"), dict) else {}
+    route_text = " ".join(str(value or "").lower() for value in (
+        item.get("screen"), item.get("target_screen"), item.get("category"),
+        item.get("kind"), item.get("key"), item.get("capability"), cta.get("href"),
+    ))
+    route_markers = (
+        (("average_ticket", "finance", "revenue", "sale"), "finance"),
+        (("partnership", "partner"), "partnerships"),
+        (("influencer", "creator"), "influencers"),
+        (("agent",), "agents"),
+        (("operator",), "operator"),
+        (("social", "content", "post"), "social_content"),
+        (("community", "feed", "radar"), "telegram_radar"),
+        (("review",), "maps.reviews"),
+        (("service",), "maps.services"),
+        (("progress", "growth_step"), "progress"),
+        (("card", "map"), "maps"),
+    )
+    for markers, capability in route_markers:
+        if any(marker in route_text for marker in markers):
+            return capability
+    return None
+
+
+def _mobile_filter_payload_items(value, subscription_access: dict):
+    allowed_capabilities = set(subscription_access.get("capabilities") or [])
+    if isinstance(value, list):
+        return [
+            _mobile_filter_payload_items(item, subscription_access)
+            for item in value
+            if not isinstance(item, dict)
+            or not _mobile_payload_item_capability(item)
+            or _mobile_payload_item_capability(item) in allowed_capabilities
+        ]
+    if isinstance(value, dict):
+        return {key: _mobile_filter_payload_items(item, subscription_access) for key, item in value.items()}
+    return value
 
 
 def _mobile_navigation(
     scope: dict,
     is_superadmin: bool = False,
-    automation_allowed: bool | None = None,
+    subscription_access: dict | None = None,
 ) -> list[dict]:
     kind = str(scope.get("kind") or "business")
-    if automation_allowed is None:
-        automation_allowed = _inline_scope_automation_allowed(scope)
-    if automation_allowed is None:
-        automation_allowed = True
+    if subscription_access is None:
+        subscription_access = _inline_scope_subscription_access(scope)
+    enforce_capabilities = subscription_access is not None
     agent_runs_available = str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
     items = [
         {"key": "today", "label": "Сегодня", "group": "primary", "status": "available", "available_actions": ["open_focus", "delegate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["today"], "version": 2},
@@ -195,11 +283,20 @@ def _mobile_navigation(
         if company_registry_miniapp_enabled:
             items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
-    if not automation_allowed:
+    if enforce_capabilities:
         for item in items:
-            if item.get("key") in MOBILE_PAID_NAVIGATION_KEYS:
+            capability = MOBILE_NAVIGATION_CAPABILITIES.get(str(item.get("key") or ""))
+            if not capability or item.get("status") == "hidden":
+                continue
+            access = capability_access_payload(subscription_access or {}, capability)
+            item["capability"] = capability
+            item["required_tier"] = access.get("required_tier")
+            item["required_tier_name"] = access.get("required_tier_name")
+            item["billing_url"] = str((access.get("cta_target") or {}).get("url") or "")
+            item["preview_available"] = not bool(access.get("allowed"))
+            if not access.get("allowed"):
                 item["status"] = "read_only"
-                item["reason"] = MOBILE_PAYMENT_REQUIRED_MESSAGE
+                item["reason"] = access.get("reason")
                 item["available_actions"] = []
     return items
 
@@ -521,7 +618,7 @@ def operator_telegram_bootstrap():
         navigation = _mobile_navigation(
             selected or {},
             bool(user.get("is_superadmin")),
-            _scope_automation_allowed(cursor, selected or {}, bool(user.get("is_superadmin"))),
+            _scope_subscription_access(cursor, selected or {}, bool(user.get("is_superadmin"))),
         )
         deep_link = resolve_mobile_deep_link(
             cursor,
@@ -1138,8 +1235,9 @@ def operator_chat():
             message_text = "Нет доступа" if owner_id else "Бизнес не найден"
             return jsonify({"success": False, "error": message_text}), status_code
         business_scope = {"kind": "business", "id": business_id, "business_ids": [business_id]}
-        if not _scope_automation_allowed(cursor, business_scope, bool(user_data.get("is_superadmin"))):
-            return _mobile_payment_required_response()
+        access = _scope_capability_access(cursor, business_scope, "operator", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
 
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         record_operator_event(
@@ -2223,13 +2321,16 @@ def operator_mobile_workspace():
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        subscription_access = _scope_subscription_access(cursor, scope, bool(user_data.get("is_superadmin")))
         summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
+        summary = _mobile_filter_payload_items(summary, subscription_access)
         items = list(summary.get("attention_items") or [])
         if scope.get("kind") == "business":
             inbox = build_operator_inbox(cursor, business_id=str(scope.get("id") or ""), user_id=user_id)
             items = list(inbox.get("items") or [])
         items.extend(_mobile_background_tasks(cursor, scope))
         items = [_mobile_task_item(item) for item in items]
+        items = _mobile_filter_payload_items(items, subscription_access)
         attention_count = len([item for item in items if item.get("status") == "needs_attention"])
         working_count = len([item for item in items if item.get("status") == "in_progress"])
         completed_count = len([item for item in items if item.get("status") == "completed"])
@@ -2253,7 +2354,7 @@ def operator_mobile_workspace():
             "navigation": _mobile_navigation(
                 scope,
                 bool(user_data.get("is_superadmin")),
-                _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))),
+                subscription_access,
             ),
         })
     finally:
@@ -2275,6 +2376,8 @@ def operator_mobile_today():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
+        subscription_access = _scope_subscription_access(cursor, scope, bool(user_data.get("is_superadmin")))
+        payload = _mobile_filter_payload_items(payload, subscription_access)
         return jsonify({"success": True, **payload})
     finally:
         db.close()
@@ -2295,6 +2398,9 @@ def operator_mobile_feed():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "telegram_radar", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         payload = build_mobile_feed(
             cursor,
             scope=scope,
@@ -2391,8 +2497,9 @@ def operator_mobile_progress():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        if not _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))):
-            return _mobile_payment_required_response()
+        access = _scope_capability_access(cursor, scope, "progress", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
         if payload.get("status") == "hidden":
@@ -2470,8 +2577,28 @@ def operator_mobile_module(module: str):
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        if module in MOBILE_PAID_MODULES and not _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))):
-            return _mobile_payment_required_response()
+        capability = MOBILE_MODULE_CAPABILITIES.get(module)
+        if capability:
+            access = _scope_capability_access(cursor, scope, capability, bool(user_data.get("is_superadmin")))
+            if not access.get("allowed"):
+                return jsonify({
+                    "success": True,
+                    "status": "payment_required",
+                    "scope": scope,
+                    "access": access,
+                    "items": [],
+                    "counts": {"total": 0},
+                    "cursor": None,
+                    "as_of": datetime.now(timezone.utc).isoformat(),
+                    "data_warnings": [],
+                    "available_actions": [],
+                    "filters": {},
+                    "preview": {
+                        "title": "Посмотрите, как работает раздел",
+                        "summary": access.get("reason"),
+                        "skeleton_count": 3,
+                    },
+                })
         if module == "settings":
             user_id = str(user_data.get("user_id") or user_data.get("id") or "")
             preferences = load_control_preferences(cursor, user_id)
@@ -2510,7 +2637,12 @@ def _mobile_scope_allows_business(scope: dict, business_id: str) -> bool:
     return business_id in {str(item) for item in scope.get("business_ids") or []}
 
 
-def _mobile_business_from_payload(cursor, user_data: dict, payload: dict) -> tuple[dict | None, str, tuple | None]:
+def _mobile_business_from_payload(
+    cursor,
+    user_data: dict,
+    payload: dict,
+    required_capability: str | None = None,
+) -> tuple[dict | None, str, tuple | None]:
     user_id = str(user_data.get("user_id") or user_data.get("id") or "")
     kind, scope_id = _scope_request_values(payload)
     scope = resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
@@ -2524,6 +2656,11 @@ def _mobile_business_from_payload(cursor, user_data: dict, payload: dict) -> tup
     has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
     if not has_access:
         return scope, business_id, (jsonify({"success": False, "error": "Точка недоступна"}), 403)
+    if required_capability:
+        business_scope = {"kind": "business", "id": business_id, "business_ids": [business_id]}
+        access = _scope_capability_access(cursor, business_scope, required_capability, bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return scope, business_id, _mobile_payment_required_response(access)
     return scope, business_id, None
 
 
@@ -2536,7 +2673,7 @@ def operator_mobile_card_schedule_update():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "maps")
         if error_response:
             return error_response
         current = get_card_automation_snapshot(db.conn, business_id).get("settings") or {}
@@ -2576,7 +2713,7 @@ def operator_mobile_content_plan_generate():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "social_content")
         if error_response:
             return error_response
     finally:
@@ -2605,7 +2742,7 @@ def operator_mobile_content_plan_delete(plan_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "social_content")
         if error_response:
             return error_response
         cursor.execute("SELECT business_id FROM contentplans WHERE id = %s", (plan_id,))
@@ -2634,7 +2771,7 @@ def operator_mobile_services_analyze():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "maps.services")
         if error_response:
             return error_response
         cursor.execute(
@@ -2845,7 +2982,7 @@ def operator_mobile_finance_recognize():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload, "finance")
         if error_response:
             return error_response
     finally:
@@ -2909,6 +3046,9 @@ def operator_mobile_service_update(service_id: str):
             return jsonify({"success": False, "error": "Услуга не найдена"}), 404
         if not scope or not _mobile_scope_allows_business(scope, business_id):
             return jsonify({"success": False, "error": "Услуга недоступна"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.services", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         updates = []
         params = []
         for field in ("name", "description", "price", "category"):
@@ -2952,6 +3092,9 @@ def _mobile_content_item_scope(cursor, user_data: dict, item_id: str):
         return scope, business_id, (jsonify({"success": False, "error": "Элемент плана не найден"}), 404)
     if not scope or not _mobile_scope_allows_business(scope, business_id):
         return scope, business_id, (jsonify({"success": False, "error": "Элемент плана недоступен"}), 403)
+    access = _scope_capability_access(cursor, scope, "social_content", bool(user_data.get("is_superadmin")))
+    if not access.get("allowed"):
+        return scope, business_id, _mobile_payment_required_response(access)
     return scope, business_id, None
 
 
@@ -3050,6 +3193,9 @@ def operator_mobile_reviews():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         status = str(request.args.get("status") or "unanswered").strip().lower()
         source = str(request.args.get("source") or "").strip().lower()
         location_id = str(request.args.get("location_id") or "").strip()
@@ -3188,8 +3334,11 @@ def operator_mobile_action_preview():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         capability = str(payload.get("capability") or payload.get("action_key") or "").strip()
         input_payload = payload.get("input") if isinstance(payload.get("input"), dict) else payload
-        if capability.startswith(MOBILE_PAID_ACTION_PREFIXES) and not _scope_automation_allowed(cursor, scope, bool(user_data.get("is_superadmin"))):
-            return _mobile_payment_required_response()
+        required_capability = _mobile_capability_for_action(capability)
+        if required_capability:
+            access = _scope_capability_access(cursor, scope, required_capability, bool(user_data.get("is_superadmin")))
+            if not access.get("allowed"):
+                return _mobile_payment_required_response(access)
         preview = create_mobile_action_preview(
             cursor,
             user_id=user_id,
@@ -3243,6 +3392,27 @@ def operator_mobile_action_confirm(action_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        cursor.execute(
+            "SELECT capability, scope_type, scope_id FROM operatoractions WHERE id = %s AND user_id = %s",
+            (action_id, user_id),
+        )
+        stored_action = dict(cursor.fetchone() or {})
+        if not stored_action:
+            return jsonify({"success": False, "error": "Действие не найдено"}), 404
+        stored_scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=str(stored_action.get("scope_type") or "business"),
+            requested_id=str(stored_action.get("scope_id") or "") or None,
+        )
+        if not stored_scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        required_capability = _mobile_capability_for_action(str(stored_action.get("capability") or ""))
+        if required_capability:
+            access = _scope_capability_access(cursor, stored_scope, required_capability, bool(user_data.get("is_superadmin")))
+            if not access.get("allowed"):
+                return _mobile_payment_required_response(access)
+
         def scope_resolver(kind: str, scope_id: str | None):
             return resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
 
@@ -3969,6 +4139,9 @@ def operator_mobile_review_draft_update(draft_id: str):
         has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Черновик не найден"}), 403 if owner_id else 404
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         cursor.execute(
             """
             UPDATE reviewreplydrafts
@@ -4012,6 +4185,9 @@ def operator_mobile_review_draft_manual_publish(draft_id: str):
         has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         result = mark_review_reply_draft_manual_published(
             cursor,
             business_id=business_id,
@@ -4041,6 +4217,9 @@ def operator_mobile_history():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "operator", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         if scope.get("kind") != "business":
             limit = max(1, min(int(request.args.get("limit") or 100), 200))
@@ -4125,6 +4304,9 @@ def operator_mobile_review_reply_generate(review_id: str):
         )
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         cursor.execute("SELECT business_id FROM externalbusinessreviews WHERE id = %s", (review_id,))
         row = cursor.fetchone()
         business_id = str((dict(row) if row else {}).get("business_id") or "")

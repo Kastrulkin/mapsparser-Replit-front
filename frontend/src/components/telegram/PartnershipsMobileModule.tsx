@@ -143,6 +143,17 @@ type Blockers = {
     hint?: string;
   }>;
 };
+type PartnershipAccess = {
+  allowed?: boolean;
+  reason?: string;
+  required_tier_name?: string;
+};
+type PartnershipPreview = {
+  limited?: boolean;
+  visible_limit?: number;
+  hidden_count?: number;
+  required_tier_name?: string;
+};
 type PartnershipTab = "overview" | "leads" | "drafts" | "send" | "analytics";
 
 const spring = { type: "spring", duration: 0.3, bounce: 0 };
@@ -273,6 +284,9 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
     limit: "25",
   });
   const [links, setLinks] = useState("");
+  const [access, setAccess] = useState<PartnershipAccess>({ allowed: true });
+  const [preview, setPreview] = useState<PartnershipPreview>({});
+  const [totalCandidates, setTotalCandidates] = useState(0);
 
   const load = async (silent = false) => {
     if (!businessId) return;
@@ -285,8 +299,26 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
       });
       if (query.trim()) params.set("q", query.trim());
       if (stage !== "all") params.set("pipeline_status", stage);
+      const leadData = await request<{
+        items?: Lead[];
+        count?: number;
+        access?: PartnershipAccess;
+        preview?: PartnershipPreview;
+      }>(`/api/partnership/leads?${params.toString()}`);
+      const nextLeads = leadData.items || [];
+      setLeads(nextLeads);
+      setAccess(leadData.access || { allowed: true });
+      setPreview(leadData.preview || {});
+      setTotalCandidates(Number(leadData.count || nextLeads.length));
+      if (leadData.preview?.limited || leadData.access?.allowed === false) {
+        setTab("leads");
+        setDrafts([]);
+        setBatches([]);
+        setReadyDrafts([]);
+        setReactions([]);
+        return;
+      }
       const [
-        leadData,
         draftData,
         batchData,
         funnelData,
@@ -294,9 +326,6 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
         sourceData,
         blockerData,
       ] = await Promise.all([
-        request<{ items?: Lead[] }>(
-          `/api/partnership/leads?${params.toString()}`,
-        ),
         request<{ drafts?: Draft[] }>(
           `/api/partnership/drafts?business_id=${encodeURIComponent(businessId)}`,
         ),
@@ -320,8 +349,6 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           `/api/partnership/blockers-summary?business_id=${encodeURIComponent(businessId)}&window_days=30`,
         ),
       ]);
-      const nextLeads = leadData.items || [];
-      setLeads(nextLeads);
       setDrafts(draftData.drafts || []);
       setBatches(batchData.batches || []);
       setReadyDrafts(batchData.ready_drafts || []);
@@ -687,6 +714,21 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
     return (
       <div className="rounded-[22px] bg-amber-500/10 p-4 text-sm leading-6 text-amber-200 ring-1 ring-inset ring-amber-400/20">
         Для работы с партнёрами сначала выберите конкретный бизнес.
+      </div>
+    );
+  if (!loading && (preview.limited || access.allowed === false))
+    return (
+      <div className="space-y-3">
+        <section className="rounded-[24px] bg-gradient-to-br from-orange-500/[0.14] to-white/[0.035] p-5 ring-1 ring-inset ring-orange-400/20">
+          <small className="font-semibold uppercase tracking-[0.13em] text-orange-400">Preview · {Math.min(leads.length, preview.visible_limit || 10)} из {totalCandidates}</small>
+          <h2 className="mt-2 text-balance text-xl font-semibold">Первые подходящие партнёры уже найдены</h2>
+          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Посмотрите реальные публичные карточки. Контакты, полный список и действия откроются на тарифе «{preview.required_tier_name || access.required_tier_name || "Привлечение"}».</p>
+        </section>
+        <div className="space-y-2">
+          {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><small className="mt-3 block text-zinc-600">{lead.reviews_count || 0} отзывов · публичная карточка</small></article>)}
+        </div>
+        {Number(preview.hidden_count || 0) > 0 ? <div className="space-y-2" aria-hidden="true">{[0, 1, 2].map((index) => <div key={index} className="rounded-[20px] bg-white/[0.035] p-4 blur-[3px] select-none"><div className="h-3 w-2/3 rounded-full bg-white/15" /><div className="mt-3 h-2 w-full rounded-full bg-white/[0.08]" /></div>)}</div> : null}
+        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent("/telegram/control?screen=partnerships")}#subscription`} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-orange-500 px-4 text-center text-sm font-semibold shadow-[0_12px_32px_rgba(249,115,22,0.22)] transition-transform duration-150 active:scale-[0.96]">Открыть полный подбор — тариф «Привлечение»</a>
       </div>
     );
   const tabs: Array<[PartnershipTab, string]> = [

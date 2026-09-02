@@ -20,6 +20,7 @@ export type GrowthNavigationEntry = {
   label: string;
   status: 'available' | 'read_only' | 'hidden';
   reason?: string;
+  preview_available?: boolean;
 };
 
 type GrowthNavigationProps = {
@@ -64,7 +65,7 @@ const utilityTitles: Record<string, string> = {
   diagnostics: 'Контроль системы',
 };
 
-const isPaymentLocked = (item?: GrowthNavigationEntry) => item?.status === 'read_only' && Boolean(item.reason?.toLowerCase().includes('оплат'));
+const isPaymentLocked = (item?: GrowthNavigationEntry) => item?.status === 'read_only' && !item.preview_available;
 
 export default function GrowthNavigation({ navigation, onOpen, onOpenProgress, onLocked, onRestartTour }: GrowthNavigationProps) {
   const visible = new Map(navigation.filter((item) => item.status !== 'hidden').map((item) => [item.key, item]));

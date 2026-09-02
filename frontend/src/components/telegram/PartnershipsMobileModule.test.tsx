@@ -13,6 +13,31 @@ const response = (payload: unknown) => Promise.resolve(new Response(JSON.stringi
 describe('PartnershipsMobileModule destructive actions', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('shows the safe acquisition preview without loading private workflow data', async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.startsWith('/api/partnership/leads?')) {
+        return response({
+          count: 42,
+          items: [{ id: 'lead-preview-1', name: 'Публичный партнёр', city: 'Москва', rating: 4.8, reviews_count: 120 }],
+          access: { allowed: false, required_tier_name: 'Привлечение' },
+          preview: { limited: true, visible_limit: 10, hidden_count: 41, required_tier_name: 'Привлечение' },
+        });
+      }
+      return response({ success: false, error: 'private_endpoint_must_not_be_called' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+
+    expect(await screen.findByText('Первые подходящие партнёры уже найдены')).toBeInTheDocument();
+    expect(screen.getByText('Публичный партнёр')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Открыть полный подбор/ })).toHaveAttribute('href', expect.stringContaining('screen%3Dpartnerships'));
+    expect(calls).toHaveLength(1);
+  });
+
   it('creates an Operator preview before deleting a partnership candidate', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {

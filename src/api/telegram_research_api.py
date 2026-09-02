@@ -35,6 +35,7 @@ from services.telegram_account_permissions_service import (
     sync_sender_binding,
     update_permissions,
 )
+from subscription_manager import get_capability_access
 
 
 telegram_research_bp = Blueprint("telegram_research", __name__)
@@ -80,7 +81,7 @@ def _sync_requested_sender_binding(
     return sender_account_id
 
 
-def _require_business(business_id: str):
+def _require_business(business_id: str, required_capability: str | None = None):
     user_data = require_auth_from_request()
     if not user_data:
         return None, None, None, (jsonify({"success": False, "error": "Требуется авторизация"}), 401)
@@ -91,6 +92,17 @@ def _require_business(business_id: str):
         db.close()
         status = 403 if owner_id else 404
         return None, None, None, (jsonify({"success": False, "error": "Нет доступа к бизнесу"}), status)
+    if required_capability:
+        access = get_capability_access(business_id, required_capability, bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            db.close()
+            return None, None, None, (jsonify({
+                "success": False,
+                "error": "payment_required",
+                "payment_required": True,
+                **access,
+                "return_to": request.full_path.rstrip("?"),
+            }), 402)
     return db, cursor, user_data, None
 
 
@@ -454,7 +466,7 @@ def research_dialogs(business_id: str):
 
 @telegram_research_bp.get("/api/business/<business_id>/community-sources")
 def community_sources(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     try:
@@ -512,7 +524,7 @@ def community_sources(business_id: str):
 
 @telegram_research_bp.get("/api/business/<business_id>/community-sources/catalog")
 def community_source_catalog(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     query = str(request.args.get("q") or "").strip()[:120]
@@ -593,7 +605,7 @@ def community_source_catalog(business_id: str):
 
 @telegram_research_bp.post("/api/business/<business_id>/community-sources/<source_id>/subscribe")
 def subscribe_community_catalog_source(business_id: str, source_id: str):
-    db, cursor, user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     try:
@@ -651,7 +663,7 @@ def subscribe_community_catalog_source(business_id: str, source_id: str):
 
 @telegram_research_bp.post("/api/business/<business_id>/community-sources")
 def add_community_source(business_id: str):
-    db, cursor, user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     payload = request.get_json(silent=True) or {}
@@ -742,7 +754,7 @@ def add_community_source(business_id: str):
 
 @telegram_research_bp.delete("/api/business/<business_id>/community-sources/<source_id>")
 def remove_community_source(business_id: str, source_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     try:
@@ -761,7 +773,7 @@ def remove_community_source(business_id: str, source_id: str):
 
 @telegram_research_bp.patch("/api/business/<business_id>/community-sources/<source_id>")
 def update_community_source_subscription(business_id: str, source_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, _user_data, error = _require_business(business_id, "telegram_radar")
     if error:
         return error
     payload = request.get_json(silent=True) or {}
