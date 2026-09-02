@@ -69,7 +69,7 @@ Gitleaks повторно проверил tracked HEAD и полную Git-ис
 
 В истории подтверждены старые Wordstat credentials и legacy Supabase `service_role` проекта `SEOmaps` (`bvhpvzcvcuswiozhyqlk`). Текущий LocalOS production Supabase не использует; новый Supabase key в LocalOS не добавлялся.
 
-Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; production `app`/`worker` не содержат Supabase variables. 2 сентября `SEOmaps` возобновлён и legacy `anon`/`service_role` отключены как API keys. Wordstat Cloud key ротирован, старые Yandex API keys удалены, legacy OAuth variables удалены из production, а provider smoke прошёл до и после отзыва старых ключей.
+Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; production `app`/`worker` не содержат Supabase variables. 2 сентября `SEOmaps` возобновлён, legacy `anon`/`service_role` отключены как API keys, проект переведён на ECC P-256 signing key, а legacy HS256 key отозван. Wordstat Cloud key ротирован, старые Yandex API keys удалены, legacy OAuth variables удалены из production, а provider smoke прошёл до и после отзыва старых ключей.
 
 ## Что ещё не завершено
 

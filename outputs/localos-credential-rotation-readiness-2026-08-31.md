@@ -59,6 +59,7 @@
 - Проект `SEOmaps` возобновлён, чтобы открыть актуальные настройки ключей; данные проекта не изменялись.
 - Подтверждено наличие современных publishable keys и secret key; новый Supabase credential в LocalOS не добавлялся.
 - Штатной командой Supabase отключены legacy JWT-based API keys `anon` и `service_role` для использования в заголовке `apikey`. Dashboard после операции показывает `Re-enable JWT-based API keys`.
-- Supabase предупреждает, что старые JWT остаются валидными именно как JWT до отдельной смены signing secret. Signing secret не менялся, поскольку пользователь разрешил отзыв legacy `service_role`, а не глобальную JWT-ротацию.
+- Для полного отзыва исторического `service_role` проект мигрирован с legacy HS256 на управляемые JWT signing keys без downtime. Новый ECC P-256 key сделан текущим.
+- Старый HS256 signing key явно отозван. Dashboard показывает его в `Revoked keys` и указывает, что revoked keys больше не используются для подписи или проверки JWT; ранее выданные legacy JWT немедленно потеряли доверие.
 
 Credential gate для LocalOS закрыт. Оставшиеся rollout-gates относятся к production drift, non-root ownership и browser cookie migration, а не к историческим Wordstat/Supabase credentials.

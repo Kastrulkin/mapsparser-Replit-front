@@ -104,7 +104,7 @@ F-rollout обязан сначала сохранить NUL-safe snapshot `uid/
 
 - Точная карта потребителей и approval gates: `outputs/localos-credential-rotation-readiness-2026-08-31.md`.
 - Закрыто 2 сентября 2026 года: Wordstat переведён на новый scoped Cloud credential; `app`/`worker` прошли provider smoke до и после удаления старых Yandex keys; legacy OAuth variables удалены.
-- Закрыто 2 сентября 2026 года: в `SEOmaps` отключены legacy JWT-based API keys `anon` и `service_role`; современные project keys сохранены.
+- Закрыто 2 сентября 2026 года: в `SEOmaps` отключены legacy JWT-based API keys `anon` и `service_role`; проект переведён на ECC P-256 signing key, legacy HS256 key отозван, современные project keys сохранены.
 - Новый Supabase credential в LocalOS production не добавлен: `SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY` по-прежнему отсутствуют в `app` и `worker`.
 - Значения не передавать через command arguments, Git, отчёты или логи.
 
