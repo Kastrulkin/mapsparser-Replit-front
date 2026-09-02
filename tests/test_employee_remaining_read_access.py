@@ -62,6 +62,10 @@ def _auth_headers():
     return {"Authorization": "Bearer member-token"}
 
 
+def _allow_maps(monkeypatch):
+    monkeypatch.setattr(external_accounts_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
+
+
 def test_network_member_can_list_shared_business_content_plans(monkeypatch):
     database = AccessDatabase()
     monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: database)
@@ -113,6 +117,7 @@ def test_network_member_can_read_shared_business_competitors(monkeypatch):
 
 
 def test_network_member_can_read_shared_business_external_summary(monkeypatch):
+    _allow_maps(monkeypatch)
     monkeypatch.setattr(external_accounts_api, "verify_session", _network_member_session)
     monkeypatch.setattr(external_accounts_api, "DatabaseManager", AccessDatabase)
     monkeypatch.setattr(external_accounts_api, "get_business_owner_id", lambda cursor, business_id: "owner-1")
@@ -127,6 +132,7 @@ def test_network_member_can_read_shared_business_external_summary(monkeypatch):
 
 
 def test_network_member_can_read_shared_business_external_reviews(monkeypatch):
+    _allow_maps(monkeypatch)
     monkeypatch.setattr(external_accounts_api, "verify_session", _network_member_session)
     monkeypatch.setattr(external_accounts_api, "DatabaseManager", AccessDatabase)
     monkeypatch.setattr(external_accounts_api, "get_business_owner_id", lambda cursor, business_id: "owner-1")
@@ -141,6 +147,7 @@ def test_network_member_can_read_shared_business_external_reviews(monkeypatch):
 
 
 def test_network_member_can_read_shared_business_external_posts(monkeypatch):
+    _allow_maps(monkeypatch)
     monkeypatch.setattr(external_accounts_api, "verify_session", _network_member_session)
     monkeypatch.setattr(external_accounts_api, "DatabaseManager", AccessDatabase)
     monkeypatch.setattr(external_accounts_api, "get_business_owner_id", lambda cursor, business_id: "owner-1")

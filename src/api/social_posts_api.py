@@ -14,6 +14,7 @@ from auth_system import verify_session
 from core.api_errors import internal_error_response
 from core.telegram_network import resolve_telegram_http_proxy, telegram_urlopen
 from database_manager import DatabaseManager
+from subscription_manager import get_capability_access
 from services.social_post_service import (
     apply_social_post_recommendation,
     approve_social_post,
@@ -396,7 +397,6 @@ def require_social_content_access():
     business_id = _social_request_business_id()
     if not business_id:
         return None
-    from subscription_manager import get_capability_access
     access = get_capability_access(business_id, 'social_content')
     if access.get('allowed'):
         return None

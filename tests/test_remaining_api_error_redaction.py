@@ -160,6 +160,8 @@ def test_media_photo_file_internal_error_is_redacted(monkeypatch):
 
 def test_social_post_prepare_internal_error_is_redacted(monkeypatch):
     social_posts_api._WRITE_RATE_BUCKETS.clear()
+    monkeypatch.setattr(social_posts_api, "_social_request_business_id", lambda: "business-1")
+    monkeypatch.setattr(social_posts_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     monkeypatch.setattr(
         social_posts_api,
         "verify_session",
@@ -190,6 +192,8 @@ def test_social_post_prepare_internal_error_is_redacted(monkeypatch):
 
 def test_social_posts_bulk_prepare_internal_error_is_redacted(monkeypatch):
     social_posts_api._WRITE_RATE_BUCKETS.clear()
+    monkeypatch.setattr(social_posts_api, "_social_request_business_id", lambda: "business-1")
+    monkeypatch.setattr(social_posts_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     monkeypatch.setattr(
         social_posts_api,
         "verify_session",
@@ -498,6 +502,7 @@ def test_telegram_radar_ingest_internal_error_is_redacted(monkeypatch):
     signature = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
 
     monkeypatch.setenv("OPENCLAW_WEBHOOK_SECRET", secret)
+    monkeypatch.setattr(telegram_opportunity_radar_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     monkeypatch.setattr(telegram_opportunity_radar_api, "DatabaseManager", lambda: database)
     monkeypatch.setattr(
         telegram_opportunity_radar_api,

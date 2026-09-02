@@ -15,12 +15,48 @@ from google_business_api import GoogleBusinessAPIError
 from google_business_sync_worker import GoogleBusinessSyncWorker
 from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from core.helpers import get_business_owner_id
+from subscription_manager import get_capability_access
 
 google_business_bp = Blueprint('google_business', __name__)
 
 DEFAULT_GOOGLE_RETURN_PATH = "/dashboard/settings/integrations?focus=google_business"
 DEFAULT_GOOGLE_SHEETS_RETURN_PATH = "/dashboard/settings/integrations?focus=google_sheets"
 GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS = 600
+
+
+@google_business_bp.before_request
+def require_google_business_capability():
+    if request.method == "OPTIONS" or request.path.endswith("/callback"):
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    payload = request.get_json(silent=True) if request.method in {"POST", "PUT", "PATCH"} else {}
+    payload = payload if isinstance(payload, dict) else {}
+    route_values = request.view_args or {}
+    business_id = str(route_values.get("business_id") or payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if not business_id:
+        return None
+    if "/google-sheets/" in request.path or request.path.startswith("/api/google/sheets/"):
+        capability = "automation"
+    elif request.path.endswith("/publish-post"):
+        capability = "maps.news"
+    elif request.path.endswith("/publish-review-reply"):
+        capability = "maps.reviews"
+    else:
+        capability = "maps"
+    access = get_capability_access(business_id, capability, bool(user_data.get("is_superadmin")))
+    if access.get("allowed"):
+        return None
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
 
 def _row_value(row, key: str, index: int = 0):
     if row is None:

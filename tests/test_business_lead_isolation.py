@@ -6,7 +6,7 @@ if "src" not in sys.path:
     sys.path.insert(0, "src")
 
 from database_manager import DatabaseManager
-from services.partnership_leads_service import partnership_list_leads
+from services.partnership_leads_service import _sanitize_partnership_preview_item, partnership_list_leads
 
 
 class CapturingCursor:
@@ -95,3 +95,20 @@ def test_partnership_leads_expose_persisted_audit_and_match_summary():
     assert "AS audit_ready" in source
     assert "AS match_summary_json" in source
     assert "partnershipleadartifacts artifact" in source
+
+
+def test_partnership_preview_drops_nested_contacts_and_operational_evidence():
+    preview = _sanitize_partnership_preview_item({
+        "id": "lead-1",
+        "company_name": "Public company",
+        "workstreams": [{
+            "contact_points": [{"type": "email", "value": "hidden@example.com"}],
+            "selected_recipient": {"value": "+79990000000"},
+            "research": {"contact_evidence": [{"source_url": "https://secret.example"}]},
+        }],
+        "contact_points": [{"value": "hidden@example.com"}],
+        "selected_recipient": {"value": "+79990000000"},
+        "next_action": {"type": "send"},
+    })
+
+    assert preview == {"id": "lead-1", "company_name": "Public company"}

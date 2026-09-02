@@ -75,6 +75,7 @@ from services.lead_workstream_service import (
     update_workstream,
 )
 from services import lead_partner_type_service
+from subscription_manager import get_capability_access
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -790,19 +791,16 @@ def search_businesses():
     except Exception as e:
         print(f"Error queueing prospecting search: {e}")
         return jsonify({"error": str(e)}), 500
-
 @admin_prospecting_bp.route("/api/admin/prospecting/business-parse-apify", methods=["POST"])
 def queue_business_parse_apify():
     """Queue single business card parsing through Apify actor (Yandex / 2GIS / Google / Apple)."""
     user_data, error = _require_auth()
     if error:
         return error
-
     data = request.get_json(silent=True) or {}
     source = str(data.get("source") or "apify_yandex").strip().lower()
     if source not in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}:
         return jsonify({"error": "Unsupported source"}), 400
-
     service = ProspectingService(source=source)
     if not service.client:
         return jsonify({"error": "APIFY_TOKEN is not configured"}), 500
@@ -813,6 +811,8 @@ def queue_business_parse_apify():
         business_id = _resolve_business_for_user(cur, user_data, str(data.get("business_id") or "").strip())
         if not business_id:
             return jsonify({"error": "Business not found or access denied"}), 404
+        if not (maps_access := get_capability_access(business_id, "maps", bool(user_data.get("is_superadmin")))).get("allowed"):
+            return jsonify({"success": False, "error": "payment_required", **maps_access, "return_to": request.full_path.rstrip("?")}), 402
 
         if source == "apify_2gis":
             cur.execute(

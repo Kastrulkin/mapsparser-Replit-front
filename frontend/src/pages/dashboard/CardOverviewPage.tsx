@@ -30,7 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
+import { getCapabilityAccessForBusiness } from '@/lib/subscriptionAccess';
 import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { CardServicesTable } from '@/components/dashboard/CardServicesTable';
 import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/dashboard/CardOverviewTabs';
@@ -116,8 +116,8 @@ export const CardOverviewPage = () => {
   const aiLearningTooltip = isRu
     ? 'Система учитывает, как вы редактируете предложения по услугам, отзывам и новостям, и постепенно подстраивает следующие рекомендации под ваш стиль.'
     : 'The system learns from how you edit service, review, and news suggestions and gradually adapts future recommendations to your style.';
-  const automationAccess = getAutomationAccessForBusiness(currentBusiness);
-  const automationLockedMessage = automationAccess.message || pageCopy.automationLocked;
+  const mapsAccess = getCapabilityAccessForBusiness(currentBusiness, 'maps');
+  const mapsLockedMessage = mapsAccess.message || pageCopy.automationLocked;
   const initialTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
   const initialModeParam = String(searchParams.get('mode') || '').trim().toLowerCase();
   const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
@@ -610,7 +610,7 @@ export const CardOverviewPage = () => {
   const canRefreshCardData = refreshSyncSources.length > 0;
   const refreshBlockedByPolicy = !parseRefreshPolicy.can_refresh;
   const refreshBlockedByActiveParse = parseStatus === 'processing' || parseStatus === 'queued';
-  const canTriggerRefresh = automationAccess.automationAllowed && canRefreshCardData && !refreshBlockedByPolicy && !refreshBlockedByActiveParse;
+  const canTriggerRefresh = mapsAccess.allowed && canRefreshCardData && !refreshBlockedByPolicy && !refreshBlockedByActiveParse;
 
   const handleRefreshCardData = async () => {
     if (isDemoMode) {
@@ -619,9 +619,9 @@ export const CardOverviewPage = () => {
       setParseStatus('done');
       return;
     }
-    if (!currentBusinessId || !automationAccess.automationAllowed || !canRefreshCardData) {
-      if (!automationAccess.automationAllowed) {
-        setError(automationLockedMessage);
+    if (!currentBusinessId || !mapsAccess.allowed || !canRefreshCardData) {
+      if (!mapsAccess.allowed) {
+        setError(mapsLockedMessage);
       }
       return;
     }
@@ -708,8 +708,8 @@ export const CardOverviewPage = () => {
     userServices,
     setUserServices,
     currentBusinessId,
-    automationAllowed: automationAccess.automationAllowed,
-    automationLockedMessage,
+    automationAllowed: mapsAccess.allowed,
+    automationLockedMessage: mapsLockedMessage,
     loadUserServices,
     setError,
     setSuccess,
@@ -1092,7 +1092,7 @@ export const CardOverviewPage = () => {
                         <span className="inline-flex">
                           <Button
                             onClick={regenerateProblematicServices}
-                            disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+                            disabled={!mapsAccess.allowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
                             className="bg-slate-950 text-white hover:bg-slate-800"
                           >
                             <Sparkles className="mr-2 h-4 w-4" />
@@ -1128,7 +1128,7 @@ export const CardOverviewPage = () => {
                           <Button
                             variant="outline"
                             onClick={optimizeAllServices}
-                            disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+                            disabled={!mapsAccess.allowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
                             className="border-slate-200 bg-white text-slate-700"
                           >
                             <Wand2 className="mr-2 h-4 w-4" />
@@ -1258,8 +1258,8 @@ export const CardOverviewPage = () => {
                 servicesSearch={servicesSearch}
                 servicesCategoryFilter={servicesCategoryFilter}
                 language={language}
-                automationAllowed={automationAccess.automationAllowed}
-                automationLockedMessage={automationLockedMessage}
+                automationAllowed={mapsAccess.allowed}
+                automationLockedMessage={mapsLockedMessage}
                 optimizingServiceId={optimizingServiceId}
                 enrichingServiceId={enrichingServiceId}
                 formatServiceSource={formatServiceSource}
@@ -1321,8 +1321,8 @@ export const CardOverviewPage = () => {
                         businessId={currentBusinessId}
                         language={language}
                         servicesCount={userServices.length}
-                        automationAllowed={automationAccess.automationAllowed}
-                        automationLockedMessage={automationLockedMessage}
+                        automationAllowed={mapsAccess.allowed}
+                        automationLockedMessage={mapsLockedMessage}
                         optimizingAll={optimizingAll}
                         regeneratingProblematic={regeneratingProblematic}
                         optimizingServiceId={optimizingServiceId}
@@ -1340,8 +1340,8 @@ export const CardOverviewPage = () => {
 
           <TabsContent value="reviews">
             <ReviewsTab
-              automationAllowed={automationAccess.automationAllowed}
-              automationLockedMessage={automationLockedMessage}
+              automationAllowed={mapsAccess.allowed}
+              automationLockedMessage={mapsLockedMessage}
               businessName={currentBusiness?.name}
               selectedSource={selectedSource}
               aggregateScope={isNetworkRepresentative ? 'network' : 'business'}
@@ -1352,8 +1352,8 @@ export const CardOverviewPage = () => {
 
           <TabsContent value="news">
             <NewsTab
-              automationAllowed={automationAccess.automationAllowed}
-              automationLockedMessage={automationLockedMessage}
+              automationAllowed={mapsAccess.allowed}
+              automationLockedMessage={mapsLockedMessage}
               services={(userServices || []).map((service) => ({ id: String(service.id || ''), name: String(service.name || '') }))}
               businessId={currentBusinessId}
               externalPosts={externalPosts}

@@ -163,7 +163,12 @@ def ingest_from_openclaw():
         elif payload.get("business_id"):
             capability_access = get_capability_access(str(payload.get("business_id")), "telegram_radar")
             if not capability_access.get("allowed"):
-                return jsonify({"success": False, "error": "payment_required", **capability_access}), 402
+                return jsonify({
+                    "success": False,
+                    "error": "payment_required",
+                    **capability_access,
+                    "return_to": request.full_path.rstrip("?"),
+                }), 402
         result = ingest_opportunity(cursor, payload)
         alert_result = None
         if result.get("created") and result.get("opportunity"):

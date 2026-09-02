@@ -19,6 +19,7 @@ from core.service_problem_regeneration import (
     select_problem_services_for_regeneration,
 )
 from core.service_catalog_compression import build_service_catalog_compression_draft
+from subscription_manager import get_capability_access
 import json
 import os
 import sys
@@ -35,6 +36,69 @@ SERVICE_REGENERATION_JOBS = {}
 SERVICE_REGENERATION_ATTEMPTS = {}
 SERVICE_REGENERATION_LOCK = threading.Lock()
 SERVICE_REGENERATION_FINAL_STATUSES = {"completed", "rate_limited", "failed", "cancelled"}
+
+
+def _services_payment_required(access):
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
+
+
+def _services_request_business_id(cursor):
+    payload = request.get_json(silent=True) if request.method in {"POST", "PUT", "PATCH"} else {}
+    payload = payload if isinstance(payload, dict) else {}
+    business_id = str(payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if business_id:
+        return business_id
+
+    route_values = request.view_args or {}
+    service_id = str(route_values.get("service_id") or "").strip()
+    if service_id:
+        cursor.execute("SELECT business_id FROM userservices WHERE id = %s LIMIT 1", (service_id,))
+        row = cursor.fetchone()
+        return str(_cell(row, "business_id", _cell(row, 0, "")) or "").strip()
+
+    request_id = str(route_values.get("request_id") or "").strip()
+    if request_id:
+        cursor.execute("SELECT business_id FROM service_catalog_compression_requests WHERE id = %s LIMIT 1", (request_id,))
+        row = cursor.fetchone()
+        return str(_cell(row, "business_id", _cell(row, 0, "")) or "").strip()
+
+    job_id = str(route_values.get("job_id") or "").strip()
+    if job_id:
+        job = _public_job(job_id) or {}
+        return str(job.get("business_id") or "").strip()
+    return ""
+
+
+@services_bp.before_request
+def require_maps_services_access():
+    if request.method == "OPTIONS" or request.endpoint == "services.get_services":
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        business_id = _services_request_business_id(cursor)
+        if not business_id:
+            return None
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id or not has_access:
+            return None
+        access = get_capability_access(business_id, "maps.services", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _services_payment_required(access)
+        return None
+    finally:
+        db.close()
 
 
 def _cell(row, key_or_index, default=None):
@@ -1148,6 +1212,7 @@ def get_services():
         business_id = request.args.get('business_id')
         requested_scope = str(request.args.get('scope') or '').strip().lower()
         source_filter_raw = str(request.args.get('source') or '').strip().lower()
+        preview_limited = False
 
         # PostgreSQL: список колонок таблицы userservices
         cursor.execute("""
@@ -1200,6 +1265,18 @@ def get_services():
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
             aggregate_network, network_id = _resolve_network_scope(cursor, business_id, requested_scope)
+            scoped_business_ids = [str(business_id)]
+            if aggregate_network:
+                cursor.execute(
+                    "SELECT id FROM businesses WHERE network_id = %s OR id = %s ORDER BY id",
+                    (network_id, network_id),
+                )
+                scoped_business_ids = [str(_cell(row, 'id', _cell(row, 0, ''))) for row in cursor.fetchall()]
+            preview_limited = any(
+                not get_capability_access(item, "maps.services", bool(user_data.get("is_superadmin"))).get("allowed")
+                for item in scoped_business_ids
+                if item
+            )
 
             order_by = "ORDER BY category NULLS LAST, name NULLS LAST"
             if has_price_from:
@@ -1230,8 +1307,20 @@ def get_services():
             )
             cursor.execute(select_sql, tuple(params))
         else:
+            if user_data.get("is_superadmin"):
+                allowed_business_ids = None
+            else:
+                cursor.execute("SELECT id FROM businesses WHERE owner_id = %s AND COALESCE(is_active, TRUE) = TRUE", (user_id,))
+                owned_business_ids = [str(_cell(row, 'id', _cell(row, 0, ''))) for row in cursor.fetchall()]
+                allowed_business_ids = [
+                    item for item in owned_business_ids
+                    if item and get_capability_access(item, "maps.services").get("allowed")
+                ]
             where_parts = ["user_id = %s"]
             params = [user_id]
+            if allowed_business_ids is not None:
+                where_parts.append("business_id = ANY(%s)")
+                params.append(allowed_business_ids)
             source_condition, source_params = _service_source_condition()
             if source_condition:
                 where_parts.append(source_condition)
@@ -1402,6 +1491,26 @@ def get_services():
         attach_service_quality_metadata(services)
         attach_service_quality_metadata(external_services)
 
+        total_services_count = len(services) + len(external_services)
+        if preview_limited:
+            visible_services = services[:10]
+            visible_external_services = external_services[:max(0, 10 - len(visible_services))]
+
+            def public_preview_service(item):
+                return {
+                    "category": item.get("category") or "",
+                    "name": item.get("name") or "",
+                    "description": item.get("description") or "",
+                    "price": item.get("price") or "",
+                    "price_from": item.get("price_from"),
+                    "price_to": item.get("price_to"),
+                    "source": item.get("source") or "",
+                    "is_external": bool(item.get("is_external")),
+                }
+
+            services = [public_preview_service(item) for item in visible_services]
+            external_services = [public_preview_service(item) for item in visible_external_services]
+
         return jsonify({
             "success": True,
             "services": services,
@@ -1410,6 +1519,13 @@ def get_services():
             "no_new_services_found": no_new_services_found,
             "scope": "network" if aggregate_network else "business",
             "network_id": network_id if aggregate_network else None,
+            "preview": {
+                "limited": preview_limited,
+                "visible_limit": 10,
+                "hidden_count": max(total_services_count - len(services) - len(external_services), 0),
+                "required_tier": "starter",
+                "required_tier_name": "Карты",
+            },
         })
     
     except Exception as e:

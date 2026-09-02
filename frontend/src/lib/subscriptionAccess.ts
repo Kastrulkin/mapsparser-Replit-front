@@ -1,5 +1,6 @@
 export type SubscriptionCapability =
-  | 'maps' | 'maps.news' | 'telegram_radar' | 'web_analytics'
+  | 'maps' | 'maps.audit' | 'maps.services' | 'maps.reviews' | 'maps.news'
+  | 'maps.photos' | 'maps.competitors' | 'progress' | 'telegram_radar' | 'web_analytics'
   | 'acquisition' | 'partnerships' | 'influencers' | 'ai_visibility'
   | 'management' | 'finance' | 'average_ticket' | 'agents' | 'operator'
   | 'chats' | 'social_content' | 'automation';
@@ -24,7 +25,9 @@ const TIER_ALIASES: Record<string, string> = { basic: 'starter', pro: 'professio
 const TIER_RANK: Record<string, number> = { starter: 1, professional: 2, concierge: 3, elite: 3, promo: 3 };
 const TIER_NAMES: Record<string, string> = { starter: 'Карты', professional: 'Привлечение', concierge: 'Управление', elite: 'Elite', promo: 'Промо' };
 const CAPABILITY_TIER: Record<SubscriptionCapability, 'starter' | 'professional' | 'concierge'> = {
-  maps: 'starter', 'maps.news': 'starter', telegram_radar: 'starter', web_analytics: 'starter',
+  maps: 'starter', 'maps.audit': 'starter', 'maps.services': 'starter', 'maps.reviews': 'starter',
+  'maps.news': 'starter', 'maps.photos': 'starter', 'maps.competitors': 'starter', progress: 'starter',
+  telegram_radar: 'starter', web_analytics: 'starter',
   acquisition: 'professional', partnerships: 'professional', influencers: 'professional', ai_visibility: 'professional',
   management: 'concierge', finance: 'concierge', average_ticket: 'concierge', agents: 'concierge',
   operator: 'concierge', chats: 'concierge', social_content: 'concierge', automation: 'concierge',

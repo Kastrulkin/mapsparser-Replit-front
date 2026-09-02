@@ -57,6 +57,7 @@ from services.meta_oauth_service import (
     meta_graph_api_version,
     public_meta_asset,
 )
+from subscription_manager import get_capability_access
 
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,66 @@ external_accounts_bp = Blueprint("external_accounts_api", __name__)
 
 DEFAULT_VK_RETURN_PATH = "/dashboard/settings/integrations?focus=vk"
 DEFAULT_META_RETURN_PATH = "/dashboard/settings/integrations?focus=meta"
+
+
+@external_accounts_bp.before_request
+def require_maps_external_accounts_access():
+    if request.method == "OPTIONS" or not (
+        request.path.startswith("/api/business/")
+        or request.path.startswith("/api/external-accounts/")
+    ):
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    route_values = request.view_args or {}
+    business_id = str(route_values.get("business_id") or "").strip()
+    db = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        if not business_id and route_values.get("account_id"):
+            cursor.execute(
+                "SELECT business_id FROM externalbusinessaccounts WHERE id = %s LIMIT 1",
+                (str(route_values.get("account_id")),),
+            )
+            row = cursor.fetchone()
+            business_id = str(row.get("business_id") if hasattr(row, "get") else row[0]) if row else ""
+        if not business_id:
+            return None
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id or not has_access:
+            return None
+        scoped_business_ids = [business_id]
+        if str(request.args.get("scope") or "").strip().lower() == "network":
+            cursor.execute("SELECT network_id FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+            row = cursor.fetchone()
+            network_id = str(row.get("network_id") if hasattr(row, "get") else row[0]) if row else ""
+            if network_id:
+                cursor.execute("SELECT id FROM businesses WHERE network_id = %s OR id = %s ORDER BY id", (network_id, network_id))
+                scoped_business_ids = [str(row.get("id") if hasattr(row, "get") else row[0]) for row in cursor.fetchall()]
+        access_rows = [
+            get_capability_access(item, "maps", bool(user_data.get("is_superadmin")))
+            for item in scoped_business_ids
+        ]
+        if access_rows and all(item.get("allowed") for item in access_rows):
+            return None
+        access = next((item for item in access_rows if not item.get("allowed")), get_capability_access(business_id, "maps"))
+        return jsonify({
+            "success": False,
+            "error": "payment_required",
+            **access,
+            "return_to": request.full_path.rstrip("?"),
+        }), 402
+    except Exception:
+        message = "Не удалось получить подключения" if request.method == "GET" and request.path.endswith("/external-accounts") else "Не удалось проверить тарифный доступ"
+        return internal_error_response(message)
+    finally:
+        if db is not None:
+            db.close()
 
 
 try:

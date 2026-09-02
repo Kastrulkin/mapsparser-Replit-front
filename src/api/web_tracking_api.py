@@ -204,7 +204,18 @@ def receive_tracking_events():
             return _ingestion_response(started_at=started_at, status=404, outcome="tracker_not_found", tracker_id=tracker_id)
         capability_access = get_capability_access(str(tracker["business_id"]), "web_analytics")
         if not capability_access.get("allowed"):
-            return _ingestion_response(started_at=started_at, status=402, outcome="payment_required", tracker_id=tracker_id)
+            return _ingestion_response(
+                started_at=started_at,
+                status=402,
+                outcome="payment_required",
+                tracker_id=tracker_id,
+                code="payment_required",
+                payment_required=True,
+                required_capability=capability_access.get("required_capability"),
+                required_tier=capability_access.get("required_tier"),
+                required_tier_name=capability_access.get("required_tier_name"),
+                message=capability_access.get("message"),
+            )
         domain_error = validate_tracker_domains(events, tracker.get("allowed_domains"))
         if domain_error:
             _record_tracker_error(db, dict(tracker), domain_error)

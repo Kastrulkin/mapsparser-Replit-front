@@ -174,6 +174,16 @@ def test_external_accounts_get_uses_current_app_debug_without_name_error(monkeyp
         "DatabaseManager",
         lambda: FakeDatabase(),
     )
+    monkeypatch.setattr(
+        external_accounts_api,
+        "verify_business_access",
+        lambda cursor, business_id, user_data: (True, "owner-1"),
+    )
+    monkeypatch.setattr(
+        external_accounts_api,
+        "get_capability_access",
+        lambda business_id, capability, is_superadmin=False: {"allowed": True, "capability": capability},
+    )
 
     app = Flask(__name__)
     app.debug = True

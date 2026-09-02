@@ -520,6 +520,54 @@ SENSITIVE_PROBE_EXACT_PATHS = {
 # ==================== ХЕЛПЕР: РАБОТА С БИЗНЕСАМИ ====================
 # Импортируем helper функции из core модуля
 from core.helpers import get_business_owner_id, get_business_id_from_user, get_user_language, find_business_id_for_user
+from subscription_manager import get_capability_access
+
+
+@app.before_request
+def require_legacy_maps_content_access():
+    protected_capability = None
+    if request.path.startswith("/api/news/"):
+        protected_capability = "maps.news"
+    elif request.path in {"/api/reviews/reply", "/api/review-replies/update"}:
+        protected_capability = "maps.reviews"
+    if not protected_capability or request.method == "OPTIONS":
+        return None
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    payload = request.get_json(silent=True) if request.method in {"POST", "PUT", "PATCH"} else {}
+    payload = payload if isinstance(payload, dict) else {}
+    business_id = str(payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if not business_id and payload.get("news_id"):
+        db = DatabaseManager()
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute(
+                "SELECT business_id FROM usernews WHERE id = %s AND user_id = %s LIMIT 1",
+                (str(payload.get("news_id")), str(user_data.get("user_id") or "")),
+            )
+            row = cursor.fetchone()
+            business_id = str(row.get("business_id") if hasattr(row, "get") else row[0]) if row else ""
+        finally:
+            db.close()
+    if not business_id and request.path != "/api/news/list":
+        business_id = str(get_business_id_from_user(str(user_data.get("user_id") or "")) or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    access = get_capability_access(business_id, protected_capability, bool(user_data.get("is_superadmin")))
+    if access.get("allowed"):
+        return None
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 

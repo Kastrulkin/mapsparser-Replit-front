@@ -54,6 +54,7 @@ def _client(monkeypatch):
     monkeypatch.setattr(finance_api, "verify_session", lambda _token: {"user_id": "user-1"})
     monkeypatch.setattr(finance_api, "get_business_id_from_user", lambda _user_id, requested: requested)
     monkeypatch.setattr(finance_api, "verify_business_access", lambda _cursor, business_id, _user: (business_id == "business-2", "owner-1"))
+    monkeypatch.setattr(finance_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     app = Flask(__name__)
     app.register_blueprint(finance_api.finance_bp)
     return app.test_client()

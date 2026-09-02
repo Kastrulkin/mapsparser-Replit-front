@@ -18,6 +18,11 @@ from services.web_tracking_service import (
 NOW = datetime(2026, 8, 16, 9, 0, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def allow_web_analytics_capability(monkeypatch):
+    monkeypatch.setattr(web_tracking_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
+
+
 def _event(event_type="page_view", extra=None):
     event = {
         "visitor_id": "v_0123456789abcdef01234567",
@@ -299,6 +304,33 @@ def test_public_ingestion_resolves_tracker_and_accepts_batch(monkeypatch):
     assert captured["metrics"]["accepted"] == 1
     assert response.headers["Access-Control-Allow-Origin"] == "https://client.example"
     assert "Access-Control-Allow-Credentials" not in response.headers
+
+
+def test_public_ingestion_returns_standardized_paywall_for_inactive_tracker_business(monkeypatch):
+    _Database.cursor = _Cursor([{"id": "tracker-1", "business_id": "business-1", "public_tracker_id": "pub_public-not-secret", "allowed_domains": ["example.com"]}])
+    monkeypatch.setattr(web_tracking_api, "DatabaseManager", _Database)
+    monkeypatch.setattr(web_tracking_api, "validate_batch", lambda _payload: ("pub_public-not-secret", [{"event_type": "page_view", "hostname": "example.com"}], None))
+    monkeypatch.setattr(web_tracking_api, "record_ingestion_metrics", lambda **_values: None)
+    monkeypatch.setattr(web_tracking_api, "get_capability_access", lambda *_args, **_kwargs: {
+        "allowed": False,
+        "required_capability": "web_analytics",
+        "required_tier": "starter",
+        "required_tier_name": "Карты",
+        "message": "Подключите тариф «Карты».",
+    })
+
+    response = _app().test_client().post(
+        "/api/tracking/events",
+        json={"tracker_id": "pub_public-not-secret", "events": [_event()]},
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 402
+    assert payload["error"] == "payment_required"
+    assert payload["code"] == "payment_required"
+    assert payload["payment_required"] is True
+    assert payload["required_capability"] == "web_analytics"
+    assert payload["required_tier"] == "starter"
 
 
 def test_public_ingestion_rejects_oversized_body_before_database_access(monkeypatch):

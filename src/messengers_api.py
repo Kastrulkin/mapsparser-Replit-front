@@ -15,7 +15,7 @@ import urllib.request
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import CONSENT_VERSION, verify_session
 from core.email_delivery import send_verification_email
-from subscription_manager import get_automation_block_message, get_capability_access, has_paid_automation_access
+from subscription_manager import get_capability_access
 from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
     decode_telegram_bot_token,
@@ -749,9 +749,20 @@ def update_business_profile():
             'ai_agent_tone',
             'ai_agents_config',
         }
-        if any(field in data for field in automation_fields) and not has_paid_automation_access(business_id):
-            db.close()
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
+        if any(field in data for field in automation_fields):
+            automation_access = get_capability_access(
+                business_id,
+                "automation",
+                bool(user_data.get("is_superadmin")),
+            )
+            if not automation_access.get("allowed"):
+                db.close()
+                return jsonify({
+                    "success": False,
+                    "error": "payment_required",
+                    **automation_access,
+                    "return_to": "/dashboard/settings?section=ai-agents",
+                }), 402
         
         # Собираем схему Businesses, чтобы безопасно обновлять только существующие поля
         cursor.execute("""

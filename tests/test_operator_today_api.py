@@ -86,6 +86,7 @@ def test_mobile_feed_uses_verified_scope_and_cursor(monkeypatch):
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
     monkeypatch.setattr(operator_api, "DatabaseManager", _Database)
     monkeypatch.setattr(operator_api, "resolve_control_scope", lambda *_args, **_kwargs: scope)
+    monkeypatch.setattr(operator_api, "_scope_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     monkeypatch.setattr(
         operator_api,
         "build_mobile_feed",

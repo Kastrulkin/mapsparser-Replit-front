@@ -95,6 +95,19 @@ def _partnership_write_access(business_id: str, user_data: dict):
         return None
     return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip("?")}), 402
 
+
+def _sanitize_partnership_preview_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Keep the free card useful without returning operational or contact data."""
+    safe = dict(item)
+    for key in (
+        "workstreams", "next_action", "next_best_action", "channel_state", "room_state",
+        "lead_kind", "contact_points", "contact_summary", "selected_recipient",
+        "selected_channel", "contact_guard", "research", "campaign_state",
+        "message_readiness", "enrichment_state", "sales_room_url",
+    ):
+        safe.pop(key, None)
+    return safe
+
 def partnership_list_leads():
     """User-level list of partnership leads for one business."""
     user_data, error = _require_auth()
@@ -343,6 +356,8 @@ def partnership_list_leads():
             items = attach_workstreams(attach_conn, items)
         finally:
             attach_conn.close()
+        if preview_limited:
+            items = [_sanitize_partnership_preview_item(item) for item in items]
         return jsonify({
             "success": True,
             "count": preview_total_count if preview_limited else len(items),

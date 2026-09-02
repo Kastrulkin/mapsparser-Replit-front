@@ -49,20 +49,20 @@ def test_operator_approval_markup_offers_confirm_and_reject() -> None:
     assert "operator_reject:action-1" in callbacks
 
 
-def test_subscription_upgrade_prompt_for_trial_mentions_starter() -> None:
+def test_subscription_upgrade_prompt_for_trial_mentions_maps() -> None:
     text = telegram_dashboard._subscription_upgrade_prompt(
         {"tier": "trial", "status": "inactive"},
         {"trial_expired": False, "automation_access": False},
     )
-    assert "starter" in text.lower()
+    assert "карты" in text.lower()
 
 
-def test_subscription_upgrade_prompt_for_starter_mentions_professional() -> None:
+def test_subscription_upgrade_prompt_for_starter_mentions_acquisition() -> None:
     text = telegram_dashboard._subscription_upgrade_prompt(
         {"tier": "starter", "status": "active"},
         {"automation_access": True},
     )
-    assert "professional" in text.lower()
+    assert "привлечение" in text.lower()
 
 
 def test_suggested_upgrade_tier_maps_promo_to_supported_tariff() -> None:
@@ -114,7 +114,7 @@ def test_guest_audit_result_menu_has_post_audit_cta() -> None:
 
     assert "📊 Открыть аудит" in labels
     assert "🛠 Исправить это в LocalOS" in labels
-    assert "💳 Посмотреть Starter за 1200 ₽" in labels
+    assert "💳 Посмотреть «Карты» за 1200 ₽" in labels
     assert "🧩 Подключить LocalOS" in labels
 
 
@@ -149,7 +149,7 @@ def test_guest_compare_result_menu_sells_fixing_the_gap() -> None:
     labels = [button.text for row in markup.inline_keyboard for button in row]
 
     assert "🛠 Исправить разрыв в LocalOS" in labels
-    assert "💳 Starter за 1200 ₽" in labels
+    assert "💳 «Карты» за 1200 ₽" in labels
     assert "🧩 Подключить LocalOS" in labels
 
 

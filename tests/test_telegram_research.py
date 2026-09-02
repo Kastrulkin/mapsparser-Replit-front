@@ -379,7 +379,7 @@ def test_private_dialog_cannot_be_promoted_to_public_by_payload(monkeypatch):
     monkeypatch.setattr(
         telegram_research_api,
         "_require_business",
-        lambda _business_id: (database, cursor, {"user_id": "user-a"}, None),
+        lambda _business_id, *_args: (database, cursor, {"user_id": "user-a"}, None),
     )
     monkeypatch.setattr(
         telegram_research_api,
@@ -491,7 +491,7 @@ def test_catalog_source_subscription_reuses_existing_public_source(monkeypatch):
     monkeypatch.setattr(
         telegram_research_api,
         "_require_business",
-        lambda _business_id: (database, cursor, {"user_id": "user-a"}, None),
+        lambda _business_id, *_args: (database, cursor, {"user_id": "user-a"}, None),
     )
     monkeypatch.setattr(
         telegram_research_api,

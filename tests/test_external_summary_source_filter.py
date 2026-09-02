@@ -69,6 +69,7 @@ class SourceFilteredSummaryDatabase:
 
 
 def test_google_summary_does_not_fall_back_to_yandex_card_metrics(monkeypatch):
+    monkeypatch.setattr(external_accounts_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     monkeypatch.setattr(
         external_accounts_api,
         "verify_session",

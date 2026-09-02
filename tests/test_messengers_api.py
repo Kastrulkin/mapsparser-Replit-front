@@ -82,3 +82,34 @@ def test_business_profile_can_save_telegram_chat_id_without_business_bot_token(m
     assert "telegram_chat_id = %s" in cursor.update_sql
     assert "telegram_bot_token = %s" not in cursor.update_sql
     assert cursor.update_values == ["@localos_proof", "biz-1"]
+
+
+def test_business_profile_ai_agent_fields_require_management_capability(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(messengers_api.messengers_bp)
+    monkeypatch.setattr(messengers_api, "require_auth", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(messengers_api, "DatabaseManager", FakeProfileDb)
+    monkeypatch.setattr(
+        messengers_api,
+        "get_capability_access",
+        lambda *_args, **_kwargs: {
+            "allowed": False,
+            "code": "payment_required",
+            "payment_required": True,
+            "required_capability": "automation",
+            "required_tier": "concierge",
+            "required_tier_name": "Управление",
+        },
+    )
+
+    response = app.test_client().put(
+        "/api/business/profile",
+        json={"business_id": "biz-1", "ai_agent_enabled": True},
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 402
+    assert payload["error"] == "payment_required"
+    assert payload["required_capability"] == "automation"
+    assert payload["required_tier"] == "concierge"
+    assert payload["return_to"] == "/dashboard/settings?section=ai-agents"

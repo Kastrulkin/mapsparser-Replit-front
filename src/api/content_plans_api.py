@@ -5,6 +5,9 @@ import sys
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.auth_helpers import verify_business_access
+from database_manager import DatabaseManager
+from subscription_manager import get_capability_access
 from services.content_plan_service import (
     create_generated_content_plan,
     create_news_from_plan_item,
@@ -22,6 +25,58 @@ from services.content_plan_service import (
 
 
 content_plans_bp = Blueprint("content_plans", __name__, url_prefix="/api/content-plans")
+
+
+def _content_plan_business_id(cursor):
+    payload = request.get_json(silent=True) if request.method in {"POST", "PUT", "PATCH"} else {}
+    payload = payload if isinstance(payload, dict) else {}
+    business_id = str(payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if business_id:
+        return business_id
+    route_values = request.view_args or {}
+    plan_id = str(route_values.get("plan_id") or "").strip()
+    if plan_id:
+        cursor.execute("SELECT business_id FROM contentplans WHERE id = %s LIMIT 1", (plan_id,))
+        row = cursor.fetchone()
+        if row:
+            return str(row.get("business_id") if hasattr(row, "get") else row[0])
+    item_id = str(route_values.get("item_id") or "").strip()
+    if item_id:
+        cursor.execute("SELECT business_id FROM contentplanitems WHERE id = %s LIMIT 1", (item_id,))
+        row = cursor.fetchone()
+        if row:
+            return str(row.get("business_id") if hasattr(row, "get") else row[0])
+    return ""
+
+
+@content_plans_bp.before_request
+def require_maps_news_access():
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    user_data = verify_session(auth_header.split(" ", 1)[1])
+    if not user_data:
+        return None
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        business_id = _content_plan_business_id(cursor)
+        if not business_id:
+            return None
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id or not has_access:
+            return None
+        access = get_capability_access(business_id, "maps.news", bool(user_data.get("is_superadmin")))
+        if access.get("allowed"):
+            return None
+        return jsonify({
+            "success": False,
+            "error": "payment_required",
+            **access,
+            "return_to": request.full_path.rstrip("?"),
+        }), 402
+    finally:
+        db.close()
 
 
 def _require_auth():

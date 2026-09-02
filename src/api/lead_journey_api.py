@@ -613,7 +613,9 @@ def action_command(action_id: str):
             "average_ticket": "average_ticket",
         }
         required_capability = flow_capabilities.get(str(current_action.get("flow_type") or ""))
-        if required_capability and str(payload.get("command") or "") != "open_upgrade" and not bool(user_data.get("is_superadmin")):
+        command = str(payload.get("command") or "").strip()
+        safe_preview_commands = {"open_upgrade", "save_configuration", "record_reply", "mark_sent"}
+        if required_capability and command not in safe_preview_commands and not bool(user_data.get("is_superadmin")):
             cursor.execute("SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s", (business_id,))
             subscription_row = cursor.fetchone() or {}
             subscription_access = build_subscription_capabilities(
@@ -626,7 +628,7 @@ def action_command(action_id: str):
                 return jsonify({"success": False, "error": "payment_required", **capability_access, "return_to": request.full_path.rstrip("?")}), 402
         result = execute_command(
             cursor, action_id=action_id, business_id=business_id, user_id=_user_id(user_data),
-            command=str(payload.get("command") or "").strip(),
+            command=command,
             expected_version=int(payload.get("version") or 0), idempotency_key=idempotency_key,
             surface=surface, payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else {},
         )

@@ -1634,7 +1634,7 @@ def _build_guest_audit_result_menu(public_url: str = "") -> InlineKeyboardMarkup
         rows.append([InlineKeyboardButton("📊 Открыть аудит", url=public_url)])
     rows.append([InlineKeyboardButton("🛠 Исправить это в LocalOS", callback_data="guest_fix_localos")])
     rows.append([InlineKeyboardButton("⚔️ Сравнить с конкурентом", callback_data="guest_compare_start")])
-    rows.append([InlineKeyboardButton("💳 Посмотреть Starter за 1200 ₽", callback_data="tariff_info_starter")])
+    rows.append([InlineKeyboardButton("💳 Посмотреть «Карты» за 1200 ₽", callback_data="tariff_info_starter")])
     rows.append([InlineKeyboardButton("🧩 Подключить LocalOS", callback_data="guest_bind_help")])
     rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(rows)
@@ -1647,7 +1647,7 @@ def _build_guest_compare_result_menu(own_report_url: str = "", competitor_report
     if competitor_report_url:
         rows.append([InlineKeyboardButton("⚔️ Открыть аудит конкурента", url=competitor_report_url)])
     rows.append([InlineKeyboardButton("🛠 Исправить разрыв в LocalOS", callback_data="guest_fix_localos")])
-    rows.append([InlineKeyboardButton("💳 Starter за 1200 ₽", callback_data="tariff_info_starter")])
+    rows.append([InlineKeyboardButton("💳 «Карты» за 1200 ₽", callback_data="tariff_info_starter")])
     rows.append([InlineKeyboardButton("🧩 Подключить LocalOS", callback_data="guest_bind_help")])
     rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(rows)
@@ -1672,9 +1672,9 @@ def _build_tariffs_menu(back_callback: str = "back_to_menu") -> InlineKeyboardMa
     urls = get_web_urls()
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🟠 Начальный", callback_data="tariff_info_starter")],
-            [InlineKeyboardButton("🟣 Профессиональный", callback_data="tariff_info_professional")],
-            [InlineKeyboardButton("🔶 Консьерж", callback_data="tariff_info_concierge")],
+            [InlineKeyboardButton("🟠 Карты", callback_data="tariff_info_starter")],
+            [InlineKeyboardButton("🟣 Привлечение", callback_data="tariff_info_professional")],
+            [InlineKeyboardButton("🔶 Управление", callback_data="tariff_info_concierge")],
             [InlineKeyboardButton("🌐 Все тарифы на сайте", url=urls["pricing"])],
             [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)],
         ]

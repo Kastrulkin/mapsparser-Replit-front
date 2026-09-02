@@ -117,6 +117,8 @@ def capability_access_payload(access: dict, capability: str) -> dict:
         'allowed': allowed,
         'capability': capability_key,
         'status': 'available' if allowed else 'payment_required',
+        'code': None if allowed else 'payment_required',
+        'payment_required': not allowed,
         'required_tier': minimum_tier,
         'required_tier_name': minimum_name,
         'cta_label': 'Открыть раздел' if allowed else f'Выбрать тариф «{minimum_name}»',

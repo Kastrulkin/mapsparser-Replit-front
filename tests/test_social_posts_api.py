@@ -7,6 +7,8 @@ from api import social_posts_api
 @pytest.fixture(autouse=True)
 def disable_runtime_telegram_transport_probe(monkeypatch):
     monkeypatch.setenv("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", "0")
+    monkeypatch.setattr(social_posts_api, "_social_request_business_id", lambda: "biz-1")
+    monkeypatch.setattr(social_posts_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
 
 
 def test_social_post_write_rate_limit_allows_first_request(monkeypatch):

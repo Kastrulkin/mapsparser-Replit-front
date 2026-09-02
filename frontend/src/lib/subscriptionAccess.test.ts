@@ -11,9 +11,13 @@ const business = (subscription_tier: string, subscription_status = 'active', sub
 describe('subscription capability matrix', () => {
   it('opens maps, radar and web analytics on Maps', () => {
     expect(getCapabilityAccessForBusiness(business('starter'), 'maps').allowed).toBe(true);
+    expect(getCapabilityAccessForBusiness(business('starter'), 'maps.services').allowed).toBe(true);
+    expect(getCapabilityAccessForBusiness(business('starter'), 'maps.reviews').allowed).toBe(true);
+    expect(getCapabilityAccessForBusiness(business('starter'), 'maps.news').allowed).toBe(true);
     expect(getCapabilityAccessForBusiness(business('starter'), 'telegram_radar').allowed).toBe(true);
     expect(getCapabilityAccessForBusiness(business('starter'), 'web_analytics').allowed).toBe(true);
     expect(getCapabilityAccessForBusiness(business('starter'), 'influencers').allowed).toBe(false);
+    expect(getCapabilityAccessForBusiness(business('starter'), 'social_content').allowed).toBe(false);
   });
 
   it('opens acquisition but not management on Acquisition', () => {

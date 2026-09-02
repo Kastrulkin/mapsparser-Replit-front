@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
-import { featureFlags } from '../config/featureFlags';
 
 type DashboardBusiness = {
   id: string;
@@ -29,18 +28,62 @@ export type ControlScope = {
   name: string;
 };
 
-const paidDashboardSections: Array<{ path: string; capability: SubscriptionCapability; title: string; hint: string }> = [
-  { path: '/dashboard/card', capability: 'maps', title: 'Работа с картами входит в тариф «Карты»', hint: 'Аудит, услуги, отзывы, фото и новости для карточки открываются на тарифе «Карты».' },
-  { path: '/dashboard/web-analytics', capability: 'web_analytics', title: 'Аналитика сайта входит в тариф «Карты»', hint: 'Установите tracker-скрипт и получите первые события поведения пользователей.' },
-  { path: '/dashboard/finance', capability: 'finance', title: 'Финансы входят в тариф «Управление»', hint: 'Импорт, показатели и рекомендации по выручке доступны на старшем тарифе.' },
-  { path: '/dashboard/average-ticket', capability: 'average_ticket', title: 'Средний чек входит в тариф «Управление»', hint: 'Пакеты услуг и сценарии допродажи доступны на старшем тарифе.' },
-  { path: '/dashboard/ai-chat-promotion', capability: 'ai_visibility', title: 'AI-видимость входит в тариф «Привлечение»', hint: 'Проверки и рекомендации по AI-выдаче входят в контур привлечения.' },
-  { path: '/dashboard/influencers/operations', capability: 'influencers', title: 'Полная работа с инфлюенсерами входит в тариф «Привлечение»', hint: 'Откроются сообщения, каналы, размещения и подтверждённая отправка.' },
-  { path: '/dashboard/operator', capability: 'operator', title: 'Оператор входит в тариф «Управление»', hint: 'Единый рабочий центр задач и запусков доступен на старшем тарифе.' },
-  { path: '/dashboard/telegram-radar', capability: 'telegram_radar', title: 'Telegram-радар входит в тариф «Карты»', hint: 'Сбор отраслевых публикаций доступен вместе с работой над карточкой.' },
-  { path: '/dashboard/agents', capability: 'agents', title: 'ИИ-сотрудники входят в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.' },
-  { path: '/dashboard/chats', capability: 'chats', title: 'Рабочие чаты входят в тариф «Управление»', hint: 'Подключение и обработка сообщений доступны на старшем тарифе.' },
+type PaidDashboardSection = { path: string; capability: SubscriptionCapability; title: string; hint: string; previewItems: string[]; nextAction: string };
+
+const paidDashboardSections: PaidDashboardSection[] = [
+  { path: '/dashboard/card', capability: 'maps', title: 'Работа с картами входит в тариф «Карты»', hint: 'Аудит, услуги, отзывы, фото и новости для карточки открываются на тарифе «Карты».', previewItems: ['Проверка заполненности и свежести карточки', 'Сводка отзывов и услуг', 'План первых улучшений'], nextAction: 'Добавьте ссылку на карты, чтобы после оплаты сразу запустить аудит.' },
+  { path: '/dashboard/web-analytics', capability: 'web_analytics', title: 'Аналитика сайта входит в тариф «Карты»', hint: 'Установите tracker-скрипт и получите первые события поведения пользователей.', previewItems: ['Посещения и источники трафика', 'Звонки, формы и переходы в мессенджеры', 'Статус подключения tracker-скрипта'], nextAction: 'После подключения главным шагом будет установка скрипта на сайт.' },
+  { path: '/dashboard/finance', capability: 'finance', title: 'Финансы входят в тариф «Управление»', hint: 'Импорт, показатели и рекомендации по выручке доступны на старшем тарифе.', previewItems: ['Выручка, расходы и маржа', 'Динамика по периодам', 'Точки, где бизнес теряет деньги'], nextAction: 'После оплаты вы вернётесь сюда и загрузите первые продажи.' },
+  { path: '/dashboard/average-ticket', capability: 'average_ticket', title: 'Средний чек входит в тариф «Управление»', hint: 'Пакеты услуг и сценарии допродажи доступны на старшем тарифе.', previewItems: ['Пары основных и дополнительных услуг', 'Пакеты с прозрачной выгодой', 'Метрики роста среднего чека'], nextAction: 'После оплаты LocalOS соберёт первую матрицу из текущих услуг.' },
+  { path: '/dashboard/content', capability: 'social_content', title: 'Контент для соцсетей входит в тариф «Управление»', hint: 'Контент-планы, адаптация под каналы и контролируемое размещение доступны на старшем тарифе. Новости для карточек уже доступны в разделе «Карты».', previewItems: ['Календарь публикаций по каналам', 'Черновики в формате каждой площадки', 'Проверка и ручное подтверждение размещения'], nextAction: 'После оплаты вы вернётесь к контент-плану и выберете первый канал. Новости для карт можно готовить уже сейчас в разделе карточки.' },
+  { path: '/dashboard/ai-chat-promotion', capability: 'ai_visibility', title: 'AI-видимость входит в тариф «Привлечение»', hint: 'Проверки и рекомендации по AI-выдаче входят в контур привлечения.', previewItems: ['Проверка упоминаний бизнеса', 'Недостающие факты для AI-ответов', 'План роста видимости'], nextAction: 'После оплаты вернём вас к первой проверке AI-выдачи.' },
+  { path: '/dashboard/influencers/operations', capability: 'influencers', title: 'Полная работа с инфлюенсерами входит в тариф «Привлечение»', hint: 'Откроются сообщения, каналы, размещения и подтверждённая отправка.', previewItems: ['Подбор локальных авторов', 'Предложение и черновики сообщений', 'Статусы размещений'], nextAction: 'Откройте тариф, чтобы продолжить работу с выбранными авторами.' },
+  { path: '/dashboard/operator', capability: 'operator', title: 'Оператор входит в тариф «Управление»', hint: 'Единый рабочий центр задач и запусков доступен на старшем тарифе.', previewItems: ['Единая очередь задач', 'Черновики с ручным подтверждением', 'Журнал запусков и ошибок'], nextAction: 'После оплаты Оператор покажет первую задачу, которая требует вашего решения.' },
+  { path: '/dashboard/telegram-radar', capability: 'telegram_radar', title: 'Telegram-радар входит в тариф «Карты»', hint: 'Сбор отраслевых публикаций доступен вместе с работой над карточкой.', previewItems: ['Темы, которые обсуждают в вашей отрасли', 'Новые возможности и риски', 'Краткая ежедневная сводка'], nextAction: 'После оплаты сохраним ваши ключевые темы и запустим сбор.' },
+  { path: '/dashboard/agents', capability: 'agents', title: 'ИИ-сотрудники входят в тариф «Управление»', hint: 'Настройка и запуск автоматизаций доступны на старшем тарифе.', previewItems: ['Задачи по расписанию', 'Результаты и статусы', 'Ручные подтверждения важных шагов'], nextAction: 'После оплаты выберите первую повторяющуюся задачу для настройки.' },
+  { path: '/dashboard/chats', capability: 'chats', title: 'Рабочие чаты входят в тариф «Управление»', hint: 'Подключение и обработка сообщений доступны на старшем тарифе.', previewItems: ['Входящие диалоги в одной очереди', 'Черновики ответов', 'Статус канала и ручная отправка'], nextAction: 'После оплаты подключите первый канал и проверьте тестовый диалог.' },
 ];
+
+const LockedSectionPreview = ({ section, currentTierName, paywallHref }: { section: PaidDashboardSection; currentTierName: string; paywallHref: string }) => (
+  <section className="mx-auto max-w-4xl py-4 sm:py-8" aria-labelledby="locked-section-title">
+    <div className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_2px_5px_rgba(15,23,42,0.05),0_18px_48px_rgba(15,23,42,0.08)] sm:p-8">
+      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+        <span className="rounded-full bg-slate-100 px-3 py-1.5">Сейчас: {currentTierName}</span>
+        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">Откроется после повышения</span>
+      </div>
+      <h1 id="locked-section-title" className="mt-5 max-w-2xl text-balance text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl">{section.title}</h1>
+      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600 sm:text-base">{section.hint}</p>
+
+      <div className="mt-7 grid gap-3 sm:grid-cols-3" aria-label="Пример результата">
+        {section.previewItems.map((item, index) => (
+          <div key={item} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05)]">
+            <span className="tabular-nums text-xs font-bold text-slate-400">0{index + 1}</span>
+            <p className="mt-2 text-pretty text-sm font-semibold leading-5 text-slate-800">{item}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="relative mt-4 overflow-hidden rounded-2xl bg-slate-50 p-4" aria-hidden="true">
+        <div className="space-y-3 opacity-45 blur-[3px]">
+          <div className="h-4 w-2/3 rounded-full bg-slate-300" />
+          <div className="h-16 rounded-xl bg-slate-200" />
+          <div className="h-16 rounded-xl bg-slate-200" />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-white/80" />
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-6">
+        <div>
+          <p className="text-sm font-semibold">Следующий шаг</p>
+          <p className="mt-1 max-w-xl text-pretty text-sm leading-6 text-slate-300">{section.nextAction}</p>
+        </div>
+        <a href={paywallHref} className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-slate-950 transition-[background-color,scale] duration-150 hover:bg-slate-100 active:scale-[0.96] sm:mt-0">
+          Выбрать подходящий тариф
+        </a>
+      </div>
+    </div>
+  </section>
+);
 
 export const DashboardLayout = () => {
   const location = useLocation();
@@ -227,7 +270,7 @@ export const DashboardLayout = () => {
     || location.pathname === '/dashboard/promotion/partnerships'
     || location.pathname === '/dashboard/promotion';
   const sectionAccess = lockedPaidSection ? getCapabilityAccessForBusiness(currentBusiness, lockedPaidSection.capability) : null;
-  const shouldBlurPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !sectionAccess?.allowed);
+  const shouldLockPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !sectionAccess?.allowed);
   const paywallReturnTo = `${location.pathname}${location.search}`;
   const paywallHref = `/dashboard/profile?focus=subscription&tier=${encodeURIComponent(sectionAccess?.requiredTier || 'starter')}&return_to=${encodeURIComponent(paywallReturnTo)}#subscription`;
 
@@ -255,37 +298,15 @@ export const DashboardLayout = () => {
         <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
-              <div className={shouldBlurPaidSection ? (featureFlags.blockAccessV2 ? 'pointer-events-none select-none opacity-55' : 'pointer-events-none select-none blur-sm') : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
+              {shouldLockPaidSection && lockedPaidSection ? (
+                <LockedSectionPreview
+                  section={lockedPaidSection}
+                  currentTierName={sectionAccess?.tierName || 'Без тарифа'}
+                  paywallHref={paywallHref}
+                />
+              ) : (
                 <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
-              </div>
-              {shouldBlurPaidSection && lockedPaidSection ? (
-                <div className="absolute inset-0 z-20 flex items-start justify-center rounded-2xl bg-slate-50/55 px-4 py-16 backdrop-blur-[2px]">
-                  <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white/95 p-6 text-center shadow-xl shadow-slate-900/10">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-lg font-semibold text-white">
-                      ₽
-                    </div>
-                    <h2 className="mt-4 text-xl font-bold text-slate-950">{lockedPaidSection.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{lockedPaidSection.hint}</p>
-                    <p className="mt-3 text-sm leading-6 text-slate-500">
-                      Сейчас можно заполнить профиль, добавить ссылки на компанию и посмотреть кабинет. Платные действия не запускаются автоматически.
-                    </p>
-                    <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
-                      <a
-                        href="/dashboard/profile?onboarding=1"
-                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
-                      >
-                        Заполнить профиль
-                      </a>
-                      <a
-                        href={paywallHref}
-                        className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-                      >
-                        Выбрать тариф{sectionAccess ? ` «${sectionAccess.requiredTierName}»` : ''}
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+              )}
             </div>
           </div>
         </main>

@@ -46,5 +46,7 @@ def test_demo_tier_does_not_bypass_real_subscription_permissions():
 def test_payment_required_payload_names_minimum_tier():
     payload = capability_access_payload({'capabilities': ['maps']}, 'influencers')
     assert payload['allowed'] is False
+    assert payload['code'] == 'payment_required'
+    assert payload['payment_required'] is True
     assert payload['required_tier'] == 'professional'
     assert payload['required_tier_name'] == 'Привлечение'
