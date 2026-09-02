@@ -1,0 +1,39 @@
+{
+  "issue": "GigaChat HTTP 402 loses terminal retry semantics in the LLM gateway",
+  "status": "FIX_PROVEN",
+  "baseline_commit": "3717dce4",
+  "branch": "codex/content-generation-v2",
+  "verified_at_utc": "2026-09-02T12:08:54Z",
+  "production_symptom": {
+    "provider_status": 402,
+    "provider_code": "gigachat_payment_required",
+    "observed_effect": "contact intelligence jobs entered retry_wait instead of terminating"
+  },
+  "root_cause": [
+    "GigaChatAdapter converted every provider exception to generic provider_error",
+    "analyze_text_with_gigachat converted the result to a generic RuntimeError",
+    "downstream retry classification therefore defaulted the failure to retryable"
+  ],
+  "regression_test": {
+    "file": "tests/test_gigachat_terminal_errors.py",
+    "name": "test_llm_gateway_preserves_terminal_gigachat_402_without_model_retries",
+    "red_result": "1 failed, 3 passed; raised RuntimeError: GIGACHAT_REQUEST_FAILED",
+    "green_result": "4 passed"
+  },
+  "verification": [
+    {
+      "command": "venv/bin/python -m pytest -q tests/test_gigachat_terminal_errors.py tests/test_llm_routing.py tests/test_contact_intelligence.py tests/test_outreach_safety_learning.py",
+      "result": "134 passed in 1.57s"
+    },
+    {
+      "command": "python3 -m py_compile src/services/llm/adapters.py src/services/llm/gateway.py tests/test_gigachat_terminal_errors.py",
+      "result": "passed"
+    }
+  ],
+  "changed_files": [
+    "src/services/llm/adapters.py",
+    "src/services/llm/gateway.py",
+    "tests/test_gigachat_terminal_errors.py"
+  ],
+  "scope_note": "The fix stops terminal provider failures from being retried. It does not restore GigaChat billing or alter existing production job rows."
+}

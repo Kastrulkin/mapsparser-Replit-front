@@ -481,5 +481,14 @@ def analyze_text_with_gigachat(
         )
     )
     if result.status != "completed":
+        if result.status == "provider_terminal_error":
+            from services.gigachat_client import GigaChatProviderError
+
+            error_code = result.fallback_reason or "gigachat_request_rejected"
+            raise GigaChatProviderError(
+                code=error_code,
+                status_code=402 if error_code == "gigachat_payment_required" else 400,
+                retryable=False,
+            )
         raise RuntimeError(result.fallback_reason or result.status)
     return result.content

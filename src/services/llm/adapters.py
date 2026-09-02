@@ -94,7 +94,7 @@ class GigaChatAdapter:
         shadow: bool = False,
         model_override: str = "",
     ) -> LLMTaskResult:
-        from services.gigachat_client import get_gigachat_client
+        from services.gigachat_client import GigaChatProviderError, get_gigachat_client
         from gigachat_config import get_gigachat_config
 
         started = time.monotonic()
@@ -127,6 +127,15 @@ class GigaChatAdapter:
                 shadow=shadow,
             )
             return result
+        except GigaChatProviderError as error:
+            return LLMTaskResult(
+                status="provider_terminal_error",
+                provider=self.provider,
+                model=model,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                fallback_reason=error.code,
+                shadow=shadow,
+            )
         except Exception:
             result = LLMTaskResult(
                 status="provider_error",

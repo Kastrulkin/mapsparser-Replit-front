@@ -8,6 +8,7 @@ from services.contact_intelligence_service import (
     fail_enrichment_job,
     provider_error_is_retryable,
 )
+from services.llm import gateway
 from services.gigachat_client import GigaChatClient, GigaChatProviderError
 from services.outreach_personalization_ai import generate_personalized_sequence
 
@@ -107,3 +108,35 @@ def test_terminal_personalization_failure_finishes_enrichment_without_retry():
 
     assert result["status"] == "failed"
     assert cursor.executions[0][1][4] == "gigachat_payment_required"
+
+
+def test_llm_gateway_preserves_terminal_gigachat_402_without_model_retries(monkeypatch):
+    class BillingBlockedClient:
+        def __init__(self):
+            self.calls = 0
+
+        def analyze_text(self, *_args, **_kwargs):
+            self.calls += 1
+            raise GigaChatProviderError(
+                code="gigachat_payment_required",
+                status_code=402,
+                retryable=False,
+            )
+
+    client = BillingBlockedClient()
+    monkeypatch.setenv("LLM_ROUTER_ENABLED", "false")
+    monkeypatch.setattr(
+        "services.gigachat_client.get_gigachat_client",
+        lambda: client,
+    )
+
+    with pytest.raises(GigaChatProviderError) as caught:
+        gateway.analyze_text_with_gigachat(
+            "Подготовь персонализированное сообщение",
+            task_type="outreach_personalization",
+        )
+
+    assert client.calls == 1
+    assert caught.value.code == "gigachat_payment_required"
+    assert caught.value.retryable is False
+    assert "provider billing body" not in str(caught.value)
