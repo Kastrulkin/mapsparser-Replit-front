@@ -285,6 +285,10 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
+  if (pathname.startsWith("/creator")) {
+    return false;
+  }
+
   if (pathname === "/bazich") {
     return false;
   }
