@@ -28,7 +28,6 @@ from services.sales_room_public_service import (
     _create_sales_room_proposal_version,
     _ensure_audit_offer_user,
     _ensure_sales_room_proposal_version,
-    _ensure_sales_room_tables,
     _is_uuid_string,
     _load_sales_room_audit_offer,
     _load_sales_room_by_slug,
@@ -82,7 +81,6 @@ def public_sales_room(slug):
         user_data = _optional_auth()
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -148,7 +146,6 @@ def public_sales_room_welcome(slug):
             return jsonify({"error": "body_text is too long"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -203,7 +200,6 @@ def public_sales_room_participant_register(slug):
             return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -299,7 +295,6 @@ def public_sales_room_participant_verify(slug):
             return jsonify({"error": "verification_token is required"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -353,7 +348,6 @@ def public_sales_room_audit_offer_request(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -410,7 +404,6 @@ def public_sales_room_audit_offer_status(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -434,7 +427,6 @@ def public_sales_room_audit_offer_opened(slug):
         normalized_slug = _slugify_company_name(slug)
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -514,7 +506,6 @@ def public_sales_room_proposal_suggestion(slug):
             normalized_end = None
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -594,7 +585,6 @@ def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
             return jsonify({"error": "author_contact is required"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -740,7 +730,6 @@ def public_sales_room_message(slug):
             return jsonify({"error": "message is too long"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -811,7 +800,6 @@ def public_sales_room_file_upload(slug):
             return jsonify({"error": "File content does not match its type"}), 400
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
@@ -875,7 +863,6 @@ def public_sales_room_file(slug, file_id):
             return jsonify({"error": "File not found"}), 404
         conn = get_db_connection()
         try:
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute(
                 """

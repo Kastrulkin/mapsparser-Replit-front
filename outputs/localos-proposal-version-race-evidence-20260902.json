@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The exact deterministic reproducer changed from PostgreSQL UniqueViolation/HTTP 500 to a pass after making initial-version insertion conflict-safe; three fresh-container repeats and the 26-test sales-room suite also passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "label": "reproduced",
+    "command": ["arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_sales_room_proposal_version_concurrency.py"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64 with disposable PostgreSQL 16",
+    "duration_ms": 7786,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "psycopg2.errors.UniqueViolation: duplicate key value violates unique constraint sales_room_proposal_versions_room_id_version_no_key; 1 failed in 7.10s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  },
+  "after": {
+    "label": "fixed",
+    "command": ["arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_sales_room_proposal_version_concurrency.py"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64 with disposable PostgreSQL 16",
+    "duration_ms": 6384,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "1 passed in 5.72s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true,
+    "repeat_runs": ["1 passed in 8.17s", "1 passed in 6.18s", "1 passed in 5.44s"],
+    "full_suite": "26 passed in 14.79s",
+    "diff_check": "passed"
+  }
+}

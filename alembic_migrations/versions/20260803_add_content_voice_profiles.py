@@ -28,13 +28,27 @@ def upgrade():
         )
         """
     )
-    op.execute("CREATE INDEX IF NOT EXISTS idx_user_examples_user_type ON userexamples(user_id, example_type)")
-    op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS business_id TEXT REFERENCES businesses(id) ON DELETE CASCADE")
+    # Some legacy installations created a narrower table at runtime. Preserve
+    # existing rows while restoring the base columns needed by current indexes
+    # and services. Fresh databases still receive the stricter definition above.
+    op.execute(
+        "ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE"
+    )
+    op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS example_type TEXT")
+    op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS example_text TEXT")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_examples_user_type ON userexamples(user_id, example_type)"
+    )
+    op.execute(
+        "ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS business_id TEXT REFERENCES businesses(id) ON DELETE CASCADE"
+    )
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS platform TEXT")
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'manual'")
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS quality_status TEXT NOT NULL DEFAULT 'reference'")
     op.execute("ALTER TABLE userexamples ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_userexamples_business_type ON userexamples(business_id, example_type, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_userexamples_business_type ON userexamples(business_id, example_type, created_at DESC)"
+    )
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS content_voice_profiles (

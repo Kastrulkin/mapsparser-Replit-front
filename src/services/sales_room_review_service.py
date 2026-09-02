@@ -160,11 +160,15 @@ def ensure_sales_room_proposal_version(
         ) VALUES (
             %s, %s, 1, %s, %s, %s, %s, NOW()
         )
+        ON CONFLICT (room_id, version_no) DO NOTHING
         RETURNING id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
         """,
         (version_id, room_id, body_text, author_name, author_contact, Json(metadata or {"source": "initial_room_proposal"})),
     )
-    return dict(cur.fetchone())
+    created = cur.fetchone()
+    if created:
+        return dict(created)
+    return load_sales_room_latest_version(cur, room_id)
 
 
 def create_sales_room_proposal_version(

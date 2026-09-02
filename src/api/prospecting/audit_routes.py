@@ -349,7 +349,6 @@ def _create_sales_room_invitation_draft(
     return draft
 
 def _record_sales_room_event(conn, *, slug: str, event_type: str, metadata: dict[str, Any] | None = None) -> None:
-    _ensure_sales_room_tables(conn)
     cur = conn.cursor()
     cur.execute("SELECT id FROM sales_rooms WHERE slug = %s LIMIT 1", (slug,))
     row = cur.fetchone()

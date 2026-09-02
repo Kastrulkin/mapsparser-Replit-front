@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same focused command changed from PostgreSQL DeadlockDetected to passing, the fix passed three additional fresh-container repetitions, and the 25-test sales-room suite is green.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "label": "reproduced",
+    "command": ["arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_sales_rooms_concurrency.py"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64 with disposable PostgreSQL 16",
+    "duration_ms": 8010,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "psycopg2.errors.DeadlockDetected: one process waited for ShareLock on sales_room_events while the other waited for RowExclusiveLock on sales_rooms; 1 failed in 8.01s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  },
+  "after": {
+    "label": "fixed",
+    "command": ["arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_sales_rooms_concurrency.py"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64 with disposable PostgreSQL 16",
+    "duration_ms": 7533,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "1 passed in 7.05s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  }
+}

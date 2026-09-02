@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The partial-legacy-schema migration changed from UndefinedColumn to two passing PostgreSQL tests, and the broader related suite passed 44 tests.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "label": "reproduced",
+    "command": ["arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_outreach_human_language_gate.py::test_pain_library_refresh_executes_with_real_psycopg2", "tests/test_outreach_human_language_gate.py::test_language_retrieval_executes_with_real_psycopg2_without_vector"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64 with disposable PostgreSQL 16",
+    "duration_ms": 5210,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "sqlalchemy.exc.ProgrammingError: psycopg2.errors.UndefinedColumn: column user_id does not exist while creating idx_user_examples_user_type; 2 errors in 5.21s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  },
+  "after": {
+    "label": "fixed",
+    "command": ["arch", "-arm64", "venv/bin/python", "-m", "pytest", "-q", "tests/test_outreach_human_language_gate.py::test_pain_library_refresh_executes_with_real_psycopg2", "tests/test_outreach_human_language_gate.py::test_language_retrieval_executes_with_real_psycopg2_without_vector"],
+    "cwd": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре",
+    "runtime": "Python 3.11 on macOS arm64 with disposable PostgreSQL 16",
+    "duration_ms": 6910,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "2 passed in 6.91s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  }
+}
