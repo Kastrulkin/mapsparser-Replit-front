@@ -742,7 +742,7 @@ def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
               SELECT 1 FROM creator_relationships r
               WHERE r.creator_profile_id = a.creator_profile_id AND r.stage = ANY(%s)
           )
-        ORDER BY o.created_at FOR UPDATE SKIP LOCKED LIMIT %s
+        ORDER BY o.created_at FOR UPDATE OF o SKIP LOCKED LIMIT %s
         """,
         (list(TERMINAL_REPLY_STAGES), limit),
     )
