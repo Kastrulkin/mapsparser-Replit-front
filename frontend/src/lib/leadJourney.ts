@@ -1,7 +1,7 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { newAuth } from '@/lib/auth_new';
 
-export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content' | 'automation';
+export type LeadJourneyKey = 'influencers' | 'partnerships' | 'maps' | 'content' | 'automation' | 'average_ticket';
 
 export type LeadJourneyDirection = {
   key: LeadJourneyKey;
@@ -28,7 +28,7 @@ export const LEAD_JOURNEY_STORAGE_KEY = 'localos_lead_journey_intent';
 export const LEAD_JOURNEY_TOKEN_STORAGE_KEY = 'localos_lead_journey_token';
 
 export type JourneyOpportunity = {
-  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'automation';
+  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'automation' | 'average_ticket';
   entity_type: string;
   entity_id?: string;
   title: string;
@@ -56,7 +56,7 @@ export type JourneyAction = {
   id: string;
   journey_id?: string | null;
   business_id?: string | null;
-  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'automation' | 'upgrade';
+  flow_type: 'influencer' | 'partnership' | 'maps' | 'content' | 'automation' | 'average_ticket' | 'upgrade';
   entity_type: string;
   entity_id?: string | null;
   action_type: string;
@@ -307,6 +307,28 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
     dashboardRoute: '/dashboard/content',
   },
   {
+    key: 'average_ticket',
+    eyebrow: 'Средний чек',
+    title: 'Найти первый безопасный сценарий роста чека',
+    preview: 'Покажем, какие услуги можно объединить и где уместно предложить дополнение.',
+    detailTitle: 'Рост среднего чека без давления на клиента',
+    detail: 'LocalOS сопоставляет услуги и цены, предлагает понятный пакет и показывает ожидаемый эффект до применения.',
+    steps: [
+      { title: 'Проверяем услуги и цены', description: 'Используем только подтверждённые данные бизнеса.' },
+      { title: 'Ищем естественное дополнение', description: 'Предлагаем связку, которая решает следующую задачу клиента.' },
+      { title: 'Проверяем предложение', description: 'Вы видите состав, цену и формулировку до запуска.' },
+      { title: 'Считаем результат', description: 'Изменения применяются только после подтверждения и измеряются отдельно.' },
+    ],
+    businessRole: 'Вы подтверждаете услуги, цены и решение использовать предложение.',
+    localosRole: 'LocalOS находит связки и готовит расчёт и формулировку.',
+    today: { title: 'Найдите первый сценарий роста чека', description: 'Проверьте услуги и выберите уместное дополнение.', cta: 'Открыть средний чек' },
+    prepareLabel: 'Показать сценарий роста',
+    resultTitle: 'Первый сценарий роста подготовлен',
+    resultPreview: ['Базовая услуга и подходящее дополнение', 'Прозрачная выгода для клиента', 'Расчёт и ручное подтверждение'],
+    lockedResult: 'Полный расчёт и применение входят в тариф «Управление».',
+    dashboardRoute: '/dashboard/average-ticket',
+  },
+  {
     key: 'automation',
     eyebrow: 'ИИ-сотрудники',
     title: 'Поручить LocalOS повторяющуюся задачу',
@@ -339,7 +361,7 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
 ];
 
 export const isLeadJourneyKey = (value: string | null): value is LeadJourneyKey => (
-  value === 'influencers' || value === 'partnerships' || value === 'maps' || value === 'content' || value === 'automation'
+  value === 'influencers' || value === 'partnerships' || value === 'maps' || value === 'content' || value === 'automation' || value === 'average_ticket'
 );
 
 export const leadJourneyKeyForFlow = (flow: string | null | undefined): LeadJourneyKey | null => {
@@ -357,6 +379,7 @@ export const journeyActionRoute = (action: JourneyAction) => {
     maps: '/dashboard/card',
     content: '/dashboard/content',
     agents: '/dashboard/agents',
+    average_ticket: '/dashboard/average-ticket',
     settings: '/dashboard/settings',
     today: '/dashboard/today',
   };

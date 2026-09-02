@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeDollarSign, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
@@ -22,10 +22,10 @@ import {
   type PublicLeadJourney,
 } from '@/lib/leadJourney';
 
-const directionIcon = (key: LeadJourneyKey) => key === 'influencers' ? Megaphone : key === 'partnerships' ? Handshake : key === 'content' ? FilePenLine : key === 'automation' ? Bot : MapPinned;
+const directionIcon = (key: LeadJourneyKey) => key === 'influencers' ? Megaphone : key === 'partnerships' ? Handshake : key === 'content' ? FilePenLine : key === 'automation' ? Bot : key === 'average_ticket' ? BadgeDollarSign : MapPinned;
 const flowForKey = (key: LeadJourneyKey) => key === 'influencers' ? 'influencer' : key === 'partnerships' ? 'partnership' : key;
 const customerDirections = leadJourneyDirections.filter((direction) => direction.key === 'influencers' || direction.key === 'partnerships' || direction.key === 'maps');
-const workDirections = leadJourneyDirections.filter((direction) => direction.key === 'content' || direction.key === 'automation');
+const workDirections = leadJourneyDirections.filter((direction) => direction.key === 'content' || direction.key === 'automation' || direction.key === 'average_ticket');
 
 const DirectionCard = ({ direction, opportunity, onOpen, secondary = false }: { direction: LeadJourneyDirection; opportunity?: JourneyOpportunity; onOpen: () => void; secondary?: boolean }) => {
   const Icon = directionIcon(direction.key);

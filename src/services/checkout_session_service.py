@@ -836,6 +836,7 @@ def build_checkout_status_payload(session: dict[str, Any], cursor=None) -> dict[
         if session.get("business_id"):
             cursor.execute("SELECT id, name, yandex_url FROM businesses WHERE id = %s", (str(session.get("business_id")),))
             business = _row_to_dict(cursor, cursor.fetchone())
+        payload = session.get("payload_json") if isinstance(session.get("payload_json"), dict) else {}
         return {
             "session_id": str(session.get("id") or ""),
             "provider": str(session.get("provider") or ""),
@@ -849,6 +850,7 @@ def build_checkout_status_payload(session: dict[str, Any], cursor=None) -> dict[
             "business_name": str(business.get("name") or ""),
             "audit_public_url": str(session.get("audit_public_url") or ""),
             "maps_url": str(session.get("normalized_maps_url") or session.get("maps_url") or ""),
+            "return_to": str(payload.get("return_to") or ""),
             "account_created": bool(user),
             "business_created": bool(business),
             "requires_password_setup": bool(user) and not bool(str(user.get("password_hash") or "").strip()) and bool(str(user.get("email") or "").strip()) and not bool(str(user.get("telegram_id") or "").strip()),

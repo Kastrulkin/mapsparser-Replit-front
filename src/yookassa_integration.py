@@ -8,6 +8,7 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import quote
 
 import requests
 from flask import Blueprint, jsonify, request
@@ -26,6 +27,7 @@ from services.checkout_session_service import (
     mark_checkout_failed,
     mark_checkout_paid,
 )
+from subscription_manager import build_subscription_capabilities
 
 
 billing_bp = Blueprint("billing", __name__)
@@ -401,10 +403,20 @@ def _mark_subscription_needs_payment_method(cursor, *, sub: Dict[str, Any], reas
     return updated
 
 
+def _safe_checkout_return_to(value: Any) -> str:
+    candidate = str(value or "").strip()
+    if not candidate.startswith("/dashboard/") or candidate.startswith("//") or len(candidate) > 500:
+        return ""
+    return candidate
+
+
 def _build_checkout_return_url(session: Dict[str, Any]) -> str:
     frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
     if str(session.get("entry_point") or "").strip() == "registered_paywall" and str(session.get("business_id") or "").strip():
-        return f"{frontend_base}/dashboard/profile?yookassa_return=1&checkout_session={session.get('id')}"
+        payload = session.get("payload_json") if isinstance(session.get("payload_json"), dict) else {}
+        return_to = _safe_checkout_return_to(payload.get("return_to"))
+        return_suffix = f"&return_to={quote(return_to, safe='')}" if return_to else ""
+        return f"{frontend_base}/dashboard/profile?yookassa_return=1&checkout_session={session.get('id')}{return_suffix}"
     return f"{frontend_base}/checkout/return?session_id={session.get('id')}"
 
 
@@ -978,6 +990,7 @@ def billing_checkout_session_start():
                 "business_name": str(business_row.get("name") or "").strip(),
                 "city": str(business_row.get("city") or "").strip(),
                 "address": str(business_row.get("address") or "").strip(),
+                "return_to": _safe_checkout_return_to(client_payload.get("return_to")),
             }
         else:
             payload_json = dict(client_payload.get("payload_json") or {})
@@ -1172,6 +1185,14 @@ def billing_checkout_start():
         )
         payment = create_yookassa_payment_for_checkout_session(str(session.get("id") or ""))
         db.conn.commit()
+        tariff_id = str(sub.get("tariff_id") or "")
+        business_tier = str(TARIFFS.get(tariff_id, {}).get("business_tier") or tariff_id)
+        access = build_subscription_capabilities(
+            tier=business_tier,
+            status=str(sub.get("status") or ""),
+            subscription_ends_at=sub.get("next_billing_date"),
+            is_superadmin=bool(user_data.get("is_superadmin")),
+        )
         return jsonify(
             {
                 "success": True,
@@ -1294,6 +1315,7 @@ def billing_status():
                 "credits_balance": int(user_row.get("credits_balance") or 0),
                 "recent_attempts": recent_attempts,
                 "renewal_status": _subscription_renewal_state(sub),
+                "access": access,
             }
         )
     except Exception as e:

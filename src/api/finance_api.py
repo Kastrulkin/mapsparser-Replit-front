@@ -20,6 +20,7 @@ from core.finance_kpis import calculate_finance_snapshot, default_period_range, 
 from core.auth_helpers import verify_business_access
 from core.helpers import get_business_id_from_user, get_business_owner_id
 from database_manager import DatabaseManager
+from subscription_manager import get_capability_access
 
 
 finance_bp = Blueprint("finance_api", __name__)
@@ -87,7 +88,29 @@ def _require_finance_user_and_business():
     if not has_access:
         return user_data, business_id, (jsonify({"error": "Нет доступа к этому бизнесу"}), 403)
 
+    capability_access = get_capability_access(business_id, 'finance', bool(user_data.get('is_superadmin')))
+    if not capability_access.get('allowed'):
+        return user_data, business_id, (
+            jsonify({
+                "error": "payment_required",
+                **capability_access,
+                "return_to": request.full_path.rstrip('?'),
+            }),
+            402,
+        )
+
     return user_data, business_id, None
+
+
+@finance_bp.before_request
+def require_finance_capability():
+    if request.method == 'OPTIONS' or request.endpoint in {
+        'finance_api.get_finance_import_template',
+        'finance_api.get_finance_import_templates',
+    }:
+        return None
+    _user_data, _business_id, error_response = _require_finance_user_and_business()
+    return error_response
 
 
 def _finance_period_from_request():

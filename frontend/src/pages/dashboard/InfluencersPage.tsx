@@ -15,11 +15,12 @@ import {
 } from '@/features/influencers/influencerWorkspace';
 import { newAuth } from '@/lib/auth_new';
 import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
+import { getCapabilityAccessForBusiness } from '@/lib/subscriptionAccess';
 import { cn } from '@/lib/utils';
 
 type InfluencerContext = {
   currentBusinessId?: string | null;
-  currentBusiness?: { name?: string; city?: string } | null;
+  currentBusiness?: { name?: string; city?: string; subscription_tier?: string; subscription_status?: string; subscription_ends_at?: string } | null;
 };
 
 type WorkspaceSection = 'recommended' | 'all' | 'shortlisted' | 'messages' | 'placements' | 'results';
@@ -80,6 +81,10 @@ export const InfluencersPage = () => {
 
   const updateShortlist = async (creator: InfluencerCreator) => {
     if (!currentBusinessId || !creator.result_id) return;
+    if (workspace?.preview?.limited) {
+      setError('Shortlist и полный каталог входят в тариф «Привлечение».');
+      return;
+    }
     setBusy(creator.result_id);
     setError('');
     try {
@@ -115,12 +120,17 @@ export const InfluencersPage = () => {
   const location = [currentBusiness?.city, workspace?.latest_search?.brief?.area].filter((value) => typeof value === 'string' && value.trim()).join(' · ');
 
   const filterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
+  const influencerAccess = getCapabilityAccessForBusiness(currentBusiness, 'influencers');
 
   if (!currentBusinessId) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Выберите бизнес, чтобы открыть подбор авторов.</div>;
 
+  if (workspace?.preview?.limited) {
+    return <div className="mx-auto max-w-7xl space-y-6 pb-12"><DashboardPageHeader eyebrow="Превью · тариф «Привлечение»" title="Инфлюенсеры рядом" description={`Сейчас: ${influencerAccess.tierName}. Видны 10 стабильных публичных карточек; полный подбор и действия откроются после повышения.`} icon={Megaphone} /><section className="rounded-[24px] bg-emerald-50 p-5 text-sm leading-6 text-emerald-950 ring-1 ring-emerald-200"><strong>Уже доступно:</strong> публичное preview и общее число авторов. <strong>После повышения:</strong> фильтры, shortlist, сообщения, размещения и результаты.</section>{error ? <div role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-900 ring-1 ring-rose-200">{error}</div> : null}<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Превью каталога инфлюенсеров">{creators.map((creator) => <div key={creator.result_id} className="pointer-events-none select-none"><InfluencerCreatorCard creator={creator} onToggleShortlist={() => undefined} /></div>)}</div><section className="overflow-hidden rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] sm:p-6"><div className="relative h-28 overflow-hidden rounded-[20px] bg-slate-100" aria-hidden="true"><div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 blur-[7px]"><span className="rounded-2xl bg-white" /><span className="rounded-2xl bg-white" /><span className="rounded-2xl bg-white" /></div></div><div className="relative -mt-4 rounded-[20px] bg-white p-5 text-center ring-1 ring-slate-200"><h2 className="text-xl font-semibold text-slate-950">Ещё {workspace.preview.hidden_count || 0} авторов</h2><p className="mt-2 text-sm leading-6 text-slate-600">Скрытые карточки, контакты и evidence не загружаются в браузер. После оплаты вы вернётесь сюда.</p><Link to="/dashboard/profile?focus=subscription&tier=professional#subscription" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">Открыть полный подбор — «Привлечение»</Link></div></section></div>;
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
-      <DashboardPageHeader eyebrow="Путь роста" title="Инфлюенсеры" description="Найдите людей, которым уже доверяют ваши потенциальные клиенты, выберите подходящих и только затем переходите к сообщениям." icon={Megaphone} actions={<Button type="button" variant="outline" onClick={() => void load()} disabled={loading} className="min-h-11 gap-2"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />Обновить</Button>} />
+      <DashboardPageHeader eyebrow="Путь роста" title="Инфлюенсеры" description="Найдите людей, которым уже доверяют ваши потенциальные клиенты, выберите подходящих и только затем переходите к сообщениям." icon={Megaphone} actions={<div className="flex flex-wrap gap-2"><Link to="/dashboard/influencers/registry" className="inline-flex min-h-11 items-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white">База и общение</Link><Button type="button" variant="outline" onClick={() => void load()} disabled={loading} className="min-h-11 gap-2"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />Обновить</Button></div>} />
 
       {journeyActions.length ? <section aria-label="Текущий шаг по инфлюенсерам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={load} />)}</section> : null}
 
@@ -149,7 +159,8 @@ export const InfluencersPage = () => {
           </div>
         </section>
 
-        {loading && !workspace ? <div className="grid min-h-64 place-items-center rounded-3xl bg-white"><span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Загружаем авторов</span></div> : creators.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{creators.map((creator) => <InfluencerCreatorCard key={creator.result_id} creator={creator} busy={busy === creator.result_id} onToggleShortlist={(item) => void updateShortlist(item)} />)}</div> : <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-12 text-center"><Search className="mx-auto h-7 w-7 text-slate-400" /><h2 className="mt-4 text-xl font-semibold text-slate-950">Подходящих авторов пока не видно</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Измените фильтры или запустите подбор. LocalOS будет искать локальные площадки, а не общий каталог известных блогеров.</p><Link to="/dashboard/influencers/operations" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">Настроить подбор<ArrowRight className="h-4 w-4" /></Link></div>}
+        {loading && !workspace ? <div className="grid min-h-64 place-items-center rounded-3xl bg-white"><span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Загружаем авторов</span></div> : creators.length ? <div className={cn('grid gap-4 md:grid-cols-2 xl:grid-cols-3', workspace?.preview?.limited && 'pointer-events-none select-none')} aria-label={workspace?.preview?.limited ? 'Превью каталога инфлюенсеров' : 'Каталог инфлюенсеров'}>{creators.map((creator) => <InfluencerCreatorCard key={creator.result_id} creator={creator} busy={busy === creator.result_id} onToggleShortlist={(item) => void updateShortlist(item)} />)}</div> : <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-12 text-center"><Search className="mx-auto h-7 w-7 text-slate-400" /><h2 className="mt-4 text-xl font-semibold text-slate-950">Подходящих авторов пока не видно</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Измените фильтры или запустите подбор. LocalOS будет искать локальные площадки, а не общий каталог известных блогеров.</p><Link to="/dashboard/influencers/operations" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">Настроить подбор<ArrowRight className="h-4 w-4" /></Link></div>}
+        {workspace?.preview?.limited ? <section className="overflow-hidden rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_45px_-34px_rgba(15,23,42,0.45)] sm:p-6" aria-labelledby="influencer-preview-title"><div className="relative h-32 overflow-hidden rounded-[20px] bg-slate-100" aria-hidden="true"><div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 blur-[7px]"><span className="rounded-2xl bg-white shadow-sm" /><span className="rounded-2xl bg-white shadow-sm" /><span className="rounded-2xl bg-white shadow-sm" /></div><div className="absolute inset-0 bg-gradient-to-b from-white/10 to-white/80" /></div><div className="relative -mt-5 rounded-[20px] bg-white p-5 text-center shadow-[0_0_0_1px_rgba(15,23,42,0.07)]"><h2 id="influencer-preview-title" className="text-balance text-xl font-semibold text-slate-950">В каталоге ещё <span className="tabular-nums">{workspace.preview.hidden_count || 0}</span> авторов</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Вы увидели стабильное превью из 10 публичных карточек. Полный каталог, shortlist, сообщения и результаты откроются на тарифе «Привлечение».</p><Link to="/dashboard/profile?focus=subscription#subscription" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.96]">Открыть полный подбор — тариф «Привлечение»</Link></div></section> : null}
         {workspace?.cursor ? <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} className="min-h-11 w-full">{loadingMore ? 'Загружаем…' : 'Показать ещё'}</Button> : null}
       </> : null}
 

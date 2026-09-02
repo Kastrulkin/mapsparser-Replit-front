@@ -15,7 +15,7 @@ import urllib.request
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import CONSENT_VERSION, verify_session
 from core.email_delivery import send_verification_email
-from subscription_manager import get_automation_block_message, has_paid_automation_access
+from subscription_manager import get_automation_block_message, get_capability_access, has_paid_automation_access
 from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
     decode_telegram_bot_token,
@@ -35,6 +35,31 @@ import json
 from datetime import datetime, timedelta
 
 messengers_bp = Blueprint('messengers', __name__)
+
+
+@messengers_bp.before_request
+def require_chat_capability():
+    protected_endpoints = {
+        'messengers.connect_telegram',
+        'messengers.telegram_bot_status',
+        'messengers.telegram_bot_publish_target_probe',
+        'messengers.channels_status',
+        'messengers.channels_test_send',
+        'messengers.verify_whatsapp',
+    }
+    if request.endpoint not in protected_endpoints or request.method == 'OPTIONS':
+        return None
+    user_data = require_auth()
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get('business_id') or request.args.get('business_id') or '').strip()
+    if not business_id:
+        return None
+    access = get_capability_access(business_id, 'chats', bool(user_data.get('is_superadmin')))
+    if access.get('allowed'):
+        return None
+    return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip('?')}), 402
 
 
 def _row_get(row, key, index=0, default=None):

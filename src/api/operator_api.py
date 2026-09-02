@@ -93,7 +93,7 @@ from services.llm import analyze_text_with_gigachat
 from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS, enqueue_paid_operator_map_refresh
 from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
-from subscription_manager import get_allowed_content_plan_horizons
+from subscription_manager import build_subscription_capabilities, get_allowed_content_plan_horizons
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -103,26 +103,18 @@ logger = logging.getLogger(__name__)
 MOBILE_PAID_NAVIGATION_KEYS = {"operator", "progress", "content", "finance", "partnerships", "agents"}
 MOBILE_PAID_MODULES = {"content", "finance", "analytics", "partnerships", "agents"}
 MOBILE_PAID_ACTION_PREFIXES = ("content.", "finance.", "partnerships.", "agents.")
-MOBILE_PAID_TIERS = ("starter", "professional", "concierge", "elite", "promo", "basic", "pro", "enterprise")
-MOBILE_ACTIVE_SUBSCRIPTION_STATUSES = ("active", "trialing")
-MOBILE_PAYMENT_REQUIRED_MESSAGE = "Раздел доступен после оплаты тарифа для выбранной точки."
+MOBILE_PAYMENT_REQUIRED_MESSAGE = "Оператор и бизнес-автоматизация входят в тариф «Управление»."
 
 
 def _inline_scope_automation_allowed(scope: dict) -> bool | None:
     if "subscription_tier" not in scope and "subscription_status" not in scope:
         return None
-    tier = str(scope.get("subscription_tier") or "").strip().lower()
-    status = str(scope.get("subscription_status") or "").strip().lower()
-    ends_at = scope.get("subscription_ends_at")
-    expired = False
-    if ends_at:
-        try:
-            parsed = datetime.fromisoformat(str(ends_at).replace("Z", "+00:00"))
-            now = datetime.now(parsed.tzinfo) if parsed.tzinfo else datetime.now()
-            expired = parsed < now
-        except (TypeError, ValueError):
-            expired = False
-    return tier in MOBILE_PAID_TIERS and status in MOBILE_ACTIVE_SUBSCRIPTION_STATUSES and not expired
+    access = build_subscription_capabilities(
+        tier=str(scope.get("subscription_tier") or ""),
+        status=str(scope.get("subscription_status") or ""),
+        subscription_ends_at=scope.get("subscription_ends_at"),
+    )
+    return "operator" in set(access.get("capabilities") or [])
 
 
 def _scope_automation_allowed(cursor, scope: dict, is_superadmin: bool = False) -> bool:
@@ -135,28 +127,36 @@ def _scope_automation_allowed(cursor, scope: dict, is_superadmin: bool = False) 
         return False
     cursor.execute(
         """
-        SELECT id,
-               LOWER(COALESCE(subscription_tier, '')) = ANY(%s)
-               AND LOWER(COALESCE(subscription_status, '')) = ANY(%s)
-               AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
-               AS automation_allowed
+        SELECT id, subscription_tier, subscription_status, subscription_ends_at
         FROM businesses
         WHERE id = ANY(%s)
           AND COALESCE(is_active, TRUE) = TRUE
         """,
-        (list(MOBILE_PAID_TIERS), list(MOBILE_ACTIVE_SUBSCRIPTION_STATUSES), business_ids),
+        (business_ids,),
     )
     rows = [dict(row) for row in (cursor.fetchall() or [])]
-    return len(rows) == len(business_ids) and all(bool(row.get("automation_allowed")) for row in rows)
+    return len(rows) == len(business_ids) and all(
+        "operator" in set(build_subscription_capabilities(
+            tier=str(row.get("subscription_tier") or ""),
+            status=str(row.get("subscription_status") or ""),
+            subscription_ends_at=row.get("subscription_ends_at"),
+        ).get("capabilities") or [])
+        for row in rows
+    )
 
 
 def _mobile_payment_required_response():
     return jsonify({
         "success": False,
-        "error": MOBILE_PAYMENT_REQUIRED_MESSAGE,
+        "error": "payment_required",
         "payment_required": True,
-        "billing_url": "/dashboard/billing",
-    }), 403
+        "capability": "operator",
+        "required_tier": "concierge",
+        "required_tier_name": "Управление",
+        "reason": MOBILE_PAYMENT_REQUIRED_MESSAGE,
+        "billing_url": "/dashboard/profile?focus=subscription#subscription",
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
 
 
 def _mobile_navigation(

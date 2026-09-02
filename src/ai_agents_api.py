@@ -4,7 +4,7 @@ API endpoints для управления ИИ агентами (только д
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
-from subscription_manager import get_automation_block_message, has_paid_automation_access
+from subscription_manager import get_capability_access
 import uuid
 import json
 
@@ -130,9 +130,10 @@ def _require_business_owner_or_superadmin(db: DatabaseManager, business_id: str)
 
 
 def _ensure_business_automation_access(business_id: str):
-    if has_paid_automation_access(business_id):
+    access = get_capability_access(business_id, 'agents')
+    if access.get('allowed'):
         return None
-    return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
+    return jsonify({"error": "payment_required", **access, "return_to": request.full_path.rstrip('?')}), 402
 
 @ai_agents_api_bp.route('/api/admin/ai-agents', methods=['GET'])
 def get_ai_agents():

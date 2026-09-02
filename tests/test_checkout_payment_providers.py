@@ -152,6 +152,20 @@ def test_yookassa_checkout_falls_back_to_onetime_when_recurring_not_allowed(monk
     assert marked["provider_invoice_id"] == "pay-onetime"
 
 
+def test_registered_checkout_returns_to_the_original_dashboard_task(monkeypatch) -> None:
+    monkeypatch.setenv("FRONTEND_BASE_URL", "https://localos.test")
+    url = yookassa_integration._build_checkout_return_url({
+        "id": "checkout-42",
+        "entry_point": "registered_paywall",
+        "business_id": "biz-1",
+        "payload_json": {"return_to": "/dashboard/influencers?tab=catalog"},
+    })
+
+    assert url.startswith("https://localos.test/dashboard/profile?yookassa_return=1")
+    assert "return_to=%2Fdashboard%2Finfluencers%3Ftab%3Dcatalog" in url
+    assert yookassa_integration._safe_checkout_return_to("https://evil.test") == ""
+
+
 def test_subscription_public_payload_exposes_autopay_flags() -> None:
     payload = yookassa_integration._subscription_public_payload(
         {

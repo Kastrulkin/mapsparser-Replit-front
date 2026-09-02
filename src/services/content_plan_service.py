@@ -1537,6 +1537,8 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
                 "tier": subscription.get("tier"),
                 "status": subscription.get("status"),
                 "allowed_horizons": allowed_horizons,
+                "maps_content_access": "maps.news" in set(subscription.get("capabilities") or []),
+                "social_content_access": "social_content" in set(subscription.get("capabilities") or []),
                 "automation_access": bool(subscription.get("automation_access")),
                 "reason": subscription.get("reason"),
             },
@@ -1843,8 +1845,8 @@ def create_generated_content_plan(
         if normalized_period not in allowed_horizons:
             raise PermissionError("Горизонт планирования недоступен на текущем тарифе")
         context = load_plan_context_for_business(user_id, business_id, scope_type, scope_target_id)
-        if not bool(context.get("subscription", {}).get("automation_access")):
-            raise PermissionError(context.get("subscription", {}).get("reason") or "Автоматизация недоступна")
+        if not bool(context.get("subscription", {}).get("maps_content_access")):
+            raise PermissionError("Новости для карт входят в тариф «Карты»")
         knowledge_metadata: dict[str, Any] = {}
         raw_knowledge_foundation = (
             content_mix.get("knowledge_foundation")

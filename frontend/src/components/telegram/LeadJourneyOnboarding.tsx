@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, ChevronRight, FilePenLine, Handshake, MapPinned, Megaphone, Sparkles } from 'lucide-react';
+import { ArrowLeft, BadgeDollarSign, Bot, Check, ChevronRight, FilePenLine, Handshake, MapPinned, Megaphone, Sparkles } from 'lucide-react';
 
 import { getLeadJourneyDirection, leadJourneyDirections, saveLeadJourneyIntent, type LeadJourneyKey } from '@/lib/leadJourney';
 
@@ -16,6 +16,8 @@ const directionIcon = (key: LeadJourneyKey) => {
   if (key === 'influencers') return Megaphone;
   if (key === 'partnerships') return Handshake;
   if (key === 'content') return FilePenLine;
+  if (key === 'automation') return Bot;
+  if (key === 'average_ticket') return BadgeDollarSign;
   return MapPinned;
 };
 

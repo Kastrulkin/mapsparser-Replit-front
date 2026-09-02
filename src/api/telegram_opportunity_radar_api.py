@@ -22,6 +22,7 @@ from services.telegram_opportunity_radar import (
     update_business_keywords,
     upsert_source,
 )
+from subscription_manager import get_capability_access
 
 
 LOCALOS_PLATFORM_RADAR_ALIASES = {"__localos__", "localos", "локалос"}
@@ -131,6 +132,17 @@ def _require_business_access() -> tuple[DatabaseManager | None, Any | None, dict
     if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
         db.close()
         return None, None, user_data, business_id, (jsonify({"error": "Нет доступа"}), 403)
+    capability_access = get_capability_access(business_id, "telegram_radar")
+    if not capability_access.get("allowed"):
+        db.close()
+        return None, None, user_data, business_id, (
+            jsonify({
+                "error": "payment_required",
+                **capability_access,
+                "return_to": request.full_path.rstrip("?"),
+            }),
+            402,
+        )
     return db, cursor, user_data, business_id, None
 
 
@@ -148,6 +160,10 @@ def ingest_from_openclaw():
     try:
         if _is_localos_platform_alias(payload.get("business_id")):
             payload = {**payload, "business_id": _ensure_localos_platform_business(cursor)}
+        elif payload.get("business_id"):
+            capability_access = get_capability_access(str(payload.get("business_id")), "telegram_radar")
+            if not capability_access.get("allowed"):
+                return jsonify({"success": False, "error": "payment_required", **capability_access}), 402
         result = ingest_opportunity(cursor, payload)
         alert_result = None
         if result.get("created") and result.get("opportunity"):

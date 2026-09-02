@@ -147,8 +147,42 @@ def test_influencer_workspace_exposes_safe_cards_and_block_level_access(monkeypa
     assert workspace["creators"][0]["audience_count"] == 4200
     assert workspace["creators"][0]["public_url"] == "https://t.me/anna_spb"
     assert "preferred_contact" not in workspace["creators"][0]
-    assert workspace["access"]["discovery"]["status"] == "available"
+    assert workspace["access"]["discovery"]["status"] == "payment_required"
     assert workspace["access"]["message_generation"]["status"] == "payment_required"
+
+
+def test_influencer_preview_is_stable_and_cannot_enumerate_hidden_cards(monkeypatch):
+    results = [
+        {
+            "id": f"result-{index}",
+            "creator_profile_id": f"creator-{index}",
+            "display_name": f"Автор {index}",
+            "platform": "telegram" if index < 10 else "youtube",
+            "canonical_url": f"https://example.test/creator-{index}",
+            "home_city": "Москва",
+            "public_metrics": {"subscribers": 1000 + index},
+            "preferred_contact": f"private-{index}@example.test",
+            "score": 100 - index,
+        }
+        for index in range(15)
+    ]
+    monkeypatch.setattr(services.creator_promotion_service, "_load_business", lambda _cursor, _business_id: {"id": "business-1"})
+    monkeypatch.setattr(services.creator_promotion_service, "list_search_jobs", lambda _cursor, _business_id: [{"id": "search-1", "results_count": 15, "shortlisted_count": 0}])
+    monkeypatch.setattr(services.creator_promotion_service, "load_search_job", lambda _cursor, **_kwargs: {"id": "search-1", "status": "completed", "results": results})
+    monkeypatch.setattr(services.creator_promotion_service, "list_campaigns", lambda _cursor, _business_id: [{"offer": {"service": "Услуга"}}])
+    monkeypatch.setattr(services.creator_promotion_service, "creator_automation_allowed", lambda _cursor, _business_id: False)
+    monkeypatch.setattr(services.creator_promotion_service, "creator_feature_state", lambda _business_id: {"promotion_hub": True, "discovery": True})
+
+    initial_preview = influencer_workspace(None, business_id="business-1", limit=100)
+    preview = influencer_workspace(None, business_id="business-1", limit=100, offset=100)
+    hidden_filter = influencer_workspace(None, business_id="business-1", filters={"platform": "youtube"})
+
+    assert len(initial_preview["creators"]) == 10
+    assert all("preferred_contact" not in card for card in initial_preview["creators"])
+    assert preview["creators"] == []
+    assert preview["cursor"] is None
+    assert preview["preview"]["hidden_count"] == 5
+    assert hidden_filter["creators"] == []
 
 
 def test_influencer_workspace_loads_without_existing_offer(monkeypatch):

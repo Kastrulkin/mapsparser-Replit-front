@@ -31,6 +31,7 @@ from services.web_tracking_service import (
     validate_tracker_domains,
 )
 from services.web_tracking_observability import get_ingestion_metrics, record_ingestion_metrics
+from subscription_manager import get_capability_access
 
 
 web_tracking_bp = Blueprint("web_tracking_api", __name__)
@@ -201,6 +202,9 @@ def receive_tracking_events():
         tracker = cursor.fetchone()
         if not tracker or not _business_allowlisted(str(tracker["business_id"])):
             return _ingestion_response(started_at=started_at, status=404, outcome="tracker_not_found", tracker_id=tracker_id)
+        capability_access = get_capability_access(str(tracker["business_id"]), "web_analytics")
+        if not capability_access.get("allowed"):
+            return _ingestion_response(started_at=started_at, status=402, outcome="payment_required", tracker_id=tracker_id)
         domain_error = validate_tracker_domains(events, tracker.get("allowed_domains"))
         if domain_error:
             _record_tracker_error(db, dict(tracker), domain_error)
@@ -243,6 +247,9 @@ def business_web_tracking(business_id: str):
         _user, access_error = _require_business(cursor, business_id)
         if access_error:
             return access_error
+        access = get_capability_access(business_id, 'web_analytics')
+        if not access.get('allowed') and not _user.get('is_superadmin'):
+            return jsonify({'success': False, 'error': 'payment_required', **access, 'return_to': request.full_path.rstrip('?')}), 402
         allow_create = _flag("WEB_TRACKING_CREATE_ENABLED")
         tracker = ensure_tracker(cursor, business_id, allow_create=allow_create)
         if not tracker:
@@ -300,6 +307,9 @@ def business_web_analytics(business_id: str):
         _user, access_error = _require_business(cursor, business_id)
         if access_error:
             return access_error
+        access = get_capability_access(business_id, 'web_analytics')
+        if not access.get('allowed') and not _user.get('is_superadmin'):
+            return jsonify({'success': False, 'error': 'payment_required', **access, 'return_to': request.full_path.rstrip('?')}), 402
         try:
             period_days = int(request.args.get("period", "30"))
         except ValueError:

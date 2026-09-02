@@ -123,7 +123,7 @@ const ruCopy: LandingCopy = {
   intro:
     "LocalOS берёт на себя карты, отзывы, публикации, услуги и показатели. ИИ готовит сценарий, вы подтверждаете, скрипт выполняет. Вы подключаетесь, когда нужно решение.",
   seeTasks: "Посмотреть, что можно передать LocalOS",
-  freeAudit: "Выбрать из 5 направлений",
+  freeAudit: "Выбрать из 6 направлений",
   formTitle: "Начните с аудита карт",
   formDescription: "Проверим, как клиенты видят ваш бизнес и что стоит исправить в первую очередь.",
   emailLabel: "Email",
@@ -190,7 +190,7 @@ const enCopy: LandingCopy = {
   title: "Your business needs you for decisions, not routine work",
   intro: "LocalOS watches the work owners usually keep in their heads: listings, reviews, content, services, numbers, and partnerships. The system handles recurring tasks. You step in when something needs a choice, a review, or approval.",
   seeTasks: "See what LocalOS can take over",
-  freeAudit: "Choose from 5 directions",
+  freeAudit: "Choose from 6 directions",
   formTitle: "Start with a listings audit",
   formDescription: "See how customers find your business and what should be fixed first.",
   emailLabel: "Email",

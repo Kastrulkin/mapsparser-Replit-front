@@ -15,12 +15,11 @@ from psycopg2.extras import Json, RealDictCursor
 
 from services.creator_catalog_service import canonical_creator_url, creator_platform, upsert_creator_catalog_entity
 from services.lead_workstream_service import CREATOR_COLLABORATION, create_workstream
+from subscription_manager import build_subscription_capabilities, capability_access_payload
 
 
 SCORING_VERSION = "creator-fit-v3"
 TRUE_VALUES = {"1", "true", "yes", "on"}
-CREATOR_AUTOMATION_TIERS = {"starter", "professional", "concierge", "elite", "promo", "basic", "pro", "enterprise"}
-CREATOR_ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
 SEARCH_RESULT_GROUPS = {
     "best_fit",
     "strong_local",
@@ -1922,19 +1921,21 @@ def create_collaboration(cursor: Any, *, business_id: str, campaign_id: str, can
         """
         INSERT INTO creator_collaborations (
             id, campaign_id, campaign_candidate_id, business_id, creator_profile_id,
-            status, agreed_terms_json, scheduled_visit_at, owner_user_id
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, ''))
+            status, agreed_terms_json, scheduled_visit_at, owner_user_id, review_status
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, ''), %s)
         ON CONFLICT (campaign_candidate_id) DO UPDATE SET
             agreed_terms_json = EXCLUDED.agreed_terms_json,
             scheduled_visit_at = EXCLUDED.scheduled_visit_at,
             terms_version = creator_collaborations.terms_version + 1,
-            approved_terms_version = NULL, updated_at = NOW()
+            approved_terms_version = NULL, review_status = 'needs_review',
+            reviewed_by = NULL, reviewed_at = NULL, updated_at = NOW()
         RETURNING id
         """,
         (
             collaboration_id, campaign_id, candidate_id, business_id, candidate["creator_profile_id"],
             status, Json(_json(payload.get("terms"), {})),
             payload.get("scheduled_visit_at"), user_id,
+            "draft" if status == "draft" else "needs_review",
         ),
     )
     row = _dict(cursor.fetchone())
@@ -1955,10 +1956,14 @@ def update_collaboration(cursor: Any, *, business_id: str, collaboration_id: str
             scheduled_visit_at = COALESCE(%s, scheduled_visit_at),
             terms_version = terms_version + CASE WHEN %s THEN 1 ELSE 0 END,
             approved_terms_version = CASE WHEN %s THEN NULL ELSE approved_terms_version END,
+            review_status = CASE WHEN %s THEN 'needs_review' ELSE review_status END,
+            reviewed_by = CASE WHEN %s THEN NULL ELSE reviewed_by END,
+            reviewed_at = CASE WHEN %s THEN NULL ELSE reviewed_at END,
             updated_at = NOW()
         WHERE id = %s AND business_id = %s
         """,
-        (status, Json(terms), payload.get("scheduled_visit_at"), terms_changed, terms_changed, collaboration_id, business_id),
+        (status, Json(terms), payload.get("scheduled_visit_at"), terms_changed, terms_changed,
+         terms_changed, terms_changed, terms_changed, collaboration_id, business_id),
     )
     return load_collaboration(cursor, business_id=business_id, collaboration_id=collaboration_id)
 
@@ -2079,6 +2084,11 @@ def _creator_room_by_token(cursor: Any, token: str) -> dict[str, Any]:
         "media_kit_url", "availability_text", "preferred_contact",
     )
     response = {key: room.get(key) for key in safe_keys}
+    cursor.execute(
+        "SELECT 1 FROM creator_accounts WHERE creator_profile_id = %s AND status = 'active' LIMIT 1",
+        (room.get("creator_profile_id"),),
+    )
+    response["portal_url"] = "/creator/login" if cursor.fetchone() else None
     response["deliverables"] = deliverables
     return _json_ready(response)
 
@@ -2447,10 +2457,12 @@ def creator_automation_allowed(cursor: Any, business_id: str) -> bool:
         normalized_ends_at = ends_at if ends_at.tzinfo else ends_at.replace(tzinfo=timezone.utc)
         if normalized_ends_at < current:
             return False
-    return (
-        str(business.get("subscription_tier") or "") in CREATOR_AUTOMATION_TIERS
-        and str(business.get("subscription_status") or "") in CREATOR_ACTIVE_SUBSCRIPTION_STATUSES
+    access = build_subscription_capabilities(
+        tier=str(business.get("subscription_tier") or ""),
+        status=str(business.get("subscription_status") or ""),
+        subscription_ends_at=business.get("subscription_ends_at"),
     )
+    return "influencers" in set(access.get("capabilities") or [])
 
 
 def _public_creator_card(item: dict[str, Any]) -> dict[str, Any]:
@@ -2516,7 +2528,10 @@ def influencer_workspace(
     elif latest_summary:
         latest_search = latest_summary
 
-    cards = [_public_creator_card(item) for item in (latest_search or {}).get("results", [])]
+    all_cards = [_public_creator_card(item) for item in (latest_search or {}).get("results", [])]
+    automation_allowed = creator_automation_allowed(cursor, business_id)
+    preview_limit = 10
+    cards = all_cards if automation_allowed else all_cards[:preview_limit]
     requested = filters or {}
     platform = str(requested.get("platform") or "").strip().lower()
     city = str(requested.get("city") or "").strip().lower()
@@ -2560,11 +2575,14 @@ def influencer_workspace(
             (business_id,),
         )
         current_offer = _json(_dict(cursor.fetchone()).get("offer"), {})
-    automation_allowed = creator_automation_allowed(cursor, business_id)
-    paid_reason = "Подготовка персональных сообщений, подключение каналов и отправка доступны после оплаты."
+    access_contract = capability_access_payload(
+        {"capabilities": ["influencers"] if automation_allowed else []},
+        "influencers",
+    )
+    paid_reason = "Полный каталог, shortlist, сообщения и подтверждённая отправка входят в тариф «Привлечение»."
     access = {
-        "discovery": {"status": "available", "reason": "Каталог, фильтры и shortlist доступны после регистрации.", "cta_label": "Смотреть авторов", "cta_target": {"screen": "influencers"}},
-        "offer": {"status": "available", "reason": "Базовое предложение можно проверить до запуска автоматизации.", "cta_label": "Проверить предложение", "cta_target": {"screen": "influencers"}},
+        "discovery": {"status": "available" if automation_allowed else "payment_required", "reason": "Полный каталог доступен для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Смотреть авторов" if automation_allowed else "Выбрать тариф «Привлечение»", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}, "required_tier": access_contract["required_tier"]},
+        "offer": {"status": "available" if automation_allowed else "payment_required", "reason": "Предложение доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Проверить предложение" if automation_allowed else "Выбрать тариф «Привлечение»", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}, "required_tier": access_contract["required_tier"]},
         "message_generation": {"status": "available" if automation_allowed else "payment_required", "reason": "Доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Подготовить сообщения" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}},
         "sender_setup": {"status": "available" if automation_allowed else "payment_required", "reason": "Доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Подключить канал" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "settings"}},
         "send": {"status": "approval_required" if automation_allowed else "payment_required", "reason": "Каждая внешняя отправка требует проверки и подтверждения." if automation_allowed else paid_reason, "cta_label": "Проверить и отправить" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}},
@@ -2587,8 +2605,15 @@ def influencer_workspace(
             "shortlisted_count": int((latest_summary or {}).get("shortlisted_count") or 0),
         } if latest_search else None,
         "creators": page,
-        "counts": {"total": len(filtered), "returned": len(page), "shortlisted": sum(1 for card in cards if card.get("shortlist_status") == "shortlisted")},
-        "cursor": str(next_offset) if next_offset is not None else None,
+        "counts": {"total": len(all_cards), "returned": len(page), "shortlisted": sum(1 for card in cards if card.get("shortlist_status") == "shortlisted")},
+        "cursor": str(next_offset) if next_offset is not None and automation_allowed else None,
+        "preview": {
+            "limited": not automation_allowed,
+            "visible_limit": preview_limit,
+            "hidden_count": max(len(all_cards) - len(cards), 0),
+            "required_tier": "professional",
+            "required_tier_name": "Привлечение",
+        },
         "filters": {
             "platforms": sorted({str(card.get("platform")) for card in cards if card.get("platform")}),
             "cities": sorted({str(card.get("city")) for card in cards if card.get("city")}),

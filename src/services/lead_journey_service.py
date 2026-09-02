@@ -14,13 +14,14 @@ from psycopg2.extras import Json
 
 ACTIVE_ACTION_STATUSES = {"ready", "in_progress", "waiting", "blocked"}
 FINAL_ACTION_STATUSES = {"completed", "superseded", "cancelled"}
-FLOW_TYPES = {"influencer", "partnership", "maps", "content", "automation"}
+FLOW_TYPES = {"influencer", "partnership", "maps", "content", "automation", "average_ticket"}
 FLOW_FLAGS = {
     "influencer": "INFLUENCER_JOURNEY_ENABLED",
     "partnership": "PARTNERSHIP_JOURNEY_ENABLED",
     "maps": "MAPS_JOURNEY_ENABLED",
     "content": "CONTENT_JOURNEY_ENABLED",
     "automation": "AUTOMATION_JOURNEY_ENABLED",
+    "average_ticket": "AUTOMATION_JOURNEY_ENABLED",
 }
 PUBLIC_EVENT_NAMES = {
     "lead_link_opened", "opportunity_preview_clicked", "opportunity_list_opened",
@@ -64,6 +65,7 @@ ACTION_COMMANDS = {
     "run_automation": ("link_run",),
     "review_automation_result": ("add_result",),
     "start_next_automation_cycle": ("start_next_cycle",),
+    "open_average_ticket": ("prepare", "complete"),
     "upgrade": ("open_upgrade",),
 }
 
@@ -177,11 +179,12 @@ def _default_opportunities(lead: dict[str, Any]) -> list[dict[str, Any]]:
         {"flow_type": "maps", "entity_type": "card_audit", "entity_id": "", "title": "Возможность на картах", "summary": "Покажем приоритетное отличие от ближайших конкурентов.", "reason": "Конкретная задача помогает улучшить полноту карточки.", "mechanic": "Выполнить первый пункт недельного плана.", "message_excerpt": "", "count": 0, "metrics": {}},
         {"flow_type": "content", "entity_type": "content_topic", "entity_id": "", "title": "Тема для следующей публикации", "summary": f"Покажем тему и короткий черновик для {business_name} на основе реальных данных бизнеса.", "reason": "Регулярный полезный контент помогает напоминать о бизнесе без постоянного поиска идей.", "mechanic": "Подготовить один материал, проверить его и сохранить в календарь.", "message_excerpt": "Полезный материал для клиентов вашего бизнеса…", "count": 0, "metrics": {}},
         {"flow_type": "automation", "entity_type": "automation_use_case", "entity_id": "routine_control", "title": "Автоматизировать повторяющуюся работу", "summary": "Выберите регулярную задачу, проверьте план ИИ-сотрудника и контролируйте каждый запуск.", "reason": "Повторяющиеся проверки можно выполнять по расписанию, сохраняя ручное подтверждение важных действий.", "mechanic": "Сначала настроить задачу и проверить preflight. Запуск и внешние действия подтверждаются отдельно.", "message_excerpt": "Например: каждое утро собрать отзывы без ответа и подготовить черновики.", "count": 0, "metrics": {}},
+        {"flow_type": "average_ticket", "entity_type": "growth_opportunity", "entity_id": "average_ticket", "title": "Увеличить средний чек", "summary": "Покажем, какие услуги можно объединить и где предложить уместную допродажу.", "reason": "Понятные пакеты и следующий подходящий шаг помогают расти без давления на клиента.", "mechanic": "Сначала проверить текущие услуги и цены, затем выбрать один безопасный сценарий роста.", "message_excerpt": "Например: базовая услуга + подходящее дополнение с прозрачной выгодой.", "count": 0, "metrics": {}},
     ]
 
 
 def build_lead_preview(lead: dict[str, Any]) -> dict[str, Any]:
-    """Build a safe five-path preview from fields already stored on the lead."""
+    """Build a safe six-path preview from fields already stored on the lead."""
     business_name = str(lead.get("name") or "").strip()
     city = str(lead.get("city") or "").strip()
     address = str(lead.get("address") or "").strip()
@@ -462,6 +465,7 @@ def _action_copy(flow_type: str, action_type: str, payload: dict[str, Any]) -> t
         "run_automation": ("Запустить проверенную задачу", "Откройте ИИ-сотрудника, выполните preflight и запустите задачу вручную.", "Открыть ИИ-сотрудника", 125),
         "review_automation_result": ("Проверить результат ИИ-сотрудника", "Результат реального запуска готов. Проверьте его перед следующим циклом.", "Зафиксировать результат", 115),
         "start_next_automation_cycle": ("Запустить следующий цикл", "Сохраните удачную настройку или скорректируйте задачу перед повтором.", "Настроить следующий цикл", 70),
+        "open_average_ticket": ("Найти первый сценарий роста чека", "Проверьте услуги, цены и уместные дополнения перед применением.", "Открыть средний чек", 105),
         "upgrade": ("Автоматизировать повторяющуюся работу", "Вы завершили полезный цикл; LocalOS может поддерживать его постоянно.", "Посмотреть автоматизацию", 40),
     }
     return copies.get(action_type, ("Продолжить работу", "LocalOS подготовил следующий конкретный шаг.", "Продолжить", 50))
@@ -507,7 +511,7 @@ def ensure_action(
 
 
 def _screen_for_flow(flow_type: str) -> str:
-    return {"influencer": "influencers", "partnership": "partnerships", "maps": "progress", "content": "content", "automation": "agents", "upgrade": "settings"}.get(flow_type, "today")
+    return {"influencer": "influencers", "partnership": "partnerships", "maps": "progress", "content": "content", "automation": "agents", "average_ticket": "average_ticket", "upgrade": "settings"}.get(flow_type, "today")
 
 
 def reserve_journey(cursor: Any, *, token: str, user_id: str, business_id: str) -> dict[str, Any]:
@@ -678,6 +682,11 @@ def _claim_loaded_journey(cursor: Any, *, journey: dict[str, Any], user_id: str,
             "approval_required": True,
         })
         action_type = "configure_automation"
+    elif flow_type == "average_ticket":
+        resolved_entity_type = "growth_opportunity"
+        resolved_entity_id = "average_ticket"
+        payload.update({"domain_summary": opportunity.get("summary"), "approval_required": True})
+        action_type = "open_average_ticket"
     else:
         action_type = "send_message"
     action = ensure_action(
@@ -832,7 +841,7 @@ def list_actions(cursor: Any, *, business_id: str, history: bool = False) -> lis
     return [serialize_action(_row(cursor, value)) for value in (cursor.fetchall() or [])]
 
 
-def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: bool) -> list[dict[str, Any]]:
+def build_growth_paths(*, actions: list[dict[str, Any]], capabilities: set[str]) -> list[dict[str, Any]]:
     """Project journey actions into the user-facing growth paths."""
     copy = {
         "maps": {
@@ -865,6 +874,28 @@ def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: boo
             "cta_label": "Настроить автоматизацию",
             "screen": "agents",
         },
+        "average_ticket": {
+            "title": "Средний чек",
+            "opportunity": "Соберите понятные пакеты услуг и выберите уместный сценарий допродажи.",
+            "cta_label": "Открыть средний чек",
+            "screen": "average_ticket",
+        },
+    }
+    required_capabilities = {
+        "maps": "maps",
+        "content": "maps.news",
+        "influencer": "influencers",
+        "partnership": "partnerships",
+        "automation": "automation",
+        "average_ticket": "average_ticket",
+    }
+    required_tiers = {
+        "maps": ("starter", "Карты"),
+        "content": ("starter", "Карты"),
+        "influencer": ("professional", "Привлечение"),
+        "partnership": ("professional", "Привлечение"),
+        "automation": ("concierge", "Управление"),
+        "average_ticket": ("concierge", "Управление"),
     }
     active_by_flow: dict[str, dict[str, Any]] = {}
     for action in actions:
@@ -872,11 +903,12 @@ def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: boo
         if flow_type in copy and flow_type not in active_by_flow:
             active_by_flow[flow_type] = action
     result: list[dict[str, Any]] = []
-    for flow_type in ("maps", "content", "influencer", "partnership", "automation"):
+    for flow_type in ("maps", "content", "influencer", "partnership", "automation", "average_ticket"):
         base = copy[flow_type]
         action = active_by_flow.get(flow_type)
-        requires_payment = flow_type == "content" and not automation_allowed
+        requires_payment = required_capabilities[flow_type] not in capabilities
         access_status = "payment_required" if requires_payment else "available"
+        required_tier, required_tier_name = required_tiers[flow_type]
         result.append({
             "flow_type": flow_type,
             "title": base["title"],
@@ -885,10 +917,11 @@ def build_growth_paths(*, actions: list[dict[str, Any]], automation_allowed: boo
             "obstacle": str((action.get("payload") or {}).get("refresh_error") or "") if action and action.get("status") == "blocked" else "",
             "access": {
                 "status": access_status,
-                "reason": "Полный черновик и календарь открываются на платном тарифе." if requires_payment else "Доступно для текущего бизнеса.",
-                "cta_label": "Выбрать тариф" if requires_payment else str(action.get("cta_label") or base["cta_label"]) if action else base["cta_label"],
+                "reason": f"Направление входит в тариф «{required_tier_name}»." if requires_payment else "Доступно для текущего бизнеса.",
+                "cta_label": f"Выбрать тариф «{required_tier_name}»" if requires_payment else str(action.get("cta_label") or base["cta_label"]) if action else base["cta_label"],
                 "cta_target": {"screen": "settings" if requires_payment else base["screen"], "action_id": None if requires_payment else action.get("id") if action else None},
                 "entitlement_source": "subscription" if requires_payment else "account",
+                "required_tier": required_tier,
             },
             "action": action,
         })

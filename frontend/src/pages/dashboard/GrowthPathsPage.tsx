@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
+import { ArrowRight, BadgeDollarSign, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { AccessPreview, type BlockAccess } from '@/components/access/AccessBoundary';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { newAuth } from '@/lib/auth_new';
 import { journeyActionRoute, type JourneyAction } from '@/lib/leadJourney';
 import { cn } from '@/lib/utils';
 
-type GrowthFlow = 'maps' | 'content' | 'influencer' | 'partnership' | 'automation';
+type GrowthFlow = 'maps' | 'content' | 'influencer' | 'partnership' | 'automation' | 'average_ticket';
 
 type GrowthPath = {
   flow_type: GrowthFlow;
@@ -30,6 +30,7 @@ const pathMeta = {
   influencer: { title: 'Инфлюенсеры рядом', icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
   partnership: { title: 'Партнёры рядом', icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
   automation: { title: 'Автоматизировать работу', icon: Bot, tone: 'bg-orange-50 text-orange-700 ring-orange-100', route: '/dashboard/agents' },
+  average_ticket: { title: 'Увеличить средний чек', icon: BadgeDollarSign, tone: 'bg-amber-50 text-amber-700 ring-amber-100', route: '/dashboard/average-ticket' },
 };
 
 const statusCopy = (path: GrowthPath) => {

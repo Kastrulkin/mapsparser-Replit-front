@@ -41,6 +41,7 @@ from services.creator_promotion_service import (
     upsert_manual_creator,
     verify_deliverable,
 )
+from subscription_manager import get_capability_access
 
 
 creator_promotion_bp = Blueprint("creator_promotion", __name__, url_prefix="/api/promotion/influencers")
@@ -58,7 +59,20 @@ def require_promotion_pilot():
     business_id = _business_id(payload if isinstance(payload, dict) else {})
     if not business_id:
         return None
-    return _require_capability(business_id, "promotion_hub")
+    feature_gate = _require_capability(business_id, "promotion_hub")
+    if feature_gate:
+        return feature_gate
+    if request.endpoint in {"creator_promotion.workspace", "creator_promotion.catalog"}:
+        return None
+    access = get_capability_access(business_id, "influencers")
+    if access.get("allowed"):
+        return None
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
 
 
 def _user_id(user_data: dict[str, Any]) -> str:
@@ -102,18 +116,8 @@ def _require_capability(business_id: str, capability: str):
 def _require_creator_automation(cursor: Any, business_id: str):
     if creator_automation_allowed(cursor, business_id):
         return None
-    return jsonify(
-        {
-            "success": False,
-            "error": "Подготовка персональных сообщений, подключение каналов и отправка доступны после оплаты.",
-            "code": "payment_required",
-            "access": {
-                "status": "payment_required",
-                "cta_label": "Выбрать тариф",
-                "cta_target": {"screen": "settings", "focus": "subscription"},
-            },
-        }
-    ), 402
+    access = get_capability_access(business_id, "influencers")
+    return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip("?")}), 402
 
 
 @creator_promotion_bp.get("/feature-state")

@@ -26,6 +26,7 @@ from services.lead_workstream_service import (
     update_workstream,
 )
 from services.outreach_safety_service import partnership_repeat_contact_guard
+from subscription_manager import get_capability_access
 from api import admin_prospecting as _legacy
 
 ALLOWED_OUTREACH_CHANNELS = _legacy.ALLOWED_OUTREACH_CHANNELS
@@ -87,6 +88,13 @@ __all__ = [
     "create_lead_workstream",
 ]
 
+
+def _partnership_write_access(business_id: str, user_data: dict):
+    access = get_capability_access(business_id, "partnerships", bool(user_data.get("is_superadmin")))
+    if access.get("allowed"):
+        return None
+    return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip("?")}), 402
+
 def partnership_list_leads():
     """User-level list of partnership leads for one business."""
     user_data, error = _require_auth()
@@ -111,6 +119,15 @@ def partnership_list_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access = get_capability_access(business_id, 'partnerships')
+            preview_limited = not bool(access.get('allowed'))
+            if preview_limited:
+                stage_filter = None
+                pipeline_status_filter = None
+                pilot_cohort = None
+                q = ''
+                limit = 10
+                offset = 0
 
             where_sql = [
                 "active_ws.client_business_id = %s",
@@ -164,7 +181,8 @@ def partnership_list_leads():
 
             cur.execute(
                 f"""
-                SELECT prospectingleads.id, prospectingleads.name, prospectingleads.address, prospectingleads.city,
+                SELECT COUNT(*) OVER() AS preview_total_count,
+                       prospectingleads.id, prospectingleads.name, prospectingleads.address, prospectingleads.city,
                        prospectingleads.category, prospectingleads.source_url, prospectingleads.source,
                        prospectingleads.source_kind, prospectingleads.source_provider,
                        prospectingleads.external_place_id, prospectingleads.external_source_id,
@@ -276,8 +294,10 @@ def partnership_list_leads():
             conn.close()
 
         items = []
+        preview_total_count = 0
         for row in rows:
             payload = dict(row) if hasattr(row, "keys") else {}
+            preview_total_count = max(preview_total_count, int(payload.pop('preview_total_count', 0) or 0))
             parse_status = str(payload.get("parse_status") or "").strip().lower()
             if parse_status in {"completed", "done"}:
                 payload = _sync_partnership_lead_from_parsed_data(payload)
@@ -310,13 +330,32 @@ def partnership_list_leads():
             if payload["contact_guard"].get("blocked"):
                 payload["pipeline_status"] = payload["contact_guard"].get("display_status")
             payload["next_best_action"] = _partnership_next_best_action(payload)
+            if preview_limited:
+                for private_key in (
+                    'phone', 'email', 'telegram_url', 'whatsapp_url', 'website',
+                    'search_payload_json', 'enrich_payload_json', 'sales_room_url',
+                    'selected_channel', 'contact_guard', 'next_best_action',
+                ):
+                    payload.pop(private_key, None)
             items.append(payload)
         attach_conn = get_db_connection()
         try:
             items = attach_workstreams(attach_conn, items)
         finally:
             attach_conn.close()
-        return jsonify({"success": True, "count": len(items), "items": items})
+        return jsonify({
+            "success": True,
+            "count": preview_total_count if preview_limited else len(items),
+            "items": items,
+            "access": access,
+            "preview": {
+                "limited": preview_limited,
+                "visible_limit": 10,
+                "hidden_count": max(preview_total_count - len(items), 0),
+                "required_tier": "professional",
+                "required_tier_name": "Привлечение",
+            },
+        })
     except Exception as e:
         print(f"Error listing partnership leads: {e}")
         return internal_error_response("Не удалось получить список партнёров")
@@ -411,6 +450,9 @@ def partnership_update_lead(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 SELECT l.id, l.name, l.telegram_url, l.whatsapp_url, l.email, ws.id AS workstream_id
@@ -597,6 +639,9 @@ def partnership_mark_lead_manual_contact(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 SELECT l.*, ws.id AS workstream_id
@@ -689,6 +734,9 @@ def partnership_bulk_update_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             if selected_channel is not None and selected_channel != "manual":
                 cur.execute(
                     """
@@ -852,6 +900,9 @@ def partnership_delete_lead(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 DELETE FROM lead_workstreams
@@ -899,6 +950,9 @@ def partnership_bulk_delete_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            access_error = _partnership_write_access(business_id, user_data)
+            if access_error:
+                return access_error
             cur.execute(
                 """
                 DELETE FROM lead_workstreams
@@ -952,6 +1006,9 @@ def partnership_prepare_sales_room(lead_id):
             conn.close()
         if not business_id:
             return jsonify({"error": "Business not found or access denied"}), 403
+        access_error = _partnership_write_access(business_id, user_data)
+        if access_error:
+            return access_error
         result = _prepare_partnership_sales_room(
             lead_id=lead_id,
             business_id=business_id,

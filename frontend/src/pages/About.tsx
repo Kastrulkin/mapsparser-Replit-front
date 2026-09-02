@@ -214,17 +214,17 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
-                  {isRu ? "Начальный" : t.about.pricingStarterTitle}
+                  {isRu ? "Карты" : t.about.pricingStarterTitle}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "1200 ₽/месяц (240 кредитов)" : t.about.pricingStarterPrice}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">Примерно хватит на:</div> : null}
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Всё для локальной видимости:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "100–120 коротких публикаций" : t.about.pricingStarterPoint1}</div>
-                  <div>- {isRu ? "около 200 ответов на отзывы" : t.about.pricingStarterPoint2}</div>
-                  <div>- {isRu ? "60–100 анализов фото*" : t.about.pricingStarterPoint3}</div>
-                  <div>- {isRu ? "или любую комбинацию действий" : t.about.pricingStarterPoint4}</div>
+                  <div>- {isRu ? "аудит, услуги, отзывы, фото и конкуренты" : t.about.pricingStarterPoint1}</div>
+                  <div>- {isRu ? "новости для публикации на картах" : t.about.pricingStarterPoint2}</div>
+                  <div>- {isRu ? "Telegram-радар по вашей индустрии" : t.about.pricingStarterPoint3}</div>
+                  <div>- {isRu ? "веб-аналитика и tracker для сайта" : t.about.pricingStarterPoint4}</div>
                 </div>
                 {isRu ? <div className="mb-6 text-xs leading-5 text-gray-500">* Интеллектуальная работа с фотографиями включается отдельно и расходует кредиты только при анализе нового фото.</div> : null}
                 <Button
@@ -243,19 +243,17 @@ const About = () => {
               <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">{story.popular}</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Профессиональный" : t.about.pricingOption0Title}
+                  {isRu ? "Привлечение" : t.about.pricingOption0Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "5000 ₽/месяц (1000 кредитов)" : t.about.pricingOption0Price}
                 </div>
                 {isRu ? <div className="text-sm text-gray-600 mb-3">Хватит чтобы:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "постить новости" : t.about.pricingOption0Point1}</div>
-                  <div>- {isRu ? "отвечать на отзывы" : t.about.pricingOption0Point2}</div>
-                  <div>- {isRu ? "проверять конкурентов" : t.about.pricingOption0Point3}</div>
-                  <div>- {isRu ? "подключить ии агентов для общения с клиентами" : t.about.pricingOption0Point4}</div>
-                  <div>- {isRu ? "отслеживать финансовые показатели" : t.about.pricingOption0Point5}</div>
-                  <div>- {isRu ? "управлять компанией через Телеграм" : t.about.pricingOption0Point6}</div>
+                  <div>- {isRu ? "всё из тарифа «Карты»" : t.about.pricingOption0Point1}</div>
+                  <div>- {isRu ? "полный цикл работы с партнёрами" : t.about.pricingOption0Point2}</div>
+                  <div>- {isRu ? "полный цикл работы с инфлюенсерами" : t.about.pricingOption0Point3}</div>
+                  <div>- {isRu ? "продвижение и видимость в AI-чатах" : t.about.pricingOption0Point4}</div>
                 </div>
                 <Button
                   variant="default"
@@ -272,18 +270,18 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Консьерж" : t.about.pricingOption1Title}
+                  {isRu ? "Управление" : t.about.pricingOption1Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "25000 ₽/месяц" : t.about.pricingOption1Price}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">(Мы всё делаем за вас)</div> : null}
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Рост показателей и автоматизация</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "Карточка компании на картах" : t.about.pricingOption1Point1}</div>
-                  <div>- {isRu ? "Коммуникация с клиентами" : t.about.pricingOption1Point2}</div>
-                  <div>- {isRu ? "Допродажи и кросс-продажи" : t.about.pricingOption1Point3}</div>
-                  <div>- {isRu ? "Оптимизация бизнес-процессов" : t.about.pricingOption1Point4}</div>
-                  <div>- {isRu ? "Выделенный менеджер" : t.about.pricingOption1Point5}</div>
+                  <div>- {isRu ? "всё из тарифа «Привлечение»" : t.about.pricingOption1Point1}</div>
+                  <div>- {isRu ? "финансы и рост среднего чека" : t.about.pricingOption1Point2}</div>
+                  <div>- {isRu ? "ИИ-сотрудники и Оператор" : t.about.pricingOption1Point3}</div>
+                  <div>- {isRu ? "рабочие чаты и автоматизация" : t.about.pricingOption1Point4}</div>
+                  <div>- {isRu ? "контент для соцсетей и подключение каналов" : t.about.pricingOption1Point5}</div>
                 </div>
                 <Button
                   variant="default"

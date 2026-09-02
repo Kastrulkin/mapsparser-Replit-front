@@ -5,12 +5,37 @@
 
 from datetime import datetime
 
-from database_manager import DatabaseManager
-
 # Суперадмин email (исключение)
 SUPERADMIN_EMAIL = 'demyanovap@yandex.ru'
 
-PAID_TIERS = {'starter', 'professional', 'concierge', 'elite', 'promo'}
+ACTIVE_SUBSCRIPTION_STATUSES = {'active', 'trialing'}
+TIER_ALIASES = {'basic': 'starter', 'pro': 'professional', 'enterprise': 'concierge'}
+MAPS_CAPABILITIES = {
+    'maps', 'maps.audit', 'maps.services', 'maps.reviews', 'maps.news',
+    'maps.photos', 'maps.competitors', 'progress', 'telegram_radar', 'web_analytics',
+}
+ACQUISITION_CAPABILITIES = MAPS_CAPABILITIES | {
+    'acquisition', 'partnerships', 'influencers', 'ai_visibility',
+}
+MANAGEMENT_CAPABILITIES = ACQUISITION_CAPABILITIES | {
+    'management', 'finance', 'average_ticket', 'agents', 'operator', 'chats',
+    'social_content', 'automation',
+}
+TIER_CAPABILITIES = {
+    'starter': MAPS_CAPABILITIES,
+    'professional': ACQUISITION_CAPABILITIES,
+    'concierge': MANAGEMENT_CAPABILITIES,
+    'elite': MANAGEMENT_CAPABILITIES,
+    'promo': MANAGEMENT_CAPABILITIES,
+}
+CAPABILITY_MINIMUM_TIER = {capability: 'starter' for capability in MAPS_CAPABILITIES}
+CAPABILITY_MINIMUM_TIER.update({capability: 'professional' for capability in ACQUISITION_CAPABILITIES - MAPS_CAPABILITIES})
+CAPABILITY_MINIMUM_TIER.update({capability: 'concierge' for capability in MANAGEMENT_CAPABILITIES - ACQUISITION_CAPABILITIES})
+TIER_PUBLIC_NAMES = {
+    'starter': 'Карты', 'professional': 'Привлечение', 'concierge': 'Управление',
+    'elite': 'Elite', 'promo': 'Промо', 'trial': 'Без тарифа', 'none': 'Без тарифа',
+}
+PAID_TIERS = set(TIER_CAPABILITIES)
 MANUAL_FEATURES = {
     'chatgpt',
     'crm',
@@ -32,12 +57,7 @@ AUTOMATION_FEATURES = {
 
 def _normalize_tier(raw_tier) -> str:
     tier = (raw_tier or '').strip().lower()
-    tier_mapping = {
-        'basic': 'starter',
-        'enterprise': 'concierge',
-        'pro': 'professional',
-    }
-    return tier_mapping.get(tier, tier or 'none')
+    return TIER_ALIASES.get(tier, tier or 'none')
 
 
 def _normalize_status(raw_status) -> str:
@@ -57,6 +77,55 @@ def _safe_fromisoformat(value):
     if parsed_value.tzinfo:
         return parsed_value.replace(tzinfo=None)
     return parsed_value
+
+
+def build_subscription_capabilities(*, tier: str, status: str, subscription_ends_at=None, is_superadmin: bool = False) -> dict:
+    normalized_tier = _normalize_tier(tier)
+    normalized_status = _normalize_status(status)
+    ends_at = _safe_fromisoformat(subscription_ends_at)
+    expired = bool(ends_at and ends_at < datetime.now())
+    active = bool(
+        is_superadmin
+        or normalized_tier in TIER_CAPABILITIES
+        and normalized_status in ACTIVE_SUBSCRIPTION_STATUSES
+        and not expired
+    )
+    capabilities = set(MANAGEMENT_CAPABILITIES) if is_superadmin else set()
+    if active and not is_superadmin:
+        capabilities = set(TIER_CAPABILITIES.get(normalized_tier, set()))
+    return {
+        'tier': normalized_tier,
+        'tier_name': TIER_PUBLIC_NAMES.get(normalized_tier, normalized_tier.title()),
+        'status': normalized_status,
+        'active': active,
+        'subscription_expired': expired,
+        'capabilities': sorted(capabilities),
+        'groups': {
+            'maps': 'maps' in capabilities,
+            'acquisition': 'acquisition' in capabilities,
+            'management': 'management' in capabilities,
+        },
+    }
+
+
+def capability_access_payload(access: dict, capability: str) -> dict:
+    capability_key = str(capability or '').strip().lower()
+    allowed = capability_key in set(access.get('capabilities') or [])
+    minimum_tier = CAPABILITY_MINIMUM_TIER.get(capability_key, 'concierge')
+    minimum_name = TIER_PUBLIC_NAMES.get(minimum_tier, 'Управление')
+    return {
+        'allowed': allowed,
+        'capability': capability_key,
+        'status': 'available' if allowed else 'payment_required',
+        'required_tier': minimum_tier,
+        'required_tier_name': minimum_name,
+        'cta_label': 'Открыть раздел' if allowed else f'Выбрать тариф «{minimum_name}»',
+        'cta_target': {
+            'screen': 'current' if allowed else 'settings',
+            'url': '/dashboard/profile?focus=subscription#subscription',
+        },
+        'reason': 'Доступно для текущего тарифа.' if allowed else f'Функция входит в тариф «{minimum_name}».',
+    }
 
 
 def _get_business_subscription_columns(cursor) -> set[str]:
@@ -109,6 +178,8 @@ def get_subscription_access(business_id: str) -> dict:
     - ручные операции доступны даже без оплаты;
     - автоматизация доступна только после оплаты тарифа.
     """
+    from database_manager import DatabaseManager
+
     db = DatabaseManager()
     cursor = db.conn.cursor()
 
@@ -141,7 +212,13 @@ def get_subscription_access(business_id: str) -> dict:
         subscription_expired = bool(
             tier in PAID_TIERS and subscription_ends_at and now > subscription_ends_at
         )
-        is_paid = tier in PAID_TIERS and status in {'active', 'trialing'} and not subscription_expired
+        capability_contract = build_subscription_capabilities(
+            tier=tier,
+            status=status,
+            subscription_ends_at=subscription_ends_at,
+            is_superadmin=is_superadmin,
+        )
+        is_paid = bool(capability_contract.get('active'))
 
         if is_superadmin or is_paid:
             reason = None
@@ -161,7 +238,10 @@ def get_subscription_access(business_id: str) -> dict:
             'is_paid': is_paid,
             'is_superadmin': is_superadmin,
             'manual_access': True,
-            'automation_access': bool(is_superadmin or is_paid),
+            'automation_access': 'automation' in capability_contract.get('capabilities', []),
+            'capabilities': capability_contract.get('capabilities', []),
+            'groups': capability_contract.get('groups', {}),
+            'tier_name': capability_contract.get('tier_name'),
             'reason': reason,
         }
     except Exception as e:
@@ -178,6 +258,22 @@ def get_subscription_access(business_id: str) -> dict:
 
 def has_paid_automation_access(business_id: str) -> bool:
     return bool(get_subscription_access(business_id).get('automation_access'))
+
+
+def has_capability(business_id: str, capability: str) -> bool:
+    info = get_subscription_access(business_id)
+    return str(capability or '').strip().lower() in set(info.get('capabilities') or [])
+
+
+def get_capability_access(business_id: str, capability: str, is_superadmin: bool = False) -> dict:
+    access = get_subscription_access(business_id)
+    if is_superadmin:
+        access = {
+            **access,
+            "capabilities": sorted(MANAGEMENT_CAPABILITIES),
+            "groups": {"maps": True, "acquisition": True, "management": True},
+        }
+    return capability_access_payload(access, capability)
 
 
 def get_automation_block_message(business_id: str) -> str:
@@ -211,13 +307,23 @@ def check_access(business_id: str, feature: str) -> bool:
     if feature_key in MANUAL_FEATURES:
         return bool(info.get('manual_access'))
     if feature_key in AUTOMATION_FEATURES:
-        return bool(info.get('automation_access'))
+        legacy_feature_capabilities = {
+            'advice': 'management',
+            'ai_agents': 'agents',
+            'automation': 'automation',
+            'news_generation': 'maps.news',
+            'review_reply': 'maps.reviews',
+            'service_optimization': 'maps.services',
+        }
+        return legacy_feature_capabilities.get(feature_key, 'management') in set(info.get('capabilities') or [])
 
-    return bool(info.get('automation_access'))
+    return feature_key in set(info.get('capabilities') or [])
 
 
 def get_subscription_info(business_id: str) -> dict:
     """Получить информацию о подписке"""
+    from database_manager import DatabaseManager
+
     db = DatabaseManager()
     cursor = db.conn.cursor()
 

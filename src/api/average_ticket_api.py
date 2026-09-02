@@ -15,6 +15,7 @@ from database_manager import DatabaseManager
 from services.llm import analyze_text_with_gigachat
 from services.llm.analytics import build_average_ticket_analysis_payload, queue_average_ticket_analysis
 from services.knowledge_retrieval import semantic_context_for_cursor
+from subscription_manager import get_capability_access
 
 
 average_ticket_bp = Blueprint("average_ticket_api", __name__)
@@ -78,6 +79,16 @@ def _require_business_access():
         return user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
     if not has_access:
         return user_data, business_id, (jsonify({"error": "Нет доступа к бизнесу"}), 403)
+    capability_access = get_capability_access(business_id, "average_ticket")
+    if not capability_access.get("allowed"):
+        return user_data, business_id, (
+            jsonify({
+                "error": "payment_required",
+                **capability_access,
+                "return_to": request.full_path.rstrip("?"),
+            }),
+            402,
+        )
     return user_data, business_id, None
 
 

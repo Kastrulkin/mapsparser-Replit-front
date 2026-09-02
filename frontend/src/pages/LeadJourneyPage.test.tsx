@@ -22,6 +22,7 @@ describe('LeadJourneyPage', () => {
     expect(leadJourneyKeyForFlow('maps')).toBe('maps');
     expect(leadJourneyKeyForFlow('content')).toBe('content');
     expect(leadJourneyKeyForFlow('automation')).toBe('automation');
+    expect(leadJourneyKeyForFlow('average_ticket')).toBe('average_ticket');
   });
 
   it('explains influencer promotion briefly without a four-step process', () => {
@@ -39,7 +40,7 @@ describe('LeadJourneyPage', () => {
     expect(screen.queryByText('Задаём рамки')).not.toBeInTheDocument();
   });
 
-  it('shows five directions, explains the selected mechanic, and carries the choice into registration', async () => {
+  it('shows six directions, explains the selected mechanic, and carries the choice into registration', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
 
@@ -48,9 +49,10 @@ describe('LeadJourneyPage', () => {
     expect(screen.getByRole('button', { name: /Карты/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Контент/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ИИ-сотрудники/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Средний чек/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Клиенты' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Контент и автоматизация' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Посмотреть возможность/ })).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: /Посмотреть возможность/ })).toHaveLength(6);
 
     await user.click(screen.getByRole('button', { name: /Карты/ }));
     expect(await screen.findByRole('heading', { name: 'Первое исправление с понятным эффектом' })).toBeInTheDocument();

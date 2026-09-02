@@ -34,6 +34,7 @@ type Tracker = {
   last_event_at?: string | null;
   enabled: boolean;
   allowed_domains: string[];
+  last_error_code?: string | null;
 };
 type Totals = {
   visitors?: number;
@@ -167,6 +168,27 @@ export const WebAnalyticsPage = () => {
   );
   const totals = metrics?.totals || {};
   const working = tracker?.status === 'working';
+  const connectionState = tracker?.last_error_code
+    ? 'error'
+    : working
+      ? 'working'
+      : tracker?.allowed_domains?.length
+        ? 'waiting'
+        : 'not_installed';
+  const connectionSteps = language === 'ru'
+    ? [
+        { key: 'not_installed', label: 'Скрипт не установлен', hint: 'Укажите домен и скопируйте tracker-код.' },
+        { key: 'waiting', label: 'Ждём первое событие', hint: 'Код готов; откройте сайт после установки.' },
+        { key: 'working', label: 'Данные поступают', hint: 'Можно анализировать пути и целевые действия.' },
+        { key: 'error', label: 'Ошибка подключения', hint: tracker?.last_error_code || 'Проверьте домен и установку кода.' },
+      ]
+    : [
+        { key: 'not_installed', label: 'Script not installed', hint: 'Add a domain and copy the tracker code.' },
+        { key: 'waiting', label: 'Waiting for the first event', hint: 'The code is ready; open the website after installation.' },
+        { key: 'working', label: 'Data is arriving', hint: 'You can now review journeys and target actions.' },
+        { key: 'error', label: 'Connection error', hint: tracker?.last_error_code || 'Check the domain and code installation.' },
+      ];
+  const activeConnectionStep = connectionSteps.find((step) => step.key === connectionState) || connectionSteps[0];
 
   if (currentBusiness?.web_tracking_available !== true) {
     return <Navigate to="/dashboard/progress" replace />;
@@ -203,6 +225,12 @@ export const WebAnalyticsPage = () => {
       />
 
       {error ? <div role="alert" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div> : null}
+
+      <section className={cn('rounded-2xl px-5 py-4 ring-1', connectionState === 'error' ? 'bg-rose-50 text-rose-900 ring-rose-200' : connectionState === 'working' ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-amber-50 text-amber-950 ring-amber-200')} aria-live="polite">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] opacity-65">{language === 'ru' ? 'Следующее действие' : 'Next action'}</div>
+        <div className="mt-1 text-lg font-semibold">{activeConnectionStep.label}</div>
+        <p className="mt-1 text-sm leading-6 opacity-75">{activeConnectionStep.hint}</p>
+      </section>
 
       <DashboardSection
         title={working ? copy.workingTitle : copy.connectTitle}

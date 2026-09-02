@@ -316,7 +316,7 @@ def test_lead_preview_uses_only_safe_business_context():
         "phone": "+79990000000",
     })
 
-    assert len(preview["opportunities"]) == 5
+    assert len(preview["opportunities"]) == 6
     assert preview["opportunities"][2]["metrics"] == {"rating": 4.8, "reviews_count": 42}
     assert preview["opportunities"][3]["flow_type"] == "content"
     assert "Салон красоты" in preview["opportunities"][3]["reason"]
@@ -356,23 +356,22 @@ def test_journey_notifications_follow_existing_tasks_preference():
     assert _tasks_enabled({"business:b-2": {"tasks": True}}, "b-1") is False
 
 
-def test_growth_paths_put_focus_action_on_matching_path_and_lock_paid_content():
+def test_growth_paths_follow_capability_matrix():
     actions = [{
         "id": "action-1", "flow_type": "influencer", "status": "ready",
         "reason": "Автор уже выбран", "cta_label": "Открыть автора", "payload": {},
     }]
 
-    paths = build_growth_paths(actions=actions, automation_allowed=False)
+    paths = build_growth_paths(actions=actions, capabilities={"maps", "maps.news", "progress"})
 
-    assert [item["flow_type"] for item in paths] == ["maps", "content", "influencer", "partnership", "automation"]
+    assert [item["flow_type"] for item in paths] == ["maps", "content", "influencer", "partnership", "automation", "average_ticket"]
     content = next(item for item in paths if item["flow_type"] == "content")
     influencer = next(item for item in paths if item["flow_type"] == "influencer")
-    assert content["access"]["status"] == "payment_required"
-    assert content["access"]["cta_target"]["screen"] == "settings"
+    assert content["access"]["status"] == "available"
     assert influencer["action"]["id"] == "action-1"
-    assert influencer["access"]["status"] == "available"
+    assert influencer["access"]["status"] == "payment_required"
     automation = next(item for item in paths if item["flow_type"] == "automation")
-    assert automation["access"]["cta_target"]["screen"] == "agents"
+    assert automation["access"]["cta_target"]["screen"] == "settings"
 
 
 def test_reserved_journey_is_resumed_by_bound_user_without_public_token(monkeypatch):

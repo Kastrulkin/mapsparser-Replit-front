@@ -44,6 +44,7 @@ export type InfluencerWorkspaceData = {
   creators?: InfluencerCreator[];
   counts?: { total?: number; returned?: number; shortlisted?: number };
   cursor?: string | null;
+  preview?: { limited?: boolean; visible_limit?: number; hidden_count?: number; required_tier?: string; required_tier_name?: string };
   filters?: { platforms?: string[]; cities?: string[]; topics?: string[]; formats?: string[]; audience_size_bands?: string[] };
   access?: {
     discovery?: InfluencerAccess;

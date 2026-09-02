@@ -27,6 +27,7 @@ from services.lead_journey_service import (
     serialize_journey,
 )
 from services.product_telemetry_service import record_product_event, sanitize_public_event_properties
+from subscription_manager import build_subscription_capabilities, capability_access_payload
 
 
 lead_journey_bp = Blueprint("lead_journey_api", __name__)
@@ -313,6 +314,8 @@ def journey_diagnostics():
                 "partnership": journey_flow_enabled("partnership"),
                 "maps": journey_flow_enabled("maps"),
                 "content": journey_flow_enabled("content"),
+                "automation": journey_flow_enabled("automation"),
+                "average_ticket": journey_flow_enabled("average_ticket"),
                 "admin_builder": journey_enabled("JOURNEY_ADMIN_BUILDER_ENABLED"),
                 "post_auth_redirect": journey_enabled("JOURNEY_POST_AUTH_REDIRECT_ENABLED"),
                 "growth_paths_navigation": journey_enabled("GROWTH_PATHS_NAVIGATION_ENABLED"),
@@ -530,21 +533,16 @@ def growth_paths():
     if error:
         return error
     try:
-        cursor.execute(
-            """
-            SELECT LOWER(COALESCE(subscription_tier, '')) IN
-                       ('starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise')
-                   AND LOWER(COALESCE(subscription_status, '')) IN ('active', 'trialing')
-                   AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
-                   AS automation_allowed
-            FROM businesses WHERE id = %s
-            """,
-            (business_id,),
-        )
+        cursor.execute("SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone() or {}
-        automation_allowed = bool(business.get("automation_allowed")) or bool(user_data.get("is_superadmin"))
+        access = build_subscription_capabilities(
+            tier=str(business.get("subscription_tier") or ""),
+            status=str(business.get("subscription_status") or ""),
+            subscription_ends_at=business.get("subscription_ends_at"),
+            is_superadmin=bool(user_data.get("is_superadmin")),
+        )
         actions = list_actions(cursor, business_id=business_id)
-        paths = build_growth_paths(actions=actions, automation_allowed=automation_allowed)
+        paths = build_growth_paths(actions=actions, capabilities=set(access.get("capabilities") or []))
         db.conn.commit()
         return jsonify({
             "success": True,
@@ -607,71 +605,25 @@ def action_command(action_id: str):
         current_action = load_action(cursor, action_id=action_id, business_id=business_id)
         if current_action.get("flow_type") != "upgrade" and not journey_flow_enabled(str(current_action.get("flow_type") or "")):
             return jsonify({"success": False, "error": "Это направление пока не включено", "code": "flow_disabled"}), 404
-        if current_action.get("flow_type") == "content" and str(payload.get("command") or "") != "open_upgrade" and not bool(user_data.get("is_superadmin")):
-            cursor.execute(
-                """
-                SELECT LOWER(COALESCE(subscription_tier, '')) IN
-                           ('starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise')
-                       AND LOWER(COALESCE(subscription_status, '')) IN ('active', 'trialing')
-                       AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
-                       AS automation_allowed
-                FROM businesses WHERE id = %s
-                """,
-                (business_id,),
+        flow_capabilities = {
+            "content": "maps.news",
+            "influencer": "influencers",
+            "partnership": "partnerships",
+            "automation": "automation",
+            "average_ticket": "average_ticket",
+        }
+        required_capability = flow_capabilities.get(str(current_action.get("flow_type") or ""))
+        if required_capability and str(payload.get("command") or "") != "open_upgrade" and not bool(user_data.get("is_superadmin")):
+            cursor.execute("SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s", (business_id,))
+            subscription_row = cursor.fetchone() or {}
+            subscription_access = build_subscription_capabilities(
+                tier=str(subscription_row.get("subscription_tier") or ""),
+                status=str(subscription_row.get("subscription_status") or ""),
+                subscription_ends_at=subscription_row.get("subscription_ends_at"),
             )
-            access_row = cursor.fetchone() or {}
-            if not bool(access_row.get("automation_allowed")):
-                return jsonify({
-                    "success": False,
-                    "error": "Полный контент-сценарий доступен после оплаты тарифа.",
-                    "code": "payment_required",
-                    "payment_required": True,
-                    "billing_url": "/dashboard/profile?focus=subscription#subscription",
-                }), 403
-        if current_action.get("flow_type") == "influencer" and current_action.get("action_type") in {
-            "send_message", "check_reply", "send_followup", "define_terms", "mark_published", "add_result", "select_next_influencer",
-        } and not bool(user_data.get("is_superadmin")):
-            cursor.execute(
-                """
-                SELECT LOWER(COALESCE(subscription_tier, '')) IN
-                           ('starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise')
-                       AND LOWER(COALESCE(subscription_status, '')) IN ('active', 'trialing')
-                       AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
-                       AS automation_allowed
-                FROM businesses WHERE id = %s
-                """,
-                (business_id,),
-            )
-            access_row = cursor.fetchone() or {}
-            if not bool(access_row.get("automation_allowed")):
-                return jsonify({
-                    "success": False,
-                    "error": "Персональные сообщения, подключение канала и отправка доступны после оплаты.",
-                    "code": "payment_required",
-                    "payment_required": True,
-                    "billing_url": "/dashboard/profile?focus=subscription#subscription",
-                }), 402
-        if current_action.get("flow_type") == "automation" and current_action.get("action_type") != "configure_automation" and not bool(user_data.get("is_superadmin")):
-            cursor.execute(
-                """
-                SELECT LOWER(COALESCE(subscription_tier, '')) IN
-                           ('starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise')
-                       AND LOWER(COALESCE(subscription_status, '')) IN ('active', 'trialing')
-                       AND (subscription_ends_at IS NULL OR subscription_ends_at >= CURRENT_TIMESTAMP)
-                       AS automation_allowed
-                FROM businesses WHERE id = %s
-                """,
-                (business_id,),
-            )
-            access_row = cursor.fetchone() or {}
-            if not bool(access_row.get("automation_allowed")):
-                return jsonify({
-                    "success": False,
-                    "error": "Проверка плана и запуск ИИ-сотрудника доступны после оплаты.",
-                    "code": "payment_required",
-                    "payment_required": True,
-                    "billing_url": "/dashboard/profile?focus=subscription#subscription",
-                }), 402
+            capability_access = capability_access_payload(subscription_access, required_capability)
+            if not capability_access.get("allowed"):
+                return jsonify({"success": False, "error": "payment_required", **capability_access, "return_to": request.full_path.rstrip("?")}), 402
         result = execute_command(
             cursor, action_id=action_id, business_id=business_id, user_id=_user_id(user_data),
             command=str(payload.get("command") or "").strip(),

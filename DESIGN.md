@@ -43,14 +43,21 @@ contrast over the grid.
 
 The homepage pain-point section explains why owners use LocalOS. It is not a
 second product taxonomy. The primary homepage CTA leads to one `/growth`
-choice with five directions:
+choice with six directions:
 
 - clients: local creators, nearby businesses, and maps;
-- ongoing work: content and automation.
+- ongoing work: content, average ticket, and automation.
 
-Keep all five directions available on the first `/growth` screen. Do not label
+Keep all six directions available on the first `/growth` screen. Do not label
 this route as three opportunities or reduce the whole product to customer
 acquisition.
+
+## Subscription Preview
+
+- A locked screen starts with one useful, truthful read-only fragment and only then shows a blurred continuation and one upgrade action.
+- Influencer and partner previews contain at most 10 stable public records. Filters must not rotate that sample, and hidden records or contacts must never be sent to the browser.
+- Blur is a conversion affordance, not an authorization boundary. Backend capability checks remain authoritative for every read and mutation.
+- Upgrade copy names the minimum result-oriented tier: `Карты`, `Привлечение`, or `Управление`, and preserves the user's return route.
 
 ## Operating Principles
 

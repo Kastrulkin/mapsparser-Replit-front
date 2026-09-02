@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, request
 from auth_system import verify_session
 from core.api_errors import internal_error_response
 from core.telegram_network import resolve_telegram_http_proxy, telegram_urlopen
+from database_manager import DatabaseManager
 from services.social_post_service import (
     apply_social_post_recommendation,
     approve_social_post,
@@ -349,6 +350,57 @@ def _require_auth():
     if not user_data:
         return None, (jsonify({"success": False, "error": "Недействительный токен"}), 401)
     return user_data, None
+
+
+def _social_request_business_id() -> str:
+    data = request.get_json(silent=True) or {}
+    direct = str(data.get('business_id') or request.args.get('business_id') or (request.view_args or {}).get('business_id') or '').strip()
+    if direct:
+        return direct
+    view_args = request.view_args or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        item_id = str(view_args.get('item_id') or '').strip()
+        plan_id = str(view_args.get('plan_id') or '').strip()
+        post_id = str(view_args.get('post_id') or '').strip()
+        if item_id:
+            cursor.execute('SELECT business_id FROM contentplanitems WHERE id = %s', (item_id,))
+        elif plan_id:
+            cursor.execute('SELECT business_id FROM contentplans WHERE id = %s', (plan_id,))
+        elif post_id:
+            cursor.execute('SELECT business_id FROM social_posts WHERE id = %s', (post_id,))
+        elif isinstance(data.get('item_ids'), list) and data.get('item_ids'):
+            cursor.execute('SELECT business_id FROM contentplanitems WHERE id = ANY(%s) LIMIT 1', (data.get('item_ids'),))
+        elif isinstance(data.get('post_ids'), list) and data.get('post_ids'):
+            cursor.execute('SELECT business_id FROM social_posts WHERE id = ANY(%s) LIMIT 1', (data.get('post_ids'),))
+        else:
+            return ''
+        row = cursor.fetchone()
+        if hasattr(row, 'keys'):
+            return str(row.get('business_id') or '')
+        return str(row[0] or '') if row else ''
+    finally:
+        db.close()
+
+
+@social_posts_bp.before_request
+def require_social_content_access():
+    if request.path == '/api/social-posts/runtime-status':
+        return None
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    if user_data.get('is_superadmin'):
+        return None
+    business_id = _social_request_business_id()
+    if not business_id:
+        return None
+    from subscription_manager import get_capability_access
+    access = get_capability_access(business_id, 'social_content')
+    if access.get('allowed'):
+        return None
+    return jsonify({'success': False, 'error': 'payment_required', **access, 'return_to': request.full_path.rstrip('?')}), 402
 
 
 @social_posts_bp.route("/api/content-plans/items/<item_id>/social-posts/prepare", methods=["POST"])
