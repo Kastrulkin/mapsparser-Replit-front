@@ -528,6 +528,8 @@ services:
       context: .
       dockerfile: Dockerfile.telegram
     restart: unless-stopped
+    # The app service owns schema migrations. The lean Telegram image starts the bot directly.
+    entrypoint: []
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       PYTHONPATH: /app:/app/src
