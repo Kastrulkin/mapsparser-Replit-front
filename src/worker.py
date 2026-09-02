@@ -109,6 +109,7 @@ from services.founder_content_editorial import (
 )
 from services.web_tracking_maintenance import run_web_tracking_maintenance
 from services.creator_promotion_service import process_next_creator_search_job
+from services.creator_portal_service import dispatch_notifications as dispatch_creator_notifications
 from services.creator_profile_revalidation_service import process_creator_profile_revalidation_batch
 from services.creator_source_enrichment_service import process_creator_source_enrichment_batch
 from services.yandex_full_reviews_sync import apply_complete_review_snapshot, fetch_complete_yandex_reviews
@@ -139,6 +140,7 @@ _LAST_FOUNDER_CONTENT_AT = 0.0
 _LAST_CREATOR_SEARCH_AT = 0.0
 _LAST_CREATOR_SOURCE_ENRICHMENT_AT = 0.0
 _LAST_CREATOR_PROFILE_REVALIDATION_AT = 0.0
+_LAST_CREATOR_NOTIFICATION_AT = 0.0
 _CREATOR_PROFILE_REVALIDATION_THREAD: threading.Thread | None = None
 
 
@@ -1686,6 +1688,31 @@ def _dispatch_outreach_queue_if_due() -> None:
             )
     except Exception as e:
         print(f"[OUTREACH_DISPATCH] error: {e}", flush=True)
+
+
+def _dispatch_creator_notifications_if_due() -> None:
+    global _LAST_CREATOR_NOTIFICATION_AT
+    if not _env_bool("CREATOR_BOT_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(10, int(os.getenv("CREATOR_NOTIFICATION_INTERVAL_SEC", "30")))
+    if now - _LAST_CREATOR_NOTIFICATION_AT < interval_sec:
+        return
+    _LAST_CREATOR_NOTIFICATION_AT = now
+    db = DatabaseManager()
+    try:
+        result = dispatch_creator_notifications(
+            db.conn.cursor(cursor_factory=RealDictCursor),
+            limit=max(1, min(int(os.getenv("CREATOR_NOTIFICATION_BATCH_SIZE", "25")), 100)),
+        )
+        db.conn.commit()
+        if result.get("processed"):
+            print(f"[CREATOR_NOTIFICATIONS] {result}", flush=True)
+    except Exception as exc:
+        db.conn.rollback()
+        print(f"[CREATOR_NOTIFICATIONS] error: {exc}", flush=True)
+    finally:
+        db.close()
 
 
 def _notify_superadmin_outreach_replies_if_due() -> None:
@@ -7665,6 +7692,7 @@ if __name__ == "__main__":
             _refresh_outreach_pain_library_if_due()
             _run_knowledge_embeddings_if_due()
             _dispatch_outreach_queue_if_due()
+            _dispatch_creator_notifications_if_due()
             _notify_superadmin_outreach_replies_if_due()
             _notify_superadmin_community_sources_if_due()
             _dispatch_openclaw_callback_outbox_if_due()

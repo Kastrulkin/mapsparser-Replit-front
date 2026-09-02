@@ -107,6 +107,7 @@ from services.telegram_static_answers import (
 from services.gigachat_client import analyze_screenshot_with_gigachat
 from services.llm import analyze_text_with_gigachat
 from services.founder_content_editorial import capture_founder_content_correction_from_telegram
+from services.creator_portal_service import claim_telegram, telegram_creator_portal_link
 from subscription_manager import get_subscription_info
 from auth_system import create_session
 
@@ -3726,10 +3727,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if args and len(args) > 0:
             bind_token = args[0]
+            if bind_token.startswith("creator_claim_"):
+                await handle_creator_claim(update, bind_token.removeprefix("creator_claim_"), user_id)
+                return
             await handle_bind_token(update, context, bind_token, user_id)
             return
 
         db_user_id = get_user_id_from_telegram(user_id)
+        creator_link = _creator_portal_link(user_id)
+        if creator_link and db_user_id:
+            await _reply_effective_message(
+                update,
+                "LocalOS\n\nВыберите, в какой роли хотите продолжить.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Я автор", url=creator_link["portal_url"])],
+                    [InlineKeyboardButton("Я управляю бизнесом", callback_data="control:home")],
+                ]),
+            )
+            return
+        if creator_link:
+            await _reply_effective_message(
+                update,
+                f"Здравствуйте, {creator_link['display_name']}!\n\nОткройте кабинет, чтобы увидеть предложения.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Открыть кабинет", url=creator_link["portal_url"])]]),
+            )
+            return
         if not db_user_id:
             await _reply_effective_message(update, _guest_welcome_text(), reply_markup=_build_guest_menu())
             return
@@ -3741,6 +3763,53 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update,
             "❌ Не удалось открыть меню. Попробуйте ещё раз через /start."
         )
+
+
+def _creator_portal_link(telegram_id: str):
+    if str(os.getenv("CREATOR_BOT_ENABLED") or "false").lower() not in {"1", "true", "yes", "on"}:
+        return None
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        result = telegram_creator_portal_link(cursor, telegram_id)
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to create creator portal link telegram_id=%s", telegram_id)
+        return None
+    finally:
+        conn.close()
+
+
+async def handle_creator_claim(update: Update, invite_token: str, telegram_id: str):
+    if str(os.getenv("CREATOR_BOT_ENABLED") or "false").lower() not in {"1", "true", "yes", "on"}:
+        await _reply_effective_message(update, "Кабинет автора пока не включён.")
+        return
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        result = claim_telegram(
+            cursor,
+            invite_token=invite_token,
+            telegram_id=telegram_id,
+            telegram_username=update.effective_user.username,
+        )
+        conn.commit()
+        await _reply_effective_message(
+            update,
+            f"Готово, {result['display_name']}! Аккаунт автора подключён.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Открыть кабинет", url=result["portal_url"])]]),
+        )
+    except (LookupError, ValueError) as exc:
+        conn.rollback()
+        await _reply_effective_message(update, f"❌ {exc}")
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed creator claim telegram_id=%s", telegram_id)
+        await _reply_effective_message(update, "❌ Не удалось принять приглашение. Попросите LocalOS создать новую ссылку.")
+    finally:
+        conn.close()
 
 async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, bind_token: str, telegram_id: str):
     """Обработка токена привязки"""

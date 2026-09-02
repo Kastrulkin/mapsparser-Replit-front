@@ -190,9 +190,19 @@ const InfluencerPromotionPage = lazy(() =>
     default: module.InfluencerPromotionPage,
   })),
 );
+const InfluencerRegistryPage = lazy(() =>
+  import("./pages/dashboard/InfluencerRegistryPage").then((module) => ({
+    default: module.InfluencerRegistryPage,
+  })),
+);
 const CreatorRoomPage = lazy(() =>
   import("./pages/CreatorRoomPage").then((module) => ({
     default: module.CreatorRoomPage,
+  })),
+);
+const CreatorPortalPage = lazy(() =>
+  import("./pages/CreatorPortalPage").then((module) => ({
+    default: module.CreatorPortalPage,
   })),
 );
 const OperatorPage = lazy(() =>
@@ -349,6 +359,7 @@ const AppShell = () => {
             <Route path="promotion" element={<PromotionHubPage />} />
             <Route path="promotion/partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
             <Route path="influencers" element={<JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus>} />
+            <Route path="influencers/registry" element={<JourneyWorkspaceFocus><InfluencerRegistryPage /></JourneyWorkspaceFocus>} />
             <Route path="influencers/operations" element={<JourneyWorkspaceFocus><InfluencerPromotionPage /></JourneyWorkspaceFocus>} />
             <Route path="promotion/influencers" element={<Navigate to="/dashboard/influencers" replace />} />
             <Route path="growth-paths" element={<GrowthPathsPage />} />
@@ -380,6 +391,13 @@ const AppShell = () => {
           ) : null}
           <Route path="/room/:roomSlug" element={<PublicSalesRoomPage />} />
           <Route path="/creator-room/:token" element={<CreatorRoomPage />} />
+          <Route path="/creator/join/:token" element={<CreatorPortalPage />} />
+          <Route path="/creator/login" element={<CreatorPortalPage />} />
+          <Route path="/creator/login/telegram" element={<CreatorPortalPage />} />
+          <Route path="/creator/verify-email/:token" element={<CreatorPortalPage />} />
+          <Route path="/creator/reset-password/:token" element={<CreatorPortalPage />} />
+          <Route path="/creator/offers/:offerId" element={<CreatorPortalPage />} />
+          <Route path="/creator" element={<CreatorPortalPage />} />
           <Route path="/veselaya-rascheska-hit" element={<VeselayaRascheskaOfferPage />} />
           <Route path="/web-analytics" element={<Navigate to="/dashboard/web-analytics" replace />} />
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />

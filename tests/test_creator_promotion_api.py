@@ -5,6 +5,15 @@ from api import creator_promotion_api
 
 def test_creator_automation_gate_requires_payment(monkeypatch):
     monkeypatch.setattr(creator_promotion_api, "creator_automation_allowed", lambda _cursor, _business_id: False)
+    monkeypatch.setattr(
+        creator_promotion_api,
+        "get_capability_access",
+        lambda _business_id, _capability: {
+            "status": "payment_required",
+            "reason": "Требуется тариф «Привлечение».",
+            "cta_label": "Выбрать тариф",
+        },
+    )
     app = Flask(__name__)
 
     with app.test_request_context():
@@ -13,13 +22,11 @@ def test_creator_automation_gate_requires_payment(monkeypatch):
     assert status == 402
     assert response.get_json() == {
         "success": False,
-        "error": "Подготовка персональных сообщений, подключение каналов и отправка доступны после оплаты.",
-        "code": "payment_required",
-        "access": {
-            "status": "payment_required",
-            "cta_label": "Выбрать тариф",
-            "cta_target": {"screen": "settings", "focus": "subscription"},
-        },
+        "error": "payment_required",
+        "status": "payment_required",
+        "reason": "Требуется тариф «Привлечение».",
+        "cta_label": "Выбрать тариф",
+        "return_to": "/",
     }
 
 

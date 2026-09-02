@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, Check, CircleAlert, ExternalLink, Loader2, MapPin, MessageSquareText, X } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,7 @@ type CreatorRoom = {
   availability_text?: string | null;
   preferred_contact?: string | null;
   deliverables?: RoomDeliverable[];
+  portal_url?: string | null;
 };
 
 const roomStatus: Record<string, string> = {
@@ -59,6 +60,7 @@ const roomStatus: Record<string, string> = {
 
 export const CreatorRoomPage = () => {
   const { token = '' } = useParams();
+  const navigate = useNavigate();
   const [room, setRoom] = useState<CreatorRoom | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -81,6 +83,10 @@ export const CreatorRoomPage = () => {
     setError('');
     try {
       const response = await newAuth.makeRequest(`/promotion/influencers/public/${encodeURIComponent(token)}`);
+      if (response.room?.portal_url) {
+        navigate(response.room.portal_url, { replace: true });
+        return;
+      }
       setRoom(response.room || null);
       setMediaKitUrl(String(response.room?.media_kit_url || ''));
       setAvailability(String(response.room?.availability_text || ''));
@@ -90,7 +96,7 @@ export const CreatorRoomPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [navigate, token]);
 
   useEffect(() => { void loadRoom(); }, [loadRoom]);
 
