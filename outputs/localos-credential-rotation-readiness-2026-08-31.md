@@ -41,4 +41,24 @@
 
 ## Статус
 
-Карта потребителей, активный production auth path и provider-side объекты подтверждены read-only. Production и provider state не изменялись. Ротация остаётся внешним approval gate и не блокирует проверенный staging package, но блокирует production go-live security decision.
+Карта потребителей, активный production auth path и provider-side объекты были подтверждены read-only до ротации.
+
+## Выполнено 2 сентября 2026 года
+
+### Wordstat
+
+- Создан новый API key с единственной областью `yc.search-api.execute`; значение ключа не записывалось в Git, отчёты или командные аргументы.
+- Production `.env` обновлён атомарно с root-only backup. Пересозданы только `app` и `worker`, оба сохранили прежний image `seo-app-app:ori-20260824-06`.
+- До отзыва старых ключей выполнен минимальный provider smoke: `auth_mode=cloud`, один ответ получен успешно.
+- Из production secret source удалены `YANDEX_WORDSTAT_CLIENT_ID`, `YANDEX_WORDSTAT_CLIENT_SECRET` и `YANDEX_WORDSTAT_OAUTH_TOKEN`; после повторного recreate оба runtime подтвердили отсутствие legacy OAuth.
+- После удаления legacy OAuth выполнен повторный smoke, затем удалены прежний scoped Wordstat key и широкий неиспользуемый Yandex API key.
+- Финальный запрос после provider-side revoke снова прошёл через Cloud Search API. `app` отвечает HTTP 200.
+
+### Supabase
+
+- Проект `SEOmaps` возобновлён, чтобы открыть актуальные настройки ключей; данные проекта не изменялись.
+- Подтверждено наличие современных publishable keys и secret key; новый Supabase credential в LocalOS не добавлялся.
+- Штатной командой Supabase отключены legacy JWT-based API keys `anon` и `service_role` для использования в заголовке `apikey`. Dashboard после операции показывает `Re-enable JWT-based API keys`.
+- Supabase предупреждает, что старые JWT остаются валидными именно как JWT до отдельной смены signing secret. Signing secret не менялся, поскольку пользователь разрешил отзыв legacy `service_role`, а не глобальную JWT-ротацию.
+
+Credential gate для LocalOS закрыт. Оставшиеся rollout-gates относятся к production drift, non-root ownership и browser cookie migration, а не к историческим Wordstat/Supabase credentials.

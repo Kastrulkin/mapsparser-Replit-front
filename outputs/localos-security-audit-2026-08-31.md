@@ -67,19 +67,18 @@
 
 Gitleaks повторно проверил tracked HEAD и полную Git-историю в redacted-режиме 1 сентября. В tracked HEAD осталось 10 совпадений, и все они классифицированы как ложные срабатывания: idempotency/domain keys, стабильные seed keys, placeholder `Bearer` и test fixtures. Полный history scan вернул 620 redacted-совпадений в 29 commits; значения не выводились. Игнорируемые локальные `.env` не входят в tracked HEAD и не добавляются в rollout.
 
-В истории подтверждены старые Wordstat credentials и legacy Supabase `service_role` для приостановленного проекта `SEOmaps` (`bvhpvzcvcuswiozhyqlk`). Текущий LocalOS production не использует Supabase. Нельзя добавлять новый Supabase key в LocalOS; сначала нужно определить других потребителей legacy-проекта.
+В истории подтверждены старые Wordstat credentials и legacy Supabase `service_role` проекта `SEOmaps` (`bvhpvzcvcuswiozhyqlk`). Текущий LocalOS production Supabase не использует; новый Supabase key в LocalOS не добавлялся.
 
-Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; production `app`/`worker` не содержат Supabase variables; dashboard подтверждает, что `SEOmaps` приостановлен и может быть возобновлён до 15 ноября 2026 года. Wordstat остаётся реальным app/worker consumer, но production использует Cloud Search API: `auth_mode()` возвращает `cloud` в обоих runtime, а legacy OAuth variables лишь продолжают присутствовать как исторический fallback. Provider state и production не изменялись.
+Read-only consumer audit завершён в `outputs/localos-credential-rotation-readiness-2026-08-31.md`: локальных Supabase consumers не найдено; production `app`/`worker` не содержат Supabase variables. 2 сентября `SEOmaps` возобновлён и legacy `anon`/`service_role` отключены как API keys. Wordstat Cloud key ротирован, старые Yandex API keys удалены, legacy OAuth variables удалены из production, а provider smoke прошёл до и после отзыва старых ключей.
 
 ## Что ещё не завершено
 
-1. Для Wordstat подтверждён текущий Cloud path, но остаются удаление/отзыв исторического OAuth fallback и controlled Cloud credential rotation. Для legacy Supabase `service_role` требуется provider-console revoke после проверки внешних потребителей.
-2. Browser cookie migration реализована и проверена на staging. Остался совместимый production rollout: dual-stack/internal cohort, cookie-first и отзыв старых browser sessions после наблюдения; Mini App и Agent API сохраняют scoped bearer.
-3. Production существенно расходится с Git из-за hot deploys. Нужен точный manifest и reconciliation, не `git pull`/reset/full rsync.
-4. Production пока работает root-контейнерами. Реальные mounts проверены: перед non-root rollout нужен ownership snapshot и контролируемая смена владельца только `debug_data`; `setfacl` на host отсутствует.
-5. После отдельного разрешения нужно проверить security headers на live edge `https://localos.pro`.
-6. CSP enforcement и SRI/COOP/COEP остаются отдельным hardening-пакетом.
+1. Browser cookie migration реализована и проверена на staging. Остался совместимый production rollout: dual-stack/internal cohort, cookie-first и отзыв старых browser sessions после наблюдения; Mini App и Agent API сохраняют scoped bearer.
+2. Production существенно расходится с Git из-за hot deploys. Нужен точный manifest и reconciliation, не `git pull`/reset/full rsync.
+3. Production пока работает root-контейнерами. Реальные mounts проверены: перед non-root rollout нужен ownership snapshot и контролируемая смена владельца только `debug_data`; `setfacl` на host отсутствует.
+4. Live edge headers проверены: HSTS, nosniff, frame, referrer и permissions policies присутствуют; CSP пока report-only.
+5. CSP enforcement и SRI/COOP/COEP остаются отдельным hardening-пакетом.
 
 ## Статус готовности
 
-Docker staging и покрытые пользовательские/security-сценарии зелёные. Production остаётся **NO-GO** до reconciliation live drift, ротации исторических privileged credentials, подготовки ownership для non-root runtime и отдельного разрешения на deployment-пакеты.
+Docker staging и покрытые пользовательские/security-сценарии зелёные. Credential gate закрыт. Production остаётся **NO-GO** до reconciliation live drift, подготовки ownership для non-root runtime и отдельного разрешения на deployment-пакеты.

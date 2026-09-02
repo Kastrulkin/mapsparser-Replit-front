@@ -34,8 +34,8 @@ Production Git HEAD: `c728015c95e47880120c025deed70c6c88657963`.
 ## Credentials
 
 - `app` и `worker`: Wordstat Cloud variables присутствуют.
-- `app` и `worker`: legacy Wordstat OAuth fallback всё ещё присутствует.
-- `app` и `worker`: Supabase variables отсутствуют.
+- `app` и `worker`: legacy Wordstat OAuth fallback присутствовал на момент read-only snapshot; 2 сентября 2026 года он удалён из secret source и обоих runtime после успешной ротации Cloud key.
+- `app` и `worker`: Supabase variables отсутствуют; 2 сентября 2026 года legacy Supabase `anon`/`service_role` отключены provider-side как API keys без добавления Supabase credentials в LocalOS.
 - Значения переменных не читались и не выводились.
 
 ## Non-root и cookie preflight

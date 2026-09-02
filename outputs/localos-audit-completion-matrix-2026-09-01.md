@@ -47,7 +47,7 @@
 | Container image | Trivy HIGH/CRITICAL: 0 после обновления `libexpat` до `2.5.0-1+deb12u3` |
 | Docker configuration | Trivy HIGH/CRITICAL: 0 по tracked tree |
 | Current tracked secrets | 10 Gitleaks matches, все подтверждены как fixtures/placeholders/domain keys; active credential в tracked HEAD не найден |
-| Git history | 620 redacted matches в 29 commits; исторические Wordstat и Supabase credentials требуют provider-side rotation/revoke |
+| Git history | 620 redacted matches в 29 commits; исторические Wordstat credentials ротированы, legacy Supabase `anon`/`service_role` отключены как API keys 2 сентября 2026 года |
 | Static analysis | Последний Semgrep ERROR-gate: 0 findings; текущий дополнительный diff затрагивает только системный пакет Docker image и audit evidence |
 | Dynamic baseline | Последний OWASP ZAP baseline: 61 pass, 0 fail, 0 high/critical |
 | Rollout integrity | 252 allowlisted files; manifest SHA-256 `828916fe94c515dd8fa5e95b4c3e99edbfa6a05e9efd71009b94bcd3cc87c79a`; verifier 252/252; exact staging dist совпадает 184/184 |
@@ -64,13 +64,11 @@
 
 Функциональный охват 10/10 сценариев зелёный, открытых P0/P1 и HIGH/CRITICAL в exact image нет. Reliability-gate закрыт одним непрерывным Playwright run 108/108; оба новых external-script regression-теста проходят на всех трёх viewport-профилях.
 
-Production rollout остаётся отдельной работой и сейчас **NO-GO** до выполнения следующих gates:
+Production rollout остаётся отдельной работой и сейчас **NO-GO** до выполнения следующих gates. Credential gate закрыт 2 сентября 2026 года: Wordstat Cloud key ротирован и проверен provider smoke, legacy OAuth удалён, старые Yandex API keys отозваны, legacy Supabase `anon`/`service_role` отключены как API keys.
 
-1. Проверить внешних потребителей legacy Supabase `SEOmaps`, затем отозвать старый `service_role`; новый Supabase key в LocalOS не добавлять.
-2. Контролируемо ротировать Wordstat Cloud credential для app/worker, выполнить один минимальный provider smoke и удалить legacy OAuth fallback.
-3. Использовать завершённую read-only drift-сверку (`97 match / 102 missing / 53 mismatch`) для отдельных partial packages; не использовать полный `git pull`, reset или blanket rsync.
-4. Перед non-root image rollout сохранить ownership snapshot и отдельно согласовать смену владельца только production `debug_data`.
-5. Выпустить browser cookie migration по dual-stack/internal-cohort схеме и после наблюдения отозвать старые browser sessions.
-6. Live edge headers проверены read-only: HSTS/nosniff/frame/referrer/permissions присутствуют, CSP остаётся report-only; production smoke выполняется отдельно после каждого разрешённого пакета без автоматических отправок, публикаций или платежей.
+1. Использовать завершённую read-only drift-сверку (`97 match / 102 missing / 53 mismatch`) для отдельных partial packages; не использовать полный `git pull`, reset или blanket rsync.
+2. Перед non-root image rollout сохранить ownership snapshot и отдельно согласовать смену владельца только production `debug_data`.
+3. Выпустить browser cookie migration по dual-stack/internal-cohort схеме и после наблюдения отозвать старые browser sessions.
+4. Live edge headers проверены read-only: HSTS/nosniff/frame/referrer/permissions присутствуют, CSP остаётся report-only; production smoke выполняется отдельно после каждого разрешённого пакета без автоматических отправок, публикаций или платежей.
 
 До этих действий production не изменяется.
