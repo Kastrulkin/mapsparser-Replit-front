@@ -61,5 +61,6 @@
 - Штатной командой Supabase отключены legacy JWT-based API keys `anon` и `service_role` для использования в заголовке `apikey`. Dashboard после операции показывает `Re-enable JWT-based API keys`.
 - Для полного отзыва исторического `service_role` проект мигрирован с legacy HS256 на управляемые JWT signing keys без downtime. Новый ECC P-256 key сделан текущим.
 - Старый HS256 signing key явно отозван. Dashboard показывает его в `Revoked keys` и указывает, что revoked keys больше не используются для подписи или проверки JWT; ранее выданные legacy JWT немедленно потеряли доверие.
+- После проверки проект возвращён в исходное paused-состояние. Dashboard подтверждает сохранность данных, backups и возможность resume до 7 октября 2027 года.
 
 Credential gate для LocalOS закрыт. Оставшиеся rollout-gates относятся к production drift, non-root ownership и browser cookie migration, а не к историческим Wordstat/Supabase credentials.
