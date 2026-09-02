@@ -8,10 +8,12 @@ type InfluencerCreatorCardProps = {
   dark?: boolean;
   busy?: boolean;
   onToggleShortlist: (creator: InfluencerCreator) => void;
+  onExclude?: (creator: InfluencerCreator) => void;
 };
 
-export const InfluencerCreatorCard = ({ creator, dark = false, busy = false, onToggleShortlist }: InfluencerCreatorCardProps) => {
+export const InfluencerCreatorCard = ({ creator, dark = false, busy = false, onToggleShortlist, onExclude }: InfluencerCreatorCardProps) => {
   const shortlisted = creator.shortlist_status === 'shortlisted';
+  const excluded = creator.disposition === 'excluded' || creator.shortlist_status === 'rejected';
   const topics = [creator.primary_topic, ...(creator.topics || []), ...(creator.content_styles || [])]
     .filter((value): value is string => Boolean(value))
     .slice(0, 4);
@@ -31,8 +33,9 @@ export const InfluencerCreatorCard = ({ creator, dark = false, busy = false, onT
       {evidence ? <p className={cn('mt-3 text-xs leading-5', dark ? 'text-zinc-500' : 'text-slate-500')}><strong className={cn('font-semibold', dark ? 'text-zinc-300' : 'text-slate-700')}>Что уже публиковал:</strong> {evidence.summary}</p> : null}
       <div className="mt-4 grid grid-cols-2 gap-2">
         {creator.public_url ? <a href={creator.public_url} target="_blank" rel="noreferrer" className={cn('inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-transform active:scale-[0.96]', dark ? 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]' : 'border border-slate-200 text-slate-700')}><ArrowUpRight className="h-4 w-4" />Площадка</a> : <span />}
-        <button type="button" disabled={busy} onClick={() => onToggleShortlist(creator)} className={cn('inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-colors active:scale-[0.96] disabled:opacity-50', shortlisted ? (dark ? 'bg-emerald-400/15 text-emerald-300' : 'bg-emerald-700 text-white hover:bg-emerald-800') : (dark ? 'bg-primary text-white' : 'bg-slate-950 text-white'))}>{shortlisted ? <Check className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}{shortlisted ? 'Выбран' : 'Выбрать'}</button>
+        <button type="button" disabled={busy} onClick={() => onToggleShortlist(creator)} className={cn('inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-colors active:scale-[0.96] disabled:opacity-50', shortlisted ? (dark ? 'bg-emerald-400/15 text-emerald-300' : 'bg-emerald-700 text-white hover:bg-emerald-800') : (dark ? 'bg-primary text-white' : 'bg-slate-950 text-white'))}>{shortlisted ? <Check className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}{shortlisted ? 'В shortlist' : excluded ? 'Вернуть' : 'В shortlist'}</button>
       </div>
+      {onExclude && !excluded ? <button type="button" disabled={busy} onClick={() => onExclude(creator)} className="mt-2 min-h-10 w-full rounded-xl px-3 text-xs font-semibold text-slate-500 transition-[background-color,color,transform] hover:bg-rose-50 hover:text-rose-700 active:scale-[0.98] disabled:opacity-50">Не подходит этому бизнесу</button> : null}
     </article>
   );
 };

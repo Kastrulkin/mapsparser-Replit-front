@@ -13,6 +13,7 @@ from psycopg2.extras import Json
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from core.email_delivery import send_email
+from services.creator_offer_distribution_service import activate_pending_offers, update_offer_preferences
 
 
 RELATIONSHIP_STAGES = (
@@ -45,6 +46,14 @@ def _json(value: Any, fallback: Any) -> Any:
         return json.loads(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def _text_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return []
 
 
 def _ready(value: Any) -> Any:
@@ -107,16 +116,6 @@ def set_relationship_stage(cursor: Any, *, profile_id: str, stage: str,
         """,
         (stage, reason, stage, list(TERMINAL_REPLY_STAGES), stage, profile_id),
     )
-    if stage in TERMINAL_REPLY_STAGES:
-        cursor.execute(
-            """
-            UPDATE creator_notification_outbox SET status = 'cancelled', updated_at = NOW()
-            WHERE collaboration_id IN (
-                SELECT id FROM creator_collaborations WHERE creator_profile_id = %s
-            ) AND status IN ('pending', 'failed')
-            """,
-            (profile_id,),
-        )
 
 
 def add_contact_event(cursor: Any, *, profile_id: str, event_type: str, channel: str,
@@ -349,7 +348,7 @@ def claim_email(cursor: Any, *, invite_token: str, email: str, password: str) ->
 def verify_email(cursor: Any, token: str) -> dict[str, Any]:
     cursor.execute(
         """
-        SELECT i.id, a.id AS account_id FROM creator_invites i
+        SELECT i.id, i.creator_profile_id, a.id AS account_id FROM creator_invites i
         JOIN creator_accounts a ON a.creator_profile_id = i.creator_profile_id
         WHERE i.token_hash = %s AND i.purpose = 'email_verify' AND i.claimed_at IS NULL
           AND i.expires_at > NOW() AND LOWER(a.email) = LOWER(i.email) FOR UPDATE
@@ -361,6 +360,11 @@ def verify_email(cursor: Any, token: str) -> dict[str, Any]:
         raise LookupError("Ссылка подтверждения недействительна")
     cursor.execute("UPDATE creator_invites SET claimed_at = NOW(), claimed_account_id = %s WHERE id = %s", (row["account_id"], row["id"]))
     cursor.execute("UPDATE creator_accounts SET status = 'active', email_verified_at = NOW(), last_login_at = NOW(), updated_at = NOW() WHERE id = %s", (row["account_id"],))
+    activate_pending_offers(
+        cursor,
+        profile_id=str(row["creator_profile_id"]),
+        account_id=str(row["account_id"]),
+    )
     return {"token": _session(cursor, str(row["account_id"])), "redirect": "/creator"}
 
 
@@ -381,6 +385,7 @@ def claim_telegram(cursor: Any, *, invite_token: str, telegram_id: str,
     )
     account_id = str(_dict(cursor.fetchone())["id"])
     cursor.execute("UPDATE creator_invites SET claimed_at = NOW(), claimed_account_id = %s WHERE id = %s", (account_id, invite["id"]))
+    activate_pending_offers(cursor, profile_id=str(invite["creator_profile_id"]), account_id=account_id)
     token = _session(cursor, account_id, hours=1)
     return {"display_name": invite["display_name"], "portal_url": f"{_base_url()}/creator/login/telegram?token={token}"}
 
@@ -446,9 +451,12 @@ def authenticate_creator(cursor: Any, token: str) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT a.id, a.creator_profile_id, a.email, a.telegram_username, a.status,
-               a.notification_preferences_json, p.display_name
+               a.notification_preferences_json, p.display_name,
+               preference.paused_until, preference.paused_indefinitely,
+               preference.excluded_categories_json
         FROM creator_sessions s JOIN creator_accounts a ON a.id = s.creator_account_id
         JOIN creator_profiles p ON p.id = a.creator_profile_id
+        LEFT JOIN creator_offer_preferences preference ON preference.creator_profile_id = p.id
         WHERE s.token_hash = %s AND s.revoked_at IS NULL AND s.expires_at > NOW()
         """,
         (_hash(token),),
@@ -458,6 +466,7 @@ def authenticate_creator(cursor: Any, token: str) -> dict[str, Any]:
         raise PermissionError("Сессия истекла")
     cursor.execute("UPDATE creator_sessions SET last_seen_at = NOW() WHERE token_hash = %s", (_hash(token),))
     account["notification_preferences"] = _json(account.pop("notification_preferences_json", None), {})
+    account["excluded_categories"] = _json(account.pop("excluded_categories_json", None), [])
     return _ready(account)
 
 
@@ -491,6 +500,32 @@ def _creator_profile(cursor: Any, profile_id: str) -> dict[str, Any]:
 def list_creator_offers(cursor: Any, profile_id: str) -> list[dict[str, Any]]:
     cursor.execute(
         """
+        SELECT recipient.id, recipient.status, recipient.updated_at,
+               recipient.offer_snapshot_json, recipient.collaboration_id,
+               campaign.title, campaign.goal, business.name AS business_name,
+               business.city, business.address
+        FROM creator_offer_recipients recipient
+        JOIN creator_campaigns campaign ON campaign.id = recipient.campaign_id
+        JOIN businesses business ON business.id = recipient.business_id
+        WHERE recipient.creator_profile_id = %s AND recipient.status <> 'pending_account'
+          AND campaign.status IN ('active', 'completed')
+        ORDER BY recipient.updated_at DESC
+        """,
+        (profile_id,),
+    )
+    offers = []
+    distributed_collaborations: set[str] = set()
+    for row in cursor.fetchall():
+        item = _dict(row)
+        snapshot = _json(item.pop("offer_snapshot_json", None), {})
+        item["offer"] = _json(snapshot.get("offer"), {})
+        item["period"] = _json(snapshot.get("period"), {})
+        item["offer_kind"] = "distributed"
+        if item.get("collaboration_id"):
+            distributed_collaborations.add(str(item["collaboration_id"]))
+        offers.append(_ready(item))
+    cursor.execute(
+        """
         SELECT collaboration.id, collaboration.status, collaboration.review_status,
                collaboration.updated_at, collaboration.scheduled_visit_at,
                campaign.title, campaign.goal, campaign.offer_json, campaign.period_json,
@@ -503,24 +538,26 @@ def list_creator_offers(cursor: Any, profile_id: str) -> list[dict[str, Any]]:
         """,
         (profile_id,),
     )
-    offers = []
     for row in cursor.fetchall():
         item = _dict(row)
+        if str(item.get("id")) in distributed_collaborations:
+            continue
         item["offer"] = _json(item.pop("offer_json", None), {})
         item["period"] = _json(item.pop("period_json", None), {})
+        item["offer_kind"] = "legacy"
         offers.append(_ready(item))
-    return offers
+    return sorted(offers, key=lambda item: str(item.get("updated_at") or ""), reverse=True)
 
 
 def portal_home(cursor: Any, account: dict[str, Any]) -> dict[str, Any]:
     offers = list_creator_offers(cursor, str(account["creator_profile_id"]))
-    active = {"agreed", "awaiting_content", "published", "measuring"}
-    finished = {"completed", "declined"}
+    active = {"interested", "needs_details", "selected", "agreed", "awaiting_content", "published", "measuring"}
+    finished = {"completed", "declined", "not_selected", "expired"}
     return {
         "account": account,
         "profile": _creator_profile(cursor, str(account["creator_profile_id"])),
         "offers": {
-            "new": [item for item in offers if item["status"] in {"draft", "invited", "replied", "negotiating"}],
+            "new": [item for item in offers if item["status"] in {"available", "draft", "invited", "replied", "negotiating"}],
             "active": [item for item in offers if item["status"] in active],
             "finished": [item for item in offers if item["status"] in finished],
         },
@@ -528,6 +565,43 @@ def portal_home(cursor: Any, account: dict[str, Any]) -> dict[str, Any]:
 
 
 def offer_detail(cursor: Any, *, profile_id: str, collaboration_id: str) -> dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT recipient.*, campaign.title, campaign.goal, business.name AS business_name,
+               business.city, business.address, business.description AS business_description
+        FROM creator_offer_recipients recipient
+        JOIN creator_campaigns campaign ON campaign.id = recipient.campaign_id
+        JOIN businesses business ON business.id = recipient.business_id
+        WHERE recipient.id = %s AND recipient.creator_profile_id = %s
+          AND recipient.status <> 'pending_account'
+          AND campaign.status IN ('active', 'completed')
+        """,
+        (collaboration_id, profile_id),
+    )
+    distributed = _dict(cursor.fetchone())
+    if distributed:
+        snapshot = _json(distributed.pop("offer_snapshot_json", None), {})
+        distributed["offer"] = _json(snapshot.get("offer"), {})
+        distributed["period"] = _json(snapshot.get("period"), {})
+        distributed["formats"] = _json(snapshot.get("formats"), [])
+        distributed["constraints"] = _json(snapshot.get("constraints"), {})
+        distributed["geography"] = _json(snapshot.get("geography"), {})
+        distributed["audience"] = _json(snapshot.get("audience"), {})
+        distributed["match"] = _json(distributed.pop("match_snapshot_json", None), {})
+        distributed["offer_kind"] = "distributed"
+        cursor.execute(
+            "SELECT id, sender_type, body_text, created_at FROM creator_offer_messages WHERE offer_recipient_id = %s ORDER BY created_at",
+            (collaboration_id,),
+        )
+        distributed["messages"] = [_ready(_dict(row)) for row in cursor.fetchall()]
+        distributed["deliverables"] = []
+        if distributed.get("collaboration_id"):
+            cursor.execute(
+                "SELECT id, platform, deliverable_type, due_at, publication_url, verification_status FROM creator_deliverables WHERE collaboration_id = %s ORDER BY created_at",
+                (distributed["collaboration_id"],),
+            )
+            distributed["deliverables"] = [_ready(_dict(row)) for row in cursor.fetchall()]
+        return _ready(distributed)
     cursor.execute(
         """
         SELECT collaboration.*, campaign.title, campaign.goal, campaign.formats_json,
@@ -544,6 +618,7 @@ def offer_detail(cursor: Any, *, profile_id: str, collaboration_id: str) -> dict
     offer = _dict(cursor.fetchone())
     if not offer:
         raise LookupError("Предложение не найдено или ещё не одобрено")
+    offer["offer_kind"] = "legacy"
     for key in ("agreed_terms_json", "formats_json", "offer_json", "period_json", "constraints_json"):
         offer[key.removesuffix("_json")] = _json(offer.pop(key, None), []) if key == "formats_json" else _json(offer.pop(key, None), {})
     cursor.execute("SELECT id, sender_type, body_text, created_at FROM creator_offer_messages WHERE collaboration_id = %s ORDER BY created_at", (collaboration_id,))
@@ -556,6 +631,53 @@ def offer_detail(cursor: Any, *, profile_id: str, collaboration_id: str) -> dict
 def creator_respond(cursor: Any, *, account: dict[str, Any], collaboration_id: str,
                     action: str, message: str | None) -> dict[str, Any]:
     offer = offer_detail(cursor, profile_id=str(account["creator_profile_id"]), collaboration_id=collaboration_id)
+    if offer.get("offer_kind") == "distributed":
+        statuses = {
+            "accept": "interested", "interest": "interested",
+            "propose_changes": "needs_details", "needs_details": "needs_details",
+            "decline": "declined", "block_category": "declined",
+        }
+        if action not in statuses:
+            raise ValueError("Недопустимое действие")
+        if offer.get("status") not in {"available", "needs_details"}:
+            raise ValueError("Отклик по этому предложению уже закрыт")
+        if action in {"propose_changes", "needs_details"} and not str(message or "").strip():
+            raise ValueError("Опишите, что нужно уточнить")
+        status = statuses[action]
+        text = str(message or "").strip() or ("Хочу участвовать" if status == "interested" else "Предложение не подходит")
+        cursor.execute(
+            "UPDATE creator_offer_recipients SET status = %s, response_text = %s, responded_at = NOW(), updated_at = NOW() WHERE id = %s AND status IN ('available', 'needs_details') RETURNING id",
+            (status, text, collaboration_id),
+        )
+        if not cursor.fetchone():
+            raise ValueError("Отклик по этому предложению уже закрыт")
+        cursor.execute(
+            "INSERT INTO creator_offer_messages (id, offer_recipient_id, sender_type, sender_id, body_text) VALUES (%s, %s, 'creator', %s, %s)",
+            (str(uuid.uuid4()), collaboration_id, account["id"], text),
+        )
+        cursor.execute(
+            "UPDATE creator_notification_outbox SET status = 'cancelled', updated_at = NOW() WHERE offer_recipient_id = %s AND event_type IN ('offer_available', 'offer_reminder') AND status IN ('pending', 'failed')",
+            (collaboration_id,),
+        )
+        if action == "block_category":
+            category = str(_json(offer.get("offer"), {}).get("category") or _json(offer.get("offer"), {}).get("service") or "").strip()
+            categories = sorted({*_text_list(account.get("excluded_categories")), category} - {""})
+            update_offer_preferences(
+                cursor,
+                profile_id=str(account["creator_profile_id"]),
+                payload={
+                    "pause_mode": "indefinite" if account.get("paused_indefinitely") else "until" if account.get("paused_until") else "active",
+                    "paused_until": account.get("paused_until"),
+                    "excluded_categories": categories,
+                },
+            )
+        set_relationship_stage(
+            cursor,
+            profile_id=str(account["creator_profile_id"]),
+            stage="interested" if status == "interested" else "needs_details" if status == "needs_details" else "declined",
+            reason=text,
+        )
+        return offer_detail(cursor, profile_id=str(account["creator_profile_id"]), collaboration_id=collaboration_id)
     statuses = {"accept": "agreed", "decline": "declined", "propose_changes": "negotiating"}
     if action not in statuses:
         raise ValueError("Недопустимое действие")
@@ -567,6 +689,10 @@ def creator_respond(cursor: Any, *, account: dict[str, Any], collaboration_id: s
     text = str(message or "").strip() or ("Предложение принято" if action == "accept" else "Предложение отклонено")
     cursor.execute("INSERT INTO creator_offer_messages (id, collaboration_id, sender_type, sender_id, body_text) VALUES (%s, %s, 'creator', %s, %s)",
                    (str(uuid.uuid4()), collaboration_id, account["id"], text))
+    cursor.execute(
+            "UPDATE creator_notification_outbox SET status = 'cancelled', updated_at = NOW() WHERE collaboration_id = %s AND event_type IN ('offer_approved', 'offer_reminder') AND status IN ('pending', 'failed')",
+        (collaboration_id,),
+    )
     set_relationship_stage(cursor, profile_id=str(account["creator_profile_id"]),
                            stage="interested" if action == "accept" else "declined" if action == "decline" else "needs_details",
                            reason=text)
@@ -579,13 +705,20 @@ def add_offer_message(cursor: Any, *, collaboration_id: str, sender_type: str,
     body = str(body or "").strip()
     if not body:
         raise ValueError("Напишите сообщение")
+    offer_kind = "legacy"
     if profile_id:
-        offer_detail(cursor, profile_id=profile_id, collaboration_id=collaboration_id)
+        offer_kind = str(offer_detail(cursor, profile_id=profile_id, collaboration_id=collaboration_id).get("offer_kind") or "legacy")
     message_id = str(uuid.uuid4())
-    cursor.execute(
-        "INSERT INTO creator_offer_messages (id, collaboration_id, sender_type, sender_id, body_text, visible_to_business) VALUES (%s, %s, %s, %s, %s, %s)",
-        (message_id, collaboration_id, sender_type, sender_id, body, visible_to_business),
-    )
+    if offer_kind == "distributed":
+        cursor.execute(
+            "INSERT INTO creator_offer_messages (id, offer_recipient_id, sender_type, sender_id, body_text, visible_to_business) VALUES (%s, %s, %s, %s, %s, %s)",
+            (message_id, collaboration_id, sender_type, sender_id, body, visible_to_business),
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO creator_offer_messages (id, collaboration_id, sender_type, sender_id, body_text, visible_to_business) VALUES (%s, %s, %s, %s, %s, %s)",
+            (message_id, collaboration_id, sender_type, sender_id, body, visible_to_business),
+        )
     return {"id": message_id, "sender_type": sender_type, "body_text": body}
 
 
@@ -601,6 +734,12 @@ def update_creator_profile(cursor: Any, *, account: dict[str, Any], payload: dic
                 primary_area = COALESCE(%s, primary_area), updated_at = NOW() WHERE id = %s
             """,
             (changes.get("display_name"), changes.get("description"), changes.get("primary_city"), changes.get("primary_area"), profile_id),
+        )
+    topics = _text_list(payload.get("topics")) if "topics" in payload else None
+    if topics is not None:
+        cursor.execute(
+            "UPDATE creator_profiles SET topics_json = %s, updated_at = NOW() WHERE id = %s",
+            (Json(topics), profile_id),
         )
     taxonomy_keys = {"home_city", "home_district", "metro_stations", "content_geographies",
                      "audience_geography", "audience_types", "audience_size_band", "content_styles"}
@@ -669,6 +808,8 @@ def update_creator_profile(cursor: Any, *, account: dict[str, Any], payload: dic
              commercial.get("availability_text", current_commercial.get("availability_text"))),
         )
     all_changes = {**changes, **taxonomy, **commercial}
+    if topics is not None:
+        all_changes["topics"] = topics
     if all_changes:
         cursor.execute(
             "INSERT INTO creator_profile_change_events (id, creator_profile_id, actor_type, actor_id, changed_fields_json, source) VALUES (%s, %s, 'creator', %s, %s, 'creator_portal')",
@@ -728,23 +869,29 @@ def review_offer(cursor: Any, *, business_id: str, collaboration_id: str,
 def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
     cursor.execute(
         """
-        SELECT o.*, a.telegram_id, a.email, p.display_name, c.status AS collaboration_status,
+        SELECT o.*, a.telegram_id, a.email, a.notification_preferences_json,
+               p.display_name, c.status AS collaboration_status,
+               recipient.status AS recipient_status,
+               preference.paused_until, preference.paused_indefinitely,
                campaign.title, business.name AS business_name
         FROM creator_notification_outbox o
         JOIN creator_accounts a ON a.id = o.creator_account_id
         JOIN creator_profiles p ON p.id = a.creator_profile_id
         LEFT JOIN creator_collaborations c ON c.id = o.collaboration_id
-        LEFT JOIN creator_campaigns campaign ON campaign.id = c.campaign_id
-        LEFT JOIN businesses business ON business.id = c.business_id
+        LEFT JOIN creator_offer_recipients recipient ON recipient.id = o.offer_recipient_id
+        LEFT JOIN creator_campaigns campaign ON campaign.id = COALESCE(recipient.campaign_id, c.campaign_id)
+        LEFT JOIN businesses business ON business.id = COALESCE(recipient.business_id, c.business_id)
+        LEFT JOIN creator_offer_preferences preference ON preference.creator_profile_id = p.id
         WHERE o.status IN ('pending', 'failed') AND o.next_attempt_at <= NOW()
           AND a.status = 'active'
-          AND NOT EXISTS (
-              SELECT 1 FROM creator_relationships r
-              WHERE r.creator_profile_id = a.creator_profile_id AND r.stage = ANY(%s)
+          AND (
+              recipient.id IS NULL
+              OR recipient.status = 'available'
+              OR (o.event_type = 'offer_message' AND recipient.status IN ('interested', 'needs_details', 'selected'))
           )
         ORDER BY o.created_at FOR UPDATE OF o SKIP LOCKED LIMIT %s
         """,
-        (list(TERMINAL_REPLY_STAGES), limit),
+        (limit,),
     )
     rows = [_dict(row) for row in cursor.fetchall()]
     result = {"processed": 0, "sent": 0, "failed": 0}
@@ -752,7 +899,21 @@ def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
     for item in rows:
         result["processed"] += 1
         payload = _json(item.get("payload_json"), {})
-        message = f"Здравствуйте, {item['display_name']}!\n\nДля вас есть новое предложение от {item.get('business_name') or 'LocalOS'}: {item.get('title') or 'сотрудничество'}"
+        preferences = _json(item.get("notification_preferences_json"), {})
+        paused = item.get("event_type") in {"offer_available", "offer_approved", "offer_reminder"} and (bool(item.get("paused_indefinitely")) or bool(
+            item.get("paused_until") and item["paused_until"] > datetime.now(timezone.utc)
+        ))
+        channel_enabled = preferences.get(str(item.get("channel")), True)
+        if paused or not channel_enabled:
+            cursor.execute(
+                "UPDATE creator_notification_outbox SET status = 'cancelled', updated_at = NOW(), last_error = %s WHERE id = %s",
+                ("Автор поставил предложения на паузу" if paused else "Канал уведомлений выключен", item["id"]),
+            )
+            continue
+        if item.get("event_type") == "offer_message":
+            message = f"Здравствуйте, {item['display_name']}!\n\nLocalOS ответил по предложению «{item.get('title') or 'сотрудничество'}»: {str(payload.get('message') or '')[:300]}"
+        else:
+            message = f"Здравствуйте, {item['display_name']}!\n\nДля вас есть новое предложение от {item.get('business_name') or 'LocalOS'}: {item.get('title') or 'сотрудничество'}"
         try:
             provider_id = None
             if item["channel"] == "telegram":
@@ -770,7 +931,8 @@ def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
                 if not item.get("email") or not send_email(item["email"], "Новое предложение в LocalOS", f"{message}\n\n{payload['portal_url']}"):
                     raise RuntimeError("Email не отправлен")
             cursor.execute("UPDATE creator_notification_outbox SET status = 'sent', attempts = attempts + 1, provider_message_id = %s, sent_at = NOW(), updated_at = NOW(), last_error = NULL WHERE id = %s", (provider_id, item["id"]))
-            cursor.execute("UPDATE creator_collaborations SET creator_notified_at = NOW(), status = CASE WHEN status = 'draft' THEN 'invited' ELSE status END, updated_at = NOW() WHERE id = %s", (item["collaboration_id"],))
+            if item.get("collaboration_id"):
+                cursor.execute("UPDATE creator_collaborations SET creator_notified_at = NOW(), status = CASE WHEN status = 'draft' THEN 'invited' ELSE status END, updated_at = NOW() WHERE id = %s", (item["collaboration_id"],))
             result["sent"] += 1
         except Exception as exc:
             attempts = int(item.get("attempts") or 0) + 1

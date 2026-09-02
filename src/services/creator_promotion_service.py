@@ -1547,6 +1547,8 @@ def approve_campaign_terms(cursor: Any, *, business_id: str, campaign_id: str) -
 
 def update_campaign_terms(cursor: Any, *, business_id: str, campaign_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     campaign = load_campaign(cursor, business_id=business_id, campaign_id=campaign_id)
+    if campaign.get("distribution_locked_at"):
+        raise ValueError("Запущенное предложение нельзя изменить; создайте новое")
     title = str(payload.get("title") if "title" in payload else campaign.get("title") or "").strip()
     goal = str(payload.get("goal") if "goal" in payload else campaign.get("goal") or "").strip()
     sender_mode = str(payload.get("sender_mode") if "sender_mode" in payload else campaign.get("sender_mode") or "partner_business")

@@ -41,6 +41,17 @@ from services.creator_promotion_service import (
     upsert_manual_creator,
     verify_deliverable,
 )
+from services.creator_offer_distribution_service import (
+    add_recipient_message,
+    approve_and_distribute,
+    distribution_enabled,
+    distribution_preview,
+    list_catalog,
+    list_campaign_recipients,
+    select_recipient,
+    set_business_disposition,
+    submit_offer,
+)
 from subscription_manager import get_capability_access
 
 
@@ -120,6 +131,12 @@ def _require_creator_automation(cursor: Any, business_id: str):
     return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip("?")}), 402
 
 
+def _require_offer_distribution(business_id: str):
+    if distribution_enabled(business_id):
+        return None
+    return jsonify({"success": False, "error": "Распределение предложений пока не включено"}), 404
+
+
 @creator_promotion_bp.get("/feature-state")
 def feature_state():
     payload: dict[str, Any] = {}
@@ -128,7 +145,9 @@ def feature_state():
         return error
     business_id = _business_id(payload)
     try:
-        return jsonify({"success": True, "feature_state": creator_feature_state(business_id)})
+        state = creator_feature_state(business_id)
+        state["offer_distribution"] = distribution_enabled(business_id)
+        return jsonify({"success": True, "feature_state": state})
     finally:
         db.close()
 
@@ -166,13 +185,42 @@ def workspace():
         filters = {
             "platform": request.args.get("platform"),
             "city": request.args.get("city"),
+            "district": request.args.get("district"),
+            "metro": request.args.get("metro"),
+            "audience_geography": request.args.get("audience_geography"),
             "topic": request.args.get("topic"),
             "format": request.args.get("format"),
             "audience_size_band": request.args.get("audience_size_band"),
+            "disposition": request.args.get("disposition"),
+            "query": request.args.get("query"),
             "shortlisted": request.args.get("shortlisted"),
             "barter": request.args.get("barter"),
             "contactable": request.args.get("contactable"),
         }
+        if distribution_enabled(business_id):
+            influencer_access = get_capability_access(business_id, "influencers")
+            limited_preview = not influencer_access.get("allowed")
+            if str(filters.get("shortlisted") or "").lower() in {"1", "true", "yes", "on"}:
+                filters["disposition"] = "shortlisted"
+            catalog_result = list_catalog(
+                cursor,
+                business_id=business_id,
+                filters={} if limited_preview else filters,
+                limit=10 if limited_preview else limit,
+                offset=0 if limited_preview else offset,
+            )
+            if limited_preview:
+                catalog_result["preview"] = {
+                    "limited": True,
+                    "visible_limit": 10,
+                    "hidden_count": max(0, int(catalog_result["counts"]["total"]) - len(catalog_result["creators"])),
+                    "required_tier": "professional",
+                    "required_tier_name": "Привлечение",
+                }
+                catalog_result["cursor"] = None
+            catalog_result["feature_state"] = {**creator_feature_state(business_id), "offer_distribution": True}
+            catalog_result["next_action"] = "Отметьте приоритетных авторов или создайте предложение"
+            return jsonify({"success": True, "workspace": catalog_result})
         return jsonify({"success": True, "workspace": influencer_workspace(cursor, business_id=business_id, filters=filters, limit=limit, offset=offset)})
     except LookupError as exc:
         return jsonify({"success": False, "error": str(exc)}), 404
@@ -183,6 +231,37 @@ def workspace():
 @creator_promotion_bp.get("/catalog")
 def catalog():
     return workspace()
+
+
+@creator_promotion_bp.patch("/catalog/<profile_id>/disposition")
+def catalog_disposition_update(profile_id: str):
+    payload = request.get_json(silent=True) or {}
+    db, cursor, user_data, error = _authorized_cursor(payload)
+    if error:
+        return error
+    business_id = _business_id(payload)
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        result = set_business_disposition(
+            cursor,
+            business_id=business_id,
+            profile_id=profile_id,
+            disposition=str(payload.get("disposition") or "available"),
+            reason=str(payload.get("reason") or "").strip() or None,
+            user_id=_user_id(user_data),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "preference": result})
+    except LookupError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    finally:
+        db.close()
 
 
 @creator_promotion_bp.get("/searches")
@@ -391,12 +470,175 @@ def campaign_approve(campaign_id: str):
         return error
     business_id = _business_id(payload)
     try:
+        if distribution_enabled(business_id):
+            return jsonify({"success": False, "error": "Отправьте предложение на проверку LocalOS"}), 409
         campaign = approve_campaign_terms(cursor, business_id=business_id, campaign_id=campaign_id)
         db.conn.commit()
         return jsonify({"success": True, "campaign": campaign, "external_messages_sent": 0})
     except ValueError as exc:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.post("/campaigns/<campaign_id>/submit")
+def campaign_submit(campaign_id: str):
+    payload = request.get_json(silent=True) or {}
+    db, cursor, _user_data, error = _authorized_cursor(payload)
+    if error:
+        return error
+    business_id = _business_id(payload)
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        result = submit_offer(cursor, business_id=business_id, campaign_id=campaign_id)
+        db.conn.commit()
+        return jsonify({"success": True, **result})
+    except LookupError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.get("/campaigns/<campaign_id>/distribution-preview")
+def campaign_distribution_preview(campaign_id: str):
+    db, cursor, _user_data, error = _authorized_cursor()
+    if error:
+        return error
+    business_id = _business_id()
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        preview = distribution_preview(cursor, business_id=business_id, campaign_id=campaign_id)
+        return jsonify({"success": True, "preview": preview})
+    except LookupError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.post("/campaigns/<campaign_id>/distribution-approve")
+def campaign_distribution_approve(campaign_id: str):
+    payload = request.get_json(silent=True) or {}
+    db, cursor, user_data, error = _authorized_cursor(payload)
+    if error:
+        return error
+    business_id = _business_id(payload)
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        if not user_data.get("is_superadmin"):
+            return jsonify({"success": False, "error": "Распределение одобряет LocalOS"}), 403
+        result = approve_and_distribute(
+            cursor,
+            business_id=business_id,
+            campaign_id=campaign_id,
+            reviewer_id=_user_id(user_data),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, **result, "external_messages_sent": 0})
+    except LookupError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.post("/offer-recipients/<recipient_id>/select")
+def offer_recipient_select(recipient_id: str):
+    payload = request.get_json(silent=True) or {}
+    db, cursor, user_data, error = _authorized_cursor(payload)
+    if error:
+        return error
+    business_id = _business_id(payload)
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        if not user_data.get("is_superadmin"):
+            return jsonify({"success": False, "error": "Авторов для сотрудничества выбирает LocalOS"}), 403
+        result = select_recipient(
+            cursor,
+            business_id=business_id,
+            recipient_id=recipient_id,
+            user_id=_user_id(user_data),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "selection": result})
+    except LookupError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.get("/campaigns/<campaign_id>/offer-recipients")
+def campaign_offer_recipients(campaign_id: str):
+    db, cursor, user_data, error = _authorized_cursor()
+    if error:
+        return error
+    business_id = _business_id()
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        recipients = list_campaign_recipients(
+            cursor,
+            business_id=business_id,
+            campaign_id=campaign_id,
+            is_superadmin=bool(user_data.get("is_superadmin")),
+        )
+        return jsonify({"success": True, "recipients": recipients})
+    except LookupError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    finally:
+        db.close()
+
+
+@creator_promotion_bp.post("/offer-recipients/<recipient_id>/messages")
+def offer_recipient_message(recipient_id: str):
+    payload = request.get_json(silent=True) or {}
+    db, cursor, user_data, error = _authorized_cursor(payload)
+    if error:
+        return error
+    business_id = _business_id(payload)
+    try:
+        gate = _require_offer_distribution(business_id)
+        if gate:
+            return gate
+        if not user_data.get("is_superadmin"):
+            return jsonify({"success": False, "error": "Переписку с автором ведёт LocalOS"}), 403
+        message = add_recipient_message(
+            cursor,
+            business_id=business_id,
+            recipient_id=recipient_id,
+            sender_id=_user_id(user_data),
+            body=str(payload.get("message") or ""),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "message": message})
+    except LookupError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
     finally:
         db.close()
 

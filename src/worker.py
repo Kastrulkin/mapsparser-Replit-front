@@ -110,6 +110,10 @@ from services.founder_content_editorial import (
 from services.web_tracking_maintenance import run_web_tracking_maintenance
 from services.creator_promotion_service import process_next_creator_search_job
 from services.creator_portal_service import dispatch_notifications as dispatch_creator_notifications
+from services.creator_offer_distribution_service import (
+    expire_creator_offers,
+    process_next_distribution_run,
+)
 from services.creator_profile_revalidation_service import process_creator_profile_revalidation_batch
 from services.creator_source_enrichment_service import process_creator_source_enrichment_batch
 from services.yandex_full_reviews_sync import apply_complete_review_snapshot, fetch_complete_yandex_reviews
@@ -141,6 +145,7 @@ _LAST_CREATOR_SEARCH_AT = 0.0
 _LAST_CREATOR_SOURCE_ENRICHMENT_AT = 0.0
 _LAST_CREATOR_PROFILE_REVALIDATION_AT = 0.0
 _LAST_CREATOR_NOTIFICATION_AT = 0.0
+_LAST_CREATOR_OFFER_DISTRIBUTION_AT = 0.0
 _CREATOR_PROFILE_REVALIDATION_THREAD: threading.Thread | None = None
 
 
@@ -1711,6 +1716,32 @@ def _dispatch_creator_notifications_if_due() -> None:
     except Exception as exc:
         db.conn.rollback()
         print(f"[CREATOR_NOTIFICATIONS] error: {exc}", flush=True)
+    finally:
+        db.close()
+
+
+def _process_creator_offer_distribution_if_due() -> None:
+    global _LAST_CREATOR_OFFER_DISTRIBUTION_AT
+    if not _env_bool("CREATOR_OFFER_DISTRIBUTION_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(5, int(os.getenv("CREATOR_OFFER_DISTRIBUTION_INTERVAL_SEC", "10")))
+    if now - _LAST_CREATOR_OFFER_DISTRIBUTION_AT < interval_sec:
+        return
+    _LAST_CREATOR_OFFER_DISTRIBUTION_AT = now
+    db = DatabaseManager()
+    try:
+        result = process_next_distribution_run(
+            db.conn.cursor(cursor_factory=RealDictCursor),
+            batch_size=max(10, min(int(os.getenv("CREATOR_OFFER_DISTRIBUTION_BATCH_SIZE", "500")), 1000)),
+        )
+        expired = expire_creator_offers(db.conn.cursor(cursor_factory=RealDictCursor))
+        db.conn.commit()
+        if result.get("processed") or result.get("status") == "failed" or expired:
+            print(f"[CREATOR_OFFER_DISTRIBUTION] result={result} expired={expired}", flush=True)
+    except Exception as exc:
+        db.conn.rollback()
+        print(f"[CREATOR_OFFER_DISTRIBUTION] error: {exc}", flush=True)
     finally:
         db.close()
 
@@ -7692,6 +7723,7 @@ if __name__ == "__main__":
             _refresh_outreach_pain_library_if_due()
             _run_knowledge_embeddings_if_due()
             _dispatch_outreach_queue_if_due()
+            _process_creator_offer_distribution_if_due()
             _dispatch_creator_notifications_if_due()
             _notify_superadmin_outreach_replies_if_due()
             _notify_superadmin_community_sources_if_due()

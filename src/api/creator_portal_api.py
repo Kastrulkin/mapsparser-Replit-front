@@ -27,6 +27,7 @@ from services.creator_portal_service import (
     update_notifications,
     verify_email,
 )
+from services.creator_offer_distribution_service import update_offer_preferences
 
 
 creator_portal_bp = Blueprint("creator_portal", __name__, url_prefix="/api/creator-portal")
@@ -193,6 +194,18 @@ def profile_update():
 def notifications_update():
     payload = request.get_json(silent=True) or {}
     return _creator_operation(lambda cursor, account: {"notifications": update_notifications(cursor, account=account, payload=payload)})
+
+
+@creator_portal_bp.patch("/availability")
+def availability_update():
+    payload = request.get_json(silent=True) or {}
+    return _creator_operation(lambda cursor, account: {
+        "availability": update_offer_preferences(
+            cursor,
+            profile_id=str(account["creator_profile_id"]),
+            payload=payload,
+        )
+    })
 
 
 @creator_portal_bp.get("/internal/relationships")

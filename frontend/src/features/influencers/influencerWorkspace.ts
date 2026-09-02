@@ -27,6 +27,9 @@ export type InfluencerCreator = {
   score?: number;
   fit_reasons?: string[];
   shortlist_status?: 'suggested' | 'shortlisted' | 'rejected';
+  disposition?: 'available' | 'shortlisted' | 'excluded';
+  disposition_reason?: string;
+  account_status?: string;
   evidence?: Array<{ type?: string; summary?: string; source_url?: string; observed_at?: string; confidence?: number }>;
 };
 
@@ -56,26 +59,36 @@ export type InfluencerWorkspaceData = {
 };
 
 export type InfluencerWorkspaceFilters = {
+  query?: string;
   platform?: string;
   city?: string;
+  district?: string;
+  metro?: string;
+  audience_geography?: string;
   topic?: string;
   format?: string;
   audience_size_band?: string;
   shortlisted?: boolean;
   barter?: boolean;
   contactable?: boolean;
+  disposition?: 'available' | 'shortlisted' | 'excluded';
 };
 
 export const influencerWorkspaceQuery = (businessId: string, filters: InfluencerWorkspaceFilters = {}, cursor = '') => {
   const params = new URLSearchParams({ business_id: businessId, limit: '30' });
   if (filters.platform) params.set('platform', filters.platform);
+  if (filters.query) params.set('query', filters.query);
   if (filters.city) params.set('city', filters.city);
+  if (filters.district) params.set('district', filters.district);
+  if (filters.metro) params.set('metro', filters.metro);
+  if (filters.audience_geography) params.set('audience_geography', filters.audience_geography);
   if (filters.topic) params.set('topic', filters.topic);
   if (filters.format) params.set('format', filters.format);
   if (filters.audience_size_band) params.set('audience_size_band', filters.audience_size_band);
   if (filters.shortlisted) params.set('shortlisted', 'true');
   if (filters.barter) params.set('barter', 'true');
   if (filters.contactable) params.set('contactable', 'true');
+  if (filters.disposition) params.set('disposition', filters.disposition);
   if (cursor) params.set('cursor', cursor);
   return params;
 };
