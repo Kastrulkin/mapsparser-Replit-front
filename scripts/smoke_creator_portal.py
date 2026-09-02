@@ -18,8 +18,9 @@ def identifier(label: str) -> str:
 
 def main() -> int:
     database_url = str(os.environ.get("CREATOR_PORTAL_TEST_DATABASE_URL") or "").strip()
-    if "creator_portal_test" not in database_url:
-        raise RuntimeError("Use an explicitly disposable creator_portal_test database")
+    explicitly_transactional = str(os.environ.get("CREATOR_PORTAL_TRANSACTIONAL_SMOKE") or "").lower() == "true"
+    if "creator_portal_test" not in database_url and not explicitly_transactional:
+        raise RuntimeError("Use a disposable creator_portal_test database or explicitly enable the rollback-only transactional smoke")
     connection = psycopg2.connect(database_url)
     cursor = connection.cursor(cursor_factory=RealDictCursor)
     portal.send_email = lambda *_args, **_kwargs: True

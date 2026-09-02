@@ -227,7 +227,7 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
 
 def relationship_detail(cursor: Any, *, profile_id: str, business_id: str,
                         is_superadmin: bool) -> dict[str, Any]:
-    result = list_relationships(cursor, business_id=business_id, is_superadmin=is_superadmin, limit=10000)
+    result = list_relationships(cursor, business_id=business_id, is_superadmin=is_superadmin, limit=50000)
     item = next((row for row in result["items"] if row["id"] == profile_id), None)
     if not item:
         raise LookupError("Автор не найден")

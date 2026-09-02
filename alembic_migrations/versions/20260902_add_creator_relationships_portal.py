@@ -68,6 +68,24 @@ def upgrade():
         WHERE provider_message_id IS NOT NULL AND provider_message_id <> ''
         """
     )
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION prevent_creator_contact_event_mutation()
+        RETURNS trigger AS $$
+        BEGIN
+            RAISE EXCEPTION 'creator_contact_events is append-only';
+        END;
+        $$ LANGUAGE plpgsql
+        """
+    )
+    op.execute("DROP TRIGGER IF EXISTS trg_creator_contact_events_append_only ON creator_contact_events")
+    op.execute(
+        """
+        CREATE TRIGGER trg_creator_contact_events_append_only
+        BEFORE UPDATE OR DELETE ON creator_contact_events
+        FOR EACH ROW EXECUTE FUNCTION prevent_creator_contact_event_mutation()
+        """
+    )
 
     op.execute(
         """

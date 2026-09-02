@@ -63,8 +63,13 @@ export const CreatorPortalPage = () => {
   if (location.pathname.includes('/login/telegram')) return <TokenView mode="telegram" token={routeToken} />;
   if (location.pathname.endsWith('/login')) return <LoginView />;
 
+  return <CreatorWorkspace offerId={params.offerId} />;
+};
+
+const CreatorWorkspace = ({ offerId }: { offerId?: string }) => {
+  const navigate = useNavigate();
   const [workspace, setWorkspace] = useState<Workspace | null>(null); const [tab, setTab] = useState<Tab>('new'); const [selected, setSelected] = useState<OfferDetail | null>(null); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState('');
-  const load = useCallback(async () => { try { const result = await request('/me'); setWorkspace(result.workspace); if (params.offerId) { const offerResult = await request(`/offers/${params.offerId}`); setSelected(offerResult.offer); } } catch (reason) { if (reason instanceof Error && /session|session|\u0441есси/i.test(reason.message)) { window.localStorage.removeItem(TOKEN_KEY); navigate('/creator/login'); } else setError(reason instanceof Error ? reason.message : 'Не удалось загрузить кабинет.'); } }, [navigate, params.offerId]);
+  const load = useCallback(async () => { try { const result = await request('/me'); setWorkspace(result.workspace); if (offerId) { const offerResult = await request(`/offers/${offerId}`); setSelected(offerResult.offer); } } catch (reason) { if (reason instanceof Error && /session|session|\u0441есси/i.test(reason.message)) { window.localStorage.removeItem(TOKEN_KEY); navigate('/creator/login'); } else setError(reason instanceof Error ? reason.message : 'Не удалось загрузить кабинет.'); } }, [navigate, offerId]);
   useEffect(() => { if (!window.localStorage.getItem(TOKEN_KEY)) navigate('/creator/login'); else void load(); }, [load, navigate]);
   const openOffer = async (offer: Offer) => { setBusy(offer.id); try { const result = await request(`/offers/${offer.id}`); setSelected(result.offer); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось открыть оффер.'); } finally { setBusy(''); } };
   const respond = async (action: string) => { if (!selected) return; setBusy(action); try { const result = await request(`/offers/${selected.id}/respond`, { method: 'POST', body: JSON.stringify({ action, message }) }); setSelected(result.offer); setMessage(''); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить ответ.'); } finally { setBusy(''); } };
