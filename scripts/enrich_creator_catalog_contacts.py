@@ -253,7 +253,7 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_profiles(cursor: Any, limit: int) -> list[dict[str, Any]]:
+def load_profiles(cursor: Any, limit: int, offset: int = 0) -> list[dict[str, Any]]:
     cursor.execute(
         """
         SELECT profile.id, profile.display_name, profile.description,
@@ -275,11 +275,10 @@ def load_profiles(cursor: Any, limit: int) -> list[dict[str, Any]]:
         GROUP BY profile.id, commercial.creator_profile_id, commercial.preferred_contact, commercial.metadata_json
         ORDER BY
             CASE WHEN NULLIF(BTRIM(commercial.preferred_contact), '') IS NULL THEN 0 ELSE 1 END,
-            profile.updated_at DESC,
             profile.id
-        LIMIT %s
+        LIMIT %s OFFSET %s
         """,
-        (limit,),
+        (limit, offset),
     )
     return [dict(row) for row in cursor.fetchall()]
 
@@ -363,6 +362,7 @@ def apply_results(cursor: Any, results: list[dict[str, Any]]) -> dict[str, int]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=2000)
+    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("--output", type=Path, default=Path("outputs/creator-contact-research-20260825.json"))
     parser.add_argument("--input-report", type=Path)
@@ -387,7 +387,11 @@ def main() -> int:
                 summary["apply"] = {"dry_run": True, "validated_report": True}
             print(json.dumps({key: value for key, value in summary.items() if key != "results"}, ensure_ascii=False, sort_keys=True))
             return 0
-        profiles = load_profiles(cursor, max(1, min(arguments.limit, 20000)))
+        profiles = load_profiles(
+            cursor,
+            max(1, min(arguments.limit, 20000)),
+            max(0, arguments.offset),
+        )
         results: list[dict[str, Any]] = []
         executor = ThreadPoolExecutor(max_workers=max(1, min(arguments.workers, 64)))
         try:
@@ -401,6 +405,7 @@ def main() -> int:
             "schema_version": "1.0",
             "status": "public_contact_research_no_messages_sent",
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "offset": max(0, arguments.offset),
             "profile_count": len(results),
             "with_route": sum(bool(item["preferred_contact"]) for item in results),
             "explicit_public_contact": sum(item["state"] == "public_explicit" for item in results),
