@@ -186,13 +186,26 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
                 lowered = route.lower()
                 if any(marker in lowered for marker in ("youtube.com", "youtu.be", "boosty.to", "patreon.com", "donationalerts.com")):
                     continue
-                route_type = "cross_platform"
+                route_type = "website_contact"
                 if "instagram.com/" in lowered:
                     route_type = "instagram_dm"
                 elif "tiktok.com/" in lowered:
                     route_type = "tiktok_dm"
                 elif "threads.net/" in lowered or "threads.com/" in lowered:
                     route_type = "threads_dm"
+                elif "t.me/" in lowered or "telegram.me/" in lowered:
+                    route_type = "telegram"
+                elif "vk.com/" in lowered or "vk.me/" in lowered:
+                    route_type = "vk_messages"
+                if route_type == "website_contact":
+                    linked_document = fetch(route)
+                    linked_contacts = extract_explicit_contacts(
+                        linked_document,
+                        source_url=route,
+                        source_channel_id=channel_id,
+                    )
+                    for contact in linked_contacts:
+                        merge_contact(contacts, contact)
                 add_contact(
                     contacts,
                     kind=route_type,
@@ -254,10 +267,16 @@ def load_profiles(cursor: Any, limit: int) -> list[dict[str, Any]]:
                    'metadata_json', channel.metadata_json
                ) ORDER BY channel.platform) FILTER (WHERE channel.id IS NOT NULL), '[]'::jsonb) AS channels_json
         FROM creator_profiles profile
+        JOIN creator_relationships relationship ON relationship.creator_profile_id = profile.id
         LEFT JOIN creator_channels channel ON channel.creator_profile_id = profile.id
         LEFT JOIN creator_commercial_profiles commercial ON commercial.creator_profile_id = profile.id
+        WHERE relationship.stage IN ('discovered', 'contact_ready')
+          AND profile.brand_safety_status <> 'blocked'
         GROUP BY profile.id, commercial.creator_profile_id, commercial.preferred_contact, commercial.metadata_json
-        ORDER BY profile.updated_at DESC, profile.id
+        ORDER BY
+            CASE WHEN NULLIF(BTRIM(commercial.preferred_contact), '') IS NULL THEN 0 ELSE 1 END,
+            profile.updated_at DESC,
+            profile.id
         LIMIT %s
         """,
         (limit,),
@@ -276,7 +295,16 @@ def apply_results(cursor: Any, results: list[dict[str, Any]]) -> dict[str, int]:
         existing_row = cursor.fetchone()
         existing = str(existing_row["preferred_contact"] or "").strip() if existing_row else ""
         preferred_reachable = bool(preferred and json_value(preferred.get("validation"), {}).get("reachable") is True)
-        preferred_value = str(preferred["value"]) if preferred and preferred_reachable else None
+        preferred_usable = bool(
+            preferred_reachable
+            and preferred
+            and preferred.get("status") in {
+                "public_explicit",
+                "public_message_route",
+                "existing_needs_periodic_confirmation",
+            }
+        )
+        preferred_value = str(preferred["value"]) if preferred and preferred_usable else None
         metadata = {
             "contact_research": {
                 "version": "creator-contact-v1",
@@ -309,7 +337,19 @@ def apply_results(cursor: Any, results: list[dict[str, Any]]) -> dict[str, int]:
             preserved += 1
         elif preferred_value:
             inserted += 1
-        source_channel_id = preferred.get("source_channel_id") if preferred and preferred_reachable else None
+        if preferred_value:
+            cursor.execute(
+                """
+                UPDATE creator_relationships SET
+                    stage = CASE WHEN stage = 'discovered' THEN 'contact_ready' ELSE stage END,
+                    primary_channel = COALESCE(primary_channel, %s),
+                    contact_value = COALESCE(contact_value, %s),
+                    updated_at = NOW()
+                WHERE creator_profile_id = %s
+                """,
+                (preferred.get("type"), preferred_value, result["profile_id"]),
+            )
+        source_channel_id = preferred.get("source_channel_id") if preferred and preferred_usable else None
         if source_channel_id and preferred:
             contactability = "advertising_contact" if preferred["status"] == "public_explicit" else "public_contact"
             cursor.execute(
@@ -347,7 +387,7 @@ def main() -> int:
                 summary["apply"] = {"dry_run": True, "validated_report": True}
             print(json.dumps({key: value for key, value in summary.items() if key != "results"}, ensure_ascii=False, sort_keys=True))
             return 0
-        profiles = load_profiles(cursor, max(1, min(arguments.limit, 5000)))
+        profiles = load_profiles(cursor, max(1, min(arguments.limit, 20000)))
         results: list[dict[str, Any]] = []
         executor = ThreadPoolExecutor(max_workers=max(1, min(arguments.workers, 64)))
         try:
