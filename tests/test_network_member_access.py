@@ -236,6 +236,15 @@ def test_auth_me_returns_network_member_businesses(monkeypatch):
     assert response.status_code == 200
     assert response.get_json()["businesses"][0]["id"] == "business-1"
     assert response.get_json()["businesses"][0]["web_tracking_available"] is False
+    assert response.get_json()["businesses"][0]["subscription_access"] == {
+        "tier": "none",
+        "tier_name": "Без тарифа",
+        "status": "inactive",
+        "active": False,
+        "subscription_expired": False,
+        "capabilities": [],
+        "groups": {"maps": False, "acquisition": False, "management": False},
+    }
     assert calls == ["member-1"]
 
 

@@ -596,6 +596,7 @@ def _search_catalog_candidates(
             "id": str(item["id"]),
             "display_name": item.get("display_name"),
             "description": item.get("description"),
+            "canonical_url": item.get("canonical_url"),
             "primary_city": item.get("primary_city"),
             "primary_area": item.get("primary_area"),
             "topics": sorted({str(value) for value in [*profile_topics, *taxonomy_topics] if str(value).strip()}),
@@ -2530,10 +2531,23 @@ def influencer_workspace(
     elif latest_summary:
         latest_search = latest_summary
 
-    all_cards = [_public_creator_card(item) for item in (latest_search or {}).get("results", [])]
+    search_results = (latest_search or {}).get("results", [])
+    if not search_results:
+        catalog_candidates = _search_catalog_candidates(cursor, limit=500)
+        search_results = []
+        for candidate in catalog_candidates:
+            scoring = score_creator_candidate(candidate, {})
+            search_results.append({
+                **candidate,
+                "id": f"catalog:{candidate.get('id')}",
+                "creator_profile_id": candidate.get("id"),
+                "score": scoring.get("score"),
+                "reasons": scoring.get("reasons"),
+                "shortlist_status": "suggested",
+            })
+    all_cards = [_public_creator_card(item) for item in search_results]
     automation_allowed = creator_automation_allowed(cursor, business_id)
-    preview_limit = 10
-    cards = all_cards if automation_allowed else all_cards[:preview_limit]
+    cards = all_cards
     requested = filters or {}
     platform = str(requested.get("platform") or "").strip().lower()
     city = str(requested.get("city") or "").strip().lower()
@@ -2581,10 +2595,10 @@ def influencer_workspace(
         {"capabilities": ["influencers"] if automation_allowed else []},
         "influencers",
     )
-    paid_reason = "Полный каталог, shortlist, сообщения и подтверждённая отправка входят в тариф «Привлечение»."
+    paid_reason = "Персональные сообщения, подключение каналов и отправка входят в тариф «Привлечение»."
     access = {
-        "discovery": {"status": "available" if automation_allowed else "payment_required", "reason": "Полный каталог доступен для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Смотреть авторов" if automation_allowed else "Выбрать тариф «Привлечение»", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}, "required_tier": access_contract["required_tier"]},
-        "offer": {"status": "available" if automation_allowed else "payment_required", "reason": "Предложение доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Проверить предложение" if automation_allowed else "Выбрать тариф «Привлечение»", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}, "required_tier": access_contract["required_tier"]},
+        "discovery": {"status": "available", "reason": "Каталог, фильтры и shortlist доступны после регистрации.", "cta_label": "Смотреть авторов", "cta_target": {"screen": "influencers"}, "required_tier": access_contract["required_tier"]},
+        "offer": {"status": "available", "reason": "Можно собрать механику обмена и посмотреть краткий preview предложения.", "cta_label": "Сформулировать предложение", "cta_target": {"screen": "influencers"}, "required_tier": access_contract["required_tier"]},
         "message_generation": {"status": "available" if automation_allowed else "payment_required", "reason": "Доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Подготовить сообщения" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}},
         "sender_setup": {"status": "available" if automation_allowed else "payment_required", "reason": "Доступно для текущего тарифа." if automation_allowed else paid_reason, "cta_label": "Подключить канал" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "settings"}},
         "send": {"status": "approval_required" if automation_allowed else "payment_required", "reason": "Каждая внешняя отправка требует проверки и подтверждения." if automation_allowed else paid_reason, "cta_label": "Проверить и отправить" if automation_allowed else "Выбрать тариф", "cta_target": {"screen": "influencers" if automation_allowed else "settings"}},
@@ -2608,11 +2622,11 @@ def influencer_workspace(
         } if latest_search else None,
         "creators": page,
         "counts": {"total": len(all_cards), "returned": len(page), "shortlisted": sum(1 for card in cards if card.get("shortlist_status") == "shortlisted")},
-        "cursor": str(next_offset) if next_offset is not None and automation_allowed else None,
+        "cursor": str(next_offset) if next_offset is not None else None,
         "preview": {
-            "limited": not automation_allowed,
-            "visible_limit": preview_limit,
-            "hidden_count": max(len(all_cards) - len(cards), 0),
+            "limited": False,
+            "visible_limit": bounded_limit,
+            "hidden_count": 0,
             "required_tier": "professional",
             "required_tier_name": "Привлечение",
         },

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 const commandLabel: Record<string, string> = {
   mark_sent: 'Сообщение отправлено', record_reply: 'Сохранить ответ', prepare_followup: 'Подготовить follow-up',
   save_terms: 'Сохранить условия', mark_launched: 'Партнёрство запущено', mark_published: 'Размещение вышло',
-  add_result: 'Добавить результат', complete: 'Готово', start_next_cycle: 'Начать следующий цикл', open_upgrade: 'Автоматизировать работу',
+  add_result: 'Добавить результат', complete: 'Готово', start_next_cycle: 'Начать следующий цикл', open_upgrade: 'Выбрать тариф',
   prepare: 'Подготовить черновик', save_draft: 'Сохранить черновик', schedule: 'Добавить в календарь',
   save_configuration: 'Сохранить настройку', approve: 'Подтвердить план', link_run: 'Проверить завершённый запуск',
 };
@@ -69,7 +69,10 @@ export const JourneyActionCard = ({ action, businessId, surface = 'web', dark = 
       const result = await runJourneyCommand({ action, businessId, command: nextCommand, payload, surface, idempotencyKey });
       retryKeys.current.delete(retryKey);
       if (nextCommand === 'open_upgrade') {
-        window.location.assign('/dashboard/settings?tab=subscription');
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        const accessUrl = action.access?.cta_target?.url || '/dashboard/profile?focus=subscription#subscription';
+        const separator = accessUrl.includes('?') ? '&' : '?';
+        window.location.assign(`${accessUrl}${separator}return_to=${encodeURIComponent(returnTo)}`);
         return;
       }
       onUpdated(result.next_action || undefined);

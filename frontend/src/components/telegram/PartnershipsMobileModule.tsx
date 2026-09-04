@@ -57,6 +57,7 @@ type Lead = {
   active_workstream_id?: string;
   sales_room_slug?: string;
   sales_room_status?: string;
+  catalog_shortlisted?: boolean;
 };
 type Draft = {
   id: string;
@@ -285,7 +286,6 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
   });
   const [links, setLinks] = useState("");
   const [access, setAccess] = useState<PartnershipAccess>({ allowed: true });
-  const [preview, setPreview] = useState<PartnershipPreview>({});
   const [totalCandidates, setTotalCandidates] = useState(0);
 
   const load = async (silent = false) => {
@@ -308,7 +308,6 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
       const nextLeads = leadData.items || [];
       setLeads(nextLeads);
       setAccess(leadData.access || { allowed: true });
-      setPreview(leadData.preview || {});
       setTotalCandidates(Number(leadData.count || nextLeads.length));
       if (leadData.preview?.limited || leadData.access?.allowed === false) {
         setTab("leads");
@@ -458,6 +457,22 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
         },
       );
     if (operation === "delete") await prepareDelete([lead.id]);
+  };
+  const toggleCatalogShortlist = async (lead: Lead) => {
+    const selected = !lead.catalog_shortlisted;
+    setBusy(`${lead.id}:catalog-shortlist`);
+    setError("");
+    try {
+      await request(`/api/partnership/leads/${lead.id}/shortlist`, {
+        method: "POST",
+        body: JSON.stringify({ business_id: businessId, selected }),
+      });
+      setLeads((current) => current.map((item) => item.id === lead.id ? { ...item, catalog_shortlisted: selected } : item));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось обновить shortlist.");
+    } finally {
+      setBusy("");
+    }
   };
   const prepareDelete = async (leadIds: string[]) => {
     const cleanIds = listUniqueStrings(leadIds);
@@ -716,19 +731,23 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
         Для работы с партнёрами сначала выберите конкретный бизнес.
       </div>
     );
-  if (!loading && (preview.limited || access.allowed === false))
+  if (!loading && access.allowed === false)
     return (
       <div className="space-y-3">
         <section className="rounded-[24px] bg-gradient-to-br from-orange-500/[0.14] to-white/[0.035] p-5 ring-1 ring-inset ring-orange-400/20">
-          <small className="font-semibold uppercase tracking-[0.13em] text-orange-400">Preview · {Math.min(leads.length, preview.visible_limit || 10)} из {totalCandidates}</small>
-          <h2 className="mt-2 text-balance text-xl font-semibold">Первые подходящие партнёры уже найдены</h2>
-          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Посмотрите реальные публичные карточки. Контакты, полный список и действия откроются на тарифе «{preview.required_tier_name || access.required_tier_name || "Привлечение"}».</p>
+          <small className="font-semibold uppercase tracking-[0.13em] text-orange-400">Каталог · {totalCandidates}</small>
+          <h2 className="mt-2 text-balance text-xl font-semibold">Выберите партнёров с похожей аудиторией</h2>
+          <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">Все публичные карточки, поиск и shortlist доступны без тарифа. Персональные сообщения и отправка входят в «{access.required_tier_name || "Привлечение"}».</p>
         </section>
+        <form onSubmit={(event) => { event.preventDefault(); void load(); }} className="flex gap-2">
+          <label className="relative min-w-0 flex-1"><Search className="absolute left-3 top-3.5 h-4 w-4 text-zinc-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, город или категория" className="min-h-11 w-full rounded-[14px] bg-white/[0.04] pl-9 pr-3 text-xs ring-1 ring-inset ring-white/[0.07]" /></label>
+          <button type="submit" aria-label="Найти" className="grid h-11 w-11 place-items-center rounded-[14px] bg-orange-500 active:scale-[0.96]"><Search className="h-4 w-4" /></button>
+        </form>
+        {error ? <div className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{error}</div> : null}
         <div className="space-y-2">
-          {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><small className="mt-3 block text-zinc-600">{lead.reviews_count || 0} отзывов · публичная карточка</small></article>)}
+          {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><div className="mt-3 flex items-center justify-between gap-3"><small className="text-zinc-600">{lead.reviews_count || 0} отзывов</small><button type="button" disabled={busy === `${lead.id}:catalog-shortlist`} onClick={() => void toggleCatalogShortlist(lead)} className="min-h-10 rounded-[13px] bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{lead.catalog_shortlisted ? "В shortlist" : "Добавить"}</button></div></article>)}
         </div>
-        {Number(preview.hidden_count || 0) > 0 ? <div className="space-y-2" aria-hidden="true">{[0, 1, 2].map((index) => <div key={index} className="rounded-[20px] bg-white/[0.035] p-4 blur-[3px] select-none"><div className="h-3 w-2/3 rounded-full bg-white/15" /><div className="mt-3 h-2 w-full rounded-full bg-white/[0.08]" /></div>)}</div> : null}
-        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent("/telegram/control?screen=partnerships")}#subscription`} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-orange-500 px-4 text-center text-sm font-semibold shadow-[0_12px_32px_rgba(249,115,22,0.22)] transition-transform duration-150 active:scale-[0.96]">Открыть полный подбор — тариф «Привлечение»</a>
+        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent("/telegram/control?screen=partnerships")}#subscription`} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-orange-500 px-4 text-center text-sm font-semibold shadow-[0_12px_32px_rgba(249,115,22,0.22)] transition-transform duration-150 active:scale-[0.96]">Подготовить сообщения — тариф «Привлечение»</a>
       </div>
     );
   const tabs: Array<[PartnershipTab, string]> = [

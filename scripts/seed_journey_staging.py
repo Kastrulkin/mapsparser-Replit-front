@@ -96,7 +96,7 @@ def ensure_business(owner_id: str, name: str, city: str) -> str:
     updates = []
     values = []
     for column, value in (
-        ("subscription_tier", "starter"),
+        ("subscription_tier", "concierge"),
         ("subscription_status", "active"),
         ("moderation_status", "approved"),
         ("entity_group", "demo"),

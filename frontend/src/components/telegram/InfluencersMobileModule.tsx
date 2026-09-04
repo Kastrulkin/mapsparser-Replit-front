@@ -72,10 +72,17 @@ export const InfluencersMobileModule = ({ scope, focusItemId }: InfluencersMobil
     setBusy(creator.result_id);
     setError('');
     try {
-      await fetch(`/api/promotion/influencers/search-results/${encodeURIComponent(creator.result_id)}`, {
+      const catalogCreator = creator.result_id.startsWith('catalog:');
+      const endpoint = catalogCreator
+        ? `/api/promotion/influencers/catalog/${encodeURIComponent(creator.id)}/disposition`
+        : `/api/promotion/influencers/search-results/${encodeURIComponent(creator.result_id)}`;
+      const body = catalogCreator
+        ? { business_id: businessId, disposition: creator.shortlist_status === 'shortlisted' ? 'available' : 'shortlisted' }
+        : { business_id: businessId, shortlist_status: creator.shortlist_status === 'shortlisted' ? 'suggested' : 'shortlisted' };
+      await fetch(endpoint, {
         method: 'PATCH',
         headers: mobileJsonHeaders(),
-        body: JSON.stringify({ business_id: businessId, shortlist_status: creator.shortlist_status === 'shortlisted' ? 'suggested' : 'shortlisted' }),
+        body: JSON.stringify(body),
       }).then(readMobileJson);
       await load();
     } catch (requestError) {

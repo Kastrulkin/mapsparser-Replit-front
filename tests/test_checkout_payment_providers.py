@@ -4,6 +4,13 @@ import main
 from src import crypto_pay_client, stripe_integration, yookassa_integration
 
 
+def test_stripe_prices_match_the_public_international_tariffs() -> None:
+    assert stripe_integration.TIERS["starter"]["amount"] == 1500
+    assert stripe_integration.TIERS["professional"]["amount"] == 5500
+    assert stripe_integration.TIERS["concierge"]["amount"] == 31000
+    assert stripe_integration.TIERS["starter"]["display_price_rub"] == 1200
+
+
 def test_normalize_checkout_provider_maps_russia_to_yookassa() -> None:
     assert yookassa_integration._normalize_checkout_provider("russia") == "yookassa"
     assert yookassa_integration._normalize_checkout_provider("yookassa") == "yookassa"
@@ -66,6 +73,7 @@ def test_create_stripe_checkout_for_checkout_session_uses_checkout_metadata(monk
     marked = {}
 
     monkeypatch.setattr(stripe_integration, "STRIPE_SECRET_KEY", "sk_test")
+    monkeypatch.setitem(stripe_integration.TIERS["professional"], "price_id", "price_professional_test")
     monkeypatch.setattr(
         stripe_integration,
         "load_checkout_session",

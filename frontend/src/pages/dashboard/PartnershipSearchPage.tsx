@@ -113,6 +113,7 @@ type PartnershipLead = {
   status?: string;
   partnership_stage?: string;
   pipeline_status?: string;
+  catalog_shortlisted?: boolean;
   pilot_cohort?: string;
   selected_channel?: string;
   active_workstream_id?: string | null;
@@ -816,7 +817,6 @@ export const PartnershipSearchPage: React.FC = () => {
   const [query, setQuery] = useState(showDemoPartner ? 'Ромашка' : '');
   const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>(showDemoPartner ? 'pipeline' : 'overview');
   const [items, setItems] = useState<PartnershipLead[]>([]);
-  const [previewHiddenCount, setPreviewHiddenCount] = useState(0);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadView, setLeadView] = useState<LeadView>('all');
@@ -1042,7 +1042,6 @@ export const PartnershipSearchPage: React.FC = () => {
         query: queryOverride ?? query,
       });
       setItems(Array.isArray(data.items) ? data.items : []);
-      setPreviewHiddenCount(Number(data.preview?.hidden_count || 0));
       setSelectedLeadIds((prev) => prev.filter((id) => (data.items || []).some((x: any) => x.id === id)));
       if (selectedLeadId && !(data.items || []).some((x: any) => x.id === selectedLeadId)) {
         setSelectedLeadId(null);
@@ -2376,6 +2375,24 @@ export const PartnershipSearchPage: React.FC = () => {
     void updateLeadStageOptimistic(leadId, PIPELINE_IN_PROGRESS, { deferredReason: '', deferredUntil: '' });
   };
 
+  const toggleCatalogShortlist = async (lead: PartnershipLead) => {
+    if (!currentBusinessId) return;
+    const selected = !lead.catalog_shortlisted;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(`/partnership/leads/${lead.id}/shortlist`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId, selected }),
+      });
+      setItems((current) => current.map((item) => item.id === lead.id ? { ...item, catalog_shortlisted: selected } : item));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось обновить shortlist.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const moveLeadToStage = (leadId: string, stageValue: string, deferred: { deferredReason: string; deferredUntil: string }) => {
     void updateLeadStageOptimistic(leadId, stageValue, deferred);
   };
@@ -2388,12 +2405,17 @@ export const PartnershipSearchPage: React.FC = () => {
     return (
       <div className="space-y-6 pb-24">
         <header className="rounded-[28px] bg-white p-6 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_45px_-34px_rgba(15,23,42,0.45)] sm:p-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Превью · тариф «Привлечение»</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Каталог партнёров</p>
           <h1 className="mt-2 text-balance text-3xl font-semibold text-slate-950">Партнёры рядом с вашим бизнесом</h1>
-          <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Сейча: {partnershipAccess.tierName}. Показываем 10 реальных публичных компаний без контактов и рабочих данных. Полный поиск, shortlist, сообщения и результаты откроются после повышения тарифа.</p>
+          <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Изучайте публичные карточки и собирайте shortlist бесплатно. Подготовка сообщения и outreach откроются на тарифе «Привлечение».</p>
         </header>
-        {loading ? <div className="h-64 animate-pulse rounded-[28px] bg-slate-200/70" /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Превью партнёров">{items.map((item) => <article key={item.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-lg font-semibold text-slate-950">{item.name || 'Локальный партнёр'}</h2><p className="mt-2 text-sm text-slate-500">{[item.category, item.city].filter(Boolean).join(' · ') || 'Категория уточняется'}</p>{item.rating ? <p className="mt-4 text-sm text-slate-600">Рейтинг <span className="tabular-nums font-semibold text-slate-950">{item.rating}</span>{item.reviews_count ? ` · ${item.reviews_count} отзывов` : ''}</p> : null}</article>)}</div>}
-        <section className="overflow-hidden rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_45px_-34px_rgba(15,23,42,0.45)] sm:p-6" aria-labelledby="partner-preview-title"><div className="relative h-32 overflow-hidden rounded-[20px] bg-slate-100" aria-hidden="true"><div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 blur-[7px]"><span className="rounded-2xl bg-white shadow-sm" /><span className="rounded-2xl bg-white shadow-sm" /><span className="rounded-2xl bg-white shadow-sm" /></div><div className="absolute inset-0 bg-gradient-to-b from-white/10 to-white/80" /></div><div className="relative -mt-5 rounded-[20px] bg-white p-5 text-center shadow-[0_0_0_1px_rgba(15,23,42,0.07)]"><h2 id="partner-preview-title" className="text-balance text-xl font-semibold text-slate-950">Ещё <span className="tabular-nums">{previewHiddenCount}</span> компаний в полном подборе</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Закрытые карточки не загружаются в браузер. После оплаты вы вернётесь в этот же маршрут.</p><Link to="/dashboard/profile?focus=subscription#subscription" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.96]">Открыть полный поиск — тариф «Привлечение»</Link></div></section>
+        <section className="rounded-[24px] bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+          <label className="text-sm font-semibold text-slate-700">Название, категория или город<input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadLeads(query); }} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+          <button type="button" onClick={() => void loadLeads(query)} className="mt-3 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-transform active:scale-[0.96]">Найти партнёров</button>
+        </section>
+        {error ? <div role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-900">{error}</div> : null}
+        {loading && items.length === 0 ? <div className="h-64 animate-pulse rounded-[28px] bg-slate-200/70" /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Каталог партнёров">{items.map((item) => <article key={item.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-lg font-semibold text-slate-950">{item.name || 'Локальный партнёр'}</h2><p className="mt-2 text-sm text-slate-500">{[item.category, item.city].filter(Boolean).join(' · ') || 'Категория уточняется'}</p>{item.rating ? <p className="mt-4 text-sm text-slate-600">Рейтинг <span className="tabular-nums font-semibold text-slate-950">{item.rating}</span>{item.reviews_count ? ` · ${item.reviews_count} отзывов` : ''}</p> : null}<button type="button" onClick={() => void toggleCatalogShortlist(item)} disabled={loading} className={`mt-5 min-h-11 w-full rounded-xl px-4 text-sm font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${item.catalog_shortlisted ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-950 text-white'}`}>{item.catalog_shortlisted ? 'В shortlist' : 'Добавить в shortlist'}</button></article>)}</div>}
+        <section className="rounded-[24px] bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-6"><div><h2 className="text-balance text-xl font-semibold">Готовы написать выбранным партнёрам?</h2><p className="mt-2 text-pretty text-sm text-slate-300">LocalOS подготовит персональные сообщения и сохранит ручное подтверждение отправки.</p></div><Link to="/dashboard/profile?focus=subscription&tier=professional#subscription" className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-slate-950 transition-transform active:scale-[0.96] sm:mt-0">Открыть «Привлечение»</Link></section>
       </div>
     );
   }

@@ -52,6 +52,52 @@ COMMAND_EVENT_NAMES = {
     "link_run": "automation_run_linked",
 }
 
+FLOW_CAPABILITIES = {
+    "maps": "maps",
+    "content": "social_content",
+    "influencer": "influencers",
+    "partnership": "partnerships",
+    "automation": "automation",
+    "average_ticket": "average_ticket",
+}
+
+
+def _subscription_access(cursor, business_id: str, user_data: dict[str, Any]) -> dict[str, Any]:
+    cursor.execute(
+        "SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s",
+        (business_id,),
+    )
+    business = cursor.fetchone() or {}
+    return build_subscription_capabilities(
+        tier=str(business.get("subscription_tier") or ""),
+        status=str(business.get("subscription_status") or ""),
+        subscription_ends_at=business.get("subscription_ends_at"),
+        is_superadmin=bool(user_data.get("is_superadmin")),
+    )
+
+
+def _action_with_access(action: dict[str, Any], subscription_access: dict[str, Any]) -> dict[str, Any]:
+    result = dict(action)
+    capability = FLOW_CAPABILITIES.get(str(result.get("flow_type") or ""))
+    if not capability:
+        result["access"] = {"allowed": True, "status": "available"}
+        return result
+    access = capability_access_payload(subscription_access, capability)
+    result["access"] = access
+    if not access.get("allowed"):
+        free_commands = {"save_configuration"} if str(result.get("action_type") or "") == "configure_automation" else set()
+        result["allowed_commands"] = [
+            command for command in result.get("allowed_commands") or [] if command in free_commands
+        ]
+        result["allowed_commands"].append("open_upgrade")
+        result["cta_label"] = access.get("cta_label")
+        result["cta_target"] = access.get("cta_target")
+    return result
+
+
+def _actions_with_access(actions: list[dict[str, Any]], subscription_access: dict[str, Any]) -> list[dict[str, Any]]:
+    return [_action_with_access(action, subscription_access) for action in actions]
+
 
 def _error(exc: JourneyError):
     return jsonify({"success": False, "error": str(exc), "code": exc.code}), exc.status_code
@@ -509,11 +555,12 @@ def actions_list():
     if disabled:
         return disabled
     business_id = str(request.args.get("business_id") or "").strip()
-    db, cursor, _user_data, error = _authorized_business_cursor(business_id)
+    db, cursor, user_data, error = _authorized_business_cursor(business_id)
     if error:
         return error
     try:
-        actions = list_actions(cursor, business_id=business_id)
+        access = _subscription_access(cursor, business_id, user_data)
+        actions = _actions_with_access(list_actions(cursor, business_id=business_id), access)
         db.conn.commit()
         return jsonify({"success": True, "focus_action": actions[0] if actions else None, "actions": actions})
     finally:
@@ -533,15 +580,8 @@ def growth_paths():
     if error:
         return error
     try:
-        cursor.execute("SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s", (business_id,))
-        business = cursor.fetchone() or {}
-        access = build_subscription_capabilities(
-            tier=str(business.get("subscription_tier") or ""),
-            status=str(business.get("subscription_status") or ""),
-            subscription_ends_at=business.get("subscription_ends_at"),
-            is_superadmin=bool(user_data.get("is_superadmin")),
-        )
-        actions = list_actions(cursor, business_id=business_id)
+        access = _subscription_access(cursor, business_id, user_data)
+        actions = _actions_with_access(list_actions(cursor, business_id=business_id), access)
         paths = build_growth_paths(actions=actions, capabilities=set(access.get("capabilities") or []))
         db.conn.commit()
         return jsonify({
@@ -559,11 +599,13 @@ def action_history():
     if disabled:
         return disabled
     business_id = str(request.args.get("business_id") or "").strip()
-    db, cursor, _user_data, error = _authorized_business_cursor(business_id)
+    db, cursor, user_data, error = _authorized_business_cursor(business_id)
     if error:
         return error
     try:
-        return jsonify({"success": True, "actions": list_actions(cursor, business_id=business_id, history=True)})
+        access = _subscription_access(cursor, business_id, user_data)
+        actions = _actions_with_access(list_actions(cursor, business_id=business_id, history=True), access)
+        return jsonify({"success": True, "actions": actions})
     finally:
         db.close()
 
@@ -574,11 +616,13 @@ def action_detail(action_id: str):
     if disabled:
         return disabled
     business_id = str(request.args.get("business_id") or "").strip()
-    db, cursor, _user_data, error = _authorized_business_cursor(business_id)
+    db, cursor, user_data, error = _authorized_business_cursor(business_id)
     if error:
         return error
     try:
-        return jsonify({"success": True, "action": serialize_action(load_action(cursor, action_id=action_id, business_id=business_id))})
+        access = _subscription_access(cursor, business_id, user_data)
+        action = serialize_action(load_action(cursor, action_id=action_id, business_id=business_id))
+        return jsonify({"success": True, "action": _action_with_access(action, access)})
     except JourneyError as exc:
         return _error(exc)
     finally:
@@ -605,16 +649,9 @@ def action_command(action_id: str):
         current_action = load_action(cursor, action_id=action_id, business_id=business_id)
         if current_action.get("flow_type") != "upgrade" and not journey_flow_enabled(str(current_action.get("flow_type") or "")):
             return jsonify({"success": False, "error": "Это направление пока не включено", "code": "flow_disabled"}), 404
-        flow_capabilities = {
-            "content": "maps.news",
-            "influencer": "influencers",
-            "partnership": "partnerships",
-            "automation": "automation",
-            "average_ticket": "average_ticket",
-        }
-        required_capability = flow_capabilities.get(str(current_action.get("flow_type") or ""))
+        required_capability = FLOW_CAPABILITIES.get(str(current_action.get("flow_type") or ""))
         command = str(payload.get("command") or "").strip()
-        safe_preview_commands = {"open_upgrade", "save_configuration", "record_reply", "mark_sent"}
+        safe_preview_commands = {"open_upgrade", "save_configuration"}
         if required_capability and command not in safe_preview_commands and not bool(user_data.get("is_superadmin")):
             cursor.execute("SELECT subscription_tier, subscription_status, subscription_ends_at FROM businesses WHERE id = %s", (business_id,))
             subscription_row = cursor.fetchone() or {}

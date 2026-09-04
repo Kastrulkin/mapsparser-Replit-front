@@ -70,6 +70,7 @@ _to_json_compatible = _legacy._to_json_compatible
 __all__ = [
     "partnership_list_leads",
     "partnership_update_lead",
+    "partnership_catalog_shortlist",
     "partnership_mark_lead_manual_contact",
     "partnership_bulk_update_leads",
     "partnership_delete_lead",
@@ -104,6 +105,8 @@ def _sanitize_partnership_preview_item(item: dict[str, Any]) -> dict[str, Any]:
         "lead_kind", "contact_points", "contact_summary", "selected_recipient",
         "selected_channel", "contact_guard", "research", "campaign_state",
         "message_readiness", "enrichment_state", "sales_room_url",
+        "phone", "email", "website", "telegram_url", "whatsapp_url",
+        "contact_person", "contact_name", "outreach_notes", "draft_text",
     ):
         safe.pop(key, None)
     return safe
@@ -132,15 +135,8 @@ def partnership_list_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
-            access = get_capability_access(business_id, 'partnerships')
-            preview_limited = not bool(access.get('allowed'))
-            if preview_limited:
-                stage_filter = None
-                pipeline_status_filter = None
-                pilot_cohort = None
-                q = ''
-                limit = 10
-                offset = 0
+            access = get_capability_access(business_id, 'partnerships', bool(user_data.get('is_superadmin')))
+            safe_catalog = not bool(access.get('allowed'))
 
             where_sql = [
                 "active_ws.client_business_id = %s",
@@ -188,9 +184,9 @@ def partnership_list_leads():
                 where_sql.append("COALESCE(pilot_cohort, 'backlog') = %s")
                 params.append(pilot_cohort)
             if q:
-                where_sql.append("(LOWER(COALESCE(name, '')) LIKE %s OR LOWER(COALESCE(source_url, '')) LIKE %s)")
+                where_sql.append("(LOWER(COALESCE(name, '')) LIKE %s OR LOWER(COALESCE(source_url, '')) LIKE %s OR LOWER(COALESCE(city, '')) LIKE %s OR LOWER(COALESCE(category, '')) LIKE %s)")
                 q_like = f"%{q}%"
-                params.extend([q_like, q_like])
+                params.extend([q_like, q_like, q_like, q_like])
 
             cur.execute(
                 f"""
@@ -343,7 +339,7 @@ def partnership_list_leads():
             if payload["contact_guard"].get("blocked"):
                 payload["pipeline_status"] = payload["contact_guard"].get("display_status")
             payload["next_best_action"] = _partnership_next_best_action(payload)
-            if preview_limited:
+            if safe_catalog:
                 for private_key in (
                     'phone', 'email', 'telegram_url', 'whatsapp_url', 'website',
                     'search_payload_json', 'enrich_payload_json', 'sales_room_url',
@@ -356,17 +352,19 @@ def partnership_list_leads():
             items = attach_workstreams(attach_conn, items)
         finally:
             attach_conn.close()
-        if preview_limited:
+        for item in items:
+            item["catalog_shortlisted"] = str(item.get("pipeline_status") or "") == "shortlisted"
+        if safe_catalog:
             items = [_sanitize_partnership_preview_item(item) for item in items]
         return jsonify({
             "success": True,
-            "count": preview_total_count if preview_limited else len(items),
+            "count": preview_total_count or len(items),
             "items": items,
             "access": access,
             "preview": {
-                "limited": preview_limited,
-                "visible_limit": 10,
-                "hidden_count": max(preview_total_count - len(items), 0),
+                "limited": False,
+                "visible_limit": limit,
+                "hidden_count": 0,
                 "required_tier": "professional",
                 "required_tier_name": "Привлечение",
             },
@@ -630,6 +628,55 @@ def partnership_update_lead(lead_id):
     except Exception as e:
         print(f"Error updating partnership lead: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+def partnership_catalog_shortlist(lead_id):
+    """Save a tenant-scoped catalog shortlist choice without opening outreach."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    requested_business_id = str(data.get("business_id") or "").strip() or None
+    selected = data.get("selected")
+    if not isinstance(selected, bool):
+        return jsonify({"error": "selected must be boolean"}), 400
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT id
+                FROM lead_workstreams
+                WHERE lead_id = %s
+                  AND client_business_id = %s
+                  AND workstream_type = 'client_partnership'
+                LIMIT 1
+                """,
+                (lead_id, business_id),
+            )
+            workstream = cur.fetchone()
+            if not workstream:
+                return jsonify({"error": "Lead not found"}), 404
+            updated = update_workstream(
+                conn,
+                workstream_id=str(workstream["id"]),
+                status="shortlisted" if selected else "unprocessed",
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({
+            "success": True,
+            "lead_id": lead_id,
+            "catalog_shortlisted": selected,
+            "workstream": _to_json_compatible(updated),
+        })
+    except Exception:
+        return internal_error_response("Не удалось обновить shortlist партнёров")
 
 
 def partnership_mark_lead_manual_contact(lead_id):

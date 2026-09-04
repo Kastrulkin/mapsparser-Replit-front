@@ -20,6 +20,16 @@ export interface BusinessCapabilityAccess {
   message: string | null;
 }
 
+export interface SubscriptionAccessPayload {
+  tier: string;
+  tier_name: string;
+  status: string;
+  active: boolean;
+  subscription_expired?: boolean;
+  capabilities: SubscriptionCapability[];
+  groups?: { maps?: boolean; acquisition?: boolean; management?: boolean };
+}
+
 const ACTIVE_STATUSES = new Set(['active', 'trialing']);
 const TIER_ALIASES: Record<string, string> = { basic: 'starter', pro: 'professional', enterprise: 'concierge' };
 const TIER_RANK: Record<string, number> = { starter: 1, professional: 2, concierge: 3, elite: 3, promo: 3 };
@@ -40,6 +50,25 @@ const isSubscriptionExpired = (value: unknown) => {
 };
 
 export const getCapabilityAccessForBusiness = (business: any, capability: SubscriptionCapability): BusinessCapabilityAccess => {
+  const serverAccess: SubscriptionAccessPayload | undefined = business?.subscription_access;
+  if (serverAccess && Array.isArray(serverAccess.capabilities)) {
+    const requiredTier = CAPABILITY_TIER[capability];
+    const requiredTierName: BusinessCapabilityAccess['requiredTierName'] = requiredTier === 'starter'
+      ? 'Карты'
+      : requiredTier === 'professional'
+        ? 'Привлечение'
+        : 'Управление';
+    const allowed = serverAccess.capabilities.includes(capability);
+    return {
+      allowed,
+      capability,
+      tier: serverAccess.tier || 'none',
+      tierName: serverAccess.tier_name || TIER_NAMES[serverAccess.tier] || 'Без тарифа',
+      requiredTier,
+      requiredTierName,
+      message: allowed ? null : `Функция входит в тариф «${requiredTierName}».`,
+    };
+  }
   const rawTier = String(business?.subscription_tier || '').trim().toLowerCase();
   const tier = TIER_ALIASES[rawTier] || rawTier || 'none';
   const status = String(business?.subscription_status || '').trim().toLowerCase();

@@ -133,6 +133,14 @@ MOBILE_ACTION_CAPABILITIES = {
     "services.": "maps.services",
     "community_sources.": "telegram_radar",
 }
+JOURNEY_FLOW_CAPABILITIES = {
+    "maps": "maps",
+    "content": "social_content",
+    "influencer": "influencers",
+    "partnership": "partnerships",
+    "automation": "automation",
+    "average_ticket": "average_ticket",
+}
 
 
 def _inline_scope_subscription_access(scope: dict) -> dict | None:
@@ -248,6 +256,33 @@ def _mobile_filter_payload_items(value, subscription_access: dict):
     return value
 
 
+def _decorate_mobile_journey_actions(payload: dict, subscription_access: dict) -> dict:
+    actions = payload.get("journey_actions") if isinstance(payload.get("journey_actions"), list) else []
+    decorated = []
+    for raw_action in actions:
+        if not isinstance(raw_action, dict):
+            continue
+        action = dict(raw_action)
+        capability = JOURNEY_FLOW_CAPABILITIES.get(str(action.get("flow_type") or ""), "management")
+        access = capability_access_payload(subscription_access, capability)
+        action["access"] = access
+        if not access.get("allowed"):
+            safe_commands = []
+            if action.get("action_type") == "configure_automation" and "save_configuration" in (action.get("allowed_commands") or []):
+                safe_commands.append("save_configuration")
+            safe_commands.append("open_upgrade")
+            action["allowed_commands"] = safe_commands
+            action["cta_label"] = access.get("cta_label")
+        decorated.append(action)
+    payload["journey_actions"] = decorated
+    if decorated and str((payload.get("focus_action") or {}).get("source") or "") == "lead_journey":
+        focus = dict(payload.get("focus_action") or {})
+        focus["cta_label"] = decorated[0].get("cta_label")
+        focus["access"] = decorated[0].get("access")
+        payload["focus_action"] = focus
+    return payload
+
+
 def _mobile_navigation(
     scope: dict,
     is_superadmin: bool = False,
@@ -295,6 +330,13 @@ def _mobile_navigation(
             item["billing_url"] = str((access.get("cta_target") or {}).get("url") or "")
             item["preview_available"] = not bool(access.get("allowed"))
             if not access.get("allowed"):
+                if item.get("key") in {"influencers", "partnerships"}:
+                    item["status"] = "available"
+                    item["reason"] = "Каталог и shortlist доступны. Сообщения и отправка требуют тариф «Привлечение»."
+                    item["available_actions"] = ["browse", "shortlist"]
+                    item["operations_access"] = access
+                    item["preview_available"] = False
+                    continue
                 item["status"] = "read_only"
                 item["reason"] = access.get("reason")
                 item["available_actions"] = []
@@ -2378,6 +2420,7 @@ def operator_mobile_today():
         payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
         subscription_access = _scope_subscription_access(cursor, scope, bool(user_data.get("is_superadmin")))
         payload = _mobile_filter_payload_items(payload, subscription_access)
+        payload = _decorate_mobile_journey_actions(payload, subscription_access)
         return jsonify({"success": True, **payload})
     finally:
         db.close()
@@ -2479,6 +2522,9 @@ def operator_progress():
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         if scope.get("kind") == "platform":
             return jsonify({"success": False, "error": "Выберите бизнес или сеть"}), 409
+        access = _scope_capability_access(cursor, scope, "progress", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            return _mobile_payment_required_response(access)
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
         return jsonify({"success": True, **payload})

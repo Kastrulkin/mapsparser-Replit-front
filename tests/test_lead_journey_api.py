@@ -211,8 +211,32 @@ def test_action_list_commits_map_reconciliation(monkeypatch):
     assert _Database.latest.conn.commits == 1
 
 
+def test_action_list_returns_locked_action_with_only_upgrade_command(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "list_actions",
+        lambda *_args, **_kwargs: [{
+            "id": "action-1",
+            "flow_type": "influencer",
+            "action_type": "send_message",
+            "allowed_commands": ["copy", "mark_sent"],
+            "cta_label": "Отправить",
+        }],
+    )
+
+    response = _app().test_client().get("/api/journey-actions?business_id=business-1")
+
+    assert response.status_code == 200
+    action = response.get_json()["actions"][0]
+    assert action["access"]["required_tier"] == "professional"
+    assert action["allowed_commands"] == ["open_upgrade"]
+    assert action["cta_target"]["url"] == "/dashboard/profile?focus=subscription#subscription"
+
+
 def test_action_command_forwards_version_idempotency_and_records_funnel_once(monkeypatch):
     _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "require_auth_from_request", lambda: {"user_id": "user-1", "is_superadmin": True})
     monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
     action = {
         "id": "action-1", "journey_id": "journey-1", "lead_id": "lead-1",
@@ -266,6 +290,76 @@ def test_influencer_message_command_is_blocked_without_payment(monkeypatch):
     assert response.get_json()["code"] == "payment_required"
 
 
+def test_maps_command_is_blocked_without_maps_subscription(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
+    action = {
+        "id": "action-1", "flow_type": "maps", "action_type": "refresh_data",
+        "entity_type": "card_audit", "entity_id": "audit-1",
+    }
+    monkeypatch.setattr(lead_journey_api, "load_action", lambda *_args, **_kwargs: action)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "execute_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("paid maps command must not run")),
+    )
+
+    response = _app().test_client().post(
+        "/api/journey-actions/action-1/commands",
+        json={"business_id": "business-1", "command": "complete", "version": 1, "surface": "web"},
+    )
+
+    assert response.status_code == 402
+    assert response.get_json()["capability"] == "maps"
+
+
+def test_send_and_reply_commands_are_blocked_without_acquisition_subscription(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
+    action = {
+        "id": "action-1", "flow_type": "influencer", "action_type": "send_message",
+        "entity_type": "creator_campaign", "entity_id": "campaign-1",
+    }
+    monkeypatch.setattr(lead_journey_api, "load_action", lambda *_args, **_kwargs: action)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "execute_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("paid outreach command must not run")),
+    )
+
+    client = _app().test_client()
+    for command in ("mark_sent", "record_reply"):
+        response = client.post(
+            "/api/journey-actions/action-1/commands",
+            json={"business_id": "business-1", "command": command, "version": 1, "surface": "web"},
+        )
+        assert response.status_code == 402
+        assert response.get_json()["capability"] == "influencers"
+
+
+def test_social_content_journey_requires_social_content_capability(monkeypatch):
+    _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
+    action = {
+        "id": "action-1", "flow_type": "content", "action_type": "prepare_content",
+        "entity_type": "content_plan_item", "entity_id": "item-1",
+    }
+    monkeypatch.setattr(lead_journey_api, "load_action", lambda *_args, **_kwargs: action)
+    monkeypatch.setattr(
+        lead_journey_api,
+        "execute_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("paid content command must not run")),
+    )
+
+    response = _app().test_client().post(
+        "/api/journey-actions/action-1/commands",
+        json={"business_id": "business-1", "command": "prepare", "version": 1, "surface": "web"},
+    )
+
+    assert response.status_code == 402
+    assert response.get_json()["capability"] == "social_content"
+
+
 def test_automation_configuration_is_free_but_preflight_requires_payment(monkeypatch):
     _enable_and_authorize(monkeypatch)
     monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
@@ -301,6 +395,7 @@ def test_automation_configuration_is_free_but_preflight_requires_payment(monkeyp
 
 def test_idempotent_action_replay_does_not_duplicate_product_event(monkeypatch):
     _enable_and_authorize(monkeypatch)
+    monkeypatch.setattr(lead_journey_api, "require_auth_from_request", lambda: {"user_id": "user-1", "is_superadmin": True})
     monkeypatch.setattr(lead_journey_api, "journey_flow_enabled", lambda _flow: True)
     action = {"id": "action-1", "flow_type": "influencer", "entity_type": "creator_collaboration"}
     monkeypatch.setattr(lead_journey_api, "load_action", lambda *_args, **_kwargs: action)

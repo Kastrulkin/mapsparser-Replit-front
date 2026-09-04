@@ -851,10 +851,16 @@ def build_growth_paths(*, actions: list[dict[str, Any]], capabilities: set[str])
             "screen": "progress",
         },
         "content": {
-            "title": "Контент",
+            "title": "Контент для соцсетей",
             "opportunity": "Подготовьте полезную публикацию и проведите её до измеримого результата.",
             "cta_label": "Открыть контент",
             "screen": "content",
+        },
+        "maps_content": {
+            "title": "Контент для карточек",
+            "opportunity": "Готовьте новости для карт и поддерживайте профиль бизнеса актуальным.",
+            "cta_label": "Открыть новости для карт",
+            "screen": "card_news",
         },
         "influencer": {
             "title": "Инфлюенсеры",
@@ -883,7 +889,8 @@ def build_growth_paths(*, actions: list[dict[str, Any]], capabilities: set[str])
     }
     required_capabilities = {
         "maps": "maps",
-        "content": "maps.news",
+        "content": "social_content",
+        "maps_content": "maps.news",
         "influencer": "influencers",
         "partnership": "partnerships",
         "automation": "automation",
@@ -891,7 +898,8 @@ def build_growth_paths(*, actions: list[dict[str, Any]], capabilities: set[str])
     }
     required_tiers = {
         "maps": ("starter", "Карты"),
-        "content": ("starter", "Карты"),
+        "content": ("concierge", "Управление"),
+        "maps_content": ("starter", "Карты"),
         "influencer": ("professional", "Привлечение"),
         "partnership": ("professional", "Привлечение"),
         "automation": ("concierge", "Управление"),
@@ -903,7 +911,7 @@ def build_growth_paths(*, actions: list[dict[str, Any]], capabilities: set[str])
         if flow_type in copy and flow_type not in active_by_flow:
             active_by_flow[flow_type] = action
     result: list[dict[str, Any]] = []
-    for flow_type in ("maps", "content", "influencer", "partnership", "automation", "average_ticket"):
+    for flow_type in ("maps", "maps_content", "content", "influencer", "partnership", "automation", "average_ticket"):
         base = copy[flow_type]
         action = active_by_flow.get(flow_type)
         requires_payment = required_capabilities[flow_type] not in capabilities

@@ -108,6 +108,11 @@ def test_partnership_preview_drops_nested_contacts_and_operational_evidence():
         }],
         "contact_points": [{"value": "hidden@example.com"}],
         "selected_recipient": {"value": "+79990000000"},
+        "phone": "+79990000000",
+        "email": "hidden@example.com",
+        "telegram_url": "https://t.me/hidden",
+        "website": "https://private-contact.example",
+        "draft_text": "Закрытое письмо",
         "next_action": {"type": "send"},
     })
 

@@ -8,7 +8,7 @@ def test_creator_automation_gate_requires_payment(monkeypatch):
     monkeypatch.setattr(
         creator_promotion_api,
         "get_capability_access",
-        lambda _business_id, _capability: {
+        lambda _business_id, _capability, _is_superadmin=False: {
             "status": "payment_required",
             "reason": "Требуется тариф «Привлечение».",
             "cta_label": "Выбрать тариф",

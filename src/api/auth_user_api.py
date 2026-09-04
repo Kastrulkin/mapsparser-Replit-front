@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 from auth_system import logout_session, verify_session
 from core.browser_session import browser_cookie_auth_enabled, clear_browser_session
 from database_manager import DatabaseManager
+from subscription_manager import build_subscription_capabilities
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ def _creator_promotion_available_for_business(business_id):
     return not configured or str(business_id or "") in configured
 
 
-def _attach_business_capabilities(businesses):
+def _attach_business_capabilities(businesses, *, is_superadmin=False):
     result = []
     for business in businesses:
         business_payload = dict(business)
@@ -94,6 +95,12 @@ def _attach_business_capabilities(businesses):
         )
         business_payload["creator_promotion_available"] = _creator_promotion_available_for_business(
             _safe_get(business, "id")
+        )
+        business_payload["subscription_access"] = build_subscription_capabilities(
+            tier=str(_safe_get(business, "subscription_tier", "") or ""),
+            status=str(_safe_get(business, "subscription_status", "") or ""),
+            subscription_ends_at=_safe_get(business, "subscription_ends_at"),
+            is_superadmin=bool(is_superadmin),
         )
         result.append(business_payload)
     return result
@@ -133,7 +140,7 @@ def get_user_info():
         if session_kind == "demo":
             businesses = _filter_demo_businesses(businesses, scope_business_id)
 
-        businesses = _attach_business_capabilities(businesses)
+        businesses = _attach_business_capabilities(businesses, is_superadmin=is_superadmin)
 
         if not is_superadmin and len(businesses) == 0:
             db.close()

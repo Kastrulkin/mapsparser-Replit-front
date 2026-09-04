@@ -49,9 +49,9 @@ describe('InfluencersPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Анна про Петербург' })).toBeInTheDocument();
     expect(screen.getByText(/Публичный обзор салона/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Выбрать' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'В shortlist' })).toBeEnabled();
 
-    await user.click(screen.getByRole('tab', { name: 'Сообщения' }));
+    await user.click(screen.getByRole('tab', { name: 'Предложение' }));
     expect(await screen.findByText('Подготовка сообщений доступна после оплаты.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');
   });

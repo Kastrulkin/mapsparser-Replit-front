@@ -35,6 +35,17 @@ def test_inactive_and_expired_subscriptions_only_receive_preview():
     assert capabilities('professional', ends_at=datetime.now() - timedelta(minutes=1)) == set()
 
 
+def test_trialing_paid_tier_and_legacy_aliases_keep_their_capabilities():
+    assert 'influencers' in capabilities('professional', 'trialing')
+    assert capabilities('basic') == capabilities('starter')
+    assert capabilities('pro') == capabilities('professional')
+    assert capabilities('enterprise') == capabilities('concierge')
+
+
+def test_legacy_paid_tier_preserves_preexisting_paid_access():
+    assert capabilities('paid') == capabilities('concierge')
+
+
 def test_superadmin_bypasses_subscription_state():
     assert 'management' in capabilities('trial', 'inactive', is_superadmin=True)
 

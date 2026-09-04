@@ -55,13 +55,12 @@ TIERS = {
         'features': ['chatgpt', 'personal_cabinet']
     },
     'starter': {
-        # Starter (Начальный) - 5$ или 400₽
-        'price_id': 'price_1Sh4wZFtze6qZAEfkLuuUqVV',  # Нужно обновить в Stripe
-        'amount': 500,  # $5.00 в центах (400₽ ≈ $4.5)
-        'name': 'Starter (Начальный)',
-        'display_name': 'Starter',
-        'display_price_usd': 5,
-        'display_price_rub': 400,
+        'price_id': os.getenv('STRIPE_STARTER_PRICE_ID', ''),
+        'amount': 1500,
+        'name': 'Maps',
+        'display_name': 'Maps',
+        'display_price_usd': 15,
+        'display_price_rub': 1200,
         'features': [
             'Подключение к профессиональной сети BeautyBot',
             'ChatGPT для лидогенерации',
@@ -69,8 +68,8 @@ TIERS = {
     },
     'professional': {
         # Professional (Профессиональный) - 5000₽
-        'price_id': 'price_1Sh4xqFtze6qZAEfFy3DvFXJ',  # Нужно обновить в Stripe
-        'amount': 5500,  # $55.00 в центах (5000₽ ≈ $55)
+        'price_id': os.getenv('STRIPE_PROFESSIONAL_PRICE_ID', ''),
+        'amount': 5500,
         'name': 'Professional (Профессиональный)',
         'display_name': 'Профессиональный',
         'display_price_usd': 55,
@@ -84,11 +83,11 @@ TIERS = {
     },
     'concierge': {
         # Concierge (Консьерж) - 25000₽
-        'price_id': 'price_1Sh4zyFtze6qZAEftqNTRZoD',  # Нужно обновить в Stripe
-        'amount': 27500,  # $275.00 в центах (25000₽ ≈ $275)
+        'price_id': os.getenv('STRIPE_CONCIERGE_PRICE_ID', ''),
+        'amount': 31000,
         'name': 'Concierge (Консьерж)',
         'display_name': 'Консьерж',
-        'display_price_usd': 275,
+        'display_price_usd': 310,
         'display_price_rub': 25000,
         'features': [
             'Мы делаем всё за вас',

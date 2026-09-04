@@ -9,6 +9,23 @@ const business = (subscription_tier: string, subscription_status = 'active', sub
 });
 
 describe('subscription capability matrix', () => {
+  it('uses the backend capability contract when it is present', () => {
+    const payload = {
+      subscription_tier: 'concierge',
+      subscription_status: 'active',
+      subscription_access: {
+        tier: 'starter',
+        tier_name: 'Карты',
+        status: 'active',
+        active: true,
+        capabilities: ['maps', 'maps.news'],
+      },
+    };
+
+    expect(getCapabilityAccessForBusiness(payload, 'maps.news').allowed).toBe(true);
+    expect(getCapabilityAccessForBusiness(payload, 'influencers').allowed).toBe(false);
+  });
+
   it('opens maps, radar and web analytics on Maps', () => {
     expect(getCapabilityAccessForBusiness(business('starter'), 'maps').allowed).toBe(true);
     expect(getCapabilityAccessForBusiness(business('starter'), 'maps.services').allowed).toBe(true);

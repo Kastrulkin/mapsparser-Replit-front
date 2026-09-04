@@ -9,7 +9,12 @@ from datetime import datetime
 SUPERADMIN_EMAIL = 'demyanovap@yandex.ru'
 
 ACTIVE_SUBSCRIPTION_STATUSES = {'active', 'trialing'}
-TIER_ALIASES = {'basic': 'starter', 'pro': 'professional', 'enterprise': 'concierge'}
+TIER_ALIASES = {
+    'basic': 'starter',
+    'pro': 'professional',
+    'enterprise': 'concierge',
+    'paid': 'concierge',
+}
 MAPS_CAPABILITIES = {
     'maps', 'maps.audit', 'maps.services', 'maps.reviews', 'maps.news',
     'maps.photos', 'maps.competitors', 'progress', 'telegram_radar', 'web_analytics',

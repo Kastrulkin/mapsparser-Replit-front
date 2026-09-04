@@ -364,10 +364,14 @@ def test_growth_paths_follow_capability_matrix():
 
     paths = build_growth_paths(actions=actions, capabilities={"maps", "maps.news", "progress"})
 
-    assert [item["flow_type"] for item in paths] == ["maps", "content", "influencer", "partnership", "automation", "average_ticket"]
+    assert [item["flow_type"] for item in paths] == ["maps", "maps_content", "content", "influencer", "partnership", "automation", "average_ticket"]
+    maps_content = next(item for item in paths if item["flow_type"] == "maps_content")
     content = next(item for item in paths if item["flow_type"] == "content")
     influencer = next(item for item in paths if item["flow_type"] == "influencer")
-    assert content["access"]["status"] == "available"
+    assert content["access"]["status"] == "payment_required"
+    assert content["access"]["required_tier"] == "concierge"
+    assert maps_content["access"]["status"] == "available"
+    assert maps_content["access"]["cta_target"]["screen"] == "card_news"
     assert influencer["action"]["id"] == "action-1"
     assert influencer["access"]["status"] == "payment_required"
     automation = next(item for item in paths if item["flow_type"] == "automation")

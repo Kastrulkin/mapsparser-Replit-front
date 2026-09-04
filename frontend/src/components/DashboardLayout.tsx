@@ -3,7 +3,7 @@ import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardHeader } from './DashboardHeader';
 import { useState, useEffect, useCallback } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
-import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
+import { getCapabilityAccessForBusiness, type SubscriptionAccessPayload, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
 
 type DashboardBusiness = {
@@ -16,6 +16,7 @@ type DashboardBusiness = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
   subscription_ends_at?: string | null;
+  subscription_access?: SubscriptionAccessPayload;
   network_id?: string | null;
   network_name?: string | null;
   web_tracking_available?: boolean;
@@ -31,6 +32,7 @@ export type ControlScope = {
 type PaidDashboardSection = { path: string; capability: SubscriptionCapability; title: string; hint: string; previewItems: string[]; nextAction: string };
 
 const paidDashboardSections: PaidDashboardSection[] = [
+  { path: '/dashboard/progress', capability: 'progress', title: 'Прогресс входит в тариф «Карты»', hint: 'Недельные задачи, повторная проверка и сравнение результата открываются на тарифе «Карты».', previewItems: ['Одна приоритетная задача', 'Прогресс недели', 'Сравнение до и после'], nextAction: 'После оплаты вы вернётесь к текущей задаче.' },
   { path: '/dashboard/card', capability: 'maps', title: 'Работа с картами входит в тариф «Карты»', hint: 'Аудит, услуги, отзывы, фото и новости для карточки открываются на тарифе «Карты».', previewItems: ['Проверка заполненности и свежести карточки', 'Сводка отзывов и услуг', 'План первых улучшений'], nextAction: 'Добавьте ссылку на карты, чтобы после оплаты сразу запустить аудит.' },
   { path: '/dashboard/web-analytics', capability: 'web_analytics', title: 'Аналитика сайта входит в тариф «Карты»', hint: 'Установите tracker-скрипт и получите первые события поведения пользователей.', previewItems: ['Посещения и источники трафика', 'Звонки, формы и переходы в мессенджеры', 'Статус подключения tracker-скрипта'], nextAction: 'После подключения главным шагом будет установка скрипта на сайт.' },
   { path: '/dashboard/finance', capability: 'finance', title: 'Финансы входят в тариф «Управление»', hint: 'Импорт, показатели и рекомендации по выручке доступны на старшем тарифе.', previewItems: ['Выручка, расходы и маржа', 'Динамика по периодам', 'Точки, где бизнес теряет деньги'], nextAction: 'После оплаты вы вернётесь сюда и загрузите первые продажи.' },

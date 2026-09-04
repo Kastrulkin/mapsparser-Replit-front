@@ -31,7 +31,33 @@ describe('InfluencersMobileModule', () => {
     expect(await screen.findByRole('heading', { name: 'Анна про Петербург' })).toBeInTheDocument();
     expect(screen.getByText('4 200')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', expect.stringContaining('screen%3Dinfluencers'));
-    await user.click(screen.getByRole('button', { name: 'Выбрать' }));
+    await user.click(screen.getByRole('button', { name: 'В shortlist' }));
     expect(fetch).toHaveBeenCalledWith('/api/promotion/influencers/search-results/result-1', expect.objectContaining({ method: 'PATCH' }));
+  });
+
+  it('shortlists a shared catalog creator through the profile disposition endpoint', async () => {
+    const catalogResponse = {
+      ...responseBody,
+      workspace: {
+        ...responseBody.workspace,
+        creators: [{
+          ...responseBody.workspace.creators[0],
+          id: 'creator-public-1',
+          result_id: 'catalog:creator-public-1',
+          display_name: 'Публичный автор',
+        }],
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(catalogResponse), { status: 200, headers: { 'Content-Type': 'application/json' } }))));
+    const user = userEvent.setup();
+
+    render(<InfluencersMobileModule scope={{ kind: 'business', id: 'business-1', name: 'Салон' }} />);
+
+    expect(await screen.findByRole('heading', { name: 'Публичный автор' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'В shortlist' }));
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/promotion/influencers/catalog/creator-public-1/disposition',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
   });
 });

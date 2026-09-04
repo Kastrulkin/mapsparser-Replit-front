@@ -1,26 +1,11 @@
 """Partnership lead lifecycle routes."""
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint
 
 from services import partnership_leads_service as service
-from subscription_manager import get_capability_access
 
 partnership_leads_bp = Blueprint("partnership_leads_api", __name__)
-
-
-@partnership_leads_bp.before_request
-def require_partnership_mutation_access():
-    if request.method == 'GET':
-        return None
-    payload = request.get_json(silent=True) or {}
-    business_id = str(payload.get('business_id') or request.args.get('business_id') or '').strip()
-    if not business_id:
-        return None
-    access = get_capability_access(business_id, 'partnerships')
-    if access.get('allowed'):
-        return None
-    return jsonify({'success': False, 'error': 'payment_required', **access, 'return_to': request.full_path.rstrip('?')}), 402
 
 @partnership_leads_bp.route('/api/partnership/leads', methods=['GET'])
 def partnership_list_leads():
@@ -29,6 +14,11 @@ def partnership_list_leads():
 @partnership_leads_bp.route('/api/partnership/leads/<string:lead_id>', methods=['PATCH'])
 def partnership_update_lead(lead_id):
     return service.partnership_update_lead(lead_id)
+
+
+@partnership_leads_bp.route('/api/partnership/leads/<string:lead_id>/shortlist', methods=['POST'])
+def partnership_catalog_shortlist(lead_id):
+    return service.partnership_catalog_shortlist(lead_id)
 
 @partnership_leads_bp.route('/api/partnership/leads/<string:lead_id>/manual-contact', methods=['POST'])
 def partnership_mark_lead_manual_contact(lead_id):

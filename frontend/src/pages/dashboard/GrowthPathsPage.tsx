@@ -7,7 +7,7 @@ import { newAuth } from '@/lib/auth_new';
 import { journeyActionRoute, type JourneyAction } from '@/lib/leadJourney';
 import { cn } from '@/lib/utils';
 
-type GrowthFlow = 'maps' | 'content' | 'influencer' | 'partnership' | 'automation' | 'average_ticket';
+type GrowthFlow = 'maps' | 'maps_content' | 'content' | 'influencer' | 'partnership' | 'automation' | 'average_ticket';
 
 type GrowthPath = {
   flow_type: GrowthFlow;
@@ -26,7 +26,8 @@ type GrowthPathsResponse = {
 
 const pathMeta = {
   maps: { title: 'Больше клиентов из карт', icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
-  content: { title: 'Контент без рутины', icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
+  maps_content: { title: 'Контент для карточек', icon: FileText, tone: 'bg-cyan-50 text-cyan-700 ring-cyan-100', route: '/dashboard/card?tab=news&mode=plan' },
+  content: { title: 'Контент для соцсетей', icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
   influencer: { title: 'Инфлюенсеры рядом', icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
   partnership: { title: 'Партнёры рядом', icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
   automation: { title: 'Автоматизировать работу', icon: Bot, tone: 'bg-orange-50 text-orange-700 ring-orange-100', route: '/dashboard/agents' },

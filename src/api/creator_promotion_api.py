@@ -73,9 +73,14 @@ def require_promotion_pilot():
     feature_gate = _require_capability(business_id, "promotion_hub")
     if feature_gate:
         return feature_gate
-    if request.endpoint in {"creator_promotion.workspace", "creator_promotion.catalog"}:
+    if request.endpoint in {
+        "creator_promotion.workspace",
+        "creator_promotion.catalog",
+        "creator_promotion.catalog_disposition_update",
+    }:
         return None
-    access = get_capability_access(business_id, "influencers")
+    user_data = require_auth_from_request() or {}
+    access = get_capability_access(business_id, "influencers", bool(user_data.get("is_superadmin")))
     if access.get("allowed"):
         return None
     return jsonify({
@@ -124,10 +129,10 @@ def _require_capability(business_id: str, capability: str):
     return None
 
 
-def _require_creator_automation(cursor: Any, business_id: str):
-    if creator_automation_allowed(cursor, business_id):
+def _require_creator_automation(cursor: Any, business_id: str, user_data: dict[str, Any] | None = None):
+    if bool((user_data or {}).get("is_superadmin")) or creator_automation_allowed(cursor, business_id):
         return None
-    access = get_capability_access(business_id, "influencers")
+    access = get_capability_access(business_id, "influencers", bool((user_data or {}).get("is_superadmin")))
     return jsonify({"success": False, "error": "payment_required", **access, "return_to": request.full_path.rstrip("?")}), 402
 
 
@@ -198,26 +203,16 @@ def workspace():
             "contactable": request.args.get("contactable"),
         }
         if distribution_enabled(business_id):
-            influencer_access = get_capability_access(business_id, "influencers")
-            limited_preview = not influencer_access.get("allowed")
             if str(filters.get("shortlisted") or "").lower() in {"1", "true", "yes", "on"}:
                 filters["disposition"] = "shortlisted"
             catalog_result = list_catalog(
                 cursor,
                 business_id=business_id,
-                filters={} if limited_preview else filters,
-                limit=10 if limited_preview else limit,
-                offset=0 if limited_preview else offset,
+                filters=filters,
+                limit=limit,
+                offset=offset,
             )
-            if limited_preview:
-                catalog_result["preview"] = {
-                    "limited": True,
-                    "visible_limit": 10,
-                    "hidden_count": max(0, int(catalog_result["counts"]["total"]) - len(catalog_result["creators"])),
-                    "required_tier": "professional",
-                    "required_tier_name": "Привлечение",
-                }
-                catalog_result["cursor"] = None
+            catalog_result["preview"] = {"limited": False, "hidden_count": 0}
             catalog_result["feature_state"] = {**creator_feature_state(business_id), "offer_distribution": True}
             catalog_result["next_action"] = "Отметьте приоритетных авторов или создайте предложение"
             return jsonify({"success": True, "workspace": catalog_result})
@@ -651,7 +646,7 @@ def candidate_prepare_outreach(campaign_id: str, candidate_id: str):
         return error
     business_id = _business_id(payload)
     try:
-        access_gate = _require_creator_automation(cursor, business_id)
+        access_gate = _require_creator_automation(cursor, business_id, user_data)
         if access_gate:
             return access_gate
         gate = _require_capability(business_id, "outreach")
@@ -679,12 +674,12 @@ def candidate_prepare_outreach(campaign_id: str, candidate_id: str):
 
 @creator_promotion_bp.get("/campaigns/<campaign_id>/candidates/<candidate_id>/outreach-preview")
 def candidate_outreach_preview(campaign_id: str, candidate_id: str):
-    db, cursor, _user_data, error = _authorized_cursor()
+    db, cursor, user_data, error = _authorized_cursor()
     if error:
         return error
     business_id = _business_id()
     try:
-        access_gate = _require_creator_automation(cursor, business_id)
+        access_gate = _require_creator_automation(cursor, business_id, user_data)
         if access_gate:
             return access_gate
         preview = preview_candidate_outreach(
@@ -708,7 +703,7 @@ def candidate_contact_confirm(campaign_id: str, candidate_id: str):
         return error
     business_id = _business_id(payload)
     try:
-        access_gate = _require_creator_automation(cursor, business_id)
+        access_gate = _require_creator_automation(cursor, business_id, user_data)
         if access_gate:
             return access_gate
         gate = _require_capability(business_id, "outreach")

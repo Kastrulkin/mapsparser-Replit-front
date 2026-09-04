@@ -8,6 +8,7 @@ from core.api_errors import internal_error_response
 from progress_calculator import calculate_business_progress
 from core.card_audit import build_card_audit_snapshot
 from core.map_url_normalizer import normalize_map_url
+from subscription_manager import get_capability_access
 
 progress_bp = Blueprint('progress_api', __name__)
 
@@ -49,6 +50,16 @@ def require_auth():
     token = auth_header.split(' ')[1]
     return verify_session(token)
 
+
+def _payment_required_response(access):
+    return jsonify({
+        "success": False,
+        "error": "payment_required",
+        "payment_required": True,
+        **access,
+        "return_to": request.full_path.rstrip("?"),
+    }), 402
+
 @progress_bp.route('/api/business/<business_id>/progress', methods=['GET'])
 def get_business_progress(business_id):
     """Получить прогресс выполнения этапов роста для бизнеса"""
@@ -68,6 +79,11 @@ def get_business_progress(business_id):
         if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        access = get_capability_access(business_id, "progress", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            db.close()
+            return _payment_required_response(access)
         
         db.close()
         
@@ -101,6 +117,11 @@ def get_business_card_audit(business_id):
         if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        access = get_capability_access(business_id, "maps.audit", bool(user_data.get("is_superadmin")))
+        if not access.get("allowed"):
+            db.close()
+            return _payment_required_response(access)
 
         db.close()
 

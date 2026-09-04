@@ -13,7 +13,7 @@ const response = (payload: unknown) => Promise.resolve(new Response(JSON.stringi
 describe('PartnershipsMobileModule destructive actions', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('shows the safe acquisition preview without loading private workflow data', async () => {
+  it('shows the complete safe catalog and shortlist without loading private workflow data', async () => {
     const calls: string[] = [];
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
@@ -23,19 +23,24 @@ describe('PartnershipsMobileModule destructive actions', () => {
           count: 42,
           items: [{ id: 'lead-preview-1', name: 'Публичный партнёр', city: 'Москва', rating: 4.8, reviews_count: 120 }],
           access: { allowed: false, required_tier_name: 'Привлечение' },
-          preview: { limited: true, visible_limit: 10, hidden_count: 41, required_tier_name: 'Привлечение' },
+          preview: { limited: false, visible_limit: 200, hidden_count: 0, required_tier_name: 'Привлечение' },
         });
       }
+      if (url === '/api/partnership/leads/lead-preview-1/shortlist') return response({ success: true, catalog_shortlisted: true });
       return response({ success: false, error: 'private_endpoint_must_not_be_called' });
     });
     vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
 
     render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
 
-    expect(await screen.findByText('Первые подходящие партнёры уже найдены')).toBeInTheDocument();
+    expect(await screen.findByText('Выберите партнёров с похожей аудиторией')).toBeInTheDocument();
     expect(screen.getByText('Публичный партнёр')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Открыть полный подбор/ })).toHaveAttribute('href', expect.stringContaining('screen%3Dpartnerships'));
-    expect(calls).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /Подготовить сообщения/ })).toHaveAttribute('href', expect.stringContaining('screen%3Dpartnerships'));
+    await user.click(screen.getByRole('button', { name: 'Добавить' }));
+    expect(await screen.findByRole('button', { name: 'В shortlist' })).toBeInTheDocument();
+    expect(calls).toEqual(expect.arrayContaining(['/api/partnership/leads/lead-preview-1/shortlist']));
+    expect(calls.filter((url) => !url.includes('/shortlist'))).toHaveLength(1);
   });
 
   it('creates an Operator preview before deleting a partnership candidate', async () => {

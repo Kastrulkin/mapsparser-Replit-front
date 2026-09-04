@@ -147,11 +147,12 @@ def test_influencer_workspace_exposes_safe_cards_and_block_level_access(monkeypa
     assert workspace["creators"][0]["audience_count"] == 4200
     assert workspace["creators"][0]["public_url"] == "https://t.me/anna_spb"
     assert "preferred_contact" not in workspace["creators"][0]
-    assert workspace["access"]["discovery"]["status"] == "payment_required"
+    assert workspace["access"]["discovery"]["status"] == "available"
+    assert workspace["access"]["offer"]["status"] == "available"
     assert workspace["access"]["message_generation"]["status"] == "payment_required"
 
 
-def test_influencer_preview_is_stable_and_cannot_enumerate_hidden_cards(monkeypatch):
+def test_registered_influencer_catalog_is_complete_filterable_and_contact_safe(monkeypatch):
     results = [
         {
             "id": f"result-{index}",
@@ -173,16 +174,17 @@ def test_influencer_preview_is_stable_and_cannot_enumerate_hidden_cards(monkeypa
     monkeypatch.setattr(services.creator_promotion_service, "creator_automation_allowed", lambda _cursor, _business_id: False)
     monkeypatch.setattr(services.creator_promotion_service, "creator_feature_state", lambda _business_id: {"promotion_hub": True, "discovery": True})
 
-    initial_preview = influencer_workspace(None, business_id="business-1", limit=100)
-    preview = influencer_workspace(None, business_id="business-1", limit=100, offset=100)
-    hidden_filter = influencer_workspace(None, business_id="business-1", filters={"platform": "youtube"})
+    catalog = influencer_workspace(None, business_id="business-1", limit=100)
+    page_after_end = influencer_workspace(None, business_id="business-1", limit=100, offset=100)
+    youtube_filter = influencer_workspace(None, business_id="business-1", filters={"platform": "youtube"})
 
-    assert len(initial_preview["creators"]) == 10
-    assert all("preferred_contact" not in card for card in initial_preview["creators"])
-    assert preview["creators"] == []
-    assert preview["cursor"] is None
-    assert preview["preview"]["hidden_count"] == 5
-    assert hidden_filter["creators"] == []
+    assert len(catalog["creators"]) == 15
+    assert all("preferred_contact" not in card for card in catalog["creators"])
+    assert page_after_end["creators"] == []
+    assert page_after_end["cursor"] is None
+    assert catalog["preview"]["limited"] is False
+    assert catalog["preview"]["hidden_count"] == 0
+    assert len(youtube_filter["creators"]) == 5
 
 
 def test_influencer_workspace_loads_without_existing_offer(monkeypatch):
@@ -194,6 +196,9 @@ def test_influencer_workspace_loads_without_existing_offer(monkeypatch):
         def fetchone(self):
             return None
 
+        def fetchall(self):
+            return []
+
     monkeypatch.setattr(services.creator_promotion_service, "_load_business", lambda _cursor, _business_id: {"id": "business-1"})
     monkeypatch.setattr(services.creator_promotion_service, "list_search_jobs", lambda _cursor, _business_id: [])
     monkeypatch.setattr(services.creator_promotion_service, "list_campaigns", lambda _cursor, _business_id: [])
@@ -204,6 +209,41 @@ def test_influencer_workspace_loads_without_existing_offer(monkeypatch):
 
     assert workspace["offer"] == {}
     assert workspace["counts"] == {"total": 0, "returned": 0, "shortlisted": 0}
+
+
+def test_registered_business_without_search_job_still_gets_public_creator_catalog(monkeypatch):
+    class PublicCatalogCursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def fetchone(self):
+            return None
+
+        def fetchall(self):
+            return [{
+                "id": "creator-public-1",
+                "creator_profile_id": "creator-public-1",
+                "display_name": "Публичный автор",
+                "description": "Рассказывает о локальных местах",
+                "platform": "telegram",
+                "canonical_url": "https://t.me/public_creator",
+                "primary_city": "Санкт-Петербург",
+                "public_metrics": {"subscribers": 3200},
+                "score": 75,
+                "reasons": ["Пишет о локальных местах"],
+            }]
+
+    monkeypatch.setattr(services.creator_promotion_service, "_load_business", lambda _cursor, _business_id: {"id": "business-1"})
+    monkeypatch.setattr(services.creator_promotion_service, "list_search_jobs", lambda _cursor, _business_id: [])
+    monkeypatch.setattr(services.creator_promotion_service, "list_campaigns", lambda _cursor, _business_id: [])
+    monkeypatch.setattr(services.creator_promotion_service, "creator_automation_allowed", lambda _cursor, _business_id: False)
+    monkeypatch.setattr(services.creator_promotion_service, "creator_feature_state", lambda _business_id: {"promotion_hub": True, "discovery": True})
+
+    workspace = influencer_workspace(PublicCatalogCursor(), business_id="business-1")
+
+    assert workspace["counts"]["total"] == 1
+    assert workspace["creators"][0]["display_name"] == "Публичный автор"
+    assert "preferred_contact" not in workspace["creators"][0]
 
 
 def test_creator_score_is_weighted_explainable_and_versioned():

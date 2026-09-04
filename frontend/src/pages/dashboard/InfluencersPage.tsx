@@ -16,7 +16,6 @@ import {
 } from '@/features/influencers/influencerWorkspace';
 import { newAuth } from '@/lib/auth_new';
 import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
-import { getCapabilityAccessForBusiness } from '@/lib/subscriptionAccess';
 import { cn } from '@/lib/utils';
 
 type InfluencerContext = {
@@ -135,13 +134,7 @@ export const InfluencersPage = () => {
   const location = [currentBusiness?.city, workspace?.latest_search?.brief?.area].filter((value) => typeof value === 'string' && value.trim()).join(' · ');
 
   const filterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
-  const influencerAccess = getCapabilityAccessForBusiness(currentBusiness, 'influencers');
-
   if (!currentBusinessId) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Выберите бизнес, чтобы открыть подбор авторов.</div>;
-
-  if (workspace?.preview?.limited) {
-    return <div className="mx-auto max-w-7xl space-y-6 pb-12"><DashboardPageHeader eyebrow="Превью · тариф «Привлечение»" title="Инфлюенсеры рядом" description={`Сейчас: ${influencerAccess.tierName}. Видны 10 стабильных публичных карточек; полный подбор и действия откроются после повышения.`} icon={Megaphone} /><section className="rounded-[24px] bg-emerald-50 p-5 text-sm leading-6 text-emerald-950 ring-1 ring-emerald-200"><strong>Уже доступно:</strong> публичное preview и общее число авторов. <strong>После повышения:</strong> фильтры, shortlist, сообщения, размещения и результаты.</section>{error ? <div role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-900 ring-1 ring-rose-200">{error}</div> : null}<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Превью каталога инфлюенсеров">{creators.map((creator) => <div key={creator.result_id} className="pointer-events-none select-none"><InfluencerCreatorCard creator={creator} onToggleShortlist={() => undefined} /></div>)}</div><section className="overflow-hidden rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] sm:p-6"><div className="relative h-28 overflow-hidden rounded-[20px] bg-slate-100" aria-hidden="true"><div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 blur-[7px]"><span className="rounded-2xl bg-white" /><span className="rounded-2xl bg-white" /><span className="rounded-2xl bg-white" /></div></div><div className="relative -mt-4 rounded-[20px] bg-white p-5 text-center ring-1 ring-slate-200"><h2 className="text-xl font-semibold text-slate-950">Ещё {workspace.preview.hidden_count || 0} авторов</h2><p className="mt-2 text-sm leading-6 text-slate-600">Скрытые карточки, контакты и evidence не загружаются в браузер. После оплаты вы вернётесь сюда.</p><Link to="/dashboard/profile?focus=subscription&tier=professional#subscription" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">Открыть полный подбор — «Привлечение»</Link></div></section></div>;
-  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
