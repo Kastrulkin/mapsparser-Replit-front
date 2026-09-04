@@ -158,7 +158,11 @@ def create_stripe_checkout_for_checkout_session(session_id: str) -> Dict[str, An
     if not price_id:
         raise RuntimeError(f"Для тарифа '{stripe_tier}' не настроен price_id")
 
-    frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
+    frontend_base = (
+        os.getenv("FRONTEND_BASE_URL")
+        or os.getenv("FRONTEND_URL")
+        or "http://localhost:8000"
+    ).rstrip("/")
     success_url = f"{frontend_base}/checkout/return?session_id={session_id}&provider=stripe"
     cancel_url = f"{frontend_base}/checkout/return?session_id={session_id}&provider=stripe&status=cancelled"
     metadata = {

@@ -112,6 +112,48 @@ def test_create_stripe_checkout_for_checkout_session_uses_checkout_metadata(monk
     assert marked["provider_invoice_id"] == "cs_test_1"
 
 
+def test_stripe_checkout_uses_the_configured_production_frontend_url(monkeypatch) -> None:
+    created = {}
+
+    monkeypatch.delenv("FRONTEND_BASE_URL", raising=False)
+    monkeypatch.setenv("FRONTEND_URL", "https://localos.pro")
+    monkeypatch.setattr(stripe_integration, "STRIPE_SECRET_KEY", "sk_test")
+    monkeypatch.setitem(stripe_integration.TIERS["starter"], "price_id", "price_starter_test")
+    monkeypatch.setattr(
+        stripe_integration,
+        "load_checkout_session",
+        lambda session_id: {
+            "id": session_id,
+            "tariff_id": "starter",
+            "entry_point": "registered_paywall",
+            "email": "owner@example.com",
+        },
+    )
+    monkeypatch.setattr(stripe_integration, "mark_checkout_created", lambda *args, **kwargs: None)
+
+    class _FakeStripeSessionApi:
+        @staticmethod
+        def create(**kwargs):
+            created.update(kwargs)
+            return SimpleNamespace(
+                id="cs_test_return_url",
+                url="https://stripe.test/checkout",
+                status="open",
+                payment_status="unpaid",
+            )
+
+    monkeypatch.setattr(
+        stripe_integration,
+        "stripe",
+        SimpleNamespace(checkout=SimpleNamespace(Session=_FakeStripeSessionApi)),
+    )
+
+    stripe_integration.create_stripe_checkout_for_checkout_session("checkout-return-url")
+
+    assert created["success_url"].startswith("https://localos.pro/")
+    assert created["cancel_url"].startswith("https://localos.pro/")
+
+
 def test_yookassa_checkout_falls_back_to_onetime_when_recurring_not_allowed(monkeypatch) -> None:
     calls = []
     marked = {}
