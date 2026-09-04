@@ -165,7 +165,7 @@ describe('TelegramControlPage scope integrity', () => {
     await openGrowthPaths(user);
 
     expect(await screen.findByRole('heading', { name: 'Пути роста' })).toBeInTheDocument();
-    expect(screen.getByText('Больше клиентов из карт')).toBeInTheDocument();
+    expect(screen.getByText('Привести карточки в порядок')).toBeInTheDocument();
     expect(screen.queryByText('Раздел пока недоступен')).not.toBeInTheDocument();
   });
 

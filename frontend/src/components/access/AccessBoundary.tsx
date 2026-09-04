@@ -18,7 +18,7 @@ const targetForAccess = (access: BlockAccess) => {
   return '/dashboard/growth-paths';
 };
 
-export const AccessPreview = ({ access, className }: { access: BlockAccess; className?: string }) => {
+export const AccessPreview = ({ access, className, title = 'Что откроется' }: { access: BlockAccess; className?: string; title?: string }) => {
   if (access.status === 'available') return null;
   return (
     <div className={cn('rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4', className)} role="note">
@@ -27,7 +27,7 @@ export const AccessPreview = ({ access, className }: { access: BlockAccess; clas
           <LockKeyhole className="h-4 w-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-amber-950">Что откроется</p>
+          <p className="text-sm font-semibold text-amber-950">{title}</p>
           <p className="mt-1 text-pretty text-sm leading-5 text-amber-900/75">{access.reason}</p>
           <Link
             to={targetForAccess(access)}

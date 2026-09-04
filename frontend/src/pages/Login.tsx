@@ -4,43 +4,15 @@ import { Button } from "../components/ui/button";
 import { newAuth } from "../lib/auth_new";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { countryOptionsFor, loginCopyFor } from '@/i18n/loginCopy';
 import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, resolveStoredLeadJourney, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
 import { featureFlags } from '@/config/featureFlags';
 
-// Список популярных стран для автодополнения при регистрации
-const COUNTRY_OPTIONS = [
-  'Россия',
-  'США',
-  'Украина',
-  'Казахстан',
-  'Беларусь',
-  'Германия',
-  'Франция',
-  'Испания',
-  'Италия',
-  'Турция',
-  'ОАЭ',
-  'Израиль',
-  'Польша',
-  'Чехия',
-  'Латвия',
-  'Литва',
-  'Эстония',
-  'Канада',
-  'Великобритания',
-  'Австралия',
-  'Швейцария',
-  'Сербия',
-  'Грузия',
-  'Армения',
-  'Кыргызстан',
-  'Узбекистан',
-  'Таджикистан',
-  'Азербайджан',
-];
-
 const Login = () => {
   const [searchParams] = useSearchParams();
+  const { language } = useLanguage();
+  const copy = loginCopyFor(language);
+  const countryOptions = countryOptionsFor(language);
 
   const [tab, setTab] = useState<'login' | 'register' | 'reset'>('login');
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -52,7 +24,7 @@ const Login = () => {
     business_name: '',
     business_address: '',
     business_city: '',
-    business_country: 'Россия',
+    business_country: countryOptions[0],
     personal_data_consent: false,
   });
   const [loading, setLoading] = useState(false);
@@ -61,51 +33,9 @@ const Login = () => {
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
   const navigate = useNavigate();
-  const { language } = useLanguage();
-  const isRu = language === 'ru';
   const journeyParam = searchParams.get('journey');
   const journeyTokenParam = searchParams.get('journey_token') || '';
   const journey = getLeadJourneyDirection(isLeadJourneyKey(journeyParam) ? journeyParam : null);
-  const copy = {
-    loginTitle: journey && tab === 'register' ? (isRu ? 'Завершите первое действие' : 'Complete your first action') : (isRu ? 'Вход в систему' : 'Sign in'),
-    loginSubtitle: journey && tab === 'register' ? journey.title : (isRu ? 'Новые клиенты для вашего бизнеса' : 'New clients for your business'),
-    loginTab: isRu ? 'Вход' : 'Login',
-    registerTab: isRu ? 'Регистрация' : 'Register',
-    resetTab: isRu ? 'Восстановление' : 'Reset',
-    loginError: isRu ? 'Ошибка входа: ' : 'Sign-in error: ',
-    registerError: isRu ? 'Ошибка регистрации: ' : 'Registration error: ',
-    registerRequired: isRu ? 'Email и пароль обязательны' : 'Email and password are required',
-    businessRequired: isRu ? 'Название бизнеса, адрес и город обязательны' : 'Business name, address, and city are required',
-    consentRequired: isRu ? 'Нужно согласие на обработку персональных данных' : 'Personal data consent is required',
-    consentText: isRu ? 'Я согласен на обработку персональных данных и принимаю политику сервиса' : 'I agree to personal data processing and accept the service policy',
-    registerSuccess: isRu ? 'Регистрация почти завершена. Проверьте почту и подтвердите email.' : 'Registration is almost complete. Check your email and confirm it.',
-    registerPending: isRu ? 'Бизнес создан и ожидает модерации. Осталось подтвердить email по письму.' : 'Your business is pending moderation. Confirm your email to continue.',
-    resetSent: isRu ? 'Инструкции по восстановлению пароля отправлены на email. Проверьте почту!' : 'Password reset instructions were sent to your email.',
-    resetError: isRu ? 'Ошибка восстановления пароля: ' : 'Password reset error: ',
-    email: 'Email',
-    password: isRu ? 'Пароль' : 'Password',
-    personalData: isRu ? 'Личные данные' : 'Personal details',
-    businessData: isRu ? 'Данные бизнеса' : 'Business details',
-    name: isRu ? 'Имя' : 'Name',
-    phone: isRu ? 'Телефон' : 'Phone',
-    businessName: isRu ? 'Название бизнеса *' : 'Business name *',
-    address: isRu ? 'Адрес *' : 'Address *',
-    addressPlaceholder: isRu ? 'Например: Невский проспект, 10' : 'Example: 123 Main St',
-    city: isRu ? 'Город *' : 'City *',
-    country: isRu ? 'Страна' : 'Country',
-    countryPlaceholder: isRu ? 'Начните вводить название страны' : 'Start typing a country',
-    countryHint: isRu ? 'Можно выбрать из списка или вписать страну вручную.' : 'Choose from the list or enter the country manually.',
-    signIn: isRu ? 'Войти' : 'Sign in',
-    signingIn: isRu ? 'Вход...' : 'Signing in...',
-    signUp: isRu ? 'Зарегистрироваться' : 'Sign up',
-    signingUp: isRu ? 'Регистрация...' : 'Registering...',
-    postRegisterHint: isRu ? 'После подтверждения email откроется кабинет: можно заполнить профиль и добавить ссылку на компанию. Платные действия включаются отдельно.' : 'After email confirmation you can fill in your profile and add a company link. Paid actions are enabled separately.',
-    checkEmailHint: isRu ? 'Мы отправили письмо со ссылкой подтверждения. После подтверждения email вы автоматически войдёте в кабинет без оплаты.' : 'We sent a confirmation link. After confirming the email you will be signed in without payment.',
-    resendVerification: isRu ? 'Отправить письмо ещё раз' : 'Send email again',
-    resendVerificationDone: isRu ? 'Письмо подтверждения отправлено повторно.' : 'Confirmation email was sent again.',
-    sendReset: isRu ? 'Восстановить пароль' : 'Reset password',
-    sendingReset: isRu ? 'Отправка...' : 'Sending...',
-  };
   const tabButtonClass = "min-h-10 flex-1 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
 
   const looksLikeUrl = (value: string) => {
@@ -175,7 +105,7 @@ const Login = () => {
           // Пользователь существует, но не установил пароль
           navigate('/set-password', { state: { email: loginForm.email } });
         } else if (error.includes('EMAIL_NOT_VERIFIED')) {
-          setError(isRu ? 'Email не подтверждён. Проверьте почту или запросите письмо ещё раз.' : 'Email is not verified. Check your inbox or request another email.');
+          setError(language === 'ru' ? 'Email не подтверждён. Проверьте почту или запросите письмо ещё раз.' : language === 'es' ? 'El email no está confirmado. Revisa tu bandeja o solicita otro mensaje.' : 'Email is not verified. Check your inbox or request another email.');
         } else {
           setError(error);
         }
@@ -188,7 +118,7 @@ const Login = () => {
             const resolved = await resolveStoredLeadJourney();
             navigate(resolved?.route || '/dashboard/today');
           } catch (journeyError) {
-            setError(isRu ? `Вход выполнен, но персональный сценарий пока не открылся: ${journeyError instanceof Error ? journeyError.message : 'повторите попытку'}` : 'Signed in, but the personal path could not be opened yet. Please retry.');
+            setError(language === 'ru' ? `Вход выполнен, но выбранное направление пока не открылось: ${journeyError instanceof Error ? journeyError.message : 'повторите попытку'}` : language === 'es' ? 'Has iniciado sesión, pero la dirección elegida no se ha podido abrir. Inténtalo de nuevo.' : 'Signed in, but the chosen direction could not be opened yet. Please retry.');
           }
         } else if (tierFromUrl && source === 'pricing') {
           localStorage.setItem('selectedTier', tierFromUrl);
@@ -199,7 +129,7 @@ const Login = () => {
         }
       }
     } catch (error) {
-      setError(copy.loginError + (error as Error).message);
+      setError(copy.loginError + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
@@ -230,12 +160,12 @@ const Login = () => {
       return;
     }
     if (looksLikeUrl(registerForm.business_address)) {
-      setError(isRu ? 'Поле «Адрес» не должно содержать ссылку на карту' : 'The address field must not contain a map link');
+      setError(copy.mapLinkAddressError);
       setLoading(false);
       return;
     }
     if (looksLikeUrl(registerForm.business_city)) {
-      setError(isRu ? 'Поле «Город» не должно содержать ссылку на карту' : 'The city field must not contain a map link');
+      setError(copy.mapLinkCityError);
       setLoading(false);
       return;
     }
@@ -277,10 +207,10 @@ const Login = () => {
           setInfo(copy.registerSuccess);
         }
       } else {
-        setError(data.error || (isRu ? 'Ошибка регистрации' : 'Registration failed'));
+        setError(data.error || copy.registrationFailed);
       }
     } catch (error) {
-      setError(copy.registerError + (error as Error).message);
+      setError(copy.registerError + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
@@ -308,10 +238,10 @@ const Login = () => {
       if (response.ok) {
         setInfo(copy.resetSent);
       } else {
-        setError(data.error || (isRu ? 'Ошибка восстановления пароля' : 'Password reset failed'));
+        setError(data.error || copy.resetFailed);
       }
     } catch (error) {
-      setError(copy.resetError + (error as Error).message);
+      setError(copy.resetError + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
@@ -334,10 +264,10 @@ const Login = () => {
       if (response.ok && data.success) {
         setInfo(copy.resendVerificationDone);
       } else {
-        setError(data.error || (isRu ? 'Не удалось отправить письмо повторно' : 'Could not resend the email'));
+        setError(data.error || copy.resendVerificationFailed);
       }
     } catch (error) {
-      setError(isRu ? 'Не удалось отправить письмо повторно' : 'Could not resend the email');
+      setError(copy.resendVerificationFailed);
     } finally {
       setResendingVerification(false);
     }
@@ -349,10 +279,10 @@ const Login = () => {
         <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {copy.loginTitle}
+            {journey && tab === 'register' ? copy.journeyTitle : tab === 'register' ? copy.registerTitle : tab === 'reset' ? copy.resetTitle : copy.loginTitle}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            {copy.loginSubtitle}
+            {journey && tab === 'register' ? copy.journeyResultText : copy.loginSubtitle}
           </p>
         </div>
 
@@ -450,8 +380,8 @@ const Login = () => {
             <form className="space-y-4" onSubmit={handleRegister}>
               {journey ? (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-slate-700">
-                  <strong className="block text-slate-950">{journey.resultTitle}</strong>
-                  <span className="mt-1 block leading-5">{journey.lockedResult}</span>
+                  <strong className="block text-slate-950">{copy.journeyResultTitle}</strong>
+                  <span className="mt-1 block leading-5">{copy.journeyResultText}</span>
                 </div>
               ) : null}
               <div className="border-b border-gray-200 pb-4">
@@ -569,7 +499,7 @@ const Login = () => {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                       />
                       <datalist id="business-country-options">
-                        {COUNTRY_OPTIONS.map((country) => (
+                        {countryOptions.map((country) => (
                           <option key={country} value={country} />
                         ))}
                       </datalist>
@@ -591,7 +521,7 @@ const Login = () => {
                 <span>
                   {copy.consentText}{' '}
                   <a className="font-medium text-indigo-600 hover:text-indigo-700" href="/policy" target="_blank" rel="noreferrer">
-                    {isRu ? 'Политика обработки персональных данных' : 'Personal data policy'}
+                    {copy.policyLabel}
                   </a>
                 </span>
               </label>

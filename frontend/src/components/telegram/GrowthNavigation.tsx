@@ -41,12 +41,12 @@ type Outcome = {
 };
 
 const outcomes: Outcome[] = [
-  { key: 'cards', title: 'Больше клиентов из карт', description: 'Следить за карточками, рейтингом и отзывами.', icon: MapPinned, secondaryKey: 'reviews', secondaryLabel: 'Ответить на отзывы' },
+  { key: 'cards', title: 'Привести карточки в порядок', description: 'Проверить услуги и цены, фото, рейтинг, отзывы и запись. Понять, что поправить первым.', icon: MapPinned, secondaryKey: 'reviews', secondaryLabel: 'Ответить на отзывы' },
   { key: 'content', title: 'Контент без рутины', description: 'Работать с планом и готовить публикации.', icon: FileText },
-  { key: 'influencers', title: 'Инфлюенсеры рядом', description: 'Получите клиентов от местных авторов через взаимовыгодный обмен.', icon: Sparkles },
-  { key: 'partnerships', title: 'Партнёры рядом', description: 'Получите новых клиентов через совместные предложения с бизнесами, у которых похожая аудитория.', icon: Users },
+  { key: 'influencers', title: 'Найти местных блогеров', description: 'Подобрать авторов рядом и следить за визитами и публикациями.', icon: Sparkles },
+  { key: 'partnerships', title: 'Найти бизнесы для взаимных рекомендаций', description: 'Увидеть, с кем рядом можно обмениваться клиентами и какое предложение сделать.', icon: Users },
   { key: 'finance', title: 'Больше выручки', description: 'Видеть продажи, загрузку и точки роста.', icon: CreditCard, secondaryKey: 'services', secondaryLabel: 'Улучшить меню услуг' },
-  { key: 'agents', title: 'Автоматизировать работу', description: 'Поручите ИИ-агентам регулярные задачи и контролируйте результат.', icon: Bot },
+  { key: 'agents', title: 'Снять с себя повторяющиеся задачи', description: 'Выбрать регулярную работу и видеть, что сделано и где требуется ваше решение.', icon: Bot },
 ];
 
 const utilityIcons: Record<string, typeof Sparkles> = {

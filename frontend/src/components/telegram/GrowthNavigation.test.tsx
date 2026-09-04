@@ -23,10 +23,10 @@ describe('GrowthNavigation', () => {
     const openProgress = vi.fn();
     render(<GrowthNavigation navigation={navigation} onOpen={open} onOpenProgress={openProgress} onLocked={vi.fn()} onRestartTour={vi.fn()} />);
 
-    expect(screen.getByText('Больше клиентов из карт')).toBeInTheDocument();
+    expect(screen.getByText('Привести карточки в порядок')).toBeInTheDocument();
     expect(screen.getByText('Контент без рутины')).toBeInTheDocument();
     expect(screen.getByText('Больше выручки')).toBeInTheDocument();
-    expect(screen.getByText('Автоматизировать работу')).toBeInTheDocument();
+    expect(screen.getByText('Снять с себя повторяющиеся задачи')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Ответить на отзывы/ }));
     expect(open).toHaveBeenCalledWith('reviews');

@@ -18,7 +18,8 @@ export const es = {
     whatWeDo: "¿Qué Hacemos?",
     whoWeAre: "¿Quiénes Somos?",
     prices: "Precios",
-    tryFree: "Ver la Demo"
+    tryFree: "Ver la Demo",
+    login: "Entrar"
   },
 
   // Footer

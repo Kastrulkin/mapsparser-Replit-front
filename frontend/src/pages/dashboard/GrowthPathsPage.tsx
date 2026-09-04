@@ -3,6 +3,8 @@ import { ArrowRight, BadgeDollarSign, Bot, FileText, MapPinned, RefreshCw, Users
 import { Link, useOutletContext } from 'react-router-dom';
 import { AccessPreview, type BlockAccess } from '@/components/access/AccessBoundary';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { growthPathsCopyFor } from '@/i18n/growthPathsCopy';
 import { newAuth } from '@/lib/auth_new';
 import { journeyActionRoute, type JourneyAction } from '@/lib/leadJourney';
 import { cn } from '@/lib/utils';
@@ -25,24 +27,26 @@ type GrowthPathsResponse = {
 };
 
 const pathMeta = {
-  maps: { title: 'Больше клиентов из карт', icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
-  maps_content: { title: 'Контент для карточек', icon: FileText, tone: 'bg-cyan-50 text-cyan-700 ring-cyan-100', route: '/dashboard/card?tab=news&mode=plan' },
-  content: { title: 'Контент для соцсетей', icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
-  influencer: { title: 'Инфлюенсеры рядом', icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
-  partnership: { title: 'Партнёры рядом', icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
-  automation: { title: 'Автоматизировать работу', icon: Bot, tone: 'bg-orange-50 text-orange-700 ring-orange-100', route: '/dashboard/agents' },
-  average_ticket: { title: 'Увеличить средний чек', icon: BadgeDollarSign, tone: 'bg-amber-50 text-amber-700 ring-amber-100', route: '/dashboard/average-ticket' },
+  maps: { icon: MapPinned, tone: 'bg-sky-50 text-sky-700 ring-sky-100', route: '/dashboard/card' },
+  maps_content: { icon: FileText, tone: 'bg-cyan-50 text-cyan-700 ring-cyan-100', route: '/dashboard/card?tab=news&mode=plan' },
+  content: { icon: FileText, tone: 'bg-violet-50 text-violet-700 ring-violet-100', route: '/dashboard/content' },
+  influencer: { icon: WandSparkles, tone: 'bg-rose-50 text-rose-700 ring-rose-100', route: '/dashboard/influencers' },
+  partnership: { icon: Users, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100', route: '/dashboard/promotion/partnerships' },
+  automation: { icon: Bot, tone: 'bg-orange-50 text-orange-700 ring-orange-100', route: '/dashboard/agents' },
+  average_ticket: { icon: BadgeDollarSign, tone: 'bg-amber-50 text-amber-700 ring-amber-100', route: '/dashboard/average-ticket' },
 };
 
-const statusCopy = (path: GrowthPath) => {
-  if (path.access.status === 'payment_required') return 'Откроется после оплаты';
-  if (path.status === 'blocked') return 'Нужно внимание';
-  if (path.action) return 'Есть следующий шаг';
-  return 'Можно начать';
+const statusCopy = (path: GrowthPath, statuses: { payment: string; blocked: string; action: string; available: string }) => {
+  if (path.access.status === 'payment_required') return statuses.payment;
+  if (path.status === 'blocked') return statuses.blocked;
+  if (path.action) return statuses.action;
+  return statuses.available;
 };
 
 export const GrowthPathsPage = () => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
+  const { language } = useLanguage();
+  const copy = growthPathsCopyFor(language);
   const [data, setData] = useState<GrowthPathsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,7 +59,7 @@ export const GrowthPathsPage = () => {
       const response = await newAuth.makeRequest(`/growth-paths?business_id=${encodeURIComponent(currentBusinessId)}`);
       setData(response);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить пути роста.');
+      setError(requestError instanceof Error ? requestError.message : copy.loadError);
     } finally {
       setLoading(false);
     }
@@ -64,34 +68,35 @@ export const GrowthPathsPage = () => {
   useEffect(() => { void load(); }, [currentBusinessId]);
 
   const paths = useMemo(() => {
-    const items = data?.paths || [];
+    const items = (data?.paths || []).filter((path) => path.flow_type !== 'maps_content');
     const focusFlow = data?.focus_action?.flow_type;
     return [...items].sort((left, right) => Number(right.flow_type === focusFlow) - Number(left.flow_type === focusFlow));
   }, [data]);
 
-  if (!currentBusinessId) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Выберите бизнес, чтобы увидеть пути роста.</div>;
+  if (!currentBusinessId) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">{copy.chooseBusiness}</div>;
 
   return (
     <div className="space-y-6 pb-10">
       <header className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">Пути роста</p>
-        <h1 className="mt-2 max-w-3xl text-balance text-3xl font-semibold tracking-tight text-slate-950">Выберите направление</h1>
-        <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">В каждом направлении LocalOS покажет, с чего начать, и проведёт по следующим шагам. Ваш текущий маршрут всегда идёт первым.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">{copy.eyebrow}</p>
+        <h1 className="mt-2 max-w-3xl text-balance text-3xl font-semibold tracking-tight text-slate-950">{copy.title}</h1>
+        <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">{copy.intro}</p>
       </header>
 
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2" aria-label="Загрузка путей роста">
+        <div className="grid gap-4 md:grid-cols-2" aria-label={copy.loading}>
           {[0, 1, 2, 3].map((item) => <div key={item} className="h-64 animate-pulse rounded-[24px] bg-slate-200/70" />)}
         </div>
       ) : error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
           <p>{error}</p>
-          <Button type="button" variant="outline" className="mt-3 min-h-10" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />Повторить</Button>
+          <Button type="button" variant="outline" className="mt-3 min-h-10" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />{copy.retry}</Button>
         </div>
       ) : paths.length ? (
         <div className="grid gap-4 md:grid-cols-2">
           {paths.map((path, index) => {
             const meta = pathMeta[path.flow_type];
+            const direction = copy.directions[path.flow_type];
             const Icon = meta.icon;
             const actionRoute = path.action ? journeyActionRoute(path.action) : meta.route;
             const locked = path.access.status !== 'available';
@@ -100,14 +105,14 @@ export const GrowthPathsPage = () => {
               <article key={path.flow_type} className={cn('rounded-[24px] border bg-white p-5 shadow-sm', centeredLastCard && 'md:col-span-2 md:w-[calc(50%-0.5rem)] md:justify-self-center', index === 0 && path.action ? 'border-orange-300 ring-2 ring-orange-100' : 'border-slate-200')}>
                 <div className="flex items-start justify-between gap-4">
                   <span className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl ring-1', meta.tone)}><Icon className="h-5 w-5" aria-hidden="true" /></span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{statusCopy(path)}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{statusCopy(path, copy.statuses)}</span>
                 </div>
-                <h2 className="mt-5 text-balance text-xl font-semibold text-slate-950">{meta.title}</h2>
-                <p className="mt-2 min-h-12 text-pretty text-sm leading-6 text-slate-600">{path.opportunity}</p>
-                {path.obstacle ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Препятствие: {path.obstacle}</p> : null}
-                {locked ? <AccessPreview access={path.access} className="mt-4" /> : (
+                <h2 className="mt-5 text-balance text-xl font-semibold text-slate-950">{direction.title}</h2>
+                <p className="mt-2 min-h-12 text-pretty text-sm leading-6 text-slate-600">{direction.description}</p>
+                {path.obstacle && language === 'ru' ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{copy.obstacle} {path.obstacle}</p> : null}
+                {locked ? <AccessPreview access={{ ...path.access, reason: copy.lockedReason, cta_label: copy.lockedCta }} title={copy.accessTitle} className="mt-4" /> : (
                   <Link to={actionRoute} className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-slate-800 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2">
-                    {path.action?.cta_label || path.access.cta_label}<ArrowRight className="ml-2 h-4 w-4" />
+                    {direction.cta}<ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 )}
               </article>
@@ -116,8 +121,8 @@ export const GrowthPathsPage = () => {
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-lg font-semibold text-slate-950">Пути пока не загрузились</h2>
-          <p className="mt-2 text-sm text-slate-600">Проверьте, что journey-функция включена для тестовой группы.</p>
+          <h2 className="text-lg font-semibold text-slate-950">{copy.emptyTitle}</h2>
+          <p className="mt-2 text-sm text-slate-600">{copy.emptyDescription}</p>
         </div>
       )}
     </div>
