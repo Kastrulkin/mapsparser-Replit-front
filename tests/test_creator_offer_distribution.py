@@ -15,6 +15,10 @@ def campaign(**offer_overrides):
         "category": "семейные услуги",
         "benefit": "Бесплатная стрижка",
         "result_condition": "Если придут 3 новых клиента",
+        "result_target": 3,
+        "reward_type": "service",
+        "reward_trigger": "result",
+        "barter": True,
         "capacity": 3,
         **offer_overrides,
     }
@@ -108,6 +112,44 @@ def test_offer_requires_a_result_condition():
     offer["offer"].pop("result_condition")
     offer["period"] = {"end_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()}
     with pytest.raises(ValueError, match="условие результата"):
+        validate_offer(offer)
+
+
+@pytest.mark.parametrize(
+    ("overrides",),
+    [
+        ({"reward_type": "service", "reward_trigger": "result", "result_target": 3},),
+        ({"reward_type": "money", "reward_trigger": "result", "money_amount": 5000, "currency": "RUB", "result_target": 3},),
+        ({"reward_type": "service", "reward_trigger": "content", "required_deliverables_count": 2},),
+        ({"reward_type": "money", "reward_trigger": "content", "money_amount": 5000, "currency": "RUB", "required_deliverables_count": 2},),
+    ],
+)
+def test_offer_supports_all_reward_and_trigger_combinations(overrides):
+    offer = campaign(**overrides)
+    offer["period"] = {"end_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()}
+    validate_offer(offer)
+
+
+def test_money_offer_does_not_require_confirmed_barter():
+    reason, _snapshot = _eligibility(
+        candidate(accepts_barter=None),
+        campaign(reward_type="money", money_amount=5000, barter=False),
+    )
+    assert reason is None
+
+
+def test_legacy_service_offer_keeps_barter_filtering():
+    legacy_offer = campaign()
+    legacy_offer["offer"].pop("reward_type")
+    legacy_offer["offer"].pop("barter")
+    reason, _snapshot = _eligibility(candidate(accepts_barter=None), legacy_offer)
+    assert reason == "barter_unconfirmed"
+
+
+def test_publication_offer_names_missing_publication_count():
+    offer = campaign(reward_trigger="content", required_deliverables_count=None)
+    offer["period"] = {"end_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()}
+    with pytest.raises(ValueError, match="количество публикаций"):
         validate_offer(offer)
 
 

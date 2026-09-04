@@ -17,6 +17,8 @@ RECIPIENT_STATUSES = {
     "declined", "selected", "not_selected", "expired",
 }
 BUSINESS_DISPOSITIONS = {"available", "shortlisted", "excluded"}
+CREATOR_REWARD_TYPES = {"service", "money"}
+CREATOR_REWARD_TRIGGERS = {"content", "result"}
 
 
 def distribution_enabled(business_id: str | None = None) -> bool:
@@ -75,6 +77,19 @@ def _normalized(value: Any) -> str:
 def _matches(value: Any, candidates: list[str]) -> bool:
     haystack = _normalized(value)
     return any(_normalized(candidate) in haystack or haystack in _normalized(candidate) for candidate in candidates if haystack)
+
+
+def _reward_type(offer: dict[str, Any]) -> str:
+    explicit = str(offer.get("reward_type") or "").strip().lower()
+    if explicit:
+        return explicit
+    if offer.get("barter") is True or offer.get("benefit") or offer.get("reward"):
+        return "service"
+    return "money"
+
+
+def _reward_trigger(offer: dict[str, Any]) -> str:
+    return str(offer.get("reward_trigger") or "result").strip().lower()
 
 
 def set_business_disposition(
@@ -279,14 +294,23 @@ def validate_offer(campaign: dict[str, Any]) -> None:
     geography = _json(campaign.get("geography"), {})
     offer = _json(campaign.get("offer"), {})
     period = _json(campaign.get("period"), {})
+    reward_type = _reward_type(offer)
+    reward_trigger = _reward_trigger(offer)
+    if reward_type not in CREATOR_REWARD_TYPES:
+        raise ValueError("Выберите, что получит автор: услугу или деньги")
+    if reward_trigger not in CREATOR_REWARD_TRIGGERS:
+        raise ValueError("Выберите, за что автор получит вознаграждение")
     required = {
         "услуга": offer.get("service"),
-        "выгода автору": offer.get("benefit") or offer.get("reward"),
-        "условие результата": offer.get("result_condition"),
+        "выгода автору": (offer.get("benefit") or offer.get("reward")) if reward_type == "service" else offer.get("money_amount"),
         "география": geography.get("city") or geography.get("cities"),
         "срок окончания": period.get("end_at"),
         "количество мест": offer.get("capacity"),
     }
+    if reward_trigger == "result":
+        required["условие результата"] = offer.get("result_condition")
+    else:
+        required["количество публикаций"] = offer.get("required_deliverables_count")
     missing = [label for label, value in required.items() if not value]
     if missing:
         raise ValueError(f"Заполните: {', '.join(missing)}")
@@ -295,6 +319,24 @@ def validate_offer(campaign: dict[str, Any]) -> None:
             raise ValueError
     except (TypeError, ValueError):
         raise ValueError("Количество мест должно быть больше нуля") from None
+    if reward_type == "money":
+        try:
+            if float(offer.get("money_amount")) <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError("Сумма вознаграждения должна быть больше нуля") from None
+    if reward_trigger == "content":
+        try:
+            if int(offer.get("required_deliverables_count")) < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError("Количество публикаций должно быть больше нуля") from None
+    if reward_trigger == "result":
+        try:
+            if int(offer.get("result_target")) < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError("Целевой результат должен быть больше нуля") from None
     try:
         end_at = datetime.fromisoformat(str(period.get("end_at")).replace("Z", "+00:00"))
         if end_at.tzinfo is None:
@@ -411,7 +453,7 @@ def _eligibility(candidate: dict[str, Any], campaign: dict[str, Any]) -> tuple[s
         reason = "geography_mismatch"
     elif target_topics and not any(_matches(item, target_topics) for item in candidate_topics):
         reason = "topic_mismatch"
-    elif offer.get("barter") is True and candidate.get("accepts_barter") is not True:
+    elif _reward_type(offer) == "service" and candidate.get("accepts_barter") is not True:
         reason = "barter_unconfirmed"
     elif desired_formats and candidate_formats and not any(_matches(item, desired_formats) for item in candidate_formats):
         reason = "format_mismatch"
@@ -842,24 +884,24 @@ def select_recipient(
         campaign_id=str(recipient["campaign_id"]),
         creator_profile_id=str(recipient["creator_profile_id"]),
     )
-    cursor.execute(
-        """
-        INSERT INTO creator_deliverables (
-            id, collaboration_id, platform, deliverable_type, due_at,
-            required_elements_json, verification_status, tracking_json
+    cursor.execute("SELECT COUNT(*) AS count FROM creator_deliverables WHERE collaboration_id = %s", (collaboration_id,))
+    existing_deliverables = int(_dict(cursor.fetchone()).get("count") or 0)
+    required_deliverables = max(1, int(offer.get("required_deliverables_count") or 1))
+    requested_formats = _text_list(offer_snapshot.get("formats")) or ["post"]
+    for index in range(existing_deliverables, required_deliverables):
+        cursor.execute(
+            """
+            INSERT INTO creator_deliverables (
+                id, collaboration_id, platform, deliverable_type, due_at,
+                required_elements_json, verification_status, tracking_json
+            ) VALUES (%s, %s, 'other', %s, NULLIF(%s, '')::timestamptz, %s, 'expected', %s)
+            """,
+            (
+                str(uuid.uuid4()), collaboration_id, requested_formats[index % len(requested_formats)],
+                str(_json(offer_snapshot.get("period"), {}).get("end_at") or ""),
+                Json(_text_list(constraints.get("requirements"))), Json(tracking),
+            ),
         )
-        SELECT %s, %s, 'other', 'post',
-               NULLIF(%s, '')::timestamptz, %s, 'expected', %s
-        WHERE NOT EXISTS (
-            SELECT 1 FROM creator_deliverables WHERE collaboration_id = %s
-        )
-        """,
-        (
-            str(uuid.uuid4()), collaboration_id,
-            str(_json(offer_snapshot.get("period"), {}).get("end_at") or ""),
-            Json(_text_list(constraints.get("requirements"))), Json(tracking), collaboration_id,
-        ),
-    )
     selected_count += 1
     if selected_count >= capacity:
         cursor.execute(
