@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from services.creator_offer_distribution_service import _eligibility, distribution_enabled, validate_offer
+from services.creator_city_service import canonicalize_city, city_matches
 from services.creator_portal_service import _publication_url, _ready
 
 
@@ -58,6 +59,17 @@ def test_shortlist_does_not_limit_distribution_but_business_exclusion_does():
     assert shortlist_reason is None
     assert snapshot["disposition"] == "shortlisted"
     assert excluded_reason == "excluded_for_business"
+
+
+@pytest.mark.parametrize("value", ["Петербург", "Санкт Петербург", "СПб", "Пеьтербург", "saint petersburg"])
+def test_city_aliases_and_typos_have_one_canonical_name(value):
+    assert canonicalize_city(value) == "Санкт-Петербург"
+
+
+def test_city_aliases_match_offer_geography():
+    reason, _snapshot = _eligibility(candidate(city="СПб"), campaign())
+    assert reason is None
+    assert city_matches("Санкт-Петербург, Выборгский район", "Питер") is True
 
 
 def test_pause_and_category_preferences_block_only_new_matching_offers():

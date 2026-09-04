@@ -7,6 +7,7 @@ import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives'
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { Button } from '@/components/ui/button';
 import { InfluencerCreatorCard } from '@/features/influencers/InfluencerCreatorCard';
+import { CreatorCityCombobox } from '@/features/influencers/CreatorCityCombobox';
 import { CreatorOfferBuilder } from '@/features/influencers/CreatorOfferBuilder';
 import {
   influencerWorkspaceQuery,
@@ -159,7 +160,7 @@ export const InfluencersPage = () => {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-xs font-semibold text-slate-600">Имя или описание<input value={filters.query || ''} onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" /></label>
             <label className="text-xs font-semibold text-slate-600">Площадка<select value={filters.platform || ''} onChange={(event) => setFilters((current) => ({ ...current, platform: event.target.value }))} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900"><option value="">Любая</option>{['telegram', 'instagram', 'threads', 'youtube', 'tiktok', 'vk'].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label className="text-xs font-semibold text-slate-600">Город<input value={filters.city || ''} onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" /></label>
+            <CreatorCityCombobox value={filters.city || ''} options={workspace?.filters?.cities || []} onChange={(city) => setFilters((current) => ({ ...current, city }))} />
             <label className="text-xs font-semibold text-slate-600">Район<input value={filters.district || ''} onChange={(event) => setFilters((current) => ({ ...current, district: event.target.value }))} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" /></label>
             <label className="text-xs font-semibold text-slate-600">Метро<input value={filters.metro || ''} onChange={(event) => setFilters((current) => ({ ...current, metro: event.target.value }))} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" /></label>
             <label className="text-xs font-semibold text-slate-600">География аудитории<input value={filters.audience_geography || ''} onChange={(event) => setFilters((current) => ({ ...current, audience_geography: event.target.value }))} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" /></label>
@@ -176,7 +177,7 @@ export const InfluencersPage = () => {
         {workspace?.cursor ? <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} className="min-h-11 w-full">{loadingMore ? 'Загружаем…' : 'Показать ещё'}</Button> : null}
       </> : null}
 
-      {section === 'messages' ? (workspace?.feature_state?.offer_distribution === true || messageAccess?.status === 'available' ? <CreatorOfferBuilder businessId={currentBusinessId} businessCity={currentBusiness?.city} onSubmitted={load} /> : messageAccess ? <AccessPreview access={messageAccess} /> : null) : null}
+      {section === 'messages' ? (workspace?.feature_state?.offer_distribution === true || messageAccess?.status === 'available' ? <CreatorOfferBuilder businessId={currentBusinessId} businessCity={currentBusiness?.city} cityOptions={workspace?.filters?.cities || []} onSubmitted={load} /> : messageAccess ? <AccessPreview access={messageAccess} /> : null) : null}
 
       {section === 'results' ? <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><Sparkles className="h-6 w-6 text-orange-600" /><h2 className="mt-4 text-xl font-semibold text-slate-950">Результаты сотрудничества</h2><p className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Здесь собираются размещения, охват, обращения, записи, промокоды и подтверждённая выручка.</p><Link to="/dashboard/influencers/operations" className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-orange-700">Открыть расширенную работу<ArrowRight className="h-4 w-4" /></Link></section> : null}
     </div>

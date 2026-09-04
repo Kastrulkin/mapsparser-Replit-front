@@ -8,6 +8,7 @@ from typing import Any
 
 from psycopg2.extras import Json
 
+from services.creator_city_service import available_creator_cities, canonicalize_city, city_matches, city_search_terms
 from services.creator_promotion_service import build_tracking_plan
 
 
@@ -118,7 +119,6 @@ def list_catalog(
     conditions = ["profile.verification_status <> 'rejected'", "profile.brand_safety_status <> 'blocked'"]
     params: list[Any] = [business_id]
     mappings = {
-        "city": "COALESCE(taxonomy.home_city, profile.primary_city, '') ILIKE %s",
         "district": "(COALESCE(taxonomy.home_district, profile.primary_area, '') ILIKE %s OR taxonomy.content_geographies_json::text ILIKE %s)",
         "metro": "taxonomy.metro_stations_json::text ILIKE %s",
         "audience_geography": "taxonomy.audience_geography_json::text ILIKE %s",
@@ -126,6 +126,15 @@ def list_catalog(
         "format": "(commercial.formats_json::text ILIKE %s OR taxonomy.observed_formats_json::text ILIKE %s OR taxonomy.confirmed_formats_json::text ILIKE %s)",
         "audience_size_band": "taxonomy.audience_size_band = %s",
     }
+    city = str(filters.get("city") or "").strip()
+    if city:
+        terms = [f"%{term}%" for term in city_search_terms(city)]
+        conditions.append(
+            "(LOWER(REGEXP_REPLACE(COALESCE(taxonomy.home_city, profile.primary_city, ''), '[^[:alnum:]]+', ' ', 'g')) ILIKE ANY(%s) "
+            "OR LOWER(REGEXP_REPLACE(taxonomy.content_geographies_json::text, '[^[:alnum:]]+', ' ', 'g')) ILIKE ANY(%s) "
+            "OR LOWER(REGEXP_REPLACE(taxonomy.audience_geography_json::text, '[^[:alnum:]]+', ' ', 'g')) ILIKE ANY(%s))"
+        )
+        params.extend([terms, terms, terms])
     for key, sql in mappings.items():
         value = str(filters.get(key) or "").strip()
         if not value:
@@ -248,6 +257,7 @@ def list_catalog(
         "creators": items,
         "counts": {"total": total, "returned": len(items), "shortlisted": counts.get("shortlisted", 0), "excluded": counts.get("excluded", 0)},
         "cursor": str(offset + len(items)) if offset + len(items) < total else None,
+        "filters": {"cities": [item["name"] for item in available_creator_cities(cursor)]},
     }
 
 
@@ -358,7 +368,7 @@ def _eligibility(candidate: dict[str, Any], campaign: dict[str, Any]) -> tuple[s
     geography = _json(campaign.get("geography"), {})
     audience = _json(campaign.get("audience"), {})
     offer = _json(campaign.get("offer"), {})
-    target_cities = _text_list(geography.get("cities")) or _text_list(geography.get("city"))
+    target_cities = [canonicalize_city(item) for item in (_text_list(geography.get("cities")) or _text_list(geography.get("city")))]
     target_districts = [*_text_list(geography.get("districts")), *_text_list(geography.get("areas")), *_text_list(geography.get("area"))]
     target_metros = _text_list(geography.get("metros")) or _text_list(geography.get("metro"))
     candidate_geography = [
@@ -393,7 +403,7 @@ def _eligibility(candidate: dict[str, Any], campaign: dict[str, Any]) -> tuple[s
         reason = "category_blocked"
     elif not any(str(item).strip() for item in candidate_geography):
         reason = "geography_unknown"
-    elif target_cities and not any(_matches(item, target_cities) for item in candidate_geography):
+    elif target_cities and not any(city_matches(item, city) for item in candidate_geography for city in target_cities):
         reason = "geography_mismatch"
     elif target_districts and not any(_matches(item, target_districts) for item in candidate_geography):
         reason = "geography_mismatch"

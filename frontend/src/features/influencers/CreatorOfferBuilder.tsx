@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
+import { CreatorCityCombobox } from './CreatorCityCombobox';
 
 type DistributionPreview = {
   eligible: number;
@@ -18,6 +19,7 @@ type DistributionPreview = {
 type CreatorOfferBuilderProps = {
   businessId: string;
   businessCity?: string;
+  cityOptions?: string[];
   onSubmitted: () => Promise<void>;
 };
 
@@ -33,7 +35,7 @@ const exclusionLabels: Record<string, string> = {
   brand_safety: 'профиль заблокирован',
 };
 
-export const CreatorOfferBuilder = ({ businessId, businessCity = '', onSubmitted }: CreatorOfferBuilderProps) => {
+export const CreatorOfferBuilder = ({ businessId, businessCity = '', cityOptions = [], onSubmitted }: CreatorOfferBuilderProps) => {
   const [campaignId, setCampaignId] = useState('');
   const [preview, setPreview] = useState<DistributionPreview | null>(null);
   const [previewFingerprint, setPreviewFingerprint] = useState('');
@@ -111,7 +113,7 @@ export const CreatorOfferBuilder = ({ businessId, businessCity = '', onSubmitted
       <label className="text-sm font-semibold text-slate-700">Выгода автору<Input value={form.benefit} onChange={(event) => setForm({ ...form, benefit: event.target.value })} placeholder="Бесплатная стрижка" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Условие результата<Input value={form.resultCondition} onChange={(event) => setForm({ ...form, resultCondition: event.target.value })} placeholder="Если придут 3 новых клиента" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Целевое количество<Input type="number" min="1" value={form.resultTarget} onChange={(event) => setForm({ ...form, resultTarget: event.target.value })} className="mt-2 tabular-nums" /></label>
-      <label className="text-sm font-semibold text-slate-700">Город<Input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} className="mt-2" /></label>
+      <CreatorCityCombobox label="Город" value={form.city} options={cityOptions.length ? cityOptions : [businessCity].filter(Boolean)} onChange={(city) => setForm({ ...form, city })} className="text-sm text-slate-700" />
       <label className="text-sm font-semibold text-slate-700">Районы<Input value={form.districts} onChange={(event) => setForm({ ...form, districts: event.target.value })} placeholder="Выборгский" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Метро<Input value={form.metros} onChange={(event) => setForm({ ...form, metros: event.target.value })} placeholder="Проспект Просвещения" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Темы<Input value={form.topics} onChange={(event) => setForm({ ...form, topics: event.target.value })} placeholder="семья, дети, места" className="mt-2" /></label>

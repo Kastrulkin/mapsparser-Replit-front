@@ -14,6 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from psycopg2.extras import Json, RealDictCursor
 
 from services.creator_catalog_service import canonical_creator_url, creator_platform, upsert_creator_catalog_entity
+from services.creator_city_service import canonicalize_city, canonicalize_geography, city_matches
 from services.lead_workstream_service import CREATOR_COLLABORATION, create_workstream
 from subscription_manager import build_subscription_capabilities, capability_access_payload
 
@@ -1385,6 +1386,7 @@ def create_campaign(cursor: Any, *, business_id: str, user_id: str, payload: dic
         raise ValueError("Недопустимый отправитель")
     campaign_id = str(uuid.uuid4())
     search_job_id = str(payload.get("search_job_id") or "").strip() or None
+    geography = canonicalize_geography(_json(payload.get("geography"), {}))
     cursor.execute(
         """
         INSERT INTO creator_campaigns (
@@ -1395,7 +1397,7 @@ def create_campaign(cursor: Any, *, business_id: str, user_id: str, payload: dic
         """,
         (
             campaign_id, business_id, search_job_id, title, goal, sender_mode,
-            Json(_json(payload.get("audience"), {})), Json(_json(payload.get("geography"), {})),
+            Json(_json(payload.get("audience"), {})), Json(geography),
             Json(_text_list(payload.get("formats"))), Json(_json(payload.get("offer"), {})),
             Json(_json(payload.get("budget"), {})), Json(_json(payload.get("period"), {})),
             Json(_json(payload.get("constraints"), {})), user_id,
@@ -1557,6 +1559,9 @@ def update_campaign_terms(cursor: Any, *, business_id: str, campaign_id: str, pa
         raise ValueError("Название и цель кампании обязательны")
     if sender_mode not in {"partner_business", "localos_for_partner"}:
         raise ValueError("Недопустимый отправитель")
+    geography = canonicalize_geography(
+        _json(payload.get("geography"), campaign.get("geography") or {})
+    )
     cursor.execute(
         """
         UPDATE creator_campaigns SET
@@ -1571,7 +1576,7 @@ def update_campaign_terms(cursor: Any, *, business_id: str, campaign_id: str, pa
         (
             title, goal, sender_mode,
             Json(_json(payload.get("audience"), campaign.get("audience") or {})),
-            Json(_json(payload.get("geography"), campaign.get("geography") or {})),
+            Json(geography),
             Json(_text_list(payload.get("formats")) if "formats" in payload else campaign.get("formats") or []),
             Json(_json(payload.get("offer"), campaign.get("offer") or {})),
             Json(_json(payload.get("budget"), campaign.get("budget") or {})),
@@ -2550,7 +2555,7 @@ def influencer_workspace(
     cards = all_cards
     requested = filters or {}
     platform = str(requested.get("platform") or "").strip().lower()
-    city = str(requested.get("city") or "").strip().lower()
+    city = canonicalize_city(requested.get("city"))
     topic = str(requested.get("topic") or "").strip().lower()
     content_format = str(requested.get("format") or "").strip().lower()
     audience_size_band = str(requested.get("audience_size_band") or "").strip().lower()
@@ -2562,7 +2567,7 @@ def influencer_workspace(
         searchable_topics = [card.get("primary_topic"), *card.get("topics", []), *card.get("content_styles", []), *card.get("formats", [])]
         return (
             (not platform or str(card.get("platform") or "").lower() == platform)
-            and (not city or city in " ".join((str(card.get("city") or ""), str(card.get("area") or ""))).lower())
+            and (not city or city_matches(card.get("city"), city) or city_matches(card.get("area"), city))
             and (not topic or any(topic in str(value or "").lower() for value in searchable_topics))
             and (not content_format or any(content_format in str(value or "").lower() for value in card.get("formats", [])))
             and (not audience_size_band or str(card.get("audience_size_band") or "").lower() == audience_size_band)
@@ -2632,7 +2637,7 @@ def influencer_workspace(
         },
         "filters": {
             "platforms": sorted({str(card.get("platform")) for card in cards if card.get("platform")}),
-            "cities": sorted({str(card.get("city")) for card in cards if card.get("city")}),
+            "cities": sorted({canonicalize_city(card.get("city")) for card in cards if canonicalize_city(card.get("city"))}),
             "topics": sorted({str(value) for card in cards for value in [card.get("primary_topic"), *card.get("topics", [])] if value}),
             "formats": sorted({str(value) for card in cards for value in card.get("formats", []) if value}),
             "audience_size_bands": sorted({str(card.get("audience_size_band")) for card in cards if card.get("audience_size_band") and card.get("audience_size_band") != "unknown"}),
