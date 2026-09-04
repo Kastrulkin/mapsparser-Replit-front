@@ -56,7 +56,15 @@ describe('CreatorPortalPage publication flow', () => {
     let completed = false;
     const onboardingWorkspace = {
       account: { display_name: 'Анна', notification_preferences: {} },
-      profile: { display_name: 'Анна', channels: [], formats: [] },
+      profile: {
+        display_name: 'Анна',
+        channels: [
+          { platform: 'youtube', url: 'https://youtube.com/@anna_small', metrics: { followers: 2500 } },
+          { platform: 'youtube', url: 'https://youtube.com/@anna_main', metrics: { followers: 6000 } },
+        ],
+        formats: [],
+        metro_stations: ['Озерки', 'Проспект Просвещения'],
+      },
       offers: { new: [], active: [], finished: [] },
       onboarding_required: true,
       city_options: ['Санкт-Петербург', 'Москва'],
@@ -75,6 +83,7 @@ describe('CreatorPortalPage publication flow', () => {
     expect(await screen.findByRole('heading', { name: 'Расскажите о себе' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Продолжить' }));
     expect(screen.getByRole('heading', { name: 'Где и как вы публикуете' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'YouTube' })).toHaveAttribute('aria-checked', 'true');
     await user.click(screen.getByRole('checkbox', { name: 'Telegram' }));
     await user.click(screen.getByRole('checkbox', { name: 'Пост' }));
     await user.click(screen.getByRole('button', { name: 'Да, рассматриваю' }));
@@ -82,11 +91,13 @@ describe('CreatorPortalPage publication flow', () => {
     expect(screen.getByRole('heading', { name: 'Где вы готовы работать' })).toBeInTheDocument();
     await user.click(screen.getByRole('combobox', { name: 'Основной город *' }));
     await user.click(screen.getByRole('option', { name: 'Санкт-Петербург' }));
+    expect(screen.getByPlaceholderText('Озерки, Проспект Просвещения')).toHaveValue('Озерки, Проспект Просвещения');
     await user.click(screen.getByRole('button', { name: 'По всему городу' }));
     await user.click(screen.getByRole('button', { name: 'Продолжить' }));
     expect(screen.getByRole('heading', { name: 'Добавьте свои площадки' })).toBeInTheDocument();
     expect(screen.getByText('Укажите ссылки на страницы, где вы публикуете контент.')).toBeInTheDocument();
     expect(screen.queryByText('Безопасное подключение.')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('youtube.com/@username')).toHaveValue('https://youtube.com/@anna_main');
     await user.type(screen.getByPlaceholderText('t.me/username'), 't.me/anna_spb');
     await user.click(screen.getByRole('button', { name: 'Завершить регистрацию' }));
 
@@ -96,7 +107,16 @@ describe('CreatorPortalPage publication flow', () => {
     expect(await screen.findByRole('heading', { name: 'Новые' })).toBeInTheDocument();
     const profileCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/profile'));
     expect(profileCall?.[1]).toEqual(expect.objectContaining({ method: 'PATCH' }));
-    expect(JSON.parse(String(profileCall?.[1]?.body))).toEqual(expect.objectContaining({ home_city: 'Санкт-Петербург', accepts_barter: true, onboarding_completed: true, channels: [{ platform: 'telegram', url: 't.me/anna_spb' }] }));
+    expect(JSON.parse(String(profileCall?.[1]?.body))).toEqual(expect.objectContaining({
+      home_city: 'Санкт-Петербург',
+      metro_stations: ['Озерки', 'Проспект Просвещения'],
+      accepts_barter: true,
+      onboarding_completed: true,
+      channels: [
+        { platform: 'youtube', url: 'https://youtube.com/@anna_main' },
+        { platform: 'telegram', url: 't.me/anna_spb' },
+      ],
+    }));
   });
 
   it('registers by email first and offers Telegram only inside the cabinet', async () => {

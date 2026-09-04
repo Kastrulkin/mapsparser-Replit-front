@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { CreatorCityCombobox } from './CreatorCityCombobox';
 
-type CreatorChannel = { platform: string; url?: string };
+type CreatorChannel = { platform: string; url?: string; metrics?: { followers?: number } };
 
 type CreatorOnboardingProfile = {
   display_name: string;
@@ -19,6 +19,7 @@ type CreatorOnboardingProfile = {
   primary_area?: string;
   phone?: string;
   travel_radius?: string;
+  metro_stations?: string[];
   accepts_barter?: boolean;
   formats?: string[];
   channels?: CreatorChannel[];
@@ -59,17 +60,28 @@ const toggle = (values: string[], value: string) => values.includes(value)
   : [...values, value];
 
 export const CreatorOnboardingWizard = ({ profile, cityOptions, onComplete }: CreatorOnboardingWizardProps) => {
-  const initialChannels = useMemo(() => Object.fromEntries((profile.channels || []).map((channel) => [channel.platform, channel.url || ''])), [profile.channels]);
+  const initialChannels = useMemo(() => {
+    const urls: Record<string, string> = {};
+    const audiences: Record<string, number> = {};
+    for (const channel of profile.channels || []) {
+      const followers = Number(channel.metrics?.followers || 0);
+      if (!(channel.platform in urls) || followers > (audiences[channel.platform] || 0)) {
+        urls[channel.platform] = channel.url || '';
+        audiences[channel.platform] = followers;
+      }
+    }
+    return urls;
+  }, [profile.channels]);
   const [step, setStep] = useState(1);
   const [displayName, setDisplayName] = useState(profile.display_name || '');
   const [description, setDescription] = useState(profile.description || '');
   const [phone, setPhone] = useState(profile.phone || '');
-  const [selectedPlatforms, setSelectedPlatforms] = useState((profile.channels || []).map((channel) => channel.platform).filter((platform) => platforms.some((item) => item.key === platform)));
+  const [selectedPlatforms, setSelectedPlatforms] = useState(Array.from(new Set((profile.channels || []).map((channel) => channel.platform).filter((platform) => platforms.some((item) => item.key === platform)))));
   const [selectedFormats, setSelectedFormats] = useState(profile.formats || []);
   const [acceptsBarter, setAcceptsBarter] = useState<boolean | null>(typeof profile.accepts_barter === 'boolean' ? profile.accepts_barter : null);
   const [homeCity, setHomeCity] = useState(profile.home_city || profile.primary_city || '');
   const [homeDistrict, setHomeDistrict] = useState(profile.home_district || profile.primary_area || '');
-  const [metroStations, setMetroStations] = useState('');
+  const [metroStations, setMetroStations] = useState((profile.metro_stations || []).join(', '));
   const [travelRadius, setTravelRadius] = useState(profile.travel_radius || '');
   const [channelUrls, setChannelUrls] = useState<Record<string, string>>(initialChannels);
   const [busy, setBusy] = useState(false);
