@@ -812,8 +812,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
           />
           <AccessCard
             title="Google Business"
-            description="Карточка компании, отзывы и посты Google. Ждём отдельного согласования Google."
-            status={googleBusinessReady ? 'Карточка выбрана' : googleAccount ? 'Выберите карточку' : 'Ждём согласования'}
+            description="Карточка компании, отзывы, статистика и посты Google через подтверждённое подключение."
+            status={googleBusinessReady ? 'Карточка выбрана' : googleAccount ? 'Выберите карточку' : 'Не подключено'}
             detail="Google Business подключается отдельно и не влияет на работу Google Таблиц."
             actionLabel={!googleAccount ? 'Подключить Google Business' : googleBusinessReady ? 'Синхронизировать' : 'Выбрать карточку'}
             icon={<Building2 className="h-5 w-5" />}

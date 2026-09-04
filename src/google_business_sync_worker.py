@@ -186,63 +186,66 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=30)
         
-        insights = api.get_insights(
-            location_name,
-            start_date.isoformat() + 'Z',
-            end_date.isoformat() + 'Z'
-        )
-        
-        # Парсим insights и создаем ExternalStatsPoint
-        stats = []
-        if insights and 'locationMetrics' in insights:
-            for metric_data in insights['locationMetrics']:
-                metric_values = metric_data.get('metricValues', [])
-                if not metric_values:
+        try:
+            insights = api.get_insights(
+                location_name,
+                start_date.isoformat() + 'Z',
+                end_date.isoformat() + 'Z'
+            )
+        except Exception:
+            print(f"⚠️ Google Business Profile statistics skipped for account {account['id']}")
+            return []
+
+        daily_data: Dict[str, Dict[str, int]] = {}
+        series_groups = insights.get("multiDailyMetricTimeSeries") if isinstance(insights, dict) else []
+        if not isinstance(series_groups, list):
+            return []
+        for group in series_groups:
+            metric_series = group.get("dailyMetricTimeSeries") if isinstance(group, dict) else []
+            if not isinstance(metric_series, list):
+                continue
+            for item in metric_series:
+                if not isinstance(item, dict):
                     continue
-                
-                # Агрегируем данные по дням
-                daily_data = {}
-                for value in metric_values:
-                    time_value = value.get('timeValue', {})
-                    time_range = time_value.get('timeRange', {})
-                    start_time = time_range.get('startTime', {})
-                    date_str = start_time.get('date', {})
-                    
-                    if not date_str:
+                metric_name = str(item.get("dailyMetric") or "")
+                time_series = item.get("timeSeries") if isinstance(item.get("timeSeries"), dict) else {}
+                dated_values = time_series.get("datedValues") if isinstance(time_series.get("datedValues"), list) else []
+                for dated_value in dated_values:
+                    if not isinstance(dated_value, dict):
                         continue
-                    
-                    day_key = f"{date_str.get('year')}-{date_str.get('month'):02d}-{date_str.get('day'):02d}"
+                    day_key = _parse_performance_date(dated_value.get("date") if isinstance(dated_value.get("date"), dict) else {})
+                    if not day_key:
+                        continue
                     if day_key not in daily_data:
                         daily_data[day_key] = {
                             'views_total': 0,
                             'clicks_total': 0,
                             'actions_total': 0
                         }
-                    
-                    metric_name = metric_data.get('metric')
-                    dimensional_values = value.get('dimensionalValues', [{}])
-                    metric_value = dimensional_values[0].get('value', 0) if dimensional_values else 0
-                    
-                    if 'VIEWS' in metric_name:
-                        daily_data[day_key]['views_total'] += int(metric_value or 0)
-                    elif 'ACTIONS' in metric_name:
-                        daily_data[day_key]['actions_total'] += int(metric_value or 0)
-                
-                # Создаем ExternalStatsPoint для каждого дня
-                for day_key, day_data in daily_data.items():
-                    sid = make_stats_id(account['business_id'], self.source, day_key)
-                    stats.append(ExternalStatsPoint(
-                        id=sid,
-                        business_id=account['business_id'],
-                        source=self.source,
-                        date=day_key,
-                        views_total=day_data['views_total'],
-                        clicks_total=day_data['clicks_total'],
-                        actions_total=day_data['actions_total'],
-                        rating=None,  # Рейтинг получаем отдельно
-                        reviews_total=None,  # Количество отзывов получаем отдельно
-                        raw_payload=insights
-                    ))
+                    metric_value = _parse_performance_value(dated_value.get("value"))
+                    if metric_name.startswith("BUSINESS_IMPRESSIONS_"):
+                        daily_data[day_key]['views_total'] += metric_value
+                    elif metric_name in {"WEBSITE_CLICKS", "CALL_CLICKS", "BUSINESS_DIRECTION_REQUESTS"}:
+                        daily_data[day_key]['clicks_total'] += metric_value
+                        daily_data[day_key]['actions_total'] += metric_value
+                    elif metric_name in {"BUSINESS_CONVERSATIONS", "BUSINESS_BOOKINGS"}:
+                        daily_data[day_key]['actions_total'] += metric_value
+
+        stats = []
+        for day_key, day_data in daily_data.items():
+            sid = make_stats_id(account['business_id'], self.source, day_key)
+            stats.append(ExternalStatsPoint(
+                id=sid,
+                business_id=account['business_id'],
+                source=self.source,
+                date=day_key,
+                views_total=day_data['views_total'],
+                clicks_total=day_data['clicks_total'],
+                actions_total=day_data['actions_total'],
+                rating=None,
+                reviews_total=None,
+                raw_payload=insights
+            ))
         
         return stats
 
@@ -311,6 +314,25 @@ def _parse_google_star_rating(value: Any) -> Optional[int]:
         return parsed if 1 <= parsed <= 5 else None
     except Exception:
         return None
+
+
+def _parse_performance_date(value: Dict[str, Any]) -> Optional[str]:
+    try:
+        year = int(value.get("year") or 0)
+        month = int(value.get("month") or 0)
+        day = int(value.get("day") or 0)
+    except Exception:
+        return None
+    if not year or not month or not day:
+        return None
+    return f"{year:04d}-{month:02d}-{day:02d}"
+
+
+def _parse_performance_value(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
 
 
 if __name__ == "__main__":

@@ -255,7 +255,7 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       description: 'Карточка компании, отзывы и посты Google.',
       connectionType: 'oauth',
       status: googleBusinessConnected ? 'connected' : googleBusinessAccount ? 'action_required' : 'not_connected',
-      nextAction: googleBusinessConnected ? 'Карточка выбрана.' : 'Ждём согласования Google. Это не мешает Google Таблицам.',
+      nextAction: googleBusinessConnected ? 'Карточка выбрана.' : 'Подключите Google-аккаунт и выберите карточку компании.',
       primaryAction: { label: googleBusinessConnected ? 'Синхронизировать' : 'Настроить', type: 'drawer', target: 'google_business' },
       hasLogs: true,
       hasHelp: true,

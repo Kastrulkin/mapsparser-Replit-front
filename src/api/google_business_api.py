@@ -84,12 +84,17 @@ def _auth_data_column(cursor) -> str:
 def _google_business_error_response(error: Exception):
     message = str(error)
     if "SERVICE_DISABLED" in message or "mybusinessaccountmanagement.googleapis.com" in message:
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT_ID", "localos-gbp")
+        activation_url = (
+            "https://console.developers.google.com/apis/api/"
+            f"mybusinessaccountmanagement.googleapis.com/overview?project={project_id}"
+        )
         return jsonify({
             "success": False,
             "status": "google_business_api_disabled",
             "error": "В Google Cloud project LocalOS не включён или не одобрен My Business Account Management API. Карточки в Google аккаунте есть, но LocalOS пока не может прочитать их через API.",
-            "next_action": "Откройте Google Cloud Console project totemic-union-440908-s8 и проверьте My Business Account Management API / quota.",
-            "activation_url": "https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=totemic-union-440908-s8",
+            "next_action": f"Откройте Google Cloud Console project {project_id} и проверьте My Business Account Management API / quota.",
+            "activation_url": activation_url,
         }), 502
     return jsonify({
         "success": False,
@@ -168,6 +173,9 @@ def _public_location(location: dict) -> dict:
     address = location.get("storefrontAddress") if isinstance(location.get("storefrontAddress"), dict) else {}
     lines = address.get("addressLines") if isinstance(address.get("addressLines"), list) else []
     category = location.get("primaryCategory") if isinstance(location.get("primaryCategory"), dict) else {}
+    categories = location.get("categories") if isinstance(location.get("categories"), dict) else {}
+    if not category:
+        category = categories.get("primaryCategory") if isinstance(categories.get("primaryCategory"), dict) else {}
     metadata = location.get("metadata") if isinstance(location.get("metadata"), dict) else {}
     title = location.get("title") or location.get("locationName") or location.get("name")
     account_name = str(location.get("accountName") or "").strip()

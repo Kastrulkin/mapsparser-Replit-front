@@ -822,7 +822,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       return (
         <SetupPanel
           title="Google Business"
-          description="Ждём согласования Google. Это не мешает Google Таблицам."
+          description="Подключите Google-аккаунт с доступом к карточке компании, затем выберите локацию для отзывов, статистики и постов."
         >
           {!googleBusinessAccount ? (
             <Button onClick={() => handleGoogleConnect('google_business')} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
