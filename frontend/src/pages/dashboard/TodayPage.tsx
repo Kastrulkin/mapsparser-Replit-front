@@ -237,7 +237,7 @@ export const TodayPage = () => {
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div>
             <h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{mission?.title || copy.openTasks}</h2>
             <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{mission?.reason || copy.noUrgent}</p>
-            {mission ? <p className="mt-3 flex max-w-3xl items-start gap-2 text-xs leading-5 text-slate-500"><ArrowRight className="mt-0.5 h-4 w-4 shrink-0" /><span><strong className="text-slate-700">{copy.after}</strong> {mission.expected_outcome}</span></p> : null}
+            {mission?.expected_outcome ? <p className="mt-3 flex max-w-3xl items-start gap-2 text-xs leading-5 text-slate-500"><ArrowRight className="mt-0.5 h-4 w-4 shrink-0" /><span><strong className="text-slate-700">{copy.after}</strong> {mission.expected_outcome}</span></p> : null}
           </div>
           <Button type="button" onClick={openMission} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{mission?.cta_label || copy.openProgress}<ArrowRight className="h-4 w-4" /></Button>
         </div>

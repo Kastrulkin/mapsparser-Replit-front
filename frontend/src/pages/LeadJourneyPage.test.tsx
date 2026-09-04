@@ -44,6 +44,7 @@ describe('LeadJourneyPage', () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
 
+    expect(screen.getByText('6 направлений')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Инфлюенсеры рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Бизнесы рядом/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Карты/ })).toBeInTheDocument();

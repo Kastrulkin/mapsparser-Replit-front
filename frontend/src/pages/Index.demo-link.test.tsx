@@ -15,7 +15,7 @@ vi.mock('@/i18n/LanguageContext', () => ({
 }));
 
 describe('Index lead journey entry', () => {
-  it('opens the three-direction preview before registration', () => {
+  it('opens the six-direction preview before registration', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <Index />
@@ -26,7 +26,7 @@ describe('Index lead journey entry', () => {
     expect(demoLink).toHaveAttribute('href', '/demo');
     expect(demoLink).toHaveAttribute('target', '_blank');
     expect(demoLink).toHaveClass('btn-iridescent');
-    const opportunitiesLink = screen.getByRole('link', { name: 'Выбрать из 5 направлений' });
+    const opportunitiesLink = screen.getByRole('link', { name: 'Выбрать из 6 направлений' });
     expect(opportunitiesLink).toHaveAttribute('href', '/growth');
     expect(opportunitiesLink).toHaveClass('btn-iridescent', 'min-h-20', 'w-full', 'justify-between');
     const tasksLink = screen.getByRole('link', { name: 'Посмотреть, что можно передать LocalOS' });

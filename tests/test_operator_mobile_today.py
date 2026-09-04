@@ -266,6 +266,7 @@ def test_blocking_operator_focus_wins_over_growth_recommendation():
     assert focus["source"] == "operator"
     assert focus["target_scope"] == {"kind": "business", "id": "b-2"}
     assert focus["affected_business_ids"] == ["b-2"]
+    assert focus["expected_outcome"] == ""
 
 
 def test_story_facts_focus_wins_over_regular_growth_recommendation():

@@ -154,6 +154,27 @@ describe('TodayPage', () => {
     expect(screen.getByText('/dashboard/card?tab=reviews&review_filter=needs_reply')).toBeInTheDocument();
   });
 
+  it('does not show an empty generic outcome for an operator task', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      focus_action: {
+        id: 'reviews_unanswered',
+        title: 'Отзывы без ответа',
+        reason: 'Есть новые отзывы.',
+        expected_outcome: '',
+        cta_label: 'Открыть задачу',
+        screen: 'reviews',
+      },
+      active_work: [],
+      changes_24h: [],
+      completed_results: [],
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Отзывы без ответа' })).toBeInTheDocument();
+    expect(screen.queryByText('После этого:')).not.toBeInTheDocument();
+  });
+
   it('loads the neutral today endpoint for the selected network scope', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     render(<MemoryRouter><Routes><Route element={<NetworkContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
