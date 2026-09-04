@@ -44,6 +44,7 @@ describe('CreatorPortalPage publication flow', () => {
     render(<MemoryRouter initialEntries={['/creator/offers/recipient-1']}><Routes><Route path="/creator/offers/:offerId" element={<CreatorPortalPage />} /></Routes></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: 'Публикация и результат' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Запросить детали' })).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('https://...'), 'https://t.me/anna/42');
     await user.click(screen.getByRole('button', { name: 'Передать ссылку LocalOS' }));
 
