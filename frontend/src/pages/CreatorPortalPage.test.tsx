@@ -83,7 +83,9 @@ describe('CreatorPortalPage publication flow', () => {
     await user.click(screen.getByRole('option', { name: 'Санкт-Петербург' }));
     await user.click(screen.getByRole('button', { name: 'По всему городу' }));
     await user.click(screen.getByRole('button', { name: 'Продолжить' }));
-    expect(screen.getByRole('heading', { name: 'Добавьте публичные аккаунты' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Добавьте свои площадки' })).toBeInTheDocument();
+    expect(screen.getByText('Укажите ссылки на страницы, где вы публикуете контент.')).toBeInTheDocument();
+    expect(screen.queryByText('Безопасное подключение.')).not.toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('t.me/username'), 't.me/anna_spb');
     await user.click(screen.getByRole('button', { name: 'Завершить регистрацию' }));
 
