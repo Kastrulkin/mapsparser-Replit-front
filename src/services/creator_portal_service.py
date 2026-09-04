@@ -15,6 +15,7 @@ from psycopg2.extras import Json
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from core.email_delivery import send_email
+from services.creator_city_service import available_creator_cities, canonicalize_city
 from services.creator_offer_distribution_service import activate_pending_offers, update_offer_preferences
 from services.creator_promotion_service import add_metric_snapshot
 
@@ -87,6 +88,53 @@ def _publication_url(value: Any) -> str:
     if parts.scheme not in {"http", "https"} or not parts.netloc:
         raise ValueError("Добавьте полную публичную ссылку на материал")
     return url
+
+
+CREATOR_CHANNEL_BASE_URLS = {
+    "telegram": "https://t.me/",
+    "vk": "https://vk.com/",
+    "instagram": "https://instagram.com/",
+    "threads": "https://threads.net/@",
+    "tiktok": "https://tiktok.com/@",
+    "youtube": "https://youtube.com/@",
+}
+CREATOR_CHANNEL_HOSTS = {
+    "telegram": {"t.me", "telegram.me"},
+    "vk": {"vk.com"},
+    "instagram": {"instagram.com"},
+    "threads": {"threads.net"},
+    "tiktok": {"tiktok.com"},
+    "youtube": {"youtube.com"},
+}
+
+
+def _creator_channel_url(platform: Any, value: Any) -> str:
+    platform_key = str(platform or "").strip().lower()
+    if platform_key not in CREATOR_CHANNEL_BASE_URLS:
+        raise ValueError("Выберите поддерживаемую площадку")
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("Добавьте ссылку на площадку")
+    candidate = raw if "://" in raw else f"https://{raw}" if "." in raw.split("/")[0] else ""
+    if candidate:
+        parts = urlsplit(candidate)
+        if parts.scheme not in {"http", "https"} or not parts.netloc:
+            raise ValueError("Добавьте полную публичную ссылку на площадку")
+        host = str(parts.hostname or "").lower().removeprefix("www.")
+        if host not in CREATOR_CHANNEL_HOSTS[platform_key]:
+            raise ValueError("Ссылка не соответствует выбранной площадке")
+        path = parts.path.rstrip("/")
+        if not path:
+            raise ValueError("Добавьте ссылку именно на ваш публичный аккаунт")
+        return f"https://{host}{path}"
+    username = raw.lstrip("@").strip("/")
+    if not username or "/" in username or " " in username:
+        raise ValueError("Укажите username или полную публичную ссылку")
+    return f"{CREATOR_CHANNEL_BASE_URLS[platform_key]}{username}"
+
+
+def _creator_channel_username(url: str) -> str:
+    return urlsplit(url).path.rstrip("/").split("/")[-1].lstrip("@")
 
 
 def _new_token(cursor: Any, *, profile_id: str, purpose: str, email: str | None,
@@ -496,6 +544,7 @@ def _creator_profile(cursor: Any, profile_id: str) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT p.id, p.display_name, p.description, p.primary_city, p.primary_area, p.topics_json,
+               p.metadata_json,
                t.home_city, t.home_district, t.metro_stations_json, t.content_geographies_json,
                t.audience_geography_json, t.audience_types_json, t.audience_size_band,
                t.content_styles_json, c.formats_json, c.accepts_barter, c.price_min, c.price_max,
@@ -516,6 +565,10 @@ def _creator_profile(cursor: Any, profile_id: str) -> dict[str, Any]:
     for key in ("topics_json", "metro_stations_json", "content_geographies_json", "audience_geography_json",
                 "audience_types_json", "content_styles_json", "formats_json", "channels"):
         profile[key.removesuffix("_json")] = _json(profile.pop(key, None), [])
+    metadata = _json(profile.pop("metadata_json", None), {})
+    profile["phone"] = str(metadata.get("creator_phone") or "")
+    profile["travel_radius"] = str(metadata.get("travel_radius") or "")
+    profile["onboarding_completed"] = bool(metadata.get("creator_onboarding_completed_at"))
     return _ready(profile)
 
 
@@ -573,11 +626,14 @@ def list_creator_offers(cursor: Any, profile_id: str) -> list[dict[str, Any]]:
 
 def portal_home(cursor: Any, account: dict[str, Any]) -> dict[str, Any]:
     offers = list_creator_offers(cursor, str(account["creator_profile_id"]))
+    profile = _creator_profile(cursor, str(account["creator_profile_id"]))
     active = {"interested", "needs_details", "selected", "agreed", "awaiting_content", "published", "measuring"}
     finished = {"completed", "declined", "not_selected", "expired"}
     return {
         "account": account,
-        "profile": _creator_profile(cursor, str(account["creator_profile_id"])),
+        "profile": profile,
+        "onboarding_required": not profile.get("onboarding_completed", False),
+        "city_options": [item["name"] for item in available_creator_cities(cursor)],
         "offers": {
             "new": [item for item in offers if item["status"] in {"available", "draft", "invited", "replied", "negotiating"}],
             "active": [item for item in offers if item["status"] in active],
@@ -960,8 +1016,21 @@ def add_offer_message(cursor: Any, *, collaboration_id: str, sender_type: str,
 
 def update_creator_profile(cursor: Any, *, account: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     profile_id = str(account["creator_profile_id"])
+    if payload.get("onboarding_completed") is True:
+        if not str(payload.get("display_name") or "").strip():
+            raise ValueError("Укажите имя автора")
+        if not canonicalize_city(payload.get("home_city")):
+            raise ValueError("Укажите основной город")
+        if not isinstance(payload.get("accepts_barter"), bool):
+            raise ValueError("Укажите готовность к бартеру")
+        if not _text_list(payload.get("formats")):
+            raise ValueError("Выберите хотя бы один формат")
+        if not isinstance(payload.get("channels"), list) or not payload["channels"]:
+            raise ValueError("Добавьте хотя бы одну публичную площадку")
     allowed = {"display_name", "description", "primary_city", "primary_area"}
     changes = {key: payload[key] for key in allowed if key in payload}
+    if "primary_city" in changes:
+        changes["primary_city"] = canonicalize_city(changes["primary_city"])
     if changes:
         cursor.execute(
             """
@@ -980,6 +1049,8 @@ def update_creator_profile(cursor: Any, *, account: dict[str, Any], payload: dic
     taxonomy_keys = {"home_city", "home_district", "metro_stations", "content_geographies",
                      "audience_geography", "audience_types", "audience_size_band", "content_styles"}
     taxonomy = {key: payload[key] for key in taxonomy_keys if key in payload}
+    if "home_city" in taxonomy:
+        taxonomy["home_city"] = canonicalize_city(taxonomy["home_city"])
     if taxonomy:
         cursor.execute("SELECT * FROM creator_profile_taxonomy WHERE creator_profile_id = %s", (profile_id,))
         current_taxonomy = _dict(cursor.fetchone())
@@ -1043,9 +1114,62 @@ def update_creator_profile(cursor: Any, *, account: dict[str, Any], payload: dic
              commercial.get("media_kit_url", current_commercial.get("media_kit_url")),
              commercial.get("availability_text", current_commercial.get("availability_text"))),
         )
-    all_changes = {**changes, **taxonomy, **commercial}
+    metadata_patch: dict[str, Any] = {}
+    if "phone" in payload:
+        metadata_patch["creator_phone"] = str(payload.get("phone") or "").strip()
+    if "travel_radius" in payload:
+        metadata_patch["travel_radius"] = str(payload.get("travel_radius") or "").strip()
+    if payload.get("onboarding_completed") is True:
+        metadata_patch["creator_onboarding_completed_at"] = datetime.now(timezone.utc).isoformat()
+    if metadata_patch:
+        cursor.execute(
+            "UPDATE creator_profiles SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s, "
+            "verification_status = CASE WHEN %s THEN 'observed' ELSE verification_status END, "
+            "updated_at = NOW() WHERE id = %s",
+            (Json(metadata_patch), payload.get("onboarding_completed") is True, profile_id),
+        )
+    channel_changes: list[dict[str, str]] = []
+    raw_channels = payload.get("channels")
+    if raw_channels is not None:
+        if not isinstance(raw_channels, list) or len(raw_channels) > 8:
+            raise ValueError("Передайте не более восьми площадок")
+        for raw_channel in raw_channels:
+            if not isinstance(raw_channel, dict):
+                raise ValueError("Некорректные данные площадки")
+            platform = str(raw_channel.get("platform") or "").strip().lower()
+            canonical_url = _creator_channel_url(platform, raw_channel.get("url"))
+            cursor.execute(
+                "SELECT id, creator_profile_id FROM creator_channels WHERE platform = %s AND canonical_url = %s",
+                (platform, canonical_url),
+            )
+            same_url = _dict(cursor.fetchone())
+            if same_url and str(same_url.get("creator_profile_id")) != profile_id:
+                raise ValueError("Эта площадка уже привязана к другому автору")
+            cursor.execute(
+                "SELECT id FROM creator_channels WHERE creator_profile_id = %s AND platform = %s ORDER BY updated_at DESC LIMIT 1",
+                (profile_id, platform),
+            )
+            existing = _dict(cursor.fetchone())
+            username = _creator_channel_username(canonical_url)
+            if existing:
+                cursor.execute(
+                    "UPDATE creator_channels SET canonical_url = %s, username = %s, contactability = 'public_contact', "
+                    "metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s, last_observed_at = NOW(), updated_at = NOW() WHERE id = %s",
+                    (canonical_url, username, Json({"source": "creator_onboarding", "creator_confirmed": True}), existing["id"]),
+                )
+            elif not same_url:
+                cursor.execute(
+                    "INSERT INTO creator_channels (id, creator_profile_id, platform, canonical_url, username, contactability, metadata_json, last_observed_at) "
+                    "VALUES (%s, %s, %s, %s, %s, 'public_contact', %s, NOW())",
+                    (str(uuid.uuid4()), profile_id, platform, canonical_url, username,
+                     Json({"source": "creator_onboarding", "creator_confirmed": True})),
+                )
+            channel_changes.append({"platform": platform, "url": canonical_url})
+    all_changes = {**changes, **taxonomy, **commercial, **metadata_patch}
     if topics is not None:
         all_changes["topics"] = topics
+    if channel_changes:
+        all_changes["channels"] = channel_changes
     if all_changes:
         cursor.execute(
             "INSERT INTO creator_profile_change_events (id, creator_profile_id, actor_type, actor_id, changed_fields_json, source) VALUES (%s, %s, 'creator', %s, %s, 'creator_portal')",
