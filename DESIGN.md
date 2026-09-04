@@ -39,6 +39,28 @@ grid, change its spacing, or introduce a separate grey background for an
 individual `/growth` route. Content cards remain solid enough to preserve text
 contrast over the grid.
 
+## Canonical Button Hierarchy
+
+LocalOS buttons use one shared hierarchy across the product:
+
+- product primary actions use the black `Button` default;
+- public conversion actions use the gold `brand` variant, backed by
+  `btn-iridescent`;
+- secondary actions use `outline`, `secondary`, `ghost`, or a black button on
+  a light brand surface when the composition requires it;
+- flat rust/orange, blue, indigo, or purple must not be introduced as a local
+  primary-button treatment;
+- red is reserved for destructive actions, while green, amber, and blue remain
+  semantic status colors rather than CTA colors;
+- provider colors are allowed only where the provider identity itself matters,
+  such as a Telegram sign-in control;
+- disabled public conversion actions retain the brand gradient and communicate
+  unavailability through opacity and state copy rather than changing hue.
+
+Use `frontend/src/components/ui/button.tsx` instead of restyling primary buttons
+screen by screen. Use `variant="brand"` for public conversion CTA and the default
+variant for the dominant action inside the authenticated product.
+
 ## Public Growth Choice
 
 The homepage pain-point section explains why owners use LocalOS. It is not a

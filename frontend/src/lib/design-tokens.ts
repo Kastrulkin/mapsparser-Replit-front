@@ -17,8 +17,8 @@ export const DESIGN_TOKENS = {
     },
     // Gradients for special elements
     gradients: {
-        primary: "bg-gradient-to-br from-blue-600 via-indigo-500 to-purple-600",
-        gold: "bg-gradient-to-br from-amber-400 via-orange-500 to-yellow-500",
+        primary: "bg-gradient-to-br from-slate-950 to-slate-800",
+        gold: "bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500",
         success: "bg-gradient-to-br from-emerald-400 via-green-500 to-teal-500",
     },
     // Animation durations

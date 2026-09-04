@@ -522,7 +522,6 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
           </div>
           <Button
             onClick={handleCreate}
-            className="bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-400/30"
           >
             <Plus className="h-4 w-4 mr-2" />
             Создать агента

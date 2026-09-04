@@ -92,7 +92,7 @@ const VerifyEmail: React.FC = () => {
         {status === 'error' && (
           <button
             type="button"
-            className="mt-5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+            className="btn-iridescent mt-5 min-h-10 rounded-md px-4 py-2 text-sm"
             onClick={() => navigate('/login')}
           >
             Вернуться ко входу

@@ -76,7 +76,7 @@ export const CompetitorsTab = ({
           placeholder={copy.namePlaceholder}
           className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm"
         />
-        <Button onClick={onAddManualCompetitor} disabled={addingManualCompetitor} className="bg-blue-600 text-white hover:bg-blue-700">
+        <Button onClick={onAddManualCompetitor} disabled={addingManualCompetitor}>
           {addingManualCompetitor ? copy.adding : copy.add}
         </Button>
       </div>

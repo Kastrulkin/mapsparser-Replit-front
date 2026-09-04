@@ -81,8 +81,8 @@ export const CategoryPills = ({
         onClick={() => onChange(value)}
         className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
           active === value
-            ? "border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/20"
-            : "border-orange-200 bg-white text-slate-700 hover:border-orange-400 hover:text-orange-700"
+            ? "border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15"
+            : "border-slate-200 bg-white text-slate-700 hover:border-amber-400 hover:text-slate-950"
         }`}
       >
         {value}
@@ -182,7 +182,7 @@ export const ContentCTA = () => (
         Сделаем быстрый аудит карточки, отзывов и точек роста. Покажем, что можно улучшить без лишних затрат на рекламу.
       </p>
       <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-        <Button asChild size="lg" className="bg-orange-500 text-white hover:bg-orange-600">
+        <Button asChild size="lg" variant="brand">
           <Link to="/#hero-form">Получить бесплатный аудит</Link>
         </Button>
         <Button asChild size="lg" variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
@@ -201,7 +201,7 @@ export const BackToSection = ({ href, label }: { href: string; label: string }) 
 );
 
 export const DownloadButton = ({ href }: { href?: string }) => (
-  <Button asChild className="bg-orange-500 text-white hover:bg-orange-600">
+  <Button asChild variant="brand">
     <a href={href || "#download-soon"}>
       <Download className="mr-2 h-4 w-4" />
       Скачать материал

@@ -9,7 +9,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md active:scale-[0.96]",
+        default: "bg-slate-950 text-white shadow-sm hover:bg-slate-800 hover:shadow-md active:scale-[0.96] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90",
+        brand: "btn-iridescent active:scale-[0.96]",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md active:scale-[0.96]",
         outline:

@@ -420,7 +420,7 @@ export default function PartnershipLeadDetailDrawer({
                       {missingProfileItems.slice(0, 5).map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   ) : null}
-                  <Button asChild size="sm" className="mt-3 bg-orange-500 text-white hover:bg-orange-600">
+                  <Button asChild size="sm" className="mt-3">
                     <a href="#sender-profile-settings">Заполнить профиль отправителя</a>
                   </Button>
                 </div>

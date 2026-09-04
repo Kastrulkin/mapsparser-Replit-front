@@ -126,9 +126,9 @@ export function OutreachDateTimePicker({
             caption_label: 'text-sm font-semibold capitalize text-slate-900',
             head_cell: 'w-9 rounded-md text-[0.72rem] font-medium uppercase text-slate-400',
             day: 'h-9 w-9 rounded-lg p-0 text-sm font-medium tabular-nums transition-[transform,background-color,color] hover:bg-orange-50 hover:text-orange-900 active:scale-[0.96]',
-            day_selected: 'bg-orange-600 text-white shadow-[0_4px_12px_-4px_rgba(234,88,12,0.65)] ring-2 ring-orange-200 hover:bg-orange-700 hover:text-white focus:bg-orange-600 focus:text-white',
-            day_today: 'bg-slate-100 font-semibold text-slate-950 ring-1 ring-inset ring-slate-200 aria-selected:bg-orange-600 aria-selected:text-white aria-selected:ring-2 aria-selected:ring-orange-200',
-            day_outside: 'day-outside text-slate-300 opacity-60 aria-selected:bg-orange-600 aria-selected:text-white aria-selected:opacity-100 aria-selected:ring-2 aria-selected:ring-orange-200',
+            day_selected: 'bg-slate-950 text-white shadow-[0_4px_12px_-4px_rgba(15,23,42,0.45)] ring-2 ring-slate-300 hover:bg-slate-800 hover:text-white focus:bg-slate-950 focus:text-white',
+            day_today: 'bg-slate-100 font-semibold text-slate-950 ring-1 ring-inset ring-slate-200 aria-selected:bg-slate-950 aria-selected:text-white aria-selected:ring-2 aria-selected:ring-slate-300',
+            day_outside: 'day-outside text-slate-300 opacity-60 aria-selected:bg-slate-950 aria-selected:text-white aria-selected:opacity-100 aria-selected:ring-2 aria-selected:ring-slate-300',
             nav_button: 'h-9 w-9 rounded-lg border-0 bg-white p-0 text-slate-600 shadow-[0_0_0_1px_rgba(15,23,42,0.1)] opacity-100 transition-transform hover:bg-slate-50 active:scale-[0.96]',
           }}
         />

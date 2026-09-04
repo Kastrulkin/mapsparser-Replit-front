@@ -145,8 +145,8 @@ export const FilterPills = ({ values, activeValue, onChange }: FilterPillsProps)
         <button
           className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
             isActive
-              ? "border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/20"
-              : "border-orange-200 bg-white text-gray-700 hover:border-orange-400 hover:text-orange-700"
+              ? "border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15"
+              : "border-slate-200 bg-white text-gray-700 hover:border-amber-400 hover:text-slate-950"
           }`}
           key={value}
           onClick={() => onChange(value)}
@@ -492,7 +492,8 @@ export const DownloadBlock = ({ available, materialSlug }: DownloadBlockProps) =
           ) : null}
 
           <Button
-            className="mt-4 min-h-11 w-full bg-orange-500 pl-4 pr-3.5 transition-[background-color,scale] duration-150 hover:bg-orange-600 active:scale-[0.96]"
+            className="mt-4 min-h-11 w-full pl-4 pr-3.5"
+            variant="brand"
             disabled={isSubmitting || !consent || !email.trim()}
             onClick={downloadUrl && !error ? (event) => {
               event.preventDefault();

@@ -349,7 +349,7 @@ const LeadPreparationGuide = ({
             {matchAssessment?.next_action || 'LocalOS сохранил результат проверки и показывает, чего не хватает для следующего шага.'}
           </p>
           {nextAction ? (
-            <Button onClick={nextAction.onClick} disabled={loading} className="mt-3 min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+            <Button onClick={nextAction.onClick} disabled={loading} className="mt-3 min-h-10">
               {nextAction.label}
             </Button>
           ) : null}
@@ -360,7 +360,7 @@ const LeadPreparationGuide = ({
             {parseRunning ? 'Можно заниматься другими лидами — статус обновится сам.' : 'Сейчас нужен только один следующий шаг.'}
           </p>
           {nextAction ? (
-            <Button onClick={nextAction.onClick} disabled={loading} className="min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+            <Button onClick={nextAction.onClick} disabled={loading} className="min-h-10">
               {nextAction.label}
             </Button>
           ) : parseRunning ? (
@@ -1037,7 +1037,7 @@ export const PartnershipPipelineList = ({
                               Открыть комнату
                             </Button>
                           ) : null}
-                          <Button size="sm" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading} className="min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+                          <Button size="sm" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading} className="min-h-10">
                             Подготовить предложение
                           </Button>
                           <Button

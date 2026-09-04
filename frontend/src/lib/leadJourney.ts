@@ -8,6 +8,7 @@ export type LeadJourneyDirection = {
   eyebrow: string;
   title: string;
   preview: string;
+  choiceCta?: string;
   detailTitle: string;
   detail: string;
   steps: Array<{ title: string; description: string }>;
@@ -321,8 +322,9 @@ export const leadJourneyDirections: LeadJourneyDirection[] = [
   {
     key: 'average_ticket',
     eyebrow: 'Средний чек',
-    title: 'Найти первый безопасный сценарий роста чека',
-    preview: 'Покажем, какие услуги можно объединить и где уместно предложить дополнение.',
+    title: 'Понять, что ещё предложить клиенту',
+    preview: 'LocalOS посмотрит ваш прайс, покажет, какие услуги и товары предлагать вместе, и поможет контролировать рекомендации и запись на следующий визит.',
+    choiceCta: 'Посмотреть варианты',
     detailTitle: 'Рост среднего чека без давления на клиента',
     detail: 'LocalOS сопоставляет услуги и цены, предлагает понятный пакет и показывает ожидаемый эффект до применения.',
     steps: [

@@ -1081,7 +1081,7 @@ export const ProfilePage = () => {
         {editMode && (
           <div className="mt-8 flex justify-end gap-3 border-t border-slate-100 pt-6">
             <Button onClick={() => setEditMode(false)} variant="ghost">{t.dashboard.profile.cancel}</Button>
-            <Button onClick={handleUpdateProfile} className="bg-blue-600 hover:bg-blue-700">{t.dashboard.profile.save}</Button>
+            <Button onClick={handleUpdateProfile}>{t.dashboard.profile.save}</Button>
           </div>
         )}
       </DashboardSection>
@@ -1455,7 +1455,6 @@ export const ProfilePage = () => {
             </Button>
             <Button
               onClick={handleSaveClientInfo}
-              className="bg-blue-600 hover:bg-blue-700"
               title={isRu ? 'Сохраняет данные бизнеса, чтобы их можно было использовать в картах, прогрессе и аудите.' : 'Saves business data so it can be used in maps management, progress, and the audit.'}
             >
               {t.dashboard.profile.save}

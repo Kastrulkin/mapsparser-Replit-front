@@ -484,7 +484,6 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 <Button
                     onClick={updateData}
                     disabled={updating}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
                 >
                     <RefreshCw className={cn("w-4 h-4 mr-2", updating && "animate-spin")} />
                     {updating ? getSeoText('updating') : getSeoText('update')}

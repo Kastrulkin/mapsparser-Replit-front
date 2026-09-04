@@ -1217,7 +1217,7 @@ export function OutreachCampaignBuilder({
       </p>
 
       {selectedCampaign?.status === 'draft' ? (
-        <Button onClick={() => void approve()} disabled={Boolean(busy) || !campaignReadyForApproval} className="min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+        <Button onClick={() => void approve()} disabled={Boolean(busy) || !campaignReadyForApproval} className="min-h-11 w-full">
           {busy === 'approve' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
           {campaignApprovalBlocker}
         </Button>
@@ -1278,7 +1278,7 @@ export function OutreachCampaignBuilder({
           <Button
             onClick={() => void dispatchPilotFirstTouch()}
             disabled={Boolean(busy)}
-            className="mt-3 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600"
+            className="mt-3 min-h-11 w-full"
           >
             {busy === 'pilot-dispatch' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
             Отправить только первое касание

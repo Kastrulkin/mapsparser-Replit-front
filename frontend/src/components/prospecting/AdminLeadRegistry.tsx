@@ -2772,7 +2772,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             ))}
           </div>
           {view === 'leads' ? (
-            <Button onClick={() => setSearchOpen(true)} className="min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+            <Button onClick={() => setSearchOpen(true)} className="min-h-11">
               <Search className="mr-2 h-4 w-4" />
               Найти лидов
             </Button>
@@ -2999,7 +2999,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   <h3 className="font-semibold text-slate-950">В этом списке пока нет компаний</h3>
                   <p className="mt-1 max-w-md text-sm text-slate-500">Найдите новые компании или измените фильтры.</p>
                 </div>
-                <Button onClick={() => setSearchOpen(true)} className="bg-orange-500 text-white hover:bg-orange-600">Найти лидов</Button>
+                <Button onClick={() => setSearchOpen(true)}>Найти лидов</Button>
               </div>
             ) : (
               <div className="divide-y divide-slate-200">
@@ -4431,7 +4431,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 ) : null}
                 {savedOutreachCampaign?.status === 'draft' ? (
-                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || campaignSetupDirty || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup || !savedCampaignQualityPassed || savedCampaignHasPendingReview} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || campaignSetupDirty || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup || !savedCampaignQualityPassed || savedCampaignHasPendingReview} className="mt-2 min-h-11 w-full">
                     {busyAction === 'approve-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
                     {campaignSetupDirty
                       ? 'Сначала сохраните новую версию'
@@ -4742,7 +4742,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </LeadDrawerSection>
 
               <div className="space-y-2">
-                <Button onClick={prepareRoom} disabled={busyAction === 'prepare-room'} className="w-full min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+                <Button onClick={prepareRoom} disabled={busyAction === 'prepare-room'} className="min-h-11 w-full">
                   {busyAction === 'prepare-room' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {selectedWorkstream.room_state?.url ? 'Обновить цифровую комнату' : 'Подготовить цифровую комнату'}
                 </Button>
@@ -4827,7 +4827,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   {businessOptions.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
                 </select>
               )}
-              <Button onClick={() => setSearchStep(2)} disabled={searchScope === 'client_partnership' && !searchClientId} className="w-full min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+              <Button onClick={() => setSearchStep(2)} disabled={searchScope === 'client_partnership' && !searchClientId} className="min-h-11 w-full">
                 Указать категорию и территорию <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -4865,7 +4865,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               {searchError && <p className="text-sm text-red-600">{searchError}</p>}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setSearchStep(1)} className="min-h-11">Назад</Button>
-                <Button onClick={startSearch} disabled={searchBusy} className="min-h-11 flex-1 bg-orange-500 text-white hover:bg-orange-600">
+                <Button onClick={startSearch} disabled={searchBusy} className="min-h-11 flex-1">
                   {searchBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                   {searchBusy ? 'Ищем компании…' : 'Найти компании'}
                 </Button>
@@ -4902,7 +4902,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               {searchError && <p className="text-sm text-red-600">{searchError}</p>}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setSearchStep(2)} className="min-h-11">Изменить поиск</Button>
-                <Button onClick={saveSearchResults} disabled={searchBusy || !selectedSearchIds.length} className="min-h-11 flex-1 bg-orange-500 text-white hover:bg-orange-600">
+                <Button onClick={saveSearchResults} disabled={searchBusy || !selectedSearchIds.length} className="min-h-11 flex-1">
                   {searchBusy ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                   Добавить выбранные
                 </Button>

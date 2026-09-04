@@ -793,7 +793,7 @@ export default function PublicSalesRoomPage() {
           <span className="mt-1 inline-flex flex-wrap gap-1">
             <button
               type="button"
-              className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-semibold leading-5 text-white hover:bg-orange-600 disabled:opacity-60"
+              className="rounded-full bg-slate-950 px-2 py-0.5 text-xs font-semibold leading-5 text-white transition-colors hover:bg-slate-800 disabled:opacity-60"
               onClick={() => void resolveProposalSuggestion(range.suggestion, 'accept')}
               disabled={resolvingSuggestionId === range.suggestion.id}
             >

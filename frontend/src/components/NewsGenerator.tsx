@@ -608,7 +608,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
           <Button
             onClick={generate}
             disabled={loading}
-            className="w-full md:w-auto px-8 py-6 rounded-xl text-lg font-medium shadow-xl shadow-orange-500/20 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white"
+            className="w-full rounded-xl px-8 py-6 text-lg font-medium md:w-auto"
           >
             {loading ? (
               <>

@@ -101,7 +101,7 @@ export const ContentOverviewView = ({ scope }) => {
                 type="button"
                 onClick={runSocialPlanNextStep}
                 disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || Boolean(socialPlanNextStep.disabled)}
-                className="shrink-0 bg-blue-700 text-white hover:bg-blue-800"
+                className="shrink-0"
               >
                 {Boolean(bulkBusyAction) || Boolean(socialBusyAction)
                   ? (isRu ? 'Выполняем...' : 'Working...')

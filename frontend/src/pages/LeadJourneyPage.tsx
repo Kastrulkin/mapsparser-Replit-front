@@ -36,7 +36,7 @@ const DirectionCard = ({ direction, opportunity, onOpen, secondary = false }: { 
       <strong className="mt-2 text-balance text-xl leading-7 text-slate-950">{opportunity?.title || direction.title}</strong>
       <span className="mt-3 flex-1 text-pretty text-sm leading-6 text-slate-600">{opportunity?.summary || direction.preview}</span>
       {opportunity?.count ? <span className="mt-3 text-xs tabular-nums text-slate-500">Ещё вариантов: {opportunity.count}</span> : null}
-      <span className="mt-5 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-slate-950">{secondary ? 'Доступно для исследования после регистрации' : 'Посмотреть возможность'}{!secondary ? <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /> : null}</span>
+      <span className="mt-5 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-slate-950">{secondary ? 'Доступно для исследования после регистрации' : direction.choiceCta || 'Посмотреть возможность'}{!secondary ? <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /> : null}</span>
     </button>
   );
 };

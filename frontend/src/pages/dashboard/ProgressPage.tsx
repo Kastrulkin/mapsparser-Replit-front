@@ -621,7 +621,7 @@ export const ProgressPage = () => {
                   {localizedGrowthText(language, currentMission.estimated_effect.label)}: {formatMoney(currentMission.estimated_effect.amount, language)} ₽
                 </div>
               ) : null}
-              <Button type="button" className="mt-4 min-h-11 w-full bg-orange-500 text-white transition-transform hover:bg-orange-600 active:scale-[0.96]" onClick={openMission}>
+              <Button type="button" className="mt-4 min-h-11 w-full" onClick={openMission}>
                 {localizedFocusAction(language, currentMission.id, 'cta', currentMission.cta_label)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

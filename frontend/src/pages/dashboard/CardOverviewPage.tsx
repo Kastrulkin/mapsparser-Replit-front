@@ -789,7 +789,7 @@ export const CardOverviewPage = () => {
             </p>
             <Button
               onClick={() => window.location.href = '/dashboard/profile'}
-              className="w-full h-12 text-lg shadow-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700"
+              className="h-12 w-full text-lg"
             >
               {t.dashboard.card.networkNotice?.action || "Выбрать точку"}
             </Button>

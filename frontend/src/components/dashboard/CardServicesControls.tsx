@@ -162,7 +162,6 @@ export const CardServiceOptimizerPanel = ({
           <Button
             onClick={onOptimizeAll}
             disabled={!automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
-            className="bg-indigo-700 text-white hover:bg-indigo-800"
             title={!automationAllowed ? automationLockedMessage : copy.optimizeAll}
           >
             <Wand2 className="mr-2 h-4 w-4" />

@@ -1332,7 +1332,6 @@ export const AdminPage: React.FC = () => {
               {primaryAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
-                const isProspecting = tab.id === 'prospecting';
                 return (
                   <button
                     key={tab.id}
@@ -1340,12 +1339,8 @@ export const AdminPage: React.FC = () => {
                     aria-current={isActive ? 'page' : undefined}
                     className={`flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-semibold transition-colors ${
                       isActive
-                        ? isProspecting
-                          ? 'bg-orange-500 text-white shadow-sm shadow-orange-200'
-                          : 'bg-slate-950 text-white shadow-sm'
-                        : isProspecting
-                          ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                        ? 'bg-slate-950 text-white shadow-sm'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                     }`}
                   >
                     <Icon className="h-4 w-4" />

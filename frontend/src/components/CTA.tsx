@@ -47,7 +47,8 @@ const CTA = () => {
 
             <Button
               size="lg"
-              className="text-lg px-10 py-7 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-2xl shadow-orange-500/40 hover:shadow-orange-600/50 transition-all duration-300 transform hover:scale-105"
+              variant="brand"
+              className="px-10 py-7 text-lg"
               onClick={() => {
                 const form = document.getElementById('hero-form');
                 if (form) {

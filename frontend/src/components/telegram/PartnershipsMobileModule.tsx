@@ -741,13 +741,13 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
         </section>
         <form onSubmit={(event) => { event.preventDefault(); void load(); }} className="flex gap-2">
           <label className="relative min-w-0 flex-1"><Search className="absolute left-3 top-3.5 h-4 w-4 text-zinc-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, город или категория" className="min-h-11 w-full rounded-[14px] bg-white/[0.04] pl-9 pr-3 text-xs ring-1 ring-inset ring-white/[0.07]" /></label>
-          <button type="submit" aria-label="Найти" className="grid h-11 w-11 place-items-center rounded-[14px] bg-orange-500 active:scale-[0.96]"><Search className="h-4 w-4" /></button>
+          <button type="submit" aria-label="Найти" className="btn-iridescent grid h-11 w-11 place-items-center rounded-[14px]"><Search className="h-4 w-4" /></button>
         </form>
         {error ? <div className="rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{error}</div> : null}
         <div className="space-y-2">
           {leads.map((lead) => <article key={lead.id} className="rounded-[20px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{lead.name || "Компания"}</b><small className="mt-1 block truncate text-zinc-600">{[lead.category, lead.city].filter(Boolean).join(" · ") || lead.address || "Данные уточняются"}</small></div><span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[9px] text-zinc-400">★ {lead.rating || "—"}</span></div><div className="mt-3 flex items-center justify-between gap-3"><small className="text-zinc-600">{lead.reviews_count || 0} отзывов</small><button type="button" disabled={busy === `${lead.id}:catalog-shortlist`} onClick={() => void toggleCatalogShortlist(lead)} className="min-h-10 rounded-[13px] bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{lead.catalog_shortlisted ? "В shortlist" : "Добавить"}</button></div></article>)}
         </div>
-        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent("/telegram/control?screen=partnerships")}#subscription`} className="flex min-h-12 w-full items-center justify-center rounded-[15px] bg-orange-500 px-4 text-center text-sm font-semibold shadow-[0_12px_32px_rgba(249,115,22,0.22)] transition-transform duration-150 active:scale-[0.96]">Подготовить сообщения — тариф «Привлечение»</a>
+        <a href={`/dashboard/profile?focus=subscription&return_to=${encodeURIComponent("/telegram/control?screen=partnerships")}#subscription`} className="btn-iridescent flex min-h-12 w-full items-center justify-center rounded-[15px] px-4 text-center text-sm">Подготовить сообщения — тариф «Привлечение»</a>
       </div>
     );
   const tabs: Array<[PartnershipTab, string]> = [
@@ -807,7 +807,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
             </p>
             <button
               onClick={() => setTab(next.tab)}
-              className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-orange-500 text-sm font-semibold active:scale-[0.96]"
+              className="btn-iridescent mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] text-sm"
             >
               {next.text}
               <ChevronRight className="h-4 w-4" />
@@ -862,7 +862,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                 className="min-h-11 w-full rounded-[14px] bg-white/[0.04] pl-9 pr-3 text-xs ring-1 ring-inset ring-white/[0.07]"
               />
             </label>
-            <button className="grid h-11 w-11 place-items-center rounded-[14px] bg-orange-500 active:scale-[0.96]">
+            <button className="btn-iridescent grid h-11 w-11 place-items-center rounded-[14px]">
               <Search className="h-4 w-4" />
             </button>
           </form>
@@ -951,7 +951,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                     </select>
                     <button
                       disabled={busy === "geo"}
-                      className="min-h-11 rounded-[13px] bg-orange-500 text-xs font-semibold disabled:opacity-50"
+                      className="btn-iridescent min-h-11 rounded-[13px] text-xs"
                     >
                       {busy === "geo" ? "Ищем…" : "Найти"}
                     </button>
@@ -1018,7 +1018,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                   aria-label="Применить этап"
                   disabled={busy !== ""}
                   onClick={() => void bulkLeadAction("update")}
-                  className="grid h-11 w-11 place-items-center rounded-[13px] bg-orange-500"
+                  className="btn-iridescent grid h-11 w-11 place-items-center rounded-[13px]"
                 >
                   <Check className="h-4 w-4" />
                 </button>
@@ -1069,7 +1069,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                             : [...current, lead.id],
                         )
                       }
-                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] ${checked ? "bg-orange-500 text-white" : "bg-black/20 text-zinc-600"}`}
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] ${checked ? "bg-amber-400 text-slate-950" : "bg-black/20 text-zinc-600"}`}
                     >
                       {checked ? (
                         <Check className="h-4 w-4" />
@@ -1146,7 +1146,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                               : [...current, draft.id],
                           )
                         }
-                        className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] ${checked ? "bg-orange-500" : "bg-black/20"}`}
+                        className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] ${checked ? "bg-amber-400 text-slate-950" : "bg-black/20"}`}
                       >
                         {checked ? (
                           <Check className="h-4 w-4" />
@@ -1203,7 +1203,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                         <button
                           disabled={!text.trim() || busy === `draft:${draft.id}`}
                           onClick={() => void approveDraft(draft)}
-                          className="min-h-11 rounded-[13px] bg-orange-500 text-xs font-semibold disabled:opacity-40"
+                          className="btn-iridescent min-h-11 rounded-[13px] text-xs disabled:opacity-40"
                         >
                           {busy === `draft:${draft.id}`
                             ? "Сохраняем…"
@@ -1219,7 +1219,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
               <button
                 disabled={busy === "create-batch"}
                 onClick={() => void createBatch()}
-                className="sticky bottom-24 min-h-12 w-full rounded-[15px] bg-orange-500 text-sm font-semibold shadow-2xl disabled:opacity-45"
+                className="btn-iridescent sticky bottom-24 min-h-12 w-full rounded-[15px] text-sm shadow-2xl disabled:opacity-45"
               >
                 {selectedDrafts.length
                   ? `Собрать пакет: ${selectedDrafts.length}`
@@ -1240,7 +1240,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
             <button
               disabled={busy === "create-batch"}
               onClick={() => void createBatch()}
-              className="min-h-12 w-full rounded-[15px] bg-orange-500 text-sm font-semibold"
+              className="btn-iridescent min-h-12 w-full rounded-[15px] text-sm"
             >
               Собрать пакет из готовых писем · {readyDrafts.length}
             </button>
@@ -1319,7 +1319,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
                 {batch.status === "draft" ? (
                   <button
                     onClick={() => setConfirmBatch(batch)}
-                    className="mt-3 min-h-11 w-full rounded-[13px] bg-orange-500 text-xs font-semibold"
+                    className="btn-iridescent mt-3 min-h-11 w-full rounded-[13px] text-xs"
                   >
                     Проверить и подтвердить пакет
                   </button>
@@ -1656,7 +1656,7 @@ const LeadSheet = ({
             <button
               disabled={busy === `${lead.id}:save`}
               onClick={() => void update(lead, values)}
-              className="col-span-2 min-h-12 rounded-[14px] bg-orange-500 text-sm font-semibold"
+              className="btn-iridescent col-span-2 min-h-12 rounded-[14px] text-sm"
             >
               Сохранить карточку
             </button>
@@ -1713,7 +1713,7 @@ const LeadSheet = ({
                         : "draft-offer",
                 )
               }
-              className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-orange-500 text-sm font-semibold disabled:opacity-45"
+              className="btn-iridescent mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] text-sm disabled:opacity-45"
             >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
@@ -1860,7 +1860,7 @@ const BatchPreview = ({
         <button
           disabled={busy}
           onClick={confirm}
-          className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-orange-500 text-sm font-semibold"
+          className="btn-iridescent flex min-h-12 items-center justify-center gap-2 rounded-[14px] text-sm"
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />

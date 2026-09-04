@@ -52,7 +52,8 @@ describe('LeadJourneyPage', () => {
     expect(screen.getByRole('button', { name: /Средний чек/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Клиенты' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Контент и автоматизация' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Посмотреть возможность/ })).toHaveLength(6);
+    expect(screen.getAllByRole('button', { name: /Посмотреть возможность/ })).toHaveLength(5);
+    expect(screen.getByRole('button', { name: /Средний чек.*Посмотреть варианты/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Карты/ }));
     expect(await screen.findByRole('heading', { name: 'Первое исправление с понятным эффектом' })).toBeInTheDocument();

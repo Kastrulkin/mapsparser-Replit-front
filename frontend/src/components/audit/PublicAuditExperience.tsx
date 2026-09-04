@@ -247,10 +247,10 @@ export const PublicAuditExperience = ({
               aria-selected={activeView === 'audit'}
               aria-controls="public-audit-panel"
               onClick={() => setActiveView('audit')}
-              className={`flex min-h-14 items-center justify-center gap-2 rounded-xl px-3 text-center text-sm font-bold leading-5 text-white transition-[background-color,box-shadow,transform] active:scale-[0.96] sm:px-5 ${focusRing} ${
+              className={`flex min-h-14 items-center justify-center gap-2 rounded-xl px-3 text-center text-sm font-bold leading-5 transition-[background-color,box-shadow,color,transform] active:scale-[0.96] sm:px-5 ${focusRing} ${
                 activeView === 'audit'
-                  ? 'bg-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.20)] hover:bg-slate-800'
-                  : 'bg-orange-500 shadow-[0_6px_18px_rgba(249,115,22,0.18)] hover:bg-orange-600'
+                  ? 'bg-slate-950 text-white shadow-[0_8px_24px_rgba(15,23,42,0.20)] hover:bg-slate-800'
+                  : 'bg-white text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.10)] hover:bg-amber-50'
               }`}
             >
               <Check className={`h-4 w-4 shrink-0 ${activeView === 'audit' ? 'opacity-100' : 'opacity-0'}`} />
@@ -262,10 +262,10 @@ export const PublicAuditExperience = ({
               aria-selected={activeView === 'content'}
               aria-controls="public-content-panel"
               onClick={() => setActiveView('content')}
-              className={`flex min-h-14 items-center justify-center gap-2 rounded-xl px-3 text-center text-sm font-bold leading-5 text-white transition-[background-color,box-shadow,transform] active:scale-[0.96] sm:px-5 ${focusRing} ${
+              className={`flex min-h-14 items-center justify-center gap-2 rounded-xl px-3 text-center text-sm font-bold leading-5 transition-[background-color,box-shadow,color,transform] active:scale-[0.96] sm:px-5 ${focusRing} ${
                 activeView === 'content'
-                  ? 'bg-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.20)] hover:bg-slate-800'
-                  : 'bg-orange-500 shadow-[0_6px_18px_rgba(249,115,22,0.18)] hover:bg-orange-600'
+                  ? 'bg-slate-950 text-white shadow-[0_8px_24px_rgba(15,23,42,0.20)] hover:bg-slate-800'
+                  : 'bg-white text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.10)] hover:bg-amber-50'
               }`}
             >
               <Check className={`h-4 w-4 shrink-0 ${activeView === 'content' ? 'opacity-100' : 'opacity-0'}`} />
@@ -288,7 +288,7 @@ export const PublicAuditExperience = ({
             <button
               type="button"
               onClick={onPrepareWithLocalOS}
-              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-semibold text-white shadow-sm transition-[background-color,transform] hover:bg-orange-600 active:scale-[0.96] ${focusRing}`}
+              className={`btn-iridescent inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm ${focusRing}`}
             >
               <Sparkles className="h-4 w-4" />
               {labels.prepareWithLocalOS}
