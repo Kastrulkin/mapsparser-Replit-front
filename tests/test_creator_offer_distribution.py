@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from services.creator_offer_distribution_service import _eligibility, distribution_enabled, validate_offer
+from services.creator_portal_service import _publication_url, _ready
 
 
 def campaign(**offer_overrides):
@@ -11,6 +13,7 @@ def campaign(**offer_overrides):
         "service": "Детская стрижка",
         "category": "семейные услуги",
         "benefit": "Бесплатная стрижка",
+        "result_condition": "Если придут 3 новых клиента",
         "capacity": 3,
         **offer_overrides,
     }
@@ -86,6 +89,28 @@ def test_offer_requires_a_future_machine_readable_deadline():
     offer["period"] = {"end_at": "когда-нибудь"}
     with pytest.raises(ValueError, match="будущей датой"):
         validate_offer(offer)
+
+
+def test_offer_requires_a_result_condition():
+    offer = campaign()
+    offer["offer"].pop("result_condition")
+    offer["period"] = {"end_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()}
+    with pytest.raises(ValueError, match="условие результата"):
+        validate_offer(offer)
+
+
+def test_creator_publication_requires_a_public_http_url():
+    assert _publication_url("https://t.me/local_creator/42") == "https://t.me/local_creator/42"
+    with pytest.raises(ValueError, match="публичную ссылку"):
+        _publication_url("telegram post 42")
+
+
+def test_creator_portal_serializes_dates_and_numeric_metrics():
+    now = datetime.now(timezone.utc)
+    assert _ready({"observed_at": now, "confidence": Decimal("0.7000")}) == {
+        "observed_at": now.isoformat(),
+        "confidence": 0.7,
+    }
 
 
 def test_migration_backfills_without_creating_notifications():

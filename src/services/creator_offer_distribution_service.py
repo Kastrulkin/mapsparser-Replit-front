@@ -8,6 +8,8 @@ from typing import Any
 
 from psycopg2.extras import Json
 
+from services.creator_promotion_service import build_tracking_plan
+
 
 RECIPIENT_STATUSES = {
     "pending_account", "available", "interested", "needs_details",
@@ -270,6 +272,7 @@ def validate_offer(campaign: dict[str, Any]) -> None:
     required = {
         "услуга": offer.get("service"),
         "выгода автору": offer.get("benefit") or offer.get("reward"),
+        "условие результата": offer.get("result_condition"),
         "география": geography.get("city") or geography.get("cities"),
         "срок окончания": period.get("end_at"),
         "количество мест": offer.get("capacity"),
@@ -813,6 +816,40 @@ def select_recipient(
         "UPDATE creator_offer_recipients SET status = 'selected', selected_at = NOW(), collaboration_id = %s, updated_at = NOW() WHERE id = %s",
         (collaboration_id, recipient_id),
     )
+    offer_snapshot = _json(recipient.get("offer_snapshot_json"), {})
+    constraints = _json(offer_snapshot.get("constraints"), {})
+    attribution = _json(constraints.get("attribution"), {})
+    promo_code = str(attribution.get("promo_code") or "").strip()
+    if attribution.get("method") == "promo_code":
+        promo_code = f"{promo_code or 'LOCALOS'}-{str(recipient['creator_profile_id'])[:6].upper()}"
+    tracking = build_tracking_plan(
+        {
+            "destination_url": attribution.get("destination_url"),
+            "promo_code": promo_code,
+            "cta": attribution.get("cta") or offer.get("result_condition"),
+        },
+        platform="creator",
+        campaign_id=str(recipient["campaign_id"]),
+        creator_profile_id=str(recipient["creator_profile_id"]),
+    )
+    cursor.execute(
+        """
+        INSERT INTO creator_deliverables (
+            id, collaboration_id, platform, deliverable_type, due_at,
+            required_elements_json, verification_status, tracking_json
+        )
+        SELECT %s, %s, 'other', 'post',
+               NULLIF(%s, '')::timestamptz, %s, 'expected', %s
+        WHERE NOT EXISTS (
+            SELECT 1 FROM creator_deliverables WHERE collaboration_id = %s
+        )
+        """,
+        (
+            str(uuid.uuid4()), collaboration_id,
+            str(_json(offer_snapshot.get("period"), {}).get("end_at") or ""),
+            Json(_text_list(constraints.get("requirements"))), Json(tracking), collaboration_id,
+        ),
+    )
     selected_count += 1
     if selected_count >= capacity:
         cursor.execute(
@@ -847,6 +884,10 @@ def list_campaign_recipients(
         """
         SELECT recipient.id, recipient.status, recipient.responded_at, recipient.selected_at,
                recipient.response_text, recipient.collaboration_id,
+               collaboration.status AS collaboration_status,
+               COALESCE(deliverable_counts.total, 0) AS deliverables_count,
+               COALESCE(deliverable_counts.submitted, 0) AS submitted_deliverables,
+               COALESCE(deliverable_counts.verified, 0) AS verified_deliverables,
                profile.id AS creator_profile_id, profile.display_name,
                COALESCE(taxonomy.home_city, profile.primary_city) AS city,
                COALESCE(taxonomy.home_district, profile.primary_area) AS area,
@@ -856,6 +897,14 @@ def list_campaign_recipients(
         LEFT JOIN creator_profile_taxonomy taxonomy ON taxonomy.creator_profile_id = profile.id
         LEFT JOIN creator_business_preferences preference
           ON preference.creator_profile_id = profile.id AND preference.business_id = recipient.business_id
+        LEFT JOIN creator_collaborations collaboration ON collaboration.id = recipient.collaboration_id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*)::INT AS total,
+                   COUNT(*) FILTER (WHERE deliverable.verification_status = 'submitted')::INT AS submitted,
+                   COUNT(*) FILTER (WHERE deliverable.verification_status = 'verified')::INT AS verified
+            FROM creator_deliverables deliverable
+            WHERE deliverable.collaboration_id = recipient.collaboration_id
+        ) deliverable_counts ON TRUE
         WHERE recipient.campaign_id = %s AND recipient.business_id = %s
         ORDER BY CASE recipient.status WHEN 'interested' THEN 0 WHEN 'needs_details' THEN 1
                      WHEN 'selected' THEN 2 WHEN 'available' THEN 3 ELSE 4 END,

@@ -23,6 +23,8 @@ from services.creator_portal_service import (
     request_password_reset,
     reset_password,
     review_offer,
+    submit_creator_metrics,
+    submit_creator_publication,
     update_creator_profile,
     update_notifications,
     verify_email,
@@ -181,6 +183,22 @@ def offer_message(collaboration_id: str):
         "message": add_offer_message(cursor, collaboration_id=collaboration_id, sender_type="creator",
                                       sender_id=str(account["id"]), body=str(payload.get("message") or ""),
                                       profile_id=str(account["creator_profile_id"]))
+    })
+
+
+@creator_portal_bp.post("/offers/<offer_id>/publication")
+def offer_publication(offer_id: str):
+    payload = request.get_json(silent=True) or {}
+    return _creator_operation(lambda cursor, account: {
+        "offer": submit_creator_publication(cursor, account=account, offer_id=offer_id, payload=payload)
+    })
+
+
+@creator_portal_bp.post("/offers/<offer_id>/metrics")
+def offer_metrics(offer_id: str):
+    payload = request.get_json(silent=True) or {}
+    return _creator_operation(lambda cursor, account: {
+        "offer": submit_creator_metrics(cursor, account=account, offer_id=offer_id, payload=payload)
     })
 
 

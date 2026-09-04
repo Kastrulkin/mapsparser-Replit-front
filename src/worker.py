@@ -109,7 +109,10 @@ from services.founder_content_editorial import (
 )
 from services.web_tracking_maintenance import run_web_tracking_maintenance
 from services.creator_promotion_service import process_next_creator_search_job
-from services.creator_portal_service import dispatch_notifications as dispatch_creator_notifications
+from services.creator_portal_service import (
+    dispatch_notifications as dispatch_creator_notifications,
+    queue_due_measurement_reminders,
+)
 from services.creator_offer_distribution_service import (
     expire_creator_offers,
     process_next_distribution_run,
@@ -1706,13 +1709,17 @@ def _dispatch_creator_notifications_if_due() -> None:
     _LAST_CREATOR_NOTIFICATION_AT = now
     db = DatabaseManager()
     try:
+        reminders_queued = queue_due_measurement_reminders(
+            db.conn.cursor(cursor_factory=RealDictCursor),
+            limit=max(1, min(int(os.getenv("CREATOR_MEASUREMENT_REMINDER_BATCH_SIZE", "100")), 500)),
+        )
         result = dispatch_creator_notifications(
             db.conn.cursor(cursor_factory=RealDictCursor),
             limit=max(1, min(int(os.getenv("CREATOR_NOTIFICATION_BATCH_SIZE", "25")), 100)),
         )
         db.conn.commit()
-        if result.get("processed"):
-            print(f"[CREATOR_NOTIFICATIONS] {result}", flush=True)
+        if result.get("processed") or reminders_queued:
+            print(f"[CREATOR_NOTIFICATIONS] reminders_queued={reminders_queued} result={result}", flush=True)
     except Exception as exc:
         db.conn.rollback()
         print(f"[CREATOR_NOTIFICATIONS] error: {exc}", flush=True)

@@ -12,6 +12,8 @@ describe('CreatorOfferBuilder', () => {
     expect(screen.getByText(/Shortlist влияет на приоритет, но не ограничивает охват/)).toBeInTheDocument();
     expect(screen.getByLabelText('Город')).toHaveValue('Санкт-Петербург');
     expect(screen.getByLabelText('Только бартер')).toBeChecked();
+    expect(screen.getByLabelText('Способ учёта')).toHaveValue('promo_code');
+    expect(screen.getByLabelText('Целевое количество')).toHaveValue(3);
     expect(screen.getByRole('button', { name: 'Передать LocalOS' })).toBeDisabled();
   });
 });

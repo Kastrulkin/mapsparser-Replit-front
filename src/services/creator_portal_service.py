@@ -5,8 +5,10 @@ import json
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 from psycopg2.extras import Json
@@ -14,6 +16,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from core.email_delivery import send_email
 from services.creator_offer_distribution_service import activate_pending_offers, update_offer_preferences
+from services.creator_promotion_service import add_metric_snapshot
 
 
 RELATIONSHIP_STAGES = (
@@ -61,8 +64,10 @@ def _ready(value: Any) -> Any:
         return {key: _ready(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_ready(item) for item in value]
-    if isinstance(value, datetime):
+    if isinstance(value, (date, datetime)):
         return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
     if isinstance(value, uuid.UUID):
         return str(value)
     return value
@@ -74,6 +79,14 @@ def _hash(token: str) -> str:
 
 def _base_url() -> str:
     return str(os.getenv("PUBLIC_BASE_URL") or os.getenv("FRONTEND_URL") or "https://localos.pro").rstrip("/")
+
+
+def _publication_url(value: Any) -> str:
+    url = str(value or "").strip()
+    parts = urlsplit(url)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise ValueError("Добавьте полную публичную ссылку на материал")
+    return url
 
 
 def _new_token(cursor: Any, *, profile_id: str, purpose: str, email: str | None,
@@ -154,7 +167,9 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
         raise ValueError("Недопустимый статус")
     scope_base = "" if is_superadmin else "AND EXISTS (SELECT 1 FROM creator_campaign_candidates cc JOIN creator_campaigns c ON c.id = cc.campaign_id WHERE cc.creator_profile_id = p.id AND c.business_id = %s)"
     scope = scope_base
-    params: list[Any] = [] if is_superadmin else [business_id]
+    params: list[Any] = [business_id]
+    if not is_superadmin:
+        params.append(business_id)
     if stage:
         scope += " AND r.stage = %s"
         params.append(stage)
@@ -174,6 +189,7 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
                taxonomy.audience_size_band, taxonomy.content_styles_json,
                taxonomy.classification_status, taxonomy.evidence_json,
                account.status AS account_status,
+               COALESCE(pending_offers.count, 0) AS pending_offers_count,
                COALESCE(channels.items, '[]'::jsonb) AS channels,
                evidence.summary_text AS evidence_summary, evidence.source_url AS evidence_url,
                evidence.observed_at AS evidence_observed_at
@@ -182,6 +198,12 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
         LEFT JOIN creator_commercial_profiles commercial ON commercial.creator_profile_id = p.id
         LEFT JOIN creator_profile_taxonomy taxonomy ON taxonomy.creator_profile_id = p.id
         LEFT JOIN creator_accounts account ON account.creator_profile_id = p.id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*)::INT AS count
+            FROM creator_offer_recipients recipient
+            WHERE recipient.creator_profile_id = p.id AND recipient.business_id = %s
+              AND recipient.status = 'pending_account'
+        ) pending_offers ON TRUE
         LEFT JOIN LATERAL (
             SELECT jsonb_agg(jsonb_build_object(
                 'platform', ch.platform, 'url', ch.canonical_url,
@@ -564,14 +586,56 @@ def portal_home(cursor: Any, account: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _portal_deliverables(cursor: Any, collaboration_id: str) -> list[dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT id, platform, deliverable_type, due_at, publication_url,
+               verification_status, published_at, tracking_json
+        FROM creator_deliverables
+        WHERE collaboration_id = %s
+        ORDER BY created_at
+        """,
+        (collaboration_id,),
+    )
+    deliverables = []
+    for row in cursor.fetchall():
+        item = _dict(row)
+        item["tracking"] = _json(item.pop("tracking_json", None), {})
+        cursor.execute(
+            """
+            SELECT id, checkpoint, due_at, status, completed_at
+            FROM creator_measurement_checkpoints
+            WHERE deliverable_id = %s
+            ORDER BY due_at, checkpoint
+            """,
+            (item["id"],),
+        )
+        item["measurement_checkpoints"] = [_ready(_dict(checkpoint)) for checkpoint in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT metric_date, views, reach, reactions, comments, saves, clicks,
+                   promo_uses, inquiries, bookings, source_type, confidence
+            FROM creator_placement_metrics
+            WHERE deliverable_id = %s
+            ORDER BY metric_date DESC, created_at DESC
+            """,
+            (item["id"],),
+        )
+        item["metrics"] = [_ready(_dict(metric)) for metric in cursor.fetchall()]
+        deliverables.append(_ready(item))
+    return deliverables
+
+
 def offer_detail(cursor: Any, *, profile_id: str, collaboration_id: str) -> dict[str, Any]:
     cursor.execute(
         """
-        SELECT recipient.*, campaign.title, campaign.goal, business.name AS business_name,
+        SELECT recipient.*, collaboration.status AS collaboration_status,
+               campaign.title, campaign.goal, business.name AS business_name,
                business.city, business.address, business.description AS business_description
         FROM creator_offer_recipients recipient
         JOIN creator_campaigns campaign ON campaign.id = recipient.campaign_id
         JOIN businesses business ON business.id = recipient.business_id
+        LEFT JOIN creator_collaborations collaboration ON collaboration.id = recipient.collaboration_id
         WHERE recipient.id = %s AND recipient.creator_profile_id = %s
           AND recipient.status <> 'pending_account'
           AND campaign.status IN ('active', 'completed')
@@ -596,11 +660,7 @@ def offer_detail(cursor: Any, *, profile_id: str, collaboration_id: str) -> dict
         distributed["messages"] = [_ready(_dict(row)) for row in cursor.fetchall()]
         distributed["deliverables"] = []
         if distributed.get("collaboration_id"):
-            cursor.execute(
-                "SELECT id, platform, deliverable_type, due_at, publication_url, verification_status FROM creator_deliverables WHERE collaboration_id = %s ORDER BY created_at",
-                (distributed["collaboration_id"],),
-            )
-            distributed["deliverables"] = [_ready(_dict(row)) for row in cursor.fetchall()]
+            distributed["deliverables"] = _portal_deliverables(cursor, str(distributed["collaboration_id"]))
         return _ready(distributed)
     cursor.execute(
         """
@@ -623,9 +683,172 @@ def offer_detail(cursor: Any, *, profile_id: str, collaboration_id: str) -> dict
         offer[key.removesuffix("_json")] = _json(offer.pop(key, None), []) if key == "formats_json" else _json(offer.pop(key, None), {})
     cursor.execute("SELECT id, sender_type, body_text, created_at FROM creator_offer_messages WHERE collaboration_id = %s ORDER BY created_at", (collaboration_id,))
     offer["messages"] = [_ready(_dict(row)) for row in cursor.fetchall()]
-    cursor.execute("SELECT id, platform, deliverable_type, due_at, publication_url, verification_status FROM creator_deliverables WHERE collaboration_id = %s ORDER BY created_at", (collaboration_id,))
-    offer["deliverables"] = [_ready(_dict(row)) for row in cursor.fetchall()]
+    offer["deliverables"] = _portal_deliverables(cursor, collaboration_id)
     return _ready(offer)
+
+
+def submit_creator_publication(
+    cursor: Any,
+    *,
+    account: dict[str, Any],
+    offer_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    offer = offer_detail(cursor, profile_id=str(account["creator_profile_id"]), collaboration_id=offer_id)
+    collaboration_id = str(offer.get("collaboration_id") or (offer.get("id") if offer.get("offer_kind") == "legacy" else ""))
+    if not collaboration_id:
+        raise ValueError("Сначала LocalOS должен выбрать вас для сотрудничества")
+    status = str(offer.get("collaboration_status") or offer.get("status") or "")
+    allowed_statuses = {"agreed", "visit_scheduled", "awaiting_content", "published", "measuring"}
+    if status not in allowed_statuses:
+        raise ValueError("Публикацию можно передать после согласования с LocalOS")
+    publication_url = _publication_url(payload.get("publication_url"))
+    deliverable_id = str(payload.get("deliverable_id") or "").strip()
+    platform = str(payload.get("platform") or "other").strip().lower() or "other"
+    deliverable_type = str(payload.get("deliverable_type") or "post").strip() or "post"
+    proof = Json({"submitted_by": "creator_portal", "submitted_at": datetime.now(timezone.utc).isoformat()})
+    if deliverable_id:
+        cursor.execute(
+            """
+            UPDATE creator_deliverables
+            SET publication_url = %s, verification_status = 'submitted',
+                platform = COALESCE(NULLIF(%s, ''), platform),
+                deliverable_type = COALESCE(NULLIF(%s, ''), deliverable_type),
+                proof_json = proof_json || %s::jsonb, published_at = COALESCE(published_at, NOW()),
+                updated_at = NOW()
+            WHERE id = %s AND collaboration_id = %s
+            RETURNING id
+            """,
+            (publication_url, platform, deliverable_type, proof, deliverable_id, collaboration_id),
+        )
+        if not cursor.fetchone():
+            raise LookupError("Материал не найден")
+    else:
+        deliverable_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO creator_deliverables (
+                id, collaboration_id, platform, deliverable_type, publication_url,
+                verification_status, proof_json, usage_rights_json, published_at
+            ) VALUES (%s, %s, %s, %s, %s, 'submitted', %s, '{}'::jsonb, NOW())
+            """,
+            (deliverable_id, collaboration_id, platform, deliverable_type, publication_url, proof),
+        )
+    cursor.execute(
+        """
+        UPDATE creator_collaborations
+        SET status = 'published', updated_at = NOW()
+        WHERE id = %s AND creator_profile_id = %s
+        """,
+        (collaboration_id, account["creator_profile_id"]),
+    )
+    return offer_detail(cursor, profile_id=str(account["creator_profile_id"]), collaboration_id=offer_id)
+
+
+def submit_creator_metrics(
+    cursor: Any,
+    *,
+    account: dict[str, Any],
+    offer_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    offer = offer_detail(cursor, profile_id=str(account["creator_profile_id"]), collaboration_id=offer_id)
+    collaboration_id = str(offer.get("collaboration_id") or (offer.get("id") if offer.get("offer_kind") == "legacy" else ""))
+    deliverable_id = str(payload.get("deliverable_id") or "").strip()
+    if not collaboration_id or not deliverable_id:
+        raise ValueError("Выберите опубликованный материал")
+    cursor.execute(
+        """
+        SELECT collaboration.business_id
+        FROM creator_deliverables deliverable
+        JOIN creator_collaborations collaboration ON collaboration.id = deliverable.collaboration_id
+        WHERE deliverable.id = %s AND deliverable.collaboration_id = %s
+          AND collaboration.creator_profile_id = %s
+        """,
+        (deliverable_id, collaboration_id, account["creator_profile_id"]),
+    )
+    collaboration = _dict(cursor.fetchone())
+    if not collaboration:
+        raise LookupError("Материал не найден")
+    add_metric_snapshot(
+        cursor,
+        business_id=str(collaboration["business_id"]),
+        deliverable_id=deliverable_id,
+        payload={
+            **payload,
+            "source_type": "creator_reported",
+            "confidence": 0.7,
+            "confirmed_revenue": None,
+            "placement_cost": None,
+        },
+    )
+    cursor.execute(
+        """
+        UPDATE creator_notification_outbox
+        SET status = 'cancelled', updated_at = NOW(), last_error = 'Статистика уже передана'
+        WHERE creator_account_id = %s AND event_type = 'measurement_due'
+          AND status IN ('pending', 'failed')
+          AND payload_json->>'deliverable_id' = %s
+          AND (%s = '' OR payload_json->>'checkpoint' = %s)
+        """,
+        (account["id"], deliverable_id, str(payload.get("checkpoint") or ""), str(payload.get("checkpoint") or "")),
+    )
+    cursor.execute(
+        "UPDATE creator_collaborations SET status = 'measuring', updated_at = NOW() WHERE id = %s",
+        (collaboration_id,),
+    )
+    return offer_detail(cursor, profile_id=str(account["creator_profile_id"]), collaboration_id=offer_id)
+
+
+def queue_due_measurement_reminders(cursor: Any, *, limit: int = 100) -> int:
+    cursor.execute(
+        """
+        SELECT checkpoint.id AS checkpoint_id, checkpoint.checkpoint, deliverable.id AS deliverable_id,
+               collaboration.id AS collaboration_id, recipient.id AS offer_recipient_id,
+               account.id AS account_id, account.telegram_id, account.email,
+               account.email_verified_at, account.notification_preferences_json
+        FROM creator_measurement_checkpoints checkpoint
+        JOIN creator_deliverables deliverable ON deliverable.id = checkpoint.deliverable_id
+        JOIN creator_collaborations collaboration ON collaboration.id = deliverable.collaboration_id
+        JOIN creator_accounts account
+          ON account.creator_profile_id = collaboration.creator_profile_id AND account.status = 'active'
+        LEFT JOIN creator_offer_recipients recipient ON recipient.collaboration_id = collaboration.id
+        WHERE checkpoint.status = 'pending' AND checkpoint.due_at <= NOW()
+          AND collaboration.status IN ('published', 'measuring')
+        ORDER BY checkpoint.due_at
+        LIMIT %s
+        """,
+        (max(1, min(int(limit), 500)),),
+    )
+    queued = 0
+    for row in cursor.fetchall():
+        item = _dict(row)
+        preferences = _json(item.get("notification_preferences_json"), {})
+        offer_id = str(item.get("offer_recipient_id") or item["collaboration_id"])
+        portal_url = f"{_base_url()}/creator/offers/{offer_id}"
+        channels = []
+        if item.get("telegram_id") and preferences.get("telegram", True):
+            channels.append("telegram")
+        if item.get("email") and item.get("email_verified_at") and preferences.get("email", True):
+            channels.append("email")
+        for channel in channels:
+            cursor.execute(
+                """
+                INSERT INTO creator_notification_outbox (
+                    id, creator_account_id, collaboration_id, offer_recipient_id,
+                    channel, event_type, payload_json, dedupe_key
+                ) VALUES (%s, %s, %s, %s, %s, 'measurement_due', %s, %s)
+                ON CONFLICT (dedupe_key) DO NOTHING
+                """,
+                (
+                    str(uuid.uuid4()), item["account_id"], item["collaboration_id"],
+                    item.get("offer_recipient_id"), channel,
+                    Json({"portal_url": portal_url, "deliverable_id": str(item["deliverable_id"]), "checkpoint": item["checkpoint"]}),
+                    f"measurement-due:{item['checkpoint_id']}:{channel}",
+                ),
+            )
+            queued += cursor.rowcount
+    return queued
 
 
 def creator_respond(cursor: Any, *, account: dict[str, Any], collaboration_id: str,
@@ -888,6 +1111,7 @@ def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
               recipient.id IS NULL
               OR recipient.status = 'available'
               OR (o.event_type = 'offer_message' AND recipient.status IN ('interested', 'needs_details', 'selected'))
+              OR (o.event_type = 'measurement_due' AND recipient.status = 'selected')
           )
         ORDER BY o.created_at FOR UPDATE OF o SKIP LOCKED LIMIT %s
         """,
@@ -912,6 +1136,8 @@ def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
             continue
         if item.get("event_type") == "offer_message":
             message = f"Здравствуйте, {item['display_name']}!\n\nLocalOS ответил по предложению «{item.get('title') or 'сотрудничество'}»: {str(payload.get('message') or '')[:300]}"
+        elif item.get("event_type") == "measurement_due":
+            message = f"Здравствуйте, {item['display_name']}!\n\nПора передать статистику публикации за {payload.get('checkpoint') or 'контрольный период'} по предложению «{item.get('title') or 'сотрудничество'}»."
         else:
             message = f"Здравствуйте, {item['display_name']}!\n\nДля вас есть новое предложение от {item.get('business_name') or 'LocalOS'}: {item.get('title') or 'сотрудничество'}"
         try:
@@ -928,7 +1154,8 @@ def dispatch_notifications(cursor: Any, *, limit: int = 25) -> dict[str, int]:
                 response.raise_for_status()
                 provider_id = str(response.json().get("result", {}).get("message_id") or "")
             else:
-                if not item.get("email") or not send_email(item["email"], "Новое предложение в LocalOS", f"{message}\n\n{payload['portal_url']}"):
+                subject = "Передайте статистику публикации" if item.get("event_type") == "measurement_due" else "Новое предложение в LocalOS"
+                if not item.get("email") or not send_email(item["email"], subject, f"{message}\n\n{payload['portal_url']}"):
                     raise RuntimeError("Email не отправлен")
             cursor.execute("UPDATE creator_notification_outbox SET status = 'sent', attempts = attempts + 1, provider_message_id = %s, sent_at = NOW(), updated_at = NOW(), last_error = NULL WHERE id = %s", (provider_id, item["id"]))
             if item.get("collaboration_id"):

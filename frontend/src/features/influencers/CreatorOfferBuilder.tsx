@@ -45,6 +45,7 @@ export const CreatorOfferBuilder = ({ businessId, businessCity = '', onSubmitted
     title: '', service: '', benefit: '', resultCondition: '', city: businessCity,
     districts: '', metros: '', topics: '', formats: '', category: '', capacity: '3',
     endAt: '', requirements: '', restrictions: '', barter: true, compensation: '',
+    attributionMethod: 'promo_code', promoCode: '', destinationUrl: '', attributionDays: '14', resultTarget: '3',
   });
 
   const payload = () => ({
@@ -54,9 +55,9 @@ export const CreatorOfferBuilder = ({ businessId, businessCity = '', onSubmitted
     geography: { city: form.city, districts: form.districts.split(',').map((item) => item.trim()).filter(Boolean), metros: form.metros.split(',').map((item) => item.trim()).filter(Boolean) },
     audience: { topics: form.topics.split(',').map((item) => item.trim()).filter(Boolean) },
     formats: form.formats.split(',').map((item) => item.trim()).filter(Boolean),
-    offer: { service: form.service, benefit: form.benefit, result_condition: form.resultCondition, barter: form.barter, compensation: form.compensation, category: form.category || form.service, capacity: Number(form.capacity) },
+    offer: { service: form.service, benefit: form.benefit, result_condition: form.resultCondition, result_target: Number(form.resultTarget), barter: form.barter, compensation: form.compensation, category: form.category || form.service, capacity: Number(form.capacity) },
     period: { end_at: form.endAt ? new Date(`${form.endAt}T23:59:59`).toISOString() : '' },
-    constraints: { requirements: form.requirements, restrictions: form.restrictions, usage_rights: { organic_publication: true } },
+    constraints: { requirements: form.requirements, restrictions: form.restrictions, usage_rights: { organic_publication: true }, attribution: { method: form.attributionMethod, promo_code: form.promoCode, destination_url: form.destinationUrl, window_days: Number(form.attributionDays), result_target: Number(form.resultTarget) } },
   });
 
   const saveDraft = async () => {
@@ -109,6 +110,7 @@ export const CreatorOfferBuilder = ({ businessId, businessCity = '', onSubmitted
       <label className="text-sm font-semibold text-slate-700">Категория<Input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} placeholder="семейные услуги" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Выгода автору<Input value={form.benefit} onChange={(event) => setForm({ ...form, benefit: event.target.value })} placeholder="Бесплатная стрижка" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Условие результата<Input value={form.resultCondition} onChange={(event) => setForm({ ...form, resultCondition: event.target.value })} placeholder="Если придут 3 новых клиента" className="mt-2" /></label>
+      <label className="text-sm font-semibold text-slate-700">Целевое количество<Input type="number" min="1" value={form.resultTarget} onChange={(event) => setForm({ ...form, resultTarget: event.target.value })} className="mt-2 tabular-nums" /></label>
       <label className="text-sm font-semibold text-slate-700">Город<Input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Районы<Input value={form.districts} onChange={(event) => setForm({ ...form, districts: event.target.value })} placeholder="Выборгский" className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700">Метро<Input value={form.metros} onChange={(event) => setForm({ ...form, metros: event.target.value })} placeholder="Проспект Просвещения" className="mt-2" /></label>
@@ -118,6 +120,7 @@ export const CreatorOfferBuilder = ({ businessId, businessCity = '', onSubmitted
       <label className="text-sm font-semibold text-slate-700">Принимать отклики до<Input type="date" value={form.endAt} onChange={(event) => setForm({ ...form, endAt: event.target.value })} className="mt-2" /></label>
       <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-slate-200 px-3 text-sm text-slate-700"><input type="checkbox" checked={form.barter} onChange={(event) => setForm({ ...form, barter: event.target.checked })} />Только бартер</label>
       {!form.barter ? <label className="text-sm font-semibold text-slate-700">Оплата или другая компенсация<Input value={form.compensation} onChange={(event) => setForm({ ...form, compensation: event.target.value })} placeholder="Например, 3 000 ₽" className="mt-2" /></label> : null}
+      <div className="rounded-[20px] bg-slate-50 p-4 sm:col-span-2"><h3 className="text-balance text-sm font-semibold text-slate-900">Как поймём, что результат достигнут</h3><p className="mt-1 text-pretty text-xs leading-5 text-slate-500">Укажите один понятный способ. Автор увидит его в условиях предложения.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold text-slate-700">Способ учёта<select value={form.attributionMethod} onChange={(event) => setForm({ ...form, attributionMethod: event.target.value })} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal"><option value="promo_code">Промокод автора</option><option value="booking_question">Вопрос при записи</option><option value="tracked_link">Отслеживаемая ссылка</option><option value="manual">Ручное подтверждение</option></select></label><label className="text-sm font-semibold text-slate-700">Окно учёта, дней<Input type="number" min="1" value={form.attributionDays} onChange={(event) => setForm({ ...form, attributionDays: event.target.value })} className="mt-2 tabular-nums" /></label>{form.attributionMethod === 'promo_code' ? <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Промокод<Input value={form.promoCode} onChange={(event) => setForm({ ...form, promoCode: event.target.value })} placeholder="Например, ALEXANDR" className="mt-2" /></label> : null}{form.attributionMethod === 'tracked_link' ? <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Ссылка на запись<Input type="url" value={form.destinationUrl} onChange={(event) => setForm({ ...form, destinationUrl: event.target.value })} placeholder="https://..." className="mt-2" /></label> : null}</div></div>
       <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Требования к публикации<Textarea value={form.requirements} onChange={(event) => setForm({ ...form, requirements: event.target.value })} className="mt-2" /></label>
       <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Ограничения<Textarea value={form.restrictions} onChange={(event) => setForm({ ...form, restrictions: event.target.value })} className="mt-2" /></label>
     </div>
