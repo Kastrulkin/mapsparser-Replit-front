@@ -77,7 +77,7 @@ export const InfluencersMobileModule = ({ scope, focusItemId }: InfluencersMobil
         ? `/api/promotion/influencers/catalog/${encodeURIComponent(creator.id)}/disposition`
         : `/api/promotion/influencers/search-results/${encodeURIComponent(creator.result_id)}`;
       const body = catalogCreator
-        ? { business_id: businessId, disposition: creator.shortlist_status === 'shortlisted' ? 'available' : 'shortlisted' }
+        ? { business_id: businessId, disposition: creator.disposition === 'shortlisted' ? 'available' : 'shortlisted' }
         : { business_id: businessId, shortlist_status: creator.shortlist_status === 'shortlisted' ? 'suggested' : 'shortlisted' };
       await fetch(endpoint, {
         method: 'PATCH',

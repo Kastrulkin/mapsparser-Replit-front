@@ -31,7 +31,7 @@ describe('InfluencersMobileModule', () => {
     expect(await screen.findByRole('heading', { name: 'Анна про Петербург' })).toBeInTheDocument();
     expect(screen.getByText('4 200')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', expect.stringContaining('screen%3Dinfluencers'));
-    await user.click(screen.getByRole('button', { name: 'В shortlist' }));
+    await user.click(screen.getByRole('button', { name: 'Подходит' }));
     expect(fetch).toHaveBeenCalledWith('/api/promotion/influencers/search-results/result-1', expect.objectContaining({ method: 'PATCH' }));
   });
 
@@ -54,7 +54,7 @@ describe('InfluencersMobileModule', () => {
     render(<InfluencersMobileModule scope={{ kind: 'business', id: 'business-1', name: 'Салон' }} />);
 
     expect(await screen.findByRole('heading', { name: 'Публичный автор' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'В shortlist' }));
+    await user.click(screen.getByRole('button', { name: 'Подходит' }));
     expect(fetch).toHaveBeenCalledWith(
       '/api/promotion/influencers/catalog/creator-public-1/disposition',
       expect.objectContaining({ method: 'PATCH' }),

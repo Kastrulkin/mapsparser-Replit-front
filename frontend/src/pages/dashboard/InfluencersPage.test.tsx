@@ -49,7 +49,8 @@ describe('InfluencersPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Анна про Петербург' })).toBeInTheDocument();
     expect(screen.getByText(/Публичный обзор салона/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'В shortlist' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Подходит' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Не подходит' })).toBeEnabled();
 
     await user.click(screen.getByRole('tab', { name: 'Предложение' }));
     expect(await screen.findByText('Подготовка сообщений доступна после оплаты.')).toBeVisible();
