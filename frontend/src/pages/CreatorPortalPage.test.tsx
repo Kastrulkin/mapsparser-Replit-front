@@ -90,9 +90,45 @@ describe('CreatorPortalPage publication flow', () => {
     await user.type(screen.getByPlaceholderText('t.me/username'), 't.me/anna_spb');
     await user.click(screen.getByRole('button', { name: 'Завершить регистрацию' }));
 
+    expect(await screen.findByRole('heading', { name: 'Анна, получайте новые предложения в Telegram' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Подключить Telegram' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Сделать позже' }));
     expect(await screen.findByRole('heading', { name: 'Новые' })).toBeInTheDocument();
     const profileCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/profile'));
     expect(profileCall?.[1]).toEqual(expect.objectContaining({ method: 'PATCH' }));
     expect(JSON.parse(String(profileCall?.[1]?.body))).toEqual(expect.objectContaining({ home_city: 'Санкт-Петербург', accepts_barter: true, onboarding_completed: true, channels: [{ platform: 'telegram', url: 't.me/anna_spb' }] }));
+  });
+
+  it('registers by email first and offers Telegram only inside the cabinet', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/invites/')) return { ok: true, json: async () => ({ success: true, invite: { display_name: 'Анна', telegram_url: 'https://t.me/LocalOspro_bot?start=legacy' } }) };
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<MemoryRouter initialEntries={['/creator/join/invite-token']}><Routes><Route path="/creator/join/:token" element={<CreatorPortalPage />} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Анна, добро пожаловать' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Создать кабинет' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Войти через Telegram' })).not.toBeInTheDocument();
+  });
+
+  it('shows Telegram connection state in availability settings', async () => {
+    const disconnectedWorkspace = { ...workspace, account: { ...workspace.account, telegram_connected: false } };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/me')) return { ok: true, json: async () => ({ success: true, workspace: disconnectedWorkspace }) };
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<MemoryRouter initialEntries={['/creator']}><Routes><Route path="/creator" element={<CreatorPortalPage />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: 'Доступность' }));
+    expect(screen.getByText('Telegram пока не подключён')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Подключить Telegram' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Присылать новые предложения в Telegram' })).not.toBeInTheDocument();
   });
 });

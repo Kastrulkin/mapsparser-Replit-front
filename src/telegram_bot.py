@@ -107,7 +107,11 @@ from services.telegram_static_answers import (
 from services.gigachat_client import analyze_screenshot_with_gigachat
 from services.llm import analyze_text_with_gigachat
 from services.founder_content_editorial import capture_founder_content_correction_from_telegram
-from services.creator_portal_service import claim_telegram, telegram_creator_portal_link
+from services.creator_portal_service import (
+    claim_telegram,
+    connect_creator_telegram,
+    telegram_creator_portal_link,
+)
 from subscription_manager import get_subscription_info
 from auth_system import create_session
 
@@ -3730,6 +3734,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if bind_token.startswith("creator_claim_"):
                 await handle_creator_claim(update, bind_token.removeprefix("creator_claim_"), user_id)
                 return
+            if bind_token.startswith("creator_connect_"):
+                await handle_creator_connect(update, bind_token.removeprefix("creator_connect_"), user_id)
+                return
             await handle_bind_token(update, context, bind_token, user_id)
             return
 
@@ -3810,6 +3817,40 @@ async def handle_creator_claim(update: Update, invite_token: str, telegram_id: s
         await _reply_effective_message(update, "❌ Не удалось принять приглашение. Попросите LocalOS создать новую ссылку.")
     finally:
         conn.close()
+
+
+async def handle_creator_connect(update: Update, connect_token: str, telegram_id: str):
+    if str(os.getenv("CREATOR_BOT_ENABLED") or "false").lower() not in {"1", "true", "yes", "on"}:
+        await _reply_effective_message(update, "Уведомления для авторов пока не включены.")
+        return
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        result = connect_creator_telegram(
+            cursor,
+            token=connect_token,
+            telegram_id=telegram_id,
+            telegram_username=update.effective_user.username,
+        )
+        conn.commit()
+        await _reply_effective_message(
+            update,
+            f"Готово, {result['display_name']}! Telegram-уведомления подключены.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Вернуться в кабинет", url=result["portal_url"])]]),
+        )
+    except (LookupError, ValueError) as exc:
+        conn.rollback()
+        await _reply_effective_message(update, f"❌ {exc}")
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed creator Telegram connection telegram_id=%s", telegram_id)
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось подключить уведомления. Вернитесь в кабинет и создайте новую ссылку.",
+        )
+    finally:
+        conn.close()
+
 
 async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, bind_token: str, telegram_id: str):
     """Обработка токена привязки"""

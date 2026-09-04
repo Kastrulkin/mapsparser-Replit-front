@@ -460,6 +460,91 @@ def claim_telegram(cursor: Any, *, invite_token: str, telegram_id: str,
     return {"display_name": invite["display_name"], "portal_url": f"{_base_url()}/creator/login/telegram?token={token}"}
 
 
+def create_telegram_connect_link(cursor: Any, *, account: dict[str, Any]) -> dict[str, Any]:
+    profile_id = str(account["creator_profile_id"])
+    cursor.execute(
+        """
+        UPDATE creator_invites
+        SET claimed_at = NOW(), claimed_account_id = %s
+        WHERE creator_profile_id = %s AND purpose = 'telegram_login' AND claimed_at IS NULL
+        """,
+        (account["id"], profile_id),
+    )
+    token = _new_token(
+        cursor,
+        profile_id=profile_id,
+        purpose="telegram_login",
+        email=None,
+        created_by=None,
+        hours=1,
+    )
+    bot = str(os.getenv("TELEGRAM_BOT_USERNAME") or "LocalOspro_bot").lstrip("@")
+    return {
+        "telegram_url": f"https://t.me/{bot}?start=creator_connect_{token}",
+        "expires_in_minutes": 60,
+    }
+
+
+def connect_creator_telegram(cursor: Any, *, token: str, telegram_id: str,
+                             telegram_username: str | None) -> dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT i.id, i.creator_profile_id, i.expires_at, i.claimed_at,
+               a.id AS account_id, p.display_name
+        FROM creator_invites i
+        JOIN creator_accounts a ON a.creator_profile_id = i.creator_profile_id
+        JOIN creator_profiles p ON p.id = i.creator_profile_id
+        WHERE i.token_hash = %s AND i.purpose = 'telegram_login'
+        FOR UPDATE OF i, a
+        """,
+        (_hash(token),),
+    )
+    link = _dict(cursor.fetchone())
+    if not link or link.get("claimed_at") or link.get("expires_at") <= datetime.now(timezone.utc):
+        raise LookupError("Ссылка подключения недействительна или истекла")
+    cursor.execute(
+        "SELECT id FROM creator_accounts WHERE telegram_id = %s AND id <> %s FOR UPDATE",
+        (telegram_id, link["account_id"]),
+    )
+    if cursor.fetchone():
+        raise ValueError("Этот Telegram уже подключён к другому кабинету автора")
+    cursor.execute(
+        """
+        UPDATE creator_accounts
+        SET telegram_id = %s, telegram_username = %s,
+            notification_preferences_json = COALESCE(notification_preferences_json, '{}'::jsonb)
+                || '{"telegram": true}'::jsonb,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (telegram_id, telegram_username, link["account_id"]),
+    )
+    cursor.execute(
+        "UPDATE creator_invites SET claimed_at = NOW(), claimed_account_id = %s WHERE id = %s",
+        (link["account_id"], link["id"]),
+    )
+    portal_token = _session(cursor, str(link["account_id"]), hours=1)
+    return {
+        "display_name": link["display_name"],
+        "portal_url": f"{_base_url()}/creator/login/telegram?token={portal_token}",
+    }
+
+
+def disconnect_creator_telegram(cursor: Any, *, account: dict[str, Any]) -> dict[str, Any]:
+    cursor.execute(
+        """
+        UPDATE creator_accounts
+        SET telegram_id = NULL, telegram_username = NULL,
+            notification_preferences_json = COALESCE(notification_preferences_json, '{}'::jsonb)
+                || '{"telegram": false}'::jsonb,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (account["id"],),
+    )
+    return {"telegram_connected": False, "telegram_username": None}
+
+
 def telegram_creator_portal_link(cursor: Any, telegram_id: str) -> dict[str, Any] | None:
     cursor.execute(
         """
@@ -520,7 +605,7 @@ def reset_password(cursor: Any, *, token: str, password: str) -> dict[str, Any]:
 def authenticate_creator(cursor: Any, token: str) -> dict[str, Any]:
     cursor.execute(
         """
-        SELECT a.id, a.creator_profile_id, a.email, a.telegram_username, a.status,
+        SELECT a.id, a.creator_profile_id, a.email, a.telegram_id, a.telegram_username, a.status,
                a.notification_preferences_json, p.display_name,
                preference.paused_until, preference.paused_indefinitely,
                preference.excluded_categories_json
@@ -537,6 +622,7 @@ def authenticate_creator(cursor: Any, token: str) -> dict[str, Any]:
     cursor.execute("UPDATE creator_sessions SET last_seen_at = NOW() WHERE token_hash = %s", (_hash(token),))
     account["notification_preferences"] = _json(account.pop("notification_preferences_json", None), {})
     account["excluded_categories"] = _json(account.pop("excluded_categories_json", None), [])
+    account["telegram_connected"] = bool(account.pop("telegram_id", None))
     return _ready(account)
 
 

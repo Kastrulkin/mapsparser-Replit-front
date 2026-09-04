@@ -11,9 +11,11 @@ from services.creator_portal_service import (
     add_offer_message,
     authenticate_creator,
     claim_email,
+    create_telegram_connect_link,
     create_invite,
     creator_portal_feature_state,
     creator_respond,
+    disconnect_creator_telegram,
     list_relationships,
     login_email,
     offer_detail,
@@ -212,6 +214,26 @@ def profile_update():
 def notifications_update():
     payload = request.get_json(silent=True) or {}
     return _creator_operation(lambda cursor, account: {"notifications": update_notifications(cursor, account=account, payload=payload)})
+
+
+@creator_portal_bp.post("/telegram/connect")
+def telegram_connect():
+    gate = _feature("bot")
+    if gate:
+        return gate
+    return _creator_operation(lambda cursor, account: {
+        "connection": create_telegram_connect_link(cursor, account=account)
+    })
+
+
+@creator_portal_bp.delete("/telegram")
+def telegram_disconnect():
+    gate = _feature("bot")
+    if gate:
+        return gate
+    return _creator_operation(lambda cursor, account: {
+        "connection": disconnect_creator_telegram(cursor, account=account)
+    })
 
 
 @creator_portal_bp.patch("/availability")
