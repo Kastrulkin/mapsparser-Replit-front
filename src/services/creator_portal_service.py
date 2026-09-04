@@ -707,6 +707,19 @@ def submit_creator_publication(
     platform = str(payload.get("platform") or "other").strip().lower() or "other"
     deliverable_type = str(payload.get("deliverable_type") or "post").strip() or "post"
     proof = Json({"submitted_by": "creator_portal", "submitted_at": datetime.now(timezone.utc).isoformat()})
+    if not deliverable_id:
+        cursor.execute(
+            """
+            SELECT id FROM creator_deliverables
+            WHERE collaboration_id = %s AND publication_url IS NULL
+              AND verification_status IN ('expected', 'rejected', 'overdue')
+            ORDER BY created_at
+            LIMIT 1 FOR UPDATE
+            """,
+            (collaboration_id,),
+        )
+        expected = _dict(cursor.fetchone())
+        deliverable_id = str(expected.get("id") or "")
     if deliverable_id:
         cursor.execute(
             """
