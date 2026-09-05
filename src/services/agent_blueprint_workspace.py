@@ -135,6 +135,8 @@ def build_version_payload_from_row(version: Dict[str, Any]) -> Dict[str, Any]:
             if "required_integration_bindings_json" in version
             else None
         ),
+        "compiled_artifact": _copy_json_value(parse_json_field(version.get("compiled_artifact_json"), {}), {}),
+        "compiled_state": _clean_text(version.get("compiled_state")) or "legacy",
     }
 
 

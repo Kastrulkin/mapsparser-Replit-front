@@ -1,0 +1,12 @@
+
+> vite_react_shadcn_ts@0.0.0 test
+> vitest run src/components/agents/CompiledScriptBuilder.test.tsx src/components/DashboardSidebar.i18n.test.tsx src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/OperatorPage.i18n.test.tsx src/pages/dashboard/InfluencersPage.test.tsx src/pages/dashboard/InfluencerPromotionPage.test.tsx
+
+
+ RUN  v4.1.10 /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend
+
+
+ Test Files  6 passed (6)
+      Tests  35 passed (35)
+   Start at  13:59:48
+   Duration  6.90s (transform 4.90s, setup 3.61s, import 6.79s, tests 7.91s, environment 10.18s)

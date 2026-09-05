@@ -129,6 +129,16 @@ An agent is a product object, not a technical workflow editor.
 
 Communication is a blueprint category, not a separate product entity called "communication agent".
 
+The canonical compiled-script contract, revised 5 September 2026, is:
+description → generated Python source → independent user examples and sandbox
+preview → approval of an immutable version → repeated execution without an LLM.
+The internal pilot accepts JSON input and returns a report; a tenant-aware data
+SDK and provider effects are not yet available. Separate preview/execute flags
+default off. Existing capability/DSL workflows continue as the legacy engine,
+including their explicitly declared AI steps. They share blueprint/version/run
+records with scripts, but are not represented as LLM-free scripts.
+
+The following capability-workflow behavior describes that compatible legacy engine.
 There are not two executable products called "simple Agents" and "Compiled
 Agents". The simple builder is the user experience; every executable result is
 an `AgentBlueprint` with a compiled workflow. The three explicit execution
@@ -154,13 +164,17 @@ LocalOS finance transactions" compiles to `google_sheets.read_rows` plus
 access; the second prepares normalized LocalOS Finance proposals. Actual finance
 writes stay behind approval, limits, duplicate checks and audit.
 
-AI may help create or edit an agent, but the product promise is a compiled
+AI may help create or edit a legacy workflow, but its contract is a saved
 workflow, not a runtime that improvises on every run. GigaChat can extract
 design-time intent and propose sources, destinations, capabilities and required
 connectors. LocalOS must then validate and save deterministic blueprint steps.
-Runtime executes the compiled workflow; runtime LLM calls are allowed only as
+Legacy runtime executes the saved workflow; runtime LLM calls are allowed only as
 explicit priced/audited steps when the workflow truly needs generation or
 classification.
+
+New compiled scripts prohibit these calls entirely, including indirect SDK calls.
+See [the implementation release](docs/LOCALOS_RELEASE_2026-09-05.md) for actual
+availability and the remaining migration work.
 
 Compiled workflows pass data through explicit step mappings, not hidden prompt
 memory. For example, a Google Sheets read step can expose

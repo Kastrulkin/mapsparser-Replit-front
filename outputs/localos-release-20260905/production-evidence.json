@@ -1,0 +1,108 @@
+{
+  "release_id": "20260905-today-134536",
+  "verified_at": "2026-09-05T14:51:46.371380+00:00",
+  "backup_verified_log": "BACKUP_STARTED 2026-09-05T13:50:30Z\n1712458047 /opt/seo-app/releases/20260905-today-134536/backup/database.dump\n  22612968 /opt/seo-app/releases/20260905-today-134536/backup/current-release.tar.gz\n1735071015 total\n1998 /opt/seo-app/releases/20260905-today-134536/backup/database.list\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        40G   33G  5.1G  87% /\nBACKUP_VERIFIED 2026-09-05T13:56:26Z\n",
+  "backup_checksums": "77ec08a24cc9c9b6b12b532e91c974706093f71d11577e24240c3b81ca6d6d57  /opt/seo-app/releases/20260905-today-134536/backup/database.dump\nff976fa3ded479e63e6242cc42a782b0fc87c1f68ed30b67e4be1188af6d1696  /opt/seo-app/releases/20260905-today-134536/backup/current-release.tar.gz\n",
+  "deploy_exit": 0,
+  "hotfix_exit": 0,
+  "hotfix_log": "HOTFIX_STARTED 2026-09-05T14:48:58Z\nHOTFIX_COPIED\n Container seo-app-worker-1 Restarting \n Container seo-app-app-1 Restarting \n Container seo-app-telegram-bot-1 Restarting \n Container seo-app-app-1 Started \n Container seo-app-telegram-bot-1 Started \n Container seo-app-worker-1 Started \nHOTFIX_HTTP_READY 2026-09-05T14:49:08Z\n",
+  "services": "{\"Command\":\"\\\"/app/entrypoint.sh …\\\"\",\"CreatedAt\":\"2026-09-04 17:16:45 +0300 MSK\",\"ExitCode\":0,\"Health\":\"\",\"ID\":\"9b057c1cd1e4\",\"Image\":\"seo-app-app:ori-20260824-06\",\"Labels\":\"com.docker.compose.config-hash=6dbf21dbe703a12ecea0369c18c0df4c8f441f234770766e1eb3401dd0f2cc95,com.docker.compose.container-number=1,com.docker.compose.image=sha256:9f89a43044e08df97636441fbc174c1fd916c687070a4ecd3ef1b4352db43c17,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=/opt/seo-app/docker-compose.yml,com.docker.compose.replace=app-1,com.docker.compose.service=app,com.docker.compose.version=5.0.2,com.docker.compose.depends_on=postgres:service_healthy:false,redis:service_healthy:false,clamav:service_healthy:false,com.docker.compose.project=seo-app,com.docker.compose.project.working_dir=/opt/seo-app\",\"LocalVolumes\":\"0\",\"Mounts\":\"/opt/seo-app/s…,/opt/seo-app/a…,/opt/seo-app/d…,/opt/seo-app/e…,/opt/seo-app/f…,/opt/seo-app/f…,/opt/seo-app/d…\",\"Name\":\"seo-app-app-1\",\"Names\":\"seo-app-app-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"0.0.0.0:8000-\\u003e8000/tcp, [::]:8000-\\u003e8000/tcp\",\"Project\":\"seo-app\",\"Publishers\":[{\"URL\":\"0.0.0.0\",\"TargetPort\":8000,\"PublishedPort\":8000,\"Protocol\":\"tcp\"},{\"URL\":\"::\",\"TargetPort\":8000,\"PublishedPort\":8000,\"Protocol\":\"tcp\"}],\"RunningFor\":\"25 hours ago\",\"Service\":\"app\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 minutes\"}\n{\"Command\":\"\\\"/init\\\"\",\"CreatedAt\":\"2026-08-24 17:48:58 +0300 MSK\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"58f12568b4e7\",\"Image\":\"clamav/clamav:1.4\",\"Labels\":\"com.docker.compose.container-number=1,com.docker.compose.image=sha256:c9d47ff55f4e0f3ffa497a88dd2848fad481c5d1ebf7b7a670dc7404441c09bf,com.docker.compose.oneoff=False,com.docker.compose.project=seo-app,com.docker.compose.project.config_files=/tmp/docker-compose.ori-20260824.yml,com.docker.compose.service=clamav,maintainer=ClamAV bugs \\u003cclamav-bugs@external.cisco.com\\u003e,com.docker.compose.config-hash=753f8f66d453d1a45fdcdaa2698ca3e5577b5729df283d557ff6efc5da74f13a,com.docker.compose.depends_on=,com.docker.compose.project.working_dir=/tmp,com.docker.compose.version=5.0.2\",\"LocalVolumes\":\"1\",\"Mounts\":\"seo-app_clamav…\",\"Name\":\"seo-app-clamav-1\",\"Names\":\"seo-app-clamav-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"3310/tcp, 7357/tcp\",\"Project\":\"seo-app\",\"Publishers\":[{\"URL\":\"\",\"TargetPort\":3310,\"PublishedPort\":0,\"Protocol\":\"tcp\"},{\"URL\":\"\",\"TargetPort\":7357,\"PublishedPort\":0,\"Protocol\":\"tcp\"}],\"RunningFor\":\"12 days ago\",\"Service\":\"clamav\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 12 days (healthy)\"}\n{\"Command\":\"\\\"/app/entrypoint.sh …\\\"\",\"CreatedAt\":\"2026-08-24 17:56:58 +0300 MSK\",\"ExitCode\":0,\"Health\":\"\",\"ID\":\"54c5dd1c2885\",\"Image\":\"sha256:a13f1a637d96c698ea0e8ef0f73d3fb65833d3fe36b1dae59fb34bc9a7653298\",\"Labels\":\"com.docker.compose.oneoff=False,com.docker.compose.project=seo-app,com.docker.compose.replace=compliance-worker-1,com.docker.compose.depends_on=postgres:service_healthy:false,com.docker.compose.project.config_files=/opt/seo-app/docker-compose.yml,com.docker.compose.project.working_dir=/opt/seo-app,com.docker.compose.service=compliance-worker,com.docker.compose.version=5.0.2,com.docker.compose.config-hash=4a2f851524a8f386b0aef61d43d39a1ced4fb005be84e2de00a6e9e61d9308aa,com.docker.compose.container-number=1,com.docker.compose.image=sha256:a13f1a637d96c698ea0e8ef0f73d3fb65833d3fe36b1dae59fb34bc9a7653298\",\"LocalVolumes\":\"0\",\"Mounts\":\"\",\"Name\":\"seo-app-compliance-worker-1\",\"Names\":\"seo-app-compliance-worker-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"\",\"Project\":\"seo-app\",\"Publishers\":[],\"RunningFor\":\"12 days ago\",\"Service\":\"compliance-worker\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 12 days\"}\n{\"Command\":\"\\\"docker-entrypoint.s…\\\"\",\"CreatedAt\":\"2026-07-22 12:25:34 +0300 MSK\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"b51285d74a25\",\"Image\":\"pgvector/pgvector:0.8.0-pg16-trixie\",\"Labels\":\"com.docker.compose.oneoff=False,com.docker.compose.replace=postgres-1,com.docker.compose.version=5.0.2,com.docker.compose.config-hash=de6ed23b1a2804f6db8c4218606473255d58c484c9e70e01c387e51f8b274b92,com.docker.compose.project=seo-app,com.docker.compose.project.config_files=/opt/seo-app/docker-compose.yml,com.docker.compose.project.working_dir=/opt/seo-app,com.docker.compose.service=postgres,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:772213ca442dfc4e7c11bf31157006dc459f707f6b2fa6471a820f7ef58716f8\",\"LocalVolumes\":\"1\",\"Mounts\":\"seo-app_pgdata\",\"Name\":\"seo-app-postgres-1\",\"Names\":\"seo-app-postgres-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"5432/tcp\",\"Project\":\"seo-app\",\"Publishers\":[{\"URL\":\"\",\"TargetPort\":5432,\"PublishedPort\":0,\"Protocol\":\"tcp\"}],\"RunningFor\":\"6 weeks ago\",\"Service\":\"postgres\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 12 days (healthy)\"}\n{\"Command\":\"\\\"docker-entrypoint.s…\\\"\",\"CreatedAt\":\"2026-08-17 13:01:39 +0300 MSK\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"6e4002e02c6b\",\"Image\":\"redis:7.4-alpine\",\"Labels\":\"com.docker.compose.project.working_dir=/opt/seo-app,com.docker.compose.config-hash=c15ea0da37a6a7a5fb3b1da8ad6d250b998cd6d80f10d2dbb7a99afb736c3b08,com.docker.compose.container-number=1,com.docker.compose.oneoff=False,com.docker.compose.service=redis,com.docker.compose.version=5.0.2,com.docker.compose.depends_on=,com.docker.compose.image=sha256:2a51817f79255c8b69f86a974459c2e0359aff81417d80158f2b9e541e6f4b33,com.docker.compose.project=seo-app,com.docker.compose.project.config_files=/opt/seo-app/docker-compose.yml\",\"LocalVolumes\":\"1\",\"Mounts\":\"seo-app_redisd…\",\"Name\":\"seo-app-redis-1\",\"Names\":\"seo-app-redis-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"6379/tcp\",\"Project\":\"seo-app\",\"Publishers\":[{\"URL\":\"\",\"TargetPort\":6379,\"PublishedPort\":0,\"Protocol\":\"tcp\"}],\"RunningFor\":\"2 weeks ago\",\"Service\":\"redis\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 12 days (healthy)\"}\n{\"Command\":\"\\\"/bin/sh -c 'if [ -z…\\\"\",\"CreatedAt\":\"2026-09-02 14:50:50 +0300 MSK\",\"ExitCode\":0,\"Health\":\"healthy\",\"ID\":\"e4e0f465bc98\",\"Image\":\"seo-app-telegram-bot\",\"Labels\":\"com.docker.compose.service=telegram-bot,com.docker.compose.version=5.0.2,com.docker.compose.config-hash=4882c0df8eff23dd542ab98d91d4bee254a47445e743f7ccdee68309d729df27,com.docker.compose.image=sha256:0b93edee0489d72ff52abe6fe745481795ed411e18c947cb93e0a3dbcbd8d7c7,com.docker.compose.oneoff=False,com.docker.compose.project=seo-app,com.docker.compose.project.working_dir=/opt/seo-app,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.project.config_files=/opt/seo-app/docker-compose.yml,com.docker.compose.replace=telegram-bot-1\",\"LocalVolumes\":\"0\",\"Mounts\":\"/opt/seo-app/a…,/opt/seo-app/s…\",\"Name\":\"seo-app-telegram-bot-1\",\"Names\":\"seo-app-telegram-bot-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"8000/tcp\",\"Project\":\"seo-app\",\"Publishers\":[{\"URL\":\"\",\"TargetPort\":8000,\"PublishedPort\":0,\"Protocol\":\"tcp\"}],\"RunningFor\":\"3 days ago\",\"Service\":\"telegram-bot\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 minutes (healthy)\"}\n{\"Command\":\"\\\"/app/entrypoint.sh …\\\"\",\"CreatedAt\":\"2026-09-04 17:16:45 +0300 MSK\",\"ExitCode\":0,\"Health\":\"\",\"ID\":\"1b8257dd62f6\",\"Image\":\"seo-app-app:ori-20260824-06\",\"Labels\":\"com.docker.compose.container-number=1,com.docker.compose.depends_on=postgres:service_healthy:false,com.docker.compose.oneoff=False,com.docker.compose.version=5.0.2,com.docker.compose.image=sha256:9f89a43044e08df97636441fbc174c1fd916c687070a4ecd3ef1b4352db43c17,com.docker.compose.project=seo-app,com.docker.compose.project.config_files=/opt/seo-app/docker-compose.yml,com.docker.compose.project.working_dir=/opt/seo-app,com.docker.compose.replace=worker-1,com.docker.compose.service=worker,com.docker.compose.config-hash=3af517c42029954fbdc052a086402e31a27692de651e9bd84f28eb6f6d118f23\",\"LocalVolumes\":\"0\",\"Mounts\":\"/opt/seo-app/a…,/opt/seo-app/d…,/opt/seo-app/e…,/opt/seo-app/s…\",\"Name\":\"seo-app-worker-1\",\"Names\":\"seo-app-worker-1\",\"Networks\":\"seo-app_default\",\"Ports\":\"\",\"Project\":\"seo-app\",\"Publishers\":[],\"RunningFor\":\"25 hours ago\",\"Service\":\"worker\",\"Size\":\"0B\",\"State\":\"running\",\"Status\":\"Up 2 minutes\"}\n",
+  "log_window_since": "2026-09-05T14:48:58Z",
+  "runtime_log_lines": 177,
+  "error_counts": {
+    "Traceback": 0,
+    "ERROR": 0,
+    "CRITICAL": 0,
+    "ImportError": 0,
+    "ModuleNotFoundError": 0
+  },
+  "live_container_checks": [
+    {
+      "container_hashes_checked": 258,
+      "hash_mismatches": []
+    },
+    {
+      "flags": {
+        "LOCALOS_TODAY_PERSONALIZATION_ENABLED": null,
+        "LOCALOS_TODAY_ACTIVITY_ENABLED": null,
+        "LOCALOS_TODAY_PROPOSALS_ENABLED": null,
+        "COMPILED_SCRIPT_PREVIEW_ENABLED": null,
+        "COMPILED_SCRIPT_EXECUTE_ENABLED": null,
+        "WORKER_ROLE": null
+      }
+    }
+  ],
+  "worker_bot_scope_source_hashes": {
+    "worker": "ff5a0940c87f97073730325fd2484133a96271e8a44f423cce8468fdb1145753",
+    "telegram-bot": "ff5a0940c87f97073730325fd2484133a96271e8a44f423cce8468fdb1145753"
+  },
+  "public_http": {
+    "public_checks": [
+      {
+        "route": "/",
+        "status": 200,
+        "assets": [
+          "/assets/index-BjeibUSx.js",
+          "/assets/vendor-nVrq5eT9.js",
+          "/assets/icons-BshG48Ce.js",
+          "/assets/query-mnvbsp7d.js",
+          "/assets/router-CRh0hsWA.js",
+          "/assets/vendor-BnuhLJ6X.css",
+          "/assets/index-_7D2sIIz.css",
+          "/tracker.js"
+        ]
+      },
+      {
+        "route": "/dashboard",
+        "status": 200,
+        "assets": [
+          "/assets/index-BjeibUSx.js",
+          "/assets/vendor-nVrq5eT9.js",
+          "/assets/icons-BshG48Ce.js",
+          "/assets/query-mnvbsp7d.js",
+          "/assets/router-CRh0hsWA.js",
+          "/assets/vendor-BnuhLJ6X.css",
+          "/assets/index-_7D2sIIz.css",
+          "/tracker.js"
+        ]
+      },
+      {
+        "route": "/dashboard/content",
+        "status": 200,
+        "assets": [
+          "/assets/index-BjeibUSx.js",
+          "/assets/vendor-nVrq5eT9.js",
+          "/assets/icons-BshG48Ce.js",
+          "/assets/query-mnvbsp7d.js",
+          "/assets/router-CRh0hsWA.js",
+          "/assets/vendor-BnuhLJ6X.css",
+          "/assets/index-_7D2sIIz.css",
+          "/tracker.js"
+        ]
+      },
+      {
+        "route": "/dashboard/influencers",
+        "status": 200,
+        "assets": [
+          "/assets/index-BjeibUSx.js",
+          "/assets/vendor-nVrq5eT9.js",
+          "/assets/icons-BshG48Ce.js",
+          "/assets/query-mnvbsp7d.js",
+          "/assets/router-CRh0hsWA.js",
+          "/assets/vendor-BnuhLJ6X.css",
+          "/assets/index-_7D2sIIz.css",
+          "/tracker.js"
+        ]
+      }
+    ]
+  },
+  "flags_effective": {
+    "today_manual_priority": true,
+    "activity_collection": false,
+    "priority_proposals": false,
+    "compiled_preview": false,
+    "compiled_execute": false,
+    "worker_role": "all"
+  },
+  "production_browser_check": "Not completed; native browser automation stalled. Prior desktop/mobile checks used mocked APIs."
+}

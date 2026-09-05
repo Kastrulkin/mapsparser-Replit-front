@@ -217,7 +217,83 @@ def test_web_today_rejects_demo_network_escape(monkeypatch):
     assert response.status_code == 403
 
 
+class _PreferenceDatabase:
+    def __init__(self):
+        self.conn = _Connection()
+        self.commits = 0
+        self.rollbacks = 0
+        self.closed = False
+        self.conn.commit = lambda: setattr(self, "commits", self.commits + 1)
+        self.conn.rollback = lambda: setattr(self, "rollbacks", self.rollbacks + 1)
+
+    def close(self):
+        self.closed = True
+
+    def rollback(self):
+        self.rollbacks += 1
+
+
+def _preference_route_setup(monkeypatch, *, user=None, scope=None):
+    import services.today_preferences_service as preferences
+    import services.today_workspace as workspace
+
+    database = _PreferenceDatabase()
+    monkeypatch.setenv("LOCALOS_TODAY_PERSONALIZATION_ENABLED", "true")
+    monkeypatch.setattr(operator_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: user if user is not None else {"user_id": "user-1"})
+    monkeypatch.setattr(operator_api, "_resolve_operator_read_scope", lambda *_args: scope if scope is not None else {"kind": "business", "id": "business-1", "business_ids": ["business-1"]})
+    monkeypatch.setattr(preferences, "schema_available", lambda _cursor: True)
+    monkeypatch.setattr(workspace, "allowed_priority_flows", lambda *_args, **_kwargs: ["overview", "content"])
+    return database, preferences
+
+
+def test_today_preference_requires_authentication(monkeypatch):
+    monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: None)
+    response = _app().test_client().get("/api/operator/today/preference")
+    assert response.status_code == 401
+
+
+def test_today_preference_rejects_foreign_scope_before_service_mutation(monkeypatch):
+    database, preferences = _preference_route_setup(monkeypatch, scope=None)
+    monkeypatch.setattr(operator_api, "_resolve_operator_read_scope", lambda *_args: None)
+    monkeypatch.setattr(preferences, "change_preferences", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not mutate")))
+    response = _app().test_client().post("/api/operator/today/preference", json={"action": "set", "primary_flow": "content", "expected_revision": 0})
+    assert response.status_code == 403
+    assert database.closed is True
+
+
+def test_today_preference_demo_and_impersonation_are_read_only_before_database(monkeypatch):
+    for session in ({"user_id": "demo", "session_kind": "demo"}, {"user_id": "admin", "impersonating": True}):
+        monkeypatch.setattr(operator_api, "require_auth_from_request", lambda session=session: session)
+        monkeypatch.setattr(operator_api, "DatabaseManager", lambda: (_ for _ in ()).throw(AssertionError("must not open database")))
+        response = _app().test_client().post("/api/operator/today/preference", json={"action": "set", "primary_flow": "content", "expected_revision": 0})
+        assert response.status_code == 403
+        assert response.get_json()["error"] == "read_only_session"
+
+
+def test_today_preference_conflict_rolls_back(monkeypatch):
+    database, preferences = _preference_route_setup(monkeypatch)
+    monkeypatch.setattr(preferences, "change_preferences", lambda *_args, **_kwargs: (_ for _ in ()).throw(preferences.PreferenceError("preference_conflict", 409)))
+    response = _app().test_client().post("/api/operator/today/preference", json={"action": "set", "primary_flow": "content", "expected_revision": 0})
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "preference_conflict"
+    assert database.rollbacks == 1
+
+
+def test_today_preference_success_commits_scoped_change(monkeypatch):
+    database, preferences = _preference_route_setup(monkeypatch)
+    captured = {}
+    monkeypatch.setattr(preferences, "change_preferences", lambda _cursor, **kwargs: captured.update(kwargs) or {"preference": {"revision": 1, "primary_flow": "content"}, "priority_proposal": None})
+    response = _app().test_client().post("/api/operator/today/preference", json={"action": "set", "primary_flow": "content", "expected_revision": 0})
+    assert response.status_code == 200
+    assert response.get_json()["preference"]["available_flows"] == ["overview", "content"]
+    assert captured["user_id"] == "user-1"
+    assert captured["scope"]["id"] == "business-1"
+    assert database.commits == 1
+
+
 def test_web_progress_uses_same_verified_network_scope(monkeypatch):
+    monkeypatch.setattr(operator_api, "_scope_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     scope = {"kind": "network", "id": "network-1", "name": "Сеть", "business_ids": ["b-1", "b-2"]}
     monkeypatch.setattr(operator_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
     monkeypatch.setattr(operator_api, "DatabaseManager", _Database)

@@ -22,6 +22,7 @@ type PartnershipDraftLite = {
   approved_text?: string;
   edited_text?: string;
   generated_text?: string;
+  review_digest?: string;
 };
 
 type PartnershipFlowCounts = {
@@ -170,12 +171,14 @@ export async function preparePartnershipBatch(
   for (const draft of drafts) {
     try {
       if (normalize(draft.status) !== 'approved') {
+        if (!draft.review_digest) throw new Error('Обновите список и проверьте актуальное письмо перед утверждением');
         const approvedText = String(draft.approved_text || draft.edited_text || draft.generated_text || '');
         await request(`/partnership/drafts/${draft.id}/approve`, {
           method: 'POST',
           body: JSON.stringify({
             business_id: businessId,
             approved_text: approvedText || undefined,
+            expected_review_digest: draft.review_digest,
           }),
         });
         approvedCount += 1;

@@ -1,7 +1,13 @@
 # LocalOS Compiled AI Architecture v1
 
-Обновлено: 13 августа 2026
-Статус: canonical implementation and rollout contract for LocalOS Compiled AI; v1 schema names are retained for compatibility
+Обновлено: 5 сентября 2026
+Статус: legacy workflow architecture with an internal compiled-script pilot.
+
+**Текущий продуктовый контракт:** ИИ создаёт исходник один раз, пользователь
+проверяет и утверждает неизменяемую версию, каждый запуск выполняет её без LLM.
+Разделы о model steps ниже относятся только к существующему DSL и сохраняются
+для совместимости. Они не разрешают model calls в новых compiled scripts.
+Фактический объём и ограничения: [выпуск 5 сентября](LOCALOS_RELEASE_2026-09-05.md).
 
 ## Цель
 
@@ -48,6 +54,29 @@ Required contract:
 - `output_schema` — expected result.
 
 ## Compiled Artifact Candidate
+
+### Compiled Script pilot
+
+`localos_compiled_script_artifact_v1` is the strict path for the product
+promise “AI writes a script once; the user approves it; later runs use no
+AI.” The compiler may use a model only to produce Python source, manifest and
+generator fixtures. Independent expected results come from the user's request,
+not from a provenance label supplied by the model. The saved source, manifest and fixtures are covered by
+an immutable `sha256` hash; every edit creates a new blueprint version.
+
+The first supported semantic is
+`localos.sheet_validate_dedupe_report.v1`: validate required fields,
+deduplicate rows and return a report. Its preview executes the approved source
+in the isolated runner and compares it to a fixed independent oracle; it
+reports `runtime_ai_calls = 0`. Flask never evaluates user source. Production
+runs use the existing queued `agent_runs` envelope with a pinned version and
+fail closed until the separate restricted runner in
+`docker/compiled-script-runner/` is deployed. A subprocess alone is not a
+security boundary. External writes remain outside this pilot and go through
+the existing approval gateway.
+
+The legacy DSL candidate below can retain registered `runtime_model_steps` for
+old blueprints, but it must not be described as a zero-AI compiled script.
 
 Source: `src/services/agent_compiled_artifact.py`.
 

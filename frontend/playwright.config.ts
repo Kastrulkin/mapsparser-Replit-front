@@ -10,6 +10,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 } } },
     { name: 'android-360', use: { ...devices['Galaxy S9+'], viewport: { width: 360, height: 800 } } },
     { name: 'telegram-393', use: { ...devices['Pixel 7'], viewport: { width: 393, height: 852 } } },
   ],

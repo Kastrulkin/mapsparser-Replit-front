@@ -123,6 +123,24 @@ class DatabaseManager:
             except:
                 pass
             self._closed = True
+
+    def rollback_and_close(self):
+        """Close a failed unit of work without committing partial changes.
+
+        ``close`` remains backward compatible for legacy callers which rely on its
+        implicit commit. Context-managed usage is safer: ``__exit__`` calls this
+        method when the body raised.
+        """
+        if self.conn and not self._closed:
+            try:
+                self.conn.rollback()
+            except Exception:
+                pass
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self._closed = True
     
     def __enter__(self):
         """Контекстный менеджер: вход"""
@@ -130,7 +148,10 @@ class DatabaseManager:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Контекстный менеджер: выход"""
-        self.close()
+        if exc_type is not None:
+            self.rollback_and_close()
+        else:
+            self.close()
         return False
 
     def _sanitize_business_payload(self, business: Dict[str, Any]) -> Dict[str, Any]:

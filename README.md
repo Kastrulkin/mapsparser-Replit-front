@@ -97,6 +97,8 @@ LocalOS помогает владельцам и управляющим лока
 - Telegram и внешние social API используют единый Grimbird proxy на OpenClaw после успешной сетевой проверки.
 
 ### AI-агенты и OpenClaw
+- **Контракт от 5 сентября 2026:** compiled script — сохранённый исходник Python, который ИИ помогает создать один раз, пользователь проверяет на примерах и утверждает. Повторный запуск исполняет эту версию без LLM. Новый путь пока `internal`, выключен отдельными preview/execute флагами; поддерживает чистые преобразования переданного JSON и отчёт. Он не предоставляет доступ к таблицам бизнеса, провайдерам или отправкам. [Реализация и выпуск](docs/LOCALOS_RELEASE_2026-09-05.md).
+- Описанные ниже capability workflows — совместимый legacy-механизм. Наличие сохранённого workflow само по себе не означает отсутствие runtime LLM; старые AI-шаги не объявляются compiled scripts.
 - Публично это один продукт «Агенты»: простой конструктор создаёт `AgentBlueprint` с compiled workflow. `AIAgents` остаётся persona/voice и legacy chat configuration, а не вторым runtime.
 - `/dashboard/agents` показывает реестр ИИ-сотрудников, тип запуска, результат, историю, версии, подключения и одно следующее действие. Типы: `one_off` (без автозапуска, можно повторить), `manual` и `scheduled`.
 - Тест использует candidate version; рабочий запуск `manual`/`scheduled` использует только явно включённую active version. Версию можно проверить, активировать и вернуть предыдущую.
@@ -106,6 +108,10 @@ LocalOS помогает владельцам и управляющим лока
 - Сертифицированные beta-capabilities охватывают read/draft/safe internal write: Google Sheets read, drafts для отзывов/новостей/услуг, content-plan draft, appointments read, support export и партнёрский analysis/draft. Request-only writes не активируются как beta workflow.
 - OpenClaw / ActionOrchestrator остаётся execution boundary для policy, approval, billing, audit, callbacks и recovery. Provider не является пользовательской моделью агента.
 - Production остаётся cohort beta: async runtime ограничивается `AGENT_BETA_BUSINESS_IDS`, а scheduler и внешние действия включаются только для явно допущенных сценариев. Датированные canary-доказательства и незакрытые gates ведутся отдельно в `docs/AGENTS_BETA_PRODUCTION_STATUS.md`; README не является источником mutable production-счётчиков.
+
+### Рабочая главная
+- `/dashboard` остаётся «Сегодня»: требуется решение, продолжить работу, готовые результаты. Контент, инфлюенсеры, партнёрства, карты, средний чек и автоматизация доступны напрямую; «Пути роста» остаются дополнительным знакомством с возможностями.
+- Приоритет главной хранится отдельно для пользователя и business/network. Срочная работа выше предпочтения. Наблюдение использования только предлагает изменение; применить, отложить, отклонить или отменить его может пользователь. Сбор сигналов и показ предложений включаются отдельными флагами.
 
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.

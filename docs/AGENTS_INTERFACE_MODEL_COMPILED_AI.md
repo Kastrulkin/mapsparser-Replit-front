@@ -4,6 +4,13 @@
 
 This document is the product contract for the LocalOS agents interface.
 
+The 5 September compiled-script contract is describe → generate source → test
+against user examples → approve an immutable version → run with new data
+without calling AI again. JSON/source editing is currently an internal pilot,
+not a finished business-owner data-source editor. Existing DSL workflows remain
+compatible; their runtime AI steps must not be labelled LLM-free scripts. See
+[implementation status](LOCALOS_RELEASE_2026-09-05.md).
+
 LocalOS agents are not workflows, automations, blueprints, provider routes, or
 runtime objects in the user interface. For a business owner, they are
 AI employees: hired to do a job, checked before external action, and trusted

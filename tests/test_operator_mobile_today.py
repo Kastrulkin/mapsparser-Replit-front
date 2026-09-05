@@ -1,6 +1,13 @@
 from datetime import datetime, timezone
+import pytest
 
 import services.operator_mobile_today as mobile_today
+
+
+@pytest.fixture(autouse=True)
+def legacy_today_contract(monkeypatch):
+    # These tests isolate the existing builder sources; new adapters have real-PG tests.
+    monkeypatch.setenv("LOCALOS_TODAY_PERSONALIZATION_ENABLED", "false")
 
 
 def _growth(priority=80):

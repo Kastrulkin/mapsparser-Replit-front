@@ -31,7 +31,7 @@ class FakeCursor:
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
         params = params or ()
-        if normalized_query.startswith(("savepoint ", "rollback to savepoint ", "release savepoint ")):
+        if normalized_query.startswith(("savepoint ", "rollback to savepoint ", "release savepoint ", "select pg_advisory_xact_lock")):
             return None
         if normalized_query.startswith("select to_regclass"):
             table_name = params[0]
@@ -146,6 +146,13 @@ class FakeCursor:
             version = self.tables["agent_blueprint_versions"].get(params[0])
             self.last_result = {"steps_json": version.get("steps_json", [])} if version else None
             return None
+        if normalized_query.startswith("select compiled_state, compiled_preview_json from agent_blueprint_versions where id"):
+            version = self.tables["agent_blueprint_versions"].get(params[0])
+            self.last_result = {
+                "compiled_state": version.get("compiled_state", "legacy"),
+                "compiled_preview_json": version.get("compiled_preview_json", {}),
+            } if version and version.get("blueprint_id") == params[1] else None
+            return None
         if normalized_query.startswith("select * from agent_blueprint_versions where id"):
             self.last_result = self.tables["agent_blueprint_versions"].get(params[0])
             return None
@@ -190,6 +197,18 @@ class FakeCursor:
             return None
         if normalized_query.startswith("select * from agent_runs where id"):
             self.last_result = self.tables["agent_runs"].get(params[0])
+            return None
+        if normalized_query.startswith("select * from agent_runs where business_id"):
+            business_id, blueprint_id, idempotency_key = params
+            self.last_result = next(
+                (
+                    row for row in self.tables["agent_runs"].values()
+                    if row.get("business_id") == business_id
+                    and row.get("blueprint_id") == blueprint_id
+                    and row.get("idempotency_key") == idempotency_key
+                ),
+                None,
+            )
             return None
         if normalized_query.startswith("select id, status, input_json, output_json, error_text"):
             blueprint_id = params[0]
@@ -1169,6 +1188,35 @@ class FakeTelegramTriggerCursor:
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
         params = params or ()
+        if normalized_query.startswith("insert into agent_trigger_events") and "source_event_key" in normalized_query:
+            existing = next(
+                (
+                    item
+                    for item in self.trigger_events
+                    if item["business_id"] == params[1]
+                    and item["source"] == params[2]
+                    and item.get("source_event_key") == params[5]
+                ),
+                None,
+            )
+            if existing:
+                self.last_result = {"id": existing["id"], "status": existing["status"], "created": False}
+                return None
+            item = {
+                "id": params[0],
+                "business_id": params[1],
+                "source": params[2],
+                "event_type": params[3],
+                "status": "received",
+                "payload_json": json.loads(params[4]),
+                "reason_code": None,
+                "source_event_key": params[5],
+            }
+            self.trigger_events.append(item)
+            self.last_result = {"id": item["id"], "status": item["status"], "created": True}
+            return None
+        if normalized_query.startswith("insert into agent_trigger_run_links"):
+            return None
         if normalized_query.startswith("create table") or normalized_query.startswith("create index"):
             return None
         if normalized_query.startswith("insert into agent_trigger_events"):
@@ -1211,6 +1259,37 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
         params = params or ()
+        if normalized_query.startswith("insert into agent_trigger_events") and "source_event_key" in normalized_query:
+            existing = next(
+                (
+                    item
+                    for item in self.trigger_events
+                    if item["business_id"] == params[1]
+                    and item["source"] == params[2]
+                    and item.get("source_event_key") == params[5]
+                ),
+                None,
+            )
+            if existing:
+                self.last_result = {"id": existing["id"], "status": existing["status"], "created": False}
+                return None
+            item = {
+                "id": params[0],
+                "business_id": params[1],
+                "source": params[2],
+                "event_type": params[3],
+                "status": "received",
+                "payload_json": json.loads(params[4]),
+                "reason_code": None,
+                "source_event_key": params[5],
+                "blueprint_id": None,
+                "run_id": None,
+            }
+            self.trigger_events.append(item)
+            self.last_result = {"id": item["id"], "status": item["status"], "created": True}
+            return None
+        if normalized_query.startswith("insert into agent_trigger_run_links"):
+            return None
         if normalized_query.startswith("create table") or normalized_query.startswith("create index"):
             return None
         if normalized_query.startswith("insert into agent_trigger_events"):
@@ -1306,10 +1385,21 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
             return None
         if normalized_query.startswith("update agent_trigger_events set blueprint_id"):
             for item in self.trigger_events:
-                if item["id"] == params[2]:
+                event_id = params[5] if len(params) == 6 else params[3] if len(params) == 4 else params[2]
+                if item["id"] == event_id:
                     item["blueprint_id"] = params[0]
-                    item["run_id"] = params[1]
-                    item["status"] = "run_started"
+                    if len(params) == 6:
+                        item["blueprint_version_id"] = params[1]
+                        item["run_id"] = params[2]
+                        item["status"] = params[3]
+                        item["reason_code"] = params[4]
+                    elif len(params) == 4:
+                        item["blueprint_version_id"] = params[1]
+                        item["run_id"] = params[2]
+                    else:
+                        item["run_id"] = params[1]
+                    if len(params) != 6:
+                        item["status"] = "run_started"
             return None
         if normalized_query.startswith("update agent_trigger_events set status = 'ignored'"):
             for item in self.trigger_events:

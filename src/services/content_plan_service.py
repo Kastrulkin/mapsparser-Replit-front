@@ -2201,7 +2201,9 @@ def delete_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         db.close()
 
 
-def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any], *, auth_context=None) -> dict[str, Any]:
+    if auth_context is not None and auth_context.user_id != user_id:
+        raise PermissionError("Несовпадение пользователя операции")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -2397,6 +2399,16 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
             },
         )
+        if auth_context is not None and ("draft_text" in field_updates or "scheduled_for" in field_updates):
+            import hashlib
+            from services.product_telemetry_service import record_confirmed_user_action
+            operation_hash = hashlib.sha256(json.dumps(field_updates, sort_keys=True, default=str).encode()).hexdigest()
+            record_confirmed_user_action(
+                cursor, auth=auth_context,
+                event_name="content_draft_saved" if "draft_text" in field_updates else "content_scheduled",
+                business_id=str(data.get("business_id") or ""), flow="content",
+                operation_key=f"content_item:{item_id}:{operation_hash}", entity_id=item_id,
+            )
         db.conn.commit()
         return get_content_plan(user_id, str(data.get("plan_id") or ""))
     except Exception:

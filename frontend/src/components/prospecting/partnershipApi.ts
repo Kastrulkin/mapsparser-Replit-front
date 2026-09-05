@@ -278,10 +278,10 @@ export const markPartnershipLeadManualContact = (businessId: string, leadId: str
     }),
   });
 
-export const approvePartnershipDraft = (businessId: string, draftId: string, approvedText: string) =>
+export const approvePartnershipDraft = (businessId: string, draftId: string, approvedText: string, expectedReviewDigest: string) =>
   request(`/partnership/drafts/${draftId}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ business_id: businessId, approved_text: approvedText }),
+    body: JSON.stringify({ business_id: businessId, approved_text: approvedText, expected_review_digest: expectedReviewDigest }),
   });
 
 export const deletePartnershipDraft = (businessId: string, draftId: string) =>

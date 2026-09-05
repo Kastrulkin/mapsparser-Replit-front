@@ -204,7 +204,11 @@ type ChatMessage = {
 
 const resultText = (result: OperatorChatResult | RefreshResult | null) => {
   if (!result) return '';
-  return result.chat_response || result.result_summary?.title || 'Готово.';
+  return (
+    ('chat_response' in result && result.chat_response) ||
+    ('result_summary' in result && result.result_summary?.title) ||
+    'Готово.'
+  );
 };
 
 const draftText = (result: OperatorChatResult | RefreshResult | null) => {
@@ -249,6 +253,8 @@ export const OperatorPage = () => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyRetry, setHistoryRetry] = useState(0);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
   const [rejectingActionId, setRejectingActionId] = useState<string | null>(null);
   useEffect(() => {
@@ -261,6 +267,7 @@ export const OperatorPage = () => {
     const storedConversationId = window.localStorage.getItem(storageKey);
     let cancelled = false;
     setHistoryLoading(true);
+    setHistoryError(null);
     const request = storedConversationId
       ? api.get(`/operator/conversations/${encodeURIComponent(storedConversationId)}/messages`, {
           params: { business_id: currentBusinessId, limit: 100 },
@@ -275,18 +282,39 @@ export const OperatorPage = () => {
       setConversationId(loadedConversationId);
       setMessages(mapStoredMessages(storedMessages));
       if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
-    }).catch(() => {
+    }).catch((error: unknown) => {
       if (cancelled) return;
-      window.localStorage.removeItem(storageKey);
-      setConversationId(null);
-      setMessages([]);
+      const status = (
+        typeof error === 'object'
+        && error !== null
+        && 'response' in error
+        && typeof error.response === 'object'
+        && error.response !== null
+        && 'status' in error.response
+        && typeof error.response.status === 'number'
+      ) ? error.response.status : null;
+      if (status === 404 && storedConversationId) {
+        window.localStorage.removeItem(storageKey);
+        setConversationId(null);
+        setMessages([]);
+        setHistoryError('Предыдущая переписка больше недоступна. Можно начать новую задачу.');
+        return;
+      }
+      if (status === 403) {
+        window.localStorage.removeItem(storageKey);
+        setConversationId(null);
+        setMessages([]);
+        setHistoryError('Нет доступа к этой истории. Проверьте выбранный бизнес или обратитесь к владельцу.');
+        return;
+      }
+      setHistoryError('Не удалось обновить историю. Последние сообщения сохранены на экране.');
     }).finally(() => {
       if (!cancelled) setHistoryLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [currentBusinessId]);
+  }, [currentBusinessId, historyRetry]);
 
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
@@ -572,7 +600,16 @@ export const OperatorPage = () => {
         </div>
 
         <div className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
-          {historyLoading ? (
+          {historyError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
+              <span>{historyError}</span>
+              <Button size="sm" variant="outline" onClick={() => setHistoryRetry((current) => current + 1)} disabled={historyLoading}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Повторить
+              </Button>
+            </div>
+          ) : null}
+          {historyLoading && messages.length === 0 ? (
             <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               <span translate="no" className="notranslate">{copy.loadingHistory}</span>
@@ -734,7 +771,7 @@ const OperatorResultActions = ({
   const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
   const isOperatorHelp =
-    result.intent === 'operator_help' || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
+    ('intent' in result && result.intent === 'operator_help') || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
   const hasUsefulResultRef = Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;

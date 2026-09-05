@@ -27,9 +27,17 @@ def build_agent_integration_preflight(
     *,
     business_id: str,
     metadata: Dict[str, Any],
+    required_bindings: List[Dict[str, Any]] | None = None,
     input_payload: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    required = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
+    # A run is an execution of a particular version.  The bindings in that
+    # version are therefore authoritative; blueprint metadata is only the
+    # compatibility source for versions created before this field existed.
+    required = required_bindings if isinstance(required_bindings, list) else (
+        metadata.get("required_integration_bindings")
+        if isinstance(metadata.get("required_integration_bindings"), list)
+        else []
+    )
     input_payload = input_payload if isinstance(input_payload, dict) else {}
     integrations = _load_agent_integrations(cursor, business_id)
     by_provider: Dict[str, List[Dict[str, Any]]] = {}

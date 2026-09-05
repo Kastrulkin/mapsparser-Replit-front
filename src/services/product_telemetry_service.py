@@ -23,6 +23,8 @@ ALLOWED_PRODUCT_EVENTS = frozenset({
     "auth_redirect_failed", "stale_action_detected", "orphan_action_detected",
     "content_draft_saved", "content_scheduled",
     "automation_configured", "automation_preflight_approved", "automation_run_linked",
+    "today_priority_set", "today_priority_accepted", "today_priority_declined",
+    "today_priority_snoozed", "today_priority_disabled", "today_priority_enabled", "today_priority_undone",
 })
 ALLOWED_SURFACES = frozenset({"web", "telegram_mini_app"})
 PUBLIC_EVENT_PROPERTY_KEYS = frozenset({"cta_variant"})
@@ -60,8 +62,29 @@ def record_product_event(cursor: Any, *, event_name: str, surface: str, business
                          properties: dict[str, Any] | None = None,
                          lead_id: str | None = None, journey_id: str | None = None,
                          action_id: str | None = None, flow_type: str | None = None,
-                         entity_type: str | None = None, entity_id: str | None = None) -> str:
+                         entity_type: str | None = None, entity_id: str | None = None,
+                         signal_source: str | None = None, deduplication_key: str | None = None) -> str:
     event_id = str(uuid.uuid4())
+    if signal_source is not None or deduplication_key is not None:
+        cursor.execute(
+            """INSERT INTO product_analytics_events
+               (id,event_name,channel,business_id,user_id,scope_type,scope_id,screen,target,
+                properties_json,lead_id,journey_id,action_id,flow_type,entity_type,entity_id,
+                signal_source,deduplication_key)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (user_id,business_id,deduplication_key)
+                   WHERE deduplication_key IS NOT NULL DO NOTHING RETURNING id""",
+            (event_id,event_name,surface,business_id,user_id,scope_type,scope_id,
+             screen[:160],target[:500],json.dumps(properties or {},ensure_ascii=False),
+             lead_id,journey_id,action_id,flow_type,entity_type,entity_id,
+             signal_source or "client_observation",deduplication_key),
+        )
+        inserted = cursor.fetchone()
+        if inserted:
+            return str(inserted.get("id") if hasattr(inserted,"keys") else inserted[0])
+        cursor.execute("SELECT id FROM product_analytics_events WHERE user_id=%s AND business_id=%s AND deduplication_key=%s", (user_id,business_id,deduplication_key))
+        existing = cursor.fetchone()
+        return str(existing.get("id") if hasattr(existing,"keys") else existing[0])
     cursor.execute(
         """INSERT INTO product_analytics_events
            (id, event_name, channel, business_id, user_id, scope_type, scope_id, screen, target,
@@ -72,3 +95,23 @@ def record_product_event(cursor: Any, *, event_name: str, surface: str, business
          lead_id, journey_id, action_id, flow_type, entity_type, entity_id),
     )
     return event_id
+
+
+def record_confirmed_user_action(cursor, *, auth, event_name, business_id, flow,
+                                 operation_key, surface="web", entity_id=None):
+    """Only call after a successful interactive application command, in its transaction."""
+    from services.today_preferences_service import CONFIRMED_EVENTS, enabled, normalize_flow
+    if not enabled("LOCALOS_TODAY_ACTIVITY_ENABLED", False) or not auth.permits_personalization_signal:
+        return None
+    if event_name not in CONFIRMED_EVENTS or not operation_key or not auth.permits_business(business_id):
+        return None
+    record_id = record_product_event(
+        cursor, event_name=event_name, surface=surface, business_id=business_id,
+        user_id=auth.user_id, scope_type="business", scope_id=business_id,
+        flow_type=normalize_flow(flow), entity_id=entity_id,
+        signal_source="confirmed_user_action",
+        deduplication_key=f"command:{event_name}:{operation_key}",
+    )
+    cursor.execute("""INSERT INTO today_preferences(user_id,scope_type,scope_id)
+        VALUES (%s,'business',%s) ON CONFLICT DO NOTHING""", (auth.user_id,business_id))
+    return record_id

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import { Bot, Zap } from 'lucide-react';
 import { newAuth } from '@/lib/auth_new';
@@ -23,6 +23,8 @@ import { isAgentWorkRun, isBusinessBlockerApproval, needsScenarioRebuildForSourc
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
 import { AgentBlueprintsView } from './agents/view';
 import { DemoAgentsPage } from './demo/DemoAgentsPage';
+import { CompiledScriptBuilder } from '@/components/agents/CompiledScriptBuilder';
+import { featureFlags } from '@/config/featureFlags';
 
 type AgentRunResumeState = {
   runId: string;
@@ -184,6 +186,7 @@ const AgentBlueprintsWorkspace = () => {
   const [showAdvancedAgentTools, setShowAdvancedAgentTools] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<AgentBlueprint | null>(null);
   const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
+  const requestedDeepLinkRef = useRef('');
   const googleAuthStatus = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get('google_auth');
@@ -654,7 +657,41 @@ const AgentBlueprintsWorkspace = () => {
   };
 
   useEffect(() => {
-    if (!currentBusinessId || !blueprints.length || runAnimation) return;
+    const params = new URLSearchParams(location.search);
+    const requestedBlueprintId = params.get('blueprint_id') || '';
+    const requestedRunId = params.get('run_id') || '';
+    const requestedBusinessId = params.get('business_id') || '';
+    const requestKey = `${requestedBlueprintId}:${requestedRunId}:${requestedBusinessId}`;
+    if (!requestedBlueprintId && !requestedRunId) return;
+    if (requestedDeepLinkRef.current === requestKey || !currentBusinessId || !blueprints.length) return;
+    if (requestedBusinessId && requestedBusinessId !== currentBusinessId) {
+      return;
+    }
+    const blueprint = blueprints.find((item) => item.id === requestedBlueprintId);
+    if (!blueprint) {
+      requestedDeepLinkRef.current = requestKey;
+      setError('Агент из ссылки не найден или недоступен в выбранном бизнесе.');
+      return;
+    }
+    requestedDeepLinkRef.current = requestKey;
+    setSelectedBlueprintId(blueprint.id);
+    if (!requestedRunId) return;
+    let cancelled = false;
+    void api.get(`/agent-runs/${requestedRunId}`).then(async (response) => {
+      if (cancelled) return;
+      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
+      if (!run || run.blueprint_id !== blueprint.id) {
+        setError('Запуск из ссылки не принадлежит выбранному агенту.');
+        return;
+      }
+      setActiveRun(run); setWorkspaceMode('results');
+      await loadBlueprintDetails(blueprint.id);
+    }).catch(() => { if (!cancelled) setError('Запуск из ссылки не найден или недоступен.'); });
+    return () => { cancelled = true; };
+  }, [blueprints, currentBusinessId, loadBlueprintDetails, location.search]);
+
+  useEffect(() => {
+    if (!currentBusinessId || !blueprints.length || runAnimation || requestedDeepLinkRef.current.includes(':')) return;
     const resume = readAgentRunResume(currentBusinessId);
     if (!resume) return;
     const resumeBlueprintExists = blueprints.some((blueprint) => blueprint.id === resume.blueprintId);
@@ -2263,6 +2300,8 @@ const AgentBlueprintsWorkspace = () => {
   };
 
   return (
+    <>
+    {featureFlags.compiledScriptPreview && selectedBlueprint && workspaceMode === 'scenario' ? <CompiledScriptBuilder blueprintId={selectedBlueprint.id} blueprintDetails={blueprintDetails} onRunQueued={(runId) => { void loadRun(runId); }} /> : null}
     <AgentBlueprintsView
       scope={{
       location, currentBusinessId, blueprints, agentTemplates, templatesLoading, usingTemplateKey, useAgentTemplate, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails, agentDetailsById, activeRun, setActiveRun, loading,
@@ -2289,6 +2328,7 @@ const AgentBlueprintsWorkspace = () => {
       openGoogleSheetsSourceSetup, openGoogleAccessReconnect, openSelectedAgentClone, runEmployeePrimaryAction, applyFinanceRequests
       }}
     />
+    </>
   );
 };
 

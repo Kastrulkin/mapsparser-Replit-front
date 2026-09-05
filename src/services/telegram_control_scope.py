@@ -388,9 +388,6 @@ def _resolve_requested_scope(
             user_id = str(actor.get("id") or "")
             is_superadmin = bool(actor.get("is_superadmin"))
             access_filter = "TRUE" if is_superadmin else "(b.owner_id = %s OR n.owner_id = %s OR nm.user_id IS NOT NULL OR bm.user_id IS NOT NULL)"
-            params: list[Any] = [scope_id]
-            if not is_superadmin:
-                params.extend([user_id, user_id, user_id, user_id])
             cursor.execute(
                 f"""
                 SELECT b.id, b.name, COALESCE(b.address, '') AS address,
@@ -403,7 +400,13 @@ def _resolve_requested_scope(
                   AND {access_filter}
                 LIMIT 1
                 """,
-                tuple(params[1:3] + params[:1] + params[3:] if not is_superadmin else params),
+                # Membership joins consume two user ids before the requested
+                # business id; the ownership predicate consumes two more.
+                # Keep this explicit so an out-of-page deep link cannot bind
+                # membership parameters to the wrong placeholders.
+                (user_id, user_id, scope_id, user_id, user_id)
+                if not is_superadmin
+                else (scope_id,),
             )
             loaded = _row_to_dict(cursor, cursor.fetchone())
             business = loaded or None

@@ -6,6 +6,29 @@ This is the design operating model for LocalOS product UI. It sits above individ
 
 Use it before editing dashboard, cockpit, builder, form, approval, run history, or agent-management screens.
 
+## Today And Direct Work Navigation
+
+`/dashboard` is always Today. Keep stable direct entries for content,
+influencers, partnerships, maps/reviews, average ticket and automation. Growth
+Paths is optional discovery under More; it must not be a required extra click.
+
+Today has one primary next action and three stable sections: needs a decision,
+continue work, completed results. Real deadlines and failed/blocked work outrank
+a personal priority. A priority changes comparable work inside Today, never the
+sidebar order or the destination of an explicit deep link. User/business/network
+scope is part of every state and request; clear private state on a scope change
+or loss of access, retain it with a retry notice for transient failures.
+
+Behavior-based suggestions require an explicit user decision. Offer accept,
+decline, snooze, disable and undo; never infer acceptance from silence or time.
+
+For compiled scripts, show task → rules → example and expected result → preview
+→ approval → run. Editing rules invalidates the candidate's approval; new run
+data does not regenerate the approved program. Technical source and JSON belong
+in the advanced layer. The current internal JSON pilot is not the finished
+nontechnical data-source editor. Draft approval never claims that a message was
+sent; changed text or contact requires a refreshed review.
+
 ## Product Surfaces Before Brand Surfaces
 
 LocalOS has two different surface types:

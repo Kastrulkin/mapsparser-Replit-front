@@ -62,6 +62,7 @@ from services.outreach_sender_profile_service import evaluate_sender_profile_com
 from services.lead_preparation_progress_service import record_lead_preparation_step
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
+from services.outreach_draft_review import draft_review_digest
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -1984,7 +1985,7 @@ def partnership_list_drafts():
                 LIMIT 200
             """
             cur.execute(query, tuple(params))
-            rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+            rows = [{**_serialize_draft(dict(row)), "review_digest": draft_review_digest(dict(row))} for row in cur.fetchall()]
         finally:
             conn.close()
         return jsonify({"success": True, "drafts": rows, "count": len(rows)})
@@ -2002,6 +2003,9 @@ def partnership_approve_draft(draft_id):
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
         approved_text = str(data.get("approved_text") or "").strip()
+        expected_review_digest = data.get("expected_review_digest")
+        if not isinstance(expected_review_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_review_digest):
+            return jsonify({"error": "Обновите список и проверьте текущую версию письма перед утверждением.", "code": "draft_review_required"}), 400
         if not approved_text:
             return jsonify({"error": "approved_text is required"}), 400
 
@@ -2015,13 +2019,15 @@ def partnership_approve_draft(draft_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json
+                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json,
+                       d.approved_text, d.updated_at, d.channel, l.email, l.selected_channel
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE d.id = %s
                   AND l.business_id = %s
                   AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
                 LIMIT 1
+                FOR UPDATE OF d, l
                 """,
                 (draft_id, business_id),
             )
@@ -2029,8 +2035,12 @@ def partnership_approve_draft(draft_id):
             if not row:
                 return jsonify({"error": "Draft not found"}), 404
             draft_row = dict(row) if hasattr(row, "keys") else {
-                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5]
+                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5],
+                "approved_text": row[6], "updated_at": row[7], "channel": row[8], "email": row[9], "selected_channel": row[10]
             }
+            if expected_review_digest != draft_review_digest(draft_row):
+                conn.rollback()
+                return jsonify({"error": "Черновик или контакт изменился. Обновите список и проверьте письмо ещё раз.", "code": "draft_review_stale"}), 409
 
             edited_text = str(draft_row.get("edited_text") or "")
             generated_text = str(draft_row.get("generated_text") or "")

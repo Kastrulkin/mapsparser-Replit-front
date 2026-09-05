@@ -128,6 +128,26 @@ from services.yandex_review_delta_sync import (
     normalize_native_review,
 )
 
+
+def _worker_role_enabled(role: str) -> bool:
+    """Keep the legacy all-in-one worker as the default during the split.
+
+    ``all`` remains the backward-compatible default. Dedicated parser, agent,
+    operator, dispatcher, and maintenance roles run only their owned loops.
+    """
+    configured = str(os.getenv("WORKER_ROLE", "all")).strip().lower()
+    if configured in {"", "all"}:
+        return True
+    aliases = {
+        "parser": {"parser", "parsers"},
+        "agent": {"agent", "agents", "script"},
+        "operator": {"operator", "operators"},
+        "dispatcher": {"dispatcher", "dispatch"},
+        "maintenance": {"maintenance", "maint"},
+        "general": {"general", "legacy"},
+    }
+    return configured in aliases.get(role, {role})
+
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
 BROWSER_SESSION_MANAGER = BrowserSessionManager()
@@ -188,6 +208,7 @@ _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 _LAST_AGENT_RUN_QUEUE_AT = 0.0
 _LAST_OPERATOR_ASYNC_JOB_AT = 0.0
+_LAST_TODAY_PRIORITY_PROPOSALS_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
@@ -2151,6 +2172,25 @@ def _process_operator_async_job_if_due() -> None:
             )
     except Exception:
         print("[OPERATOR_ASYNC_JOB] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _materialize_today_priority_proposals_if_due() -> None:
+    global _LAST_TODAY_PRIORITY_PROPOSALS_AT
+    interval_sec = max(60, int(os.getenv("TODAY_PRIORITY_PROPOSAL_INTERVAL_SEC", "3600")))
+    now = time.time()
+    if now - _LAST_TODAY_PRIORITY_PROPOSALS_AT < interval_sec:
+        return
+    _LAST_TODAY_PRIORITY_PROPOSALS_AT = now
+    try:
+        from services.today_preferences_service import materialize_priority_proposals
+
+        created = materialize_priority_proposals(DatabaseManager)
+        if created:
+            print(f"[TODAY_PRIORITY_PROPOSALS] created={created}", flush=True)
+    except Exception:
+        print("[TODAY_PRIORITY_PROPOSALS] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
 
@@ -7713,32 +7753,42 @@ if __name__ == "__main__":
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
         try:
-            process_queue()
-            _run_card_automation_if_due()
-            _run_founder_content_if_due()
-            _dispatch_agent_schedules_if_due()
-            _process_agent_run_queue_if_due()
-            _process_operator_async_job_if_due()
-            _enrich_creator_sources_if_due()
-            _revalidate_creator_profiles_if_due()
-            _process_creator_search_if_due()
-            _process_contact_intelligence_if_due()
-            _dispatch_social_posts_if_due()
-            _collect_social_post_metrics_if_due()
-            _run_telegram_opportunity_monitor_if_due()
-            _run_knowledge_telegram_monitor_if_due()
-            _refresh_outreach_pain_library_if_due()
-            _run_knowledge_embeddings_if_due()
-            _dispatch_outreach_queue_if_due()
-            _process_creator_offer_distribution_if_due()
-            _dispatch_creator_notifications_if_due()
-            _notify_superadmin_outreach_replies_if_due()
-            _notify_superadmin_community_sources_if_due()
-            _dispatch_openclaw_callback_outbox_if_due()
-            _check_openclaw_callback_alerts_if_due()
-            _reconcile_openclaw_billing_if_due()
-            _run_yookassa_renewals_if_due()
-            _run_web_tracking_maintenance_if_due()
+            if _worker_role_enabled("parser"):
+                process_queue()
+            if _worker_role_enabled("dispatcher"):
+                _run_card_automation_if_due()
+                _run_founder_content_if_due()
+                _dispatch_social_posts_if_due()
+                _collect_social_post_metrics_if_due()
+                _dispatch_outreach_queue_if_due()
+                _process_creator_offer_distribution_if_due()
+                _dispatch_creator_notifications_if_due()
+                _notify_superadmin_outreach_replies_if_due()
+                _notify_superadmin_community_sources_if_due()
+                _dispatch_openclaw_callback_outbox_if_due()
+                _check_openclaw_callback_alerts_if_due()
+            if _worker_role_enabled("maintenance"):
+                _enrich_creator_sources_if_due()
+                _revalidate_creator_profiles_if_due()
+                _process_creator_search_if_due()
+                _process_contact_intelligence_if_due()
+                _run_telegram_opportunity_monitor_if_due()
+                _run_knowledge_telegram_monitor_if_due()
+                _refresh_outreach_pain_library_if_due()
+                _run_knowledge_embeddings_if_due()
+                _reconcile_openclaw_billing_if_due()
+                _run_yookassa_renewals_if_due()
+                _run_web_tracking_maintenance_if_due()
+                _materialize_today_priority_proposals_if_due()
+            if _worker_role_enabled("general"):
+                # Keep a slot for unclassified legacy work while individual
+                # workloads move into the five explicit roles above.
+                pass
+            if _worker_role_enabled("agent"):
+                _dispatch_agent_schedules_if_due()
+                _process_agent_run_queue_if_due()
+            if _worker_role_enabled("operator"):
+                _process_operator_async_job_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)

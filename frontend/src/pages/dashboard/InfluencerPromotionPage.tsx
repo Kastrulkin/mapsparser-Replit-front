@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   BarChart3,
@@ -347,9 +347,30 @@ const EmptyState = ({ icon: Icon, title, description, action }: { icon: typeof S
 
 export const InfluencerPromotionPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
+  const [searchParams] = useSearchParams();
+  const requestedCollaborationId = searchParams.get('collaboration_id');
+  const requestedBusinessId = searchParams.get('business_id');
+  const businessMatchesLink = !requestedBusinessId || requestedBusinessId === currentBusinessId;
+  const requestedSection = searchParams.get('section');
+  const scopeRef = useRef(currentBusinessId);
+  scopeRef.current = currentBusinessId;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
   const [section, setSection] = useState<WorkspaceSection>('search');
+  useEffect(() => {
+    if (!businessMatchesLink) return;
+    if (requestedCollaborationId) setSection('collaborations');
+    else if (requestedSection === 'campaigns' || requestedSection === 'collaborations' || requestedSection === 'results' || requestedSection === 'search') setSection(requestedSection);
+  }, [requestedCollaborationId, requestedSection, businessMatchesLink]);
+  useEffect(() => {
+    setOverview(null); setSearchJob(null);
+  }, [currentBusinessId]);
+  useEffect(() => {
+    if (!requestedCollaborationId || !businessMatchesLink || section !== 'collaborations' || !overview) return;
+    const target = document.getElementById(`collaboration-${requestedCollaborationId}`);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({ block: 'center' });
+  }, [requestedCollaborationId, businessMatchesLink, section, overview]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -411,18 +432,21 @@ export const InfluencerPromotionPage = () => {
     setError('');
     try {
       const response = await request('/promotion/influencers/overview');
+      if (scopeRef.current !== currentBusinessId) return;
       const nextOverview = response.overview || null;
       setOverview(nextOverview);
       if (nextOverview?.latest_search?.id) {
         const searchResponse = await request(`/promotion/influencers/searches/${nextOverview.latest_search.id}`);
+        if (scopeRef.current !== currentBusinessId) return;
         setSearchJob(searchResponse.search || null);
       } else {
         setSearchJob(null);
       }
     } catch (loadError) {
+      if (scopeRef.current !== currentBusinessId) return;
       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить продвижение через авторов.');
     } finally {
-      setLoading(false);
+      if (scopeRef.current === currentBusinessId) setLoading(false);
     }
   }, [currentBusiness?.creator_promotion_available, currentBusinessId, request]);
 
@@ -1037,10 +1061,10 @@ export const InfluencerPromotionPage = () => {
       ) : null}
 
       {!loading && section === 'collaborations' ? (
-        <div id="influencer-panel-collaborations" role="tabpanel" aria-labelledby="influencer-tab-collaborations" className="space-y-4">{(overview?.collaborations || []).length ? (overview?.collaborations || []).map((collaboration) => {
+        <div id="influencer-panel-collaborations" role="tabpanel" aria-labelledby="influencer-tab-collaborations" className="space-y-4">{requestedCollaborationId && !loading && (!businessMatchesLink || !(overview?.collaborations || []).some((collaboration) => collaboration.id === requestedCollaborationId)) ? <p role="alert" className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-950">Коллаборация из ссылки недоступна в выбранном бизнесе. Проверьте выбор бизнеса и доступ.</p> : null}{(overview?.collaborations || []).length ? (overview?.collaborations || []).map((collaboration) => {
           const draft = deliverableDrafts[collaboration.id] || emptyDeliverableDraft();
           const nextStatus = nextCollaborationStatus[collaboration.status];
-          return <section key={collaboration.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
+          return <section key={collaboration.id} id={`collaboration-${collaboration.id}`} tabIndex={-1} aria-label={`Коллаборация: ${collaboration.display_name}`} className={cn('rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.06)] focus-visible:outline focus-visible:outline-2', requestedCollaborationId === collaboration.id && businessMatchesLink && 'ring-2 ring-slate-900')}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{statusLabel[collaboration.status] || collaboration.status}</div><h2 className="mt-2 text-balance text-lg font-semibold text-slate-950">{collaboration.display_name}</h2></div>
               <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600 tabular-nums">Материалов: {collaboration.deliverables?.length || 0}</div><Button variant="outline" onClick={() => void createCreatorRoom(collaboration)} disabled={busy === `room:${collaboration.id}`} className="min-h-10 rounded-xl">{busy === `room:${collaboration.id}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-2 h-4 w-4" />}{collaboration.public_room_ready ? 'Обновить ссылку' : 'Создать ссылку автору'}</Button>{nextStatus ? <Button onClick={() => void updateCollaborationStatus(collaboration, nextStatus.status)} disabled={busy === `collaboration-status:${collaboration.id}`} className="min-h-10 rounded-xl bg-slate-950 text-white">{busy === `collaboration-status:${collaboration.id}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronRight className="mr-2 h-4 w-4" />}{nextStatus.label}</Button> : null}</div>

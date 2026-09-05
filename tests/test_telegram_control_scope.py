@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from services.operator_scope_summary import format_scope_summary_for_telegram
 from services.telegram_control_scope import list_control_scopes, list_network_scope_locations, resolve_control_scope, toggle_favorite_control_scope
+from services.telegram_control_scope import _resolve_requested_scope
 from services.telegram_webapp_auth import validate_telegram_webapp_init_data
 
 
@@ -250,3 +251,28 @@ def test_current_scope_can_be_added_to_favorites():
 
     assert favorite is True
     assert cursor.updated is True
+
+
+def test_requested_business_outside_catalog_page_binds_all_membership_parameters():
+    class DeepLinkCursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=()):
+            assert "WHERE b.id = %s" in query
+            assert query.count("%s") == len(params)
+            assert params == ("owner-1", "owner-1", "biz-201", "owner-1", "owner-1")
+            self.rows = [{"id": "biz-201", "name": "Late business", "address": "", "network_id": None, "network_name": None}]
+
+        def fetchone(self):
+            return self.rows[0]
+
+    resolved = _resolve_requested_scope(
+        DeepLinkCursor(),
+        catalog={"actor": {"id": "owner-1", "is_superadmin": False}, "businesses": [], "total_choices": 201},
+        kind="business",
+        scope_id="biz-201",
+    )
+
+    assert resolved["id"] == "biz-201"
+    assert resolved["business_ids"] == ["biz-201"]

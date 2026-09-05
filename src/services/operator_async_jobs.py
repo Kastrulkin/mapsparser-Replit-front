@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -21,6 +23,8 @@ CANCELLABLE_JOB_KINDS = {
     "finance_document_recognize",
     "finance_crm_sync",
 }
+OPERATOR_JOB_LEASE_SECONDS = max(30, int(os.getenv("OPERATOR_ASYNC_JOB_LEASE_SECONDS", "300")))
+OPERATOR_JOB_HEARTBEAT_SECONDS = max(5, int(os.getenv("OPERATOR_ASYNC_JOB_HEARTBEAT_SECONDS", "30")))
 
 
 def _row(cursor: Any, value: Any) -> dict[str, Any]:
@@ -241,7 +245,8 @@ def retry_operator_async_job(
         """
         UPDATE operator_async_jobs
         SET status = 'queued', progress = 0, stage = 'Повтор поставлен в очередь',
-            error_text = NULL, next_attempt_at = NOW(), completed_at = NULL, updated_at = NOW()
+            error_text = NULL, next_attempt_at = NOW(), completed_at = NULL, lease_token = NULL,
+            updated_at = NOW()
         WHERE id = %s
         RETURNING *
         """,
@@ -274,7 +279,7 @@ def cancel_operator_async_job(
         """
         UPDATE operator_async_jobs
         SET status = 'cancelled', progress = 100, stage = 'Остановлено',
-            completed_at = NOW(), updated_at = NOW()
+            completed_at = NOW(), lease_token = NULL, updated_at = NOW()
         WHERE id = %s
         RETURNING *
         """,
@@ -284,6 +289,7 @@ def cancel_operator_async_job(
 
 
 def claim_next_operator_async_job(cursor: Any) -> dict[str, Any] | None:
+    lease_token = str(uuid.uuid4())
     cursor.execute(
         """
         SELECT *
@@ -302,15 +308,60 @@ def claim_next_operator_async_job(cursor: Any) -> dict[str, Any] | None:
         """
         UPDATE operator_async_jobs
         SET status = 'running', progress = GREATEST(progress, 5), stage = 'LocalOS начал работу',
-            attempt_count = attempt_count + 1, heartbeat_at = NOW(), updated_at = NOW()
+            attempt_count = attempt_count + 1, heartbeat_at = NOW(), lease_token = %s, updated_at = NOW()
         WHERE id = %s
         RETURNING *
         """,
-        (row.get("id"),),
+        (lease_token, row.get("id")),
     )
     claimed = _row(cursor, cursor.fetchone())
     claimed["payload_json"] = _json(claimed.get("payload_json"), {})
     return claimed
+
+
+def recover_stale_operator_async_jobs(cursor: Any, *, limit: int = 50) -> int:
+    """Return expired leases to the queue without waiting on a live job lock."""
+    cursor.execute(
+        """
+        WITH stale_jobs AS (
+            SELECT id
+            FROM operator_async_jobs
+            WHERE status = 'running'
+              AND heartbeat_at < NOW() - (%s * INTERVAL '1 second')
+            ORDER BY heartbeat_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT %s
+        )
+        UPDATE operator_async_jobs job
+        SET status = CASE WHEN job.attempt_count < job.max_attempts THEN 'queued' ELSE 'failed' END,
+            progress = CASE WHEN job.attempt_count < job.max_attempts THEN job.progress ELSE 100 END,
+            stage = CASE WHEN job.attempt_count < job.max_attempts THEN 'Исполнитель перезапущен' ELSE 'Нужно внимание' END,
+            error_text = CASE
+                WHEN job.attempt_count < job.max_attempts THEN 'worker heartbeat expired; retry scheduled'
+                ELSE 'worker heartbeat expired; retry limit reached'
+            END,
+            next_attempt_at = CASE WHEN job.attempt_count < job.max_attempts THEN NOW() ELSE NULL END,
+            completed_at = CASE WHEN job.attempt_count < job.max_attempts THEN NULL ELSE NOW() END,
+            lease_token = NULL,
+            updated_at = NOW()
+        FROM stale_jobs
+        WHERE job.id = stale_jobs.id
+        """,
+        (OPERATOR_JOB_LEASE_SECONDS, max(1, min(int(limit), 500))),
+    )
+    return max(0, int(getattr(cursor, "rowcount", 0) or 0))
+
+
+def heartbeat_operator_async_job(cursor: Any, *, job_id: str, lease_token: str) -> bool:
+    cursor.execute(
+        """
+        UPDATE operator_async_jobs
+        SET heartbeat_at = NOW(), updated_at = NOW()
+        WHERE id = %s AND status = 'running' AND lease_token = %s
+        """,
+        (job_id, lease_token),
+    )
+    return bool(getattr(cursor, "rowcount", 0))
 
 
 def update_operator_async_job(
@@ -322,7 +373,8 @@ def update_operator_async_job(
     stage: str,
     result: dict[str, Any] | None = None,
     error: str = "",
-) -> None:
+    lease_token: str = "",
+) -> bool:
     clean_status = status if status in JOB_STATUSES else "failed"
     terminal = clean_status in TERMINAL_JOB_STATUSES
     cursor.execute(
@@ -330,8 +382,10 @@ def update_operator_async_job(
         UPDATE operator_async_jobs
         SET status = %s, progress = %s, stage = %s, result_json = %s::jsonb,
             error_text = %s, heartbeat_at = NOW(), updated_at = NOW(),
-            completed_at = CASE WHEN %s THEN NOW() ELSE completed_at END
+            completed_at = CASE WHEN %s THEN NOW() ELSE completed_at END,
+            lease_token = CASE WHEN %s THEN NULL ELSE lease_token END
         WHERE id = %s AND status = 'running'
+          AND (%s = '' OR lease_token = %s)
         """,
         (
             clean_status,
@@ -340,9 +394,54 @@ def update_operator_async_job(
             json.dumps(result or {}, ensure_ascii=False, default=str),
             error or None,
             terminal,
+            terminal,
             job_id,
+            lease_token,
+            lease_token,
         ),
     )
+    return bool(getattr(cursor, "rowcount", 0))
+
+
+class _OperatorJobHeartbeat:
+    """Keep a short lease alive while a synchronous domain service is running."""
+
+    def __init__(self, job_id: str, lease_token: str) -> None:
+        self.job_id = job_id
+        self.lease_token = lease_token
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if not self.lease_token:
+            return
+        self._thread = threading.Thread(target=self._run, name=f"operator-job-{self.job_id}", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=min(2, OPERATOR_JOB_HEARTBEAT_SECONDS))
+
+    def _run(self) -> None:
+        from database_manager import DatabaseManager
+
+        while not self._stop.wait(OPERATOR_JOB_HEARTBEAT_SECONDS):
+            database = DatabaseManager()
+            try:
+                if not heartbeat_operator_async_job(
+                    database.conn.cursor(), job_id=self.job_id, lease_token=self.lease_token
+                ):
+                    database.conn.rollback()
+                    return
+                database.conn.commit()
+            except Exception:
+                try:
+                    database.conn.rollback()
+                except Exception:
+                    pass
+            finally:
+                database.close()
 
 
 def process_next_operator_async_job() -> dict[str, Any] | None:
@@ -356,6 +455,7 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
     claim_db = DatabaseManager()
     claimed: dict[str, Any] | None = None
     try:
+        recover_stale_operator_async_jobs(claim_db.conn.cursor())
         claimed = claim_next_operator_async_job(claim_db.conn.cursor())
         claim_db.conn.commit()
     except Exception:
@@ -367,11 +467,14 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
         return None
 
     job_id = str(claimed.get("id") or "")
+    lease_token = str(claimed.get("lease_token") or "")
     kind = str(claimed.get("kind") or "")
     user_id = str(claimed.get("user_id") or "")
     business_id = str(claimed.get("business_id") or "")
     payload = claimed.get("payload_json") if isinstance(claimed.get("payload_json"), dict) else {}
     result: dict[str, Any]
+    heartbeat = _OperatorJobHeartbeat(job_id, lease_token)
+    heartbeat.start()
     try:
         if kind == "content_plan_generate":
             from services.content_plan_service import create_generated_content_plan
@@ -399,17 +502,20 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
             raise ValueError("Для этой операции ещё нет безопасного фонового исполнителя")
         finish_db = DatabaseManager()
         try:
-            update_operator_async_job(
+            updated = update_operator_async_job(
                 finish_db.conn.cursor(),
                 job_id=job_id,
                 status=status,
                 progress=progress,
                 stage=stage,
                 result=result,
+                lease_token=lease_token,
             )
             finish_db.conn.commit()
         finally:
             finish_db.close()
+        if not updated:
+            return {"id": job_id, "kind": kind, "status": "lease_lost", "result": result}
         return {"id": job_id, "kind": kind, "status": status, "result": result}
     except Exception as exc:
         fail_db = DatabaseManager()
@@ -421,8 +527,11 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
                 progress=100,
                 stage="Нужно внимание",
                 error=str(exc),
+                lease_token=lease_token,
             )
             fail_db.conn.commit()
         finally:
             fail_db.close()
         return {"id": job_id, "kind": kind, "status": "failed", "error": str(exc)}
+    finally:
+        heartbeat.stop()

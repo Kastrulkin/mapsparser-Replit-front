@@ -69,6 +69,7 @@ type Draft = {
   edited_text?: string;
   approved_text?: string;
   updated_at?: string;
+  review_digest?: string;
 };
 type QueueItem = {
   id: string;
@@ -636,7 +637,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
     await action(
       `draft:${draft.id}`,
       `/api/partnership/drafts/${draft.id}/approve`,
-      { approved_text: text },
+      { approved_text: text, expected_review_digest: draft.review_digest },
     );
   };
   const createBatch = async () => {

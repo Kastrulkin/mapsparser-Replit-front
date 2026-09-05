@@ -5,6 +5,7 @@ import sys
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.auth_context import AuthContext
 from core.api_errors import internal_error_response
 from services.content_voice_service import (
     add_content_voice_example,
@@ -37,8 +38,8 @@ def content_voice_profile():
     if not business_id:
         return jsonify({"success": False, "error": "business_id обязателен"}), 400
     try:
-        user_id = str(user_data.get("user_id") or "")
-        profile = update_content_voice(user_id, business_id, data) if request.method == "PATCH" else get_content_voice(user_id, business_id)
+        auth = AuthContext.from_session(user_data)
+        profile = update_content_voice(auth, business_id, data) if request.method == "PATCH" else get_content_voice(auth, business_id)
         return jsonify({"success": True, "profile": profile})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
@@ -59,7 +60,7 @@ def content_voice_example_create():
         return jsonify({"success": False, "error": "business_id обязателен"}), 400
     try:
         example = add_content_voice_example(
-            str(user_data.get("user_id") or ""),
+            AuthContext.from_session(user_data),
             business_id,
             str(data.get("text") or ""),
             platform=str(data.get("platform") or ""),
@@ -81,7 +82,7 @@ def content_voice_example_delete(example_id: str):
     if error_response:
         return error_response
     try:
-        delete_content_voice_example(str(user_data.get("user_id") or ""), example_id)
+        delete_content_voice_example(AuthContext.from_session(user_data), example_id)
         return jsonify({"success": True})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403

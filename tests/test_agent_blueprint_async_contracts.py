@@ -314,7 +314,11 @@ def test_agent_run_queue_reuses_existing_idempotency_key(monkeypatch):
         def load_run(self, run_id, user_data=None):
             return {"id": run_id, "status": "queued"}
 
-    monkeypatch.setattr(agent_run_queue, "build_agent_integration_preflight", lambda *args, **kwargs: {"ready": True})
+    monkeypatch.setattr(
+        agent_run_queue,
+        "build_agent_integration_preflight",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("replay must not use current preflight")),
+    )
     monkeypatch.setattr(agent_run_queue, "AgentBlueprintRunner", Runner)
 
     result = agent_run_queue.enqueue_agent_run(
@@ -328,6 +332,69 @@ def test_agent_run_queue_reuses_existing_idempotency_key(monkeypatch):
     assert result["success"] is True
     assert result["reused"] is True
     assert result["run"]["id"] == "run-existing"
+
+
+def test_agent_run_queue_passes_pinned_version_bindings_to_preflight(monkeypatch):
+    from services import agent_run_queue
+
+    class Cursor:
+        def __init__(self):
+            self.results = [None, None]
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            if normalized.startswith("select pg_advisory_xact_lock") or "from agent_runs" in normalized:
+                return None
+            raise AssertionError(f"Unexpected SQL: {query}")
+
+        def fetchone(self):
+            return self.results.pop(0)
+
+    captured = {}
+    monkeypatch.setattr(
+        agent_run_queue,
+        "build_agent_integration_preflight",
+        lambda *_args, **kwargs: captured.update(kwargs) or {"ready": False},
+    )
+    version_bindings = [{"key": "version-only", "provider": "maton", "required": True}]
+    result = agent_run_queue.enqueue_agent_run(
+        Cursor(),
+        blueprint={"id": "bp1", "business_id": "biz1", "metadata_json": {"required_integration_bindings": [{"key": "metadata-only"}]}},
+        version={"id": "version1", "blueprint_id": "bp1", "required_integration_bindings_json": version_bindings},
+        input_payload={},
+        user_data={"user_id": "user1"},
+        idempotency_key="new-click",
+    )
+    assert result["code"] == "AGENT_INTEGRATIONS_REQUIRED"
+    assert captured["required_bindings"] == version_bindings
+
+
+def test_agent_run_queue_keeps_empty_legacy_dsl_executable(monkeypatch):
+    from services import agent_run_queue
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchone(self):
+            return None
+
+    captured = {}
+    monkeypatch.setattr(
+        agent_run_queue,
+        "build_agent_integration_preflight",
+        lambda *_args, **kwargs: captured.update(kwargs) or {"ready": False},
+    )
+    result = agent_run_queue.enqueue_agent_run(
+        Cursor(),
+        blueprint={"id": "bp1", "business_id": "biz1", "metadata_json": {}},
+        version={"id": "version1", "blueprint_id": "bp1", "compiled_state": "legacy", "steps_json": []},
+        input_payload={},
+        user_data={"user_id": "user1"},
+        idempotency_key="legacy-empty",
+    )
+    assert result["code"] == "AGENT_INTEGRATIONS_REQUIRED"
+    assert captured["required_bindings"] is None
 
 
 def test_agent_run_queue_blocks_a_new_key_while_same_blueprint_is_active(monkeypatch):
@@ -432,7 +499,8 @@ def test_agent_run_claim_recovers_stale_heartbeat_before_claiming_retry():
 
     assert claimed["id"] == "run-stale"
     assert "heartbeat_at < now() - interval '5 minutes'" in cursor.queries[0]
-    assert "status = case when attempt_count < max_attempts then 'retry_wait' else 'failed' end" in cursor.queries[0]
+    assert "for update skip locked" in cursor.queries[0]
+    assert "status = case when run.attempt_count < run.max_attempts then 'retry_wait' else 'failed' end" in cursor.queries[0]
     assert "for update skip locked" in cursor.queries[1]
     assert "attempt_count = r.attempt_count + 1" in cursor.queries[1]
 

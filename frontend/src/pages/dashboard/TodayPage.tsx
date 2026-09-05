@@ -18,7 +18,19 @@ import type { JourneyAction } from '@/lib/leadJourney';
 type DashboardContext = { currentBusinessId?: string | null; controlScope?: ControlScope | null; onControlScopeChange?: (scope: ControlScope) => void; onBusinessChange?: (businessId: string) => void };
 
 type Mission = { id?: string; title: string; reason: string; expected_outcome: string; cta_label: string; screen?: string; cta_url?: string; plan_id?: string; item_id?: string; target_scope?: { kind?: string; id?: string } };
-type TodayItem = { id: string; title: string; description?: string; stage?: string; source?: string; occurred_at?: string; progress?: number | null; screen?: string; business_id?: string; business_name?: string };
+type TodayItem = { id: string; title: string; description?: string; stage?: string; source?: string; occurred_at?: string; progress?: number | null; screen?: string; business_id?: string; business_name?: string; flow?: TodayPreference['primary_flow']; urgency?: 'urgent' | 'normal'; due_at?: string | null; preview?: string | null; action?: { label?: string; url?: string }; freshness?: { as_of?: string; status?: string }; reason_code?: string; message_code?: string; params?: Record<string, unknown> };
+type TodayPreference = {
+  scope_type: 'business' | 'network';
+  scope_id: string;
+  primary_flow: 'overview' | 'content' | 'influencers' | 'partnerships' | 'maps' | 'upsells' | 'automation';
+  suggestions_enabled: boolean;
+  revision: number;
+  updated_at?: string | null;
+  previous_flow?: string | null;
+  can_undo?: boolean;
+  available_flows?: Array<'overview' | 'content' | 'influencers' | 'partnerships' | 'maps' | 'upsells' | 'automation'>;
+};
+type PriorityProposal = { id: string; flow: TodayPreference['primary_flow']; active_days: number; confirmed_actions: number; reason_code: 'activity_shift' };
 type ProblemLocation = { business_id: string; business_name: string; problem?: string; data_health_status?: string; focus_action?: Mission | null };
 type TodayOverview = {
   focus_action?: Mission | null;
@@ -32,6 +44,10 @@ type TodayOverview = {
   problem_locations?: ProblemLocation[];
   data_rhythm?: { status?: string; coverage?: number; completed_periods_8w?: number; next_due_at?: string | null } | null;
   analytics_modules?: Array<{ key?: string; label?: string; status?: string; next_unlock?: string | null }>;
+  preference?: TodayPreference;
+  priority_proposal?: PriorityProposal | null;
+  work_sections?: { needs_decision?: TodayItem[]; continue_work?: TodayItem[]; results?: TodayItem[] };
+  work_source_states?: Partial<Record<'content' | 'influencers' | 'automation', { status?: 'live' | 'error' | 'unavailable'; as_of?: string }>>;
 };
 
 const screenRoute = (screen?: string) => ({
@@ -114,6 +130,21 @@ const formatDate = (language: Language, value?: string | null) => {
   return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat(localeByLanguage[language], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
 };
 
+const flowRoute: Record<TodayPreference['primary_flow'], string> = { overview: '/dashboard/today', content: '/dashboard/content', influencers: '/dashboard/influencers', partnerships: '/dashboard/partnerships', maps: '/dashboard/card', upsells: '/dashboard/average-ticket', automation: '/dashboard/agents' };
+const flowOrder: TodayPreference['primary_flow'][] = ['overview', 'content', 'influencers', 'partnerships', 'maps', 'upsells', 'automation'];
+const flowLabels: Record<Language, Record<TodayPreference['primary_flow'], string>> = {
+  ru: { overview: 'Обзор', content: 'Контент', influencers: 'Инфлюенсеры', partnerships: 'Партнёрства', maps: 'Карты', upsells: 'Допродажи', automation: 'Автоматизация' },
+  en: { overview: 'Overview', content: 'Content', influencers: 'Creators', partnerships: 'Partnerships', maps: 'Maps', upsells: 'Upsells', automation: 'Automation' },
+  fr: { overview: 'Aperçu', content: 'Contenu', influencers: 'Créateurs', partnerships: 'Partenariats', maps: 'Cartes', upsells: 'Ventes additionnelles', automation: 'Automatisation' },
+  es: { overview: 'Resumen', content: 'Contenido', influencers: 'Creadores', partnerships: 'Alianzas', maps: 'Mapas', upsells: 'Ventas adicionales', automation: 'Automatización' },
+  el: { overview: 'Επισκόπηση', content: 'Περιεχόμενο', influencers: 'Δημιουργοί', partnerships: 'Συνεργασίες', maps: 'Χάρτες', upsells: 'Πρόσθετες πωλήσεις', automation: 'Αυτοματοποίηση' },
+  de: { overview: 'Übersicht', content: 'Inhalte', influencers: 'Creator', partnerships: 'Partnerschaften', maps: 'Karten', upsells: 'Zusatzverkäufe', automation: 'Automatisierung' },
+  th: { overview: 'ภาพรวม', content: 'คอนเทนต์', influencers: 'ครีเอเตอร์', partnerships: 'พาร์ทเนอร์', maps: 'แผนที่', upsells: 'การขายเพิ่ม', automation: 'งานอัตโนมัติ' },
+  ar: { overview: 'نظرة عامة', content: 'المحتوى', influencers: 'صناع المحتوى', partnerships: 'الشراكات', maps: 'الخرائط', upsells: 'المبيعات الإضافية', automation: 'الأتمتة' },
+  ha: { overview: 'Bayani', content: 'Abun ciki', influencers: 'Masu ƙirƙira', partnerships: 'Haɗin gwiwa', maps: 'Taswira', upsells: 'Ƙarin tallace-tallace', automation: 'Aiki ta atomatik' },
+  tr: { overview: 'Genel bakış', content: 'İçerik', influencers: 'İçerik üreticileri', partnerships: 'Ortaklıklar', maps: 'Haritalar', upsells: 'Ek satışlar', automation: 'Otomasyon' },
+};
+
 export const TodayPage = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
@@ -122,16 +153,24 @@ export const TodayPage = () => {
   const [overview, setOverview] = useState<TodayOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [preferenceSaving, setPreferenceSaving] = useState(false);
   const [journeyIntent, setJourneyIntent] = useState(() => readLeadJourneyIntent());
   const requestSequence = useRef(0);
+  const loadedScope = useRef<string | null>(null);
+  const scopeKey = currentBusinessId ? `${controlScope?.kind || 'business'}:${controlScope?.id || currentBusinessId}` : null;
 
   const load = () => {
     const requestId = requestSequence.current + 1;
     requestSequence.current = requestId;
     if (!currentBusinessId) {
       setOverview(null);
+      loadedScope.current = null;
       setLoading(false);
       return;
+    }
+    if (loadedScope.current !== scopeKey) {
+      setOverview(null);
+      loadedScope.current = scopeKey;
     }
     setLoading(true);
     setError(false);
@@ -151,6 +190,7 @@ export const TodayPage = () => {
         if (requestSequence.current === requestId) setOverview(data);
       })
       .catch(() => {
+        // Keep the last confirmed summary visible during a transient refresh error.
         if (requestSequence.current === requestId) setError(true);
       })
       .finally(() => {
@@ -176,12 +216,12 @@ export const TodayPage = () => {
       });
   }, [currentBusinessId]);
 
-  const openItem = (itemMission?: Mission | null, businessId?: string, businessName?: string) => {
+  const openItem = (itemMission?: Mission | null, businessId?: string, businessName?: string, url?: string) => {
     if (businessId && controlScope?.kind === 'network') {
       onBusinessChange?.(businessId);
       onControlScopeChange?.({ kind: 'business', id: businessId, name: businessName || copy.locationName });
     }
-    navigate(missionRoute(itemMission));
+    navigate(url?.startsWith('/dashboard/') ? url : missionRoute(itemMission));
   };
 
   const openMission = () => {
@@ -196,9 +236,15 @@ export const TodayPage = () => {
   const mission = missionCopy(language, overview?.focus_action, copy);
   const journeyActions = overview?.journey_actions || [];
   const journeyDirection = getLeadJourneyDirection(journeyIntent);
-  const activeWork = useMemo(() => (overview?.active_work || []).slice(0, 3), [overview?.active_work]);
+  const activeWork = useMemo(() => (overview?.work_sections?.continue_work || overview?.active_work || []).slice(0, 3), [overview?.active_work, overview?.work_sections?.continue_work]);
   const changes = overview?.changes_24h?.slice(0, 3) || [];
-  const completedResults = overview?.completed_results?.slice(0, 3) || [];
+  const completedResults = (overview?.work_sections?.results || overview?.completed_results || []).slice(0, 3);
+  const needsDecision = (overview?.work_sections?.needs_decision || []).slice(0, 3);
+  const primaryItem = needsDecision[0] || activeWork[0] || null;
+  const remainingNeedsDecision = primaryItem && needsDecision[0]?.id === primaryItem.id ? needsDecision.slice(1) : needsDecision;
+  const remainingActiveWork = primaryItem && activeWork[0]?.id === primaryItem.id ? activeWork.slice(1) : activeWork;
+  const availableFlows = overview?.preference?.available_flows || flowOrder;
+  const unavailableSources = Object.entries(overview?.work_source_states || {}).filter(([, state]) => state?.status === 'error');
   const communityPulse = overview?.community_pulse?.slice(0, 2) || [];
   const networkSummary = overview?.network_summary;
   const problemLocations = overview?.problem_locations?.slice(0, 5) || [];
@@ -207,6 +253,32 @@ export const TodayPage = () => {
   const dataHealth = overview?.data_health;
   const hasDataOverview = Boolean(dataRhythm || analyticsModules.length);
   const dataNeedsAttention = Boolean(['missing', 'stale', 'due'].includes(dataHealth?.status || '') || dataHealth?.stale || dataHealth?.is_stale || dataHealth?.missing?.length);
+  const preferenceCopy = language === 'ru'
+    ? { configure: 'Настроить основной раздел', undo: 'Отменить последнее изменение', disableSuggestions: 'Не предлагать смену раздела', enableSuggestions: 'Снова включить предложения', proposalTitle: 'Вы стали чаще работать с', proposalDescription: 'Поставить этот раздел первым среди обычных задач? Срочные решения останутся выше.', accept: 'Поставить первым', decline: 'Не сейчас', snooze: 'Напомнить позже' }
+    : { configure: 'Set main section', undo: 'Undo last change', disableSuggestions: 'Stop suggesting a section change', enableSuggestions: 'Enable suggestions again', proposalTitle: 'You have been working more often with', proposalDescription: 'Put this section first among regular work? Urgent decisions will stay above it.', accept: 'Put first', decline: 'Not now', snooze: 'Remind me later' };
+
+  const updatePreference = async (action: 'set' | 'accept' | 'decline' | 'snooze' | 'opt_out' | 'enable' | 'undo', options: { primary_flow?: TodayPreference['primary_flow']; proposal_id?: string } = {}) => {
+    const preference = overview?.preference;
+    if (!preference || preferenceSaving) return;
+    setPreferenceSaving(true);
+    try {
+      const params = new URLSearchParams({ scope_type: preference.scope_type, scope_id: preference.scope_id });
+      const response = await newAuth.makeRequest(`/operator/today/preference?${params.toString()}`, {
+        method: 'POST',
+        body: JSON.stringify({ action, expected_revision: preference.revision, ...options }),
+      });
+      const payload: { preference?: TodayPreference; priority_proposal?: PriorityProposal | null } = response;
+      if (scopeKey !== `${preference.scope_type}:${preference.scope_id}`) return;
+      setOverview((current) => current && current.preference?.scope_type === preference.scope_type && current.preference.scope_id === preference.scope_id
+        ? { ...current, preference: payload.preference || current.preference, priority_proposal: payload.priority_proposal ?? current.priority_proposal }
+        : current);
+    } catch {
+      // A revision conflict or transient error leaves the confirmed view intact; refresh resolves it.
+      setError(true);
+    } finally {
+      setPreferenceSaving(false);
+    }
+  };
 
   if (!currentBusinessId) return <DashboardEmptyState title={copy.selectBusiness} description={copy.selectBusinessHint} />;
 
@@ -222,16 +294,13 @@ export const TodayPage = () => {
     <div className="mx-auto max-w-5xl space-y-5 pb-10" data-tour-target="today-overview">
       <DashboardPageHeader eyebrow={controlScope?.kind === 'network' ? copy.networkEyebrow : 'LocalOS'} title={copy.title} description={copy.description} icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />{copy.refresh}</Button>} />
 
-      {journeyDirection && !journeyActions.length ? (
-        <section className="rounded-3xl border border-orange-200 bg-orange-50 p-5 shadow-sm sm:p-6">
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Первое действие</div><h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{journeyDirection.today.title}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{journeyDirection.today.description}</p></div>
-            <Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2 transition-transform active:scale-[0.96]">{journeyDirection.today.cta}<ArrowRight className="h-4 w-4" /></Button>
-          </div>
-        </section>
-      ) : null}
+      {error && overview ? <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-950"><span>{copy.retryHint}</span><Button type="button" size="sm" variant="outline" onClick={load} disabled={loading}>{copy.retry}</Button></div> : null}
 
-      {journeyActions.length ? <section aria-label="Текущее действие"><JourneyActionCard action={journeyActions[0]} businessId={currentBusinessId} onUpdated={load} /></section> : <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6">
+      {unavailableSources.length ? <div role="status" className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-950">Часть рабочих данных временно недоступна: {unavailableSources.map(([flow]) => flow).join(', ')}. Остальные задачи показаны без изменений.</div> : null}
+
+      {primaryItem ? <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div><h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{localizedGrowthText(language, primaryItem.title)}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{localizedGrowthText(language, primaryItem.description || primaryItem.stage || copy.noUrgent)}</p></div><Button type="button" onClick={() => openItem({ title: primaryItem.title, reason: '', expected_outcome: '', cta_label: '', screen: primaryItem.screen }, primaryItem.business_id, primaryItem.business_name, primaryItem.action?.url)} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{primaryItem.action?.label || copy.openTasks}<ArrowRight className="h-4 w-4" /></Button></div>
+      </section> : journeyActions.length ? <section aria-label="Текущее действие"><JourneyActionCard action={journeyActions[0]} businessId={currentBusinessId} onUpdated={load} /></section> : journeyDirection ? <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6"><div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div><h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{journeyDirection.today.title}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{journeyDirection.today.description}</p></div><Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2">{journeyDirection.today.cta}<ArrowRight className="h-4 w-4" /></Button></div></section> : <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div>
@@ -242,6 +311,12 @@ export const TodayPage = () => {
           <Button type="button" onClick={openMission} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{mission?.cta_label || copy.openProgress}<ArrowRight className="h-4 w-4" /></Button>
         </div>
       </section>}
+
+      {overview?.preference ? <details className="group rounded-2xl bg-white px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden"><span>{preferenceCopy.configure}: {flowLabels[language][overview.preference.primary_flow]}</span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></summary><div className="mt-3 border-t border-slate-100 pt-3"><div className="flex flex-wrap gap-2">{availableFlows.map((flow) => <Button key={flow} type="button" size="sm" variant={flow === overview.preference?.primary_flow ? 'default' : 'outline'} disabled={preferenceSaving} onClick={() => updatePreference('set', { primary_flow: flow })}>{flowLabels[language][flow]}</Button>)}</div><div className="mt-3 flex flex-wrap gap-2">{overview.preference.can_undo ? <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('undo')}>{preferenceCopy.undo}</Button> : null}{overview.preference.suggestions_enabled ? <Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('opt_out')}>{preferenceCopy.disableSuggestions}</Button> : <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('enable')}>{preferenceCopy.enableSuggestions}</Button>}</div></div></details> : null}
+
+      {overview?.priority_proposal && overview.preference?.suggestions_enabled ? <section className="rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><p className="text-sm font-semibold text-slate-950">{preferenceCopy.proposalTitle} «{flowLabels[language][overview.priority_proposal.flow]}»</p><p className="mt-1 text-sm text-slate-600">{preferenceCopy.proposalDescription}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" disabled={preferenceSaving} onClick={() => updatePreference('accept', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.accept}</Button><Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('decline', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.decline}</Button><Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('snooze', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.snooze}</Button></div></section> : null}
+
+      {remainingNeedsDecision.length ? <DashboardSection title={language === 'ru' ? 'Требует решения' : 'Needs your decision'} description={language === 'ru' ? 'Проверьте подготовленный результат и выберите следующий шаг.' : 'Review the prepared result and choose the next step.'}><div className="space-y-3">{remainingNeedsDecision.map((item) => <button key={item.id} type="button" onClick={() => openItem({ title: item.title, reason: '', expected_outcome: '', cta_label: '', screen: item.screen }, item.business_id, item.business_name, item.action?.url)} className="w-full rounded-2xl bg-amber-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><strong className="block text-sm text-slate-950">{localizedGrowthText(language, item.title)}</strong>{item.description ? <span className="mt-1 block text-sm text-slate-600">{localizedGrowthText(language, item.description)}</span> : null}</button>)}</div></DashboardSection> : null}
 
       {controlScope?.kind === 'network' && networkSummary ? (
         <DashboardSection title={copy.locationsTitle} description={copy.locationsHint}>
@@ -275,15 +350,15 @@ export const TodayPage = () => {
         </details>
       ) : null}
 
-      {changes.length || activeWork.length ? <div className="grid gap-5 lg:grid-cols-2">
+      {changes.length || remainingActiveWork.length ? <div className="grid gap-5 lg:grid-cols-2">
         {changes.length ? <DashboardSection title={copy.changesTitle} description={copy.changesHint}>
           {changes.length ? <div className="divide-y divide-slate-100">{changes.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><div className="font-medium text-slate-950">{localizedGrowthText(language, item.title)}</div><p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{localizedGrowthText(language, item.description)}</p>{formatDate(language, item.occurred_at) ? <div className="mt-1 text-xs tabular-nums text-slate-400">{formatDate(language, item.occurred_at)}</div> : null}</div></div>)}</div> : <p className="text-sm leading-6 text-slate-600">{copy.noChanges}</p>}
         </DashboardSection> : null}
 
-        {activeWork.length ? <DashboardSection title={copy.workTitle} description={copy.workHint}>
-          {activeWork.length ? <div className="space-y-3">{activeWork.map((item) => <button key={item.id} type="button" onClick={() => openItem({ title: item.title, reason: '', expected_outcome: '', cta_label: '', screen: item.screen }, item.business_id, item.business_name)} className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><div className="flex items-start gap-2"><Bot className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0 flex-1"><div className="font-medium text-slate-950">{localizedGrowthText(language, item.title)}</div><p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{[item.business_name, localizedGrowthText(language, item.stage || item.description)].filter(Boolean).join(' · ')}</p></div>{item.progress == null ? null : <span className="text-sm tabular-nums text-slate-500">{item.progress}%</span>}</div></button>)}</div> : <p className="text-sm leading-6 text-slate-600">{copy.noWork}</p>}
+        {remainingActiveWork.length ? <DashboardSection title={copy.workTitle} description={copy.workHint}>
+          {remainingActiveWork.length ? <div className="space-y-3">{remainingActiveWork.map((item) => <button key={item.id} type="button" onClick={() => openItem({ title: item.title, reason: '', expected_outcome: '', cta_label: '', screen: item.screen }, item.business_id, item.business_name, item.action?.url)} className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-left transition-transform active:scale-[0.96]"><div className="flex items-start gap-2"><Bot className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0 flex-1"><div className="font-medium text-slate-950">{localizedGrowthText(language, item.title)}</div><p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{[item.business_name, localizedGrowthText(language, item.stage || item.description)].filter(Boolean).join(' · ')}</p></div>{item.progress == null ? null : <span className="text-sm tabular-nums text-slate-500">{item.progress}%</span>}</div></button>)}</div> : <p className="text-sm leading-6 text-slate-600">{copy.noWork}</p>}
         </DashboardSection> : null}
-      </div> : <div className="flex min-h-14 items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" /><span>{copy.noWork}</span></div>}
+      </div> : !primaryItem && !journeyActions.length && !journeyDirection ? <div className="flex min-h-14 items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" /><span>{copy.noWork}</span></div> : null}
 
       {completedResults.length ? <details className="group overflow-hidden rounded-3xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-5 py-3 marker:hidden [&::-webkit-details-marker]:hidden"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" /><span className="min-w-0 flex-1 font-semibold text-slate-950">{copy.readyTitle}</span><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-emerald-800">{completedResults.length}</span><ChevronDown className="h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-5 py-4"><p className="mb-3 text-sm leading-6 text-slate-600">{copy.readyHint}</p><div className="divide-y divide-slate-100">{completedResults.map((item) => <div key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><div className="font-medium text-slate-950">{localizedGrowthText(language, item.title)}</div>{item.description ? <p className="mt-1 text-pretty text-sm leading-5 text-slate-600">{localizedGrowthText(language, item.description)}</p> : null}{item.source ? <div className="mt-1 text-xs text-slate-500">{copy.source} {resultSourceLabel(copy, item.source)}</div> : null}</div></div>)}</div></div></details> : null}
 

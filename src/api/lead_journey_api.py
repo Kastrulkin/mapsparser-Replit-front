@@ -671,6 +671,14 @@ def action_command(action_id: str):
         )
         event_name = COMMAND_EVENT_NAMES.get(str(payload.get("command") or "").strip())
         if event_name and not result.get("idempotent_replay"):
+            from core.auth_context import AuthContext
+            from services.product_telemetry_service import record_confirmed_user_action
+            record_confirmed_user_action(
+                cursor, auth=AuthContext.from_session(user_data), event_name=event_name,
+                business_id=business_id, flow=current_action.get("flow_type"),
+                operation_key=f"journey:{action_id}:{idempotency_key}", surface=surface,
+                entity_id=current_action.get("entity_id"),
+            )
             record_product_event(
                 cursor, event_name=event_name, surface=surface,
                 business_id=business_id, user_id=_user_id(user_data),

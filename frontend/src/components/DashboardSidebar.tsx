@@ -17,9 +17,10 @@ import {
   Radar,
   BarChart3,
   Megaphone,
-  LayoutGrid,
   CircleEllipsis,
-  Radio,
+  UsersRound,
+  Handshake,
+  Map,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -32,6 +33,19 @@ import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
 import { featureFlags } from '../config/featureFlags';
+
+const influencerNavigationCopy = {
+  ru: { label: 'Инфлюенсеры', hint: 'Подберите местных авторов, согласуйте условия и следите за размещениями.' },
+  en: { label: 'Creators', hint: 'Find local creators, agree terms, and track placements.' },
+  fr: { label: 'Créateurs', hint: 'Trouvez des créateurs locaux, convenez des conditions et suivez les placements.' },
+  es: { label: 'Creadores', hint: 'Encuentra creadores locales, acuerda las condiciones y sigue las publicaciones.' },
+  el: { label: 'Δημιουργοί', hint: 'Βρείτε τοπικούς δημιουργούς, συμφωνήστε τους όρους και παρακολουθήστε τις δημοσιεύσεις.' },
+  de: { label: 'Creator', hint: 'Finden Sie lokale Creator, stimmen Sie Bedingungen ab und verfolgen Sie Platzierungen.' },
+  th: { label: 'ครีเอเตอร์', hint: 'ค้นหาครีเอเตอร์ท้องถิ่น ตกลงเงื่อนไข และติดตามการเผยแพร่' },
+  ar: { label: 'صناع المحتوى', hint: 'اعثر على صناع محتوى محليين، اتفق على الشروط وتابع النشر.' },
+  ha: { label: 'Masu ƙirƙira', hint: 'Nemo masu ƙirƙira na yankinku, ku amince da sharudda kuma ku bi wallafe-wallafe.' },
+  tr: { label: 'İçerik üreticileri', hint: 'Yerel içerik üreticilerini bulun, koşulları kararlaştırın ve yayınları takip edin.' },
+};
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
@@ -52,6 +66,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const { t, language } = useLanguage();
   const demoCopy = getDemoWorkspaceCopy(language).sidebar;
   const navigationCopy = getDashboardNavigationCopy(language);
+  const influencerCopy = influencerNavigationCopy[language];
   const shellCopy = getDashboardShellCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -170,34 +185,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/today',
       tooltip: shellCopy.todayHint,
     },
-    {
-      id: 'operator',
-      label: navigationCopy.operator,
-      icon: Bot,
-      path: '/dashboard/operator',
-      tooltip: navigationCopy.operatorHint,
-    },
-    {
-      id: 'growth-paths',
-      label: shellCopy.growthPaths,
-      icon: LayoutGrid,
-      path: '/dashboard/growth-paths',
-      tooltip: shellCopy.growthPathsHint,
-    },
-    {
-      id: 'feed',
-      label: shellCopy.feed,
-      icon: Radio,
-      path: '/dashboard/feed',
-      tooltip: shellCopy.feedHint,
-    },
-    {
-      id: 'progress',
-      label: shellCopy.results,
-      icon: TrendingUp,
-      path: '/dashboard/progress',
-      tooltip: shellCopy.resultsHint,
-    },
+    { id: 'content', label: navigationCopy.content, icon: Calendar, path: '/dashboard/content', tooltip: navigationCopy.contentHint },
+    { id: 'influencers', label: influencerCopy.label, icon: UsersRound, path: '/dashboard/influencers', tooltip: influencerCopy.hint },
+    { id: 'partnerships', label: navigationCopy.partnerships, icon: Handshake, path: '/dashboard/partnerships', tooltip: navigationCopy.partnershipsHint },
+    { id: 'card', label: t.dashboard.sidebar.card, icon: Map, path: '/dashboard/card', tooltip: shellCopy.cardHint },
+    { id: 'average-ticket', label: demoCopy.upsells, icon: BadgeDollarSign, path: '/dashboard/average-ticket', tooltip: demoCopy.upsellsHint },
+    { id: 'agents', label: navigationCopy.agents, icon: Sparkles, path: '/dashboard/agents', tooltip: navigationCopy.agentsHint },
+    { id: 'progress', label: shellCopy.results, icon: TrendingUp, path: '/dashboard/progress', tooltip: shellCopy.resultsHint },
     {
       id: 'more',
       label: shellCopy.more,

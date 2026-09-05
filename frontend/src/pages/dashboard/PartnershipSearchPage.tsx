@@ -1,7 +1,8 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { newAuth } from '@/lib/auth_new';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { loadJourneyActions, type JourneyAction } from '@/lib/leadJourney';
 import { Input } from '@/components/ui/input';
@@ -171,7 +172,27 @@ type PartnershipDraft = {
   edited_text?: string;
   approved_text?: string;
   updated_at?: string;
+  email?: string;
+  recipient?: string;
+  recipient_name?: string;
+  sender_name?: string;
+  scheduled_at?: string;
+  review_digest?: string;
 };
+
+type DraftApprovalReview = {
+  id: string;
+  businessId: string;
+  digest: string;
+  leadName: string;
+  recipient: string;
+  channel: string;
+  sender: string;
+  schedule: string;
+  text: string;
+};
+
+type InsightKey = 'health' | 'funnel' | 'blockers' | 'outcomes' | 'sourceQuality' | 'ralphLoop' | 'learningMetrics';
 
 type PartnershipBatch = {
   id: string;
@@ -786,6 +807,8 @@ const toPilotCohort = (value: string): PilotCohort => {
 
 export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId, currentBusiness, user } = useOutletContext<any>();
+  const currentBusinessRef = useRef(currentBusinessId);
+  currentBusinessRef.current = currentBusinessId;
   const partnershipAccess = getCapabilityAccessForBusiness(currentBusiness, 'partnerships');
   const { language } = useLanguage();
   const partnershipCopy = getPartnershipWorkspaceCopy(language);
@@ -831,6 +854,8 @@ export const PartnershipSearchPage: React.FC = () => {
   const [draftText, setDraftText] = useState('');
   const [drafts, setDrafts] = useState<PartnershipDraft[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [draftApprovalReview, setDraftApprovalReview] = useState<DraftApprovalReview[] | null>(null);
+  useEffect(() => { setDraftApprovalReview(null); setSelectedDraftIds([]); }, [currentBusinessId]);
   const [draftView, setDraftView] = useState<(typeof DRAFT_VIEW_OPTIONS)[number]['value']>('all');
   const [batches, setBatches] = useState<PartnershipBatch[]>([]);
   const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
@@ -848,6 +873,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
   const [sourceQuality, setSourceQuality] = useState<PartnershipSourceQuality | null>(null);
   const [ralphLoop, setRalphLoop] = useState<PartnershipRalphLoop | null>(null);
+  const [insightErrors, setInsightErrors] = useState<Partial<Record<InsightKey, string>>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deferredReasonInput, setDeferredReasonInput] = useState('');
@@ -1091,8 +1117,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipRalphLoop(currentBusinessId, pilotCohort);
       setRalphLoop(data || null);
+      setInsightErrors((current) => ({ ...current, ralphLoop: undefined }));
     } catch {
-      setRalphLoop(null);
+      setInsightErrors((current) => ({ ...current, ralphLoop: 'Обучающая сводка временно недоступна.' }));
     }
   };
 
@@ -1123,8 +1150,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipLearningMetrics();
       setLearningMetrics(Array.isArray(data.items) ? data.items : []);
+      setInsightErrors((current) => ({ ...current, learningMetrics: undefined }));
     } catch {
-      setLearningMetrics([]);
+      setInsightErrors((current) => ({ ...current, learningMetrics: 'Метрики обучения временно недоступны.' }));
     }
   };
 
@@ -1133,8 +1161,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipHealth(currentBusinessId);
       setHealth(data || null);
+      setInsightErrors((current) => ({ ...current, health: undefined }));
     } catch {
-      setHealth(null);
+      setInsightErrors((current) => ({ ...current, health: 'Состояние воронки временно недоступно.' }));
     }
   };
 
@@ -1143,8 +1172,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipFunnel(currentBusinessId);
       setFunnel(data || null);
+      setInsightErrors((current) => ({ ...current, funnel: undefined }));
     } catch {
-      setFunnel(null);
+      setInsightErrors((current) => ({ ...current, funnel: 'Показатели воронки временно недоступны.' }));
     }
   };
 
@@ -1153,8 +1183,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipBlockers(currentBusinessId);
       setBlockers(data || null);
+      setInsightErrors((current) => ({ ...current, blockers: undefined }));
     } catch {
-      setBlockers(null);
+      setInsightErrors((current) => ({ ...current, blockers: 'Причины остановки временно недоступны.' }));
     }
   };
 
@@ -1163,8 +1194,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipOutcomes(currentBusinessId);
       setOutcomes(data || null);
+      setInsightErrors((current) => ({ ...current, outcomes: undefined }));
     } catch {
-      setOutcomes(null);
+      setInsightErrors((current) => ({ ...current, outcomes: 'Результаты касаний временно недоступны.' }));
     }
   };
 
@@ -1173,8 +1205,9 @@ export const PartnershipSearchPage: React.FC = () => {
     try {
       const data = await loadPartnershipSourceQuality(currentBusinessId);
       setSourceQuality(data || null);
+      setInsightErrors((current) => ({ ...current, sourceQuality: undefined }));
     } catch {
-      setSourceQuality(null);
+      setInsightErrors((current) => ({ ...current, sourceQuality: 'Качество источников временно недоступно.' }));
     }
   };
 
@@ -1200,7 +1233,9 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const refreshAllPartnershipData = async () => {
     await refreshOperationalData();
-    await refreshInsightsData();
+    if (workspaceView === 'analytics') {
+      await refreshInsightsData();
+    }
   };
 
   const runPartnershipAction = async (fallback: string, action: () => Promise<void>) => {
@@ -1234,9 +1269,14 @@ export const PartnershipSearchPage: React.FC = () => {
       return;
     }
     void refreshOperationalData();
-    void refreshInsightsData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage, pilotCohort]);
+
+  useEffect(() => {
+    if (workspaceView !== 'analytics') return;
+    void refreshInsightsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceView, currentBusinessId, pilotCohort]);
 
   const handleImportLinks = async () => {
     if (!currentBusinessId) return;
@@ -2085,10 +2125,12 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const approveDraft = async (draftId: string, text: string) => {
     if (!currentBusinessId) return;
+    const digest = drafts.find((draft) => draft.id === draftId)?.review_digest;
+    if (!digest) { setError('Обновите список писем перед утверждением.'); return; }
     try {
       setLoading(true);
       setError(null);
-      await approvePartnershipDraft(currentBusinessId, draftId, text);
+      await approvePartnershipDraft(currentBusinessId, draftId, text, digest);
       setMessage('Письмо утверждено');
       await loadDrafts();
       await loadBatches();
@@ -2113,27 +2155,75 @@ export const PartnershipSearchPage: React.FC = () => {
     setSelectedDraftIds(checked ? visibleDrafts.map((draft) => draft.id) : []);
   };
 
+  const requestBulkDraftApproval = () => {
+    const review = selectedDraftIds.map((draftId) => {
+      const draft = drafts.find((item) => item.id === draftId);
+      if (!draft) return null;
+      return {
+        id: draft.id,
+        businessId: currentBusinessId,
+        digest: draft.review_digest || '',
+        leadName: String(draft.lead_name || draft.lead_id || 'Партнёр'),
+        recipient: String(draft.recipient || draft.email || 'Не указан'),
+        channel: String(draft.channel || 'Не выбран'),
+        sender: String(draft.sender_name || 'Выбирается при ручной отправке'),
+        schedule: String(draft.scheduled_at || 'Не назначено'),
+        text: String(draft.approved_text || draft.edited_text || draft.generated_text || '').trim(),
+      };
+    }).filter((draft): draft is DraftApprovalReview => draft !== null);
+    if (review.length !== selectedDraftIds.length || review.some((draft) => !draft.text)) {
+      setError('В выбранных письмах нет текста. Проверьте их перед утверждением.');
+      return;
+    }
+    if (review.some((draft) => !draft.digest)) {
+      setError('Обновите список писем, чтобы получить текущую версию для проверки.');
+      return;
+    }
+    setDraftApprovalReview(review);
+  };
+
   const bulkApproveDrafts = async () => {
-    if (!currentBusinessId || selectedDraftIds.length === 0) return;
+    if (!currentBusinessId || !draftApprovalReview?.length) return;
+    if (draftApprovalReview.some((draft) => draft.businessId !== currentBusinessId)) {
+      setDraftApprovalReview(null);
+      return;
+    }
+    const reviewedBusinessId = currentBusinessId;
+    const currentReview = draftApprovalReview.map((review) => {
+      const draft = drafts.find((item) => item.id === review.id);
+      return {
+        ...review,
+        digest: draft?.review_digest || '',
+        text: String(draft?.approved_text || draft?.edited_text || draft?.generated_text || '').trim(),
+      };
+    });
+    if (currentReview.some((review) => !review.text) || currentReview.some((review, index) => review.text !== draftApprovalReview[index]?.text || review.digest !== draftApprovalReview[index]?.digest)) {
+      setDraftApprovalReview(null);
+      setError('Текст выбранных писем изменился. Проверьте список ещё раз перед утверждением.');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
-      await Promise.all(
-        selectedDraftIds.map((draftId) => {
-          const draft = drafts.find((item) => item.id === draftId);
-          const text = draft?.approved_text || draft?.edited_text || draft?.generated_text || '';
-          return approvePartnershipDraft(currentBusinessId, draftId, text);
+      const results = await Promise.allSettled(
+        currentReview.map((draft) => {
+          return approvePartnershipDraft(reviewedBusinessId, draft.id, draft.text, draft.digest);
         })
       );
-      setMessage(`Утверждено писем: ${selectedDraftIds.length}`);
-      setSelectedDraftIds([]);
+      if (currentBusinessRef.current !== reviewedBusinessId) return;
+      const failedIds = currentReview.filter((_draft, index) => results[index].status === 'rejected').map((draft) => draft.id);
+      setMessage(`Утверждено писем: ${results.length - failedIds.length} из ${results.length}`);
+      if (failedIds.length) setError('Часть писем не утверждена. Обновлённые версии оставлены выбранными: проверьте их ещё раз.');
+      setSelectedDraftIds(failedIds);
+      setDraftApprovalReview(null);
       await loadDrafts();
       await loadBatches();
       await loadLeads();
     } catch (e: any) {
+      if (currentBusinessRef.current !== reviewedBusinessId) return;
       setError(e.message || 'Не удалось массово утвердить письма');
     } finally {
-      setLoading(false);
+      if (currentBusinessRef.current === reviewedBusinessId) setLoading(false);
     }
   };
 
@@ -2685,6 +2775,13 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
 
           {workspaceView === 'analytics' ? (
+            <div className="space-y-3">
+              {Object.values(insightErrors).filter(Boolean).length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">
+                  <span>{Object.values(insightErrors).filter(Boolean).join(' ')}</span>
+                  <Button size="sm" variant="outline" onClick={() => void refreshInsightsData()} disabled={loading}>Повторить</Button>
+                </div>
+              ) : null}
             <PartnershipAnalyticsWorkspace
               loading={loading}
               health={health}
@@ -2727,6 +2824,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onLoadBlockers={() => void loadBlockers()}
               onLoadOutcomes={() => void loadOutcomes()}
             />
+            </div>
           ) : null}
 
           {workspaceView === 'pipeline' ? (
@@ -2853,7 +2951,7 @@ export const PartnershipSearchPage: React.FC = () => {
             loading={loading}
             onDraftViewChange={(value) => setDraftView(toDraftView(value))}
             onRefresh={() => void loadDrafts()}
-            onBulkApprove={bulkApproveDrafts}
+            onBulkApprove={requestBulkDraftApproval}
             onBulkDelete={bulkDeleteDrafts}
             onToggleAll={toggleAllDraftSelection}
             onToggleDraft={toggleDraftSelection}
@@ -2972,6 +3070,32 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
         </>
       )}
+
+      <Dialog open={Boolean(draftApprovalReview)} onOpenChange={(open) => { if (!open) setDraftApprovalReview(null); }}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Проверить письма перед утверждением</DialogTitle>
+            <DialogDescription>
+              Утверждение подготовит письма к ручной отправке. Ничего не будет отправлено автоматически.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-slate-700">Выбрано: {draftApprovalReview?.length || 0}</div>
+            {draftApprovalReview?.map((draft) => (
+              <article key={draft.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <div className="font-semibold text-slate-950">{draft.leadName}</div>
+                <div className="mt-1 text-slate-600">Получатель: {draft.recipient} · Канал: {draft.channel}</div>
+                <div className="text-slate-600">Отправитель: {draft.sender} · Время: {draft.schedule}</div>
+                <p className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-slate-800">{draft.text}</p>
+              </article>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDraftApprovalReview(null)} disabled={loading}>Вернуться к редактированию</Button>
+            <Button onClick={() => void bulkApproveDrafts()} disabled={loading || !draftApprovalReview?.length}>Утвердить для ручной отправки</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {message && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">

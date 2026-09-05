@@ -1,7 +1,7 @@
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardHeader } from './DashboardHeader';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionAccessPayload, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
@@ -206,6 +206,18 @@ export const DashboardLayout = () => {
       localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
     }
   };
+
+  const appliedBusinessLink = useRef('');
+  useEffect(() => {
+    const requestedBusiness = new URLSearchParams(location.search).get('business_id');
+    const linkKey = `${location.pathname}${location.search}`;
+    if (!requestedBusiness) { appliedBusinessLink.current = ''; return; }
+    if (appliedBusinessLink.current === linkKey || !businesses.some((business) => business.id === requestedBusiness)) return;
+    // Resolve only against the authenticated list, once per link. A later manual
+    // business switch is not overwritten by a query parameter left in the URL.
+    appliedBusinessLink.current = linkKey;
+    void handleBusinessChange(requestedBusiness);
+  }, [location.pathname, location.search, businesses]);
 
   const updateBusiness = (businessId: string, updates: Partial<DashboardBusiness>) => {
     const updatedBusinesses = businesses.map(b =>

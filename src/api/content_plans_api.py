@@ -224,7 +224,9 @@ def content_plan_item_update(item_id: str):
         return error_response
     data = request.get_json(silent=True) or {}
     try:
-        plan = update_content_plan_item(str(user_data.get("user_id") or ""), item_id, data)
+        from core.auth_context import AuthContext
+        plan = update_content_plan_item(str(user_data.get("user_id") or ""), item_id, data,
+            auth_context=AuthContext.from_session(user_data))
         return jsonify({"success": True, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403

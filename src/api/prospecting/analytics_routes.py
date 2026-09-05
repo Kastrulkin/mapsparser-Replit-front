@@ -108,6 +108,30 @@ class AuditQualityError(ValueError):
         super().__init__("Audit quality gate failed")
         self.quality = quality
 
+
+def _require_migrated_table(conn, table_name: str) -> None:
+    """Keep legacy import/call contracts without mutating schema at request time."""
+    cur = conn.cursor()
+    cur.execute("SELECT to_regclass(%s) AS table_name", (table_name,))
+    row = cur.fetchone() or {}
+    value = row.get("table_name") if isinstance(row, dict) else row[0]
+    if not value:
+        raise RuntimeError(
+            f"Required table {table_name} is missing; run the current Alembic migrations before using this route."
+        )
+
+
+def _ensure_partnership_public_offers_table(conn) -> None:
+    _require_migrated_table(conn, "partnershippublicoffers")
+
+
+def _ensure_partnership_artifacts_table(conn) -> None:
+    _require_migrated_table(conn, "partnershipleadartifacts")
+
+
+def _ensure_admin_prospecting_public_offers_table(conn) -> None:
+    _require_migrated_table(conn, "adminprospectingleadpublicoffers")
+
 SHORTLIST_APPROVED = "shortlist_approved"
 SHORTLIST_REJECTED = "shortlist_rejected"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
@@ -1161,20 +1185,6 @@ def partnership_ralph_loop_summary():
         print(f"Error partnership Ralph loop summary: {e}")
         return internal_error_response("Не удалось получить сводку по партнёрствам")
 
-def _ensure_partnership_artifacts_table(conn) -> None:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS partnershipleadartifacts (
-            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
-            audit_json JSONB,
-            match_json JSONB,
-            offer_draft_json JSONB,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-
 def _slugify_text(value: str) -> str:
     source = str(value or "").strip().lower()
     if not source:
@@ -1248,80 +1258,6 @@ def _build_offer_slug(name: str | None, city: str | None = None, address: str | 
 def _slugify_company_name(name: str) -> str:
     slug = _slugify_text(name)
     return slug or f"lead-{uuid.uuid4().hex[:8]}"
-
-def _ensure_partnership_public_offers_table(conn) -> None:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS partnershippublicoffers (
-            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
-            business_id UUID NOT NULL,
-            slug TEXT NOT NULL UNIQUE,
-            page_json JSONB NOT NULL,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_by UUID,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_partnershippublicoffers_business_id
-        ON partnershippublicoffers (business_id)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_partnershippublicoffers_is_active
-        ON partnershippublicoffers (is_active)
-        """
-    )
-
-def _ensure_admin_prospecting_public_offers_table(conn) -> None:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS adminprospectingleadpublicoffers (
-            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
-            slug TEXT NOT NULL UNIQUE,
-            page_json JSONB NOT NULL,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_by UUID,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_adminprospectingleadpublicoffers_is_active
-        ON adminprospectingleadpublicoffers (is_active)
-        """
-    )
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS business_id UUID")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS business_profile TEXT")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'admin_prospecting_public_audit'")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS generated_json JSONB")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edited_json JSONB")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS published_json JSONB")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edit_status TEXT NOT NULL DEFAULT 'generated'")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edited_by UUID")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS published_by UUID")
-    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ")
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_adminprospectingleadpublicoffers_edit_status
-        ON adminprospectingleadpublicoffers (edit_status, updated_at DESC)
-        """
-    )
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_adminprospectingleadpublicoffers_business_id
-        ON adminprospectingleadpublicoffers (business_id)
-        """
-    )
 
 def _build_admin_lead_offer_payload(
     *,
@@ -1528,7 +1464,6 @@ def _partnership_source_requires_map_match(url: Any) -> bool:
     return _is_internal_partnership_source_url(url) or not _is_direct_partnership_map_card_url(url)
 
 def _load_latest_sales_room_url_for_lead(cur, lead_id: str) -> str:
-    _ensure_sales_room_tables(cur.connection)
     cur.execute(
         """
         SELECT slug

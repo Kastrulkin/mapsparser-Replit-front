@@ -1,0 +1,84 @@
+src/components/CardAuditPanel.tsx(591,25): error TS2322: Type '{ key: string; title: string; priority: string; problem: string; evidence: string; meaning: string; action: string; help: string; }' is not assignable to type 'IntrinsicAttributes & { title: string; priority?: string; problem: string; meaning: string; action: string; outcome: string; evidence?: string; }'.
+  Property 'help' does not exist on type 'IntrinsicAttributes & { title: string; priority?: string; problem: string; meaning: string; action: string; outcome: string; evidence?: string; }'.
+src/components/companies/CompanyRegistryMap.tsx(236,42): error TS2322: Type 'Map' is not assignable to type 'YandexMapInstance'.
+  The types returned by 'getBounds(...)' are incompatible between these types.
+    Type 'number[][]' is not assignable to type '[[number, number], [number, number]]'.
+      Target requires 2 element(s) but source may have fewer.
+src/components/FinanceFirstStep.tsx(567,25): error TS2345: Argument of type '"data"' is not assignable to parameter of type 'SetStateAction<"settings" | "overview">'.
+src/components/FinanceFirstStep.tsx(618,40): error TS2322: Type 'Dispatch<SetStateAction<"settings" | "overview">>' is not assignable to type '(value: string) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string' is not assignable to type 'SetStateAction<"settings" | "overview">'.
+src/components/guided-tour/GuidedTourProvider.brand-buttons.test.tsx(23,29): error TS2741: Property 'email' is missing in type '{ id: string; demo_mode: true; }' but required in type 'User'.
+src/components/prospecting/AdminLeadRegistry.tsx(1316,9): error TS2322: Type '{ id: string; sequence_index: number; channel: string; contact_point_id: string; day_offset: number; angle: string; subject: string; text: string; channel_status: string; quality_gate: OutreachQualityGate; ... 11 more ...; human_edited: boolean; }[]' is not assignable to type 'OutreachTouchPreview[]'.
+  Type '{ id: string; sequence_index: number; channel: string; contact_point_id: string; day_offset: number; angle: string; subject: string; text: string; channel_status: string; quality_gate: OutreachQualityGate; ... 11 more ...; human_edited: boolean; }' is not assignable to type 'OutreachTouchPreview'.
+    Types of property 'channel_status' are incompatible.
+      Type 'string' is not assignable to type '"ready" | "manual" | "connect_required" | "permission_required" | "recipient_missing" | "adapter_unavailable" | "sender_degraded" | "sender_paused" | "sender_selection_required"'.
+src/components/prospecting/AdminLeadRegistry.tsx(1923,41): error TS2339: Property 'subject' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1923,73): error TS2339: Property 'subject' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1924,38): error TS2339: Property 'text' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1924,67): error TS2339: Property 'text' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1925,49): error TS2339: Property 'originalSubject' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1925,89): error TS2339: Property 'originalSubject' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1926,46): error TS2339: Property 'originalText' does not exist on type 'object'.
+src/components/prospecting/AdminLeadRegistry.tsx(1926,83): error TS2339: Property 'originalText' does not exist on type 'object'.
+src/components/prospecting/OutreachCampaignBuilder.tsx(1066,19): error TS2322: Type '{ touch: TouchPreview; draft: OutreachTouchMessageDraft; editing: boolean; disabled: boolean; onStart: () => void; onChange: (nextDraft: OutreachTouchMessageDraft) => void; onFinish: () => void; onCancel: () => void; onReset: () => void; }' is not assignable to type 'IntrinsicAttributes & OutreachTouchMessageEditorProps'.
+  Property 'onFinish' does not exist on type 'IntrinsicAttributes & OutreachTouchMessageEditorProps'.
+src/components/prospecting/PartnershipLeadDetailDrawer.tsx(677,127): error TS2322: Type '{ children: Element[]; id: string; className: string; defaultOpen: boolean; }' is not assignable to type 'DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>'.
+  Property 'defaultOpen' does not exist on type 'DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>'.
+src/components/prospecting/PartnershipPipelineSections.tsx(214,49): error TS2339: Property 'code' does not exist on type '{ label?: string; hint?: string; }'.
+src/components/prospecting/PartnershipPipelineSections.tsx(215,51): error TS2339: Property 'code' does not exist on type '{ label?: string; hint?: string; }'.
+src/components/prospecting/PartnershipPipelineSections.tsx(282,40): error TS2339: Property 'code' does not exist on type '{ label?: string; hint?: string; }'.
+src/components/telegram/AgentsMobileModule.tsx(84,971): error TS2322: Type 'string | ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>' is not assignable to type 'ReactNode'.
+  Type 'ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>' is not assignable to type 'ReactNode'.
+src/components/telegram/CompaniesMobileModule.tsx(13,58): error TS2350: Only a void function can be called with the 'new' keyword.
+src/components/telegram/CompaniesMobileModule.tsx(13,68): error TS2345: Argument of type 'string' is not assignable to parameter of type '{ text: string; }'.
+src/components/telegram/CompaniesMobileModule.tsx(14,57): error TS2350: Only a void function can be called with the 'new' keyword.
+src/components/telegram/CompaniesMobileModule.tsx(20,58): error TS2350: Only a void function can be called with the 'new' keyword.
+src/components/telegram/CompaniesMobileModule.tsx(20,68): error TS2345: Argument of type 'string' is not assignable to parameter of type '{ text: string; }'.
+src/components/telegram/CompaniesMobileModule.tsx(21,57): error TS2350: Only a void function can be called with the 'new' keyword.
+src/components/telegram/CompaniesMobileModule.tsx(53,55): error TS2339: Property 'message' does not exist on type '{}'.
+src/components/telegram/CompaniesMobileModule.tsx(61,105): error TS2339: Property 'message' does not exist on type '{}'.
+src/components/telegram/CompaniesMobileModule.tsx(68,195): error TS2339: Property 'message' does not exist on type '{}'.
+src/components/telegram/TodayMobileV2.test.tsx(63,65): error TS2353: Object literal may only specify known properties, and 'summary' does not exist in type 'CommunityPulseItem'.
+src/components/TelegramOpportunityRadar.tsx(153,34): error TS2339: Property 'patch' does not exist on type '{ get: (url: string, options?: ApiOptions) => Promise<{ data: any; }>; post: (url: string, body?: any, options?: ApiOptions) => Promise<{ data: any; }>; put: (url: string, body: any, options?: ApiOptions) => Promise<...>; delete: (url: string, options?: ApiOptions) => Promise<...>; }'.
+src/lib/leadJourney.ts(384,43): error TS2322: Type 'string' is not assignable to type 'LeadJourneyKey'.
+src/lib/subscriptionAccess.ts(79,97): error TS2322: Type 'string' is not assignable to type '"Карты" | "Привлечение" | "Управление"'.
+src/pages/dashboard/AdminPage.tsx(1392,41): error TS2322: Type '({ label: string; value: Element; hint: string; tone: string; } | { label: string; value: Element; hint: string; tone?: undefined; })[]' is not assignable to type 'DashboardMetricItem[]'.
+  Type '{ label: string; value: Element; hint: string; tone: string; } | { label: string; value: Element; hint: string; tone?: undefined; }' is not assignable to type 'DashboardMetricItem'.
+    Type '{ label: string; value: JSX.Element; hint: string; tone: string; }' is not assignable to type 'DashboardMetricItem'.
+      Types of property 'tone' are incompatible.
+        Type 'string' is not assignable to type '"default" | "warning" | "positive"'.
+src/pages/dashboard/AdminPage.tsx(1580,41): error TS2322: Type '{ label: string; value: string; tone: string; }[]' is not assignable to type 'DashboardMetricItem[]'.
+  Type '{ label: string; value: string; tone: string; }' is not assignable to type 'DashboardMetricItem'.
+    Types of property 'tone' are incompatible.
+      Type 'string' is not assignable to type '"default" | "warning" | "positive"'.
+src/pages/dashboard/AdminPage.tsx(1595,43): error TS2322: Type '{ label: string; value: string; hint: string; tone: string; }[]' is not assignable to type 'DashboardMetricItem[]'.
+  Type '{ label: string; value: string; hint: string; tone: string; }' is not assignable to type 'DashboardMetricItem'.
+    Types of property 'tone' are incompatible.
+      Type 'string' is not assignable to type '"default" | "warning" | "positive"'.
+src/pages/dashboard/agents/agent-deep-copy.ts(26,47): error TS2741: Property 'paused' is missing in type '{ draft: string; needs_mode: string; needs_connection: string; ready_for_test: string; running_test: string; waiting_for_review: string; blocked_result: string; working: string; completed: string; needs_attention: string; error: string; }' but required in type 'Record<EmployeeWorkspaceState, string>'.
+src/pages/dashboard/agents/employee.tsx(298,7): error TS2322: Type '{ key: string; title: string; trigger: string; execution_mode: string; }[]' is not assignable to type 'VisualEditorOption[]'.
+  Type '{ key: string; title: string; trigger: string; execution_mode: string; }' is not assignable to type 'VisualEditorOption'.
+    Types of property 'execution_mode' are incompatible.
+      Type 'string' is not assignable to type 'AgentExecutionMode'.
+src/pages/dashboard/agents/model.ts(1047,7): error TS2322: Type '"Пауза"' is not assignable to type '"Ошибка" | "Выполнено" | "Нужно проверить" | "Черновик" | "Нужны данные" | "Работает" | "Ждёт решения"'.
+src/pages/dashboard/CardOverviewPage.tsx(591,38): error TS2345: Argument of type 'string' is not assignable to parameter of type '"yandex" | "google" | "2gis"'.
+src/pages/dashboard/ContentPage.tsx(673,25): error TS2339: Property 'plan_status' does not exist on type 'PlanPayload'.
+src/pages/dashboard/ContentPage.tsx(3469,13): error TS2322: Type 'string | ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>' is not assignable to type 'ReactNode'.
+  Type 'ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>' is not assignable to type 'ReactNode'.
+src/pages/dashboard/ContentPage.tsx(3596,21): error TS2322: Type 'string | ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>' is not assignable to type 'ReactNode'.
+  Type 'ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>' is not assignable to type 'ReactNode'.
+src/pages/Index.tsx(491,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(493,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(495,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(497,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(499,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(501,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(503,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/Index.tsx(505,7): error TS2741: Property 'networkSummary' is missing in type '{ metaTitle: string; metaDescription: string; eyebrow: string; title: string; intro: string; seeTasks: string; freeAudit: string; formTitle: string; formDescription: string; emailLabel: string; ... 36 more ...; talkExpert: string; }' but required in type 'LandingCopy'.
+src/pages/PublicPartnershipOfferPage.tsx(2548,114): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/pages/PublicPartnershipOfferPage.tsx(2645,39): error TS2339: Property 'description' does not exist on type '{ id?: string; section?: string; priority?: string; title?: string; problem?: string; evidence?: string; impact?: string; fix?: string; }'.
+src/pages/PublicPartnershipOfferPage.tsx(2646,37): error TS2339: Property 'meaning' does not exist on type '{ id?: string; section?: string; priority?: string; title?: string; problem?: string; evidence?: string; impact?: string; fix?: string; }'.
+src/pages/PublicPartnershipOfferPage.tsx(2647,46): error TS2339: Property 'actions' does not exist on type '{ id?: string; section?: string; priority?: string; title?: string; problem?: string; evidence?: string; impact?: string; fix?: string; }'.
+src/pages/PublicPartnershipOfferPage.tsx(2647,63): error TS2339: Property 'actions' does not exist on type '{ id?: string; section?: string; priority?: string; title?: string; problem?: string; evidence?: string; impact?: string; fix?: string; }'.
+src/pages/PublicPartnershipOfferPage.tsx(3382,92): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.

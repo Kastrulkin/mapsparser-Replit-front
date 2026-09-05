@@ -702,7 +702,10 @@ class ActionOrchestrator:
                 action_id = self._row_value(existing, 0, "action_id")
                 status = self._row_value(existing, 1, "status")
                 return {
-                    "success": status in ("completed", "approved"),
+                    # Replaying a request waiting for an explicit human
+                    # decision is successful transport-wise.  Reporting it
+                    # as a failure makes a safe client retry look rejected.
+                    "success": status in ("completed", "approved", "pending_human"),
                     "status": status,
                     "action_id": action_id,
                     "trace_id": trace_id,

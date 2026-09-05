@@ -434,14 +434,8 @@ def test_runner_creates_drafts_after_shortlist_approval_and_queues_after_drafts_
     assert orchestrator.last_envelope["payload"]["daily_limit"] == 10
 
 
-def test_runner_creates_maton_delivery_preview_draft_without_dispatch(monkeypatch):
-    from services import agent_blueprint_runner
+def test_runner_creates_maton_delivery_preview_draft_without_dispatch():
     from services.agent_blueprint_runner import AgentBlueprintRunner
-
-    def _fail_dispatch(*args, **kwargs):
-        raise AssertionError("Maton dispatch must not run during safe preview")
-
-    monkeypatch.setattr(agent_blueprint_runner, "dispatch_with_routing", _fail_dispatch)
 
     cursor = FakeCursor()
     cursor.tables["agent_blueprints"]["bp1"] = {
@@ -537,29 +531,8 @@ def test_runner_creates_maton_delivery_preview_draft_without_dispatch(monkeypatc
     assert runtime_contract["side_effects"]["external_dispatch_performed"] is False
 
 
-def test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch(monkeypatch):
-    from services import agent_blueprint_runner
+def test_runner_queues_maton_delivery_request_after_approval_without_provider_send():
     from services.agent_blueprint_runner import AgentBlueprintRunner
-
-    captured = {}
-
-    def _fake_load_context(cursor, business_id):
-        captured["business_id"] = business_id
-        return {"id": business_id, "name": "Riderra", "maton_api_key": "key", "maton_bridge_enabled": True}
-
-    def _fake_dispatch(ctx, text, *, preferred_provider="telegram", force_channel_id=None):
-        captured["text"] = text
-        captured["preferred_provider"] = preferred_provider
-        captured["force_channel_id"] = force_channel_id
-        return {
-            "success": True,
-            "selected_channel_id": "maton_bridge",
-            "selected_provider": "maton",
-            "attempts": [{"channel_id": "maton_bridge", "provider": "maton", "success": True}],
-        }
-
-    monkeypatch.setattr(agent_blueprint_runner, "load_business_channel_context", _fake_load_context)
-    monkeypatch.setattr(agent_blueprint_runner, "dispatch_with_routing", _fake_dispatch)
 
     cursor = FakeCursor()
     cursor.tables["agent_blueprints"]["bp1"] = {
@@ -622,7 +595,8 @@ def test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch(m
         },
     }
 
-    completed = AgentBlueprintRunner(cursor, orchestrator=CountingOrchestrator())._execute_capability_step(
+    orchestrator = CountingOrchestrator()
+    completed = AgentBlueprintRunner(cursor, orchestrator=orchestrator)._execute_capability_step(
         cursor.tables["agent_runs"]["run1"],
         cursor.tables["agent_blueprint_versions"]["ver1"],
         step,
@@ -631,16 +605,16 @@ def test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch(m
     )
 
     assert completed is True
-    assert captured["business_id"] == "biz1"
-    assert captured["text"] == "Пакетное предложение для клиента"
-    assert captured["preferred_provider"] == "maton"
-    assert captured["force_channel_id"] == "maton_bridge"
+    assert orchestrator.calls == 1
+    assert orchestrator.last_envelope["idempotency_key"] == "agent-run:run1:send_offer:maton-request"
+    assert orchestrator.last_envelope["payload"]["bound_external_account_id"] == "maton-account-1"
+    assert orchestrator.last_envelope["payload"]["message"] == "Пакетное предложение для клиента"
     artifact = next(item for item in cursor.tables["agent_artifacts"].values() if item["artifact_type"] == "maton_delivery_request")
     payload = artifact["payload_json"]
-    assert payload["status"] == "sent"
-    assert payload["delivery_state"] == "sent"
-    assert payload["external_dispatch_performed"] is True
-    assert payload["router_result"]["selected_channel_id"] == "maton_bridge"
+    assert payload["status"] == "request_created"
+    assert payload["delivery_state"] == "request_queued"
+    assert payload["external_dispatch_performed"] is False
+    assert payload["router_result"]["status"] == "completed"
 
 
 def test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers():

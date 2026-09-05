@@ -19,6 +19,8 @@ from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 from services.agent_builder_billing import charge_agent_creation_credits
 from services.agent_builder_session import build_agent_builder_state, preview_to_setup
 from services.agent_compiled_artifact import validate_compiled_artifact_candidate
+from services.compiled_script_artifact import build_artifact as build_compiled_script_artifact, generate_candidate_from_description, validate_artifact as validate_compiled_script_artifact
+from services.compiled_script_runtime import CompiledRuntimeUnavailable, preview as preview_compiled_script
 from services.agent_workflow_dsl import build_workflow_dsl_document
 from services.agent_workflow_graph import validate_workflow_graph, validate_workflow_step_approval_order, workflow_dsl_to_graph, workflow_graph_to_steps
 from services.agent_visual_editor_registry import (
@@ -3067,7 +3069,9 @@ def _without_archived_clause(where_sql: str, include_account_examples: bool = Fa
     return f"WHERE {conjunction}"
 
 
-def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
+def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict, *, trusted_compiled: bool = False):
+    if not trusted_compiled:
+        payload = {key: value for key, value in payload.items() if not str(key).startswith("compiled_")}
     cursor.execute(
         "SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM agent_blueprint_versions WHERE blueprint_id = %s",
         (blueprint_id,),
@@ -3082,11 +3086,11 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
             id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
             persona_agent_id, capability_allowlist_json, approval_policy_json,
             output_schema_json, execution_mode, trigger, schedule_json, runtime_config_json, limits_json,
-            required_integration_bindings_json, created_by_user_id
+            required_integration_bindings_json, compiled_artifact_json, compiled_artifact_hash, compiled_state, created_by_user_id
         )
         VALUES (
             %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb,
-            %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s
+            %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s, %s
         )
         """,
         (
@@ -3111,6 +3115,9 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
                 else [],
                 ensure_ascii=False,
             ),
+            json.dumps(payload.get("compiled_artifact") if trusted_compiled and isinstance(payload.get("compiled_artifact"), dict) else {}, ensure_ascii=False),
+            str(payload.get("compiled_artifact_hash") or "").strip() if trusted_compiled else None,
+            str(payload.get("compiled_state") or "legacy").strip() if trusted_compiled else "legacy",
             _user_id(user_data),
         ),
     )
@@ -4103,6 +4110,13 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         blockers.append({"type": "version", "message": "Создайте или выберите версию агента."})
     else:
         version_payload = build_version_payload_from_row(active_version)
+        compiled_state = str(active_version.get("compiled_state") or "legacy")
+        if compiled_state != "legacy":
+            strict_compiled_validation = validate_compiled_script_artifact(
+                parse_json_field(active_version.get("compiled_artifact_json"), {})
+            )
+            if compiled_state not in {"approved", "active"} or not strict_compiled_validation.get("valid"):
+                blockers.append({"type": "compiled_script", "message": "Compiled script требует успешного preview и подтверждения неизменного артефакта."})
         compiled_validation = validate_compiled_artifact_candidate(
             version_payload,
             metadata,
@@ -4175,6 +4189,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         and bool(preflight.get("ready"))
         and bool(preview_run_status.get("ready"))
         and all(item.get("beta_enabled") for item in capability_contracts)
+        and not any(item.get("type") == "compiled_script" for item in blockers)
     )
     next_step = "activate_version" if ready else _activation_gate_next_step(blockers)
     human_blockers = _activation_gate_human_blockers(blockers, preflight, compiled_validation)
@@ -4246,6 +4261,20 @@ def _activation_preview_run_status(cursor, blueprint_id: str, version_id: str) -
             "accepted_statuses": accepted_statuses,
             "message": "Создайте версию агента, затем запустите preview.",
         }
+    cursor.execute("SELECT compiled_state, compiled_preview_json FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s", (version_id, blueprint_id))
+    compiled_version = cursor.fetchone() or {}
+    if str(compiled_version.get("compiled_state") or "legacy") in {"approved", "active"}:
+        compiled_preview = parse_json_field(compiled_version.get("compiled_preview_json"), {})
+        if isinstance(compiled_preview, dict) and compiled_preview.get("status") == "passed":
+            return {
+                "schema": "localos_agent_preview_run_status_v1",
+                "required": True,
+                "ready": True,
+                "status": "completed",
+                "accepted_statuses": accepted_statuses,
+                "message": "Independent compiled-script preview completed.",
+                "run": None,
+            }
     cursor.execute(
         """
         SELECT id, status, input_json, output_json, error_text, started_at, completed_at, updated_at
@@ -4921,6 +4950,202 @@ def get_agent_blueprint_version_diff(blueprint_id: str, version_id: str):
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/compile", methods=["POST"])
+def compile_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    description = str(payload.get("description") or "").strip()
+    if not description or len(description) > 3000:
+        return _json_error("Опишите процесс для компиляции.", 400, "COMPILED_DESCRIPTION_REQUIRED")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        runner_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
+        if not runner_digest.startswith("sha256:"):
+            return _json_error("Compiled runner ещё не закреплён образом.", 503, "COMPILED_RUNTIME_NOT_READY")
+        user_fixtures = payload.get("fixtures") if isinstance(payload.get("fixtures"), list) else []
+        if any(not isinstance(item, dict) or item.get("source") != "user" or "expected" not in item for item in user_fixtures):
+            return _json_error("Добавьте подтверждённые пользователем fixtures с expected.", 400, "COMPILED_USER_FIXTURES_INVALID")
+        # Manual source is intentionally an advanced route; ordinary users get one AI generation here.
+        if isinstance(payload.get("source"), str):
+            candidate = {"status": "ready", "candidate": {"source": payload.get("source"), "manifest": payload.get("manifest"), "fixtures": payload.get("fixtures")}}
+            provenance = {"mode": "manual_source", "description": description}
+        else:
+            candidate = generate_candidate_from_description(description, business_id=str(blueprint.get("business_id") or ""), user_id=_user_id(user_data), runner_image_digest=runner_digest)
+            provenance = {"mode": "ai_generation", "description": description, "provider": str(candidate.get("source") or "")}
+        raw = candidate.get("candidate") if isinstance(candidate.get("candidate"), dict) else {}
+        generated_fixtures = raw.get("fixtures") if isinstance(raw.get("fixtures"), list) else []
+        generated_fixtures = [{**item, "source": "generator"} for item in generated_fixtures if isinstance(item, dict)]
+        manifest = raw.get("manifest") if isinstance(raw.get("manifest"), dict) else {}
+        manifest = {**manifest, "runner_image_digest": runner_digest}
+        raw = {**raw, "manifest": manifest, "fixtures": [*user_fixtures, *generated_fixtures]}
+        checked = validate_compiled_script_artifact({"schema": "localos_compiled_script_artifact_v1", **raw, "artifact_hash": raw.get("artifact_hash")}) if raw.get("artifact_hash") else None
+        if candidate.get("status") != "ready" or not raw:
+            return jsonify({"success": False, "code": "COMPILED_GENERATION_NEEDS_FIX", "generation": candidate}), 422
+        try:
+            artifact = build_compiled_script_artifact(raw.get("source"), raw.get("manifest"), raw.get("fixtures"), provenance)
+        except ValueError:
+            return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": checked or candidate}), 422
+        base = _resolve_candidate_version(cursor, blueprint) or {}
+        version_payload = build_version_payload_from_row(base)
+        version_payload["goal"] = description
+        version_payload["compiled_artifact"] = artifact
+        version_payload["compiled_artifact_hash"] = artifact["artifact_hash"]
+        version_payload["compiled_state"] = "checking"
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data, trusted_compiled=True)
+        db.conn.commit()
+        return jsonify({"success": True, "candidate_version": version, "artifact": artifact, "next_step": "run_compiled_preview"}), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/preview", methods=["POST"])
+def preview_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    if str(os.getenv("COMPILED_SCRIPT_PREVIEW_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
+        return _json_error("Preview compiled scripts пока выключен.", 404, "COMPILED_PREVIEW_DISABLED")
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
+        if not version:
+            return _json_error("Версия не найдена.", 404, "VERSION_NOT_FOUND")
+        if str(version.get("compiled_state") or "") not in {"checking", "needs_fix"}:
+            return _json_error("Preview уже подтверждённой версии не меняет evidence.", 409, "COMPILED_PREVIEW_STATE_INVALID")
+        cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(version.get("id") or ""), blueprint_id))
+        artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+        validation = validate_compiled_script_artifact(artifact)
+        if not validation.get("valid"):
+            return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": validation}), 422
+        preview_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        try:
+            preview_result = preview_compiled_script(artifact, preview_input)
+        except CompiledRuntimeUnavailable:
+            return _json_error("Защищённый runtime для compiled scripts недоступен.", 503, "COMPILED_RUNTIME_UNAVAILABLE")
+        if preview_result.get("status") != "passed":
+            cursor.execute("UPDATE agent_blueprint_versions SET compiled_state = 'needs_fix', compiled_preview_json = %s::jsonb WHERE id = %s AND blueprint_id = %s", (json.dumps(preview_result, ensure_ascii=False), str(version.get("id") or ""), blueprint_id))
+            db.conn.commit()
+            return jsonify({"success": False, "code": "COMPILED_PREVIEW_FAILED", "preview": preview_result}), 422
+        cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'ready_approval', compiled_preview_json = %s::jsonb
+            WHERE id = %s AND blueprint_id = %s""", (json.dumps(preview_result, ensure_ascii=False), str(version.get("id") or ""), blueprint_id))
+        db.conn.commit()
+        return jsonify({"success": True, "version_id": version.get("id"), "preview": preview_result, "approval_digest": validation.get("artifact_hash"), "fixture_digest": preview_result.get("fixture_digest"), "next_step": "approve_compiled_version"})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/approve", methods=["POST"])
+def approve_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
+        artifact = parse_json_field((version or {}).get("compiled_artifact_json"), {})
+        validation = validate_compiled_script_artifact(artifact)
+        if not version or str(version.get("compiled_state") or "") != "ready_approval" or not validation.get("valid"):
+            return _json_error("Сначала выполните успешный preview неизменённого артефакта.", 409, "COMPILED_APPROVAL_BLOCKED")
+        preview_evidence = parse_json_field(version.get("compiled_preview_json"), {})
+        if str((preview_evidence.get("result") or {}).get("artifact_hash") or "") != str(validation.get("artifact_hash") or ""):
+            return _json_error("Preview evidence не соответствует текущему артефакту.", 409, "COMPILED_APPROVAL_EVIDENCE_INVALID")
+        if str(payload.get("approval_digest") or "") != str(validation.get("artifact_hash") or ""):
+            return _json_error("Подтверждение относится к другой версии скрипта.", 409, "COMPILED_APPROVAL_DIGEST_MISMATCH")
+        if str(payload.get("fixture_digest") or "") != str(preview_evidence.get("fixture_digest") or ""):
+            return _json_error("Подтверждение относится к другому preview evidence.", 409, "COMPILED_APPROVAL_FIXTURE_DIGEST_MISMATCH")
+        cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'approved', compiled_approved_at = NOW(), compiled_approved_by_user_id = %s
+            WHERE id = %s AND blueprint_id = %s""", (_user_id(user_data), str(version.get("id") or ""), blueprint_id))
+        from core.auth_context import AuthContext
+        from services.product_telemetry_service import record_confirmed_user_action
+        record_confirmed_user_action(cursor,auth=AuthContext.from_session(user_data),
+            event_name="automation_preflight_approved",business_id=blueprint.get("business_id"),
+            flow="automation",operation_key=f"compiled-approval:{version.get('id')}",entity_id=version.get("id"))
+        db.conn.commit()
+        return jsonify({"success": True, "version_id": version.get("id"), "artifact_hash": validation.get("artifact_hash"), "state": "approved", "next_step": "run_compiled_script"})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/run", methods=["POST"])
+def run_agent_blueprint_script(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    if str(os.getenv("COMPILED_SCRIPT_EXECUTE_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
+        return _json_error("Запуск compiled scripts пока выключен.", 404, "COMPILED_EXECUTE_DISABLED")
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
+        if not version or str(version.get("compiled_state") or "") not in {"approved", "active"} or not version.get("compiled_approved_at") or not str(version.get("compiled_approved_by_user_id") or ""):
+            return _json_error("Для запуска требуется подтверждённая версия скрипта.", 409, "COMPILED_RUN_NOT_APPROVED")
+        from services.agent_run_queue import enqueue_agent_run
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            return _json_error("Укажите ключ идемпотентности запуска.", 400, "IDEMPOTENCY_KEY_REQUIRED")
+        run = enqueue_agent_run(
+            cursor,
+            blueprint=blueprint,
+            version=version,
+            input_payload=payload.get("input") if isinstance(payload.get("input"), dict) else {},
+            user_data=user_data,
+            idempotency_key=idempotency_key,
+        )
+        if not run.get("success"):
+            db.conn.rollback()
+            return jsonify({"success": False, "code": str(run.get("code") or "COMPILED_RUN_FAILED"), "error": str(run.get("error") or "Не удалось запустить compiled script."), "details": run}), 422
+        from core.auth_context import AuthContext
+        from services.product_telemetry_service import record_confirmed_user_action
+        record_confirmed_user_action(cursor,auth=AuthContext.from_session(user_data),
+            event_name="automation_run_linked",business_id=blueprint.get("business_id"),
+            flow="automation",operation_key=f"compiled-run:{blueprint_id}:{idempotency_key}",
+            entity_id=(run.get("run") or {}).get("id"))
+        db.conn.commit()
+        return jsonify({"success": True, "version_id": version.get("id"), "run": run.get("run"), "reused": bool(run.get("reused")), "status": "queued"}), 202
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate", methods=["POST"])
 def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
     user_data, error_response = _require_auth()
@@ -4988,6 +5213,12 @@ def rollback_agent_blueprint_version(blueprint_id: str, version_id: str):
         active_before = _resolve_active_version(cursor, blueprint)
         if active_before and str(active_before.get("id") or "") == str(version.get("id") or ""):
             return _json_error("Version is already active", 400, "VERSION_ALREADY_ACTIVE")
+        if str(version.get("compiled_state") or "legacy") != "legacy":
+            artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+            strict = validate_compiled_script_artifact(artifact)
+            configured_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
+            if not strict.get("valid") or artifact.get("manifest", {}).get("runner_image_digest") != configured_digest:
+                return _json_error("Rollback compiled версии требует актуальный verified runner image.", 409, "COMPILED_ROLLBACK_RUNTIME_MISMATCH")
         reason = str(payload.get("reason") or "rollback").strip()
         rollback_gate = {}
         if not _version_was_active_before(blueprint, version):

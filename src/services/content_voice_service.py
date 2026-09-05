@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from database_manager import DatabaseManager
-from core.helpers import get_business_owner_id
+from core.auth_context import AuthContext
+from core.auth_helpers import verify_business_access
 
 
 CONTENT_EXAMPLE_LIMIT = 50
@@ -40,20 +41,26 @@ def _json_value(value: Any, fallback: Any) -> Any:
         return fallback
 
 
-def _verify_access(cursor: Any, user_id: str, business_id: str) -> None:
-    owner_id = get_business_owner_id(cursor, business_id)
-    if str(owner_id or "") == str(user_id or ""):
-        return
-    cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-    row = cursor.fetchone()
-    if row and bool(row[0] if isinstance(row, (tuple, list)) else row.get("coalesce")):
-        return
-    cursor.execute(
-        "SELECT 1 FROM business_members WHERE business_id = %s AND user_id = %s AND status = 'active' AND role IN ('manager', 'member') LIMIT 1",
-        (business_id, user_id),
+def _auth_context(actor: AuthContext | str) -> AuthContext:
+    return actor if isinstance(actor, AuthContext) else AuthContext(user_id=str(actor or ""))
+
+
+def _verify_access(cursor: Any, actor: AuthContext | str, business_id: str) -> AuthContext:
+    auth = _auth_context(actor)
+    if not auth.permits_business(business_id):
+        raise PermissionError("Нет доступа к стилю публикаций этого бизнеса")
+    has_access, _owner_id = verify_business_access(
+        cursor,
+        business_id,
+        {
+            "user_id": auth.user_id,
+            "session_kind": auth.session_kind,
+            "scope_business_id": auth.scope_business_id,
+            "is_superadmin": auth.is_superadmin,
+        },
     )
-    if cursor.fetchone():
-        return
+    if has_access:
+        return auth
     raise PermissionError("Нет доступа к стилю публикаций этого бизнеса")
 
 
@@ -164,11 +171,13 @@ def _learning_suggestion(cursor: Any, business_id: str) -> dict[str, Any] | None
     }
 
 
-def get_content_voice(user_id: str, business_id: str) -> dict[str, Any]:
+def get_content_voice(actor: AuthContext | str, business_id: str) -> dict[str, Any]:
+    auth = _auth_context(actor)
+    user_id = auth.user_id
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        _verify_access(cursor, user_id, business_id)
+        _verify_access(cursor, auth, business_id)
         cursor.execute(
             """
             SELECT id, business_id, example_text, platform, origin, quality_status, metadata_json, created_at
@@ -201,7 +210,7 @@ def get_content_voice(user_id: str, business_id: str) -> dict[str, Any]:
 
 
 def add_content_voice_example(
-    user_id: str,
+    actor: AuthContext | str,
     business_id: str,
     text: str,
     *,
@@ -209,6 +218,8 @@ def add_content_voice_example(
     origin: str = "manual",
     quality_status: str = "reference",
 ) -> dict[str, Any]:
+    auth = _auth_context(actor)
+    user_id = auth.user_id
     clean_text = str(text or "").strip()
     clean_platform = str(platform or "").strip()
     clean_origin = str(origin or "manual").strip()
@@ -226,7 +237,7 @@ def add_content_voice_example(
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        _verify_access(cursor, user_id, business_id)
+        _verify_access(cursor, auth, business_id)
         cursor.execute(
             "SELECT COUNT(*) FROM userexamples WHERE user_id = %s AND example_type = 'news' AND business_id = %s",
             (user_id, business_id),
@@ -254,7 +265,9 @@ def add_content_voice_example(
         db.close()
 
 
-def delete_content_voice_example(user_id: str, example_id: str) -> None:
+def delete_content_voice_example(actor: AuthContext | str, example_id: str) -> None:
+    auth = _auth_context(actor)
+    user_id = auth.user_id
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -264,7 +277,7 @@ def delete_content_voice_example(user_id: str, example_id: str) -> None:
             raise ValueError("Пример не найден")
         business_id = str(row[0] if isinstance(row, (tuple, list)) else _row_to_dict(cursor, row).get("business_id") or "")
         if business_id:
-            _verify_access(cursor, user_id, business_id)
+            _verify_access(cursor, auth, business_id)
         cursor.execute("DELETE FROM userexamples WHERE id = %s AND user_id = %s AND example_type = 'news'", (example_id, user_id))
         db.conn.commit()
     except Exception:
@@ -274,8 +287,10 @@ def delete_content_voice_example(user_id: str, example_id: str) -> None:
         db.close()
 
 
-def update_content_voice(user_id: str, business_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    current = get_content_voice(user_id, business_id)
+def update_content_voice(actor: AuthContext | str, business_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    auth = _auth_context(actor)
+    user_id = auth.user_id
+    current = get_content_voice(auth, business_id)
     summary = str(payload.get("summary") if "summary" in payload else current.get("summary") or "").strip()[:600]
     preferences = payload.get("preferences") if isinstance(payload.get("preferences"), dict) else current.get("preferences") or {}
     forbidden = payload.get("forbidden_phrases") if isinstance(payload.get("forbidden_phrases"), list) else current.get("forbidden_phrases") or []
@@ -285,7 +300,7 @@ def update_content_voice(user_id: str, business_id: str, payload: dict[str, Any]
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        _verify_access(cursor, user_id, business_id)
+        _verify_access(cursor, auth, business_id)
         cursor.execute(
             """
             INSERT INTO content_voice_profiles (
@@ -323,7 +338,7 @@ def update_content_voice(user_id: str, business_id: str, payload: dict[str, Any]
         raise
     finally:
         db.close()
-    return get_content_voice(user_id, business_id)
+    return get_content_voice(auth, business_id)
 
 
 def load_content_voice_context(cursor: Any, *, user_id: str, business_id: str, limit: int = 5) -> dict[str, Any]:

@@ -430,13 +430,12 @@ export const localizedGrowthText = (language: Language, value?: string | null) =
   if (!normalized) return normalized;
   if (language === 'tr') {
     const translated = textTr[normalized] || translateDynamicTr(normalized);
-    return /[А-Яа-яЁё]/.test(translated) ? genericText.tr : translated;
+    return /[А-Яа-яЁё]/.test(translated) ? normalized : translated;
   }
   if (language === 'el') {
     const translated = textEl[normalized] || translateDynamicEl(normalized);
-    return /[А-Яа-яЁё]/.test(translated) ? genericText.el : translated;
+    return /[А-Яа-яЁё]/.test(translated) ? normalized : translated;
   }
-  if (language !== 'ru' && /[А-Яа-яЁё]/.test(normalized)) return genericText[language];
   return normalized;
 };
 

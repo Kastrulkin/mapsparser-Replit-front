@@ -783,6 +783,14 @@ def collaboration_update(collaboration_id: str):
             collaboration_id=collaboration_id,
             payload=payload,
         )
+        from core.auth_context import AuthContext
+        from services.product_telemetry_service import record_confirmed_user_action
+        event_name = {"replied": "reply_recorded", "agreed": "deal_started", "completed": "result_added"}.get(collaboration.get("status"))
+        if event_name:
+            record_confirmed_user_action(cursor, auth=AuthContext.from_session(_user_data),
+                event_name=event_name, business_id=business_id, flow="influencers",
+                operation_key=f"collaboration:{collaboration_id}:{collaboration.get('status')}:{collaboration.get('terms_version')}",
+                entity_id=collaboration_id)
         db.conn.commit()
         return jsonify({"success": True, "collaboration": collaboration})
     except LookupError as exc:

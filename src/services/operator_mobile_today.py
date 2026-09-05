@@ -1228,7 +1228,7 @@ def build_mobile_today(
     content_action = _load_story_facts_action(cursor, scope, observed_at)
     journey_actions = _load_journey_actions(cursor, scope)
     focus = _journey_focus(journey_actions[0] if journey_actions else None) or select_daily_focus(summary, progress, scope, content_action)
-    return {
+    payload = {
         "scope": scope,
         "as_of": observed_at.astimezone(timezone.utc).isoformat(),
         "period": {"kind": "rolling_24h", "since": cutoff.isoformat()},
@@ -1252,6 +1252,8 @@ def build_mobile_today(
         "freshness": summary.get("freshness") or {"status": "live"},
         "data_warnings": summary.get("data_warnings") or [],
     }
+    from services.today_workspace import attach_today_workspace
+    return attach_today_workspace(cursor, scope=scope, user_id=user_id, payload=payload, now=observed_at)
 
 
 def build_mobile_progress(

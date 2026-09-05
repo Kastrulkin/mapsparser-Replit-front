@@ -1,0 +1,39 @@
+# Optional staged rollout: compose with -f docker-compose.yml -f docker-compose.workers.yml.
+# The original worker becomes parser-only so adding roles never duplicates its work.
+services:
+  worker:
+    environment:
+      WORKER_ROLE: parser
+  worker-agent:
+    extends:
+      file: docker-compose.yml
+      service: worker
+    environment:
+      WORKER_ROLE: agent
+      # The dedicated runner is reachable only on the internal runner network
+      # supplied by docker/compiled-script-runner/compose.fragment.yml.
+      COMPILED_SCRIPT_RUNNER_URL: ${COMPILED_SCRIPT_RUNNER_URL:-http://compiled-script-runner:8091}
+      COMPILED_SCRIPT_RUNNER_SHARED_SECRET: ${COMPILED_SCRIPT_RUNNER_SHARED_SECRET:-}
+      COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST: ${COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST:-}
+      COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
+      COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
+  worker-operator:
+    extends:
+      file: docker-compose.yml
+      service: worker
+    environment:
+      WORKER_ROLE: operator
+  worker-dispatcher:
+    extends:
+      file: docker-compose.yml
+      service: worker
+    environment:
+      WORKER_ROLE: dispatcher
+  worker-maintenance:
+    extends:
+      file: docker-compose.yml
+      service: worker
+    environment:
+      WORKER_ROLE: maintenance
+      LOCALOS_TODAY_ACTIVITY_ENABLED: ${LOCALOS_TODAY_ACTIVITY_ENABLED:-false}
+      LOCALOS_TODAY_PROPOSALS_ENABLED: ${LOCALOS_TODAY_PROPOSALS_ENABLED:-false}

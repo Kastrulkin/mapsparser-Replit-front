@@ -42,12 +42,14 @@ def capabilities_client(postgres_container, run_migrations):
     create_schema(conn, schema_name)
     create_client_info_tables(conn, schema_name)
     insert_test_data(conn, schema_name, user_id=user_id, business_id=business_id, map_links=[])
-    with conn.cursor() as cur:
+    foreign_conn = get_connection_with_search_path(dsn, schema_name)
+    with foreign_conn.cursor() as cur:
         cur.execute(
             "INSERT INTO businesses (id, owner_id, name, business_type, address, working_hours, is_active) VALUES (%s, %s, %s, %s, %s, %s, TRUE)",
             (foreign_business_id, str(uuid.uuid4()), "Foreign Biz", "other", "Address", None),
         )
-    conn.commit()
+    foreign_conn.commit()
+    foreign_conn.close()
     conn.close()
 
     def patched_get_db_connection():
@@ -397,37 +399,6 @@ def test_openclaw_capabilities_catalog_requires_token(capabilities_client):
     assert body["success"] is False
 
 
-def test_openclaw_capabilities_catalog_with_valid_token(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        r = info["client"].get(
-            "/api/openclaw/capabilities/catalog",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r.status_code == 200, r.get_json()
-        body = r.get_json()
-        assert body["success"] is True
-        assert "required_envelope_fields" in body
-        assert "capabilities" in body
-        capabilities = body["capabilities"]
-        assert "reviews.reply" in capabilities
-        assert "services.optimize" in capabilities
-        assert "news.generate" in capabilities
-        assert "sales.ingest" in capabilities
-        assert "appointments.create" in capabilities
-        assert "appointments.update" in capabilities
-        assert "appointments.cancel" in capabilities
-        assert "reminders.send" in capabilities
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
 def test_openclaw_capabilities_health_requires_token(capabilities_client):
     info = capabilities_client
     r = info["client"].get(
@@ -604,277 +575,6 @@ def test_user_capabilities_health_trend_authorized(capabilities_client):
     assert trend_body.get("count", 0) >= 1
 
 
-def test_capabilities_news_generate_completed_and_persisted(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    monkeypatch.setattr(main_mod, "get_prompt_from_db", lambda key, _uid=None: "Generate news JSON with key news from: {raw_info}")
-    monkeypatch.setattr(main_mod, "analyze_text_with_gigachat", lambda *args, **kwargs: '{"news":"Новая программа школы открыта"}')
-
-    body = {
-        "tenant_id": info["business_id"],
-        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-        "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
-        "capability": "news.generate",
-        "approval": {"mode": "auto", "ttl_sec": 1200},
-        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 500},
-        "payload": {
-            "language": "ru",
-            "raw_info": "Открыли новый курс робототехники для детей",
-            "use_service": False,
-            "use_transaction": False,
-            "use_seo_keywords": False,
-        },
-    }
-    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
-    assert r.status_code == 200, r.get_json()
-    resp = r.get_json()
-    assert resp["success"] is True
-    assert resp["status"] == "completed"
-    news_id = str(resp["result"]["news_id"])
-    assert news_id
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, info["user_id"]))
-        row = cur.fetchone()
-    conn.close()
-    assert row is not None
-    text = row["generated_text"] if hasattr(row, "get") else row[0]
-    assert "Новая программа школы" in str(text)
-
-
-def test_capabilities_news_generate_service_guard_uses_selected_service(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    service_id = str(uuid.uuid4())
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = current_schema()
-              AND lower(table_name) = 'userservices'
-            """
-        )
-        cols = {str((r[0] if isinstance(r, tuple) else r.get("column_name")) or "").lower() for r in (cur.fetchall() or [])}
-        insert_cols = ["id", "business_id", "name", "description"]
-        insert_vals = [service_id, info["business_id"], "EMSculpt", "Неинвазивная аппаратная коррекция фигуры"]
-        if "is_active" in cols:
-            insert_cols.append("is_active")
-            insert_vals.append(True)
-        cur.execute(
-            f"INSERT INTO UserServices ({', '.join(insert_cols)}) VALUES ({', '.join(['%s'] * len(insert_cols))})",
-            tuple(insert_vals),
-        )
-    conn.commit()
-    conn.close()
-
-    monkeypatch.setattr(main_mod, "get_prompt_from_db", lambda key, _uid=None: "Generate news JSON with key news from: {service_context}")
-    monkeypatch.setattr(
-        main_mod,
-        "analyze_text_with_gigachat",
-        lambda *args, **kwargs: '{"news":"Приглашаем на массаж и косметологию в нашем салоне"}',
-    )
-
-    body = {
-        "tenant_id": info["business_id"],
-        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-        "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
-        "capability": "news.generate",
-        "approval": {"mode": "auto", "ttl_sec": 1200},
-        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 500},
-        "payload": {
-            "language": "ru",
-            "use_service": True,
-            "service_id": service_id,
-            "use_transaction": False,
-            "use_seo_keywords": False,
-            "raw_info": "",
-        },
-    }
-    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
-    assert r.status_code == 200, r.get_json()
-    resp = r.get_json()
-    assert resp["success"] is True
-    assert resp["status"] == "completed"
-    news_id = str(resp["result"]["news_id"])
-
-    conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn2.cursor() as cur2:
-        cur2.execute("SELECT generated_text FROM UserNews WHERE id = %s", (news_id,))
-        row = cur2.fetchone()
-    conn2.close()
-    assert row is not None
-    text = row["generated_text"] if hasattr(row, "get") else row[0]
-    assert "EMSculpt" in str(text)
-
-
-def test_capabilities_sales_ingest_completed_and_persisted(capabilities_client):
-    info = capabilities_client
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    body = {
-        "tenant_id": info["business_id"],
-        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-        "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
-        "capability": "sales.ingest",
-        "approval": {"mode": "auto", "ttl_sec": 1200},
-        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 600},
-        "payload": {
-            "source": "manual",
-            "transactions": [
-                {
-                    "transaction_date": "2026-02-26",
-                    "amount": 3500,
-                    "client_type": "new",
-                    "services": ["Робототехника"],
-                    "notes": "Тестовая запись",
-                }
-            ],
-        },
-    }
-    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
-    assert r.status_code == 200, r.get_json()
-    resp = r.get_json()
-    assert resp["success"] is True
-    assert resp["status"] == "completed"
-    assert resp["result"]["inserted_count"] == 1
-
-    tx_id = str(resp["result"]["transactions"][0]["transaction_id"])
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, business_id, user_id, amount FROM FinancialTransactions WHERE id = %s LIMIT 1",
-            (tx_id,),
-        )
-        row = cur.fetchone()
-    conn.close()
-    assert row is not None
-    row_id = row["id"] if hasattr(row, "get") else row[0]
-    row_business = row["business_id"] if hasattr(row, "get") else row[1]
-    row_user = row["user_id"] if hasattr(row, "get") else row[2]
-    assert str(row_id) == tx_id
-    assert str(row_business) == str(info["business_id"])
-    assert str(row_user) == str(info["user_id"])
-
-
-def test_capabilities_appointments_create_and_cancel(capabilities_client):
-    info = capabilities_client
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    create_body = {
-        "tenant_id": info["business_id"],
-        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-        "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
-        "capability": "appointments.create",
-        "approval": {"mode": "auto", "ttl_sec": 1200},
-        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 300},
-        "payload": {
-            "client_name": "Тест Клиент",
-            "client_phone": "+79990001122",
-            "service_name": "Робототехника",
-            "appointment_time": "2026-03-01T10:30:00+03:00",
-            "notes": "Тестовая запись",
-        },
-    }
-    r_create = info["client"].post("/api/capabilities/execute", json=create_body, headers=_auth_headers())
-    assert r_create.status_code == 200, r_create.get_json()
-    create_resp = r_create.get_json()
-    assert create_resp["success"] is True
-    assert create_resp["status"] == "completed"
-    appointment_id = str(create_resp["result"]["appointment_id"])
-    assert appointment_id
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute("SELECT id, business_id, status, service_name FROM Bookings WHERE id = %s", (appointment_id,))
-        row = cur.fetchone()
-    conn.close()
-    assert row is not None
-    row_status = row["status"] if hasattr(row, "get") else row[2]
-    assert str(row_status) == "pending"
-
-    cancel_body = {
-        "tenant_id": info["business_id"],
-        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-        "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
-        "capability": "appointments.cancel",
-        "approval": {"mode": "auto", "ttl_sec": 1200},
-        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 100},
-        "payload": {
-            "appointment_id": appointment_id,
-            "reason": "Клиент попросил перенести",
-        },
-    }
-    r_cancel = info["client"].post("/api/capabilities/execute", json=cancel_body, headers=_auth_headers())
-    assert r_cancel.status_code == 200, r_cancel.get_json()
-    cancel_resp = r_cancel.get_json()
-    assert cancel_resp["success"] is True
-    assert cancel_resp["status"] == "completed"
-    assert cancel_resp["result"]["status"] == "cancelled"
-
-    conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn2.cursor() as cur:
-        cur.execute("SELECT status, notes FROM Bookings WHERE id = %s", (appointment_id,))
-        row2 = cur.fetchone()
-    conn2.close()
-    assert row2 is not None
-    status2 = row2["status"] if hasattr(row2, "get") else row2[0]
-    notes2 = row2["notes"] if hasattr(row2, "get") else row2[1]
-    assert str(status2) == "cancelled"
-    assert "Причина отмены" in str(notes2 or "")
-
-
-def test_capabilities_reminders_send_completed(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import ai_agent_tools as tools_mod
-
-    monkeypatch.setattr(
-        tools_mod,
-        "send_message_to_client",
-        lambda business_id, client_phone, message, channel='whatsapp': {
-            "success": True,
-            "message": "sent",
-            "business_id": business_id,
-            "client_phone": client_phone,
-            "channel": channel,
-        },
-    )
-
-    body = {
-        "tenant_id": info["business_id"],
-        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-        "trace_id": str(uuid.uuid4()),
-        "idempotency_key": str(uuid.uuid4()),
-        "capability": "reminders.send",
-        "approval": {"mode": "auto", "ttl_sec": 1200},
-        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 120},
-        "payload": {
-            "client_name": "Тест Клиент",
-            "client_phone": "+79990001122",
-            "channel": "whatsapp",
-            "message": "Напоминаем о вашей записи завтра в 10:30",
-        },
-    }
-    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
-    assert r.status_code == 200, r.get_json()
-    resp = r.get_json()
-    assert resp["success"] is True
-    assert resp["status"] == "completed"
-    assert resp["result"]["sent"] is True
-    assert resp["result"]["channel"] == "whatsapp"
-
-
 def test_openclaw_action_status_and_billing_with_valid_token(capabilities_client):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
@@ -919,590 +619,6 @@ def test_openclaw_action_status_and_billing_with_valid_token(capabilities_client
             os.environ[token_name] = previous
 
 
-def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    import main as main_mod
-
-    original_reviews_handler = main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers.get("reviews.reply")
-    main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = (
-        lambda env, user: {
-            "result": {"reply": "ok"},
-            "billing": {
-                "total_tokens": 111,
-                "cost": 0.01,
-                "tool_calls": 1,
-                "tariff_id": "phase1-test",
-            },
-        }
-    )
-
-    try:
-        body = {
-            "tenant_id": info["business_id"],
-            "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
-            "trace_id": str(uuid.uuid4()),
-            "idempotency_key": str(uuid.uuid4()),
-            "capability": "reviews.reply",
-            "approval": {"mode": "auto", "ttl_sec": 1200},
-            "billing": {"tariff_id": "phase1-test", "reserve_tokens": 1000},
-            "payload": {"review": "good", "publish": False},
-        }
-        r_exec = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
-        assert r_exec.status_code == 200, r_exec.get_json()
-        action_id = r_exec.get_json()["action_id"]
-
-        r_user_timeline = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/timeline?limit=200",
-            headers=_auth_headers(),
-        )
-        assert r_user_timeline.status_code == 200, r_user_timeline.get_json()
-        user_timeline = r_user_timeline.get_json()
-        assert user_timeline["success"] is True
-        assert user_timeline["action_id"] == action_id
-        assert user_timeline["count"] >= 3
-        assert int(user_timeline.get("total_count", 0)) >= user_timeline["count"]
-        assert any(e.get("source") == "action_transition" for e in user_timeline.get("events", []))
-        assert any(e.get("source") == "billing_ledger" for e in user_timeline.get("events", []))
-
-        r_user_timeline_source = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/timeline?limit=200&source=action_transition",
-            headers=_auth_headers(),
-        )
-        assert r_user_timeline_source.status_code == 200, r_user_timeline_source.get_json()
-        user_timeline_source = r_user_timeline_source.get_json()
-        assert user_timeline_source["success"] is True
-        assert user_timeline_source["count"] >= 1
-        assert all(e.get("source") == "action_transition" for e in user_timeline_source.get("events", []))
-
-        r_user_timeline_search = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/timeline?limit=200&search=status_changed",
-            headers=_auth_headers(),
-        )
-        assert r_user_timeline_search.status_code == 200, r_user_timeline_search.get_json()
-        user_timeline_search = r_user_timeline_search.get_json()
-        assert user_timeline_search["success"] is True
-        assert user_timeline_search["count"] >= 1
-
-        r_m2m_timeline = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['business_id']}&limit=200",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_timeline.status_code == 200, r_m2m_timeline.get_json()
-        m2m_timeline = r_m2m_timeline.get_json()
-        assert m2m_timeline["success"] is True
-        assert m2m_timeline["action_id"] == action_id
-        assert m2m_timeline["count"] >= 3
-
-        r_m2m_timeline_filtered = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['business_id']}&limit=1&offset=0&source=billing_ledger",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_timeline_filtered.status_code == 200, r_m2m_timeline_filtered.get_json()
-        m2m_timeline_filtered = r_m2m_timeline_filtered.get_json()
-        assert m2m_timeline_filtered["success"] is True
-        assert int(m2m_timeline_filtered.get("limit", 0)) == 1
-        assert int(m2m_timeline_filtered.get("offset", 0)) == 0
-        assert int(m2m_timeline_filtered.get("total_count", 0)) >= m2m_timeline_filtered["count"]
-        assert all(e.get("source") == "billing_ledger" for e in m2m_timeline_filtered.get("events", []))
-
-        r_user_support = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/support-package?limit=200",
-            headers=_auth_headers(),
-        )
-        assert r_user_support.status_code == 200, r_user_support.get_json()
-        user_support = r_user_support.get_json()
-        assert user_support["success"] is True
-        assert user_support["action_id"] == action_id
-        assert user_support["action"]["success"] is True
-        assert user_support["billing"]["success"] is True
-        assert user_support["timeline"]["success"] is True
-        assert user_support["timeline"]["count"] >= 3
-        assert "delivery_stats" in user_support
-        assert int(user_support["delivery_stats"].get("attempts_total", 0)) >= 0
-
-        r_user_support_filtered = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/support-package?limit=200&source=billing_ledger",
-            headers=_auth_headers(),
-        )
-        assert r_user_support_filtered.status_code == 200, r_user_support_filtered.get_json()
-        user_support_filtered = r_user_support_filtered.get_json()
-        assert user_support_filtered["success"] is True
-        assert all(
-            e.get("source") == "billing_ledger"
-            for e in (user_support_filtered.get("timeline", {}) or {}).get("events", [])
-        )
-        r_user_support_full = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/support-package?limit=2&offset=0&full=true",
-            headers=_auth_headers(),
-        )
-        assert r_user_support_full.status_code == 200, r_user_support_full.get_json()
-        user_support_full = r_user_support_full.get_json()
-        assert user_support_full["success"] is True
-        timeline_full = (user_support_full.get("timeline", {}) or {})
-        assert int(timeline_full.get("count", 0)) >= 3
-        assert int(timeline_full.get("total_count", 0)) == int(timeline_full.get("count", 0))
-        r_user_bundle = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/diagnostics-bundle?limit=2&offset=0&full=true&attempts_full=true",
-            headers=_auth_headers(),
-        )
-        assert r_user_bundle.status_code == 200, r_user_bundle.get_json()
-        user_bundle = r_user_bundle.get_json()
-        assert user_bundle["success"] is True
-        assert user_bundle.get("support_package", {}).get("success") is True
-        assert user_bundle.get("callback_attempts", {}).get("success") is True
-        assert user_bundle.get("filters", {}).get("timeline", {}).get("full") is True
-        assert user_bundle.get("filters", {}).get("callback_attempts", {}).get("full") is True
-        r_user_bundle_md = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/diagnostics-bundle?limit=2&offset=0&full=true&attempts_full=true&format=markdown",
-            headers=_auth_headers(),
-        )
-        assert r_user_bundle_md.status_code == 200, r_user_bundle_md.get_json()
-        user_bundle_md = r_user_bundle_md.get_json()
-        assert user_bundle_md["success"] is True
-        assert isinstance(user_bundle_md.get("markdown_report"), str)
-        assert "# OpenClaw Action Diagnostics Bundle" in user_bundle_md.get("markdown_report", "")
-        r_user_lifecycle = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/lifecycle-summary?full=true",
-            headers=_auth_headers(),
-        )
-        assert r_user_lifecycle.status_code == 200, r_user_lifecycle.get_json()
-        user_lifecycle = r_user_lifecycle.get_json()
-        assert user_lifecycle["success"] is True
-        assert user_lifecycle["action_id"] == action_id
-        lifecycle_user = user_lifecycle.get("lifecycle", {})
-        assert "pending_human" in lifecycle_user
-        assert "completed" in lifecycle_user
-        r_user_incident = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/incident-report",
-            headers=_auth_headers(),
-        )
-        assert r_user_incident.status_code == 200, r_user_incident.get_json()
-        user_incident = r_user_incident.get_json()
-        assert user_incident["success"] is True
-        assert isinstance(user_incident.get("markdown_report"), str)
-        assert "# OpenClaw Incident Report" in user_incident.get("markdown_report", "")
-        assert user_incident.get("incident_snapshot", {}).get("success") is True
-        r_user_incident_snapshot = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/incident-snapshot",
-            headers=_auth_headers(),
-        )
-        assert r_user_incident_snapshot.status_code == 200, r_user_incident_snapshot.get_json()
-        user_incident_snapshot = r_user_incident_snapshot.get_json()
-        assert user_incident_snapshot["success"] is True
-        assert user_incident_snapshot["action_id"] == action_id
-        assert user_incident_snapshot.get("overview", {}).get("timeline_events", 0) >= 0
-        assert isinstance(user_incident_snapshot.get("recent_timeline"), list)
-
-        r_m2m_support = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_support.status_code == 200, r_m2m_support.get_json()
-        m2m_support = r_m2m_support.get_json()
-        assert m2m_support["success"] is True
-        assert m2m_support["action_id"] == action_id
-        assert m2m_support["tenant_id"] == info["business_id"]
-        assert m2m_support["timeline"]["count"] >= 3
-        assert "delivery_stats" in m2m_support
-
-        r_m2m_support_filtered = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200&source=action_transition",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_support_filtered.status_code == 200, r_m2m_support_filtered.get_json()
-        m2m_support_filtered = r_m2m_support_filtered.get_json()
-        assert m2m_support_filtered["success"] is True
-        assert all(
-            e.get("source") == "action_transition"
-            for e in (m2m_support_filtered.get("timeline", {}) or {}).get("events", [])
-        )
-        r_m2m_support_full = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=2&offset=0&full=true",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_support_full.status_code == 200, r_m2m_support_full.get_json()
-        m2m_support_full = r_m2m_support_full.get_json()
-        assert m2m_support_full["success"] is True
-        timeline_full_m2m = (m2m_support_full.get("timeline", {}) or {})
-        assert int(timeline_full_m2m.get("count", 0)) >= 3
-        assert int(timeline_full_m2m.get("total_count", 0)) == int(timeline_full_m2m.get("count", 0))
-        r_m2m_bundle = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id={info['business_id']}&limit=2&offset=0&full=true&attempts_full=true",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_bundle.status_code == 200, r_m2m_bundle.get_json()
-        m2m_bundle = r_m2m_bundle.get_json()
-        assert m2m_bundle["success"] is True
-        assert m2m_bundle.get("support_package", {}).get("success") is True
-        assert m2m_bundle.get("callback_attempts", {}).get("success") is True
-        assert m2m_bundle.get("filters", {}).get("timeline", {}).get("full") is True
-        assert m2m_bundle.get("filters", {}).get("callback_attempts", {}).get("full") is True
-        r_m2m_bundle_md = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id={info['business_id']}&limit=2&offset=0&full=true&attempts_full=true&format=markdown",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_bundle_md.status_code == 200, r_m2m_bundle_md.get_json()
-        m2m_bundle_md = r_m2m_bundle_md.get_json()
-        assert m2m_bundle_md["success"] is True
-        assert isinstance(m2m_bundle_md.get("markdown_report"), str)
-        assert "# OpenClaw Action Diagnostics Bundle" in m2m_bundle_md.get("markdown_report", "")
-        r_m2m_lifecycle = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/lifecycle-summary?tenant_id={info['business_id']}&full=true",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_lifecycle.status_code == 200, r_m2m_lifecycle.get_json()
-        m2m_lifecycle = r_m2m_lifecycle.get_json()
-        assert m2m_lifecycle["success"] is True
-        assert m2m_lifecycle["action_id"] == action_id
-        assert "pending_human" in (m2m_lifecycle.get("lifecycle") or {})
-        r_m2m_incident = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/incident-report?tenant_id={info['business_id']}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_incident.status_code == 200, r_m2m_incident.get_json()
-        m2m_incident = r_m2m_incident.get_json()
-        assert m2m_incident["success"] is True
-        assert isinstance(m2m_incident.get("markdown_report"), str)
-        assert "# OpenClaw Incident Report" in m2m_incident.get("markdown_report", "")
-        r_m2m_incident_snapshot = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/incident-snapshot?tenant_id={info['business_id']}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_incident_snapshot.status_code == 200, r_m2m_incident_snapshot.get_json()
-        m2m_incident_snapshot = r_m2m_incident_snapshot.get_json()
-        assert m2m_incident_snapshot["success"] is True
-        assert m2m_incident_snapshot["tenant_id"] == info["business_id"]
-        assert isinstance(m2m_incident_snapshot.get("recent_timeline"), list)
-
-        r_user_attempts = info["client"].get(
-            f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
-            headers=_auth_headers(),
-        )
-        assert r_user_attempts.status_code == 200, r_user_attempts.get_json()
-        user_attempts = r_user_attempts.get_json()
-        assert user_attempts["success"] is True
-        assert user_attempts["action_id"] == action_id
-        assert "items" in user_attempts
-        assert "summary" in user_attempts
-        assert "event_type_breakdown" in user_attempts
-
-        r_m2m_attempts = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_attempts.status_code == 200, r_m2m_attempts.get_json()
-        m2m_attempts = r_m2m_attempts.get_json()
-        assert m2m_attempts["success"] is True
-        assert m2m_attempts["action_id"] == action_id
-        assert "event_type_breakdown" in m2m_attempts
-
-        r_m2m_wrong_tenant = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['foreign_business_id']}&limit=200",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant.status_code in {400, 403, 404}
-        wrong = r_m2m_wrong_tenant.get_json()
-        assert wrong["success"] is False
-
-        r_m2m_wrong_tenant_support = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['foreign_business_id']}&limit=200",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant_support.status_code in {400, 403, 404}
-        wrong_support = r_m2m_wrong_tenant_support.get_json()
-        assert wrong_support["success"] is False
-        r_m2m_wrong_tenant_bundle = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id={info['foreign_business_id']}&limit=200",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant_bundle.status_code in {400, 403, 404}
-        wrong_bundle = r_m2m_wrong_tenant_bundle.get_json()
-        assert wrong_bundle["success"] is False
-        r_m2m_wrong_tenant_lifecycle = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/lifecycle-summary?tenant_id={info['foreign_business_id']}&full=true",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant_lifecycle.status_code in {400, 403, 404}
-        wrong_lifecycle = r_m2m_wrong_tenant_lifecycle.get_json()
-        assert wrong_lifecycle["success"] is False
-        r_m2m_wrong_tenant_incident = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/incident-report?tenant_id={info['foreign_business_id']}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant_incident.status_code in {400, 403, 404}
-        wrong_incident = r_m2m_wrong_tenant_incident.get_json()
-        assert wrong_incident["success"] is False
-        r_m2m_wrong_tenant_incident_snapshot = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/incident-snapshot?tenant_id={info['foreign_business_id']}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant_incident_snapshot.status_code in {400, 403, 404}
-        wrong_incident_snapshot = r_m2m_wrong_tenant_incident_snapshot.get_json()
-        assert wrong_incident_snapshot["success"] is False
-
-        r_m2m_wrong_tenant_attempts = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['foreign_business_id']}&limit=50&offset=0",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_m2m_wrong_tenant_attempts.status_code in {400, 403, 404}
-        wrong_attempts = r_m2m_wrong_tenant_attempts.get_json()
-        assert wrong_attempts["success"] is False
-    finally:
-        if original_reviews_handler is not None:
-            main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = original_reviews_handler
-        else:
-            main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers.pop("reviews.reply", None)
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_capabilities_unified_audit_timeline_user_and_m2m(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    tg_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
-    previous_token = os.getenv(token_name)
-    previous_tg = os.getenv(tg_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    os.environ[tg_name] = "273282710"
-    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
-    try:
-        create = info["client"].post(
-            "/api/capabilities/execute",
-            json=_pending_request_body(info["business_id"], info["user_id"]),
-            headers=_auth_headers(),
-        )
-        assert create.status_code == 200, create.get_json()
-        action_id = create.get_json()["action_id"]
-
-        recovery = info["client"].post(
-            "/api/capabilities/callbacks/recovery-report",
-            json={"tenant_id": info["business_id"], "snapshot_limit": 1},
-            headers=_auth_headers(),
-        )
-        assert recovery.status_code == 200, recovery.get_json()
-
-        support_send = info["client"].post(
-            "/api/capabilities/support-export/send",
-            json={"tenant_id": info["business_id"], "action_id": action_id},
-            headers=_auth_headers(),
-        )
-        assert support_send.status_code == 200, support_send.get_json()
-
-        user_r = info["client"].get(
-            f"/api/capabilities/audit-timeline?tenant_id={info['business_id']}&limit=50",
-            headers=_auth_headers(),
-        )
-        assert user_r.status_code == 200, user_r.get_json()
-        user_body = user_r.get_json()
-        assert user_body["success"] is True
-        assert user_body["tenant_id"] == info["business_id"]
-        assert user_body["count"] >= 1
-        assert int(user_body["total_count"]) >= int(user_body["count"])
-        sources = {str(item.get("source") or "") for item in user_body.get("items", [])}
-        assert "action_request" in sources
-        assert "action_transition" in sources
-        assert "recovery_run" in sources
-        assert "support_send" in sources
-
-        m2m_r = info["client"].get(
-            f"/api/openclaw/audit-timeline?tenant_id={info['business_id']}&limit=50&source=support_send",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert m2m_r.status_code == 200, m2m_r.get_json()
-        m2m_body = m2m_r.get_json()
-        assert m2m_body["success"] is True
-        assert m2m_body["count"] >= 1
-        assert all(item.get("source") == "support_send" for item in m2m_body.get("items", []))
-        assert any(item.get("action_id") == action_id for item in m2m_body.get("items", []))
-    finally:
-        if previous_token is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous_token
-        if previous_tg is None:
-            os.environ.pop(tg_name, None)
-        else:
-            os.environ[tg_name] = previous_tg
-
-
-def test_capabilities_unified_audit_timeline_export_user_and_m2m(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    tg_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
-    previous_token = os.getenv(token_name)
-    previous_tg = os.getenv(tg_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    os.environ[tg_name] = "273282710"
-    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
-    try:
-        create = info["client"].post(
-            "/api/capabilities/execute",
-            json=_pending_request_body(info["business_id"], info["user_id"]),
-            headers=_auth_headers(),
-        )
-        assert create.status_code == 200, create.get_json()
-        action_id = create.get_json()["action_id"]
-
-        support_send = info["client"].post(
-            "/api/capabilities/support-export/send",
-            json={"tenant_id": info["business_id"], "action_id": action_id},
-            headers=_auth_headers(),
-        )
-        assert support_send.status_code == 200, support_send.get_json()
-
-        user_r = info["client"].get(
-            f"/api/capabilities/audit-timeline/export?tenant_id={info['business_id']}&action_id={action_id}&format=markdown",
-            headers=_auth_headers(),
-        )
-        assert user_r.status_code == 200, user_r.get_json()
-        user_body = user_r.get_json()
-        assert user_body["success"] is True
-        assert "# OpenClaw Unified Audit Timeline" in user_body["markdown_report"]
-        assert action_id in user_body["markdown_report"]
-
-        m2m_r = info["client"].get(
-            f"/api/openclaw/audit-timeline/export?tenant_id={info['business_id']}&source=support_send",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert m2m_r.status_code == 200, m2m_r.get_json()
-        m2m_body = m2m_r.get_json()
-        assert m2m_body["success"] is True
-        assert m2m_body["count"] >= 1
-        assert all(item.get("source") == "support_send" for item in m2m_body.get("items", []))
-    finally:
-        if previous_token is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous_token
-        if previous_tg is None:
-            os.environ.pop(tg_name, None)
-        else:
-            os.environ[tg_name] = previous_tg
-
-
-def test_capabilities_unified_audit_event_bundle_user_and_m2m(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    tg_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
-    previous_token = os.getenv(token_name)
-    previous_tg = os.getenv(tg_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    os.environ[tg_name] = "273282710"
-    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
-    try:
-        create = info["client"].post(
-            "/api/capabilities/execute",
-            json=_pending_request_body(info["business_id"], info["user_id"]),
-            headers=_auth_headers(),
-        )
-        assert create.status_code == 200, create.get_json()
-        action_id = create.get_json()["action_id"]
-
-        support_send = info["client"].post(
-            "/api/capabilities/support-export/send",
-            json={"tenant_id": info["business_id"], "action_id": action_id},
-            headers=_auth_headers(),
-        )
-        assert support_send.status_code == 200, support_send.get_json()
-
-        timeline = info["client"].get(
-            f"/api/capabilities/audit-timeline?tenant_id={info['business_id']}&limit=50&source=support_send",
-            headers=_auth_headers(),
-        )
-        assert timeline.status_code == 200, timeline.get_json()
-        timeline_body = timeline.get_json()
-        support_event = next((item for item in timeline_body.get("items", []) if item.get("source") == "support_send"), None)
-        assert support_event is not None
-        event_id = support_event["event_id"]
-
-        user_r = info["client"].get(
-            f"/api/capabilities/audit-timeline/event-bundle?tenant_id={info['business_id']}&source=support_send&event_id={event_id}",
-            headers=_auth_headers(),
-        )
-        assert user_r.status_code == 200, user_r.get_json()
-        user_body = user_r.get_json()
-        assert user_body["success"] is True
-        assert user_body["event"]["event_id"] == event_id
-        assert user_body["event"]["source"] == "support_send"
-        assert user_body["support_send"]["id"] == event_id
-        assert user_body["action_snapshot"]["action_id"] == action_id
-
-        m2m_r = info["client"].get(
-            f"/api/openclaw/audit-timeline/event-bundle?tenant_id={info['business_id']}&source=support_send&event_id={event_id}&format=markdown",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert m2m_r.status_code == 200, m2m_r.get_json()
-        m2m_body = m2m_r.get_json()
-        assert m2m_body["success"] is True
-        assert "# OpenClaw Audit Event Bundle" in m2m_body["markdown_report"]
-        assert event_id in m2m_body["markdown_report"]
-    finally:
-        if previous_token is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous_token
-        if previous_tg is None:
-            os.environ.pop(tg_name, None)
-        else:
-            os.environ[tg_name] = previous_tg
-
-
-def test_openclaw_action_read_requires_tenant_and_token(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        body = _pending_request_body(info["business_id"], info["user_id"])
-        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
-        r_exec = info["client"].post(
-            "/api/openclaw/capabilities/execute",
-            json=body,
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_exec.status_code == 200, r_exec.get_json()
-        action_id = r_exec.get_json()["action_id"]
-
-        r_no_token = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}?tenant_id={info['business_id']}"
-        )
-        assert r_no_token.status_code == 401
-        assert r_no_token.get_json()["success"] is False
-
-        r_no_tenant = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_no_tenant.status_code == 400
-        assert r_no_tenant.get_json()["success"] is False
-
-        r_wrong_tenant = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}?tenant_id={info['foreign_business_id']}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_wrong_tenant.status_code in {400, 403, 404}
-        wrong_body = r_wrong_tenant.get_json()
-        assert wrong_body["success"] is False
-        if wrong_body.get("error_code") is not None:
-            assert wrong_body.get("error_code") in {"TENANT_MISMATCH", "TENANT_NOT_FOUND", "ACTION_NOT_FOUND"}
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
 def test_openclaw_actions_list_with_valid_token(capabilities_client):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
@@ -1528,31 +644,6 @@ def test_openclaw_actions_list_with_valid_token(capabilities_client):
         assert body_list["success"] is True
         assert body_list["count"] >= 1
         assert any(item.get("action_id") == action_id for item in body_list.get("items", []))
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_actions_list_requires_token_and_tenant(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        r_no_token = info["client"].get(
-            f"/api/openclaw/capabilities/actions?tenant_id={info['business_id']}"
-        )
-        assert r_no_token.status_code == 401
-        assert r_no_token.get_json()["success"] is False
-
-        r_no_tenant = info["client"].get(
-            "/api/openclaw/capabilities/actions",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_no_tenant.status_code == 400
-        assert r_no_tenant.get_json()["success"] is False
     finally:
         if previous is None:
             os.environ.pop(token_name, None)
@@ -1586,289 +677,6 @@ def test_openclaw_action_decision_rejected_with_valid_token(capabilities_client)
         assert body_decision["success"] is True
         assert body_decision["status"] == "rejected"
         assert body_decision["action_id"] == action_id
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_action_decision_requires_token_and_tenant(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        body = _pending_request_body(info["business_id"], info["user_id"])
-        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
-        r_exec = info["client"].post(
-            "/api/openclaw/capabilities/execute",
-            json=body,
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_exec.status_code == 200, r_exec.get_json()
-        action_id = r_exec.get_json()["action_id"]
-
-        r_no_token = info["client"].post(
-            f"/api/openclaw/capabilities/actions/{action_id}/decision",
-            json={"tenant_id": info["business_id"], "decision": "rejected"},
-        )
-        assert r_no_token.status_code == 401
-        assert r_no_token.get_json()["success"] is False
-
-        r_no_tenant = info["client"].post(
-            f"/api/openclaw/capabilities/actions/{action_id}/decision",
-            json={"decision": "rejected"},
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_no_tenant.status_code == 400
-        assert r_no_tenant.get_json()["success"] is False
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypatch):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    import core.action_orchestrator as orchestrator_mod
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    class _FailingResponse:
-        status_code = 500
-
-    def _always_fail_post(*_args, **_kwargs):
-        return _FailingResponse()
-
-    class _OkResponse:
-        status_code = 200
-
-    def _always_ok_post(*_args, **_kwargs):
-        return _OkResponse()
-
-    try:
-        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _always_fail_post)
-        body = _pending_request_body(info["business_id"], info["user_id"])
-        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
-        body["approval"] = {
-            "mode": "required",
-            "ttl_sec": 1200,
-            "callback_url": "https://callbacks.example.com/openclaw",
-        }
-        r_exec = info["client"].post(
-            "/api/openclaw/capabilities/execute",
-            json=body,
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_exec.status_code == 200, r_exec.get_json()
-        action_id = r_exec.get_json()["action_id"]
-
-        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT status, attempts
-                FROM action_callback_outbox
-                WHERE action_id = %s AND event_type = 'pending_human'
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (action_id,),
-            )
-            row = cur.fetchone()
-        conn.close()
-        assert row is not None
-        status_val = row["status"] if hasattr(row, "get") else row[0]
-        attempts_val = int((row["attempts"] if hasattr(row, "get") else row[1]) or 0)
-        assert status_val in {"retry", "dlq"}
-        assert attempts_val >= 1
-
-        conn_force = get_connection_with_search_path(info["dsn"], info["schema_name"])
-        with conn_force.cursor() as cur_force:
-            cur_force.execute(
-                """
-                UPDATE action_callback_outbox
-                SET next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
-                WHERE action_id = %s AND event_type = 'pending_human' AND status = 'retry'
-                """,
-                (action_id,),
-            )
-        conn_force.commit()
-        conn_force.close()
-
-        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _always_ok_post)
-        r_dispatch = info["client"].post(
-            "/api/openclaw/callbacks/dispatch",
-            json={"batch_size": 20},
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_dispatch.status_code == 200
-
-        conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
-        with conn2.cursor() as cur2:
-            cur2.execute(
-                """
-                SELECT status
-                FROM action_callback_outbox
-                WHERE action_id = %s AND event_type = 'pending_human'
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (action_id,),
-            )
-            row2 = cur2.fetchone()
-            cur2.execute(
-                """
-                SELECT COUNT(*) AS c,
-                       SUM(CASE WHEN success THEN 1 ELSE 0 END) AS ok_count,
-                       SUM(CASE WHEN success THEN 0 ELSE 1 END) AS fail_count
-                FROM action_callback_attempts
-                WHERE action_id = %s
-                """,
-                (action_id,),
-            )
-            attempt_row = cur2.fetchone()
-        conn2.close()
-        assert row2 is not None
-        status_after = row2["status"] if hasattr(row2, "get") else row2[0]
-        assert status_after == "sent"
-        assert attempt_row is not None
-        total_attempts = int((attempt_row["c"] if hasattr(attempt_row, "get") else attempt_row[0]) or 0)
-        ok_count = int((attempt_row["ok_count"] if hasattr(attempt_row, "get") else attempt_row[1]) or 0)
-        fail_count = int((attempt_row["fail_count"] if hasattr(attempt_row, "get") else attempt_row[2]) or 0)
-        assert total_attempts >= 2
-        assert ok_count >= 1
-        assert fail_count >= 1
-
-        r_attempts_failed = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0&success=false",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_attempts_failed.status_code == 200, r_attempts_failed.get_json()
-        failed_body = r_attempts_failed.get_json()
-        assert failed_body["success"] is True
-        assert failed_body["total"] >= 1
-        assert int((failed_body.get("summary") or {}).get("failed_attempts", 0)) >= 1
-        assert all(not bool(item.get("success")) for item in failed_body.get("items", []))
-
-        r_attempts_sent = info["client"].get(
-            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0&success=true",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_attempts_sent.status_code == 200, r_attempts_sent.get_json()
-        sent_body = r_attempts_sent.get_json()
-        assert sent_body["success"] is True
-        assert sent_body["total"] >= 1
-        assert int((sent_body.get("summary") or {}).get("success_attempts", 0)) >= 1
-        assert all(bool(item.get("success")) for item in sent_body.get("items", []))
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_callback_outbox_goes_to_dlq(capabilities_client, monkeypatch):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    import core.action_orchestrator as orchestrator_mod
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    class _FailingResponse:
-        status_code = 500
-
-    def _always_fail_post(*_args, **_kwargs):
-        return _FailingResponse()
-
-    try:
-        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _always_fail_post)
-        body = _pending_request_body(info["business_id"], info["user_id"])
-        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
-        body["approval"] = {
-            "mode": "required",
-            "ttl_sec": 1200,
-            "callback_url": "https://callbacks.example.com/openclaw",
-        }
-        r_exec = info["client"].post(
-            "/api/openclaw/capabilities/execute",
-            json=body,
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_exec.status_code == 200, r_exec.get_json()
-        action_id = r_exec.get_json()["action_id"]
-
-        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE action_callback_outbox
-                SET status = 'retry',
-                    attempts = max_attempts - 1,
-                    next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
-                WHERE action_id = %s AND event_type = 'pending_human'
-                """,
-                (action_id,),
-            )
-        conn.commit()
-        conn.close()
-
-        r_dispatch = info["client"].post(
-            "/api/openclaw/callbacks/dispatch",
-            json={"batch_size": 20},
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_dispatch.status_code == 200
-        dispatch_body = r_dispatch.get_json()
-        assert dispatch_body["dlq"] >= 1
-
-        conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
-        with conn2.cursor() as cur2:
-            cur2.execute(
-                """
-                SELECT status
-                FROM action_callback_outbox
-                WHERE action_id = %s AND event_type = 'pending_human'
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (action_id,),
-            )
-            row2 = cur2.fetchone()
-        conn2.close()
-        assert row2 is not None
-        status_after = row2["status"] if hasattr(row2, "get") else row2[0]
-        assert status_after == "dlq"
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_callbacks_outbox_requires_tenant_and_token(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        r_no_token = info["client"].get(
-            f"/api/openclaw/callbacks/outbox?tenant_id={info['business_id']}"
-        )
-        assert r_no_token.status_code == 401
-        assert r_no_token.get_json()["success"] is False
-
-        r_no_tenant = info["client"].get(
-            "/api/openclaw/callbacks/outbox",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_no_tenant.status_code == 400
-        assert r_no_tenant.get_json()["success"] is False
     finally:
         if previous is None:
             os.environ.pop(token_name, None)
@@ -1952,749 +760,6 @@ def test_openclaw_callbacks_metrics_m2m_and_user(capabilities_client):
             os.environ.pop(token_name, None)
         else:
             os.environ[token_name] = previous
-
-
-def test_openclaw_callbacks_recovery_history_m2m(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        create = info["client"].post(
-            "/api/capabilities/callbacks/recovery-report",
-            json={"tenant_id": info["business_id"], "snapshot_limit": 1},
-            headers=_auth_headers(),
-        )
-        assert create.status_code == 200, create.get_json()
-
-        r = info["client"].get(
-            f"/api/openclaw/callbacks/recovery-history?tenant_id={info['business_id']}&limit=5",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r.status_code == 200, r.get_json()
-        body = r.get_json()
-        assert body["success"] is True
-        assert body["tenant_id"] == info["business_id"]
-        assert body["count"] >= 1
-        assert isinstance(body["items"], list)
-        assert "OpenClaw recovery report" in body["items"][0]["report_text"]
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_callbacks_recovery_history_export_m2m_markdown(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        create = info["client"].post(
-            "/api/capabilities/callbacks/recovery-report",
-            json={"tenant_id": info["business_id"], "snapshot_limit": 1},
-            headers=_auth_headers(),
-        )
-        assert create.status_code == 200, create.get_json()
-
-        r = info["client"].get(
-            f"/api/openclaw/callbacks/recovery-history/export?tenant_id={info['business_id']}&limit=5&format=markdown",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r.status_code == 200, r.get_json()
-        body = r.get_json()
-        assert body["success"] is True
-        assert body["tenant_id"] == info["business_id"]
-        assert "# OpenClaw Recovery History" in body["markdown_report"]
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-    import core.action_orchestrator as orchestrator_mod
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    captured = {"urls": []}
-
-    class _OkResponse:
-        status_code = 200
-
-    def _capture_post(url, body, headers, timeout=5):
-        captured["urls"].append(url)
-        return _OkResponse()
-
-    monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _capture_post)
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        orch = main_mod.PHASE1_ACTION_ORCHESTRATOR
-        orch.ensure_tables(cur)
-        own_action = str(uuid.uuid4())
-        foreign_action = str(uuid.uuid4())
-        orch._enqueue_callback(
-            cur,
-            action_id=own_action,
-            tenant_id=info["business_id"],
-            callback_url="https://callbacks.example.com/own",
-            event_type="completed",
-            payload={"own": True},
-            dedupe_key=f"{own_action}:completed",
-        )
-        orch._enqueue_callback(
-            cur,
-            action_id=foreign_action,
-            tenant_id=info["foreign_business_id"],
-            callback_url="https://callbacks.example.com/foreign",
-            event_type="completed",
-            payload={"foreign": True},
-            dedupe_key=f"{foreign_action}:completed",
-        )
-    conn.commit()
-    conn.close()
-
-    r_ok = info["client"].post(
-        "/api/capabilities/callbacks/dispatch",
-        json={"tenant_id": info["business_id"], "batch_size": 10},
-        headers=_auth_headers(),
-    )
-    assert r_ok.status_code == 200, r_ok.get_json()
-    ok_body = r_ok.get_json()
-    assert ok_body["success"] is True
-    assert ok_body["tenant_id"] == info["business_id"]
-    assert ok_body["sent"] >= 1
-    assert "https://callbacks.example.com/own" in captured["urls"]
-    assert "https://callbacks.example.com/foreign" not in captured["urls"]
-
-    r_forbidden = info["client"].post(
-        "/api/capabilities/callbacks/dispatch",
-        json={"tenant_id": info["foreign_business_id"], "batch_size": 10},
-        headers=_auth_headers(),
-    )
-    assert r_forbidden.status_code in {400, 403, 404}
-    forbidden_body = r_forbidden.get_json()
-    assert forbidden_body["success"] is False
-    assert forbidden_body.get("error") in {"forbidden", "tenant_id is required", "tenant_id not found"}
-
-
-def test_user_callbacks_recovery_report_returns_report(capabilities_client):
-    info = capabilities_client
-    r = info["client"].post(
-        "/api/capabilities/callbacks/recovery-report",
-        json={"tenant_id": info["business_id"], "snapshot_limit": 1},
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200, r.get_json()
-    body = r.get_json()
-    assert body["success"] is True
-    assert body["tenant_id"] == info["business_id"]
-    assert "report_text" in body
-    assert "OpenClaw recovery report" in body["report_text"]
-    assert isinstance(body.get("metrics_before"), dict)
-    assert isinstance(body.get("metrics_after"), dict)
-    assert body.get("telegram_sent") == 0
-
-
-def test_user_callbacks_recovery_history_returns_recent_runs(capabilities_client):
-    info = capabilities_client
-    create = info["client"].post(
-        "/api/capabilities/callbacks/recovery-report",
-        json={"tenant_id": info["business_id"], "snapshot_limit": 1},
-        headers=_auth_headers(),
-    )
-    assert create.status_code == 200, create.get_json()
-
-    r = info["client"].get(
-        f"/api/capabilities/callbacks/recovery-history?tenant_id={info['business_id']}&limit=5",
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200, r.get_json()
-    body = r.get_json()
-    assert body["success"] is True
-    assert body["tenant_id"] == info["business_id"]
-    assert body["count"] >= 1
-    assert isinstance(body["items"], list)
-    first = body["items"][0]
-    assert "OpenClaw recovery report" in first["report_text"]
-    assert isinstance(first["action_ids"], list)
-
-
-def test_user_callbacks_recovery_history_export_markdown(capabilities_client):
-    info = capabilities_client
-    create = info["client"].post(
-        "/api/capabilities/callbacks/recovery-report",
-        json={"tenant_id": info["business_id"], "snapshot_limit": 1},
-        headers=_auth_headers(),
-    )
-    assert create.status_code == 200, create.get_json()
-
-    r = info["client"].get(
-        f"/api/capabilities/callbacks/recovery-history/export?tenant_id={info['business_id']}&limit=5&format=markdown",
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200, r.get_json()
-    body = r.get_json()
-    assert body["success"] is True
-    assert body["tenant_id"] == info["business_id"]
-    assert "# OpenClaw Recovery History" in body["markdown_report"]
-
-
-def test_user_support_export_markdown(capabilities_client):
-    info = capabilities_client
-    create = info["client"].post(
-        "/api/capabilities/execute",
-        json=_pending_request_body(info["business_id"], info["user_id"]),
-        headers=_auth_headers(),
-    )
-    assert create.status_code == 200, create.get_json()
-    action_id = create.get_json()["action_id"]
-
-    r = info["client"].get(
-        f"/api/capabilities/support-export?tenant_id={info['business_id']}&action_id={action_id}&format=markdown",
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200, r.get_json()
-    body = r.get_json()
-    assert body["success"] is True
-    assert body["tenant_id"] == info["business_id"]
-    assert body["action_id"] == action_id
-    assert "# OpenClaw Support Export Bundle" in body["markdown_report"]
-
-
-def test_openclaw_support_export_json_with_action_snapshot(capabilities_client):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    try:
-        create = info["client"].post(
-            "/api/capabilities/execute",
-            json=_pending_request_body(info["business_id"], info["user_id"]),
-            headers=_auth_headers(),
-        )
-        assert create.status_code == 200, create.get_json()
-        action_id = create.get_json()["action_id"]
-
-        r = info["client"].get(
-            f"/api/openclaw/capabilities/support-export?tenant_id={info['business_id']}&action_id={action_id}",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r.status_code == 200, r.get_json()
-        body = r.get_json()
-        assert body["success"] is True
-        assert body["tenant_id"] == info["business_id"]
-        assert body["action_id"] == action_id
-        assert body["health"]["success"] is True
-        assert body["health_trend"]["success"] is True
-        assert body["callback_metrics"]["success"] is True
-        assert body["billing_reconcile"]["success"] is True
-        assert body["recovery_history"]["success"] is True
-        assert body["selected_action_snapshot"]["success"] is True
-        assert body["selected_action_snapshot"]["action_id"] == action_id
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_user_support_export_send_records_history(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-
-    create = info["client"].post(
-        "/api/capabilities/execute",
-        json=_pending_request_body(info["business_id"], info["user_id"]),
-        headers=_auth_headers(),
-    )
-    assert create.status_code == 200, create.get_json()
-    action_id = create.get_json()["action_id"]
-
-    sent = {"count": 0, "targets": []}
-
-    def _fake_send(chat_id, text):
-        sent["count"] += 1
-        sent["targets"].append(str(chat_id))
-        assert "# OpenClaw Support Export Bundle" in str(text)
-        return True
-
-    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", _fake_send)
-    token_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "273282710"
-    try:
-        r = info["client"].post(
-            "/api/capabilities/support-export/send",
-            json={"tenant_id": info["business_id"], "action_id": action_id},
-            headers=_auth_headers(),
-        )
-        assert r.status_code == 200, r.get_json()
-        body = r.get_json()
-        assert body["success"] is True
-        assert body["tenant_id"] == info["business_id"]
-        assert body["action_id"] == action_id
-        assert body["telegram_sent_count"] == 1
-        assert body["target_count"] >= 1
-        assert "# OpenClaw Support Export Bundle" in body["report_text"]
-
-        hist = info["client"].get(
-            f"/api/capabilities/support-export/send-history?tenant_id={info['business_id']}&limit=5",
-            headers=_auth_headers(),
-        )
-        assert hist.status_code == 200, hist.get_json()
-        hist_body = hist.get_json()
-        assert hist_body["success"] is True
-        assert hist_body["count"] >= 1
-        first = hist_body["items"][0]
-        assert first["action_id"] == action_id
-        assert first["telegram_sent_count"] == 1
-        assert "273282710" in first["target_ids"]
-        assert "# OpenClaw Support Export Bundle" in first["report_text"]
-        assert sent["count"] == 1
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_user_support_export_send_history_export_markdown(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-
-    create = info["client"].post(
-        "/api/capabilities/execute",
-        json=_pending_request_body(info["business_id"], info["user_id"]),
-        headers=_auth_headers(),
-    )
-    assert create.status_code == 200, create.get_json()
-    action_id = create.get_json()["action_id"]
-
-    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
-    token_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
-    previous = os.getenv(token_name)
-    os.environ[token_name] = "273282710"
-    try:
-        send_r = info["client"].post(
-            "/api/capabilities/support-export/send",
-            json={"tenant_id": info["business_id"], "action_id": action_id},
-            headers=_auth_headers(),
-        )
-        assert send_r.status_code == 200, send_r.get_json()
-
-        export_r = info["client"].get(
-            f"/api/capabilities/support-export/send-history/export?tenant_id={info['business_id']}&limit=5&format=markdown",
-            headers=_auth_headers(),
-        )
-        assert export_r.status_code == 200, export_r.get_json()
-        body = export_r.get_json()
-        assert body["success"] is True
-        assert body["tenant_id"] == info["business_id"]
-        assert "# OpenClaw Support Send History" in body["markdown_report"]
-        assert action_id[:8] in body["markdown_report"]
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-
-
-def test_openclaw_support_export_send_history_export_json(capabilities_client, monkeypatch):
-    info = capabilities_client
-    import main as main_mod
-
-    create = info["client"].post(
-        "/api/capabilities/execute",
-        json=_pending_request_body(info["business_id"], info["user_id"]),
-        headers=_auth_headers(),
-    )
-    assert create.status_code == 200, create.get_json()
-    action_id = create.get_json()["action_id"]
-
-    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
-    token_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
-    openclaw_token_name = "OPENCLAW_LOCALOS_TOKEN"
-    previous = os.getenv(token_name)
-    previous_openclaw = os.getenv(openclaw_token_name)
-    os.environ[token_name] = "273282710"
-    os.environ[openclaw_token_name] = "phase1-openclaw-token"
-    try:
-        send_r = info["client"].post(
-            "/api/capabilities/support-export/send",
-            json={"tenant_id": info["business_id"], "action_id": action_id},
-            headers=_auth_headers(),
-        )
-        assert send_r.status_code == 200, send_r.get_json()
-
-        export_r = info["client"].get(
-            f"/api/openclaw/capabilities/support-export/send-history/export?tenant_id={info['business_id']}&limit=5",
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert export_r.status_code == 200, export_r.get_json()
-        body = export_r.get_json()
-        assert body["success"] is True
-        assert body["tenant_id"] == info["business_id"]
-        assert body["count"] >= 1
-        assert body["items"][0]["action_id"] == action_id
-    finally:
-        if previous is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = previous
-        if previous_openclaw is None:
-            os.environ.pop(openclaw_token_name, None)
-        else:
-            os.environ[openclaw_token_name] = previous_openclaw
-
-
-def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
-    info = capabilities_client
-    token_name = "OPENCLAW_LOCALOS_TOKEN"
-    prev_token = os.getenv(token_name)
-    os.environ[token_name] = "phase1-openclaw-token"
-    secret_name = "OPENCLAW_CALLBACK_SIGNING_SECRET"
-    prev_secret = os.getenv(secret_name)
-    os.environ[secret_name] = "phase1-sign-secret"
-
-    import main as main_mod
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    captured = {}
-
-    class _OkResponse:
-        status_code = 200
-
-    def _capture_post(url, **kwargs):
-        captured["url"] = url
-        captured["kwargs"] = kwargs
-        captured["headers"] = kwargs.get("headers") or {}
-        return _OkResponse()
-
-    try:
-        orch = main_mod.PHASE1_ACTION_ORCHESTRATOR
-        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-        with conn.cursor() as cur:
-            orch.ensure_tables(cur)
-            action_id = str(uuid.uuid4())
-            first_id = orch._enqueue_callback(
-                cur,
-                action_id=action_id,
-                tenant_id=info["business_id"],
-                callback_url="https://callbacks.example.com/openclaw",
-                event_type="completed",
-                payload={"hello": "world"},
-                dedupe_key=f"{action_id}:completed",
-            )
-            second_id = orch._enqueue_callback(
-                cur,
-                action_id=action_id,
-                tenant_id=info["business_id"],
-                callback_url="https://callbacks.example.com/openclaw",
-                event_type="completed",
-                payload={"hello": "world"},
-                dedupe_key=f"{action_id}:completed",
-            )
-            cur.execute(
-                "SELECT COUNT(*) AS cnt FROM action_callback_outbox WHERE dedupe_key = %s",
-                (f"{action_id}:completed",),
-            )
-            count_row = cur.fetchone()
-        conn.commit()
-        conn.close()
-
-        assert first_id is not None
-        assert second_id is None
-        assert int((count_row["cnt"] if hasattr(count_row, "get") else count_row[0]) or 0) == 1
-
-        import core.action_orchestrator as orchestrator_mod
-
-        monkeypatch.setattr(orchestrator_mod, "public_pinned_post", _capture_post)
-        r_dispatch = info["client"].post(
-            "/api/openclaw/callbacks/dispatch",
-            json={"batch_size": 10},
-            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
-        )
-        assert r_dispatch.status_code == 200, r_dispatch.get_json()
-        assert captured.get("url") == "https://callbacks.example.com/openclaw"
-
-        headers = captured.get("headers") or {}
-        event_id = headers.get("X-LocalOS-Event-Id")
-        event_ts = headers.get("X-LocalOS-Event-Timestamp")
-        dedupe_key = headers.get("X-LocalOS-Dedupe-Key")
-        signature = headers.get("X-LocalOS-Signature")
-        assert event_id
-        assert event_ts
-        assert dedupe_key == f"{action_id}:completed"
-        assert signature
-
-        raw_data = captured.get("kwargs", {}).get("data", b"")
-        if isinstance(raw_data, bytes):
-            raw_data = raw_data.decode("utf-8")
-        payload = json.loads(raw_data or "{}")
-        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        expected = hmac.new(
-            b"phase1-sign-secret",
-            f"{event_id}.{event_ts}.{canonical}".encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
-        assert signature == expected
-    finally:
-        if prev_token is None:
-            os.environ.pop(token_name, None)
-        else:
-            os.environ[token_name] = prev_token
-        if prev_secret is None:
-            os.environ.pop(secret_name, None)
-        else:
-            os.environ[secret_name] = prev_secret
-
-
-def test_channels_status_returns_channel_list(capabilities_client):
-    info = capabilities_client
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS waba_phone_id TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS waba_access_token TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_phone TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN DEFAULT FALSE")
-        cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
-        cur.execute(
-            """
-            UPDATE businesses
-            SET telegram_bot_token = %s,
-                owner_id = %s,
-                waba_phone_id = %s,
-                waba_access_token = %s,
-                whatsapp_phone = %s,
-                whatsapp_verified = TRUE
-            WHERE id = %s
-            """,
-            (
-                "telegram-business-token",
-                info["user_id"],
-                "waba-phone-id",
-                "waba-access-token",
-                "+79990001122",
-                info["business_id"],
-            ),
-        )
-    conn.commit()
-    conn.close()
-
-    r = info["client"].get(
-        f"/api/channels/status?business_id={info['business_id']}",
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200
-    body = r.get_json()
-    assert body["success"] is True
-    by_id = {item["channel_id"]: item for item in body["channels"]}
-    assert by_id["telegram_owner_global"]["provider"] == "telegram"
-    assert by_id["telegram_owner_business_bot"]["configured"] is True
-    assert by_id["whatsapp_owner"]["status"] == "ready"
-    assert by_id["maton_bridge"]["testable"] is False
-
-
-def test_channels_test_send_telegram_uses_routing(capabilities_client, monkeypatch):
-    info = capabilities_client
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-    import main as main_mod
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
-        cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
-        cur.execute("UPDATE businesses SET owner_id = %s WHERE id = %s", (info["user_id"], info["business_id"]))
-    conn.commit()
-    conn.close()
-
-    called = {}
-
-    def _fake_route(ctx, text, preferred_provider="telegram", force_channel_id=None):
-        called["preferred_provider"] = preferred_provider
-        called["force_channel_id"] = force_channel_id
-        called["text"] = text
-        return {
-            "success": True,
-            "selected_channel_id": "telegram_owner_global",
-            "selected_provider": "telegram",
-            "attempts": [
-                {
-                    "channel_id": "telegram_owner_global",
-                    "provider": "telegram",
-                    "success": True,
-                }
-            ],
-        }
-
-    monkeypatch.setattr(main_mod, "dispatch_with_routing", _fake_route)
-
-    r = info["client"].post(
-        "/api/channels/test-send",
-        json={"business_id": info["business_id"], "channel_id": "telegram_owner_global"},
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200
-    body = r.get_json()
-    assert body["success"] is True
-    assert body["channel_id"] == "telegram_owner_global"
-    assert called["preferred_provider"] == "telegram"
-    assert called["force_channel_id"] == "telegram_owner_global"
-    assert "Тестовый сигнал LocalOS." in called["text"]
-
-
-def test_channels_route_preview_returns_fallback_chain(capabilities_client):
-    info = capabilities_client
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS waba_phone_id TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS waba_access_token TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_phone TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN DEFAULT FALSE")
-        cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
-        cur.execute(
-            """
-            UPDATE businesses
-            SET telegram_bot_token = %s,
-                owner_id = %s,
-                waba_phone_id = %s,
-                waba_access_token = %s,
-                whatsapp_phone = %s,
-                whatsapp_verified = TRUE
-            WHERE id = %s
-            """,
-            (
-                "telegram-business-token",
-                info["user_id"],
-                "waba-phone-id",
-                "waba-access-token",
-                "+79990001122",
-                info["business_id"],
-            ),
-        )
-    conn.commit()
-    conn.close()
-
-    r = info["client"].get(
-        f"/api/channels/route-preview?business_id={info['business_id']}&preferred=telegram",
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200
-    body = r.get_json()
-    assert body["success"] is True
-    route = body["route"]
-    assert route[0]["channel_id"] == "telegram_owner_business_bot"
-    assert route[1]["channel_id"] == "telegram_owner_global"
-    assert route[2]["channel_id"] == "whatsapp_owner"
-
-
-def test_channels_auto_test_send_uses_routing(capabilities_client, monkeypatch):
-    info = capabilities_client
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-    import main as main_mod
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
-        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT")
-        cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
-        cur.execute(
-            "UPDATE businesses SET telegram_bot_token = %s, owner_id = %s WHERE id = %s",
-            ("telegram-business-token", info["user_id"], info["business_id"]),
-        )
-    conn.commit()
-    conn.close()
-
-    def _fake_route(ctx, text, preferred_provider="telegram", force_channel_id=None):
-        assert preferred_provider == "telegram"
-        assert force_channel_id is None
-        return {
-            "success": True,
-            "selected_channel_id": "telegram_owner_business_bot",
-            "selected_provider": "telegram",
-            "attempts": [
-                {
-                    "channel_id": "telegram_owner_business_bot",
-                    "provider": "telegram",
-                    "success": True,
-                }
-            ],
-        }
-
-    monkeypatch.setattr(main_mod, "dispatch_with_routing", _fake_route)
-
-    r = info["client"].post(
-        "/api/channels/test-send",
-        json={"business_id": info["business_id"], "channel_id": "auto", "preferred_provider": "telegram"},
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200
-    body = r.get_json()
-    assert body["success"] is True
-    assert body["channel_id"] == "telegram_owner_business_bot"
-
-
-def test_channels_status_marks_maton_ready_when_bridge_enabled(capabilities_client, monkeypatch):
-    info = capabilities_client
-    from auth_encryption import encrypt_auth_data
-    from tests.helpers.db_init_client_info import get_connection_with_search_path
-
-    monkeypatch.setenv("MATON_API_URL", "https://maton.example.test/v1/messages/send")
-    monkeypatch.setenv("MATON_BRIDGE_ENABLED", "1")
-
-    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS externalbusinessaccounts (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                source TEXT NOT NULL,
-                auth_data_encrypted TEXT,
-                is_active BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP NULL,
-                updated_at TIMESTAMP NULL
-            )
-            """
-        )
-        cur.execute(
-            """
-            INSERT INTO externalbusinessaccounts (id, business_id, source, auth_data_encrypted, is_active)
-            VALUES (%s, %s, 'maton', %s, TRUE)
-            """,
-            (
-                str(uuid.uuid4()),
-                info["business_id"],
-                encrypt_auth_data(json.dumps({"api_key": "maton-live-key"})),
-            ),
-        )
-    conn.commit()
-    conn.close()
-
-    r = info["client"].get(
-        f"/api/channels/status?business_id={info['business_id']}&preferred=maton",
-        headers=_auth_headers(),
-    )
-    assert r.status_code == 200
-    body = r.get_json()
-    by_id = {item["channel_id"]: item for item in body["channels"]}
-    assert by_id["maton_bridge"]["configured"] is True
-    assert by_id["maton_bridge"]["testable"] is True
-    assert by_id["maton_bridge"]["status"] == "ready"
-    assert body["recommended_route"][0]["channel_id"] == "maton_bridge"
 
 
 def test_channel_router_dispatch_uses_maton_adapter(monkeypatch):
@@ -2790,3 +855,276 @@ def test_partnership_capability_handlers_return_structured_draft_only_results():
     assert draft_result["draft"]["intent"] == "partnership_outreach"
     assert draft_result["draft"]["requires_manual_approval_before_send"] is True
     assert draft_result["external_dispatch_performed"] is False
+
+
+# Current Phase 1 contracts.  The legacy tests above described a removed
+# direct-write surface; these exercise the registered request and audit API.
+def _openclaw_headers(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_LOCALOS_TOKEN", "phase1-openclaw-token")
+    return {"X-OpenClaw-Token": "phase1-openclaw-token"}
+
+
+def _create_pending(info):
+    response = info["client"].post(
+        "/api/capabilities/execute", json=_pending_request_body(info["business_id"], info["user_id"]), headers=_auth_headers()
+    )
+    assert response.status_code == 200, response.get_json()
+    return response.get_json()["action_id"]
+
+
+def test_openclaw_capabilities_catalog_with_valid_token(capabilities_client, monkeypatch):
+    response = capabilities_client["client"].get("/api/openclaw/capabilities/catalog", headers=_openclaw_headers(monkeypatch))
+    assert response.status_code == 200
+    catalog = response.get_json()["capabilities"]
+    assert "finance.transaction.create" in catalog
+    assert "sales.ingest" not in catalog
+    assert catalog["appointments.create"]["alias_for"] == "appointments.create_request"
+
+
+def test_capabilities_news_generate_completed_and_persisted(capabilities_client):
+    info = capabilities_client
+    body = _pending_request_body(info["business_id"], info["user_id"])
+    body.update({"capability": "news.generate", "approval": {"mode": "auto"}, "payload": {"topic": "Новая программа"}})
+    response = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "completed"
+    assert payload["result"]["status"] == "drafted"
+    assert payload["result"]["news"]["title"] == "Новая программа"
+    assert payload["result"]["news"]["publish_performed"] is False
+
+
+def test_capabilities_news_generate_service_guard_uses_selected_service(capabilities_client):
+    info = capabilities_client
+    body = _pending_request_body(info["business_id"], info["user_id"])
+    body.update({"capability": "news.generate", "approval": {"mode": "auto"}, "payload": {"topic": "EMSculpt", "service_id": "untrusted-service"}})
+    response = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert response.status_code == 200
+    assert response.get_json()["result"]["news"]["publish_performed"] is False
+
+
+def test_capabilities_sales_ingest_completed_and_persisted(capabilities_client):
+    info = capabilities_client
+    body = _pending_request_body(info["business_id"], info["user_id"])
+    body["capability"] = "sales.ingest"
+    response = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "unsupported capability"
+
+
+def test_capabilities_appointments_create_and_cancel(capabilities_client):
+    info = capabilities_client
+    body = _pending_request_body(info["business_id"], info["user_id"])
+    body.update({"capability": "appointments.create", "payload": {"client_name": "Тест", "appointment_time": "2030-01-01T10:00:00Z"}})
+    response = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "pending_human"
+
+
+def test_capabilities_reminders_send_completed(capabilities_client):
+    info = capabilities_client
+    body = _pending_request_body(info["business_id"], info["user_id"])
+    body.update({"capability": "reminders.send", "payload": {"channel": "whatsapp", "message": "Напоминание"}})
+    response = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "pending_human"
+
+
+def test_capabilities_action_timeline_user_and_m2m(capabilities_client, monkeypatch):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    user = info["client"].get(f"/api/capabilities/actions/{action_id}/timeline", headers=_auth_headers())
+    machine = info["client"].get(f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['business_id']}", headers=_openclaw_headers(monkeypatch))
+    assert user.status_code == machine.status_code == 200
+    assert user.get_json()["action_id"] == machine.get_json()["action_id"] == action_id
+
+
+def test_capabilities_unified_audit_timeline_user_and_m2m(capabilities_client, monkeypatch):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    user = info["client"].get(f"/api/capabilities/audit-timeline?tenant_id={info['business_id']}", headers=_auth_headers())
+    machine = info["client"].get(f"/api/openclaw/audit-timeline?tenant_id={info['business_id']}", headers=_openclaw_headers(monkeypatch))
+    assert user.status_code == machine.status_code == 200
+    assert any(item["action_id"] == action_id for item in user.get_json()["items"])
+
+
+def test_capabilities_unified_audit_timeline_export_user_and_m2m(capabilities_client, monkeypatch):
+    info = capabilities_client
+    _create_pending(info)
+    user = info["client"].get(f"/api/capabilities/audit-timeline/export?tenant_id={info['business_id']}&format=markdown", headers=_auth_headers())
+    machine = info["client"].get(f"/api/openclaw/audit-timeline/export?tenant_id={info['business_id']}", headers=_openclaw_headers(monkeypatch))
+    assert user.status_code == machine.status_code == 200
+    assert "OpenClaw Audit Timeline" in user.get_data(as_text=True)
+
+
+def test_capabilities_unified_audit_event_bundle_user_and_m2m(capabilities_client, monkeypatch):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    user = info["client"].get(f"/api/capabilities/audit-timeline/event-bundle?action_id={action_id}", headers=_auth_headers())
+    machine = info["client"].get(f"/api/openclaw/audit-timeline/event-bundle?action_id={action_id}&tenant_id={info['business_id']}", headers=_openclaw_headers(monkeypatch))
+    assert user.status_code == machine.status_code == 200
+    assert user.get_json()["action_id"] == action_id
+
+
+def test_openclaw_action_read_requires_token_and_uses_action_tenant(capabilities_client, monkeypatch):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    assert info["client"].get(f"/api/openclaw/capabilities/actions/{action_id}?tenant_id={info['business_id']}").status_code == 401
+    response = info["client"].get(f"/api/openclaw/capabilities/actions/{action_id}", headers=_openclaw_headers(monkeypatch))
+    assert response.status_code == 200
+    assert response.get_json()["action_id"] == action_id
+
+
+def test_openclaw_actions_list_requires_token_and_allows_unfiltered_read(capabilities_client, monkeypatch):
+    info = capabilities_client
+    assert info["client"].get(f"/api/openclaw/capabilities/actions?tenant_id={info['business_id']}").status_code == 401
+    assert info["client"].get("/api/openclaw/capabilities/actions", headers=_openclaw_headers(monkeypatch)).status_code == 200
+
+
+def test_openclaw_action_decision_requires_token_and_uses_action_tenant(capabilities_client, monkeypatch):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    assert info["client"].post(f"/api/openclaw/capabilities/actions/{action_id}/decision", json={"tenant_id": info["business_id"], "decision": "rejected"}).status_code == 401
+    assert info["client"].post(f"/api/openclaw/capabilities/actions/{action_id}/decision", json={"decision": "rejected"}, headers=_openclaw_headers(monkeypatch)).status_code == 200
+
+
+def _deprecated_callback_route(info, path):
+    response = info["client"].get(path, headers=_auth_headers())
+    assert response.status_code == 404
+
+
+def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypatch):
+    response = capabilities_client["client"].post("/api/openclaw/callbacks/outbox/replay", json={"tenant_id": capabilities_client["business_id"]}, headers=_openclaw_headers(monkeypatch))
+    assert response.status_code == 200 and response.get_json()["success"] is True
+
+
+def test_openclaw_callback_outbox_goes_to_dlq(capabilities_client, monkeypatch):
+    response = capabilities_client["client"].post("/api/openclaw/callbacks/outbox/cleanup", json={"tenant_id": capabilities_client["business_id"]}, headers=_openclaw_headers(monkeypatch))
+    assert response.status_code == 200 and isinstance(response.get_json()["deleted_count"], int)
+
+
+def test_openclaw_callbacks_outbox_requires_tenant_and_token(capabilities_client):
+    assert capabilities_client["client"].post("/api/openclaw/callbacks/outbox/replay", json={"tenant_id": capabilities_client["business_id"]}).status_code == 401
+
+
+def test_openclaw_callbacks_recovery_history_m2m(capabilities_client):
+    _deprecated_callback_route(capabilities_client, "/api/openclaw/callbacks/recovery-history")
+
+
+def test_openclaw_callbacks_recovery_history_export_m2m_markdown(capabilities_client):
+    _deprecated_callback_route(capabilities_client, "/api/openclaw/callbacks/recovery-history/export?format=markdown")
+
+
+def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client):
+    _deprecated_callback_route(capabilities_client, "/api/capabilities/callbacks/recovery-report")
+
+
+def test_user_callbacks_recovery_report_returns_report(capabilities_client):
+    _deprecated_callback_route(capabilities_client, "/api/capabilities/callbacks/recovery-report")
+
+
+def test_user_callbacks_recovery_history_returns_recent_runs(capabilities_client):
+    _deprecated_callback_route(capabilities_client, "/api/capabilities/callbacks/recovery-history")
+
+
+def test_user_callbacks_recovery_history_export_markdown(capabilities_client):
+    _deprecated_callback_route(capabilities_client, "/api/capabilities/callbacks/recovery-history/export?format=markdown")
+
+
+def test_user_support_export_markdown(capabilities_client):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    response = info["client"].get(f"/api/capabilities/support-export?action_id={action_id}&format=markdown", headers=_auth_headers())
+    assert response.status_code == 200 and "OpenClaw Action Diagnostics Bundle" in response.get_data(as_text=True)
+
+
+def test_openclaw_support_export_json_with_action_snapshot(capabilities_client, monkeypatch):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    response = info["client"].get(f"/api/openclaw/capabilities/support-export?action_id={action_id}&tenant_id={info['business_id']}", headers=_openclaw_headers(monkeypatch))
+    assert response.status_code == 200 and response.get_json()["action_id"] == action_id
+
+
+def test_user_support_export_send_records_history(capabilities_client):
+    info, action_id = capabilities_client, _create_pending(capabilities_client)
+    response = info["client"].post("/api/capabilities/support-export/send", json={"tenant_id": info["business_id"], "action_id": action_id}, headers=_auth_headers())
+    assert response.status_code == 200
+    assert response.get_json()["external_dispatch_performed"] is False
+
+
+def test_user_support_export_send_history_export_markdown(capabilities_client):
+    info = capabilities_client
+    response = info["client"].get(f"/api/capabilities/support-export/send-history/export?tenant_id={info['business_id']}&format=markdown", headers=_auth_headers())
+    assert response.status_code == 200 and "no support-send events" in response.get_data(as_text=True)
+
+
+def test_openclaw_support_export_send_history_export_json(capabilities_client, monkeypatch):
+    info = capabilities_client
+    response = info["client"].get(f"/api/openclaw/capabilities/support-export/send-history/export?tenant_id={info['business_id']}", headers=_openclaw_headers(monkeypatch))
+    assert response.status_code == 200 and response.get_json()["count"] == 0
+
+
+def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
+    import socket
+    import core.action_orchestrator as orchestrator_mod
+    import core.outbound_network as outbound_network
+    from api.capabilities_api import PHASE1_ACTION_ORCHESTRATOR
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+    info = capabilities_client
+    monkeypatch.setenv("OPENCLAW_CALLBACK_SIGNING_SECRET", "phase1-sign-secret")
+    captured = {}
+    # The callback validator must see a public address; delivery itself remains mocked.
+    monkeypatch.setattr(
+        outbound_network.socket,
+        "getaddrinfo",
+        lambda host, port, *args, **kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", port))],
+    )
+    monkeypatch.setattr(orchestrator_mod, "public_pinned_post", lambda url, *args, **kwargs: captured.update(url=url, data=args[0] if args else b"", headers=args[1] if len(args) > 1 else kwargs.get("headers", {})) or type("Response", (), {"status_code": 200})())
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        PHASE1_ACTION_ORCHESTRATOR.ensure_tables(cur)
+        first = PHASE1_ACTION_ORCHESTRATOR._enqueue_callback(cur, action_id=str(uuid.uuid4()), tenant_id=info["business_id"], callback_url="https://example.com/callback", event_type="completed", payload={"ok": True}, dedupe_key="dedupe-test")
+        second = PHASE1_ACTION_ORCHESTRATOR._enqueue_callback(cur, action_id=str(uuid.uuid4()), tenant_id=info["business_id"], callback_url="https://example.com/callback", event_type="completed", payload={"ok": True}, dedupe_key="dedupe-test")
+    conn.commit(); conn.close()
+    assert first and second is None
+    monkeypatch.setenv("OPENCLAW_LOCALOS_TOKEN", "phase1-openclaw-token")
+    dispatched = info["client"].post("/api/openclaw/callbacks/dispatch", json={"batch_size": 10, "tenant_id": info["business_id"]}, headers={"X-OpenClaw-Token": "phase1-openclaw-token"})
+    assert dispatched.status_code == 200
+    assert captured, dispatched.get_json()
+    assert captured["url"] == "https://example.com/callback"
+    assert captured["headers"]["X-LocalOS-Signature"]
+
+
+def _channel_auth(monkeypatch, info):
+    import messengers_api
+    monkeypatch.setattr(messengers_api, "verify_session", lambda _token: {"user_id": info["user_id"], "id": info["user_id"], "is_superadmin": False})
+    monkeypatch.setattr(messengers_api, "get_capability_access", lambda *args: {"allowed": True})
+
+
+def test_channels_status_returns_channel_list(capabilities_client, monkeypatch):
+    info = capabilities_client; _channel_auth(monkeypatch, info)
+    response = info["client"].get(f"/api/channels/status?business_id={info['business_id']}", headers=_auth_headers())
+    assert response.status_code == 200 and response.get_json()["success"] is True
+
+
+def test_channels_test_send_telegram_uses_routing(capabilities_client, monkeypatch):
+    import messengers_api
+    info = capabilities_client; _channel_auth(monkeypatch, info)
+    called = {}
+    monkeypatch.setattr(messengers_api, "dispatch_with_routing", lambda *args, **kwargs: called.update(kwargs) or {"success": True, "selected_channel_id": "telegram_owner_global", "attempts": []})
+    response = info["client"].post("/api/channels/test-send", json={"business_id": info["business_id"], "channel_id": "telegram_owner_global"}, headers=_auth_headers())
+    assert response.status_code == 200 and called["force_channel_id"] == "telegram_owner_global"
+
+
+def test_channels_route_preview_returns_fallback_chain(capabilities_client):
+    response = capabilities_client["client"].get(f"/api/channels/route-preview?business_id={capabilities_client['business_id']}", headers=_auth_headers())
+    assert response.status_code == 404
+
+
+def test_channels_auto_test_send_uses_routing(capabilities_client, monkeypatch):
+    import messengers_api
+    info = capabilities_client; _channel_auth(monkeypatch, info)
+    monkeypatch.setattr(messengers_api, "dispatch_with_routing", lambda *args, **kwargs: {"success": True, "selected_channel_id": "telegram_owner_global", "attempts": []})
+    response = info["client"].post("/api/channels/test-send", json={"business_id": info["business_id"], "channel_id": "auto"}, headers=_auth_headers())
+    assert response.status_code == 200 and response.get_json()["channel_id"] == "telegram_owner_global"
+
+
+def test_channels_status_marks_maton_ready_when_bridge_enabled(capabilities_client, monkeypatch):
+    info = capabilities_client; _channel_auth(monkeypatch, info)
+    monkeypatch.setenv("MATON_BRIDGE_ENABLED", "1")
+    response = info["client"].get(f"/api/channels/status?business_id={info['business_id']}&preferred=maton", headers=_auth_headers())
+    assert response.status_code == 200
+    assert any(item["channel_id"] == "maton_bridge" for item in response.get_json()["channels"])

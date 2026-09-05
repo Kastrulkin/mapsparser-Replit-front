@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "read_only_get_requests": 12,
+  "preference_revision_stable": true,
+  "tenant_boundaries": 3,
+  "tenant_boundary_statuses": {
+    "foreign_today": 403,
+    "foreign_preference": 403,
+    "foreign_blueprints": 403
+  },
+  "blueprints_checked": 1,
+  "blueprint_versions_checked": 1,
+  "network_scope_checked": true,
+  "legacy_version_compatibility_checked": true,
+  "new_sessions_created": false,
+  "test_business_data_created": false,
+  "hotfix_source_sha256": "ff5a0940c87f97073730325fd2484133a96271e8a44f423cce8468fdb1145753",
+  "hotfix_tests_passed": 25,
+  "verifier": "release_preflight",
+  "prior_failure_evidence": "production-api-smoke-before-hotfix.json"
+}

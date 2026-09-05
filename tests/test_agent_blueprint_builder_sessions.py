@@ -478,10 +478,16 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
         def __init__(self):
             self.rows = []
 
+        def fetchone(self):
+            return self.rows[0] if self.rows else None
+
         def execute(self, query, params=None):
             normalized_query = " ".join(query.split()).lower()
             self.rows = []
             if "from agent_integrations" in normalized_query:
+                return None
+            if "from agent_blueprint_versions" in normalized_query:
+                self.rows = [{"compiled_state": "legacy", "compiled_preview_json": {}}]
                 return None
             if "from agent_runs" in normalized_query:
                 self.rows = [

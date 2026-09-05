@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "read_only": true,
+  "production_data_modified": false,
+  "passed": [
+    "health",
+    "existing_standard_session",
+    "owned_business_today",
+    "owned_business_preference_first_read",
+    "owned_business_preference_second_read",
+    "preference_revision_stable"
+  ],
+  "failed_check": "foreign_business_today_boundary",
+  "expected_http_status": 403,
+  "actual_http_status": 500,
+  "cause": "telegram_control_scope business fallback supplied seven parameters for five SQL placeholders",
+  "corrective_action": "Use the five-parameter binding, update the encoded unit-test expectation, deploy the source hotfix, and rerun this smoke."
+}

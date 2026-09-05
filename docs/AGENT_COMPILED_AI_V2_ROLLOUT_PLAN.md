@@ -2,6 +2,13 @@
 
 Обновлено: 13 августа 2026
 
+Статус от 5 сентября: исторический rollout для legacy DSL. Пользователь
+уточнил новый контракт compiled AI: ИИ генерирует исходник, человек утверждает,
+запуски выполняют скрипт без повторных model calls. Этот контракт имеет приоритет
+над разрешениями model steps ниже. Новый план и фактическая реализация:
+[план](LOCALOS_IMPLEMENTATION_PLAN_2026-09-05.md),
+[локальный выпуск](LOCALOS_RELEASE_2026-09-05.md).
+
 ## Цель
 
 Сделать раздел «Агенты» рабочим инструментом для владельца локального бизнеса:
@@ -29,6 +36,14 @@
 LocalOS хранит это разделение как `runtime_planner_required = false` и
 `runtime_model_steps`. Старое поле `runtime_llm_required` остаётся временным
 alias для совместимости.
+
+## Compiled scripts (strict path)
+
+For “describe → AI generates a script → approve → run without AI”, LocalOS
+uses a separate artifact contract. Generation uses a model once, before
+preview. A human approves the exact artifact hash. The queued runtime receives
+only the pinned version; it has no LLM SDK transitively. Until the isolated
+runner and adversarial checks are deployed, production execution fails closed.
 
 ## План внедрения
 

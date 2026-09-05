@@ -2508,6 +2508,51 @@ def operator_today():
         db.close()
 
 
+@operator_bp.route("/today/preference", methods=["GET", "POST"])
+def operator_today_preference():
+    from core.auth_context import AuthContext
+    from services.today_preferences_service import (
+        PreferenceError, change_preferences, enabled, read_preferences, schema_available,
+    )
+    from services.today_workspace import allowed_priority_flows
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    auth = AuthContext.from_session(user_data)
+    if not enabled():
+        return jsonify({"success": False, "error": "personalization_disabled"}), 404
+    if request.method == "POST" and (auth.session_kind == "demo" or auth.impersonating):
+        return jsonify({"success": False, "error": "read_only_session"}), 403
+    command = request.get_json(silent=True) if request.method == "POST" else {}
+    if not isinstance(command, dict):
+        return jsonify({"success": False, "error": "invalid_command"}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        scope = _resolve_operator_read_scope(cursor, user_data)
+        if not scope or scope.get("kind") not in {"business", "network"}:
+            return jsonify({"success": False, "error": "scope_unavailable"}), 403
+        if not schema_available(cursor):
+            return jsonify({"success": False, "error": "personalization_unavailable"}), 503
+        allowed = allowed_priority_flows(cursor, scope=scope, is_superadmin=auth.is_superadmin)
+        if request.method == "GET":
+            result = read_preferences(cursor, user_id=auth.user_id, scope=scope, allowed_flows=allowed)
+        else:
+            result = change_preferences(cursor, user_id=auth.user_id, scope=scope, command=command, allowed_flows=allowed)
+            db.conn.commit()
+        result["preference"]["available_flows"] = allowed
+        return jsonify({"success": True, **result})
+    except PreferenceError:
+        db.conn.rollback()
+        error = sys.exc_info()[1]
+        return jsonify({"success": False, "error": error.code, "code": error.code}), error.status
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 @operator_bp.route("/progress", methods=["GET"])
 def operator_progress():
     """Return the canonical scope-aware progress payload for web clients."""

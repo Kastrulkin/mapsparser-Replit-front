@@ -92,86 +92,6 @@ def _require_business_access():
     return user_data, business_id, None
 
 
-def _ensure_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS averageticketmatrices (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            status TEXT NOT NULL DEFAULT 'draft',
-            source_services_hash TEXT,
-            matrix_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            generated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_averageticketmatrices_business_id ON averageticketmatrices(business_id, generated_at DESC)"
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS averageticketevents (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            matrix_id TEXT REFERENCES averageticketmatrices(id) ON DELETE SET NULL,
-            link_id TEXT,
-            package_id TEXT,
-            booking_id TEXT,
-            main_service_id TEXT REFERENCES userservices(id) ON DELETE SET NULL,
-            addon_service_id TEXT REFERENCES userservices(id) ON DELETE SET NULL,
-            event_type TEXT NOT NULL,
-            event_date DATE DEFAULT CURRENT_DATE,
-            amount NUMERIC(12, 2),
-            master_id TEXT,
-            client_name TEXT,
-            notes TEXT,
-            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_averageticketevents_business_date
-        ON averageticketevents(business_id, event_date DESC, created_at DESC)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_averageticketevents_booking
-        ON averageticketevents(business_id, booking_id)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS averageticketpackages (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            name TEXT NOT NULL,
-            service_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
-            service_names JSONB NOT NULL DEFAULT '[]'::jsonb,
-            base_total NUMERIC(12, 2) DEFAULT 0,
-            package_price NUMERIC(12, 2),
-            bonus_text TEXT,
-            positioning TEXT,
-            script TEXT,
-            status TEXT NOT NULL DEFAULT 'draft',
-            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_averageticketpackages_business_status
-        ON averageticketpackages(business_id, status)
-        """
-    )
-
-
 def _table_columns(cursor, table_name):
     cursor.execute(
         """
@@ -345,7 +265,6 @@ def _find_service_by_name(services, service_name):
 
 
 def _load_packages(cursor, business_id):
-    _ensure_table(cursor)
     cursor.execute(
         """
         SELECT id, name, service_ids, service_names, base_total, package_price, bonus_text,
@@ -392,7 +311,6 @@ def _calculate_package_totals(services, service_ids, package_price):
 
 
 def _load_latest_matrix(cursor, business_id):
-    _ensure_table(cursor)
     cursor.execute(
         """
         SELECT id, business_id, status, source_services_hash, matrix_json, generated_by, generated_at, updated_at
@@ -742,7 +660,6 @@ def _active_links_for_service(matrix, service_id, service_name):
 
 
 def _load_events(cursor, business_id, start_date=None, end_date=None):
-    _ensure_table(cursor)
     params = [business_id]
     filters = ["business_id = %s"]
     if start_date:
@@ -1040,7 +957,6 @@ def generate_average_ticket_matrix():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         business = _load_business(cursor, business_id)
         services = _load_services(cursor, business_id)
         if len(services) < 2:
@@ -1167,7 +1083,6 @@ def update_average_ticket_link(matrix_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         cursor.execute(
             """
             SELECT matrix_json
@@ -1229,7 +1144,6 @@ def create_average_ticket_link(matrix_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         services = _load_services(cursor, business_id)
         service_by_id = {item.get("id"): item for item in services}
         main_service = service_by_id.get(main_service_id)
@@ -1324,7 +1238,6 @@ def create_average_ticket_event():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         cursor.execute(
             """
             INSERT INTO averageticketevents
@@ -1383,7 +1296,6 @@ def create_average_ticket_package():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         services = _load_services(cursor, business_id)
         valid_ids = {item.get("id") for item in services}
         clean_service_ids = [item for item in service_ids if item in valid_ids]
@@ -1437,7 +1349,6 @@ def update_average_ticket_package(package_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_table(cursor)
         services = _load_services(cursor, business_id)
         cursor.execute(
             "SELECT id FROM averageticketpackages WHERE id = %s AND business_id = %s LIMIT 1",

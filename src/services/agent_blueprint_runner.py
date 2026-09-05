@@ -1,11 +1,11 @@
 import json
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.action_orchestrator import ActionOrchestrator
-from core.channel_router import dispatch_with_routing, load_business_channel_context
 from services.agent_capability_handlers import build_capability_handlers
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
@@ -20,6 +20,8 @@ from services.agent_integration_preflight import (
     resolve_agent_binding_runtime_config,
 )
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema
+from services.compiled_script_artifact import validate_artifact as validate_compiled_script_artifact
+from services.compiled_script_runtime import CompiledRuntimeUnavailable, execute_in_attested_sandbox
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
@@ -153,6 +155,8 @@ class AgentBlueprintRunner:
         version = self._load_version(blueprint_version_id)
         if not version:
             return {"success": False, "error": "blueprint_version_not_found"}
+        if str(version.get("compiled_state") or "legacy") != "legacy":
+            return {"success": False, "error": "compiled_script_requires_dedicated_runtime"}
         blueprint = self._load_blueprint(str(version.get("blueprint_id") or ""))
         if not blueprint:
             return {"success": False, "error": "blueprint_not_found"}
@@ -162,6 +166,7 @@ class AgentBlueprintRunner:
             self.cursor,
             business_id=str(blueprint.get("business_id") or ""),
             metadata=metadata,
+            required_bindings=self._version_required_bindings(version),
             input_payload=input_payload or {},
         )
         if not preflight.get("ready"):
@@ -216,9 +221,44 @@ class AgentBlueprintRunner:
             """,
             (run_id,),
         )
+        version = self._load_version(str(run.get("blueprint_version_id") or ""))
+        if not version or str(version.get("blueprint_id") or "") != str(run.get("blueprint_id") or ""):
+            self._fail_run(run_id, "pinned blueprint version is unavailable or belongs to another blueprint")
+            return {"success": False, "error": "pinned_version_invalid", "run": self.load_run(run_id, user_data)}
+        if str((version or {}).get("compiled_state") or "legacy") != "legacy":
+            return self._execute_queued_compiled_script(run_id, version or {})
         self._create_openclaw_preview_observations(run_id, parse_json_field(run.get("input_json"), {}), idempotent=True)
         self._advance_run(run_id, user_data)
         return {"success": True, "run": self.load_run(run_id, user_data)}
+
+    def _execute_queued_compiled_script(self, run_id: str, version: Dict[str, Any]) -> Dict[str, Any]:
+        if str(os.getenv("COMPILED_SCRIPT_EXECUTE_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
+            self._fail_run(run_id, "compiled script execution is disabled")
+            return {"success": False, "error": "compiled_execution_disabled", "run": self.load_run(run_id)}
+        if str(version.get("compiled_state") or "") not in {"approved", "active"} or not version.get("compiled_approved_at") or not str(version.get("compiled_approved_by_user_id") or ""):
+            self._fail_run(run_id, "compiled script version is not approved")
+            return {"success": False, "error": "compiled_version_not_approved", "run": self.load_run(run_id)}
+        artifact = parse_json_field(version.get("compiled_artifact_json"), {})
+        preview_evidence = parse_json_field(version.get("compiled_preview_json"), {})
+        if str(preview_evidence.get("fixture_digest") or "") == "" or str((preview_evidence.get("result") or {}).get("artifact_hash") or "") != str(artifact.get("artifact_hash") or ""):
+            self._fail_run(run_id, "compiled script preview evidence does not match artifact")
+            return {"success": False, "error": "compiled_preview_evidence_invalid", "run": self.load_run(run_id)}
+        validation = validate_compiled_script_artifact(artifact)
+        if not validation.get("valid"):
+            self._fail_run(run_id, "compiled script artifact hash or policy validation failed")
+            return {"success": False, "error": "compiled_artifact_invalid", "run": self.load_run(run_id)}
+        run = self._load_run_header(run_id) or {}
+        try:
+            result = execute_in_attested_sandbox(artifact, parse_json_field(run.get("input_json"), {}))
+        except CompiledRuntimeUnavailable:
+            self._fail_run(run_id, "compiled_script_sandbox_unavailable")
+            return {"success": False, "error": "compiled_script_sandbox_unavailable", "run": self.load_run(run_id)}
+        self.cursor.execute(
+            """UPDATE agent_runs SET status = 'completed', output_json = %s::jsonb, error_text = NULL,
+                completed_at = NOW(), heartbeat_at = NOW(), updated_at = NOW() WHERE id = %s""",
+            (json.dumps(result, ensure_ascii=False), run_id),
+        )
+        return {"success": True, "run": self.load_run(run_id), "result": result}
 
     def approve(self, run_id: str, approval_id: str, user_data: Dict[str, Any], decision_reason: str = "") -> Dict[str, Any]:
         approval = self._load_approval(run_id, approval_id)
@@ -1353,16 +1393,34 @@ class AgentBlueprintRunner:
         status = "draft_created"
         external_dispatch_performed = False
         if dispatch_requested:
-            ctx = load_business_channel_context(self.cursor, str(run.get("business_id") or ""))
-            router_result = dispatch_with_routing(
-                ctx,
-                message,
-                preferred_provider="maton",
-                force_channel_id="maton_bridge",
+            # The registered communications capability writes an internal,
+            # approval-audited request only.  It has no provider-send handler,
+            # so an ambiguous worker failure cannot cause an automatic resend.
+            recipient = self._maton_delivery_recipient(payload)
+            router_result = self.orchestrator.execute(
+                {
+                    "tenant_id": str(run.get("business_id") or ""),
+                    "actor": {"type": "user", "id": str(run.get("created_by_user_id") or "")},
+                    "trace_id": f"agent-run:{run.get('id')}:{step.get('key')}:maton",
+                    "idempotency_key": f"agent-run:{run.get('id')}:{step.get('key')}:maton-request",
+                    "capability": capability,
+                    "payload": {
+                        "message": message,
+                        "recipient": recipient.get("target"),
+                        "channel": recipient.get("channel"),
+                        "provider_route": "maton",
+                        "bound_external_account_id": str(contract.get("external_account_id") or ""),
+                        "agent_run_id": str(run.get("id") or ""),
+                    },
+                    "approval": {"source": "agent_blueprint", "run_id": run.get("id"), "approved": True},
+                    "billing": {"source": "agent_blueprint"},
+                },
+                {"user_id": str(run.get("created_by_user_id") or "")},
+                allow_execute_when_approved=True,
             )
-            external_dispatch_performed = bool(router_result.get("success"))
-            delivery_state = "sent" if external_dispatch_performed else "dispatch_failed"
-            status = "sent" if external_dispatch_performed else "dispatch_failed"
+            request_created = bool(router_result.get("success"))
+            delivery_state = "request_queued" if request_created else "request_blocked"
+            status = "request_created" if request_created else "blocked"
         elif safe_preview:
             delivery_state = "preview_draft_only"
             status = "preview_draft_created"
@@ -1385,6 +1443,10 @@ class AgentBlueprintRunner:
             },
         )
         return True
+
+    def _version_required_bindings(self, version: Dict[str, Any]) -> List[Dict[str, Any]] | None:
+        required = parse_json_field(version.get("required_integration_bindings_json"), None)
+        return required if isinstance(required, list) else None
 
     def _maton_delivery_message(self, payload: Dict[str, Any]) -> str:
         for key in ("message", "text", "draft_text", "post_text", "message_template"):
@@ -1609,8 +1671,8 @@ class AgentBlueprintRunner:
         capability: str,
         version: Dict[str, Any] | None = None,
     ) -> str:
-        required = parse_json_field((version or {}).get("required_integration_bindings_json"), [])
-        if not isinstance(required, list) or not required:
+        required = parse_json_field((version or {}).get("required_integration_bindings_json"), None)
+        if not isinstance(required, list):
             required = (
                 metadata.get("required_integration_bindings")
                 if isinstance(metadata.get("required_integration_bindings"), list)
@@ -2429,10 +2491,12 @@ class AgentBlueprintRunner:
         blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
         metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
         metadata = metadata if isinstance(metadata, dict) else {}
+        version = self._load_version(str(run.get("blueprint_version_id") or "")) or {}
         return build_agent_integration_preflight(
             self.cursor,
             business_id=str(run.get("business_id") or ""),
             metadata=metadata,
+            required_bindings=self._version_required_bindings(version),
             input_payload=self._run_input(run),
         )
 

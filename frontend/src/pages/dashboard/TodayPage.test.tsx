@@ -90,6 +90,16 @@ describe('TodayPage', () => {
     expect(screen.getByText('Подготовлен черновик ответа')).toBeInTheDocument();
   });
 
+  it('does not say there is no work while a primary decision is on screen', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      work_sections: { needs_decision: [{ id: 'decision-1', title: 'Подтвердите черновик', description: 'Проверьте условия.' }], continue_work: [], results: [] },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Подтвердите черновик' })).toBeInTheDocument();
+    expect(screen.queryByText('Сейчас у LocalOS нет активных задач.')).not.toBeInTheDocument();
+  });
+
   it('keeps the target publication when opening a story-facts action', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({
       focus_action: {
@@ -173,6 +183,29 @@ describe('TodayPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Отзывы без ответа' })).toBeInTheDocument();
     expect(screen.queryByText('После этого:')).not.toBeInTheDocument();
+  });
+
+  it('puts an urgent decision ahead of a finance focus and does not duplicate it below', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      focus_action: { title: 'Обновите финансовые данные', reason: 'Нет сводки', cta_label: 'Загрузить данные', screen: 'finance' },
+      work_sections: { needs_decision: [{ id: 'urgent-1', title: 'Подтвердите ответ клиенту', description: 'Сообщение ждёт решения', urgency: 'urgent', action: { label: 'Проверить', url: '/dashboard/card?review=1' } }], continue_work: [], results: [] },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Подтвердите ответ клиенту' })).toBeInTheDocument();
+    expect(screen.getAllByText('Подтвердите ответ клиенту')).toHaveLength(1);
+  });
+
+  it('keeps preference controls behind settings and sends the scoped revision', async () => {
+    vi.mocked(newAuth.makeRequest)
+      .mockResolvedValueOnce({ preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'overview', suggestions_enabled: true, revision: 4, available_flows: ['overview', 'content'] }, active_work: [], changes_24h: [], completed_results: [] })
+      .mockResolvedValueOnce({ preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 5 } });
+    renderPage();
+    expect(await screen.findByText('Настроить основной раздел: Обзор')).toBeInTheDocument();
+    expect(screen.getByText('Настроить основной раздел: Обзор').closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Настроить основной раздел: Обзор'));
+    fireEvent.click(screen.getByRole('button', { name: 'Контент' }));
+    await waitFor(() => expect(vi.mocked(newAuth.makeRequest)).toHaveBeenLastCalledWith('/operator/today/preference?scope_type=business&scope_id=business-1', { method: 'POST', body: JSON.stringify({ action: 'set', expected_revision: 4, primary_flow: 'content' }) }));
   });
 
   it('loads the neutral today endpoint for the selected network scope', async () => {

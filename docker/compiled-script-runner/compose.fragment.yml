@@ -1,0 +1,39 @@
+services:
+  app:
+    networks: [default, compiled_script_internal]
+    environment:
+      COMPILED_SCRIPT_RUNNER_URL: ${COMPILED_SCRIPT_RUNNER_URL:-http://compiled-script-runner:8091}
+      COMPILED_SCRIPT_RUNNER_SHARED_SECRET: ${COMPILED_SCRIPT_RUNNER_SHARED_SECRET:-}
+      COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST: ${COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST:-}
+      COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
+      COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
+  worker:
+    networks: [default, compiled_script_internal]
+    environment:
+      COMPILED_SCRIPT_RUNNER_URL: ${COMPILED_SCRIPT_RUNNER_URL:-http://compiled-script-runner:8091}
+      COMPILED_SCRIPT_RUNNER_SHARED_SECRET: ${COMPILED_SCRIPT_RUNNER_SHARED_SECRET:-}
+      COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST: ${COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST:-}
+      COMPILED_SCRIPT_PREVIEW_ENABLED: ${COMPILED_SCRIPT_PREVIEW_ENABLED:-false}
+      COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_SCRIPT_EXECUTE_ENABLED:-false}
+  worker-agent:
+    networks: [default, compiled_script_internal]
+  compiled-script-runner:
+    build: ./docker/compiled-script-runner
+    image: ${COMPILED_SCRIPT_RUNNER_IMAGE:?pin_by_digest}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m
+    cap_drop: ["ALL"]
+    cap_add: ["SETUID", "SETGID"]
+    security_opt: ["no-new-privileges:true"]
+    init: true
+    pids_limit: 32
+    mem_limit: 128m
+    cpus: 0.50
+    networks: [compiled_script_internal]
+    environment:
+      COMPILED_SCRIPT_RUNNER_SHARED_SECRET: ${COMPILED_SCRIPT_RUNNER_SHARED_SECRET:?required}
+      COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST: ${COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST:?sha256_digest_required}
+networks:
+  compiled_script_internal:
+    internal: true

@@ -16,6 +16,8 @@ def create_product_event():
     if not user_data:
         return jsonify({"success": False, "error": "Требуется авторизация"}), 401
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "error": "Ожидается объект события"}), 400
     event_name, surface, validation_error = validate_product_event(payload.get("event_name"), payload.get("surface"))
     if validation_error:
         return jsonify({"success": False, "error": validation_error}), 400
@@ -25,6 +27,9 @@ def create_product_event():
     properties = payload.get("properties")
     if properties is not None and not isinstance(properties, dict):
         return jsonify({"success": False, "error": "Свойства события должны быть объектом"}), 400
+    observation_id = payload.get("observation_id")
+    if observation_id is not None and (not isinstance(observation_id, str) or not 1 <= len(observation_id) <= 128):
+        return jsonify({"success": False, "error": "Некорректный идентификатор события"}), 400
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -48,6 +53,8 @@ def create_product_event():
             flow_type=str(payload.get("flow_type") or "") or None,
             entity_type=str(payload.get("entity_type") or "") or None,
             entity_id=str(payload.get("entity_id") or "") or None,
+            # Never trust a browser's claim that a command completed successfully.
+            **({"signal_source": "client_observation", "deduplication_key": f"client:{event_name}:{observation_id}"} if observation_id else {}),
         )
         db.conn.commit()
         return jsonify({"success": True, "event_id": event_id}), 201

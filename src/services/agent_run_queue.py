@@ -9,6 +9,7 @@ from services.agent_canary_budget import evaluate_agent_canary_budget
 from services.agent_blueprint_runner import AgentBlueprintRunner, parse_json_field
 from services.agent_integration_preflight import build_agent_integration_preflight
 from services.agent_run_billing import AGENT_RUN_ESTIMATED_CREDITS, finalize_agent_run_credits, reserve_agent_run_credits
+from services.compiled_script_artifact import validate_artifact as validate_compiled_script_artifact
 
 
 ACTIVE_EXECUTION_STATUSES = ("queued", "running", "retry_wait")
@@ -43,21 +44,13 @@ def enqueue_agent_run(
     if not clean_key:
         return {"success": False, "code": "IDEMPOTENCY_KEY_REQUIRED", "error": "idempotency_key is required"}
 
-    metadata = parse_json_field(blueprint.get("metadata_json"), {})
-    preflight = build_agent_integration_preflight(
-        cursor,
-        business_id=business_id,
-        metadata=metadata if isinstance(metadata, dict) else {},
-        input_payload=input_payload,
-    )
-    if not preflight.get("ready"):
-        return {
-            "success": False,
-            "code": "AGENT_INTEGRATIONS_REQUIRED",
-            "error": "agent_integration_preflight_blocked",
-            "preflight": preflight,
-        }
+    version_error = _validate_pinned_version(blueprint, version)
+    if version_error:
+        return {"success": False, "code": "AGENT_VERSION_NOT_EXECUTABLE", "error": version_error}
 
+    # Replay is intentionally before the current version's preflight.  A
+    # retry must return the original pinned run even when the active blueprint
+    # configuration has changed since the first request.
     cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (blueprint_id,))
     cursor.execute(
         """
@@ -71,6 +64,23 @@ def enqueue_agent_run(
     if existing:
         run = AgentBlueprintRunner(cursor).load_run(str(existing.get("id") or ""), user_data)
         return {"success": True, "run": run, "reused": True}
+
+    metadata = parse_json_field(blueprint.get("metadata_json"), {})
+    required_bindings = parse_json_field(version.get("required_integration_bindings_json"), None)
+    preflight = build_agent_integration_preflight(
+        cursor,
+        business_id=business_id,
+        metadata=metadata if isinstance(metadata, dict) else {},
+        required_bindings=required_bindings if isinstance(required_bindings, list) else None,
+        input_payload=input_payload,
+    )
+    if not preflight.get("ready"):
+        return {
+            "success": False,
+            "code": "AGENT_INTEGRATIONS_REQUIRED",
+            "error": "agent_integration_preflight_blocked",
+            "preflight": preflight,
+        }
 
     cursor.execute(
         """
@@ -152,20 +162,56 @@ def enqueue_agent_run(
     return {"success": True, "run": run, "reused": False}
 
 
+def _validate_pinned_version(blueprint: dict[str, Any], version: dict[str, Any]) -> str:
+    version_id = str(version.get("id") or "").strip()
+    if not version_id:
+        return "blueprint version id is required"
+    if str(version.get("blueprint_id") or "").strip() not in {"", str(blueprint.get("id") or "").strip()}:
+        return "blueprint version does not belong to this blueprint"
+    compiled_state = str(version.get("compiled_state") or "legacy").strip()
+    if compiled_state == "legacy":
+        # Legacy versions are executable even when their historical DSL is
+        # empty.  Candidate validation belongs to the compiled path and must
+        # not turn valid legacy runs into uncontrolled rejections.
+        return ""
+    if str(os.getenv("COMPILED_SCRIPT_EXECUTE_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
+        return "compiled script execution is disabled"
+    if compiled_state not in {"approved", "active"}:
+        return "compiled script version is not approved"
+    validation = validate_compiled_script_artifact(
+        parse_json_field(version.get("compiled_artifact_json"), {})
+    )
+    if not validation.get("valid"):
+        return "compiled script artifact hash or policy validation failed"
+    return ""
+
+
 def claim_next_agent_run(cursor: Any) -> dict[str, Any] | None:
+    # Do not issue one broad UPDATE over every stale run. A live runner can hold
+    # its row lock while invoking a provider; SKIP LOCKED lets this worker claim
+    # another runnable item instead of waiting behind it.
     cursor.execute(
         """
-        UPDATE agent_runs
-        SET status = CASE WHEN attempt_count < max_attempts THEN 'retry_wait' ELSE 'failed' END,
-            next_attempt_at = CASE WHEN attempt_count < max_attempts THEN NOW() ELSE NULL END,
+        WITH stale_runs AS (
+            SELECT id
+            FROM agent_runs
+            WHERE status = 'running'
+              AND heartbeat_at < NOW() - INTERVAL '5 minutes'
+            ORDER BY heartbeat_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 50
+        )
+        UPDATE agent_runs run
+        SET status = CASE WHEN run.attempt_count < run.max_attempts THEN 'retry_wait' ELSE 'failed' END,
+            next_attempt_at = CASE WHEN run.attempt_count < run.max_attempts THEN NOW() ELSE NULL END,
             error_text = CASE
-                WHEN attempt_count < max_attempts THEN 'worker heartbeat expired; retry scheduled'
+                WHEN run.attempt_count < run.max_attempts THEN 'worker heartbeat expired; retry scheduled'
                 ELSE 'worker heartbeat expired; retry limit reached'
             END,
-            completed_at = CASE WHEN attempt_count < max_attempts THEN NULL ELSE NOW() END,
+            completed_at = CASE WHEN run.attempt_count < run.max_attempts THEN NULL ELSE NOW() END,
             updated_at = NOW()
-        WHERE status = 'running'
-          AND heartbeat_at < NOW() - INTERVAL '5 minutes'
+        FROM stale_runs
+        WHERE run.id = stale_runs.id
         """
     )
     cursor.execute(

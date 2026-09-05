@@ -1633,9 +1633,33 @@ def test_telegram_trigger_runtime_records_ignored_event_when_no_custom_blueprint
     assert cursor.trigger_events[0]["reason_code"] == "NO_MATCHING_ACTIVE_BLUEPRINT"
 
 
-def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet_approval():
-    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+def test_telegram_trigger_runtime_deduplicates_a_provider_message():
     from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
+
+    cursor = FakeTelegramTriggerCursor()
+    payload = {
+        "message_text": "Повтор webhook",
+        "telegram_user_id": "123",
+        "chat_id": "456",
+        "message_id": "789",
+    }
+
+    first = dispatch_telegram_message_to_agent_blueprints(cursor, "biz1", payload)
+    second = dispatch_telegram_message_to_agent_blueprints(cursor, "biz1", payload)
+
+    assert first.get("duplicate") is not True
+    assert second["duplicate"] is True
+    assert second["trigger_event_id"] == first["trigger_event_id"]
+    assert len(cursor.trigger_events) == 1
+
+
+def test_telegram_trigger_runtime_enqueues_active_custom_agent(monkeypatch):
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+    from services import agent_trigger_runtime
+
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz1")
+    monkeypatch.setattr(agent_trigger_runtime, "enqueue_agent_run", _fake_scheduled_enqueue)
 
     draft = compile_agent_blueprint("Когда пользователь пишет в Telegram бота, добавь строку в Google таблицу")
     payload = draft["version_payload"]
@@ -1674,7 +1698,7 @@ def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet
         "created_by_user_id": "user1",
     }
 
-    result = dispatch_telegram_message_to_agent_blueprints(
+    result = agent_trigger_runtime.dispatch_telegram_message_to_agent_blueprints(
         cursor,
         "biz1",
         {
@@ -1688,18 +1712,16 @@ def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet
     )
 
     run = next(iter(cursor.tables["agent_runs"].values()))
-    approval = next(iter(cursor.tables["agent_approvals"].values()))
     assert result["success"] is True
     assert result["matched_count"] == 1
     assert result["legacy_reply_should_continue"] is False
     assert cursor.trigger_events[0]["status"] == "run_started"
     assert cursor.trigger_events[0]["run_id"] == run["id"]
-    assert run["status"] == "waiting_approval"
+    assert run["status"] == "queued"
     assert run["input_json"]["integration_id"] == "integration-1"
     assert run["input_json"]["spreadsheet_id"] == "spreadsheet-1"
     assert run["input_json"]["sheet_name"] == "Leads"
-    assert approval["approval_type"] == "sheet_update"
-    assert approval["status"] == "pending"
+    assert cursor.tables["agent_approvals"] == {}
 
 
 def test_scheduled_trigger_runtime_blocks_when_required_sheet_connection_missing(monkeypatch):
@@ -1963,9 +1985,9 @@ def test_due_scheduler_retries_slot_deferred_by_parallel_run(monkeypatch):
 
     assert first["dispatched_count"] == 0
     assert first["skipped"][0]["reason"] == "AGENT_RUN_ALREADY_IN_PROGRESS"
-    assert cursor.trigger_events[0]["status"] == "deferred"
     assert second["dispatched_count"] == 1
-    assert cursor.trigger_events[1]["status"] == "run_started"
+    assert len(cursor.trigger_events) == 1
+    assert cursor.trigger_events[0]["status"] == "run_started"
     assert len(cursor.tables["agent_runs"]) == 1
     assert attempts[0] == attempts[1]
 

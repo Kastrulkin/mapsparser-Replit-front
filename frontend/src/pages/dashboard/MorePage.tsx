@@ -1,4 +1,4 @@
-import { Bot, Building2, CreditCard, MessageSquare, Radar, Settings, Sparkles, WalletCards } from 'lucide-react';
+import { Bot, Building2, CreditCard, MessageSquare, Radar, Route, Settings, Sparkles, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const sections = [
@@ -20,6 +20,12 @@ const sections = [
       { title: 'Настройки и подключения', description: 'Тариф, интеграции, команда и безопасность.', route: '/dashboard/settings', icon: Settings },
     ],
   },
+  {
+    title: 'Обзор возможностей',
+    items: [
+      { title: 'Пути роста', description: 'Посмотреть все направления и выбрать следующий фокус, когда нужен ориентир.', route: '/dashboard/growth-paths', icon: Route },
+    ],
+  },
 ];
 
 export const MorePage = () => (
@@ -27,7 +33,7 @@ export const MorePage = () => (
     <header className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ещё</p>
       <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-slate-950">Управление бизнесом и LocalOS</h1>
-      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Здесь находятся инструменты, которые помогают выполнять основную работу, но не конкурируют с текущим путём роста.</p>
+      <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-slate-600">Здесь находятся дополнительные инструменты и обзор направлений. Ежедневная работа остаётся в разделах слева и на странице «Сегодня».</p>
     </header>
     {sections.map((section) => (
       <section key={section.title}>

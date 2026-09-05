@@ -31,6 +31,25 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({ json: { id: 'user-1', email: 'qa@localos.pro', is_superadmin: true, businesses: [business] } });
       return;
     }
+    if (path === '/api/operator/today') {
+      await route.fulfill({ json: {
+        active_work: [],
+        changes_24h: [],
+        completed_results: [],
+        work_sections: {
+          needs_decision: [{
+            id: 'collaboration-review',
+            title: 'Подтвердите условия с Автором 31',
+            description: 'Проверьте условия размещения перед следующим шагом.',
+            action: { label: 'Открыть коллаборацию', url: '/dashboard/influencers/operations?section=collaborations&collaboration_id=collaboration-1&business_id=business-1' },
+          }],
+          continue_work: [],
+          results: [],
+        },
+        preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'overview', suggestions_enabled: true, revision: 1, available_flows: ['overview', 'influencers'] },
+      } });
+      return;
+    }
     if (path === '/api/promotion/influencers/overview') {
       await route.fulfill({ json: {
         overview: {
@@ -119,5 +138,17 @@ test('keeps the first review batch usable on a phone and preserves the approval 
   await expect(page.getByText('ORGANIKA15')).toBeVisible();
   await expect(page.getByRole('button', { name: '24 часа' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Ссылка бизнеса для UTM' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test('opens a concrete Today action and preserves the collaboration deep link', async ({ page}, testInfo) => {
+  await page.goto('/dashboard/today');
+  await expect(page.getByRole('heading', { name: 'Подтвердите условия с Автором 31' })).toBeVisible();
+  await expect(page.getByText('Set main section: Overview')).toBeVisible();
+  await page.screenshot({ path: `/tmp/localos-today-${testInfo.project.name}.png`, fullPage: true });
+
+  await page.getByRole('button', { name: 'Открыть коллаборацию' }).click();
+  await expect(page).toHaveURL(/section=collaborations.*collaboration_id=collaboration-1/);
+  await expect(page.getByText('ORGANIKA15')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
