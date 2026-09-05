@@ -8,6 +8,9 @@ import { LEAD_JOURNEY_STORAGE_KEY, leadJourneyKeyForFlow } from '@/lib/leadJourn
 import LeadJourneyPage from './LeadJourneyPage';
 
 vi.mock('@/components/SeoMeta', () => ({ default: () => null }));
+vi.mock('@/i18n/LanguageContext', () => ({
+  useLanguage: () => ({ language: window.localStorage.getItem('language') || 'ru' }),
+}));
 
 describe('LeadJourneyPage', () => {
   beforeEach(() => {
@@ -68,6 +71,23 @@ describe('LeadJourneyPage', () => {
     await user.click(registrationLink);
     expect(window.localStorage.getItem(LEAD_JOURNEY_STORAGE_KEY)).toBe('maps');
   }, 15_000);
+
+  it('keeps the Spanish landing language through direction choice and detail', async () => {
+    window.localStorage.setItem('language', 'es');
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/growth']}><LeadJourneyPage /></MemoryRouter>);
+
+    expect(screen.getByText('6 direcciones')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Elige una dirección' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pon tus fichas al día/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Pon tus fichas al día/ }));
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Pon tus fichas al día' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cómo funciona' })).toBeInTheDocument();
+    expect(screen.getByText('Los mensajes, publicaciones y cambios externos esperan tu confirmación.')).toBeInTheDocument();
+    expect(screen.queryByText('Как это работает')).not.toBeInTheDocument();
+  });
 
   it('opens an operator-selected content journey without asking to choose again', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {

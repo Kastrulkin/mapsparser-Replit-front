@@ -98,4 +98,31 @@ describe('browser cookie authentication', () => {
       }),
     );
   });
+
+  it('keeps the bearer session after a transient profile request failure', async () => {
+    vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'false');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    const auth = new NewAuth();
+    window.localStorage.setItem('auth_token', 'existing-session-token');
+
+    const user = await auth.getCurrentUser();
+
+    expect(user).toBeNull();
+    expect(window.localStorage.getItem('auth_token')).toBe('existing-session-token');
+  });
+
+  it('clears the bearer session after an authenticated request returns 401', async () => {
+    vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'false');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: 'Недействительный токен' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )));
+    const auth = new NewAuth();
+    window.localStorage.setItem('auth_token', 'expired-session-token');
+
+    const user = await auth.getCurrentUser();
+
+    expect(user).toBeNull();
+    expect(window.localStorage.getItem('auth_token')).toBeNull();
+  });
 });

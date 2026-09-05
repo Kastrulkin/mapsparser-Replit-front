@@ -150,8 +150,7 @@ export class NewAuth {
       }
 
       if (!response.ok) {
-        const backendError = String(data.error || '');
-        if (response.status === 401 && backendError.toLowerCase().includes('invalid token')) {
+        if (response.status === 401) {
           this.clearActiveToken();
           throw new Error('Сессия истекла. Войдите снова.');
         }
@@ -342,7 +341,6 @@ export class NewAuth {
       return this.currentUser;
     } catch (error) {
       console.error('Ошибка при получении пользователя:', error);
-      this.clearActiveToken();
       return null;
     }
   }
