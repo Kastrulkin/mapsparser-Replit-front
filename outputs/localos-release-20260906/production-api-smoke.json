@@ -1,0 +1,44 @@
+{
+  "verifier": "release_verify",
+  "recorded_by": "root from independent read-only verifier final response",
+  "recorded_at": "2026-09-06T19:10:19.530186+00:00",
+  "release_id": "20260906-plan-a4deb61e-181955",
+  "release_commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "status": "PASS",
+  "request_count": 12,
+  "all_passed": true,
+  "read_only_get_requests": 12,
+  "passed": 12,
+  "existing_standard_non_admin_session": true,
+  "single_session_used": true,
+  "new_sessions_created": false,
+  "data_mutations_performed": false,
+  "preference_revision_stable": true,
+  "authorization": "User explicitly authorized this exact twelve-GET check through one existing non-admin session; no data changes or sensitive output.",
+  "results": {
+    "owned_business_today": 200,
+    "owned_business_preference_first": 200,
+    "owned_business_preference_second": 200,
+    "owned_network_today": 200,
+    "owned_network_preference": 200,
+    "foreign_business_today": 403,
+    "foreign_business_preference": 403,
+    "foreign_network_today": 403,
+    "foreign_network_preference": 403,
+    "owned_blueprint_list": 200,
+    "owned_blueprint_detail_history": 200,
+    "foreign_blueprint_boundary": 403
+  },
+  "contracts": {
+    "owned_blueprint_present_in_list": true,
+    "versions_present": true,
+    "version_history_present": true,
+    "run_history_present": true
+  },
+  "sensitive_data_handling": {
+    "token_and_real_identifiers": "Remote process memory only",
+    "tokens_identifiers_names_pii_or_response_bodies_in_output": false,
+    "additional_api_or_browser_requests": false
+  },
+  "scope": "Twelve explicitly authorized read-only production checks only; not completion of the full R0-R7 plan."
+}

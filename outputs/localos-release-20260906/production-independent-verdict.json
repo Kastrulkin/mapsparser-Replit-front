@@ -43,15 +43,14 @@
     "migration_chain_linear": true
   },
   "authenticated_api_smoke": {
-    "status": "UNKNOWN",
-    "checks_not_executed": [
-      "Owned business Today and preference",
-      "Owned network Today and preference",
-      "Foreign business/network 403",
-      "Blueprint detail and history",
-      "Foreign blueprint 403"
-    ],
-    "reason": "Automatic approval review rejected reuse of an existing production session token because deployment authorization did not explicitly authorize reuse of credentials and access to authenticated business data. No token or authenticated response was read."
+    "status": "PASS",
+    "request_count": 12,
+    "proof": "production-api-smoke.json",
+    "read_only": true,
+    "single_existing_non_admin_session": true,
+    "tokens_or_personal_data_in_output": false,
+    "prior_auto_review_rejection_resolved_by_explicit_user_authorization": true
   },
-  "overall": "UNKNOWN"
+  "overall": "PASS",
+  "overall_scope": "Prepared bounded release only; the complete R0-R7 implementation plan remains IN_PROGRESS."
 }

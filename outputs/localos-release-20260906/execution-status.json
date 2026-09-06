@@ -24,17 +24,18 @@
     "backend": 310,
     "frontend": 53,
     "mock_browser": 14,
-    "real_staging_browser": 9
+    "real_staging_browser": 9,
+    "production_authenticated_get": 12
   },
   "unrelated_tracked_changes_preserved": 9,
   "production_approval": "User explicitly approved all twelve migrations, legacy CRM reconciliation and release with fresh backup in this turn.",
   "release_id": "20260906-plan-a4deb61e-181955",
   "production_schema": "20260906_012",
   "application_started_at": "2026-09-06T18:30:38.390963+00:00",
-  "production_verification": "PARTIAL_AUTHENTICATED_API_AWAITING_EXPLICIT_ACCESS_APPROVAL",
+  "production_verification": "PASS_FOR_RELEASE_SCOPE",
   "infrastructure_verification": "PASS",
   "public_browser": "PASS_DESKTOP_AND_MOBILE",
-  "authenticated_api_smoke": "NOT_EXECUTED_AUTO_REVIEW_REJECTED",
+  "authenticated_api_smoke": "PASS_12_READ_ONLY_GETS",
   "runtime_flags": {
     "status": "PASS",
     "browser_cookie_auth_enabled": false,
@@ -47,5 +48,6 @@
     "today_proposals_enabled": false,
     "migration_mode": "schema-check-only",
     "worker_role": "all"
-  }
+  },
+  "authenticated_api_authorization": "User explicitly approved reuse of one existing non-admin session for twelve GET checks without data changes or token/personal-data output."
 }
