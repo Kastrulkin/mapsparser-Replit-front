@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "payload_members": 270,
+  "runtime_files": 48,
+  "ui_files": 222,
+  "payload_bytes": 11885542,
+  "payload_sha256": "b98da934b43a3559cee5407113406b590d17a6d8405dcedf6de253b40b98a509",
+  "compose_patch_sha256": "d4e42bad16c195fdf1aeee07e912d1eec6b38bd1fdc9a08f8422f00e8746e073",
+  "all_member_hashes_verified": true,
+  "all_runtime_files_match_commit": true,
+  "production_changed": false
+}

@@ -1,6 +1,6 @@
 # Evidence: localos-plan-20260906
 
-Дата: 2026-09-06. Полный план: **IN_PROGRESS**. Первый локальный пакет: **CONDITIONAL_PASS** по независимой read-only проверке [/root/final_package_verdict](raw/review-package-final.md). Root сохранил её вывод. Production не изменён; это не приёмка всего R0–R7.
+Дата: 2026-09-06. Полный план: **IN_PROGRESS**. Первый локальный пакет: **CONDITIONAL_PASS** по независимой read-only проверке [/root/final_package_verdict](raw/review-package-final.md). Root сохранил её вывод. Ниже сохранён локальный срез до production-выпуска; это не приёмка всего R0–R7. Первый пакет впоследствии выпущен после отдельного разрешения: [production evidence](../../../outputs/localos-release-20260906/production-evidence.json). Авторизованный production API smoke пока UNKNOWN после отказа автоматической проверки разрешений.
 
 ## Проверенный результат
 

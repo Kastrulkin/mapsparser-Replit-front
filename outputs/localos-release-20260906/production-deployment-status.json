@@ -1,0 +1,18 @@
+{
+  "release_id": "20260906-plan-a4deb61e-181955",
+  "commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "phase": "application_started",
+  "application_changed": true,
+  "updated_at": "2026-09-06T18:30:38.390963+00:00",
+  "backup_sha256": "ed1e51f1fa24a6626b633cf9b9207d894496f1262306dc9050d99fef6f3472bb",
+  "active": {
+    "agent": 0,
+    "parser": 0,
+    "operator": 0,
+    "enrichment_fresh": 0,
+    "embedding": 0
+  },
+  "schema": "20260906_012",
+  "seconds": 22.5,
+  "old_assets_preserved": 606
+}

@@ -1,0 +1,57 @@
+{
+  "verifier": "release_verify",
+  "recorded_by": "root from independent read-only verifier final response",
+  "scope": "LocalOS 2026-09-06 bounded production release",
+  "deployment_infrastructure": "PASS",
+  "schema": {
+    "status": "PASS",
+    "head": "20260906_012",
+    "missing_tables": [],
+    "missing_columns": {},
+    "missing_indexes": [],
+    "immutable_snapshot_trigger": true,
+    "canonical_business_type_seed_count": 10,
+    "booking_agent_default_count": 1,
+    "prospecting_reconciliation_remaining": 0
+  },
+  "runtime_flags": {
+    "status": "PASS",
+    "browser_cookie_auth_enabled": false,
+    "compiled_preview_enabled": false,
+    "compiled_execute_enabled": false,
+    "compiled_advanced_enabled": false,
+    "compiled_pilot_business_ids_empty": true,
+    "today_activity_enabled": false,
+    "today_personalization_enabled": true,
+    "today_proposals_enabled": false,
+    "migration_mode": "schema-check-only",
+    "worker_role": "all"
+  },
+  "runtime": {
+    "status": "PASS",
+    "app_running": true,
+    "worker_running": true,
+    "telegram_running_healthy": true,
+    "schema_ok_log_count": 2,
+    "fatal_pattern_count": 0
+  },
+  "artifact_integrity": {
+    "status": "PASS",
+    "payload_sha256": "b98da934b43a3559cee5407113406b590d17a6d8405dcedf6de253b40b98a509",
+    "manifest_members_verified": 270,
+    "runtime_members_match_release_commit": 48,
+    "migration_chain_linear": true
+  },
+  "authenticated_api_smoke": {
+    "status": "UNKNOWN",
+    "checks_not_executed": [
+      "Owned business Today and preference",
+      "Owned network Today and preference",
+      "Foreign business/network 403",
+      "Blueprint detail and history",
+      "Foreign blueprint 403"
+    ],
+    "reason": "Automatic approval review rejected reuse of an existing production session token because deployment authorization did not explicitly authorize reuse of credentials and access to authenticated business data. No token or authenticated response was read."
+  },
+  "overall": "UNKNOWN"
+}

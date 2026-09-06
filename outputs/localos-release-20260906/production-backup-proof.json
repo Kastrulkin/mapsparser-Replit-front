@@ -1,0 +1,18 @@
+{
+  "release_id": "20260906-plan-a4deb61e-181955",
+  "completed_at": "2026-09-06T18:25:58.600401+00:00",
+  "custom_dump": true,
+  "pg_restore_list": "PASS",
+  "full_dump_read_without_restore": "PASS",
+  "application_tar_read": "PASS",
+  "files": {
+    "database.dump": {
+      "bytes": 1715587457,
+      "sha256": "ed1e51f1fa24a6626b633cf9b9207d894496f1262306dc9050d99fef6f3472bb"
+    },
+    "application-before.tar.gz": {
+      "bytes": 24368508,
+      "sha256": "408a082d14f6270de5e83a3c3705d6a1fa6239145435efc39a9dd01fb9e7eb67"
+    }
+  }
+}

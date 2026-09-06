@@ -1,13 +1,13 @@
 # LocalOS: реализация плана 6 сентября
 
-Статус: **первый локальный пакет реализован и проверен; production не изменён**. Весь R0–R7 ещё не завершён. Независимая проверка дала ограниченному пакету `CONDITIONAL_PASS`, полному плану — `INCOMPLETE`: для выпуска остаются отдельное разрешение на новые миграции, свежий backup и повторный live preflight.
+Статус: **первый пакет выпущен в production 6 сентября, 18:30 UTC**. Весь R0–R7 ещё не завершён. Миграции, схема, флаги, live hashes и публичный browser прошли проверку. Закрытая production API-проверка пока `UNKNOWN`: автоматическая проверка разрешений отклонила использование существующей пользовательской сессии; требуется отдельное разрешение на read-only доступ.
 
 Источник требований: [план](LOCALOS_IMPLEMENTATION_PLAN_2026-09-06.md). Исходный выпущенный commit: `ffc54c19122c86b7d8bf2c25aa7d3c8080c754c0`. Результаты первого выпуска не подменяют новую приёмку.
 
 | Этап | Текущий пакет | Что остаётся |
 | --- | --- | --- |
 | R0 | Заморожены контракты, исходное состояние Git, целевые воспроизведения; staging и production проверены раздельно | Полная сравнительная база latency/SQL/queue/соединений; окончательная приёмка всего плана |
-| R1 | Типизированные HTTP-ошибки, очистка отозванного scope, защита поздних ответов, обновление overview после выбора, явный null предложения, идемпотентность компиляции/запуска | Production-выпуск; совместимость отката проверена локально |
+| R1 | Типизированные HTTP-ошибки, очистка отозванного scope, защита поздних ответов, обновление overview после выбора, явный null предложения, идемпотентность компиляции/запуска | Авторизованная production API-проверка; совместимость отката проверена локально |
 | R2 | Стабильная главная; срочное выше предпочтений; выбранное направление доступно даже без задач; прямые переходы и проверка трёх размеров экрана | Пользовательский тест 4/5 за 30 секунд, полные рабочие сценарии целевых пользователей |
 | R3 | Admission в UnitOfWork; reservation/run/audit атомарны; lease fencing; compiled claim → закрытие транзакции → runner → fenced finish; реестр worker roles | Legacy provider execution ещё удерживает транзакции; перенос по capabilities и production worker cutover |
 | R4 | CSV/TSV/вставка, формальные правила, собственный пример, generated Python, preview/approval, protected approved pointer, входной snapshot и фактический отчёт; проверки current account/cohort/лимитов/retention | Настоящий model-backed пользовательский пилот; зарегистрированный read-only источник; проверенный production image; общий sandbox review |
@@ -40,6 +40,13 @@ Production frontend собран отдельно с выключенными co
 
 Production read-only preflight: Alembic **20260905_004**, активных/ожидающих agent runs в момент проверки нет, `AGENT_ASYNC_RUNS_ENABLED=true`. Today/compiled/migration-mode env не заданы; это отсутствие переменных, а не измеренное выключение. Host Git checkout `c728015c…` отличается от исходного локального commit: при частичных выпусках источник истины — backup и hashes live файлов, а не один `git rev-parse` на сервере.
 
-[Состав выпуска и порядок отката](LOCALOS_RELEASE_2026-09-06.md) подготовлены. 48 затронутых source/migration/startup путей внутри app сверены без расхождений с ожидаемой исходной версией. Новые production-миграции пока не разрешены отдельным подтверждением для этого пакета. Пакет содержит также одноразовые idempotent seeds и reconciliation `prospectingleads.pipeline_status` для legacy/unprocessed записей; заданные прочие ручные статусы сохраняются. Выпуск требует свежего DB backup, сверки live diff, последовательного обновления app/worker/telegram и проверки отката. Compiled execution/preview, activity/proposals не включаются автоматически; роли worker и DB-права не переключаются глобально.
+[Состав выпуска и порядок отката](LOCALOS_RELEASE_2026-09-06.md) подготовлены. 48 затронутых source/migration/startup путей внутри app сверены без расхождений с ожидаемой исходной версией. Пользователь отдельно разрешил новые миграции; 12 ревизий применены после свежего проверенного backup, фактический head — `20260906_012`. Пакет содержит также одноразовые idempotent seeds и reconciliation `prospectingleads.pipeline_status` для legacy/unprocessed записей; заданные прочие ручные статусы сохраняются. Свежий DB backup, сверка live diff и последовательное обновление app/worker/telegram выполнены; инструкция и локальная проверка отката сохранены. Compiled execution/preview, activity/proposals не включаются автоматически; роли worker и DB-права не переключаются глобально.
 
 Список остаточных DDL и границ находится в `raw/ddl-inventory.md`. Глобальная смена legacy `DatabaseManager.close()` не выполнялась. В R3 следующим отдельным переносом проверяется Google Sheets `update_cells`: claim → commit → provider → fenced finish, неоднозначный исход переводится на сверку без слепого повтора. `append_row` нельзя считать идемпотентным после сбоя внешнего POST.
+
+
+## Проверка выпущенного пакета
+
+Выпуск `20260906-plan-a4deb61e-181955`, код `a4deb61e`. Контрольные суммы: 270 host/app, 48 worker, 45 Telegram; расхождений нет. Сохранены 606 прежних assets. Независимая проверка схемы/флагов/запуска — PASS; reconciliation remaining=0. Публичный production browser desktop/mobile — PASS. Авторизованные Today/preferences/foreign scope/blueprint history остаются непроверенными после отказа автоматической проверки разрешений. Полная production-приёмка пока UNKNOWN, весь план IN_PROGRESS.
+
+[Production evidence](../outputs/localos-release-20260906/production-evidence.json) и [фактический выпуск](LOCALOS_RELEASE_2026-09-06.md). Push в GitVerse не выполнен: отсутствует HTTPS-авторизация.

@@ -1,0 +1,155 @@
+{
+  "release_id": "20260906-plan-a4deb61e-181955",
+  "release_commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "application_started_at": "2026-09-06T18:30:38.390963+00:00",
+  "production_changed": true,
+  "schema": "20260906_012",
+  "migration_count": 12,
+  "crm_reconciliation_remaining": 0,
+  "backup": {
+    "release_id": "20260906-plan-a4deb61e-181955",
+    "completed_at": "2026-09-06T18:25:58.600401+00:00",
+    "custom_dump": true,
+    "pg_restore_list": "PASS",
+    "full_dump_read_without_restore": "PASS",
+    "application_tar_read": "PASS",
+    "files": {
+      "database.dump": {
+        "bytes": 1715587457,
+        "sha256": "ed1e51f1fa24a6626b633cf9b9207d894496f1262306dc9050d99fef6f3472bb"
+      },
+      "application-before.tar.gz": {
+        "bytes": 24368508,
+        "sha256": "408a082d14f6270de5e83a3c3705d6a1fa6239145435efc39a9dd01fb9e7eb67"
+      }
+    }
+  },
+  "live_files": {
+    "release_id": "20260906-plan-a4deb61e-181955",
+    "checked_at": "2026-09-06T18:31:51.443049+00:00",
+    "commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+    "host_files": 270,
+    "host_mismatches": [],
+    "containers": {
+      "app": {
+        "container": "4381808202c0",
+        "status": "running",
+        "health": null,
+        "verified_files": 270,
+        "mismatches": [],
+        "flags": {
+          "LOCALOS_MIGRATION_MODE": "schema-check-only",
+          "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+          "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+          "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+          "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+          "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+          "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+          "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+          "BROWSER_COOKIE_AUTH_ENABLED": "false",
+          "WORKER_ROLE": null
+        },
+        "image": "sha256:9f89a43044e08df97636441fbc174c1fd916c687070a4ecd3ef1b4352db43c17"
+      },
+      "worker": {
+        "container": "4f7ce8511183",
+        "status": "running",
+        "health": null,
+        "verified_files": 48,
+        "mismatches": [],
+        "flags": {
+          "LOCALOS_MIGRATION_MODE": "schema-check-only",
+          "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+          "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+          "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+          "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+          "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+          "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+          "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+          "BROWSER_COOKIE_AUTH_ENABLED": "false",
+          "WORKER_ROLE": "all"
+        },
+        "image": "sha256:9f89a43044e08df97636441fbc174c1fd916c687070a4ecd3ef1b4352db43c17"
+      },
+      "telegram-bot": {
+        "container": "e4a6f75b219d",
+        "status": "running",
+        "health": "healthy",
+        "verified_files": 45,
+        "mismatches": [],
+        "flags": {
+          "LOCALOS_MIGRATION_MODE": null,
+          "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+          "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+          "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+          "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+          "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+          "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+          "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+          "BROWSER_COOKIE_AUTH_ENABLED": null,
+          "WORKER_ROLE": null
+        },
+        "image": "sha256:0b93edee0489d72ff52abe6fe745481795ed411e18c947cb93e0a3dbcbd8d7c7"
+      }
+    },
+    "old_assets_preserved": 606,
+    "old_asset_mismatches": [],
+    "status": "PASS"
+  },
+  "public_browser": {
+    "status": "PASS",
+    "scope": "Public browser and protected-route login boundary only; no authenticated session or user data",
+    "release_commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+    "results": [
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 960
+        },
+        "initial_status": 200,
+        "final_path": "/login",
+        "login_form_visible": true,
+        "authenticated": false,
+        "live_module_verified": true,
+        "page_errors": [],
+        "document_overflow": false,
+        "blocked_writes": []
+      },
+      {
+        "viewport": {
+          "width": 393,
+          "height": 852
+        },
+        "initial_status": 200,
+        "final_path": "/login",
+        "login_form_visible": true,
+        "authenticated": false,
+        "live_module_verified": true,
+        "page_errors": [],
+        "document_overflow": false,
+        "blocked_writes": []
+      }
+    ]
+  },
+  "independent_verdict": "production-independent-verdict.json",
+  "authenticated_api_smoke": {
+    "status": "UNKNOWN",
+    "checks_not_executed": [
+      "Owned business Today and preference",
+      "Owned network Today and preference",
+      "Foreign business/network 403",
+      "Blueprint detail and history",
+      "Foreign blueprint 403"
+    ],
+    "reason": "Automatic approval review rejected reuse of an existing production session token because deployment authorization did not explicitly authorize reuse of credentials and access to authenticated business data. No token or authenticated response was read."
+  },
+  "git_push": {
+    "status": "BLOCKED",
+    "remote": "gitverse",
+    "branch": "codex/content-generation-v2",
+    "attempted_commit": "4611377145726445adcc3ed9bd8760c1686dc29d",
+    "exit_code": 128,
+    "reason": "HTTPS username unavailable; terminal prompts disabled"
+  },
+  "full_plan_status": "IN_PROGRESS"
+}

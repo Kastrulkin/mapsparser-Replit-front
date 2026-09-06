@@ -1,0 +1,49 @@
+{
+  "status": "PASS",
+  "source_sha256": "4133a90b5d3c07410e24e2ef0355a6c65e2b754537efc2cd2fe72fef7c3d10f2",
+  "candidate_sha256": "95308e90caec9d6adbd074b1fd2c6f2352a4ad51cf616369871656316de10009",
+  "changed_environment": {
+    "app": {
+      "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+      "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+      "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+      "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+      "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+      "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+      "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+      "LOCALOS_MIGRATION_MODE": "schema-check-only",
+      "BROWSER_COOKIE_AUTH_ENABLED": "false"
+    },
+    "worker": {
+      "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+      "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+      "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+      "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+      "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+      "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+      "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+      "LOCALOS_MIGRATION_MODE": "schema-check-only",
+      "BROWSER_COOKIE_AUTH_ENABLED": "false",
+      "WORKER_ROLE": "all"
+    },
+    "telegram-bot": {
+      "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+      "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+      "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+      "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+      "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+      "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+      "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": ""
+    }
+  },
+  "added_mounts": [
+    "./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro",
+    "./scripts/check_content_learning_schema.py:/app/scripts/check_content_learning_schema.py:ro"
+  ],
+  "all_other_config_preserved": true,
+  "images": {
+    "app": "seo-app-app:ori-20260824-06",
+    "worker": "seo-app-app:ori-20260824-06",
+    "telegram-bot": "seo-app-telegram-bot"
+  }
+}

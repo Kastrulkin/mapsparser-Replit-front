@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "scope": "Public browser and protected-route login boundary only; no authenticated session or user data",
+  "release_commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "results": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "initial_status": 200,
+      "final_path": "/login",
+      "login_form_visible": true,
+      "authenticated": false,
+      "live_module_verified": true,
+      "page_errors": [],
+      "document_overflow": false,
+      "blocked_writes": []
+    },
+    {
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "initial_status": 200,
+      "final_path": "/login",
+      "login_form_visible": true,
+      "authenticated": false,
+      "live_module_verified": true,
+      "page_errors": [],
+      "document_overflow": false,
+      "blocked_writes": []
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "task": "localos-plan-20260906",
+  "package_status": "DEPLOYED",
+  "plan_status": "IN_PROGRESS",
+  "implementation_commit": "4611377145726445adcc3ed9bd8760c1686dc29d",
+  "release_commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "local_commit": true,
+  "push": {
+    "status": "BLOCKED",
+    "remote": "gitverse",
+    "branch": "codex/content-generation-v2",
+    "attempted_commit": "4611377145726445adcc3ed9bd8760c1686dc29d",
+    "exit_code": 128,
+    "reason": "HTTPS username unavailable; terminal prompts disabled"
+  },
+  "production_changed": true,
+  "new_production_approval_required": false,
+  "migration_count": 12,
+  "schema_before": "20260905_004",
+  "schema_after": "20260906_012",
+  "payload_sha256": "b98da934b43a3559cee5407113406b590d17a6d8405dcedf6de253b40b98a509",
+  "archive_verification": "PASS",
+  "checks": {
+    "backend": 310,
+    "frontend": 53,
+    "mock_browser": 14,
+    "real_staging_browser": 9
+  },
+  "unrelated_tracked_changes_preserved": 9,
+  "production_approval": "User explicitly approved all twelve migrations, legacy CRM reconciliation and release with fresh backup in this turn.",
+  "release_id": "20260906-plan-a4deb61e-181955",
+  "production_schema": "20260906_012",
+  "application_started_at": "2026-09-06T18:30:38.390963+00:00",
+  "production_verification": "PARTIAL_AUTHENTICATED_API_AWAITING_EXPLICIT_ACCESS_APPROVAL",
+  "infrastructure_verification": "PASS",
+  "public_browser": "PASS_DESKTOP_AND_MOBILE",
+  "authenticated_api_smoke": "NOT_EXECUTED_AUTO_REVIEW_REJECTED",
+  "runtime_flags": {
+    "status": "PASS",
+    "browser_cookie_auth_enabled": false,
+    "compiled_preview_enabled": false,
+    "compiled_execute_enabled": false,
+    "compiled_advanced_enabled": false,
+    "compiled_pilot_business_ids_empty": true,
+    "today_activity_enabled": false,
+    "today_personalization_enabled": true,
+    "today_proposals_enabled": false,
+    "migration_mode": "schema-check-only",
+    "worker_role": "all"
+  }
+}

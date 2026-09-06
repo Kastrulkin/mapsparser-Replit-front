@@ -1,0 +1,72 @@
+{
+  "release_id": "20260906-plan-a4deb61e-181955",
+  "checked_at": "2026-09-06T18:31:51.443049+00:00",
+  "commit": "a4deb61e94e027fe565f9f4c6e61eabe0ee3907e",
+  "host_files": 270,
+  "host_mismatches": [],
+  "containers": {
+    "app": {
+      "container": "4381808202c0",
+      "status": "running",
+      "health": null,
+      "verified_files": 270,
+      "mismatches": [],
+      "flags": {
+        "LOCALOS_MIGRATION_MODE": "schema-check-only",
+        "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+        "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+        "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+        "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+        "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+        "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+        "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+        "BROWSER_COOKIE_AUTH_ENABLED": "false",
+        "WORKER_ROLE": null
+      },
+      "image": "sha256:9f89a43044e08df97636441fbc174c1fd916c687070a4ecd3ef1b4352db43c17"
+    },
+    "worker": {
+      "container": "4f7ce8511183",
+      "status": "running",
+      "health": null,
+      "verified_files": 48,
+      "mismatches": [],
+      "flags": {
+        "LOCALOS_MIGRATION_MODE": "schema-check-only",
+        "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+        "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+        "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+        "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+        "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+        "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+        "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+        "BROWSER_COOKIE_AUTH_ENABLED": "false",
+        "WORKER_ROLE": "all"
+      },
+      "image": "sha256:9f89a43044e08df97636441fbc174c1fd916c687070a4ecd3ef1b4352db43c17"
+    },
+    "telegram-bot": {
+      "container": "e4a6f75b219d",
+      "status": "running",
+      "health": "healthy",
+      "verified_files": 45,
+      "mismatches": [],
+      "flags": {
+        "LOCALOS_MIGRATION_MODE": null,
+        "LOCALOS_TODAY_PERSONALIZATION_ENABLED": "true",
+        "LOCALOS_TODAY_ACTIVITY_ENABLED": "false",
+        "LOCALOS_TODAY_PROPOSALS_ENABLED": "false",
+        "COMPILED_SCRIPT_PREVIEW_ENABLED": "false",
+        "COMPILED_SCRIPT_EXECUTE_ENABLED": "false",
+        "COMPILED_SCRIPT_ADVANCED_ENABLED": "false",
+        "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "",
+        "BROWSER_COOKIE_AUTH_ENABLED": null,
+        "WORKER_ROLE": null
+      },
+      "image": "sha256:0b93edee0489d72ff52abe6fe745481795ed411e18c947cb93e0a3dbcbd8d7c7"
+    }
+  },
+  "old_assets_preserved": 606,
+  "old_asset_mismatches": [],
+  "status": "PASS"
+}

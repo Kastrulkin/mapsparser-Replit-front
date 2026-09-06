@@ -1,0 +1,12 @@
+{
+  "head": [
+    "20260905_004"
+  ],
+  "active": {
+    "agent": 0,
+    "parser": 0,
+    "operator": 0,
+    "enrichment_fresh": 0,
+    "embedding": 0
+  }
+}
