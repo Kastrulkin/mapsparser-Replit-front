@@ -15,6 +15,7 @@ FLOWS = ("overview", "content", "influencers", "partnerships", "maps", "upsells"
 FLOW_ALIASES = {"influencer": "influencers", "partnership": "partnerships", "average_ticket": "upsells", "cards": "maps", "agents": "automation", "services": "maps"}
 FLOW_CAPABILITIES = {"content": "social_content", "influencers": "influencers", "partnerships": "partnerships", "maps": "maps", "upsells": "average_ticket", "automation": "automation"}
 CONFIRMED_EVENTS = frozenset({"content_draft_saved", "content_scheduled", "automation_configured", "automation_preflight_approved", "automation_run_linked", "reply_recorded", "deal_started", "result_added", "map_task_completed", "action_marked_sent", "followup_created"})
+OBSERVATION_WINDOW = timedelta(days=14)
 
 
 class PreferenceError(Exception):
@@ -180,9 +181,26 @@ def choose_candidate(activity, primary_flow):
         return None
     candidate = sorted(scores.values(), key=lambda item: (-item["confirmed_actions"], item["flow"]))[0]
     total = sum(item["confirmed_actions"] for item in scores.values())
-    if candidate["flow"] == primary_flow or candidate["active_days"] < 3 or candidate["confirmed_actions"] < 5 or candidate["confirmed_actions"] / max(total, 1) < .6:
+    candidate["action_share"] = round(candidate["confirmed_actions"] / max(total, 1), 4)
+    if candidate["flow"] == primary_flow or candidate["active_days"] < 3 or candidate["confirmed_actions"] < 5 or candidate["action_share"] < .6:
         return None
     return candidate
+
+
+def observation_window_complete(cursor, *, record, now):
+    """A proposal needs a real collection window, never inferred elapsed use."""
+    observed = _now(now)
+    cursor.execute("""SELECT MIN(occurred_at) observed_from
+        FROM product_analytics_events
+        WHERE user_id=%s AND signal_source='confirmed_user_action'
+          AND event_name = ANY(%s)
+          AND ((%s='business' AND business_id=%s) OR
+               (%s='network' AND business_id IN (SELECT id FROM businesses WHERE network_id=%s)))""",
+        (record["user_id"], list(CONFIRMED_EVENTS), record["scope_type"], record["scope_id"], record["scope_type"], record["scope_id"]))
+    observed_from = _row(cursor, cursor.fetchone()).get("observed_from")
+    if isinstance(observed_from, str):
+        observed_from = datetime.fromisoformat(observed_from)
+    return bool(observed_from and _now(observed_from) <= observed - OBSERVATION_WINDOW)
 
 
 def evaluate_record(cursor, *, record, now=None):
@@ -213,7 +231,9 @@ def evaluate_record(cursor, *, record, now=None):
     blocked_until = datetime.fromisoformat(dismissed[flow]) if flow in dismissed else None
     may_offer = not record.get("next_offer_at") or _now(record["next_offer_at"]) <= observed
     may_offer = may_offer and (not blocked_until or _now(blocked_until) <= observed)
-    offered = bool(candidate and since and since < day and may_offer and not proposal)
+    may_offer = may_offer and enabled("LOCALOS_TODAY_PROPOSALS_ENABLED", False)
+    offered = bool(candidate and since and since < day and may_offer and not proposal
+                   and observation_window_complete(cursor, record=record, now=observed))
     if offered:
         proposal = {"id": str(uuid.uuid4()), **candidate, "reason_code": "activity_shift", "preference_revision": record["revision"], "created_at": observed.isoformat()}
     cursor.execute("""UPDATE today_preferences SET candidate_flow=%s,candidate_since=%s,

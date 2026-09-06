@@ -4,6 +4,12 @@ import { resolve } from 'node:path';
 
 export const fixtureCommand = (...args: string[]) => {
   const repositoryRoot = resolve(process.cwd(), '..');
+  const stagingContainer = process.env.JOURNEY_STAGING_CONTAINER;
+  if (stagingContainer) {
+    return execFileSync('docker', [
+      'exec', stagingContainer, 'python', '/app/scripts/staging_fixture_cli.py', ...args,
+    ], { cwd: repositoryRoot, encoding: 'utf8' }).trim();
+  }
   const nativeDatabaseUrl = process.env.JOURNEY_STAGING_DATABASE_URL;
   if (nativeDatabaseUrl) {
     return execFileSync(

@@ -50,8 +50,15 @@ type TodayOverview = {
   work_source_states?: Partial<Record<'content' | 'influencers' | 'automation', { status?: 'live' | 'error' | 'unavailable'; as_of?: string }>>;
 };
 
+const isScopeAccessError = (error: unknown) => (
+  typeof error === 'object'
+  && error !== null
+  && 'status' in error
+  && (error.status === 403 || error.status === 404)
+);
+
 const screenRoute = (screen?: string) => ({
-  cards: '/dashboard/card', reviews: '/dashboard/card?tab=reviews&review_filter=needs_reply', content: '/dashboard/content', services: '/dashboard/card?tab=services', finance: '/dashboard/finance', partnerships: '/dashboard/partnerships', agents: '/dashboard/agents', settings: '/dashboard/settings', progress: '/dashboard/progress', operator: '/dashboard/operator',
+  cards: '/dashboard/card', reviews: '/dashboard/card?tab=reviews&review_filter=needs_reply', content: '/dashboard/content', services: '/dashboard/card?tab=services', finance: '/dashboard/finance', partnerships: '/dashboard/partnerships', influencers: '/dashboard/influencers', agents: '/dashboard/agents', settings: '/dashboard/settings', progress: '/dashboard/progress', operator: '/dashboard/operator',
 }[screen || ''] || '/dashboard/progress');
 
 const missionRoute = (mission?: Mission | null) => {
@@ -150,18 +157,24 @@ export const TodayPage = () => {
   const { language } = useLanguage();
   const copy = getTodayPageCopy(language);
   const { currentBusinessId, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardContext>();
-  const [overview, setOverview] = useState<TodayOverview | null>(null);
+  const [cachedOverview, setOverview] = useState<TodayOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [preferenceSaving, setPreferenceSaving] = useState(false);
   const [journeyIntent, setJourneyIntent] = useState(() => readLeadJourneyIntent());
   const requestSequence = useRef(0);
+  const preferenceRequestSequence = useRef(0);
   const loadedScope = useRef<string | null>(null);
   const scopeKey = currentBusinessId ? `${controlScope?.kind || 'business'}:${controlScope?.id || currentBusinessId}` : null;
+  const currentScopeKey = useRef(scopeKey);
+  currentScopeKey.current = scopeKey;
+  // Guard the first render of a new scope, before effects clear cached state.
+  const overview = loadedScope.current === scopeKey ? cachedOverview : null;
 
   const load = () => {
     const requestId = requestSequence.current + 1;
     requestSequence.current = requestId;
+    const requestedScopeKey = scopeKey;
     if (!currentBusinessId) {
       setOverview(null);
       loadedScope.current = null;
@@ -187,18 +200,26 @@ export const TodayPage = () => {
     }
     void request
       .then((data: TodayOverview) => {
-        if (requestSequence.current === requestId) setOverview(data);
+        if (requestSequence.current === requestId && currentScopeKey.current === requestedScopeKey) setOverview(data);
       })
-      .catch(() => {
+      .catch((requestError: unknown) => {
         // Keep the last confirmed summary visible during a transient refresh error.
-        if (requestSequence.current === requestId) setError(true);
+        if (requestSequence.current === requestId && currentScopeKey.current === requestedScopeKey) {
+          if (isScopeAccessError(requestError)) setOverview(null);
+          setError(true);
+        }
       })
       .finally(() => {
-        if (requestSequence.current === requestId) setLoading(false);
+        if (requestSequence.current === requestId && currentScopeKey.current === requestedScopeKey) setLoading(false);
       });
   };
 
   useEffect(() => { load(); }, [currentBusinessId, controlScope?.id, controlScope?.kind]);
+
+  useEffect(() => {
+    preferenceRequestSequence.current += 1;
+    setPreferenceSaving(false);
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!featureFlags.journeyPostAuthRedirect || !currentBusinessId) return;
@@ -224,23 +245,37 @@ export const TodayPage = () => {
     navigate(url?.startsWith('/dashboard/') ? url : missionRoute(itemMission));
   };
 
-  const openMission = () => {
-    const target = mission?.target_scope;
+  const openMission = (selectedMission?: Mission | null) => {
+    const target = selectedMission?.target_scope;
     if (target?.kind === 'business' && target.id) {
       onBusinessChange?.(target.id);
       onControlScopeChange?.({ kind: 'business', id: target.id, name: copy.locationName });
     }
-    navigate(missionRoute(mission));
+    navigate(missionRoute(selectedMission));
   };
 
   const mission = missionCopy(language, overview?.focus_action, copy);
+  const emptyPrimaryMissions: Partial<Record<TodayPreference['primary_flow'], Mission>> = {
+    content: { title: language === 'ru' ? 'Подготовьте следующий материал' : 'Prepare the next post', reason: language === 'ru' ? 'Откройте контент-план, создайте черновик или продолжите уже начатый материал.' : 'Open your content plan, create a draft, or continue an existing post.', expected_outcome: '', cta_label: language === 'ru' ? 'Открыть контент' : 'Open content', screen: 'content' },
+    influencers: { title: language === 'ru' ? 'Продолжите работу с инфлюенсерами' : 'Continue creator work', reason: language === 'ru' ? 'Откройте сотрудничества и выберите следующего автора или ответ.' : 'Open collaborations and choose the next creator or reply.', expected_outcome: '', cta_label: language === 'ru' ? 'Открыть инфлюенсеров' : 'Open creators', screen: 'influencers' },
+    automation: { title: language === 'ru' ? 'Проверьте автоматизацию' : 'Review automation', reason: language === 'ru' ? 'Откройте автоматизацию, чтобы посмотреть результат, ошибку или следующий запрос решения.' : 'Open automation to review a result, error, or a decision request.', expected_outcome: '', cta_label: language === 'ru' ? 'Открыть автоматизацию' : 'Open automation', screen: 'agents' },
+  };
+  const preferredFlow = overview?.preference?.primary_flow;
+  const hasPreferredWork = [...(overview?.work_sections?.needs_decision || []), ...(overview?.work_sections?.continue_work || overview?.active_work || [])]
+    .some((item) => item.flow === preferredFlow);
+  const hasPreferredMission = preferredFlow && mission && missionRoute(mission).split('?')[0] === flowRoute[preferredFlow];
+  const emptyPrimaryMission = preferredFlow && !hasPreferredWork && !hasPreferredMission
+    ? emptyPrimaryMissions[preferredFlow]
+    : null;
+  const displayedMission = emptyPrimaryMission || mission;
   const journeyActions = overview?.journey_actions || [];
   const journeyDirection = getLeadJourneyDirection(journeyIntent);
   const activeWork = useMemo(() => (overview?.work_sections?.continue_work || overview?.active_work || []).slice(0, 3), [overview?.active_work, overview?.work_sections?.continue_work]);
   const changes = overview?.changes_24h?.slice(0, 3) || [];
   const completedResults = (overview?.work_sections?.results || overview?.completed_results || []).slice(0, 3);
   const needsDecision = (overview?.work_sections?.needs_decision || []).slice(0, 3);
-  const primaryItem = needsDecision[0] || activeWork[0] || null;
+  const nextItem = needsDecision[0] || activeWork[0] || null;
+  const primaryItem = emptyPrimaryMission && nextItem?.urgency !== 'urgent' ? null : nextItem;
   const remainingNeedsDecision = primaryItem && needsDecision[0]?.id === primaryItem.id ? needsDecision.slice(1) : needsDecision;
   const remainingActiveWork = primaryItem && activeWork[0]?.id === primaryItem.id ? activeWork.slice(1) : activeWork;
   const availableFlows = overview?.preference?.available_flows || flowOrder;
@@ -254,12 +289,15 @@ export const TodayPage = () => {
   const hasDataOverview = Boolean(dataRhythm || analyticsModules.length);
   const dataNeedsAttention = Boolean(['missing', 'stale', 'due'].includes(dataHealth?.status || '') || dataHealth?.stale || dataHealth?.is_stale || dataHealth?.missing?.length);
   const preferenceCopy = language === 'ru'
-    ? { configure: 'Настроить основной раздел', undo: 'Отменить последнее изменение', disableSuggestions: 'Не предлагать смену раздела', enableSuggestions: 'Снова включить предложения', proposalTitle: 'Вы стали чаще работать с', proposalDescription: 'Поставить этот раздел первым среди обычных задач? Срочные решения останутся выше.', accept: 'Поставить первым', decline: 'Не сейчас', snooze: 'Напомнить позже' }
-    : { configure: 'Set main section', undo: 'Undo last change', disableSuggestions: 'Stop suggesting a section change', enableSuggestions: 'Enable suggestions again', proposalTitle: 'You have been working more often with', proposalDescription: 'Put this section first among regular work? Urgent decisions will stay above it.', accept: 'Put first', decline: 'Not now', snooze: 'Remind me later' };
+    ? { configure: 'Что показывать первым на «Сегодня»', undo: 'Отменить последнее изменение', disableSuggestions: 'Не предлагать смену раздела', enableSuggestions: 'Снова включить предложения', proposalTitle: 'Вы стали чаще работать с', proposalDescription: 'Поставить этот раздел первым среди обычных задач? Срочные решения останутся выше.', accept: 'Поставить первым', decline: 'Не сейчас', snooze: 'Напомнить позже' }
+    : { configure: 'What to show first on Today', undo: 'Undo last change', disableSuggestions: 'Stop suggesting a section change', enableSuggestions: 'Enable suggestions again', proposalTitle: 'You have been working more often with', proposalDescription: 'Put this section first among regular work? Urgent decisions will stay above it.', accept: 'Put first', decline: 'Not now', snooze: 'Remind me later' };
 
   const updatePreference = async (action: 'set' | 'accept' | 'decline' | 'snooze' | 'opt_out' | 'enable' | 'undo', options: { primary_flow?: TodayPreference['primary_flow']; proposal_id?: string } = {}) => {
     const preference = overview?.preference;
     if (!preference || preferenceSaving) return;
+    const preferenceRequestId = preferenceRequestSequence.current + 1;
+    preferenceRequestSequence.current = preferenceRequestId;
+    const requestedScopeKey = `${preference.scope_type}:${preference.scope_id}`;
     setPreferenceSaving(true);
     try {
       const params = new URLSearchParams({ scope_type: preference.scope_type, scope_id: preference.scope_id });
@@ -268,15 +306,17 @@ export const TodayPage = () => {
         body: JSON.stringify({ action, expected_revision: preference.revision, ...options }),
       });
       const payload: { preference?: TodayPreference; priority_proposal?: PriorityProposal | null } = response;
-      if (scopeKey !== `${preference.scope_type}:${preference.scope_id}`) return;
+      if (currentScopeKey.current !== requestedScopeKey || preferenceRequestSequence.current !== preferenceRequestId) return;
+      const hasPriorityProposal = Object.prototype.hasOwnProperty.call(payload, 'priority_proposal');
       setOverview((current) => current && current.preference?.scope_type === preference.scope_type && current.preference.scope_id === preference.scope_id
-        ? { ...current, preference: payload.preference || current.preference, priority_proposal: payload.priority_proposal ?? current.priority_proposal }
+        ? { ...current, preference: payload.preference || current.preference, priority_proposal: hasPriorityProposal ? payload.priority_proposal : current.priority_proposal }
         : current);
+      load();
     } catch {
       // A revision conflict or transient error leaves the confirmed view intact; refresh resolves it.
-      setError(true);
+      if (currentScopeKey.current === requestedScopeKey && preferenceRequestSequence.current === preferenceRequestId) setError(true);
     } finally {
-      setPreferenceSaving(false);
+      if (currentScopeKey.current === requestedScopeKey && preferenceRequestSequence.current === preferenceRequestId) setPreferenceSaving(false);
     }
   };
 
@@ -300,17 +340,23 @@ export const TodayPage = () => {
 
       {primaryItem ? <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div><h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{localizedGrowthText(language, primaryItem.title)}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{localizedGrowthText(language, primaryItem.description || primaryItem.stage || copy.noUrgent)}</p></div><Button type="button" onClick={() => openItem({ title: primaryItem.title, reason: '', expected_outcome: '', cta_label: '', screen: primaryItem.screen }, primaryItem.business_id, primaryItem.business_name, primaryItem.action?.url)} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{primaryItem.action?.label || copy.openTasks}<ArrowRight className="h-4 w-4" /></Button></div>
-      </section> : journeyActions.length ? <section aria-label="Текущее действие"><JourneyActionCard action={journeyActions[0]} businessId={currentBusinessId} onUpdated={load} /></section> : journeyDirection ? <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6"><div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div><h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{journeyDirection.today.title}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{journeyDirection.today.description}</p></div><Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2">{journeyDirection.today.cta}<ArrowRight className="h-4 w-4" /></Button></div></section> : <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6">
+      </section> : journeyActions.length && !emptyPrimaryMission ? <section aria-label="Текущее действие"><JourneyActionCard action={journeyActions[0]} businessId={currentBusinessId} onUpdated={load} /></section> : journeyDirection && !emptyPrimaryMission ? <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6"><div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div><div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div><h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{journeyDirection.today.title}</h2><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{journeyDirection.today.description}</p></div><Button type="button" onClick={() => { clearLeadJourneyIntent(); setJourneyIntent(null); navigate(journeyDirection.dashboardRoute); }} className="min-h-11 gap-2">{journeyDirection.today.cta}<ArrowRight className="h-4 w-4" /></Button></div></section> : <section className="rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_50px_-36px_rgba(15,23,42,0.45)] sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{copy.now}</div>
-            <h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{mission?.title || copy.openTasks}</h2>
-            <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{mission?.reason || copy.noUrgent}</p>
-            {mission?.expected_outcome ? <p className="mt-3 flex max-w-3xl items-start gap-2 text-xs leading-5 text-slate-500"><ArrowRight className="mt-0.5 h-4 w-4 shrink-0" /><span><strong className="text-slate-700">{copy.after}</strong> {mission.expected_outcome}</span></p> : null}
+            <h2 className="mt-2 text-balance text-2xl font-semibold text-slate-950">{displayedMission?.title || copy.openTasks}</h2>
+            <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{displayedMission?.reason || copy.noUrgent}</p>
+            {displayedMission?.expected_outcome ? <p className="mt-3 flex max-w-3xl items-start gap-2 text-xs leading-5 text-slate-500"><ArrowRight className="mt-0.5 h-4 w-4 shrink-0" /><span><strong className="text-slate-700">{copy.after}</strong> {displayedMission.expected_outcome}</span></p> : null}
           </div>
-          <Button type="button" onClick={openMission} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{mission?.cta_label || copy.openProgress}<ArrowRight className="h-4 w-4" /></Button>
+          <Button type="button" onClick={() => openMission(displayedMission)} className="min-h-11 w-full gap-2 transition-transform active:scale-[0.96] lg:w-auto lg:justify-self-end">{displayedMission?.cta_label || copy.openProgress}<ArrowRight className="h-4 w-4" /></Button>
         </div>
       </section>}
+
+      {primaryItem && emptyPrimaryMission ? <DashboardSection title={emptyPrimaryMission.title} description={emptyPrimaryMission.reason}>
+        <Button type="button" variant="outline" onClick={() => openMission(emptyPrimaryMission)} className="min-h-11 w-full gap-2 sm:w-auto">
+          {emptyPrimaryMission.cta_label}<ArrowRight className="h-4 w-4" />
+        </Button>
+      </DashboardSection> : null}
 
       {overview?.preference ? <details className="group rounded-2xl bg-white px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden"><span>{preferenceCopy.configure}: {flowLabels[language][overview.preference.primary_flow]}</span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></summary><div className="mt-3 border-t border-slate-100 pt-3"><div className="flex flex-wrap gap-2">{availableFlows.map((flow) => <Button key={flow} type="button" size="sm" variant={flow === overview.preference?.primary_flow ? 'default' : 'outline'} disabled={preferenceSaving} onClick={() => updatePreference('set', { primary_flow: flow })}>{flowLabels[language][flow]}</Button>)}</div><div className="mt-3 flex flex-wrap gap-2">{overview.preference.can_undo ? <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('undo')}>{preferenceCopy.undo}</Button> : null}{overview.preference.suggestions_enabled ? <Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('opt_out')}>{preferenceCopy.disableSuggestions}</Button> : <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('enable')}>{preferenceCopy.enableSuggestions}</Button>}</div></div></details> : null}
 

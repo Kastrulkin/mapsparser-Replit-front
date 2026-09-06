@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +21,24 @@ describe('TodayPage', () => {
   beforeEach(() => {
     vi.mocked(newAuth.makeRequest).mockReset();
     window.localStorage.clear();
+  });
+
+  it.each([false, true])('keeps the chosen direction one click away when only other work exists (urgent=%s)', async (urgent) => {
+    const otherWork = { id: 'review-1', title: 'Ответьте на отзыв', flow: 'maps', urgency: urgent ? 'urgent' : 'normal', action: { label: 'Открыть отзыв', url: '/dashboard/card?tab=reviews' } };
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'influencers', suggestions_enabled: true, revision: 1 },
+      focus_action: { title: 'Обновите финансовые данные', screen: 'finance' },
+      work_sections: { needs_decision: urgent ? [otherWork] : [], continue_work: urgent ? [] : [otherWork], results: [] },
+    });
+    render(<MemoryRouter initialEntries={['/dashboard/today']}><Routes><Route element={<ContextRoute />}>
+      <Route path="/dashboard/today" element={<TodayPage />} />
+      <Route path="/dashboard/influencers" element={<LocationProbe />} />
+    </Route></Routes></MemoryRouter>);
+    const action = await screen.findByRole('button', { name: 'Открыть инфлюенсеров' });
+    const titles = screen.getAllByRole('heading').map((heading) => heading.textContent);
+    expect(titles[1]).toBe(urgent ? 'Ответьте на отзыв' : 'Продолжите работу с инфлюенсерами');
+    fireEvent.click(action);
+    expect(screen.getByText('/dashboard/influencers')).toBeInTheDocument();
   });
 
   it('shows a concrete maps task instead of registration journey copy', async () => {
@@ -98,6 +116,42 @@ describe('TodayPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Подтвердите черновик' })).toBeInTheDocument();
     expect(screen.queryByText('Сейчас у LocalOS нет активных задач.')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['content', 'Подготовьте следующий материал', 'Открыть контент'],
+    ['influencers', 'Продолжите работу с инфлюенсерами', 'Открыть инфлюенсеров'],
+    ['automation', 'Проверьте автоматизацию', 'Открыть автоматизацию'],
+  ])('gives an empty %s priority a direct next action', async (primaryFlow, title, button) => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: primaryFlow, suggestions_enabled: true, revision: 1 },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: button })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть прогресс' })).not.toBeInTheDocument();
+  });
+
+  it('opens the influencer workspace from its empty-priority action', async () => {
+    vi.mocked(newAuth.makeRequest).mockResolvedValue({
+      preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'influencers', suggestions_enabled: true, revision: 1 },
+      active_work: [], changes_24h: [], completed_results: [],
+    });
+    render(
+      <MemoryRouter initialEntries={['/dashboard/today']}>
+        <Routes>
+          <Route element={<ContextRoute />}>
+            <Route path="/dashboard/today" element={<TodayPage />} />
+            <Route path="/dashboard/influencers" element={<LocationProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Открыть инфлюенсеров' }));
+    expect(screen.getByText('/dashboard/influencers')).toBeInTheDocument();
   });
 
   it('keeps the target publication when opening a story-facts action', async () => {
@@ -201,11 +255,125 @@ describe('TodayPage', () => {
       .mockResolvedValueOnce({ preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'overview', suggestions_enabled: true, revision: 4, available_flows: ['overview', 'content'] }, active_work: [], changes_24h: [], completed_results: [] })
       .mockResolvedValueOnce({ preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 5 } });
     renderPage();
-    expect(await screen.findByText('Настроить основной раздел: Обзор')).toBeInTheDocument();
-    expect(screen.getByText('Настроить основной раздел: Обзор').closest('details')).not.toHaveAttribute('open');
-    fireEvent.click(screen.getByText('Настроить основной раздел: Обзор'));
+    expect(await screen.findByText('Что показывать первым на «Сегодня»: Обзор')).toBeInTheDocument();
+    expect(screen.getByText('Что показывать первым на «Сегодня»: Обзор').closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Что показывать первым на «Сегодня»: Обзор'));
     fireEvent.click(screen.getByRole('button', { name: 'Контент' }));
     await waitFor(() => expect(vi.mocked(newAuth.makeRequest)).toHaveBeenLastCalledWith('/operator/today/preference?scope_type=business&scope_id=business-1', { method: 'POST', body: JSON.stringify({ action: 'set', expected_revision: 4, primary_flow: 'content' }) }));
+  });
+
+  it('clears a previously loaded overview when the current scope becomes unavailable', async () => {
+    const forbidden = Object.assign(new Error('Доступ отозван'), { status: 403 });
+    vi.mocked(newAuth.makeRequest)
+      .mockResolvedValueOnce({ active_work: [{ id: 'private-work', title: 'Закрытая задача' }], changes_24h: [], completed_results: [] })
+      .mockRejectedValueOnce(forbidden);
+    renderPage();
+
+    expect(await screen.findByText('Закрытая задача')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+
+    expect(await screen.findByText('Страница временно недоступна')).toBeInTheDocument();
+    expect(screen.queryByText('Закрытая задача')).not.toBeInTheDocument();
+  });
+
+  it('keeps a confirmed overview visible after a transient refresh failure', async () => {
+    const unavailable = Object.assign(new Error('Сервис временно недоступен'), { status: 503 });
+    vi.mocked(newAuth.makeRequest)
+      .mockResolvedValueOnce({ active_work: [{ id: 'work-1', title: 'Продолжить контент' }], changes_24h: [], completed_results: [] })
+      .mockRejectedValueOnce(unavailable);
+    renderPage();
+
+    expect(await screen.findByText('Продолжить контент')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Попробуйте ещё раз');
+    expect(screen.getByText('Продолжить контент')).toBeInTheDocument();
+  });
+
+  it('refreshes scoped work after a priority choice while urgent work remains first', async () => {
+    vi.mocked(newAuth.makeRequest)
+      .mockResolvedValueOnce({
+        preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 4, available_flows: ['content', 'influencers'] },
+        work_sections: {
+          needs_decision: [{ id: 'urgent-1', title: 'Подтвердите договор', urgency: 'urgent' }],
+          continue_work: [{ id: 'content-1', title: 'Продолжить контент' }],
+          results: [],
+        },
+        changes_24h: [], completed_results: [],
+      })
+      .mockResolvedValueOnce({ preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'influencers', suggestions_enabled: true, revision: 5 } })
+      .mockResolvedValueOnce({
+        preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'influencers', suggestions_enabled: true, revision: 5, available_flows: ['content', 'influencers'] },
+        work_sections: {
+          needs_decision: [{ id: 'urgent-1', title: 'Подтвердите договор', urgency: 'urgent' }],
+          continue_work: [{ id: 'influencer-1', title: 'Согласуйте инфлюенсера' }],
+          results: [],
+        },
+        changes_24h: [], completed_results: [],
+      });
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Подтвердите договор' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Что показывать первым на «Сегодня»: Контент'));
+    fireEvent.click(screen.getByRole('button', { name: 'Инфлюенсеры' }));
+
+    expect(await screen.findByText('Согласуйте инфлюенсера')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Подтвердите договор' })).toBeInTheDocument();
+    expect(screen.queryByText('Продолжить контент')).not.toBeInTheDocument();
+  });
+
+  it('removes a proposal when the preference response explicitly returns null', async () => {
+    vi.mocked(newAuth.makeRequest)
+      .mockResolvedValueOnce({
+        preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 4 },
+        priority_proposal: { id: 'proposal-1', flow: 'influencers', active_days: 3, confirmed_actions: 5, reason_code: 'activity_shift' },
+        active_work: [], changes_24h: [], completed_results: [],
+      })
+      .mockResolvedValueOnce({
+        preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 5 },
+        priority_proposal: null,
+      })
+      .mockResolvedValueOnce({
+        preference: { scope_type: 'business', scope_id: 'business-1', primary_flow: 'content', suggestions_enabled: true, revision: 5 },
+        priority_proposal: null,
+        active_work: [], changes_24h: [], completed_results: [],
+      });
+    renderPage();
+
+    expect(await screen.findByText(/Вы стали чаще работать с/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Не сейчас' }));
+
+    await waitFor(() => expect(screen.queryByText(/Вы стали чаще работать с/)).not.toBeInTheDocument());
+  });
+
+  it('does not let a late response from the previous scope overwrite the selected business', async () => {
+    let resolveFirst = (_value: unknown) => undefined;
+    let resolveSecond = (_value: unknown) => undefined;
+    const firstRequest = new Promise((resolve) => { resolveFirst = resolve; });
+    const secondRequest = new Promise((resolve) => { resolveSecond = resolve; });
+    vi.mocked(newAuth.makeRequest)
+      .mockImplementationOnce(() => firstRequest)
+      .mockImplementationOnce(() => secondRequest);
+    const page = (businessId: string) => (
+      <MemoryRouter>
+        <Routes>
+          <Route element={<Outlet context={{ currentBusinessId: businessId }} />}>
+            <Route index element={<TodayPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+    const view = render(page('business-1'));
+    await waitFor(() => expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledTimes(1));
+    view.rerender(page('business-2'));
+    await waitFor(() => expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledTimes(2));
+
+    await act(async () => { resolveSecond({ active_work: [{ id: 'second-work', title: 'Задача второго бизнеса' }], changes_24h: [], completed_results: [] }); });
+    expect(await screen.findByText('Задача второго бизнеса')).toBeInTheDocument();
+    await act(async () => { resolveFirst({ active_work: [{ id: 'first-work', title: 'Закрытая задача первого бизнеса' }], changes_24h: [], completed_results: [] }); });
+
+    expect(screen.getByText('Задача второго бизнеса')).toBeInTheDocument();
+    expect(screen.queryByText('Закрытая задача первого бизнеса')).not.toBeInTheDocument();
   });
 
   it('loads the neutral today endpoint for the selected network scope', async () => {

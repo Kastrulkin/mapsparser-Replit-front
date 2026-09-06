@@ -24,6 +24,7 @@ from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.request import HTTPXRequest
 from database_manager import get_db_connection
+from core.db_helpers import assert_schema_columns
 from core.action_orchestrator import ActionOrchestrator
 from core.helpers import get_user_language
 from core.service_optimization_verticals import (
@@ -613,19 +614,9 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
+        assert_schema_columns(cursor, "usernews", (
+            "id", "user_id", "service_id", "source_text", "generated_text", "approved", "created_at",
+        ))
         cursor.execute(
             """
             INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
@@ -2297,54 +2288,13 @@ def _build_partnership_summary_text(telegram_id: str) -> tuple[bool, str]:
 
 
 def _ensure_callback_recovery_history_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS callback_recovery_history (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            triggered_by TEXT NOT NULL,
-            send_telegram_report BOOLEAN NOT NULL DEFAULT FALSE,
-            include_retry BOOLEAN NOT NULL DEFAULT TRUE,
-            replayed_count INTEGER NOT NULL DEFAULT 0,
-            sent_count INTEGER NOT NULL DEFAULT 0,
-            retried_count INTEGER NOT NULL DEFAULT 0,
-            dlq_count INTEGER NOT NULL DEFAULT 0,
-            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
-            action_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            report_text TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_callback_recovery_history_tenant_created
-        ON callback_recovery_history (tenant_id, created_at DESC)
-        """
-    )
+    """Check Alembic-owned schema without DDL or committing caller work."""
+    assert_schema_columns(cursor, 'callback_recovery_history', ('id', 'tenant_id', 'triggered_by', 'send_telegram_report', 'include_retry', 'replayed_count', 'sent_count', 'retried_count', 'dlq_count', 'telegram_sent_count', 'action_ids_json', 'report_text', 'created_at'))
 
 
 def _ensure_support_export_send_history_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS support_export_send_history (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            triggered_by TEXT NOT NULL,
-            action_id TEXT NULL,
-            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
-            target_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            report_text TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_support_export_send_history_tenant_created
-        ON support_export_send_history (tenant_id, created_at DESC)
-        """
-    )
+    """Check Alembic-owned schema without DDL or committing caller work."""
+    assert_schema_columns(cursor, 'support_export_send_history', ('id', 'tenant_id', 'triggered_by', 'action_id', 'telegram_sent_count', 'target_ids_json', 'report_text', 'created_at'))
 
 
 def _load_callback_recovery_history_items(cursor, tenant_id: str, limit: int) -> list[dict]:

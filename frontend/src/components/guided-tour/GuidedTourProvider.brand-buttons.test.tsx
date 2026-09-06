@@ -20,7 +20,7 @@ describe('Guided tour public brand buttons', () => {
   it('uses the gold CTA for the guided-tour welcome action', async () => {
     render(
       <MemoryRouter initialEntries={['/dashboard/operator']}>
-        <GuidedTourProvider user={{ id: 'demo-user', demo_mode: true }}>
+        <GuidedTourProvider user={{ id: 'demo-user', email: 'demo@example.test', demo_mode: true }}>
           <div>Dashboard</div>
         </GuidedTourProvider>
       </MemoryRouter>,

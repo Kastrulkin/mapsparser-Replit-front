@@ -488,21 +488,21 @@ const copyForLanguage = (language: Language): LandingCopy => {
     case "en":
       return enCopy;
     case "fr":
-      return landingTranslations.fr;
+      return { ...landingTranslations.fr, networkSummary: 'Les mêmes tâches reviennent dans de nombreuses entreprises. LocalOS conserve ce qui fonctionne.' };
     case "es":
-      return landingTranslations.es;
+      return { ...landingTranslations.es, networkSummary: 'Las mismas tareas se repiten en muchos negocios. LocalOS guarda lo que funciona.' };
     case "el":
-      return landingTranslations.el;
+      return { ...landingTranslations.el, networkSummary: 'Οι ίδιες εργασίες επαναλαμβάνονται σε πολλές επιχειρήσεις. Το LocalOS κρατά ό,τι λειτουργεί.' };
     case "de":
-      return landingTranslations.de;
+      return { ...landingTranslations.de, networkSummary: 'Die gleichen Aufgaben wiederholen sich in vielen Unternehmen. LocalOS bewahrt, was funktioniert.' };
     case "th":
-      return landingTranslations.th;
+      return { ...landingTranslations.th, networkSummary: 'งานเดิมเกิดซ้ำในหลายธุรกิจ LocalOS เก็บสิ่งที่ใช้ได้ผลไว้' };
     case "ar":
-      return landingTranslations.ar;
+      return { ...landingTranslations.ar, networkSummary: 'تتكرر المهام نفسها في أعمال كثيرة. يحتفظ LocalOS بما ينجح.' };
     case "ha":
-      return landingTranslations.ha;
+      return { ...landingTranslations.ha, networkSummary: 'Ayyuka iri ɗaya suna maimaituwa a kamfanoni da yawa. LocalOS yana adana abin da ke aiki.' };
     case "tr":
-      return landingTranslations.tr;
+      return { ...landingTranslations.tr, networkSummary: 'Aynı işler birçok işletmede tekrar eder. LocalOS işe yarayanları saklar.' };
   }
 };
 

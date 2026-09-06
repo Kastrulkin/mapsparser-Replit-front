@@ -1046,12 +1046,12 @@ def _content_plan_schema_ready(cursor: Any) -> bool:
         cursor.execute(
             """
             SELECT
-                to_regclass('public.contentplans') IS NOT NULL AS has_plans,
-                to_regclass('public.contentplanitems') IS NOT NULL AS has_items,
+                to_regclass('contentplans') IS NOT NULL AS has_plans,
+                to_regclass('contentplanitems') IS NOT NULL AS has_items,
                 EXISTS (
                     SELECT 1
                     FROM information_schema.columns
-                    WHERE table_schema = 'public'
+                    WHERE table_schema = current_schema()
                       AND table_name = 'contentplanitems'
                       AND column_name = 'metadata_json'
                 ) AS has_item_metadata
@@ -1068,83 +1068,16 @@ def _content_plan_schema_ready(cursor: Any) -> bool:
 
 
 def ensure_content_plan_tables(cursor: Any) -> None:
-    if _content_plan_schema_ready(cursor):
-        return
-    cursor.execute("SET LOCAL lock_timeout = '1500ms'")
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS contentplans (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            network_id TEXT,
-            scope_type TEXT NOT NULL DEFAULT 'single_business',
-            scope_target_id TEXT,
-            title TEXT NOT NULL,
-            period_days INTEGER NOT NULL,
-            period_start DATE NOT NULL,
-            period_end DATE NOT NULL,
-            plan_status TEXT NOT NULL DEFAULT 'generated',
-            generation_mode TEXT NOT NULL DEFAULT 'manual',
-            input_snapshot_json JSONB,
-            generated_plan_json JSONB,
-            edited_plan_json JSONB,
-            published_plan_json JSONB,
-            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS contentplanitems (
-            id TEXT PRIMARY KEY,
-            plan_id TEXT NOT NULL REFERENCES contentplans(id) ON DELETE CASCADE,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            scheduled_for DATE NOT NULL,
-            content_type TEXT NOT NULL DEFAULT 'news',
-            theme TEXT NOT NULL,
-            goal TEXT,
-            source_kind TEXT,
-            source_ref TEXT,
-            seo_keyword TEXT,
-            service_id TEXT,
-            transaction_id TEXT,
-            seo_views INTEGER NOT NULL DEFAULT 0,
-            location_scope TEXT,
-            draft_text TEXT,
-            status TEXT NOT NULL DEFAULT 'planned',
-            usernews_id TEXT,
-            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
     if not _content_plan_schema_ready(cursor):
-        cursor.execute("ALTER TABLE contentplanitems ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb")
+        raise RuntimeError("content plan schema is missing; run Alembic migrations before starting the application")
 
 
 def _ensure_usernews_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS usernews (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            service_id TEXT,
-            source_text TEXT,
-            generated_text TEXT NOT NULL,
-            approved INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS business_id TEXT")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS original_generated_text TEXT")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS edited_before_approve BOOLEAN DEFAULT FALSE")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS prompt_key TEXT")
-    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS prompt_version TEXT")
+    cursor.execute("SELECT to_regclass('usernews')")
+    row = cursor.fetchone()
+    exists = _row_get(row, "to_regclass", 0, None)
+    if not exists:
+        raise RuntimeError("usernews schema is missing; run Alembic migrations before starting the application")
 
 
 def _build_scope_business_context(cursor: Any, business_row: dict[str, Any], scope_type: str, scope_target_id: str | None) -> dict[str, Any]:

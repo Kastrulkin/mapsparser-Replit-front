@@ -105,12 +105,14 @@ def _seed_activity(cursor):
             VALUES (%s,'user-1','b-1','automation_configured','automation','confirmed_user_action',%s)""", (uuid.uuid4().hex,NOW-timedelta(days=3+index%3)))
 
 
-def test_proposal_requires_two_days_consent_then_supports_undo_and_optout(preference_db):
+def test_proposal_requires_full_observation_window_then_supports_undo_and_optout(preference_db):
     cursor = preference_db.cursor()
     record_confirmed_user_action(cursor,auth=AuthContext(user_id="user-1"),event_name="content_draft_saved",business_id="b-1",flow="content",operation_key="first")
     _seed_activity(cursor)
     record = today_preferences_service.load_record(cursor,user_id="user-1",scope=SCOPE)
     assert not today_preferences_service.evaluate_record(cursor,record=record,now=NOW)
+    cursor.execute("""INSERT INTO product_analytics_events(id,user_id,business_id,event_name,flow_type,signal_source,occurred_at)
+        VALUES (%s,'user-1','b-1','automation_configured','automation','confirmed_user_action',%s)""", (uuid.uuid4().hex,NOW-timedelta(days=14)))
     record = today_preferences_service.load_record(cursor,user_id="user-1",scope=SCOPE)
     assert not today_preferences_service.evaluate_record(cursor,record=record,now=NOW+timedelta(hours=1))
     assert today_preferences_service.evaluate_record(cursor,record=record,now=NOW+timedelta(days=1))
@@ -123,6 +125,30 @@ def test_proposal_requires_two_days_consent_then_supports_undo_and_optout(prefer
     assert result["preference"]["primary_flow"] == "overview"
     result = today_preferences_service.change_preferences(cursor,user_id="user-1",scope=SCOPE,command={"action":"opt_out","expected_revision":3},now=NOW+timedelta(days=1))
     assert not result["preference"]["suggestions_enabled"]
+
+
+def test_proposal_is_never_materialized_while_the_proposal_flag_is_off(preference_db, monkeypatch):
+    cursor = preference_db.cursor()
+    monkeypatch.setenv("LOCALOS_TODAY_PROPOSALS_ENABLED", "false")
+    _seed_activity(cursor)
+    cursor.execute("""INSERT INTO product_analytics_events(id,user_id,business_id,event_name,flow_type,signal_source,occurred_at)
+        VALUES (%s,'user-1','b-1','automation_configured','automation','confirmed_user_action',%s)""", (uuid.uuid4().hex,NOW-timedelta(days=14)))
+    cursor.execute("""INSERT INTO today_preferences(user_id,scope_type,scope_id)
+        VALUES ('user-1','business','b-1')""")
+    record = today_preferences_service.load_record(cursor,user_id="user-1",scope=SCOPE)
+
+    assert not today_preferences_service.evaluate_record(cursor,record=record,now=NOW+timedelta(days=1))
+    record = today_preferences_service.load_record(cursor,user_id="user-1",scope=SCOPE)
+    assert not today_preferences_service.evaluate_record(cursor,record=record,now=NOW+timedelta(days=2))
+    assert today_preferences_service.load_record(cursor,user_id="user-1",scope=SCOPE)["proposal_json"] is None
+
+
+def test_candidate_explanation_keeps_normalized_share():
+    candidate = today_preferences_service.choose_candidate([
+        {"flow":"automation","active_days":3,"confirmed_actions":6},
+        {"flow":"content","active_days":3,"confirmed_actions":4},
+    ], "overview")
+    assert candidate == {"flow":"automation","active_days":3,"confirmed_actions":6,"action_share":.6}
 
 
 def test_short_burst_and_tie_do_not_make_proposal():

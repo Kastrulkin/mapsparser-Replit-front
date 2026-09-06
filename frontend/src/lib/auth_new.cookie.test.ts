@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NewAuth } from './auth_new';
+import { HttpError, NewAuth } from './auth_new';
 import { browserAuthenticationAvailable } from './browserSessionFetch';
 
 
@@ -123,6 +123,63 @@ describe('browser cookie authentication', () => {
     const user = await auth.getCurrentUser();
 
     expect(user).toBeNull();
+    expect(window.localStorage.getItem('auth_token')).toBeNull();
+  });
+
+  it('preserves the HTTP status, server code, and message for a JSON API failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: 'Конфликт версии', code: 'REVISION_CONFLICT' }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } },
+    )));
+    const auth = new NewAuth();
+
+    await expect(auth.makeRequest('/operator/today/preference', { method: 'POST' })).rejects.toMatchObject({
+      name: 'HttpError', status: 409, code: 'REVISION_CONFLICT', message: 'Конфликт версии',
+    });
+  });
+
+  it('keeps the expired-session message and clears the bearer token on a typed 401 error', async () => {
+    vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'false');
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
+      JSON.stringify({ error: 'Недействительный токен', code: 'TOKEN_EXPIRED' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    ))));
+    const auth = new NewAuth();
+    window.localStorage.setItem('auth_token', 'expired-session-token');
+
+    await expect(auth.makeRequest('/operator/today')).rejects.toBeInstanceOf(HttpError);
+    await expect(auth.makeRequest('/operator/today')).rejects.toMatchObject({ status: 401, code: 'TOKEN_EXPIRED', message: 'Сессия истекла. Войдите снова.' });
+    expect(window.localStorage.getItem('auth_token')).toBeNull();
+  });
+
+  it('returns typed errors for non-JSON responses and network failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('upstream unavailable', {
+      status: 502,
+      headers: { 'Content-Type': 'text/plain' },
+    })).mockRejectedValueOnce(new TypeError('Failed to fetch')));
+    const auth = new NewAuth();
+
+    await expect(auth.makeRequest('/operator/today')).rejects.toMatchObject({ name: 'HttpError', status: 502, code: 'INVALID_RESPONSE' });
+    await expect(auth.makeRequest('/operator/today')).rejects.toMatchObject({ name: 'HttpError', status: null, code: 'NETWORK_ERROR', message: 'Ошибка соединения с сервером: Failed to fetch' });
+  });
+
+  it.each([403, 502])('retains status %s when a JSON response is malformed', async (status) => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{broken', {
+      status, headers: { 'Content-Type': 'application/json' },
+    }))));
+    await expect(new NewAuth().makeRequest('/operator/today')).rejects.toMatchObject({
+      name: 'HttpError', status, code: 'INVALID_RESPONSE',
+    });
+  });
+
+  it('expires the session even when 401 has a malformed body', async () => {
+    vi.stubEnv('VITE_BROWSER_COOKIE_AUTH_ENABLED', 'false');
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{broken', {
+      status: 401, headers: { 'Content-Type': 'application/json' },
+    }))));
+    const auth = new NewAuth();
+    window.localStorage.setItem('auth_token', 'expired-token');
+    await expect(auth.makeRequest('/operator/today')).rejects.toMatchObject({ status: 401, message: 'Сессия истекла. Войдите снова.' });
     expect(window.localStorage.getItem('auth_token')).toBeNull();
   });
 });

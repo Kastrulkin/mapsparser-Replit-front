@@ -144,7 +144,7 @@ test('keeps the first review batch usable on a phone and preserves the approval 
 test('opens a concrete Today action and preserves the collaboration deep link', async ({ page}, testInfo) => {
   await page.goto('/dashboard/today');
   await expect(page.getByRole('heading', { name: 'Подтвердите условия с Автором 31' })).toBeVisible();
-  await expect(page.getByText('Set main section: Overview')).toBeVisible();
+  await expect(page.getByText('What to show first on Today: Overview')).toBeVisible();
   await page.screenshot({ path: `/tmp/localos-today-${testInfo.project.name}.png`, fullPage: true });
 
   await page.getByRole('button', { name: 'Открыть коллаборацию' }).click();

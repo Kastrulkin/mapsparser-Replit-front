@@ -2,6 +2,8 @@ from legacy_routes import shared as _shared
 
 globals().update(_shared.runtime_namespace)
 
+from core.db_helpers import assert_schema_columns
+
 
 def _telegram_bind_row_value(row, key, index):
     if row is None:
@@ -469,24 +471,8 @@ def _send_public_report_ready_telegram(page_json: dict[str, Any], slug: str) -> 
         return False
 
 def _ensure_public_report_requests_table(conn) -> None:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS publicreportrequests (
-            slug TEXT PRIMARY KEY,
-            email TEXT NOT NULL,
-            source_url TEXT NOT NULL,
-            source TEXT NOT NULL DEFAULT 'apify_yandex',
-            status TEXT NOT NULL DEFAULT 'queued',
-            page_json JSONB NOT NULL,
-            result_json JSONB,
-            error_text TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.commit()
+    """Check Alembic-owned schema without DDL or committing caller work."""
+    assert_schema_columns(conn.cursor(), 'publicreportrequests', ('slug', 'email', 'source_url', 'source', 'status', 'page_json', 'result_json', 'error_text', 'created_at', 'updated_at'))
 
 def _is_public_offer_slug(path: str) -> bool:
     slug = str(path or "").strip().strip("/")

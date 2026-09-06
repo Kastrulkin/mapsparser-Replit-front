@@ -218,7 +218,10 @@ def use_agent_template(template_key: str):
             }
         ), 201
     except Exception:
-        db.conn.rollback()
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
         db.close()
@@ -275,6 +278,36 @@ def _require_auth():
     if not user_data:
         return None, _json_error("Authorization required", 401, "AUTH_REQUIRED")
     return user_data, None
+
+
+def _require_compiled_standard_session(user_data: dict):
+    """Compiled artifacts are created and approved only by a direct session."""
+    session_kind = str(user_data.get("session_kind") or "standard").strip().lower()
+    impersonating = bool(user_data.get("impersonating") or user_data.get("impersonated_by"))
+    if session_kind == "standard" and not impersonating:
+        return None
+    return _json_error(
+        "Compiled scripts доступны только из вашей обычной сессии.",
+        403,
+        "COMPILED_SESSION_NOT_ALLOWED",
+    )
+
+
+def _require_current_compiled_account(cursor, user_data: dict):
+    cursor.execute(
+        """SELECT COALESCE(is_active,FALSE) AS is_active,
+                  COALESCE(is_verified,FALSE) AS is_verified
+           FROM users WHERE id=%s""",
+        (_user_id(user_data),),
+    )
+    account = cursor.fetchone() or {}
+    if bool(account.get("is_active")) and bool(account.get("is_verified")):
+        return None
+    return _json_error(
+        "Для compiled scripts нужен активный подтверждённый аккаунт.",
+        403,
+        "COMPILED_ACCOUNT_NOT_ALLOWED",
+    )
 
 
 def _user_id(user_data: dict) -> str:
@@ -3367,6 +3400,9 @@ def list_agent_blueprints():
             decorated["execution_mode"] = _agent_execution_mode(row)
             decorated["execution_mode_source"] = _agent_execution_mode_source(row)
             decorated["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(row)
+            # This is a read-only compiled-pilot marker. It deliberately does not
+            # change the generic blueprint lifecycle or status shown elsewhere.
+            decorated["compiled_approved_version_id"] = row.get("compiled_approved_version_id") or None
             decorated["suggested_execution_mode"] = _agent_execution_mode(row)
             decorated["lifecycle_state"] = _agent_lifecycle_state(row)
             decorated["last_business_result"] = _agent_business_result_from_artifact(row.get("last_result_payload_json"))
@@ -3934,6 +3970,7 @@ def create_agent_graph_candidate(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>", methods=["GET"])
 def get_agent_blueprint(blueprint_id: str):
+    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
@@ -4038,11 +4075,18 @@ def get_agent_blueprint(blueprint_id: str):
         decorated_blueprint["last_business_result"] = last_business_result
         schedule_status = _agent_schedule_status(blueprint, active_version)
         decorated_blueprint["next_run_at"] = schedule_status.get("next_run_at") if blueprint.get("status") == "active" else None
+        compiled_version_id = str(blueprint.get("compiled_approved_version_id") or "")
+        compiled_approved_version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, compiled_version_id) if compiled_version_id else None
         return jsonify(
             {
                 "success": True,
                 "blueprint": decorated_blueprint,
+                "compiled_access": {
+                    "preview": compiled_pilot_allowed(blueprint.get("business_id")),
+                    "execute": compiled_pilot_allowed(blueprint.get("business_id"), execute=True),
+                },
                 "active_version": active_version if active_version else None,
+                "compiled_approved_version": _normalize_json_row(compiled_approved_version) if compiled_approved_version else None,
                 "active_version_id": str((active_version or {}).get("id") or ""),
                 "active_version_number": _version_number(active_version),
                 "candidate_version": candidate_version if candidate_version else None,
@@ -4950,58 +4994,45 @@ def get_agent_blueprint_version_diff(blueprint_id: str, version_id: str):
         db.close()
 
 
-@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/compile", methods=["POST"])
-def compile_agent_blueprint_script(blueprint_id: str):
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/snapshots", methods=["POST"])
+def create_agent_compiled_snapshot(blueprint_id: str):
+    from core.auth_context import AuthContext
+    from services.compiled_input_snapshots import create_snapshot, SnapshotUnavailable, SnapshotQuotaExceeded
+    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
-    description = str(payload.get("description") or "").strip()
-    if not description or len(description) > 3000:
-        return _json_error("Опишите процесс для компиляции.", 400, "COMPILED_DESCRIPTION_REQUIRED")
+        return _json_error("Ожидается таблица.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
         blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
         if access_error:
             return access_error
-        runner_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
-        if not runner_digest.startswith("sha256:"):
-            return _json_error("Compiled runner ещё не закреплён образом.", 503, "COMPILED_RUNTIME_NOT_READY")
-        user_fixtures = payload.get("fixtures") if isinstance(payload.get("fixtures"), list) else []
-        if any(not isinstance(item, dict) or item.get("source") != "user" or "expected" not in item for item in user_fixtures):
-            return _json_error("Добавьте подтверждённые пользователем fixtures с expected.", 400, "COMPILED_USER_FIXTURES_INVALID")
-        # Manual source is intentionally an advanced route; ordinary users get one AI generation here.
-        if isinstance(payload.get("source"), str):
-            candidate = {"status": "ready", "candidate": {"source": payload.get("source"), "manifest": payload.get("manifest"), "fixtures": payload.get("fixtures")}}
-            provenance = {"mode": "manual_source", "description": description}
-        else:
-            candidate = generate_candidate_from_description(description, business_id=str(blueprint.get("business_id") or ""), user_id=_user_id(user_data), runner_image_digest=runner_digest)
-            provenance = {"mode": "ai_generation", "description": description, "provider": str(candidate.get("source") or "")}
-        raw = candidate.get("candidate") if isinstance(candidate.get("candidate"), dict) else {}
-        generated_fixtures = raw.get("fixtures") if isinstance(raw.get("fixtures"), list) else []
-        generated_fixtures = [{**item, "source": "generator"} for item in generated_fixtures if isinstance(item, dict)]
-        manifest = raw.get("manifest") if isinstance(raw.get("manifest"), dict) else {}
-        manifest = {**manifest, "runner_image_digest": runner_digest}
-        raw = {**raw, "manifest": manifest, "fixtures": [*user_fixtures, *generated_fixtures]}
-        checked = validate_compiled_script_artifact({"schema": "localos_compiled_script_artifact_v1", **raw, "artifact_hash": raw.get("artifact_hash")}) if raw.get("artifact_hash") else None
-        if candidate.get("status") != "ready" or not raw:
-            return jsonify({"success": False, "code": "COMPILED_GENERATION_NEEDS_FIX", "generation": candidate}), 422
-        try:
-            artifact = build_compiled_script_artifact(raw.get("source"), raw.get("manifest"), raw.get("fixtures"), provenance)
-        except ValueError:
-            return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": checked or candidate}), 422
-        base = _resolve_candidate_version(cursor, blueprint) or {}
-        version_payload = build_version_payload_from_row(base)
-        version_payload["goal"] = description
-        version_payload["compiled_artifact"] = artifact
-        version_payload["compiled_artifact_hash"] = artifact["artifact_hash"]
-        version_payload["compiled_state"] = "checking"
-        version = _insert_version(cursor, blueprint_id, version_payload, user_data, trusted_compiled=True)
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        snapshot = create_snapshot(cursor, auth=AuthContext.from_session(user_data),
+            blueprint_id=blueprint_id, business_id=blueprint.get("business_id"),
+            input_payload=payload.get("input"), name=payload.get("name"))
         db.conn.commit()
-        return jsonify({"success": True, "candidate_version": version, "artifact": artifact, "next_step": "run_compiled_preview"}), 201
+        return jsonify({"success": True, "snapshot": snapshot}), 201
+    except SnapshotQuotaExceeded:
+        db.conn.rollback()
+        return _json_error("Достигнут лимит: 100 таблиц за 7 дней для этого пользователя и бизнеса.", 429, "COMPILED_SNAPSHOT_QUOTA_EXCEEDED")
+    except SnapshotUnavailable:
+        db.conn.rollback()
+        return _json_error("Нет доступа к источнику таблицы.", 403, "COMPILED_SNAPSHOT_UNAVAILABLE")
+    except ValueError:
+        db.conn.rollback()
+        return _json_error("Проверьте формат и размер таблицы: до 200 строк, 20 колонок и 20 КБ.", 422, "COMPILED_TABLE_INVALID")
     except Exception:
         db.conn.rollback()
         raise
@@ -5009,11 +5040,207 @@ def compile_agent_blueprint_script(blueprint_id: str):
         db.close()
 
 
-@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/preview", methods=["POST"])
-def preview_agent_blueprint_script(blueprint_id: str):
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/compile", methods=["POST"])
+def compile_agent_blueprint_script(blueprint_id: str):
+    from services.compiled_generation_admission import (
+        input_digest,
+        mark_generation_failed,
+        mark_generation_succeeded,
+        reserve_generation,
+    )
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    from services.compiled_table_contract import normalize_table_contract, normalize_table_input, table_manifest
+    from services.compiled_script_runtime import execute_pilot
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
+    description = str(payload.get("description") or "").strip()
+    if not description or len(description) > 3000:
+        return _json_error("Опишите процесс для компиляции.", 400, "COMPILED_DESCRIPTION_REQUIRED")
+    table_contract = None
+    try:
+        if "table_contract" in payload:
+            table_contract = normalize_table_contract(payload["table_contract"])
+    except ValueError:
+        return _json_error("Проверьте колонки и правила таблицы.", 422, "COMPILED_TABLE_CONTRACT_INVALID")
+    advanced_enabled = _env_enabled("COMPILED_SCRIPT_ADVANCED_ENABLED") and bool(user_data.get("is_superadmin"))
+    if table_contract is None and not advanced_enabled:
+        return _json_error("Первый compiled-пилот работает только с правилами проверки таблицы.", 403, "COMPILED_TABLE_CONTRACT_REQUIRED")
+    if isinstance(payload.get("source"), str) and not advanced_enabled:
+        return _json_error("Исходник программы доступен только техническому оператору в advanced-режиме.", 403, "COMPILED_MANUAL_SOURCE_FORBIDDEN")
+    supplied_key = str(payload.get("idempotency_key") or "").strip()
+    if table_contract is not None and not supplied_key:
+        return _json_error("Для компиляции таблицы нужен ключ идемпотентности.", 400, "COMPILED_GENERATION_IDEMPOTENCY_REQUIRED")
+    generation_key = supplied_key or str(uuid.uuid4())
+    generation_digest = input_digest(
+        {
+            "description": description,
+            "table_contract": table_contract,
+            "fixtures": payload.get("fixtures"),
+            "source": payload.get("source"),
+            "manifest": payload.get("manifest"),
+        }
+    )
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    generation_request_id = ""
+    try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        runner_digest = str(os.getenv("COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST") or "")
+        if not runner_digest.startswith("sha256:"):
+            return _json_error("Compiled runner ещё не закреплён образом.", 503, "COMPILED_RUNTIME_NOT_READY")
+        user_fixtures = payload.get("fixtures") if isinstance(payload.get("fixtures"), list) else []
+        if any(not isinstance(item, dict) or item.get("source") != "user" or "expected" not in item for item in user_fixtures):
+            return _json_error("Добавьте подтверждённые пользователем fixtures с expected.", 400, "COMPILED_USER_FIXTURES_INVALID")
+        if table_contract is not None:
+            if not user_fixtures:
+                return _json_error("Задайте ожидаемый результат хотя бы для одного примера.", 422, "COMPILED_USER_FIXTURE_REQUIRED")
+            if len(user_fixtures) > 16:
+                return _json_error("Добавьте не более 16 примеров: остальные проверки выполняет LocalOS.", 422, "COMPILED_USER_FIXTURE_LIMIT")
+            try:
+                for fixture in user_fixtures:
+                    normalize_table_input(fixture.get("input"), table_contract["columns"])
+            except ValueError:
+                return _json_error("Пример не соответствует колонкам таблицы.", 422, "COMPILED_TABLE_FIXTURE_INVALID")
+        admission = reserve_generation(
+            cursor,
+            user_id=_user_id(user_data),
+            business_id=str(blueprint.get("business_id") or ""),
+            blueprint_id=blueprint_id,
+            idempotency_key=generation_key,
+            request_digest=generation_digest,
+        )
+        if admission.get("status") == "replayed":
+            version_id = str((admission.get("request") or {}).get("result_version_id") or "")
+            version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, version_id)
+            if version:
+                db.conn.commit()
+                return jsonify({
+                    "success": True,
+                    "candidate_version": version,
+                    "artifact": parse_json_field(version.get("compiled_artifact_json"), {}),
+                    "reused": True,
+                    "next_step": "run_compiled_preview",
+                }), 200
+            mark_generation_failed(cursor, str((admission.get("request") or {}).get("id") or ""), "COMPILED_GENERATION_RESULT_MISSING")
+            db.conn.commit()
+            return _json_error("Сохранённый результат генерации недоступен.", 409, "COMPILED_GENERATION_RESULT_MISSING")
+        if admission.get("status") != "reserved":
+            db.conn.commit()
+            code = str(admission.get("code") or "COMPILED_GENERATION_FAILED")
+            status = 409 if code in {"COMPILED_GENERATION_IN_PROGRESS", "COMPILED_GENERATION_IDEMPOTENCY_CONFLICT", "COMPILED_GENERATION_STALE_UNKNOWN"} else 429 if code in {"COMPILED_GENERATION_QUOTA_EXCEEDED", "COMPILED_GENERATION_RATE_LIMITED"} else 422
+            return _json_error("Генерация уже обрабатывается или недоступна для этого ключа.", status, code)
+        generation_request_id = str((admission.get("request") or {}).get("id") or "")
+        # The reservation is durable before the provider call; no DB
+        # transaction stays open while the model is running.
+        db.conn.commit()
+        # Manual source is intentionally an advanced route; ordinary users get one AI generation here.
+        if isinstance(payload.get("source"), str):
+            candidate = {"status": "ready", "candidate": {"source": payload.get("source"), "manifest": payload.get("manifest"), "fixtures": payload.get("fixtures")}}
+            provenance = {"mode": "manual_source", "description": description}
+        else:
+            generation_options = {"business_id": str(blueprint.get("business_id") or ""), "user_id": _user_id(user_data), "runner_image_digest": runner_digest}
+            if table_contract is not None:
+                generation_options["table_contract"] = table_contract
+                generation_options["validation_fixtures"] = user_fixtures
+            candidate = generate_candidate_from_description(description, **generation_options)
+            provenance = {"mode": "ai_generation", "description": description, "provider": str(candidate.get("source") or "")}
+        raw = candidate.get("candidate") if isinstance(candidate.get("candidate"), dict) else {}
+        generated_fixtures = raw.get("fixtures") if isinstance(raw.get("fixtures"), list) else []
+        generated_fixtures = [{**item, "source": "generator"} for item in generated_fixtures if isinstance(item, dict)]
+        manifest = raw.get("manifest") if isinstance(raw.get("manifest"), dict) else {}
+        manifest = table_manifest(table_contract, runner_digest) if table_contract is not None else {**manifest, "runner_image_digest": runner_digest}
+        if table_contract is not None:
+            # Model examples are not independent evidence. The user's examples and
+            # platform boundary fixtures are compared against the independent oracle.
+            generated_fixtures = []
+            provenance["version_name"] = table_contract["version_name"]
+        raw = {**raw, "manifest": manifest, "fixtures": [*user_fixtures, *generated_fixtures]}
+        checked = validate_compiled_script_artifact({"schema": "localos_compiled_script_artifact_v1", **raw, "artifact_hash": raw.get("artifact_hash")}) if raw.get("artifact_hash") else None
+        if candidate.get("status") != "ready" or not raw:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_NEEDS_FIX")
+            db.conn.commit()
+            return jsonify({"success": False, "code": "COMPILED_GENERATION_NEEDS_FIX", "generation": candidate}), 422
+        try:
+            artifact = build_compiled_script_artifact(raw.get("source"), raw.get("manifest"), raw.get("fixtures"), provenance)
+        except ValueError:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_ARTIFACT_INVALID")
+            db.conn.commit()
+            return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": checked or candidate}), 422
+        if table_contract is not None:
+            sample = {column: "пример" for column in table_contract["columns"]}
+            fixture_inputs = [{"rows": []}, {"rows": [sample]}, {"rows": [sample, sample]}]
+            if table_contract["required_columns"]:
+                missing = dict(sample)
+                missing[table_contract["required_columns"][0]] = " "
+                fixture_inputs.append({"rows": [missing]})
+            fixtures = list(user_fixtures)
+            for fixture_input in fixture_inputs:
+                expected = execute_pilot(artifact, fixture_input)
+                expected = {key: value for key, value in expected.items() if key not in {"artifact_hash", "runtime_ai_calls", "external_effects"}}
+                fixtures.append({"input": fixture_input, "expected": expected, "source": "platform"})
+            artifact = build_compiled_script_artifact(raw.get("source"), manifest, fixtures, provenance)
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_ACCOUNT_CHANGED")
+            db.conn.commit()
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_ACCESS_CHANGED")
+            db.conn.commit()
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_COHORT_CHANGED")
+            db.conn.commit()
+            return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        cursor.execute("SELECT id FROM agent_blueprints WHERE id = %s FOR UPDATE", (blueprint_id,))
+        base = _resolve_candidate_version(cursor, blueprint) or {}
+        version_payload = build_version_payload_from_row(base)
+        version_payload["goal"] = description
+        version_payload["compiled_artifact"] = artifact
+        version_payload["compiled_artifact_hash"] = artifact["artifact_hash"]
+        version_payload["compiled_state"] = "checking"
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data, trusted_compiled=True)
+        mark_generation_succeeded(cursor, generation_request_id, str(version.get("id") or ""))
+        db.conn.commit()
+        return jsonify({"success": True, "candidate_version": version, "artifact": artifact, "next_step": "run_compiled_preview"}), 201
+    except Exception:
+        db.conn.rollback()
+        if generation_request_id:
+            try:
+                mark_generation_failed(cursor, generation_request_id, "COMPILED_GENERATION_INTERNAL_ERROR")
+                db.conn.commit()
+            except Exception:
+                db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/preview", methods=["POST"])
+def preview_agent_blueprint_script(blueprint_id: str):
+    from services.compiled_pilot_access import compiled_pilot_allowed
+    from services.compiled_input_snapshots import resolve_snapshot, SnapshotUnavailable
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
     if str(os.getenv("COMPILED_SCRIPT_PREVIEW_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
         return _json_error("Preview compiled scripts пока выключен.", 404, "COMPILED_PREVIEW_DISABLED")
     payload = request.get_json(silent=True)
@@ -5022,24 +5249,49 @@ def preview_agent_blueprint_script(blueprint_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
         blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
         if access_error:
             return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
         version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
         if not version:
             return _json_error("Версия не найдена.", 404, "VERSION_NOT_FOUND")
-        if str(version.get("compiled_state") or "") not in {"checking", "needs_fix"}:
+        if str(version.get("compiled_state") or "") not in {"checking", "needs_fix", "ready_approval"}:
             return _json_error("Preview уже подтверждённой версии не меняет evidence.", 409, "COMPILED_PREVIEW_STATE_INVALID")
-        cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(version.get("id") or ""), blueprint_id))
         artifact = parse_json_field(version.get("compiled_artifact_json"), {})
         validation = validate_compiled_script_artifact(artifact)
         if not validation.get("valid"):
             return jsonify({"success": False, "code": "COMPILED_ARTIFACT_INVALID", "validation": validation}), 422
         preview_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        if payload.get("snapshot_id"):
+            try:
+                snapshot = resolve_snapshot(cursor, payload["snapshot_id"], blueprint.get("business_id"), _user_id(user_data), blueprint_id)
+                preview_input = snapshot["input"]
+            except SnapshotUnavailable:
+                return _json_error("Снимок недоступен или срок хранения истёк. Загрузите таблицу снова.", 404, "COMPILED_SNAPSHOT_UNAVAILABLE")
+        db.conn.rollback()
         try:
             preview_result = preview_compiled_script(artifact, preview_input)
         except CompiledRuntimeUnavailable:
             return _json_error("Защищённый runtime для compiled scripts недоступен.", 503, "COMPILED_RUNTIME_UNAVAILABLE")
+        except ValueError:
+            return _json_error("Таблица не соответствует правилам этой версии.", 422, "COMPILED_INPUT_INVALID")
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Доступ к пилоту изменился.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(version.get("id") or ""), blueprint_id))
+        current = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(version.get("id") or ""))
+        if not current or current.get("compiled_state") not in {"checking", "needs_fix", "ready_approval"} or current.get("compiled_artifact_hash") != version.get("compiled_artifact_hash"):
+            return _json_error("Версия уже изменилась. Откройте её снова.", 409, "COMPILED_PREVIEW_STATE_INVALID")
         if preview_result.get("status") != "passed":
             cursor.execute("UPDATE agent_blueprint_versions SET compiled_state = 'needs_fix', compiled_preview_json = %s::jsonb WHERE id = %s AND blueprint_id = %s", (json.dumps(preview_result, ensure_ascii=False), str(version.get("id") or ""), blueprint_id))
             db.conn.commit()
@@ -5057,18 +5309,31 @@ def preview_agent_blueprint_script(blueprint_id: str):
 
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/compiled-script/approve", methods=["POST"])
 def approve_agent_blueprint_script(blueprint_id: str):
+    from services.compiled_pilot_access import compiled_pilot_allowed
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
         blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
         if access_error:
             return access_error
+        if not compiled_pilot_allowed(blueprint.get("business_id")):
+            return _json_error("Проверка таблиц пока недоступна для этого бизнеса.", 403, "COMPILED_PILOT_NOT_ALLOWED")
+        # Keep the same lock order as admission: blueprint, then pinned version.
+        # Approval changes a protected column, never client-editable metadata.
+        cursor.execute("SELECT id FROM agent_blueprints WHERE id = %s FOR UPDATE", (blueprint_id,))
+        cursor.execute("SELECT id FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s FOR UPDATE", (str(payload.get("version_id") or ""), blueprint_id))
         version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
         artifact = parse_json_field((version or {}).get("compiled_artifact_json"), {})
         validation = validate_compiled_script_artifact(artifact)
@@ -5083,6 +5348,8 @@ def approve_agent_blueprint_script(blueprint_id: str):
             return _json_error("Подтверждение относится к другому preview evidence.", 409, "COMPILED_APPROVAL_FIXTURE_DIGEST_MISMATCH")
         cursor.execute("""UPDATE agent_blueprint_versions SET compiled_state = 'approved', compiled_approved_at = NOW(), compiled_approved_by_user_id = %s
             WHERE id = %s AND blueprint_id = %s""", (_user_id(user_data), str(version.get("id") or ""), blueprint_id))
+        cursor.execute("""UPDATE agent_blueprints SET compiled_approved_version_id = %s, updated_at = NOW()
+            WHERE id = %s""", (str(version.get("id") or ""), blueprint_id))
         from core.auth_context import AuthContext
         from services.product_telemetry_service import record_confirmed_user_action
         record_confirmed_user_action(cursor,auth=AuthContext.from_session(user_data),
@@ -5102,45 +5369,91 @@ def run_agent_blueprint_script(blueprint_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
-    if str(os.getenv("COMPILED_SCRIPT_EXECUTE_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
-        return _json_error("Запуск compiled scripts пока выключен.", 404, "COMPILED_EXECUTE_DISABLED")
+    session_error = _require_compiled_standard_session(user_data)
+    if session_error:
+        return session_error
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return _json_error("Ожидается JSON object.", 400, "INVALID_JSON_PAYLOAD")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        account_error = _require_current_compiled_account(cursor, user_data)
+        if account_error:
+            return account_error
         blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
         if access_error:
             return access_error
+        from services.compiled_pilot_access import compiled_pilot_allowed
+        if not compiled_pilot_allowed(str(blueprint.get("business_id") or ""), execute=True):
+            return _json_error("Запуск compiled scripts пока недоступен для этого бизнеса.", 404, "COMPILED_EXECUTE_DISABLED")
         version = _load_blueprint_version_for_blueprint(cursor, blueprint_id, str(payload.get("version_id") or ""))
         if not version or str(version.get("compiled_state") or "") not in {"approved", "active"} or not version.get("compiled_approved_at") or not str(version.get("compiled_approved_by_user_id") or ""):
             return _json_error("Для запуска требуется подтверждённая версия скрипта.", 409, "COMPILED_RUN_NOT_APPROVED")
-        from services.agent_run_queue import enqueue_agent_run
+        from core.auth_context import AuthContext
+        from services.agent_run_admission import AgentRunAdmissionService
+        from services.compiled_input_snapshots import SnapshotUnavailable, resolve_snapshot
+        auth = AuthContext.from_session(user_data)
+        snapshot_id = str(payload.get("snapshot_id") or payload.get("input_snapshot_id") or "").strip()
+        if not snapshot_id:
+            return _json_error("Для запуска нужна сохранённая таблица.", 400, "COMPILED_INPUT_SNAPSHOT_REQUIRED")
         idempotency_key = str(payload.get("idempotency_key") or "").strip()
         if not idempotency_key:
             return _json_error("Укажите ключ идемпотентности запуска.", 400, "IDEMPOTENCY_KEY_REQUIRED")
-        run = enqueue_agent_run(
-            cursor,
-            blueprint=blueprint,
-            version=version,
-            input_payload=payload.get("input") if isinstance(payload.get("input"), dict) else {},
-            user_data=user_data,
-            idempotency_key=idempotency_key,
+        # A retry is a read of the accepted journal entry, not a fresh use of
+        # an expired input. Tenant access and the direct session were checked
+        # above; version and snapshot must still match that exact intent.
+        cursor.execute(
+            """SELECT id,blueprint_version_id,input_snapshot_id FROM agent_runs
+               WHERE business_id=%s AND blueprint_id=%s AND idempotency_key=%s
+               LIMIT 1""",
+            (str(blueprint.get("business_id") or ""), blueprint_id, idempotency_key),
         )
-        if not run.get("success"):
-            db.conn.rollback()
-            return jsonify({"success": False, "code": str(run.get("code") or "COMPILED_RUN_FAILED"), "error": str(run.get("error") or "Не удалось запустить compiled script."), "details": run}), 422
-        from core.auth_context import AuthContext
+        existing = cursor.fetchone()
+        if existing:
+            if (
+                str(existing.get("blueprint_version_id") or "") != str(version.get("id") or "")
+                or str(existing.get("input_snapshot_id") or "") != snapshot_id
+            ):
+                return _json_error("Ключ запуска относится к другим версии или таблице.", 409, "COMPILED_RUN_IDEMPOTENCY_CONFLICT")
+            replayed_run = AgentBlueprintRunner(cursor).load_run(str(existing.get("id") or ""), user_data)
+            return jsonify({"success": True, "version_id": version.get("id"), "run": replayed_run, "reused": True, "status": str((replayed_run or {}).get("status") or "queued")}), 200
+        try:
+            snapshot = resolve_snapshot(
+                cursor,
+                snapshot_id,
+                str(blueprint.get("business_id") or ""),
+                auth.user_id,
+                blueprint_id=blueprint_id,
+            )
+        except SnapshotUnavailable:
+            return _json_error("Таблица недоступна или устарела. Создайте новую версию.", 409, "COMPILED_INPUT_SNAPSHOT_UNAVAILABLE")
+        from core.unit_of_work import UnitOfWork
         from services.product_telemetry_service import record_confirmed_user_action
-        record_confirmed_user_action(cursor,auth=AuthContext.from_session(user_data),
-            event_name="automation_run_linked",business_id=blueprint.get("business_id"),
-            flow="automation",operation_key=f"compiled-run:{blueprint_id}:{idempotency_key}",
-            entity_id=(run.get("run") or {}).get("id"))
-        db.conn.commit()
-        return jsonify({"success": True, "version_id": version.get("id"), "run": run.get("run"), "reused": bool(run.get("reused")), "status": "queued"}), 202
+        admission = UnitOfWork(database=db)
+        with admission:
+            run = AgentRunAdmissionService(admission.cursor).admit(
+                auth=auth,
+                blueprint=blueprint,
+                version=version,
+                input_payload=snapshot["input"],
+                idempotency_key=idempotency_key,
+                input_snapshot=snapshot,
+            )
+            if not run.get("success"):
+                admission.rollback()
+                return jsonify({"success": False, "code": str(run.get("code") or "COMPILED_RUN_FAILED"), "error": str(run.get("error") or "Не удалось запустить compiled script."), "details": run}), 422
+            record_confirmed_user_action(admission.cursor,auth=auth,
+                event_name="automation_run_linked",business_id=blueprint.get("business_id"),
+                flow="automation",operation_key=f"compiled-run:{blueprint_id}:{idempotency_key}",
+                entity_id=(run.get("run") or {}).get("id"))
+            admission.commit()
+            return jsonify({"success": True, "version_id": version.get("id"), "run": run.get("run"), "reused": bool(run.get("reused")), "status": "queued"}), 202
     except Exception:
-        db.conn.rollback()
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
         db.close()
@@ -5966,7 +6279,8 @@ def start_agent_blueprint_run(blueprint_id: str):
         raw_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
         preview_mode = raw_input.get("preview_mode") is True
         execution_mode = _agent_execution_mode(blueprint)
-        if not preview_mode and _agent_execution_mode_confirmation_required(blueprint):
+        async_enabled = async_agent_runs_enabled(str(blueprint.get("business_id") or ""))
+        if not async_enabled and not preview_mode and _agent_execution_mode_confirmation_required(blueprint):
             return _json_error(
                 "Сначала выберите, как должен запускаться агент.",
                 400,
@@ -5978,13 +6292,13 @@ def start_agent_blueprint_run(blueprint_id: str):
             version_id = str((selected_version or {}).get("id") or "")
         elif not _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id):
             return _json_error("Blueprint version does not belong to this blueprint", 400, "VERSION_BLUEPRINT_MISMATCH")
-        if version_id and not preview_mode and execution_mode != "one_off":
-            active_version = _resolve_active_version(cursor, blueprint)
-            if str((active_version or {}).get("id") or "") != version_id:
-                return _json_error("Сначала включите проверенную версию агента.", 400, "AGENT_VERSION_NOT_ACTIVE")
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
         version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+        if not async_enabled and version_id and not preview_mode and execution_mode != "one_off":
+            active_version = _resolve_active_version(cursor, blueprint)
+            if str((active_version or {}).get("id") or "") != version_id:
+                return _json_error("Сначала включите проверенную версию агента.", 400, "AGENT_VERSION_NOT_ACTIVE")
         user_input = {
             str(key): value
             for key, value in raw_input.items()
@@ -6019,21 +6333,26 @@ def start_agent_blueprint_run(blueprint_id: str):
             if preview_mode
             else normalized_raw_input
         )
-        if async_agent_runs_enabled(str(blueprint.get("business_id") or "")):
-            result = enqueue_agent_run(
-                cursor,
-                blueprint=blueprint,
-                version=version or {},
-                input_payload=run_input,
-                user_data=user_data,
-                idempotency_key=str(payload.get("idempotency_key") or ""),
-            )
-            if not result.get("success"):
-                db.conn.rollback()
-                status = 409 if result.get("code") == "AGENT_RUN_ALREADY_IN_PROGRESS" else 402 if result.get("code") == "AGENT_RUN_BILLING_BLOCKED" else 400
-                return jsonify(result), status
-            db.conn.commit()
-            return jsonify(result), 200 if result.get("reused") else 202
+        if async_enabled:
+            from core.auth_context import AuthContext
+            from services.agent_run_admission import AgentRunAdmissionService
+            from core.unit_of_work import UnitOfWork
+            admission = UnitOfWork(database=db)
+            with admission:
+                result = AgentRunAdmissionService(admission.cursor).admit(
+                    auth=AuthContext.from_session(user_data),
+                    blueprint=blueprint,
+                    version=version or {},
+                    input_payload=run_input,
+                    idempotency_key=str(payload.get("idempotency_key") or ""),
+                    require_execution_mode_confirmation=True,
+                )
+                if not result.get("success"):
+                    admission.rollback()
+                    status = 409 if result.get("code") == "AGENT_RUN_ALREADY_IN_PROGRESS" else 402 if result.get("code") == "AGENT_RUN_BILLING_BLOCKED" else 400
+                    return jsonify(result), status
+                admission.commit()
+                return jsonify(result), 200 if result.get("reused") else 202
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         result = runner.start_run(version_id, run_input, user_data)
         db.conn.commit()
@@ -6043,7 +6362,10 @@ def start_agent_blueprint_run(blueprint_id: str):
             return _json_error(str(result.get("error") or "run failed"), 400, "RUN_FAILED")
         return jsonify(result), 201
     except Exception:
-        db.conn.rollback()
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
         db.close()

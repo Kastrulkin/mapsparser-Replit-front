@@ -5,12 +5,27 @@ import uuid
 import json
 import hmac
 import hashlib
+import importlib.util
+from pathlib import Path
 
 import pytest
 
 
 def _schema_name() -> str:
     return "test_" + uuid.uuid4().hex
+
+
+def _install_action_orchestrator_schema(cursor) -> None:
+    path = Path(__file__).parents[1] / "alembic_migrations/versions/20260906_move_action_orchestrator_runtime_ddl.py"
+    spec = importlib.util.spec_from_file_location("action_orchestrator_schema", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    previous_execute = migration.op.execute
+    try:
+        migration.op.execute = cursor.execute
+        migration.upgrade()
+    finally:
+        migration.op.execute = previous_execute
 
 
 def _auth_headers() -> dict:
@@ -41,6 +56,14 @@ def capabilities_client(postgres_container, run_migrations):
     conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     create_schema(conn, schema_name)
     create_client_info_tables(conn, schema_name)
+    action_schema_conn = get_connection_with_search_path(dsn, schema_name)
+    action_schema_cursor = action_schema_conn.cursor()
+    try:
+        _install_action_orchestrator_schema(action_schema_cursor)
+        action_schema_conn.commit()
+    finally:
+        action_schema_cursor.close()
+        action_schema_conn.close()
     insert_test_data(conn, schema_name, user_id=user_id, business_id=business_id, map_links=[])
     foreign_conn = get_connection_with_search_path(dsn, schema_name)
     with foreign_conn.cursor() as cur:

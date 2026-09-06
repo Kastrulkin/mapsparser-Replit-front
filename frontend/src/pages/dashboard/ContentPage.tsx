@@ -135,6 +135,7 @@ type VoiceProfile = {
 type PlanPayload = {
   id: string;
   title?: string;
+  plan_status?: string;
   period_days?: number;
   scope_type?: string;
   scope_target_id?: string;
@@ -3452,10 +3453,10 @@ function ContentWorkspace() {
 
       <div className="inline-flex rounded-2xl bg-slate-100 p-1">
         {[
-          ['calendar', contentCopy.calendar, CalendarDays],
-          ['media', contentCopy.media, ImageIcon],
-          ['audience', contentCopy.audience, MessageCircleQuestion],
-        ].map(([key, label, Icon]) => (
+          { key: 'calendar', label: contentCopy.calendar, Icon: CalendarDays },
+          { key: 'media', label: contentCopy.media, Icon: ImageIcon },
+          { key: 'audience', label: contentCopy.audience, Icon: MessageCircleQuestion },
+        ].map(({ key, label, Icon }) => (
           <button
             key={String(key)}
             type="button"
@@ -3579,10 +3580,10 @@ function ContentWorkspace() {
             <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="inline-flex rounded-2xl bg-slate-100 p-1">
                 {[
-                  ['month', calendarCopy.month, CalendarDays],
-                  ['week', calendarCopy.week, Clock3],
-                  ['list', calendarCopy.list, FileText],
-                ].map(([key, label, Icon]) => (
+                  { key: 'month', label: calendarCopy.month, Icon: CalendarDays },
+                  { key: 'week', label: calendarCopy.week, Icon: Clock3 },
+                  { key: 'list', label: calendarCopy.list, Icon: FileText },
+                ].map(({ key, label, Icon }) => (
                   <button
                     key={String(key)}
                     type="button"

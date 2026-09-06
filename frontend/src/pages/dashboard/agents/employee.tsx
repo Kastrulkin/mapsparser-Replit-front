@@ -295,13 +295,17 @@ const emptyVisualEditorRegistry: VisualEditorRegistry = {
 
 const visualEditorOptions = (value: unknown): VisualEditorOption[] => (
   Array.isArray(value)
-    ? value.map(recordValue).filter(Boolean).map((item) => ({
+    ? value.map(recordValue).filter(Boolean).map((item): VisualEditorOption => ({
       key: String(item?.key || ''),
       title: String(item?.title || item?.key || ''),
       trigger: item?.trigger ? String(item.trigger) : undefined,
-      execution_mode: ['one_off', 'manual', 'scheduled'].includes(String(item?.execution_mode || ''))
-        ? String(item?.execution_mode) === 'scheduled' ? 'scheduled' : String(item?.execution_mode) === 'one_off' ? 'one_off' : 'manual'
-        : undefined,
+      execution_mode: String(item?.execution_mode || '') === 'scheduled'
+        ? 'scheduled'
+        : String(item?.execution_mode || '') === 'one_off'
+          ? 'one_off'
+          : String(item?.execution_mode || '') === 'manual'
+            ? 'manual'
+            : undefined,
     })).filter((item) => item.key)
     : []
 );
@@ -1121,6 +1125,13 @@ export const EmployeeAgentsList = ({
             : (details?.approval_queue || []).find((item) => item.status === 'pending') || null;
           const status = buildEmployeeStatus(blueprint, details, pendingApproval);
           const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+          const compiledReady = ['draft', 'active'].includes(blueprint.status)
+            && Boolean(details?.compiled_approved_version || blueprint.compiled_approved_version_id);
+          const visibleState = compiledReady
+            ? (language === 'ru' ? 'Готова к запуску' : 'Ready to run')
+            : blueprint.status === 'paused'
+              ? (language === 'ru' ? 'Пауза' : 'Paused')
+              : deepCopy.state[state];
           const mode = agentExecutionMode(blueprint, details);
           const lastResult = blueprint.last_business_result || details?.last_business_result;
           const resultText = lastResult ? businessResultPrimaryText(lastResult) : '';
@@ -1151,7 +1162,7 @@ export const EmployeeAgentsList = ({
               </div>
               <div className="grid gap-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>{deepCopy.state[state]}</span>
+                  <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', compiledReady ? employeeToneClass.emerald : employeeToneClass[status.tone])}>{visibleState}</span>
                   <span className={cn('text-[11px] tabular-nums', selected ? 'text-slate-300' : 'text-slate-500')}>{agentNextRunLabel(blueprint, details)}</span>
                 </div>
                 <div className={cn('line-clamp-1 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>

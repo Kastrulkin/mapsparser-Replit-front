@@ -387,6 +387,17 @@ interface OutreachTouchPreview {
   human_edited?: boolean;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const channelStatus = (value: unknown): OutreachTouchPreview['channel_status'] => {
+  switch (value) {
+    case 'ready': case 'connect_required': case 'permission_required': case 'manual':
+    case 'recipient_missing': case 'adapter_unavailable': case 'sender_degraded':
+    case 'sender_paused': case 'sender_selection_required': return value;
+    default: return 'manual';
+  }
+};
+
 interface OutreachPreview {
   status?: 'ready' | 'observe' | 'needs_contact' | 'needs_sender_setup' | 'needs_evidence' | 'needs_generation' | 'needs_revision' | 'needs_channel_setup' | 'invalid_sequence' | 'suppressed' | 'excluded';
   missing?: string[];
@@ -1331,7 +1342,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         angle: String(touch.angle_type || ''),
         subject: touch.subject,
         text: String(touch.approved_text || touch.generated_text || ''),
-        channel_status: touch.channel_status || touch.message_brief_json?.channel_status || 'manual',
+        channel_status: channelStatus(touch.channel_status || touch.message_brief_json?.channel_status),
         quality_gate: touch.quality_gate_json,
         evidence_kind: touch.message_brief_json?.evidence_kind,
         source_url: touch.message_brief_json?.source_url,
@@ -1919,7 +1930,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const restoredEdits: Record<number, OutreachTouchMessageDraft> = {};
       Object.entries(parsedValue).forEach(([rawIndex, rawDraft]) => {
         const touchIndex = Number(rawIndex);
-        if (!Number.isInteger(touchIndex) || !rawDraft || typeof rawDraft !== 'object' || Array.isArray(rawDraft)) return;
+        if (!Number.isInteger(touchIndex) || !isRecord(rawDraft)) return;
         const subject = typeof rawDraft.subject === 'string' ? rawDraft.subject : '';
         const text = typeof rawDraft.text === 'string' ? rawDraft.text : '';
         const originalSubject = typeof rawDraft.originalSubject === 'string' ? rawDraft.originalSubject : '';

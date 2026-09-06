@@ -1,0 +1,16 @@
+
+Running 3 tests using 1 worker
+
+(node:3851) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop] › e2e/staging/plan-today.spec.ts:5:1 › Today saves the selected direction through the real API and preserves tenant boundaries (2.7s)
+(node:3887) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [laptop] › e2e/staging/plan-today.spec.ts:5:1 › Today saves the selected direction through the real API and preserves tenant boundaries (2.5s)
+(node:3948) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile] › e2e/staging/plan-today.spec.ts:5:1 › Today saves the selected direction through the real API and preserves tenant boundaries (2.6s)
+
+  3 passed (12.4s)
+
+EXIT=0

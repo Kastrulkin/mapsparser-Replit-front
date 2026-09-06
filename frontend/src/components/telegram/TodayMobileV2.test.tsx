@@ -60,7 +60,7 @@ describe('TodayMobileV2', () => {
       <TodayMobileV2
         data={{
           scope: { kind: 'business', id: 'business-1', name: 'Салон' },
-          community_pulse: [{ id: 'topic-1', title: 'Рост цен', summary: 'Обсуждают новых поставщиков.', source_name: 'Beauty Owners', message_count: 21 }],
+          community_pulse: [{ id: 'topic-1', title: 'Рост цен', source_name: 'Beauty Owners', message_count: 21 }],
         }}
         loading={false}
         slowLoading={false}

@@ -70,7 +70,8 @@ from services.content_publish_notifications import (
     mark_content_publish_handoff_sent,
 )
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
-from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
+from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run, execute_claimed_compiled_agent_run
+from services.worker_ownership import worker_role_enabled
 from services.operator_async_jobs import process_next_operator_async_job
 from services.social_post_service import (
     collect_due_social_post_metrics,
@@ -135,18 +136,7 @@ def _worker_role_enabled(role: str) -> bool:
     ``all`` remains the backward-compatible default. Dedicated parser, agent,
     operator, dispatcher, and maintenance roles run only their owned loops.
     """
-    configured = str(os.getenv("WORKER_ROLE", "all")).strip().lower()
-    if configured in {"", "all"}:
-        return True
-    aliases = {
-        "parser": {"parser", "parsers"},
-        "agent": {"agent", "agents", "script"},
-        "operator": {"operator", "operators"},
-        "dispatcher": {"dispatcher", "dispatch"},
-        "maintenance": {"maintenance", "maint"},
-        "general": {"general", "legacy"},
-    }
-    return configured in aliases.get(role, {role})
+    return worker_role_enabled(role)
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -209,6 +199,7 @@ _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 _LAST_AGENT_RUN_QUEUE_AT = 0.0
 _LAST_OPERATOR_ASYNC_JOB_AT = 0.0
 _LAST_TODAY_PRIORITY_PROPOSALS_AT = 0.0
+_LAST_COMPILED_INPUT_PURGE_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
@@ -2122,6 +2113,7 @@ def _process_agent_run_queue_if_due() -> None:
     _LAST_AGENT_RUN_QUEUE_AT = now
 
     db = None
+    execution_db = None
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -2129,8 +2121,20 @@ def _process_agent_run_queue_if_due() -> None:
         db.conn.commit()
         if not run:
             return
-        result = execute_claimed_agent_run(cursor, run)
-        db.conn.commit()
+        # Claim and execution intentionally use separate connections.  The
+        # claim transaction is short and visible to competing workers before
+        # any provider/sandbox work starts.  The runner still has legacy
+        # provider paths that need checkpoint extraction before they can be
+        # considered fully short-transaction; its lease is nevertheless
+        # verified before execution begins.
+        db.close()
+        db = None
+        result = execute_claimed_compiled_agent_run(run)
+        if result is None:
+            execution_db = DatabaseManager()
+            execution_cursor = execution_db.conn.cursor()
+            result = execute_claimed_agent_run(execution_cursor, run)
+            execution_db.conn.commit()
         print(
             "[AGENT_RUN_QUEUE] "
             f"run_id={run.get('id')} status={str((result.get('run') or {}).get('status') or 'retry_wait')}",
@@ -2138,7 +2142,9 @@ def _process_agent_run_queue_if_due() -> None:
         )
     except Exception:
         try:
-            if db:
+            if execution_db:
+                execution_db.conn.rollback()
+            elif db:
                 db.conn.rollback()
         except Exception:
             pass
@@ -2149,6 +2155,8 @@ def _process_agent_run_queue_if_due() -> None:
         try:
             if db:
                 db.close()
+            if execution_db:
+                execution_db.close()
         except Exception:
             pass
 
@@ -2174,6 +2182,32 @@ def _process_operator_async_job_if_due() -> None:
         print("[OPERATOR_ASYNC_JOB] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+
+
+def _purge_compiled_inputs_if_due() -> None:
+    global _LAST_COMPILED_INPUT_PURGE_AT
+    now = time.time()
+    if now - _LAST_COMPILED_INPUT_PURGE_AT < 3600:
+        return
+    _LAST_COMPILED_INPUT_PURGE_AT = now
+    from services.compiled_input_snapshots import purge_expired_snapshots
+    database = DatabaseManager()
+    try:
+        cursor = database.conn.cursor()
+        cursor.execute("SELECT to_regclass('compiled_input_snapshots') table_ref")
+        if not (cursor.fetchone() or {}).get("table_ref"):
+            database.conn.rollback()
+            return
+        result = purge_expired_snapshots(cursor)
+        database.conn.commit()
+        if result["purged_snapshots"]:
+            print(f"[COMPILED_INPUT_RETENTION] purged={result['purged_snapshots']} expired_runs={result['expired_runs']}", flush=True)
+    except Exception:
+        database.conn.rollback()
+        print("[COMPILED_INPUT_RETENTION] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+    finally:
+        database.close()
 
 
 def _materialize_today_priority_proposals_if_due() -> None:
@@ -7780,6 +7814,7 @@ if __name__ == "__main__":
                 _run_yookassa_renewals_if_due()
                 _run_web_tracking_maintenance_if_due()
                 _materialize_today_priority_proposals_if_due()
+                _purge_compiled_inputs_if_due()
             if _worker_role_enabled("general"):
                 # Keep a slot for unclassified legacy work while individual
                 # workloads move into the five explicit roles above.

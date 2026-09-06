@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-06",
+  "environment": "production",
+  "mutated": false,
+  "host_git_head": "c728015c95e47880120c025deed70c6c88657963",
+  "alembic_head": "20260905_004",
+  "agent_runs": {
+    "completed": 307,
+    "failed": 17,
+    "superseded": 18,
+    "queued": 0,
+    "running": 0
+  },
+  "flags": {
+    "AGENT_ASYNC_RUNS_ENABLED": "true",
+    "LOCALOS_TODAY_PERSONALIZATION_ENABLED": null,
+    "LOCALOS_TODAY_ACTIVITY_ENABLED": null,
+    "LOCALOS_TODAY_PROPOSALS_ENABLED": null,
+    "COMPILED_SCRIPT_PREVIEW_ENABLED": null,
+    "COMPILED_SCRIPT_EXECUTE_ENABLED": null,
+    "LOCALOS_MIGRATION_MODE": null
+  },
+  "note": "Null means unset, not a measured false. Defaults are defined by current runtime code. Host Git HEAD is not proof of live source after previous partial releases. All listed Compose services running; postgres/redis/clamav/telegram-bot healthy."
+}

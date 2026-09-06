@@ -25,15 +25,9 @@ type CompanyRegistryMapProps = {
 type YandexMapInstance = {
   setBounds?: (bounds: [[number, number], [number, number]], options?: Record<string, unknown>) => void;
   setCenter?: (center: [number, number], zoom?: number, options?: Record<string, unknown>) => void;
-  getBounds?: () => [[number, number], [number, number]];
+  getBounds?: () => number[][];
   getZoom?: () => number;
-  container?: { getSize?: () => [number, number]; fitToViewport?: () => void };
-  events?: YandexMapEventManager;
-};
-
-type YandexMapEventManager = {
-  add?: (eventName: string, handler: () => void) => void;
-  remove?: (eventName: string, handler: () => void) => void;
+  container?: { getSize?: () => number[]; fitToViewport?: () => void };
 };
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (symbol) => ({
@@ -181,23 +175,6 @@ export const CompanyRegistryMap = ({ items, expanded = false, loading, error, tr
     };
   }, [expanded, mapReady]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const eventManager = map?.events;
-    if (!mapReady || !eventManager?.add || !eventManager.remove) return;
-    const handleBoundsChange = () => {
-      const nextZoom = map.getZoom?.();
-      if (typeof nextZoom === 'number' && Number.isFinite(nextZoom)) setMapZoom(nextZoom);
-      if (displayMode !== 'density') return;
-      if (heatmapRedrawTimerRef.current !== null) window.clearTimeout(heatmapRedrawTimerRef.current);
-      heatmapRedrawTimerRef.current = window.setTimeout(() => {
-        setHeatmapRevision((revision) => revision + 1);
-        heatmapRedrawTimerRef.current = null;
-      }, 90);
-    };
-    eventManager.add('boundschange', handleBoundsChange);
-    return () => eventManager.remove?.('boundschange', handleBoundsChange);
-  }, [displayMode, mapReady]);
 
   if (loading) return <MapSkeleton expanded={expanded} />;
   if (error) {

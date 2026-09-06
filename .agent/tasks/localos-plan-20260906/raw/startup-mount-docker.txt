@@ -1,0 +1,33 @@
+ Container localos-startup-mount-proof-startup-check-1 Creating 
+ Container localos-startup-mount-proof-startup-check-1 Created 
+Attaching to startup-check-1
+ Container localos-startup-mount-proof-startup-check-1 Starting 
+startup-check-1  | Waiting for Postgres...
+ Container localos-startup-mount-proof-startup-check-1 Started 
+startup-check-1  | postgres:5432 - accepting connections
+startup-check-1  | content_learning_schema=ok
+startup-check-1  | content_learning_schema=ok
+[Kstartup-check-1 exited with code 0
+ Compose Stopping Aborting on container exit...
+ Container localos-startup-mount-proof-startup-check-1 Stopping 
+ Container localos-startup-mount-proof-startup-check-1 Stopped 
+ Container localos-startup-mount-proof-startup-check-1 Recreate 
+ Container localos-startup-mount-proof-startup-check-1 Recreated 
+Attaching to startup-check-1
+ Container localos-startup-mount-proof-startup-check-1 Starting 
+startup-check-1  | Waiting for Postgres...
+ Container localos-startup-mount-proof-startup-check-1 Started 
+startup-check-1  | postgres:5432 - accepting connections
+startup-check-1  | content_learning_schema=ok
+startup-check-1  | content_learning_schema=ok
+[Kstartup-check-1 exited with code 0
+ Compose Stopping Aborting on container exit...
+ Container localos-startup-mount-proof-startup-check-1 Stopping 
+ Container localos-startup-mount-proof-startup-check-1 Stopped 
+ Container localos-startup-mount-proof-startup-check-1 Stopping 
+ Container localos-startup-mount-proof-startup-check-1 Stopped 
+ Container localos-startup-mount-proof-startup-check-1 Removing 
+ Container localos-startup-mount-proof-startup-check-1 Removed 
+{"status": "passed", "fresh_and_recreated_containers": 2, "mode": "schema-check-only", "migration_scripts": "read-only host mounts", "production_changed": false}
+
+EXIT=0

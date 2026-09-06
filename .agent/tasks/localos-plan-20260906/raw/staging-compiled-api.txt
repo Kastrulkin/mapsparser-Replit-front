@@ -1,0 +1,3 @@
+{"status": "passed", "mode": "internal_manual_source_staging", "model_generation_tested": false, "real_user_pilot": false, "blueprint_id": "a322708e-56f8-476c-834a-78b764cbbbbf", "version_id": "27945a02-2536-4089-8f73-88928a8db5b3", "run_ids": ["c1d84448-b8da-46f1-8983-66165971715b", "2784ee77-e4c7-48fc-bfa8-bb0b2ebdbef6", "366a0898-7720-471c-97ca-850f933587b0", "1ebc7f1a-11aa-4242-91d2-db48512d86c9", "6734b883-6bdb-4e33-91c4-78c4443d0272"], "compile_replay": true, "run_replay": true, "runtime_ai_calls": 0, "table_contract_version": 2, "previews": 10, "runs": 5}
+
+EXIT=0

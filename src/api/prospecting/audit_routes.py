@@ -24,6 +24,7 @@ from psycopg2.extras import Json, RealDictCursor
 from auth_system import CONSENT_VERSION, normalize_email, verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
+from core.db_helpers import assert_schema_columns
 from core.audit_quality import evaluate_audit_quality
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
@@ -1009,17 +1010,7 @@ def _load_partnership_artifact(cur, lead_id: str) -> dict[str, Any]:
     return _row_to_dict(row)
 
 def _ensure_partnership_artifacts_table_from_cursor(cur) -> None:
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS partnershipleadartifacts (
-            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
-            audit_json JSONB,
-            match_json JSONB,
-            offer_draft_json JSONB,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
+    assert_schema_columns(cur, "partnershipleadartifacts", ("lead_id", "audit_json", "match_json", "offer_draft_json", "updated_at"))
 
 def _refresh_existing_partnership_sales_room(
     cur,

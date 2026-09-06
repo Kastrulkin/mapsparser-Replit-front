@@ -55,6 +55,10 @@ services:
       RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
       BROWSER_COOKIE_AUTH_ENABLED: ${BROWSER_COOKIE_AUTH_ENABLED:-false}
       BROWSER_COOKIE_AUTH_SECURE: ${BROWSER_COOKIE_AUTH_SECURE:-true}
+      LOCALOS_MIGRATION_MODE: ${LOCALOS_MIGRATION_MODE:-startup}
+      LOCALOS_TODAY_PERSONALIZATION_ENABLED: ${LOCALOS_TODAY_PERSONALIZATION_ENABLED:-true}
+      LOCALOS_TODAY_ACTIVITY_ENABLED: ${LOCALOS_TODAY_ACTIVITY_ENABLED:-false}
+      LOCALOS_TODAY_PROPOSALS_ENABLED: ${LOCALOS_TODAY_PROPOSALS_ENABLED:-false}
       WEB_TRACKING_ENABLED: ${WEB_TRACKING_ENABLED:-false}
       WEB_TRACKING_CREATE_ENABLED: ${WEB_TRACKING_CREATE_ENABLED:-false}
       WEB_TRACKING_INGEST_ENABLED: ${WEB_TRACKING_INGEST_ENABLED:-false}
@@ -269,6 +273,8 @@ services:
       - ./debug_data:/app/debug_data
       - ./src:/app/src:ro
       - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro
+      - ./scripts/check_content_learning_schema.py:/app/scripts/check_content_learning_schema.py:ro
       - ./alembic_migrations:/app/alembic_migrations:ro
       - ./frontend/dist:/app/frontend/dist
       - ./frontend/public-dist:/app/frontend/public-dist
@@ -304,6 +310,10 @@ services:
       RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
       RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
       CONTENT_GENERATION_V2_ENABLED: ${CONTENT_GENERATION_V2_ENABLED:-false}
+      LOCALOS_MIGRATION_MODE: ${LOCALOS_MIGRATION_MODE:-startup}
+      LOCALOS_TODAY_PERSONALIZATION_ENABLED: ${LOCALOS_TODAY_PERSONALIZATION_ENABLED:-true}
+      LOCALOS_TODAY_ACTIVITY_ENABLED: ${LOCALOS_TODAY_ACTIVITY_ENABLED:-false}
+      LOCALOS_TODAY_PROPOSALS_ENABLED: ${LOCALOS_TODAY_PROPOSALS_ENABLED:-false}
       FOUNDER_CONTENT_MORNING_ENABLED: ${FOUNDER_CONTENT_MORNING_ENABLED:-false}
       WEB_TRACKING_MAINTENANCE_ENABLED: ${WEB_TRACKING_MAINTENANCE_ENABLED:-false}
       WEB_TRACKING_MAINTENANCE_DRY_RUN: ${WEB_TRACKING_MAINTENANCE_DRY_RUN:-true}
@@ -524,6 +534,8 @@ services:
       - ./debug_data:/app/debug_data
       - ./src:/app/src:ro
       - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro
+      - ./scripts/check_content_learning_schema.py:/app/scripts/check_content_learning_schema.py:ro
       - ./alembic_migrations:/app/alembic_migrations:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

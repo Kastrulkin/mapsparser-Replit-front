@@ -79,7 +79,7 @@ def main():
         command([
             "docker", "run", "-d", "--name", GATEWAY, "--network", NETWORK, "--read-only",
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=8m", "--cap-drop", "ALL", "--cap-add", "SETUID", "--cap-add", "SETGID",
-            "--security-opt", "no-new-privileges:true", "--pids-limit", "32", "--memory", "128m", "--cpus", "0.50",
+            "--security-opt", "no-new-privileges:true", "--pids-limit", "32", "--memory", "256m", "--cpus", "0.50",
             "-e", "COMPILED_SCRIPT_RUNNER_SHARED_SECRET=" + SECRET, "-e", "COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST=" + digest, image_id,
         ])
         created_gateway = True

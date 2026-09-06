@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from subscription_manager import get_capability_access
+from core.db_helpers import assert_schema_columns
 import uuid
 import json
 
@@ -50,51 +51,7 @@ def _get_table_columns(cursor, table_name: str):
 
 def _ensure_ai_agents_schema(db: DatabaseManager) -> None:
     cursor = db.conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS AIAgents (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            type TEXT NOT NULL,
-            description TEXT,
-            personality TEXT,
-            states_json TEXT,
-            workflow TEXT,
-            task TEXT,
-            identity TEXT,
-            speech_style TEXT,
-            restrictions_json TEXT,
-            variables_json TEXT,
-            is_active INTEGER DEFAULT 1,
-            created_by TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS workflow TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS task TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS identity TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS speech_style TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS restrictions_json TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS variables_json TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS created_by TEXT")
-    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    cursor.execute(
-        """
-        INSERT INTO AIAgents (id, name, type, description, personality, is_active)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (id) DO NOTHING
-        """,
-        (
-            "booking_agent_default",
-            "Booking Agent",
-            "booking",
-            "Агент для записи клиентов",
-            "Вежливый, пунктуальный администратор. Твоя задача - записать клиента на услугу.",
-            1,
-        ),
-    )
-    db.conn.commit()
+    assert_schema_columns(cursor, "aiagents", ("id", "name", "type", "description", "personality", "states_json", "workflow", "task", "identity", "speech_style", "restrictions_json", "variables_json", "is_active", "created_by", "created_at", "updated_at"))
 
 def require_superadmin():
     """Проверка, что пользователь - суперадмин"""

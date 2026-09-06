@@ -68,9 +68,12 @@ type OfferPagePayload = {
       priority?: string;
       title?: string;
       problem?: string;
+      description?: string;
       evidence?: string;
       impact?: string;
+      meaning?: string;
       fix?: string;
+      actions?: string[];
     }>;
     top_3_issues?: Array<{
       id?: string;
@@ -2545,7 +2548,7 @@ const buildLocalizedEvidence = (
   if (lang === 'ru') return String(issue?.evidence || '').trim();
   const servicesCount = Number(state?.services_count || 0);
   const rawPricedServicesCount = state?.services_with_price_count;
-  const hasKnownPricedServicesCount = rawPricedServicesCount !== null && rawPricedServicesCount !== undefined && rawPricedServicesCount !== '';
+  const hasKnownPricedServicesCount = rawPricedServicesCount !== null && rawPricedServicesCount !== undefined;
   const pricedServicesCount = hasKnownPricedServicesCount ? Number(rawPricedServicesCount || 0) : null;
   const reviewsCount = Number(state?.reviews_count || 0);
   const unansweredReviewsCount = Number(state?.unanswered_reviews_count || 0);
@@ -3379,7 +3382,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const servicesCountForWhy = Number(state.services_count || 0);
   const rawPricedServicesCountForWhy = state.services_with_price_count;
   const hasKnownPricedServicesCountForWhy =
-    rawPricedServicesCountForWhy !== null && rawPricedServicesCountForWhy !== undefined && rawPricedServicesCountForWhy !== '';
+    rawPricedServicesCountForWhy !== null && rawPricedServicesCountForWhy !== undefined;
   const pricedServicesCountForWhy = hasKnownPricedServicesCountForWhy ? Number(rawPricedServicesCountForWhy || 0) : null;
   const auditProfileForWhy = String(page.audit?.audit_profile || '').trim().toLowerCase();
   const serviceListWhy = (() => {

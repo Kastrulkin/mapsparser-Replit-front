@@ -487,7 +487,7 @@ export const AgentBlueprintsView = ({ scope }) => {
     saveMatonIntegration, chooseProviderRoute, attachExistingAgentIntegration, saveCustomProcess, runCustomProcessPreview, applyLegacyMigration,
     sendRunFeedback, postCreateReadyForRun, showPostCreateConnectionDetails, todaySummary, employeeListDetailsById, filteredBlueprints,
     selectedEmployeeAction, selectedResultRun, resultNeedsScenarioRebuild, resultNeedsGoogleSheetsSetup, resultNeedsGoogleAccessReconnect, resultGoogleAccessReconnected,
-    openGoogleSheetsSourceSetup, openGoogleAccessReconnect, openSelectedAgentClone, runEmployeePrimaryAction, applyFinanceRequests
+    openGoogleSheetsSourceSetup, openGoogleAccessReconnect, openSelectedAgentClone, runEmployeePrimaryAction, applyFinanceRequests, isCompiledTableRun
   } = scope;
   const [archiveReasonCode, setArchiveReasonCode] = useState('no_longer_needed');
   const archiveReasonOptions = [
@@ -965,7 +965,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                         )}
                       </div>
                     </section>
-                    {selectedResultRun || selectedPendingApproval ? (
+                    {!isCompiledTableRun && (selectedResultRun || selectedPendingApproval) ? (
                       <EmployeeTestResultPanel
                         activeRun={selectedResultRun}
                         pendingApproval={selectedPendingApproval}

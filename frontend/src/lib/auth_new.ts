@@ -23,6 +23,20 @@ export interface AuthResponse {
 import { API_URL } from '../config/api';
 import { browserCookieAuthEnabled, browserCookieValue } from './browserSessionFetch';
 
+export class HttpError extends Error {
+  readonly status: number | null;
+  readonly code: string;
+  readonly details: unknown;
+
+  constructor(message: string, status: number | null, code: string, details?: unknown) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
 export class NewAuth {
   private static instance: NewAuth;
   private currentUser: User | null = null;
@@ -125,6 +139,9 @@ export class NewAuth {
         ...(browserCookieAuthEnabled() ? { credentials: 'include' } : {}),
       });
       responseReceived = true;
+      if (response.status === 401) {
+        this.clearActiveToken();
+      }
 
       // Проверяем Content-Type перед парсингом JSON
       const contentType = response.headers.get('content-type');
@@ -137,35 +154,34 @@ export class NewAuth {
         if (text.trim()) {
           try {
             data = JSON.parse(text);
-          } catch (parseError) {
-            console.error('Ошибка парсинга JSON:', parseError, 'Ответ:', text);
-            throw new Error(`Ошибка парсинга ответа сервера: ${text.substring(0, 100)}`);
+          } catch {
+            if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, 'HTTP_ERROR');
+            throw new HttpError('Сервер вернул повреждённый ответ. Повторите запрос.', response.status, 'INVALID_RESPONSE');
           }
         }
       } else {
         // Если ответ не JSON, читаем как текст
         const text = await response.text();
-        console.error('Сервер вернул не-JSON ответ:', text.substring(0, 200));
-        throw new Error(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`);
+        if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, 'HTTP_ERROR');
+        throw new HttpError(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`, response.status, 'INVALID_RESPONSE');
       }
 
       if (!response.ok) {
-        if (response.status === 401) {
-          this.clearActiveToken();
-          throw new Error('Сессия истекла. Войдите снова.');
-        }
-        throw new Error(data.message || data.error || `Ошибка запроса (${response.status})`);
+        const errorBody = data && typeof data === 'object' ? data : {};
+        const code = typeof errorBody.code === 'string' ? errorBody.code : typeof errorBody.error_code === 'string' ? errorBody.error_code : 'HTTP_ERROR';
+        if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, code);
+        throw new HttpError(errorBody.message || errorBody.error || `Ошибка запроса (${response.status})`, response.status, code, errorBody);
       }
 
       return data;
     } catch (error) {
       // Если сервер ответил, показываем его прикладную ошибку без маскировки под сетевой сбой.
-      if (responseReceived || (error instanceof Error && error.message.includes('Ошибка'))) {
+      if (responseReceived || error instanceof HttpError || (error instanceof Error && error.message.includes('Ошибка'))) {
         throw error;
       }
       // Иначе это сетевая ошибка или другая проблема
       console.error('Ошибка запроса:', error);
-      throw new Error(`Ошибка соединения с сервером: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      throw new HttpError(`Ошибка соединения с сервером: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`, null, 'NETWORK_ERROR');
     }
   }
 

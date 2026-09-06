@@ -26,7 +26,7 @@ const states = (
 ): Record<EmployeeWorkspaceState, string> => ({
   draft, needs_mode: needsMode, needs_connection: needsConnection, ready_for_test: ready,
   running_test: running, waiting_for_review: review, blocked_result: blocked, working,
-  completed, needs_attention: attention, error,
+  paused: working, completed, needs_attention: attention, error,
 });
 
 const modes = (oneOff: string, manual: string, scheduled: string): Record<AgentExecutionMode, string> => ({ one_off: oneOff, manual, scheduled });

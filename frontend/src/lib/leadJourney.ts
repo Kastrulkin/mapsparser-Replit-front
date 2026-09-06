@@ -381,7 +381,8 @@ export const isLeadJourneyKey = (value: string | null): value is LeadJourneyKey 
 export const leadJourneyKeyForFlow = (flow: string | null | undefined): LeadJourneyKey | null => {
   if (flow === 'influencer') return 'influencers';
   if (flow === 'partnership') return 'partnerships';
-  return isLeadJourneyKey(flow || null) ? flow : null;
+  const candidate = flow || null;
+  return isLeadJourneyKey(candidate) ? candidate : null;
 };
 
 export const journeyActionRoute = (action: JourneyAction) => {

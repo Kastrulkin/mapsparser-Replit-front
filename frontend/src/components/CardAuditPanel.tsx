@@ -588,7 +588,7 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
                         evidence={compactAuditText(issue.evidence, 'Фактических деталей пока недостаточно.')}
                         meaning={compactAuditText(issue.impact, 'Это может снижать доверие и усложнять выбор для клиента.')}
                         action={compactAuditText(issue.fix, 'Сначала уточните данные карточки, затем обновите публичное описание.')}
-                        help={localosOperationalHelp}
+                        outcome={localosOperationalHelp}
                       />
                     ))
                   ) : (

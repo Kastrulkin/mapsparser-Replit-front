@@ -18,6 +18,27 @@ TASK_PYTHON="${PYTHON_BIN:-python3}"
   tests/test_agent_blueprint_capabilities.py \
   tests/test_compiled_script_api.py \
   tests/test_compiled_script_artifact.py \
+  tests/test_compiled_table_pilot.py \
+  tests/test_compiled_runner_load.py \
+  tests/test_compiled_runtime_errors.py \
+  tests/test_compiled_deployment_contract.py \
+  tests/test_plan_compose_contract.py \
+  tests/test_agent_run_fences_pg.py \
+  tests/test_agent_run_admission_pg.py \
+  tests/test_compiled_run_claim_pg.py \
+  tests/test_compiled_generation_admission_pg.py \
+  tests/test_compiled_account_api_pg.py \
+  tests/test_compiled_run_replay_api_pg.py \
+  tests/test_compiled_pointer_lifecycle.py \
+  tests/test_compiled_snapshot_lock_pg.py \
+  tests/test_content_learning_schema_pg.py \
+  tests/test_remaining_runtime_ddl_schema_pg.py \
+  tests/test_action_orchestrator_schema_pg.py \
+  tests/test_growth_schema_pg.py \
+  tests/test_report_telegram_schema_pg.py \
+  tests/test_runtime_ddl_009_pg.py \
+  tests/test_prospecting_runtime_schema_pg.py \
+  tests/test_migration_startup_contract.py \
   tests/test_partnership_draft_review.py \
   tests/test_telegram_control_scope.py
 "${TASK_PYTHON}" -m compileall -q src

@@ -1,6 +1,8 @@
 import os
 from typing import Optional
 
+from core.db_helpers import assert_schema_columns
+
 
 RUNTIME_SETTING_KEY_USE_APIFY_MAP_PARSING = "use_apify_map_parsing"
 
@@ -13,16 +15,7 @@ def _env_default_use_apify() -> bool:
 def _ensure_runtime_settings_table(conn) -> None:
     cur = conn.cursor()
     try:
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS parsingruntimeconfig (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        conn.commit()
+        assert_schema_columns(cur, "parsingruntimeconfig", ("key", "value", "updated_at"))
     finally:
         cur.close()
 

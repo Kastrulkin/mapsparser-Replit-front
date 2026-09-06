@@ -1063,7 +1063,7 @@ export function OutreachCampaignBuilder({
                     setTouchEditsValidated(false);
                     setPilotReadiness(null);
                   }}
-                  onFinish={() => {
+                  onAccept={() => {
                     setEditingTouchIndex(null);
                     setNotice('Правка применена в предпросмотре. Теперь проверьте всю цепочку.');
                   }}

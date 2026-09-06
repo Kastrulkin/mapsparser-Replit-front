@@ -1,0 +1,90 @@
+[WebServer] (node:1581) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 3 workers
+
+(node:1587) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1585) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1586) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [desktop-chromium] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report (3.0s)
+  ✘  2 [telegram-393] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report (4.8s)
+  ✘  1 [android-360] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report (30.5s)
+
+
+  1) [android-360] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Сценарий', exact: true })
+        - locator resolved to <button type="button" class="min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96] text-slate-600 hover:text-slate-950">Сценарий</button>
+      - attempting click action
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+      - element was detached from the DOM, retrying
+
+
+      70 |   page.on('pageerror', (error) => pageErrors.push(error.message));
+      71 |   await page.goto(`/dashboard/agents?business_id=${selectedBusinessId}&blueprint_id=${chosen.blueprintId}&run_id=${chosen.runId}`);
+    > 72 |   await page.getByRole('button', { name: 'Сценарий', exact: true }).click();
+         |                                                                     ^
+      73 |   await expect(page.getByText('Утверждённая версия готова')).toBeVisible();
+      74 |   const builder = page.locator('section[aria-label="Проверьте таблицу без повторного обращения к ИИ"]');
+      75 |   const actualReport = page.getByText('Фактический отчёт запуска', { exact: true }).locator('..');
+        at /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/e2e/staging/plan-compiled.spec.ts:72:69
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-android-360/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-android-360/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-android-360/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-android-360/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [telegram-393] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report 
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 393
+    Received:    438
+
+      16 |   expect(bounds.width).toBeGreaterThan(0);
+      17 |   expect(bounds.left).toBeGreaterThanOrEqual(0);
+    > 18 |   expect(bounds.right).toBeLessThanOrEqual(viewportWidth);
+         |                        ^
+      19 | };
+      20 |
+      21 | const newestCompletedCompiledRun = async (request: APIRequestContext) => {
+        at expectVisibleChildWithinViewport (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/e2e/staging/plan-compiled.spec.ts:18:24)
+        at /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/e2e/staging/plan-compiled.spec.ts:92:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-telegram-393/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-telegram-393/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-telegram-393/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-telegram-393/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [android-360] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report 
+    [telegram-393] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report 
+  1 passed (35.0s)
+EXIT=1

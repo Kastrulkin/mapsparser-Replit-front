@@ -1,0 +1,14 @@
+ Container localos-plan-rollback-proof-rollback-app-1 Creating 
+ Container localos-plan-rollback-proof-rollback-app-1 Created 
+ Container localos-plan-rollback-proof-rollback-app-1 Starting 
+ Container localos-plan-rollback-proof-rollback-app-1 Started 
+content_learning_schema=ok
+ Container localos-plan-rollback-proof-rollback-app-1 Stopping 
+ Container localos-plan-rollback-proof-rollback-app-1 Stopped 
+ Container localos-plan-rollback-proof-rollback-app-1 Removing 
+ Container localos-plan-rollback-proof-rollback-app-1 Removed 
+{"status": "passed", "baseline_code": "ffc54c19", "migration_mode": "schema-check-only", "retained_schema": {"version_num": "20260906_012"}, "health": 200, "login": 200, "today": 200, "production_changed": false}
+
+
+
+EXIT=0

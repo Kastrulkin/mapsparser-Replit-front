@@ -1,0 +1,7 @@
+{
+  "chunk_id": "038563",
+  "wall_time_seconds": 1.311762667,
+  "exit_code": 0,
+  "original_token_count": 58,
+  "output": "⚠️  Файл с популярными запросами не найден\n{\"status\": \"passed\", \"revision\": \"20260906_012\", \"ddl_denied\": [\"CREATE\", \"ALTER\", \"DROP\"], \"runtime_helpers\": 13, \"caller_savepoint_preserved\": true}\n"
+}

@@ -1,0 +1,3 @@
+{"status": "passed", "image_id": "sha256:b1ee29707308c6e81f32d20c9d7b0eb59ed0e360905da66072fa33335bd6917b", "gateway": "localos-compiled-it-gateway-11efe079d369", "fixtures": 2}
+
+EXIT=0

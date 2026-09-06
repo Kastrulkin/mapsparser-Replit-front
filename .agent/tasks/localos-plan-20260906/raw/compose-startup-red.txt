@@ -1,0 +1,76 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_rendered_compose_passes_today_and_compiled_flags_to_the_actual_owners[False] _
+
+override = False
+
+    @pytest.mark.parametrize("override", [False, True])
+    def test_rendered_compose_passes_today_and_compiled_flags_to_the_actual_owners(override):
+        docker = shutil.which("docker")
+        if not docker:
+            pytest.skip("Docker Compose CLI is required to render the release configuration")
+        digest = "sha256:" + "a" * 64
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
+               "COMPILED_SCRIPT_RUNNER_IMAGE": "registry.example/runner@" + digest,
+               "COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST": digest,
+               "COMPILED_SCRIPT_RUNNER_SHARED_SECRET": "synthetic-compose-contract-secret"}
+        expected = {key: ("false" if value == "true" else "true") for key, value in FLAGS.items()} if override else FLAGS
+        if override:
+            env.update(expected)
+            env.update({"COMPILED_SCRIPT_PREVIEW_ENABLED": "true", "COMPILED_SCRIPT_EXECUTE_ENABLED": "true",
+                        "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "synthetic-business",
+                        "LOCALOS_MIGRATION_MODE": "schema-check-only"})
+        process = subprocess.run([docker, "compose", "--env-file", "/dev/null",
+            "-f", "docker-compose.yml", "-f", "docker-compose.workers.yml",
+            "-f", "docker/compiled-script-runner/compose.fragment.yml", "config", "--no-env-resolution", "--format", "json"],
+            cwd=ROOT, env=env, text=True, capture_output=True, timeout=30)
+        assert process.returncode == 0, "Compose rendering failed; credentials and rendered config are intentionally omitted"
+        config = json.loads(process.stdout)
+        for service in ("app", "worker", "worker-agent", "worker-maintenance"):
+            actual = config["services"][service]
+>           assert actual["environment"].get("LOCALOS_MIGRATION_MODE") == ("schema-check-only" if override else "startup")
+E           AssertionError: assert None == 'startup'
+E            +  where None = <built-in method get of dict object at 0x106752140>('LOCALOS_MIGRATION_MODE')
+E            +    where <built-in method get of dict object at 0x106752140> = {'AGENT_ASYNC_RUNS_ENABLED': 'false', 'AGENT_BETA_BUSINESS_IDS': '', 'AGENT_SCHEDULE_DISPATCH_ENABLED': 'false', 'ALLOWED_ORIGINS': '', ...}.get
+
+tests/test_plan_compose_contract.py:43: AssertionError
+_ test_rendered_compose_passes_today_and_compiled_flags_to_the_actual_owners[True] _
+
+override = True
+
+    @pytest.mark.parametrize("override", [False, True])
+    def test_rendered_compose_passes_today_and_compiled_flags_to_the_actual_owners(override):
+        docker = shutil.which("docker")
+        if not docker:
+            pytest.skip("Docker Compose CLI is required to render the release configuration")
+        digest = "sha256:" + "a" * 64
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
+               "COMPILED_SCRIPT_RUNNER_IMAGE": "registry.example/runner@" + digest,
+               "COMPILED_SCRIPT_RUNNER_IMAGE_DIGEST": digest,
+               "COMPILED_SCRIPT_RUNNER_SHARED_SECRET": "synthetic-compose-contract-secret"}
+        expected = {key: ("false" if value == "true" else "true") for key, value in FLAGS.items()} if override else FLAGS
+        if override:
+            env.update(expected)
+            env.update({"COMPILED_SCRIPT_PREVIEW_ENABLED": "true", "COMPILED_SCRIPT_EXECUTE_ENABLED": "true",
+                        "COMPILED_SCRIPT_PILOT_BUSINESS_IDS": "synthetic-business",
+                        "LOCALOS_MIGRATION_MODE": "schema-check-only"})
+        process = subprocess.run([docker, "compose", "--env-file", "/dev/null",
+            "-f", "docker-compose.yml", "-f", "docker-compose.workers.yml",
+            "-f", "docker/compiled-script-runner/compose.fragment.yml", "config", "--no-env-resolution", "--format", "json"],
+            cwd=ROOT, env=env, text=True, capture_output=True, timeout=30)
+        assert process.returncode == 0, "Compose rendering failed; credentials and rendered config are intentionally omitted"
+        config = json.loads(process.stdout)
+        for service in ("app", "worker", "worker-agent", "worker-maintenance"):
+            actual = config["services"][service]
+>           assert actual["environment"].get("LOCALOS_MIGRATION_MODE") == ("schema-check-only" if override else "startup")
+E           AssertionError: assert None == 'schema-check-only'
+E            +  where None = <built-in method get of dict object at 0x106736dc0>('LOCALOS_MIGRATION_MODE')
+E            +    where <built-in method get of dict object at 0x106736dc0> = {'AGENT_ASYNC_RUNS_ENABLED': 'false', 'AGENT_BETA_BUSINESS_IDS': '', 'AGENT_SCHEDULE_DISPATCH_ENABLED': 'false', 'ALLOWED_ORIGINS': '', ...}.get
+
+tests/test_plan_compose_contract.py:43: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_plan_compose_contract.py::test_rendered_compose_passes_today_and_compiled_flags_to_the_actual_owners[False]
+FAILED tests/test_plan_compose_contract.py::test_rendered_compose_passes_today_and_compiled_flags_to_the_actual_owners[True]
+2 failed in 0.72s
+
+EXIT=1

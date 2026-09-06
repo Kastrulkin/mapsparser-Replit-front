@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bot, Check, CircleAlert, Clock3, Loader2, Play } from 'lucide-react';
+import { Bot, Check, CircleAlert, Clock3, Loader2, Play, type LucideIcon } from 'lucide-react';
 import ActionPreviewSheet, { type MobileActionPreview } from './ActionPreviewSheet';
 import JobProgressSheet from './JobProgressSheet';
 import type { MobileScope } from './ScopeProvider';
@@ -21,7 +21,7 @@ type AgentItem = {
 
 const spring = { duration: 0.3, bounce: 0 };
 
-const statusCopy = (value?: string) => {
+const statusCopy = (value?: string): [string, string, LucideIcon] => {
   const status = String(value || '').toLowerCase();
   if (['running', 'processing', 'in_progress'].includes(status)) return ['В работе', 'text-primary', Loader2];
   if (['failed', 'error', 'stuck'].includes(status)) return ['Нужно внимание', 'text-rose-300', CircleAlert];

@@ -1,0 +1,68 @@
+{
+  "task_id": "localos-plan-20260906",
+  "overall_verdict": "FAIL",
+  "completion_status": "INCOMPLETE",
+  "bounded_package_verdict": "CONDITIONAL_PASS",
+  "reviewer": "/root/final_package_verdict (independent read-only quality_verifier)",
+  "recorded_by": "root from reviewer final response",
+  "criteria": [
+    {
+      "id": "R0",
+      "status": "FAIL",
+      "reason": "Полная сравнительная база latency/SQL/queue/connections отсутствует."
+    },
+    {
+      "id": "R1",
+      "status": "PASS",
+      "reason": "Текущие backend, frontend и staging evidence подтверждают пакет исправлений доступа, предпочтений, поздних ответов и повторов."
+    },
+    {
+      "id": "R2",
+      "status": "FAIL",
+      "reason": "Нет обязательного наблюдения 4 из 5 реальных пользователей."
+    },
+    {
+      "id": "R3",
+      "status": "FAIL",
+      "reason": "Legacy provider transactions и worker split/cutover не завершены."
+    },
+    {
+      "id": "R4",
+      "status": "FAIL",
+      "reason": "Нет настоящей model-backed генерации, зарегистрированного read-only источника и реального пользовательского пилота."
+    },
+    {
+      "id": "R5",
+      "status": "FAIL",
+      "reason": "Нет 14-дневного реального цикла наблюдения."
+    },
+    {
+      "id": "R6",
+      "status": "FAIL",
+      "reason": "Остаются runtime DDL callers, доменные переносы и глобальный DML-only cutover."
+    },
+    {
+      "id": "R7",
+      "status": "FAIL",
+      "reason": "Effect proposals, второй пилот и legacy migration не реализованы."
+    }
+  ],
+  "production_changed": false,
+  "release_conditions": [
+    "Explicit approval for twelve new migrations and CRM reconciliation",
+    "Fresh verified DB/artifact backup",
+    "Repeated live head/hash/queue/flags preflight"
+  ],
+  "artifacts_used": [
+    "raw/backend-final.txt",
+    "raw/frontend-gate.txt",
+    "raw/compiled-agent-e2e-final.txt",
+    "raw/staging-compiled-browser-table-final.txt",
+    "raw/staging-today-browser.txt",
+    "raw/staging-today-bearer.txt",
+    "raw/staging-compiled-api.txt",
+    "raw/staging-dml-role.json",
+    "raw/staging-rollback.txt",
+    "raw/startup-mount-docker.txt"
+  ]
+}

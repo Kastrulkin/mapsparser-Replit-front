@@ -584,11 +584,14 @@ export const CardOverviewPage = () => {
   );
 
   const refreshSyncSources = useMemo(() => {
-    const supportedSources = mapSources.filter(source => source === 'yandex' || source === '2gis' || source === 'google');
+    const supportedSources = mapSources.filter((source): source is 'yandex' | '2gis' | 'google' => source === 'yandex' || source === '2gis' || source === 'google');
     if (selectedSource === 'all') {
       return supportedSources;
     }
-    return supportedSources.includes(selectedSource) ? [selectedSource] : [];
+    if (selectedSource === 'yandex' || selectedSource === '2gis' || selectedSource === 'google') {
+      return [selectedSource];
+    }
+    return [];
   }, [mapSources, selectedSource]);
   const orderedMapSources = useMemo(() => {
     const priority: Record<string, number> = {

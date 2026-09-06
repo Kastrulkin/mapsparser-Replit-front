@@ -125,6 +125,17 @@ type FinanceFirstStepProps = {
   initialTab?: 'overview' | 'settings';
 };
 
+type FinanceTab = 'overview' | 'data' | 'services' | 'team' | 'workplaces' | 'settings';
+
+const isFinanceTab = (value: string): value is FinanceTab => (
+  value === 'overview'
+  || value === 'data'
+  || value === 'services'
+  || value === 'team'
+  || value === 'workplaces'
+  || value === 'settings'
+);
+
 type FinancePeriod = {
   start: string;
   end: string;
@@ -266,7 +277,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const [impact, setImpact] = useState<FinanceImpact | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<FinanceMetricKey | null>(null);
   const [activeInputStep, setActiveInputStep] = useState('entry');
-  const [activeFinanceTab, setActiveFinanceTab] = useState(initialTab);
+  const [activeFinanceTab, setActiveFinanceTab] = useState<FinanceTab>(initialTab);
   const [periodPreset, setPeriodPreset] = useState('last_3_months');
   const [period, setPeriod] = useState<FinancePeriod>(getDefaultFinancePeriod);
   const [entry, setEntry] = useState({
@@ -615,7 +626,9 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
       />
 
       <section id="finance-tabs" className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <Tabs value={activeFinanceTab} onValueChange={setActiveFinanceTab}>
+        <Tabs value={activeFinanceTab} onValueChange={(value) => {
+          if (isFinanceTab(value)) setActiveFinanceTab(value);
+        }}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:grid-cols-6">
             <TabsTrigger value="overview">{copy.tabs[0]}</TabsTrigger>
             <TabsTrigger value="data">{copy.tabs[1]}</TabsTrigger>

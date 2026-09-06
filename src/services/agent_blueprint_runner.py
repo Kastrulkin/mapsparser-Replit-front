@@ -235,30 +235,11 @@ class AgentBlueprintRunner:
         if str(os.getenv("COMPILED_SCRIPT_EXECUTE_ENABLED", "false")).lower() not in {"1", "true", "yes", "on"}:
             self._fail_run(run_id, "compiled script execution is disabled")
             return {"success": False, "error": "compiled_execution_disabled", "run": self.load_run(run_id)}
-        if str(version.get("compiled_state") or "") not in {"approved", "active"} or not version.get("compiled_approved_at") or not str(version.get("compiled_approved_by_user_id") or ""):
-            self._fail_run(run_id, "compiled script version is not approved")
-            return {"success": False, "error": "compiled_version_not_approved", "run": self.load_run(run_id)}
-        artifact = parse_json_field(version.get("compiled_artifact_json"), {})
-        preview_evidence = parse_json_field(version.get("compiled_preview_json"), {})
-        if str(preview_evidence.get("fixture_digest") or "") == "" or str((preview_evidence.get("result") or {}).get("artifact_hash") or "") != str(artifact.get("artifact_hash") or ""):
-            self._fail_run(run_id, "compiled script preview evidence does not match artifact")
-            return {"success": False, "error": "compiled_preview_evidence_invalid", "run": self.load_run(run_id)}
-        validation = validate_compiled_script_artifact(artifact)
-        if not validation.get("valid"):
-            self._fail_run(run_id, "compiled script artifact hash or policy validation failed")
-            return {"success": False, "error": "compiled_artifact_invalid", "run": self.load_run(run_id)}
-        run = self._load_run_header(run_id) or {}
-        try:
-            result = execute_in_attested_sandbox(artifact, parse_json_field(run.get("input_json"), {}))
-        except CompiledRuntimeUnavailable:
-            self._fail_run(run_id, "compiled_script_sandbox_unavailable")
-            return {"success": False, "error": "compiled_script_sandbox_unavailable", "run": self.load_run(run_id)}
-        self.cursor.execute(
-            """UPDATE agent_runs SET status = 'completed', output_json = %s::jsonb, error_text = NULL,
-                completed_at = NOW(), heartbeat_at = NOW(), updated_at = NOW() WHERE id = %s""",
-            (json.dumps(result, ensure_ascii=False), run_id),
-        )
-        return {"success": True, "run": self.load_run(run_id), "result": result}
+        # Compiled execution is intentionally owned by the fenced queue
+        # executor. Running it here would retain this runner transaction while
+        # the sandbox request is in flight and could bypass the lease fence.
+        self._fail_run(run_id, "compiled_run_requires_fenced_queue_executor")
+        return {"success": False, "error": "compiled_run_requires_fenced_queue_executor", "run": self.load_run(run_id)}
 
     def approve(self, run_id: str, approval_id: str, user_data: Dict[str, Any], decision_reason: str = "") -> Dict[str, Any]:
         approval = self._load_approval(run_id, approval_id)

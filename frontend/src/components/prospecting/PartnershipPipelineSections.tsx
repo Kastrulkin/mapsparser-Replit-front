@@ -60,6 +60,7 @@ type PipelineLead = {
   sales_room_data_mode?: string;
   sales_room_url?: string;
   next_best_action?: {
+    code?: string;
     label?: string;
     hint?: string;
   };

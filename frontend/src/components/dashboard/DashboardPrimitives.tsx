@@ -53,7 +53,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   </div>
 );
 
-type DashboardMetricItem = {
+export type DashboardMetricItem = {
   label: string;
   value: React.ReactNode;
   hint?: string;

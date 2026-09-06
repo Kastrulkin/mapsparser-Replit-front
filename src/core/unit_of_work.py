@@ -14,8 +14,8 @@ from database_manager import DatabaseManager
 class UnitOfWork:
     """Own one database transaction and never commit it after an exception."""
 
-    def __init__(self, database_factory=DatabaseManager) -> None:
-        self.database = database_factory()
+    def __init__(self, database_factory=DatabaseManager, database: Any | None = None) -> None:
+        self.database = database if database is not None else database_factory()
         self._finished = False
 
     @property

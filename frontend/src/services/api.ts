@@ -52,6 +52,14 @@ export const api = {
         });
         return { data };
     },
+    patch: async (url: string, body: unknown, options: ApiOptions = {}) => {
+        const data = await newAuth.makeRequest(url, {
+            method: 'PATCH',
+            headers: options.headers,
+            body: JSON.stringify(body)
+        });
+        return { data };
+    },
     delete: async (url: string, options: ApiOptions = {}) => {
         const data = await newAuth.makeRequest(buildUrl(url, options.params), {
             method: 'DELETE',

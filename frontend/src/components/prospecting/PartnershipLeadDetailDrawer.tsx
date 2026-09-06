@@ -674,7 +674,7 @@ export default function PartnershipLeadDetailDrawer({
           ) : null}
 
           <LeadDetailSection title="Мультиканальный аутрич" tone="info">
-            <details id="sender-profile-settings" className="scroll-mt-24 rounded-xl border border-slate-200 bg-slate-50 p-4" defaultOpen={matchNeedsSenderProfile}>
+            <details id="sender-profile-settings" className="scroll-mt-24 rounded-xl border border-slate-200 bg-slate-50 p-4" open={matchNeedsSenderProfile}>
               <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-800">
                 Заполнить профиль отправителя
               </summary>

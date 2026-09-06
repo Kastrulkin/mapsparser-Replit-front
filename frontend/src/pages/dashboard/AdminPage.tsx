@@ -15,6 +15,7 @@ import {
   DashboardEmptyState,
   DashboardPageHeader,
   DashboardSection,
+  type DashboardMetricItem,
 } from '../../components/dashboard/DashboardPrimitives';
 
 const AgentApiManagement = lazy(() =>
@@ -1177,7 +1178,7 @@ export const AdminPage: React.FC = () => {
   }, [users]);
   const activeTabConfig = adminTabs.find((tab) => tab.id === activeTab) || adminTabs[0];
   const agentSummary = agentBlueprintOverview?.summary;
-  const agentMetrics = [
+  const agentMetrics: DashboardMetricItem[] = [
     { label: 'Всего агентов', value: String(agentSummary?.total || 0), tone: 'default' },
     { label: 'Высокий риск', value: String(agentSummary?.high_risk || 0), tone: 'warning' },
     { label: 'Средний риск', value: String(agentSummary?.medium_risk || 0), tone: 'warning' },
@@ -1189,7 +1190,7 @@ export const AdminPage: React.FC = () => {
     + Number(agentRuntime?.scheduler.failed_24h || 0)
     + Number(agentRuntime?.consistency.archived_unfinished_runs || 0)
     + Number(agentRuntime?.consistency.waiting_without_pending_approval || 0);
-  const agentRuntimeMetrics = [
+  const agentRuntimeMetrics: DashboardMetricItem[] = [
     {
       label: 'В очереди и работе',
       value: String(Number(agentRuntime?.runs.queued || 0) + Number(agentRuntime?.runs.running || 0)),
@@ -1218,7 +1219,7 @@ export const AdminPage: React.FC = () => {
     },
   ];
   const subscriptionSummary = subscriptionsOverview?.summary;
-  const subscriptionMetrics = [
+  const subscriptionMetrics: DashboardMetricItem[] = [
     {
       label: 'Активные подписки',
       value: <span className="tabular-nums">{subscriptionSummary?.active_subscriptions || 0}</span>,

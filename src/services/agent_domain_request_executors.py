@@ -5,6 +5,7 @@ import hashlib
 from typing import Any, Dict, List
 
 from core.agent_api_security import log_agent_action
+from core.db_helpers import assert_schema_columns
 
 
 APPROVED_EXECUTOR_REASON = "HUMAN_APPROVED_CONTROLLED_EXECUTOR"
@@ -244,41 +245,13 @@ def _approve_communication_requests(cursor: Any, business_id: str, user_id: str,
 
 
 def _ensure_communication_delivery_journal(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_communication_delivery_journal (
-            id TEXT PRIMARY KEY,
-            request_id TEXT NOT NULL,
-            action_id TEXT,
-            business_id TEXT NOT NULL,
-            run_id TEXT,
-            user_id TEXT,
-            recipient_key TEXT NOT NULL,
-            channel TEXT,
-            message_template TEXT,
-            status TEXT NOT NULL,
-            delivery_state TEXT NOT NULL,
-            consent_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            router_handoff_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
-            error_text TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_communication_delivery_request_recipient
-        ON agent_communication_delivery_journal(request_id, recipient_key)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_agent_communication_delivery_business_state
-        ON agent_communication_delivery_journal(business_id, delivery_state, created_at DESC)
-        """
+    assert_schema_columns(
+        cursor,
+        "agent_communication_delivery_journal",
+        (
+            "id", "request_id", "business_id", "recipient_key", "status",
+            "delivery_state", "consent_json", "limits_json", "created_at", "updated_at",
+        ),
     )
 
 
@@ -501,39 +474,13 @@ def _approve_review_publish_requests(cursor: Any, business_id: str, user_id: str
 
 
 def _ensure_review_publish_requests(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_review_publish_requests (
-            id TEXT PRIMARY KEY,
-            draft_id TEXT NOT NULL,
-            review_id TEXT NOT NULL,
-            business_id TEXT NOT NULL,
-            run_id TEXT,
-            user_id TEXT,
-            source TEXT,
-            reply_text TEXT NOT NULL,
-            status TEXT NOT NULL,
-            publish_state TEXT NOT NULL,
-            provider_request_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            audit_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
-            error_text TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_review_publish_requests_draft
-        ON agent_review_publish_requests(draft_id)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_agent_review_publish_requests_business_state
-        ON agent_review_publish_requests(business_id, publish_state, created_at DESC)
-        """
+    assert_schema_columns(
+        cursor,
+        "agent_review_publish_requests",
+        (
+            "id", "draft_id", "review_id", "business_id", "reply_text", "status",
+            "publish_state", "provider_request_json", "audit_json", "created_at", "updated_at",
+        ),
     )
 
 

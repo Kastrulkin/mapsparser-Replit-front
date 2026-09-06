@@ -505,6 +505,130 @@ def test_agent_run_claim_recovers_stale_heartbeat_before_claiming_retry():
     assert "attempt_count = r.attempt_count + 1" in cursor.queries[1]
 
 
+def test_agent_run_admission_checks_membership_before_reserving(monkeypatch):
+    from core.auth_context import AuthContext
+    from services import agent_run_admission
+
+    class Cursor:
+        def __init__(self):
+            self.rows = [{"id": "bp-1", "business_id": "biz-1", "status": "active", "metadata_json": {"active_version_id": "version-1"}}, {"id": "version-1", "blueprint_id": "bp-1"}]
+
+        def execute(self, *_args):
+            return None
+
+        def fetchone(self):
+            return self.rows.pop(0)
+
+    monkeypatch.setattr(agent_run_admission, "verify_business_access", lambda *_args: (False, "owner-1"))
+    monkeypatch.setattr(
+        agent_run_admission,
+        "enqueue_agent_run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not reserve a forbidden run")),
+    )
+
+    result = agent_run_admission.AgentRunAdmissionService(Cursor()).admit(
+        auth=AuthContext(user_id="user-1"),
+        blueprint={"id": "bp-1", "business_id": "biz-1"},
+        version={"id": "version-1"},
+        input_payload={},
+        idempotency_key="run-1",
+    )
+
+    assert result["code"] == "AGENT_RUN_SCOPE_FORBIDDEN"
+
+
+def test_agent_run_admission_passes_complete_auth_context_to_queue(monkeypatch):
+    from core.auth_context import AuthContext
+    from services import agent_run_admission
+
+    captured = {}
+    monkeypatch.setattr(agent_run_admission, "verify_business_access", lambda *_args: (True, "owner-1"))
+    monkeypatch.setattr(
+        agent_run_admission,
+        "enqueue_agent_run",
+        lambda *_args, **kwargs: captured.update(kwargs) or {"success": True, "run": {"id": "run-1"}},
+    )
+    auth = AuthContext(
+        user_id="user-1",
+        session_kind="standard",
+        scope_business_id="biz-1",
+        is_superadmin=True,
+        impersonating=True,
+    )
+
+    class Cursor:
+        def __init__(self):
+            self.rows = [{"id": "bp-1", "business_id": "biz-1", "status": "active", "metadata_json": {"active_version_id": "version-1"}}, {"id": "version-1", "blueprint_id": "bp-1"}]
+
+        def execute(self, *_args):
+            return None
+
+        def fetchone(self):
+            return self.rows.pop(0)
+
+    result = agent_run_admission.AgentRunAdmissionService(Cursor()).admit(
+        auth=auth,
+        blueprint={"id": "bp-1", "business_id": "biz-1"},
+        version={"id": "version-1"},
+        input_payload={"key": "value"},
+        input_snapshot={"snapshot_id": "snap-1", "content_hash": "sha256:fixture"},
+        idempotency_key="run-1",
+    )
+
+    assert result["success"] is True
+    assert captured["user_data"]["scope_business_id"] == "biz-1"
+    assert captured["user_data"]["impersonating"] is True
+    assert captured["input_snapshot"]["snapshot_id"] == "snap-1"
+
+
+def test_agent_run_admission_atomic_boundary_commits_only_a_success(monkeypatch):
+    from core.auth_context import AuthContext
+    from services import agent_run_admission
+
+    class Connection:
+        def __init__(self):
+            self.commits = 0
+            self.rollbacks = 0
+
+        def cursor(self):
+            return object()
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
+    class Database:
+        def __init__(self):
+            self.conn = Connection()
+            self.closed = 0
+
+        def rollback_and_close(self):
+            self.closed += 1
+
+    database = Database()
+    monkeypatch.setattr(
+        agent_run_admission.AgentRunAdmissionService,
+        "admit",
+        lambda *_args, **_kwargs: {"success": True, "run": {"id": "run-1"}},
+    )
+
+    result = agent_run_admission.AgentRunAdmissionService.admit_atomically(
+        auth=AuthContext(user_id="user-1"),
+        blueprint={"id": "bp-1", "business_id": "biz-1"},
+        version={"id": "version-1"},
+        input_payload={},
+        idempotency_key="run-1",
+        database_factory=lambda: database,
+    )
+
+    assert result["success"] is True
+    assert database.conn.commits == 1
+    assert database.conn.rollbacks == 0
+    assert database.closed == 1
+
+
 def test_unified_run_billing_counts_internal_artifact_tokens_once():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 

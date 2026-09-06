@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict
 from zoneinfo import ZoneInfo
 
 from database_manager import DatabaseManager
+from core.db_helpers import assert_schema_columns
 from core.finance_imports import normalize_finance_import_rows
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.outreach_send_capability import (
@@ -366,120 +367,19 @@ def _table_columns(cursor: Any, table_name: str) -> set[str]:
 
 
 def _ensure_communication_request_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_communication_requests (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL,
-            user_id TEXT,
-            capability TEXT NOT NULL,
-            message_type TEXT NOT NULL,
-            status TEXT NOT NULL,
-            channel TEXT,
-            recipient_count INTEGER NOT NULL DEFAULT 0,
-            recipients_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            message_template TEXT,
-            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            consent_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            delivery_state TEXT NOT NULL DEFAULT 'not_dispatched',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_communication_requests_business_status ON agent_communication_requests(business_id, status, created_at DESC)"
-    )
+    assert_schema_columns(cursor, "agent_communication_requests", ("id", "action_id", "business_id", "capability", "message_type", "status", "recipients_json", "limits_json", "consent_json", "delivery_state", "created_at", "updated_at"))
 
 
 def _ensure_service_optimization_request_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_service_optimization_requests (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL,
-            user_id TEXT,
-            status TEXT NOT NULL,
-            service_count INTEGER NOT NULL DEFAULT 0,
-            suggestions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            diff_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            apply_state TEXT NOT NULL DEFAULT 'not_applied',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_service_optimization_requests_business_status ON agent_service_optimization_requests(business_id, status, created_at DESC)"
-    )
-    cursor.execute(
-        """
-        ALTER TABLE agent_service_optimization_requests
-        ADD COLUMN IF NOT EXISTS diff_json JSONB NOT NULL DEFAULT '[]'::jsonb
-        """
-    )
+    assert_schema_columns(cursor, "agent_service_optimization_requests", ("id", "action_id", "business_id", "status", "service_count", "suggestions_json", "diff_json", "apply_state", "created_at", "updated_at"))
 
 
 def _ensure_review_reply_draft_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reviewreplydrafts (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            review_id TEXT NOT NULL,
-            user_id TEXT,
-            source TEXT,
-            rating INTEGER,
-            author_name TEXT,
-            review_text TEXT,
-            generated_text TEXT NOT NULL,
-            edited_text TEXT,
-            status TEXT NOT NULL DEFAULT 'draft',
-            tone TEXT,
-            prompt_key TEXT,
-            prompt_version TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_reviewreplydrafts_review_unique ON reviewreplydrafts(review_id)")
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reviewreplydrafts_business_status ON reviewreplydrafts(business_id, status, created_at DESC)"
-    )
+    assert_schema_columns(cursor, "reviewreplydrafts", ("id", "business_id", "review_id", "generated_text", "status", "tone", "prompt_key", "prompt_version", "created_at", "updated_at"))
 
 
 def _ensure_sheet_operation_request_table(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_sheet_operation_requests (
-            id TEXT PRIMARY KEY,
-            action_id TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL,
-            user_id TEXT,
-            integration_id TEXT,
-            spreadsheet_id TEXT,
-            sheet_name TEXT,
-            operation TEXT NOT NULL,
-            status TEXT NOT NULL,
-            approval_state TEXT NOT NULL DEFAULT 'pending_human',
-            apply_state TEXT NOT NULL DEFAULT 'not_applied',
-            row_values_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            mapping_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            source_event_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
-            error_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_sheet_operation_requests_business_status ON agent_sheet_operation_requests(business_id, status, created_at DESC)"
-    )
+    assert_schema_columns(cursor, "agent_sheet_operation_requests", ("id", "action_id", "business_id", "operation", "status", "approval_state", "apply_state", "row_values_json", "mapping_json", "source_event_json", "limits_json", "provider_write_performed", "created_at", "updated_at"))
 
 
 def _template_value(value: Any, context: Dict[str, Any]) -> Any:

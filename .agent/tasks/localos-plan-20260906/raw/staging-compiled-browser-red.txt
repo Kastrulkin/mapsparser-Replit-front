@@ -1,0 +1,52 @@
+[WebServer] (node:98506) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:98512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [desktop-chromium] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report (6.9s)
+
+
+  1) [desktop-chromium] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByText('Фактический отчёт запуска', { exact: true }).locator('..')
+    Expected substring: "Строк: 3 · принято: 1 · дубли: 1 · ошибки: 1"
+    Received string:    "Фактический отчёт запускаСтрок: 1 · принято: 1 · дубли: 0 · ошибки: 0Скачать ошибки CSV"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 5000ms
+      - waiting for getByText('Фактический отчёт запуска', { exact: true }).locator('..')
+        14 × locator resolved to <div class="mt-3 rounded-xl bg-slate-50 p-3 text-sm">…</div>
+           - unexpected value "Фактический отчёт запускаСтрок: 1 · принято: 1 · дубли: 0 · ошибки: 0Скачать ошибки CSV"
+
+
+      75 |   const actualReport = page.getByText('Фактический отчёт запуска', { exact: true }).locator('..');
+      76 |   await expect(actualReport).toBeVisible();
+    > 77 |   await expect(actualReport).toContainText('Строк: 3 · принято: 1 · дубли: 1 · ошибки: 1');
+         |                              ^
+      78 |   await expect(actualReport.getByText('Дубликат строки')).toBeVisible();
+      79 |   await expect(actualReport.getByText('Не заполнены: email')).toBeVisible();
+      80 |   await expect(page.getByText('Данные запуска хранятся 7 дней. После этого остаётся отчёт без содержимого строк.')).toBeVisible();
+        at /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/e2e/staging/plan-compiled.spec.ts:77:30
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-desktop-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-desktop-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/staging-plan-compiled-appr-fa605-hows-its-real-runner-report-desktop-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop-chromium] › e2e/staging/plan-compiled.spec.ts:53:1 › approved compiled table version reloads and shows its real runner report 
+EXIT=1

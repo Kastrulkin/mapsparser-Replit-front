@@ -16,6 +16,7 @@ export type AgentBlueprint = {
   latest_goal?: string | null;
   active_version_id?: string | null;
   active_version_number?: number | null;
+  compiled_approved_version_id?: string | null;
   active_goal?: string | null;
   active_persona_agent_id?: string | null;
   latest_persona_agent_id?: string | null;
@@ -301,6 +302,7 @@ export type AgentRun = {
   run_billing?: Record<string, unknown>;
   observability?: AgentRunObservability;
   business_result?: Record<string, unknown>;
+  output_json?: Record<string, unknown>;
   result_state?: 'missing' | 'prepared' | 'saved' | 'blocked';
   current_approval?: AgentApproval | null;
   evaluation?: {
@@ -439,6 +441,7 @@ export type AgentBlueprintDetails = {
   active_version?: Record<string, unknown> | null;
   active_version_id?: string;
   active_version_number?: number;
+  compiled_approved_version?: Record<string, unknown> | null;
   candidate_version?: Record<string, unknown> | null;
   candidate_version_id?: string;
   run_input_schema?: AgentRunInputSchema;
@@ -458,6 +461,7 @@ export type AgentBlueprintDetails = {
   metrics?: AgentMetricsSummary;
   activation_gate?: AgentActivationGate;
   execution_contract?: AgentExecutionContract;
+  compiled_access?: { preview?: boolean; execute?: boolean };
 };
 
 export type AgentTemplate = {
@@ -897,7 +901,7 @@ export type AgentBusinessStatus = {
 };
 
 export type EmployeeStatus = {
-  label: 'Работает' | 'Выполнено' | 'Нужны данные' | 'Ждёт решения' | 'Нужно проверить' | 'Ошибка' | 'Черновик';
+  label: 'Работает' | 'Выполнено' | 'Нужны данные' | 'Ждёт решения' | 'Нужно проверить' | 'Ошибка' | 'Черновик' | 'Пауза';
   tone: 'emerald' | 'amber' | 'rose' | 'slate';
   summary: string;
 };

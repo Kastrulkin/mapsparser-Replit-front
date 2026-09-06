@@ -1,0 +1,39 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_prospecting_reconciliation_preserves_manual_status_and_maps_delivery_state _
+
+connection = (<connection object at 0x101b11540; dsn: 'postgresql:///localos_plan_test?host=/tmp/localos-plan-pg-socket&port=55439', closed: 0>, 'test_prospecting_867140e636dc49eaa19bca40c33ac150')
+
+    def test_prospecting_reconciliation_preserves_manual_status_and_maps_delivery_state(connection):
+        conn, _schema = connection
+        cur = conn.cursor()
+        cur.executemany(
+            "INSERT INTO prospectingleads(id, status, pipeline_status) VALUES (%s, %s, %s)",
+            [
+                ("sent", "sent", "unprocessed"),
+                ("delivered", "delivered", "unprocessed"),
+                ("second", "second_message_sent", ""),
+                ("manual", "sent", "postponed"),
+                ("converted", "qualified", "unprocessed"),
+            ],
+        )
+        _apply_prospecting_reconciliation(cur)
+        cur.execute("SELECT id, pipeline_status FROM prospectingleads ORDER BY id")
+>       assert {row["id"]: row["pipeline_status"] for row in cur.fetchall()} == {
+            "converted": "converted",
+            "delivered": "waiting_reply",
+            "manual": "postponed",
+            "second": "second_message_sent",
+            "sent": "contacted",
+        }
+E       AssertionError: assert {'converted':...ge_sent', ...} == {'converted':...ge_sent', ...}
+E         
+E         Omitting 4 identical items, use -vv to show
+E         Differing items:
+E         {'delivered': 'contacted'} != {'delivered': 'waiting_reply'}
+E         Use -v to get more diff
+
+tests/test_prospecting_runtime_schema_pg.py:91: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_prospecting_runtime_schema_pg.py::test_prospecting_reconciliation_preserves_manual_status_and_maps_delivery_state
+1 failed, 1 passed in 0.75s

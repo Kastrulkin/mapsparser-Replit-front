@@ -648,6 +648,9 @@ class FakeCapabilityCursor:
             self.description = [("to_regclass",)]
             self.last_result = (table_name if table_name in {"bookings", "externalbusinessreviews", "userservices"} else None,)
             return None
+        if "array_agg(column_name::text)" in normalized_query:
+            self.last_result = {"columns": list(params[1])}
+            return None
         if "from information_schema.columns" in normalized_query:
             table_name = str(params[0])
             column_map = {
@@ -836,6 +839,14 @@ class FakeApprovedDomainExecutorCursor:
         if normalized_query.startswith("select to_regclass"):
             table_name = str(params[0])
             self.last_result = (table_name if table_name in self.tables else None,)
+            return None
+        if "array_agg(column_name::text)" in normalized_query:
+            table_name = str(params[0])
+            requested_columns = list(params[1])
+            if table_name not in self.tables:
+                self.last_result = {"columns": []}
+                return None
+            self.last_result = {"columns": requested_columns}
             return None
         if "from information_schema.columns" in normalized_query:
             table_name = str(params[0])

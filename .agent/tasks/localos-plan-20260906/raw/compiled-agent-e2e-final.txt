@@ -1,0 +1,27 @@
+[WebServer] (node:2117) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 14 tests using 1 worker
+
+(node:2122) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:49:1 › compiled table run polls queued, running, and completed states without replacing the builder (7.0s)
+  ✓   2 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:155:1 › a deep-linked compiled report stays selected until the user starts a new run (1.0s)
+  ✓   3 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:187:1 › a failed compiled preview renders its row error and cannot be approved (992ms)
+  ✓   4 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:209:1 › the English compiled-table flow reviews, approves, runs, and downloads its row report (1.7s)
+  ✓   5 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:249:1 › an unfinished next version does not hide the approved version after reload (3.0s)
+  ✓   6 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:313:1 › a user outside the compiled cohort keeps the existing scenario UI (756ms)
+  ✓   7 [desktop-chromium] › e2e/compiled-agent-mocked.spec.ts:326:1 › a paused blueprint keeps its paused status even with a compiled approval marker (719ms)
+(node:2184) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   8 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:49:1 › compiled table run polls queued, running, and completed states without replacing the builder (3.7s)
+  ✓   9 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:155:1 › a deep-linked compiled report stays selected until the user starts a new run (917ms)
+  ✓  10 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:187:1 › a failed compiled preview renders its row error and cannot be approved (934ms)
+  ✓  11 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:209:1 › the English compiled-table flow reviews, approves, runs, and downloads its row report (1.2s)
+  ✓  12 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:249:1 › an unfinished next version does not hide the approved version after reload (3.0s)
+  ✓  13 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:313:1 › a user outside the compiled cohort keeps the existing scenario UI (787ms)
+  ✓  14 [telegram-393] › e2e/compiled-agent-mocked.spec.ts:326:1 › a paused blueprint keeps its paused status even with a compiled approval marker (745ms)
+
+  14 passed (32.8s)
+
+EXIT=0
