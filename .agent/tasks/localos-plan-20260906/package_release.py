@@ -44,9 +44,10 @@ def main():
     source_paths = [name for name in owned if name.startswith(("src/", "alembic_migrations/"))
                     or name in ("entrypoint.sh", "scripts/localos_migrator.py", "scripts/check_content_learning_schema.py")]
     ui_paths = []
-    for directory in ("frontend/dist", "frontend/public-dist"):
-        if not (ROOT / directory / "index.html").is_file():
-            raise RuntimeError("Missing UI entrypoint: " + directory)
+    for directory, entrypoint in (("frontend/dist", "index.html"),
+                                  ("frontend/public-dist", "public-audit/index.html")):
+        if not (ROOT / directory / entrypoint).is_file():
+            raise RuntimeError("Missing UI entrypoint: " + directory + "/" + entrypoint)
         ui_paths.extend(str(path.relative_to(ROOT)) for path in (ROOT / directory).rglob("*") if path.is_file())
     DESTINATION.mkdir(parents=True, exist_ok=True)
     archive_path = DESTINATION / "payload.tar.gz"
