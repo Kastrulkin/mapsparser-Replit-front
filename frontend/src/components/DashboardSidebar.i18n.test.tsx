@@ -47,6 +47,7 @@ describe('DashboardSidebar localization', () => {
 
     expect(await screen.findByRole('link', { name: 'Ещё' })).toHaveAttribute('href', '/dashboard/more');
     expect(screen.queryByRole('link', { name: 'Пути роста' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Управление через чат' })).toHaveAttribute('href', '/dashboard/operator');
     expect(screen.getByRole('link', { name: 'Контент' })).toHaveAttribute('href', '/dashboard/content');
     expect(screen.getByRole('link', { name: 'Инфлюенсеры' })).toHaveAttribute('href', '/dashboard/influencers');
   });

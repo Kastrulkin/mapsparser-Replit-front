@@ -1,4 +1,5 @@
 import type { Language } from '@/i18n/LanguageContext';
+import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
 
 type AttentionCopy = { title: string; description: string };
 
@@ -202,7 +203,7 @@ const feedbackByLanguage: Partial<Record<Language, OperatorPageCopy['feedback']>
 export const operatorPageCopyForLanguage = (language: Language) => {
   const base = copyByLanguage[language];
   const localizedSummary = summaryByLanguage[language];
-  return { ...base, ...(localizedSummary || {}), ...(feedbackByLanguage[language] ? { feedback: feedbackByLanguage[language] } : {}) };
+  return { ...base, ...(localizedSummary || {}), ...(feedbackByLanguage[language] ? { feedback: feedbackByLanguage[language] } : {}), title: getDashboardNavigationCopy(language).operator };
 };
 
 export const fillOperatorTemplate = (template: string, values: Record<string, string | number>) => (

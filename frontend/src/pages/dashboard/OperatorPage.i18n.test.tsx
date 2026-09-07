@@ -37,7 +37,7 @@ describe('OperatorPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Χειριστής' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Διαχείριση μέσω συνομιλίας' })).toBeInTheDocument();
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     expect(vi.mocked(api.get).mock.calls.some(([url]) => url === '/operator/summary')).toBe(false);
     expect(screen.getByRole('button', { name: 'Αναφορά προβλήματος' })).toBeInTheDocument();

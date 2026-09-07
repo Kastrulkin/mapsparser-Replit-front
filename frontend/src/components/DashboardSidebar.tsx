@@ -185,6 +185,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/today',
       tooltip: shellCopy.todayHint,
     },
+    { id: 'operator', label: navigationCopy.operator, icon: Bot, path: '/dashboard/operator', tooltip: navigationCopy.operatorHint },
     { id: 'content', label: navigationCopy.content, icon: Calendar, path: '/dashboard/content', tooltip: navigationCopy.contentHint },
     { id: 'influencers', label: influencerCopy.label, icon: UsersRound, path: '/dashboard/influencers', tooltip: influencerCopy.hint },
     { id: 'partnerships', label: navigationCopy.partnerships, icon: Handshake, path: '/dashboard/partnerships', tooltip: navigationCopy.partnershipsHint },
