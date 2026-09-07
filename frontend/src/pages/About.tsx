@@ -1,3 +1,4 @@
+import { subscriptionPlanCopy } from "@/content/subscriptionPlanCopy";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
@@ -15,6 +16,7 @@ const About = () => {
   const location = useLocation();
   const { t, language } = useLanguage();
   const isRu = language === "ru";
+  const planCopy = subscriptionPlanCopy(language);
   const story = aboutStoryCopy[language];
 
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
@@ -195,26 +197,23 @@ const About = () => {
       <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-orange-50/30">
         <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">{t.about.pricingSubtitle}</p>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">{planCopy.subtitle}</p>
 
+          <p className="text-sm text-muted-foreground mb-8">{planCopy.approval}</p>
           <div className="grid lg:grid-cols-4 gap-8 mb-8 items-stretch">
             {/* Starter */}
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
-                  {isRu ? "Карты" : t.about.pricingStarterTitle}
+                  {planCopy.starter.name}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "1200 ₽/месяц (240 кредитов)" : t.about.pricingStarterPrice}
+                  {isRu ? "1200 ₽/месяц (240 кредитов)" : "$15 / month"}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">Всё для локальной видимости:</div> : null}
+                <div className="text-sm text-gray-600 mb-3">{planCopy.starter.lead}</div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "аудит, услуги, отзывы, фото и конкуренты" : t.about.pricingStarterPoint1}</div>
-                  <div>- {isRu ? "новости для публикации на картах" : t.about.pricingStarterPoint2}</div>
-                  <div>- {isRu ? "Telegram-радар по вашей индустрии" : t.about.pricingStarterPoint3}</div>
-                  <div>- {isRu ? "веб-аналитика и tracker для сайта" : t.about.pricingStarterPoint4}</div>
+                  {planCopy.starter.features.map((feature) => <div key={feature}>- {feature}</div>)}
                 </div>
-                {isRu ? <div className="mb-6 text-xs leading-5 text-gray-500">* Интеллектуальная работа с фотографиями включается отдельно и расходует кредиты только при анализе нового фото.</div> : null}
                 <Button
                   variant="default"
                   size="lg"
@@ -231,17 +230,14 @@ const About = () => {
               <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">{story.popular}</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Привлечение" : t.about.pricingOption0Title}
+                  {planCopy.professional.name}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "5000 ₽/месяц (1000 кредитов)" : t.about.pricingOption0Price}
+                  {isRu ? "5000 ₽/месяц (1000 кредитов)" : "$55 / month"}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">Хватит чтобы:</div> : null}
+                <div className="text-sm text-gray-600 mb-3">{planCopy.professional.lead}</div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "всё из тарифа «Карты»" : t.about.pricingOption0Point1}</div>
-                  <div>- {isRu ? "полный цикл работы с партнёрами" : t.about.pricingOption0Point2}</div>
-                  <div>- {isRu ? "полный цикл работы с инфлюенсерами" : t.about.pricingOption0Point3}</div>
-                  <div>- {isRu ? "продвижение и видимость в AI-чатах" : t.about.pricingOption0Point4}</div>
+                  {planCopy.professional.features.map((feature) => <div key={feature}>- {feature}</div>)}
                 </div>
                 <Button
                   variant="default"
@@ -258,18 +254,14 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Управление" : t.about.pricingOption1Title}
+                  {planCopy.concierge.name}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "25000 ₽/месяц" : t.about.pricingOption1Price}
+                  {isRu ? "25000 ₽/месяц" : "$310 / month"}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">Рост показателей и автоматизация</div> : null}
+                <div className="text-sm text-gray-600 mb-3">{planCopy.concierge.lead}</div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "всё из тарифа «Привлечение»" : t.about.pricingOption1Point1}</div>
-                  <div>- {isRu ? "финансы и рост среднего чека" : t.about.pricingOption1Point2}</div>
-                  <div>- {isRu ? "ИИ-сотрудники и Оператор" : t.about.pricingOption1Point3}</div>
-                  <div>- {isRu ? "рабочие чаты и автоматизация" : t.about.pricingOption1Point4}</div>
-                  <div>- {isRu ? "контент для соцсетей и подключение каналов" : t.about.pricingOption1Point5}</div>
+                  {planCopy.concierge.features.map((feature) => <div key={feature}>- {feature}</div>)}
                 </div>
                 <Button
                   variant="default"

@@ -1,3 +1,4 @@
+import { subscriptionPlanCopy } from '@/content/subscriptionPlanCopy';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -89,75 +90,38 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
   const tiers: SubscriptionTier[] = useMemo(() => {
     const isRu = language === 'ru';
+    const copy = subscriptionPlanCopy(language);
     return [
       {
         id: 'starter',
-        name: isRu ? 'Карты' : 'Maps',
+        name: copy.starter.name,
         price: isRu ? 1200 : 15,
         currency: isRu ? '₽' : '$',
         period: isRu ? '₽/месяц (240 кредитов)' : t.dashboard.subscription.perMonth,
-        lead: isRu ? 'Хватит чтобы:' : undefined,
+        lead: copy.starter.lead,
         icon: Rocket,
-        features: isRu
-          ? [
-              'провести аудит и улучшать карточки на картах',
-              'работать с услугами, отзывами, фото и конкурентами',
-              'создавать новости для публикации на картах',
-              'собирать отраслевые посты через Telegram-радар',
-              'подключить tracker и анализировать поведение на сайте',
-            ]
-          : [
-              t.dashboard.subscription.starterFeature1,
-              t.dashboard.subscription.starterFeature2,
-              t.dashboard.subscription.starterFeature3,
-            ],
+        features: copy.starter.features,
       },
       {
         id: 'professional',
-        name: isRu ? 'Привлечение' : 'Acquisition',
+        name: copy.professional.name,
         price: isRu ? 5000 : 55,
         currency: isRu ? '₽' : '$',
         period: isRu ? '₽/месяц (1000 кредитов)' : t.dashboard.subscription.perMonth,
-        lead: isRu ? 'Хватит чтобы:' : undefined,
+        lead: copy.professional.lead,
         popular: true,
         icon: Zap,
-        features: isRu
-          ? [
-              'всё из тарифа «Карты»',
-              'искать партнёров и вести полный цикл сотрудничества',
-              'искать инфлюенсеров, готовить сообщения и учитывать результаты',
-              'проверять видимость бизнеса в AI-чатах',
-            ]
-          : [
-              t.dashboard.subscription.profFeature1,
-              t.dashboard.subscription.profFeature2,
-              t.dashboard.subscription.profFeature3,
-              t.dashboard.subscription.profFeature4,
-            ],
+        features: copy.professional.features,
       },
       {
         id: 'concierge',
-        name: isRu ? 'Управление' : 'Management',
+        name: copy.concierge.name,
         price: isRu ? 25000 : 310,
         currency: isRu ? '₽' : '$',
         period: isRu ? '₽/месяц' : t.dashboard.subscription.perMonth,
-        lead: isRu ? 'Управление ростом и автоматизацией' : undefined,
+        lead: copy.concierge.lead,
         icon: Crown,
-        features: isRu
-          ? [
-              'всё из тарифа «Привлечение»',
-              'финансы и рост среднего чека',
-              'ИИ-сотрудники и Оператор',
-              'рабочие чаты и автоматизация бизнеса',
-              'контент для соцсетей и подключение каналов',
-            ]
-          : [
-              t.dashboard.subscription.conciergeFeature1,
-              t.dashboard.subscription.conciergeFeature2,
-              t.dashboard.subscription.conciergeFeature3,
-              t.dashboard.subscription.conciergeFeature4,
-              t.dashboard.subscription.conciergeFeature5,
-            ],
+        features: copy.concierge.features,
       },
       {
         id: 'elite',
@@ -729,6 +693,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
       </div>
 
       {/* Tiers Grid */}
+      <p className="text-sm text-muted-foreground">{subscriptionPlanCopy(language).approval}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {tiers.map((tier) => {
           const isCurrentTier = subscription?.tier === tier.id;
