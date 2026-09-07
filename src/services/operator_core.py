@@ -52,6 +52,33 @@ from services.operator_product_knowledge import (
 from services.operator_scope_summary import build_operator_scope_summary
 from services.operator_tool_loop import run_operator_tool_loop
 from services.operator_tool_billing import run_paid_operator_tool_loop
+from subscription_manager import capability_access_payload
+
+
+def operator_subscription_block(access, capability):
+    """Chat is a shared surface; domain tools retain their paid access."""
+    if access is None:
+        return None
+    prefix = str(capability).split('.')[0]
+    required = {
+        'maps': 'maps', 'services': 'maps.services', 'reviews': 'maps.reviews',
+        'news': 'maps.news', 'competitors': 'maps.competitors',
+        'social_post': 'social_content', 'content': 'social_content',
+        'finance': 'finance', 'average_ticket': 'average_ticket',
+        'partnerships': 'partnerships', 'communications': 'partnerships',
+        'agents': 'agents', 'crm': 'progress', 'network': 'progress',
+        'appointments': 'management', 'settings': 'operator', 'support': 'operator',
+    }.get(prefix, 'management')
+    if capability in {'operator.help', 'operator.product_explain'}:
+        required = 'operator'
+    decision = capability_access_payload(access, required)
+    if decision['allowed']:
+        return None
+    return {
+        'status': 'blocked', 'capability': capability, 'access': decision,
+        'chat_response': decision['reason'], 'blocked_reasons': ['payment_required'],
+        'external_writes_performed': False, 'credit_charged': False,
+    }
 
 
 @dataclass(frozen=True)
@@ -1728,6 +1755,7 @@ def route_operator_message(
     tool_planner: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     manual_review_handler: Callable[..., dict[str, Any]] | None = None,
     action_orchestrator: ActionOrchestrator | None = None,
+    subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
     tool_loop_active = _operator_tool_loop_enabled() or tool_planner is not None
@@ -1735,6 +1763,24 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    direct_commands = (
+        (pending.get('capability') == 'services.price.update' or _is_service_price_intent(clean_message), 'services.price.update'),
+        (_is_services_inventory_intent(clean_message) or _is_services_read_intent(clean_message), 'services.read'),
+        (_is_content_plan_intent(clean_message), 'content.create_plan'),
+        (classify_unanswered_reviews_status_intent(clean_message), 'reviews.read'),
+        (classify_bulk_review_reply_intent(clean_message), 'reviews.reply.draft'),
+        (classify_fresh_reviews_intent(clean_message), 'maps.refresh'),
+        (classify_services_apply_intent(clean_message) or classify_services_optimize_intent(clean_message), 'services.optimize'),
+        (classify_social_post_generate_intent(clean_message), 'social_post.generate'),
+        (classify_news_generate_intent(clean_message), 'news.generate'),
+        (classify_operator_chat_intent(clean_message) != 'unsupported', 'reviews.manual.add'),
+    )
+    for matched, domain_capability in direct_commands:
+        if matched:
+            blocked = operator_subscription_block(subscription_access, domain_capability)
+            if blocked:
+                return blocked, pending
+            break
     if pending.get("capability") == "services.price.update":
         original = str(pending.get("original_message") or "").strip()
         service_name = str(pending.get("service_name") or "").strip()
@@ -1838,7 +1884,7 @@ def route_operator_message(
         user_id=user_id,
         message=clean_message,
         channel=channel,
-    )
+    ) if manual_review_intent != 'unsupported' else {'status': 'unsupported'}
     if manual_review_intent != "unsupported" or manual_review_result.get("status") != "unsupported":
         return standardize_operator_result(
             manual_review_result,
@@ -1859,6 +1905,7 @@ def route_operator_message(
             refresh_handler=run_refresh,
             action_orchestrator=action_orchestrator,
         )
+        tools = [tool for tool in tools if not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]
         if tool_planner is None:
             tool_result = run_paid_operator_tool_loop(
                 cursor,
@@ -1908,8 +1955,14 @@ def route_operator_message(
         selected = handlers.get(ai_intent)
         if selected:
             capability, handler = selected
+            blocked = operator_subscription_block(subscription_access, capability)
+            if blocked:
+                return blocked, {}
             return standardize_operator_result(_attach_ai_router(handler(), ai_router), capability), {}
         if ai_intent == "manual_review_add_and_reply":
+            blocked = operator_subscription_block(subscription_access, 'reviews.manual.add')
+            if blocked:
+                return blocked, {}
             lowered = clean_message.lower()
             if "отзыв:" not in lowered and not ("добав" in lowered and "отзыв" in lowered and ":" in lowered):
                 blocked = {
@@ -1950,6 +2003,7 @@ def confirm_pending_operator_action(
     business_id: str,
     user_id: str,
     action_orchestrator: ActionOrchestrator | None = None,
+    subscription_access: dict | None = None,
 ) -> tuple[dict[str, Any], bool]:
     action = get_operator_action(cursor, action_id=action_id, business_id=business_id, user_id=user_id)
     if not action:
@@ -1960,6 +2014,9 @@ def confirm_pending_operator_action(
             stored = json.loads(stored)
         return stored if isinstance(stored, dict) else {}, True
     capability = str(action.get("capability") or "")
+    blocked = operator_subscription_block(subscription_access, capability)
+    if blocked:
+        return blocked, False
     envelope = action.get("envelope_json")
     if isinstance(envelope, str):
         envelope = json.loads(envelope)

@@ -33,11 +33,10 @@ export const subscriptionPlanCopy = (language: string) => language === 'ru' ? {
       'Контент-план, черновики и публикации в подключённых соцсетях',
       'Финансовые показатели и работа со средним чеком',
       'ИИ-сотрудники для регулярных задач бизнеса',
-      'Оператор для управления через чат',
       'Рабочие чаты и история выполнения задач',
     ],
   },
-  approval: 'Публикации и отправки — после вашего подтверждения. Доступные каналы зависят от подключённых интеграций.',
+  approval: 'Управление через чат доступно на любом тарифе. Доступ к действиям зависит от подписки. Публикации и отправки — после вашего подтверждения.',
 } : {
   subtitle: 'Choose the business tasks you want LocalOS to help with',
   starter: {
@@ -71,9 +70,8 @@ export const subscriptionPlanCopy = (language: string) => language === 'ru' ? {
       'Content plans, drafts and posts for connected social channels',
       'Financial metrics and average transaction value',
       'AI employees for recurring business tasks',
-      'Operator for managing work through chat',
       'Work chats and task history',
     ],
   },
-  approval: 'Posts and messages require your approval. Available channels depend on your connected integrations.',
+  approval: 'Chat control is available on every plan. Actions depend on your subscription. Posts and messages require your approval.',
 };

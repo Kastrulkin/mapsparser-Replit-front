@@ -9,6 +9,10 @@ const business = (subscription_tier: string, subscription_status = 'active', sub
 });
 
 describe('subscription capability matrix', () => {
+  it('opens chat without opening paid domains on an inactive plan', () => {
+    expect(getCapabilityAccessForBusiness(business('starter', 'inactive'), 'operator').allowed).toBe(true);
+    expect(getCapabilityAccessForBusiness(business('starter', 'inactive'), 'maps').allowed).toBe(false);
+  });
   it('uses the backend capability contract when it is present', () => {
     const payload = {
       subscription_tier: 'concierge',

@@ -22,7 +22,8 @@ def test_starter_only_opens_maps_radar_and_web_analytics():
 def test_professional_adds_acquisition_without_management():
     available = capabilities('professional')
     assert {'maps', 'partnerships', 'influencers', 'ai_visibility'} <= available
-    assert {'finance', 'average_ticket', 'agents', 'operator'}.isdisjoint(available)
+    assert {'finance', 'average_ticket', 'agents'}.isdisjoint(available)
+    assert 'operator' in available
 
 
 def test_concierge_elite_promo_and_legacy_enterprise_open_management():
@@ -31,8 +32,8 @@ def test_concierge_elite_promo_and_legacy_enterprise_open_management():
 
 
 def test_inactive_and_expired_subscriptions_only_receive_preview():
-    assert capabilities('professional', 'inactive') == set()
-    assert capabilities('professional', ends_at=datetime.now() - timedelta(minutes=1)) == set()
+    assert capabilities('professional', 'inactive') == {'operator'}
+    assert capabilities('professional', ends_at=datetime.now() - timedelta(minutes=1)) == {'operator'}
 
 
 def test_trialing_paid_tier_and_legacy_aliases_keep_their_capabilities():
@@ -51,7 +52,7 @@ def test_superadmin_bypasses_subscription_state():
 
 
 def test_demo_tier_does_not_bypass_real_subscription_permissions():
-    assert capabilities('demo') == set()
+    assert capabilities('demo') == {'operator'}
 
 
 def test_payment_required_payload_names_minimum_tier():

@@ -95,9 +95,9 @@ def build_subscription_capabilities(*, tier: str, status: str, subscription_ends
         and normalized_status in ACTIVE_SUBSCRIPTION_STATUSES
         and not expired
     )
-    capabilities = set(MANAGEMENT_CAPABILITIES) if is_superadmin else set()
+    capabilities = set(MANAGEMENT_CAPABILITIES) if is_superadmin else {'operator'}
     if active and not is_superadmin:
-        capabilities = set(TIER_CAPABILITIES.get(normalized_tier, set()))
+        capabilities |= set(TIER_CAPABILITIES.get(normalized_tier, set()))
     return {
         'tier': normalized_tier,
         'tier_name': TIER_PUBLIC_NAMES.get(normalized_tier, normalized_tier.title()),

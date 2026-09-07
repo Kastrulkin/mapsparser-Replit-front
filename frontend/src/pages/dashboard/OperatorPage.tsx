@@ -575,7 +575,7 @@ export const OperatorPage = () => {
   return (
     <div className="space-y-5" data-tour-target="operator-overview">
       <DashboardPageHeader
-        eyebrow="LocalOS Operator"
+        eyebrow="LocalOS"
         title={copy.title}
         description={copy.description}
         icon={Bot}

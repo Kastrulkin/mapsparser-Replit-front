@@ -4208,6 +4208,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Для аккаунта не найден активный бизнес.", reply_markup=_build_client_more_menu())
             return
         action_id = data.replace("operator_confirm:", "", 1).strip()
+        from subscription_manager import get_subscription_access
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
@@ -4216,6 +4217,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 action_id=action_id,
                 business_id=str(business_ctx.get("business_id") or ""),
                 user_id=str(business_ctx.get("user_id") or ""),
+                subscription_access=get_subscription_access(str(business_ctx.get("business_id") or "")),
             )
             conn.commit()
             await query.edit_message_text(

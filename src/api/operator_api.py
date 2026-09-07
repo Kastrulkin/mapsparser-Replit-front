@@ -298,7 +298,7 @@ def _mobile_navigation(
         {"key": "tasks", "label": "В работе", "group": "primary", "status": "available", "available_actions": ["open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["task", "job", "approval"], "version": 3},
         {"key": "feed", "label": "Лента", "group": "primary", "status": "available", "available_actions": ["open_message"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["feed"], "version": 1},
         {"key": "reviews", "label": "Отзывы", "group": "more", "status": "available", "available_actions": ["generate_reply", "edit_draft", "mark_manual_published"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["review", "review_draft"], "version": 3},
-        {"key": "operator", "label": "Оператор", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
+        {"key": "operator", "label": "Управление через чат", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
         {"key": "progress", "label": "Прогресс", "group": "primary", "status": "hidden" if kind == "platform" else "available", "reason": "Выберите бизнес или сеть" if kind == "platform" else "", "available_actions": ["open_next_step"], "supported_scopes": ["business", "network"], "deep_link_targets": ["progress", "growth_step"], "version": 3},
         {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update", "refresh"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
         {"key": "content", "label": "Контент", "group": "more", "status": "available", "available_actions": ["plan_generate", "item_update", "draft_generate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["content_plan", "content_item", "post"], "version": 2},
@@ -1323,6 +1323,7 @@ def operator_chat():
         )
         result, next_pending_context = route_operator_message(
             cursor,
+            subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get('is_superadmin'))),
             business_id=business_id,
             user_id=user_id,
             message=message,
@@ -1599,6 +1600,7 @@ def confirm_operator_action(action_id: str):
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         result, idempotent = confirm_pending_operator_action(
             cursor,
+            subscription_access=_scope_subscription_access(cursor, {'kind': 'business', 'id': business_id, 'business_ids': [business_id]}, bool(user_data.get('is_superadmin'))),
             action_id=action_id,
             business_id=business_id,
             user_id=user_id,

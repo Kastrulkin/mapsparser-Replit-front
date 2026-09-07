@@ -13,7 +13,7 @@ const sections = [
   {
     title: 'Работа и контроль',
     items: [
-      { title: 'Оператор', description: 'Задачи, подтверждения и ручные действия.', route: '/dashboard/operator', icon: Bot },
+      { title: 'Управление через чат', description: 'Напишите, что нужно сделать.', route: '/dashboard/operator', icon: Bot },
       { title: 'Агенты', description: 'Регулярная работа и история запусков.', route: '/dashboard/agents', icon: Sparkles },
       { title: 'Чаты', description: 'Сообщения и ответы клиентам.', route: '/dashboard/chats', icon: MessageSquare },
       { title: 'Telegram-радар', description: 'Сигналы рынка и новые возможности.', route: '/dashboard/telegram-radar', icon: Radar },

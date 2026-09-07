@@ -548,6 +548,7 @@ def route_operator_chat_for_telegram(
         refresh_handler=refresh_reviews_from_operator,
         ai_router_handler=classify_operator_intent_with_ai,
         manual_review_handler=process_operator_chat_message,
+        subscription_access=get_subscription_access(business_id),
     )
     result["conversation_id"] = conversation_id
     if persistence_enabled:

@@ -10,7 +10,7 @@ from api.operator_api import (
 from subscription_manager import build_subscription_capabilities
 
 
-PAID_MODULES = {"operator", "progress", "content", "finance"}
+PAID_MODULES = {"progress", "content", "finance"}
 
 
 def _scope(tier: str, status: str = "active") -> dict:
@@ -56,7 +56,8 @@ def test_starter_opens_maps_radar_reviews_and_progress_only():
 
     for key in ("cards", "services", "reviews", "progress", "feed", "community_sources"):
         assert navigation[key]["status"] == "available"
-    for key in ("content", "finance", "operator"):
+    assert navigation['operator']['status'] == 'available'
+    for key in ("content", "finance"):
         assert navigation[key]["status"] == "read_only"
         assert navigation[key]["preview_available"] is True
     for key in ("partnerships", "influencers"):
@@ -72,7 +73,7 @@ def test_professional_opens_acquisition_but_not_management():
     assert navigation["influencers"]["status"] == "available"
     assert navigation["finance"]["status"] == "read_only"
     assert navigation["content"]["required_tier_name"] == "Управление"
-    assert navigation["operator"]["status"] == "read_only"
+    assert navigation["operator"]["status"] == "available"
 
 
 def test_concierge_opens_management_modules():

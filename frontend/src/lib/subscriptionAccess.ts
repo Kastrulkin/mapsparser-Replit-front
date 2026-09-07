@@ -79,7 +79,7 @@ export const getCapabilityAccessForBusiness = (business: any, capability: Subscr
       ? 'Привлечение'
       : 'Управление';
   const active = ACTIVE_STATUSES.has(status) && !isSubscriptionExpired(business?.subscription_ends_at);
-  const allowed = active && (TIER_RANK[tier] || 0) >= TIER_RANK[requiredTier];
+  const allowed = capability === 'operator' || active && (TIER_RANK[tier] || 0) >= TIER_RANK[requiredTier];
   return { allowed, capability, tier, tierName: TIER_NAMES[tier] || 'Без тарифа', requiredTier, requiredTierName, message: allowed ? null : `Функция входит в тариф «${requiredTierName}».` };
 };
 

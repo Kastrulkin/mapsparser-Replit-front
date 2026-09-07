@@ -1,4 +1,6 @@
 import telegram_bot
+import pytest
+from subscription_manager import build_subscription_capabilities
 from services.telegram_static_answers import guest_welcome_text, tariff_detail_text
 from services import telegram_dashboard
 from services.telegram_response_router import classify_client_intent
@@ -12,6 +14,11 @@ from telegram_bot import (
     _suggested_upgrade_tier,
     _format_control_start,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolated_subscription(monkeypatch):
+    monkeypatch.setattr(telegram_dashboard, 'get_subscription_access', lambda _business_id: build_subscription_capabilities(tier='concierge', status='active'))
 
 
 def test_control_start_has_one_real_priority_without_technical_metrics() -> None:
@@ -297,7 +304,8 @@ def test_telegram_operator_ai_fallback_routes_card_refresh(monkeypatch) -> None:
     assert result["queue_id"] == "queue-1"
     assert result["ai_router"]["intent"] == "card_refresh"
     assert result["ai_router"]["charged_credits"] == 1
-    assert calls == {"process": 1, "ai": 1, "refresh": 1}
+    # Unknown text goes to the intent router, not an unclassified domain handler.
+    assert calls == {"process": 0, "ai": 1, "refresh": 1}
 
 
 def test_telegram_operator_passes_same_conversation_context_to_tool_loop(monkeypatch) -> None:
