@@ -21,6 +21,7 @@ from services.outreach_campaign_service import (
     build_pilot_readiness,
     build_preview,
     change_campaign_status,
+    current_outreach_source_fact_fingerprint,
     persist_preview,
     record_campaign_business_outcome,
     record_campaign_event,
@@ -31,6 +32,7 @@ from services.outreach_campaign_service import (
 )
 from services.outreach_safety_service import (
     classify_inbound_event,
+    is_localos_author_lane,
     learning_stat_metrics,
     normalized_contact_hash,
     recipient_key,
@@ -110,6 +112,20 @@ def _parse_campaign_start_at(value: Any) -> datetime | None:
     if utc_value < datetime.now(timezone.utc) - timedelta(minutes=5):
         raise ValueError("start_at must not be in the past")
     return utc_value
+
+
+def _parse_manual_event_occurred_at(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    normalized = f"{raw[:-1]}+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError("occurred_at must be a valid ISO-8601 date-time") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("occurred_at must include a timezone")
+    return parsed.astimezone(timezone.utc)
 
 
 def _outreach_sandbox_enabled() -> bool:
@@ -234,7 +250,18 @@ def _authorized_campaign(cursor: Any, campaign_id: str, user_data: dict[str, Any
 
 
 def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
-    cursor.execute("SELECT * FROM outreach_campaigns WHERE id = %s", (campaign_id,))
+    cursor.execute(
+        """
+        SELECT outreach_campaigns.*,
+               (
+                   SELECT workstream_type
+                   FROM lead_workstreams
+                   WHERE lead_workstreams.id = outreach_campaigns.workstream_id
+               ) AS workstream_type
+        FROM outreach_campaigns WHERE id = %s
+        """,
+        (campaign_id,),
+    )
     row = cursor.fetchone()
     if not row:
         return None
@@ -260,17 +287,26 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
         touch = dict(item)
         touch["channel_status"] = runtime_touch_channel_status(touch)
         campaign["touches"].append(touch)
-    cursor.execute(
-        """
-        SELECT evidence_json, signals_json, report_hash
-        FROM lead_workstream_research
-        WHERE workstream_id = %s
-        ORDER BY researched_at DESC, created_at DESC
-        LIMIT 1
-        """,
-        (campaign.get("workstream_id"),),
-    )
-    current_source_fingerprint = research_source_fact_fingerprint(dict(cursor.fetchone() or {}))
+    if is_localos_author_lane(campaign):
+        current_source_fingerprint = current_outreach_source_fact_fingerprint(
+            cursor,
+            campaign.get("workstream_id") or "",
+            campaign.get("sender_mode") or "",
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT evidence_json, signals_json, report_hash
+            FROM lead_workstream_research
+            WHERE workstream_id = %s
+            ORDER BY researched_at DESC, created_at DESC
+            LIMIT 1
+            """,
+            (campaign.get("workstream_id"),),
+        )
+        current_source_fingerprint = research_source_fact_fingerprint(
+            dict(cursor.fetchone() or {})
+        )
     source_facts_current = bool(current_source_fingerprint) and all(
         str((touch.get("message_brief_json") or {}).get("source_fact_fingerprint") or "").strip()
         == current_source_fingerprint
@@ -1329,6 +1365,7 @@ def review_campaign_touch_edits(campaign_id: str):
             manual_reviewer_role=(
                 "superadmin" if user_data.get("is_superadmin") else "business_user"
             ),
+            manual_review_context="saved_draft_review",
         )
         reviewed_touches = [
             {
@@ -1457,6 +1494,7 @@ def manual_touch_event(campaign_id: str, touch_id: str):
             event_type,
             user_id=str(user_data.get("user_id") or ""),
             note=str(payload.get("note") or "").strip()[:1000],
+            occurred_at=_parse_manual_event_occurred_at(payload.get("occurred_at")),
         )
         conn.commit()
         return jsonify({"success": True, "event": result})
@@ -1665,6 +1703,7 @@ def pilot_dispatch_first_touch(campaign_id: str):
     from services.outreach_email_reply_service import sync_email_replies
     from services.outreach_vk_reply_service import sync_vk_replies
 
+    reply_sync_cycle_started_at = datetime.now(timezone.utc)
     if first_touch.get("channel") == "telegram":
         reply_sync = _sync_telegram_app_replies(
             limit=50,
@@ -1696,6 +1735,7 @@ def pilot_dispatch_first_touch(campaign_id: str):
         batch_size=1,
         batch_id=batch_id,
         queue_id=queue_id,
+        author_reply_sync_started_at=reply_sync_cycle_started_at,
     )
     messages_sent = int(dispatch.get("sent") or 0) + int(dispatch.get("delivered") or 0)
     audit_conn = get_db_connection()

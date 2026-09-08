@@ -4,7 +4,7 @@ import json
 import re
 import os
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import signal
 import sys
 import multiprocessing
@@ -1556,13 +1556,19 @@ def _run_yookassa_renewals_if_due() -> None:
 def _sync_outreach_replies_if_due() -> dict[str, Any]:
     global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_STATE
     if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
-        return {"healthy": True, "global_block": False, "blocked_sender_ids": []}
+        return {
+            "healthy": False,
+            "global_block": False,
+            "blocked_sender_ids": [],
+            "cycle_started_at": None,
+        }
 
     now = time.time()
     interval_sec = max(10, int(os.getenv("OUTREACH_REPLY_SYNC_INTERVAL_SEC", "60")))
     if now - _LAST_OUTREACH_REPLY_SYNC_AT < interval_sec:
-        return dict(_OUTREACH_REPLY_SYNC_STATE)
+        return {**_OUTREACH_REPLY_SYNC_STATE, "cycle_started_at": None}
     _LAST_OUTREACH_REPLY_SYNC_AT = now
+    cycle_started_at = datetime.now(timezone.utc)
 
     try:
         from api.admin_prospecting import _sync_telegram_app_replies
@@ -1629,6 +1635,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             "healthy": reply_sync_failed <= 0,
             "global_block": bool(fail_closed and unscoped_failures > 0),
             "blocked_sender_ids": failed_sender_ids if fail_closed else [],
+            "cycle_started_at": cycle_started_at,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
     except Exception as e:
@@ -1638,6 +1645,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             "healthy": False,
             "global_block": fail_closed,
             "blocked_sender_ids": [],
+            "cycle_started_at": None,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
 
@@ -1695,6 +1703,7 @@ def _dispatch_outreach_queue_if_due() -> None:
             allowed_business_ids=allowed_business_ids,
             allow_platform=allow_platform,
             blocked_sender_ids=list(reply_sync_ready.get("blocked_sender_ids") or []),
+            author_reply_sync_started_at=reply_sync_ready.get("cycle_started_at"),
         )
         picked = int(result.get("picked") or 0)
         if picked > 0:
