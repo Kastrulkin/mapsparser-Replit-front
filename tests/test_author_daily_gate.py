@@ -94,7 +94,7 @@ def test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day():
 
 
 def test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent():
-    cursor = GateCursor({"total_count": 200, "channel_count": 150, "duplicate_author": False})
+    cursor = GateCursor({"total_count": AUTHOR_DAILY_LIMIT, "channel_count": 150, "duplicate_author": False})
 
     result = reserve_localos_author_daily_slot(
         cursor,
@@ -143,7 +143,7 @@ def test_legacy_activity_contributes_across_all_platform_author_channels():
 
 
 def test_confirmed_send_after_later_claim_still_consumes_the_slot():
-    cursor = GateCursor({"total_count": 201, "channel_count": 150, "duplicate_author": False})
+    cursor = GateCursor({"total_count": AUTHOR_DAILY_LIMIT + 1, "channel_count": 150, "duplicate_author": False})
 
     result = reserve_localos_author_daily_slot(
         cursor,
@@ -192,7 +192,7 @@ def test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles():
 
 
 def test_author_gate_enforces_total_and_channel_caps():
-    total_cursor = GateCursor({"total_count": 201, "channel_count": 1, "duplicate_author": False})
+    total_cursor = GateCursor({"total_count": AUTHOR_DAILY_LIMIT + 1, "channel_count": 1, "duplicate_author": False})
     channel_cursor = GateCursor({"total_count": 26, "channel_count": 26, "duplicate_author": False})
 
     total_result = reserve_localos_author_daily_slot(

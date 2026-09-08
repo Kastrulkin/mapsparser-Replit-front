@@ -13,9 +13,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v9"
+TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v10"
 CREATOR_INVITATION_TEMPLATE_KEY = "creator_invitation_v1"
 CREATOR_INVITATION_TEMPLATE_VERSION = 1
+CREATOR_NAME_ONLY_TEMPLATE_KEY = "creator_invitation_name_only_v2"
+CREATOR_NAME_ONLY_TEMPLATE_VERSION = 2
+CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT = "verified_name_v2"
 
 OUTREACH_TEMPLATES = (
     {
@@ -198,6 +201,53 @@ def _creator_invitation_topic(identity_text: str, evidence_text: str) -> str | N
     return None
 
 
+def _creator_verified_first_name(bridge: dict[str, Any]) -> str | None:
+    display_name = _text(bridge.get("creator_display_name"))
+    match = re.match(r"^([А-ЯЁ][а-яё]{2,})(?:\s|$)", display_name)
+    return match.group(1) if match else None
+
+
+def _render_creator_name_only_invitation(bridge: dict[str, Any]) -> dict[str, Any] | None:
+    constraints = bridge.get("constraints")
+    if (
+        not isinstance(constraints, dict)
+        or constraints.get("invitation_template")
+        != CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT
+    ):
+        return None
+    recipient = _creator_verified_first_name(bridge)
+    if not recipient:
+        return None
+    subject = f"{recipient} | LocalOS | сотрудничество"
+    body = (
+        f"{recipient}, здравствуйте!\n\n"
+        "Я Александр Демьянов, LocalOS. Приглашаем авторов сотрудничать с "
+        "местными бизнесами — по бартеру или за оплату, в зависимости от "
+        "заказчика.\n\n"
+        "Например, по бартеру это может быть бесплатная стрижка за трёх новых "
+        "клиентов, пришедших по вашей рекомендации. Условия каждого предложения "
+        "обсуждаем заранее.\n\n"
+        "Вам интересен такой формат? Если да, подскажите, в каком городе и районе "
+        "вы бываете и какие услуги вам были бы интересны.\n\n"
+        "Александр Демьянов\n"
+        "LocalOS"
+    )
+    return {
+        "status": "selected",
+        "library_version": TEMPLATE_LIBRARY_VERSION,
+        "key": CREATOR_NAME_ONLY_TEMPLATE_KEY,
+        "version": CREATOR_NAME_ONLY_TEMPLATE_VERSION,
+        "subject": subject,
+        "body": body,
+        "subject_sha256": hashlib.sha256(subject.encode("utf-8")).hexdigest(),
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "recipient": recipient,
+        "topic": None,
+        "channel_id": _text(bridge.get("channel_id")),
+        "evidence_id": _text(bridge.get("evidence_id")),
+    }
+
+
 def render_creator_invitation_template(bridge: dict[str, Any]) -> dict[str, Any] | None:
     """Render approved author-invitation bytes from current public source slots."""
 
@@ -210,6 +260,9 @@ def render_creator_invitation_template(bridge: dict[str, Any]) -> dict[str, Any]
         or not _text(bridge.get("evidence_id"))
     ):
         return None
+    name_only_invitation = _render_creator_name_only_invitation(bridge)
+    if name_only_invitation:
+        return name_only_invitation
     identity_text = _creator_invitation_identity_text(bridge)
     recipient = _creator_invitation_recipient(identity_text)
     topic = _creator_invitation_topic(

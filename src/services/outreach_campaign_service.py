@@ -3980,8 +3980,8 @@ def _apply_creator_invitation_template_contract(
         and only_business_specific_failures
     )
     result["creator_invitation_copy_contract"] = {
-        "key": CREATOR_INVITATION_TEMPLATE_KEY,
-        "version": CREATOR_INVITATION_TEMPLATE_VERSION,
+        "key": rendered.get("key") if rendered else CREATOR_INVITATION_TEMPLATE_KEY,
+        "version": rendered.get("version") if rendered else CREATOR_INVITATION_TEMPLATE_VERSION,
         "passed": contract_passed,
         "exact_server_copy": exact_server_copy,
         "authorized_saved_review": authorized_saved_review,

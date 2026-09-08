@@ -425,6 +425,100 @@ def test_creator_invitation_contract_accepts_only_exact_server_copy_and_current_
     assert business_reviewer["passed"] is False
 
 
+def test_creator_name_only_invitation_uses_exact_approved_copy_and_verified_first_name():
+    bridge = {
+        "status": "ready",
+        "constraints": {
+            "invitation_only": True,
+            "invitation_template": "verified_name_v2",
+        },
+        "terms_version": 2,
+        "approved_at": "2026-09-08T14:00:00Z",
+        "channel_id": "channel-kdvmua",
+        "evidence_id": "evidence-kdvmua",
+        "creator_display_name": "Катерина Давыдова",
+    }
+
+    rendered = render_creator_invitation_template(bridge)
+
+    assert rendered["key"] == "creator_invitation_name_only_v2"
+    assert rendered["version"] == 2
+    assert rendered["subject"] == "Катерина | LocalOS | сотрудничество"
+    assert rendered["body"] == (
+        "Катерина, здравствуйте!\n\n"
+        "Я Александр Демьянов, LocalOS. Приглашаем авторов сотрудничать с "
+        "местными бизнесами — по бартеру или за оплату, в зависимости от "
+        "заказчика.\n\n"
+        "Например, по бартеру это может быть бесплатная стрижка за трёх новых "
+        "клиентов, пришедших по вашей рекомендации. Условия каждого предложения "
+        "обсуждаем заранее.\n\n"
+        "Вам интересен такой формат? Если да, подскажите, в каком городе и районе "
+        "вы бываете и какие услуги вам были бы интересны.\n\n"
+        "Александр Демьянов\nLocalOS"
+    )
+
+
+def test_creator_name_only_invitation_still_requires_saved_review():
+    bridge = {
+        "status": "ready",
+        "constraints": {
+            "invitation_only": True,
+            "invitation_template": "verified_name_v2",
+        },
+        "terms_version": 2,
+        "approved_at": "2026-09-08T14:00:00Z",
+        "channel_id": "channel-kdvmua",
+        "evidence_id": "evidence-kdvmua",
+        "creator_display_name": "Катерина Давыдова",
+    }
+    rendered = render_creator_invitation_template(bridge)
+    gate = {
+        "checks": {"removal": False, "bridge": False, "specificity": False},
+        "diagnostic_codes": ["removal", "bridge", "specificity"],
+        "reason_codes": ["DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"],
+        "canonical_reason_codes": ["DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"],
+        "blocking_reasons": ["decorative_personalization"],
+        "passed": False,
+    }
+
+    preview = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge=bridge,
+        manual_review_context="",
+        manual_reviewer_role="superadmin",
+    )
+    reviewed = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge=bridge,
+        manual_review_context="saved_draft_review",
+        manual_reviewer_role="superadmin",
+    )
+
+    assert preview["passed"] is False
+    assert reviewed["passed"] is True
+
+
+def test_creator_name_only_invitation_rejects_unverified_display_name_shape():
+    rendered = render_creator_invitation_template({
+        "status": "ready",
+        "constraints": {
+            "invitation_only": True,
+            "invitation_template": "verified_name_v2",
+        },
+        "terms_version": 2,
+        "approved_at": "2026-09-08T14:00:00Z",
+        "channel_id": "channel-1",
+        "evidence_id": "evidence-1",
+        "creator_display_name": "@beauty_spb",
+    })
+
+    assert rendered is None
+
+
 def test_creator_outreach_bridge_supplies_existing_decision_offer_and_evidence_contracts():
     bridge = {
         "status": "ready",

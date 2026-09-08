@@ -34,13 +34,13 @@ TECHNICAL_CLASSIFICATIONS = {
 SUPPRESSION_CLASSIFICATIONS = {"not_interested", "unsubscribe", "complaint"}
 SENDER_BLOCKING_HEALTH = {"paused", "blocked"}
 
-AUTHOR_DAILY_LIMIT = 200
+AUTHOR_DAILY_LIMIT = 150
 AUTHOR_CHANNEL_DAILY_LIMITS = {
     "email": 150,
     "telegram": 25,
     "vk": 25,
 }
-AUTHOR_POLICY_VERSION = "localos-author-daily-v1"
+AUTHOR_POLICY_VERSION = "localos-author-daily-v2"
 
 PARTNERSHIP_ACTIVE_LIFECYCLES = {"converted"}
 PARTNERSHIP_REPLY_LIFECYCLES = {"replied", "responded"}
