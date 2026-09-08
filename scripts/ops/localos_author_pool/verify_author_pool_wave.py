@@ -28,7 +28,9 @@ try:
     cur.execute('SELECT * FROM outreach_sender_accounts WHERE id=%s',(SENDER,)); sender=dict(cur.fetchone())
     cur.execute("""SELECT q.id,q.delivery_status,q.provider_message_id,q.sent_at,q.recipient_value,q.sender_account_id,
         q.workstream_id,t.id AS touch_id,t.subject,t.generated_text,cc.id AS candidate_id,cc.creator_profile_id,
-        c.last_reply_at
+        c.last_reply_at,
+        EXISTS(SELECT 1 FROM outreach_inbound_events e WHERE e.touch_id=t.id AND e.classification IN ('bounce','permanent_delivery_failure')) AS delivery_failed,
+        EXISTS(SELECT 1 FROM outreach_inbound_events e WHERE e.touch_id=t.id AND e.classification='out_of_office') AS out_of_office
         FROM outreachsendqueue q JOIN outreach_campaign_touches t ON t.id=q.campaign_touch_id
         JOIN outreach_campaigns c ON c.id=t.campaign_id JOIN creator_campaign_candidates cc ON cc.outreach_campaign_id=c.id
         WHERE q.id::text=ANY(%s::text[]) AND cc.campaign_id=%s""",([r['queue_id'] for r in wave['records']],CAMPAIGN))
@@ -61,21 +63,34 @@ try:
                'sent_uid':ids[0].decode(),'evidence_kind':'provider_observed','body_sha256':hashlib.sha256(body.encode()).hexdigest()}
         proofs.append(proof)
         if not args.commit: continue
-        add_contact_event(cur,profile_id=str(row['creator_profile_id']),event_type='sent',channel='email',body=body,
-            contact=row['recipient_value'],source='native_email_sent_verification',campaign_id=CAMPAIGN,
-            provider_message_id=mid,occurred_at=row['sent_at'],metadata=proof)
+        cur.execute("SELECT 1 FROM creator_contact_events WHERE creator_profile_id=%s AND provider_message_id=%s AND event_type='sent' LIMIT 1",(row['creator_profile_id'],mid))
+        if not cur.fetchone():
+            add_contact_event(cur,profile_id=str(row['creator_profile_id']),event_type='sent',channel='email',body=body,
+                contact=row['recipient_value'],source='native_email_sent_verification',campaign_id=CAMPAIGN,
+                provider_message_id=mid,occurred_at=row['sent_at'],metadata=proof)
         ensure_relationship(cur,str(row['creator_profile_id']))
         cur.execute("""UPDATE creator_relationships SET stage='contacted',primary_channel='email',contact_value=%s,
             last_contacted_at=GREATEST(last_contacted_at,%s),status_reason='Первое приглашение LocalOS отправлено; подтверждено в Gmail Sent',updated_at=NOW()
             WHERE creator_profile_id=%s AND last_replied_at IS NULL AND stage IN ('discovered','contact_ready','contacted')""",
             (row['recipient_value'],row['sent_at'],row['creator_profile_id']))
         cur.execute("UPDATE creator_campaign_candidates SET status='invited',updated_at=NOW() WHERE id=%s AND status='invitation_ready'",(row['candidate_id'],))
-        if row['last_reply_at'] is None:
+        if row['delivery_failed'] and row['last_reply_at'] is None:
+            cur.execute("""UPDATE creator_relationships SET stage='invalid_contact',
+                status_reason='Получен постоянный отказ доставки; повторная отправка на этот email запрещена',updated_at=NOW()
+                WHERE creator_profile_id=%s AND last_replied_at IS NULL AND stage IN ('discovered','contact_ready','contacted','invalid_contact')""",(row['creator_profile_id'],))
+            cur.execute("""UPDATE lead_workstreams SET lifecycle_status='needs_attention',status_reason='permanent_delivery_failure',
+                next_action_at=NULL,next_step='Недействительный email: найти другой подтверждённый контакт; не повторять отправку',updated_at=NOW()
+                WHERE id=%s AND lifecycle_status NOT IN ('closed','suppressed','paused')
+                  AND NOT EXISTS(SELECT 1 FROM outreach_inbound_events e WHERE e.workstream_id=lead_workstreams.id AND e.is_human)""",(row['workstream_id'],))
+        elif row['last_reply_at'] is None and not row['out_of_office']:
             cur.execute("""UPDATE lead_workstreams SET last_contact_at=%s,last_contact_channel='email',
                 next_action_at=COALESCE(next_action_at,%s),next_step='Проверить ответ на приглашение автора LocalOS',updated_at=NOW()
-                WHERE id=%s AND (last_contact_at IS NULL OR last_contact_at<=%s)""",
+                WHERE id=%s AND (last_contact_at IS NULL OR last_contact_at<=%s)
+                  AND lifecycle_status NOT IN ('closed','suppressed','paused','needs_attention')
+                  AND NOT EXISTS(SELECT 1 FROM outreach_inbound_events e WHERE e.workstream_id=lead_workstreams.id
+                    AND (e.is_human OR e.classification IN ('bounce','permanent_delivery_failure','out_of_office')))""",
                 (row['sent_at'],row['sent_at']+timedelta(days=4),row['workstream_id'],row['sent_at']))
-        if enqueue_touch_sent_projection(cur,queue_id=str(row['id'])): projection_count+=1
+        if not row['delivery_failed'] and not row['out_of_office'] and enqueue_touch_sent_projection(cur,queue_id=str(row['id'])): projection_count+=1
     if args.commit: conn.commit()
     else: conn.rollback()
     encoded=json.dumps({'checked_at':datetime.now(timezone.utc).isoformat(),'proofs':proofs,'verification_failures':failures,'yougile_projections':projection_count,'crm_committed':args.commit},ensure_ascii=False)
