@@ -5104,10 +5104,16 @@ def approve_campaign(
     )
     if not channels_ready:
         raise ValueError("Campaign preflight failed")
+    author_template_approval = bool(
+        template_authorization
+        and is_localos_author_lane(campaign)
+        and (campaign.get("policy_json") or {}).get("approval_mode") == "author_template"
+    )
     if not all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
+            require_ai=False if author_template_approval else None,
         )
         for touch in approval_touches
     ):

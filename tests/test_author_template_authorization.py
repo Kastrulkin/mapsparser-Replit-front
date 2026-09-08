@@ -235,7 +235,12 @@ def test_dispatch_rechecks_permission_without_bypassing_existing_facts_gate(monk
     if case == "draft_id": item["queue_draft_id"] = "other-draft"
     if case == "draft_contact": item["queued_draft_contact_id"] = "different-contact"
     monkeypatch.setattr(safety, "load_partnership_repeat_contact_guard", lambda *a, **k: {})
-    monkeypatch.setattr(safety, "generation_contract_current", lambda *a: True)
+    generation_calls = []
+    monkeypatch.setattr(
+        safety,
+        "generation_contract_current",
+        lambda *a, **k: generation_calls.append(k) or True,
+    )
     monkeypatch.setattr(auth, "load_author_template_authorization", lambda *a, **k: permission)
     monkeypatch.setattr(campaign, "_load_context", lambda *a: {"creator_outreach_bridge": evidence})
     monkeypatch.setattr(campaign, "current_outreach_source_fact_fingerprint", lambda *a: "")
@@ -245,6 +250,112 @@ def test_dispatch_rechecks_permission_without_bypassing_existing_facts_gate(monk
                 else "source_facts_changed" if case == "valid_but_stale_facts"
                 else "author_template_copy_or_contact_changed")
     assert not result["allowed"] and result["reason_code"] == expected
+    if case == "valid_but_stale_facts":
+        assert generation_calls == [{"require_ai": False}]
+    else:
+        assert not generation_calls
+
+
+@pytest.mark.parametrize(
+    ("enabled", "expected_reason"),
+    [("true", "generation_contract_outdated"), ("false", "source_facts_changed")],
+)
+def test_non_author_template_dispatch_preserves_ai_generation_default(monkeypatch, enabled, expected_reason):
+    item = {
+        "id": "queue", "lead_id": "lead", "campaign_touch_id": "touch",
+        "campaign_status": "approved", "touch_status": "scheduled",
+        "approved_at": datetime.now(timezone.utc), "approved_snapshot_hash": "snapshot",
+        "campaign_id": "campaign", "campaign_workstream_id": "workstream",
+        "workstream_type": "localos_sales", "policy_json": {"approval_mode": "manual"},
+    }
+    touch = {"message_brief_json": {}, "quality_gate_json": {"passed": True}}
+    generation_calls = []
+    original_generation_contract = safety.generation_contract_current
+    monkeypatch.setenv("OUTREACH_AI_PERSONALIZATION_ENABLED", enabled)
+    monkeypatch.setattr(safety, "load_partnership_repeat_contact_guard", lambda *a, **k: {})
+    monkeypatch.setattr(
+        safety,
+        "generation_contract_current",
+        lambda *a, **k: generation_calls.append(k) or original_generation_contract(*a, **k),
+    )
+
+    result = safety.run_dispatch_preflight(Cursor(rows=[item, None], lists=[[touch]]), "queue")
+
+    assert not result["allowed"]
+    assert result["reason_code"] == expected_reason
+    assert generation_calls == [{"require_ai": None}]
+
+
+def test_exact_author_template_preflight_skips_ai_provenance_only_after_full_validation(monkeypatch):
+    evidence, permission = bridge(), grant()
+    rendered = render_creator_invitation_template(evidence)
+    item = {
+        "id": "queue", "lead_id": "lead", "campaign_touch_id": "touch",
+        "campaign_status": "approved", "touch_status": "scheduled",
+        "approved_at": datetime.now(timezone.utc), "approved_snapshot_hash": "snapshot",
+        "campaign_id": "campaign", "campaign_workstream_id": "workstream",
+        "sender_account_id": "sender", "sender_mode": "localos_for_partner",
+        "workstream_type": "creator_collaboration",
+        "policy_json": {"approval_mode": "author_template", "author_template_authorization_id": "grant"},
+        "queue_draft_id": "draft", "queued_draft_id": "draft", "queued_draft_status": "approved",
+        "queued_draft_body": rendered["body"], "queued_draft_channel": "email",
+        "queued_draft_contact_id": "contact", "queued_draft_lead_id": "lead",
+        "queued_draft_workstream_id": "workstream",
+    }
+    touch = {
+        "draft_id": "draft", "contact_point_id": "contact", "channel": "email", "sequence_index": 0,
+        "subject": rendered["subject"], "generated_text": rendered["body"], "approved_text": rendered["body"],
+        # The deterministic template intentionally has no AI metadata.
+        "message_brief_json": {}, "quality_gate_json": {"passed": True},
+    }
+    monkeypatch.setenv("OUTREACH_AI_PERSONALIZATION_ENABLED", "true")
+    monkeypatch.setattr(safety, "load_partnership_repeat_contact_guard", lambda *a, **k: {})
+    monkeypatch.setattr(auth, "load_author_template_authorization", lambda *a, **k: permission)
+    monkeypatch.setattr(campaign, "_load_context", lambda *a: {"creator_outreach_bridge": evidence})
+    monkeypatch.setattr(campaign, "current_outreach_source_fact_fingerprint", lambda *a: "")
+
+    result = safety.run_dispatch_preflight(Cursor(rows=[item], lists=[[touch]]), "queue")
+
+    assert not result["allowed"]
+    assert result["reason_code"] == "source_facts_changed"
+
+
+def test_exact_author_template_approval_does_not_require_ai_provenance(monkeypatch):
+    """The deterministic author lane remains approvable while AI is globally on."""
+    policy = {
+        "approval_mode": "author_template", "author_template_authorization_id": "grant",
+        "author_policy_version": campaign.AUTHOR_POLICY_VERSION,
+        "daily_limit": campaign.AUTHOR_DAILY_LIMIT,
+        "channel_daily_limits": campaign.AUTHOR_CHANNEL_DAILY_LIMITS,
+    }
+    saved = {
+        "id": "campaign", "status": "draft", "workstream_id": "workstream",
+        "workstream_type": "creator_collaboration", "sender_mode": "localos_for_partner", "touch_count": 1,
+        "quality_passed": True, "senders_ready": True, "policy_json": policy,
+    }
+    touch = {
+        "id": "touch", "lead_id": "lead", "workstream_id": "workstream",
+        "channel": "email", "sender_account_id": "sender", "contact_point_id": "contact",
+        "sender_status": "connected", "sender_health_status": "healthy",
+        "sender_outreach_enabled": True,
+        "sender_capabilities_json": {"direct_send": True, "reply_sync": True},
+        "message_brief_json": {"source_fact_fingerprint": "current"},
+        # Exact-template previews intentionally have no AI generation metadata.
+        "quality_gate_json": {"passed": True}, "angle_type": "invitation",
+        "generated_text": "exact template body", "scheduled_at": None,
+    }
+    monkeypatch.setenv("OUTREACH_AI_PERSONALIZATION_ENABLED", "true")
+    monkeypatch.setattr(campaign, "load_author_template_authorization", lambda *a, **k: grant())
+    monkeypatch.setattr(campaign, "current_outreach_source_fact_fingerprint", lambda *a: "current")
+    monkeypatch.setattr(campaign, "sender_scope_preflight_reason", lambda *a: None)
+    cursor = Cursor(rows=[saved, {"count": 0}, {"id": "campaign", "version": 1, "status": "approved"}], lists=[[touch], []])
+
+    result = campaign.approve_campaign(
+        cursor, "campaign", user_id=None, template_authorization=grant(),
+    )
+
+    assert result["status"] == "approved"
+    assert result["approval_mode"] == "author_template"
 
 
 def test_dispatch_uses_validated_bytes_not_earlier_mutable_draft_snapshot():

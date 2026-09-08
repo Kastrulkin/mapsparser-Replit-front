@@ -892,14 +892,6 @@ def run_dispatch_preflight(
     )
     current_touches = [_dict(row) for row in cursor.fetchall()]
     validated_dispatch_payload = None
-    if not all(
-        generation_contract_current(
-            touch.get("message_brief_json"),
-            touch.get("quality_gate_json"),
-        )
-        for touch in current_touches
-    ):
-        return {"allowed": False, "reason_code": "generation_contract_outdated", "item": item}
     if (item.get("policy_json") or {}).get("approval_mode") == "author_template":
         from services.author_template_authorization_service import (
             exact_author_invitation, load_author_template_authorization,
@@ -950,6 +942,18 @@ def run_dispatch_preflight(
             "approved_text": str(touch["approved_text"]),
             "generated_text": str(touch["approved_text"]),
         }
+    if not all(
+        generation_contract_current(
+            touch.get("message_brief_json"),
+            touch.get("quality_gate_json"),
+            # An exact, live-authorized invitation is deterministic by policy,
+            # so it does not need AI provenance that this lane never creates.
+            # All malformed/revoked/template-mutated cases retain AI checks.
+            require_ai=False if validated_dispatch_payload else None,
+        )
+        for touch in current_touches
+    ):
+        return {"allowed": False, "reason_code": "generation_contract_outdated", "item": item}
     if is_localos_author_lane(item):
         # Local import avoids a module cycle while keeping preview, approval,
         # and dispatch on the same creator-campaign bridge resolver.
