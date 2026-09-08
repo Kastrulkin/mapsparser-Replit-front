@@ -129,6 +129,7 @@ def _message_for_template_match(value: Any) -> str:
     return message
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_template_service import (
+    CREATOR_NAME_ONLY_TEMPLATE_KEY,
     CREATOR_INVITATION_TEMPLATE_KEY,
     CREATOR_INVITATION_TEMPLATE_VERSION,
     attach_public_audit_link,
@@ -137,6 +138,11 @@ from services.outreach_template_service import (
     template_allows_two_questions,
     template_copy_matches,
     template_owner_pain_matches,
+)
+from services.author_template_authorization_service import (
+    exact_author_invitation,
+    load_author_template_authorization,
+    template_manifest,
 )
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
@@ -3953,8 +3959,9 @@ def _apply_creator_invitation_template_contract(
     bridge: dict[str, Any],
     manual_review_context: str,
     manual_reviewer_role: str,
+    template_authorization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Adapt business-only diagnostics after the authenticated saved-draft review."""
+    """Accept exact author copy under manual review or a trusted template grant."""
     result = dict(gate)
     rendered = render_creator_invitation_template(bridge)
     allowed_diagnostics = {"removal", "bridge", "specificity"}
@@ -3969,6 +3976,12 @@ def _apply_creator_invitation_template_contract(
         manual_review_context == "saved_draft_review"
         and manual_reviewer_role == "superadmin"
     )
+    grant = template_authorization or {}
+    authorized_template = bool(
+        rendered and rendered.get("key") == CREATOR_NAME_ONLY_TEMPLATE_KEY
+        and grant.get("id") and grant.get("approved_by")
+        and grant.get("manifest") == template_manifest()
+    )
     only_business_specific_failures = bool(
         set(result.get("diagnostic_codes") or []).issubset(allowed_diagnostics)
         and set(result.get("reason_codes") or []).issubset(allowed_reasons)
@@ -3976,7 +3989,7 @@ def _apply_creator_invitation_template_contract(
     )
     contract_passed = bool(
         exact_server_copy
-        and authorized_saved_review
+        and (authorized_saved_review or authorized_template)
         and only_business_specific_failures
     )
     result["creator_invitation_copy_contract"] = {
@@ -3985,13 +3998,15 @@ def _apply_creator_invitation_template_contract(
         "passed": contract_passed,
         "exact_server_copy": exact_server_copy,
         "authorized_saved_review": authorized_saved_review,
+        "authorized_template": authorized_template,
+        "template_authorization_id": grant.get("id") if authorized_template else None,
         "subject_sha256": rendered.get("subject_sha256") if rendered else None,
         "body_sha256": rendered.get("body_sha256") if rendered else None,
         "channel_id": rendered.get("channel_id") if rendered else None,
         "evidence_id": rendered.get("evidence_id") if rendered else None,
     }
     if not contract_passed:
-        if exact_server_copy and not authorized_saved_review:
+        if exact_server_copy and not (authorized_saved_review or authorized_template):
             result["passed"] = False
             result["verdict"] = "revise"
             result["blocking_reasons"] = list(dict.fromkeys(
@@ -4058,6 +4073,14 @@ def build_preview(
         context.get("workstream_type") == "creator_collaboration"
         and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
     )
+    # Read the permission journal here, never accept a grant from preview JSON
+    # or mutable creator-campaign constraints.
+    author_template_authorization = {}
+    if author_lane and (
+        (context.get("creator_outreach_bridge") or {}).get("constraints", {})
+        .get("invitation_template") == "verified_name_v2"
+    ):
+        author_template_authorization = load_author_template_authorization(cursor)
     reviewer_role = _text(manual_reviewer_role) or "authorized_user"
     review_context = _text(manual_review_context)
     ledger = build_evidence_ledger(context)
@@ -4478,6 +4501,7 @@ def build_preview(
                 bridge=context.get("creator_outreach_bridge") or {},
                 manual_review_context=review_context,
                 manual_reviewer_role=reviewer_role,
+                template_authorization=author_template_authorization,
             )
         strategy = _strategy_dimensions(
             context,
@@ -4681,6 +4705,7 @@ def build_preview(
                     bridge=context.get("creator_outreach_bridge") or {},
                     manual_review_context=review_context,
                     manual_reviewer_role=reviewer_role,
+                    template_authorization=author_template_authorization,
                 )
             gate["manual_review"] = {
                 "passed": bool(gate.get("passed")),
@@ -4932,7 +4957,67 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
     }
 
 
-def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str, Any]:
+def approve_campaign_by_author_template(cursor: Any, campaign_id: str) -> dict[str, Any]:
+    """Queue one exact first invitation using the recorded template permission.
+
+    This is a separate, explicit operation; saving/previewing a draft still does
+    not send or queue it. No per-message human review is fabricated.
+    """
+    cursor.execute(
+        """SELECT campaign.*, workstream.workstream_type
+           FROM outreach_campaigns campaign
+           JOIN lead_workstreams workstream ON workstream.id = campaign.workstream_id
+           WHERE campaign.id = %s FOR UPDATE OF campaign""", (campaign_id,),
+    )
+    campaign = _dict(cursor.fetchone())
+    if not campaign or not is_localos_author_lane(campaign):
+        raise ValueError("author_template_campaign_scope_invalid")
+    cursor.execute(
+        "SELECT * FROM outreach_campaign_touches WHERE campaign_id = %s ORDER BY sequence_index",
+        (campaign_id,),
+    )
+    touches = [_dict(row) for row in cursor.fetchall()]
+    if len(touches) != 1:
+        raise ValueError("author_template_single_first_touch_required")
+    touch = touches[0]
+    grant = load_author_template_authorization(
+        cursor, sender_account_id=str(touch.get("sender_account_id") or ""),
+    )
+    if not grant:
+        raise ValueError("author_template_authorization_required")
+    context = _apply_sender_mode(_load_context(cursor, str(campaign["workstream_id"])), SENDER_MODE_LOCALOS_FOR_PARTNER)
+    bridge = context.get("creator_outreach_bridge") or {}
+    if (str(touch.get("contact_point_id") or "") != str(bridge.get("selected_contact_point_id") or "")
+            or not exact_author_invitation(
+                bridge=bridge, subject=str(touch.get("subject") or ""),
+                body=str(touch.get("generated_text") or ""), authorization=grant,
+                sender_account_id=str(touch.get("sender_account_id") or ""),
+                channel=str(touch.get("channel") or ""),
+                sequence_index=int(touch.get("sequence_index") or 0),
+            )):
+        raise ValueError("author_template_exact_copy_or_contact_required")
+    policy = dict(campaign.get("policy_json") or {})
+    if campaign.get("status") in {"approved", "active"}:
+        if policy.get("author_template_authorization_id") == grant["id"]:
+            return {"id": campaign_id, "status": campaign["status"], "already_authorized": True}
+        raise ValueError("author_template_campaign_already_approved")
+    if campaign.get("status") != "draft":
+        raise ValueError("author_template_draft_required")
+    policy.update({
+        "approval_mode": "author_template",
+        "author_template_authorization_id": grant["id"],
+        "author_template_manifest": grant["manifest"],
+    })
+    cursor.execute("UPDATE outreach_campaigns SET policy_json = %s WHERE id = %s", (Json(policy), campaign_id))
+    return approve_campaign(cursor, campaign_id, user_id=None, template_authorization=grant)
+
+
+def approve_campaign(
+    cursor: Any, campaign_id: str, *, user_id: str | None,
+    template_authorization: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not user_id and not template_authorization:
+        raise ValueError("campaign_approval_authority_required")
     cursor.execute(
         """
         SELECT c.*, MAX(ws.workstream_type) AS workstream_type,
@@ -4952,6 +5037,16 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         raise LookupError("Campaign not found")
     if campaign.get("status") != "draft":
         raise ValueError("Only a draft campaign can be approved")
+    if template_authorization:
+        policy = campaign.get("policy_json") or {}
+        current_grant = load_author_template_authorization(
+            cursor, sender_account_id=template_authorization.get("sender_account_id"),
+        )
+        if (not is_localos_author_lane(campaign) or not current_grant
+                or current_grant["id"] != template_authorization.get("id")
+                or policy.get("author_template_authorization_id") != current_grant["id"]
+                or policy.get("approval_mode") != "author_template"):
+            raise ValueError("author_template_authorization_changed")
     if is_localos_author_lane(campaign):
         policy = campaign.get("policy_json") if isinstance(campaign.get("policy_json"), dict) else {}
         channel_limits = policy.get("channel_daily_limits") if isinstance(policy.get("channel_daily_limits"), dict) else {}
@@ -5155,8 +5250,13 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         campaign_id,
         "campaign_approved",
         actor_id=user_id,
-        payload={"version": int(result.get("version") or 0), "batch_id": batch_id},
+        payload={
+            "version": int(result.get("version") or 0), "batch_id": batch_id,
+            "approval_mode": "author_template" if template_authorization else "manual",
+            "template_authorization_id": (template_authorization or {}).get("id"),
+        },
     )
+    result["approval_mode"] = "author_template" if template_authorization else "manual"
     return result
 
 

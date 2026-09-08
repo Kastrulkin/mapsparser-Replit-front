@@ -18,6 +18,18 @@ from services.outreach_safety_service import (
 )
 
 
+def bind_preflight_dispatch_item(item: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any]:
+    """Use only freshly validated bytes/recipient for template-authorized sends."""
+    checked = preflight.get("item") or {}
+    if (checked.get("policy_json") or {}).get("approval_mode") != "author_template":
+        return item
+    payload = preflight.get("validated_dispatch_payload")
+    if (not isinstance(payload, dict) or payload.get("id") != str(item.get("id") or "")
+            or not payload.get("approved_text") or not payload.get("email")):
+        raise ValueError("author_template_dispatch_payload_missing")
+    return {**item, **payload}
+
+
 def dispatch_due_outreach_queue(
     batch_size: int = 20,
     batch_id: str | None = None,
@@ -315,6 +327,11 @@ def dispatch_due_outreach_queue(
                     queue_id,
                     author_reply_sync_started_at=author_reply_sync_started_at,
                 )
+                if preflight.get("allowed"):
+                    try:
+                        item = bind_preflight_dispatch_item(item, preflight)
+                    except ValueError as exc:
+                        preflight = {**preflight, "allowed": False, "reason_code": str(exc)}
                 persist_preflight_result(preflight_cur, queue_id, preflight)
                 if not preflight.get("allowed"):
                     block_queue_item_after_preflight(preflight_cur, queue_id, preflight)

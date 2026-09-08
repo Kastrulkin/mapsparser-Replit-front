@@ -36,7 +36,7 @@ def _candidate(**overrides):
 
 
 def test_library_contains_ten_versioned_owner_templates():
-    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v9"
+    assert TEMPLATE_LIBRARY_VERSION == "localos_outreach_templates_v10"
     assert len(OUTREACH_TEMPLATES) == 10
     assert len({item["key"] for item in OUTREACH_TEMPLATES}) == 10
     assert all(item["version"] >= 1 for item in OUTREACH_TEMPLATES)

@@ -19,6 +19,20 @@ CREATOR_INVITATION_TEMPLATE_VERSION = 1
 CREATOR_NAME_ONLY_TEMPLATE_KEY = "creator_invitation_name_only_v2"
 CREATOR_NAME_ONLY_TEMPLATE_VERSION = 2
 CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT = "verified_name_v2"
+CREATOR_NAME_ONLY_SUBJECT_TEMPLATE = "{name} | LocalOS | сотрудничество"
+CREATOR_NAME_ONLY_BODY_TEMPLATE = (
+    "{name}, здравствуйте!\n\n"
+    "Я Александр Демьянов, LocalOS. Приглашаем авторов сотрудничать с "
+    "местными бизнесами — по бартеру или за оплату, в зависимости от "
+    "заказчика.\n\n"
+    "Например, по бартеру это может быть бесплатная стрижка за трёх новых "
+    "клиентов, пришедших по вашей рекомендации. Условия каждого предложения "
+    "обсуждаем заранее.\n\n"
+    "Вам интересен такой формат? Если да, подскажите, в каком городе и районе "
+    "вы бываете и какие услуги вам были бы интересны.\n\n"
+    "Александр Демьянов\n"
+    "LocalOS"
+)
 
 OUTREACH_TEMPLATES = (
     {
@@ -218,20 +232,8 @@ def _render_creator_name_only_invitation(bridge: dict[str, Any]) -> dict[str, An
     recipient = _creator_verified_first_name(bridge)
     if not recipient:
         return None
-    subject = f"{recipient} | LocalOS | сотрудничество"
-    body = (
-        f"{recipient}, здравствуйте!\n\n"
-        "Я Александр Демьянов, LocalOS. Приглашаем авторов сотрудничать с "
-        "местными бизнесами — по бартеру или за оплату, в зависимости от "
-        "заказчика.\n\n"
-        "Например, по бартеру это может быть бесплатная стрижка за трёх новых "
-        "клиентов, пришедших по вашей рекомендации. Условия каждого предложения "
-        "обсуждаем заранее.\n\n"
-        "Вам интересен такой формат? Если да, подскажите, в каком городе и районе "
-        "вы бываете и какие услуги вам были бы интересны.\n\n"
-        "Александр Демьянов\n"
-        "LocalOS"
-    )
+    subject = CREATOR_NAME_ONLY_SUBJECT_TEMPLATE.replace("{name}", recipient)
+    body = CREATOR_NAME_ONLY_BODY_TEMPLATE.replace("{name}", recipient)
     return {
         "status": "selected",
         "library_version": TEMPLATE_LIBRARY_VERSION,

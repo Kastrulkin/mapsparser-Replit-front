@@ -822,6 +822,13 @@ def run_dispatch_preflight(
     cursor.execute(
         """
         SELECT q.id, q.lead_id, q.workstream_id, q.campaign_touch_id,
+               q.draft_id AS queue_draft_id, q.idempotency_key,
+               draft.id AS queued_draft_id, draft.status AS queued_draft_status,
+               draft.approved_text AS queued_draft_body,
+               draft.channel AS queued_draft_channel,
+               draft.contact_point_id AS queued_draft_contact_id,
+               draft.lead_id AS queued_draft_lead_id,
+               draft.workstream_id AS queued_draft_workstream_id,
                q.sender_account_id, q.delivery_status, q.recipient_key AS queue_recipient_key,
                t.id AS touch_id, t.status AS touch_status, t.channel,
                t.contact_point_id, t.strategy_fingerprint, t.sequence_index,
@@ -841,6 +848,7 @@ def run_dispatch_preflight(
                contact.contact_type, contact.normalized_value,
                contact.verification_status AS contact_verification_status
         FROM outreachsendqueue q
+        LEFT JOIN outreachmessagedrafts draft ON draft.id = q.draft_id
         LEFT JOIN outreach_campaign_touches t ON t.id = q.campaign_touch_id
         LEFT JOIN outreach_campaigns c ON c.id = t.campaign_id
         LEFT JOIN lead_workstreams ws ON ws.id = q.workstream_id
@@ -883,6 +891,7 @@ def run_dispatch_preflight(
         (item.get("campaign_id"),),
     )
     current_touches = [_dict(row) for row in cursor.fetchall()]
+    validated_dispatch_payload = None
     if not all(
         generation_contract_current(
             touch.get("message_brief_json"),
@@ -891,6 +900,56 @@ def run_dispatch_preflight(
         for touch in current_touches
     ):
         return {"allowed": False, "reason_code": "generation_contract_outdated", "item": item}
+    if (item.get("policy_json") or {}).get("approval_mode") == "author_template":
+        from services.author_template_authorization_service import (
+            exact_author_invitation, load_author_template_authorization,
+        )
+        from services.outreach_campaign_service import _load_context
+
+        grant = load_author_template_authorization(
+            cursor, sender_account_id=str(item.get("sender_account_id") or ""),
+        )
+        if (not is_localos_author_lane(item) or not grant
+                or grant["id"] != (item.get("policy_json") or {}).get("author_template_authorization_id")
+                or len(current_touches) != 1):
+            return {"allowed": False, "reason_code": "author_template_authorization_revoked_or_changed", "item": item}
+        bridge = _load_context(cursor, str(item.get("campaign_workstream_id") or "")).get("creator_outreach_bridge") or {}
+        touch = current_touches[0]
+        if (str(touch.get("contact_point_id") or "") != str(bridge.get("selected_contact_point_id") or "")
+                or touch.get("approved_text") != touch.get("generated_text")
+                or not exact_author_invitation(
+                    bridge=bridge, subject=str(touch.get("subject") or ""),
+                    body=str(touch.get("approved_text") or ""), authorization=grant,
+                    sender_account_id=str(item.get("sender_account_id") or ""),
+                    channel=str(touch.get("channel") or ""),
+                    sequence_index=int(touch.get("sequence_index") or 0),
+                )):
+            return {"allowed": False, "reason_code": "author_template_copy_or_contact_changed", "item": item}
+        if (not item.get("queue_draft_id")
+                or str(item["queue_draft_id"]) != str(touch.get("draft_id") or "")
+                or str(item["queue_draft_id"]) != str(item.get("queued_draft_id") or "")
+                or item.get("queued_draft_status") != "approved"
+                or item.get("queued_draft_body") != touch.get("approved_text")
+                or item.get("queued_draft_channel") != "email"
+                or str(item.get("queued_draft_contact_id") or "") != str(touch.get("contact_point_id") or "")
+                or str(item.get("queued_draft_lead_id") or "") != str(item.get("lead_id") or "")
+                or str(item.get("queued_draft_workstream_id") or "") != str(item.get("campaign_workstream_id") or "")):
+            return {"allowed": False, "reason_code": "author_template_queued_draft_changed", "item": item}
+        # Bind actual provider inputs to this validated snapshot. The dispatcher
+        # must not send its earlier mutable draft/contact snapshot after commit.
+        validated_dispatch_payload = {
+            "id": str(item["id"]), "lead_id": str(item["lead_id"]),
+            "campaign_touch_id": str(item["campaign_touch_id"]),
+            "draft_id": str(item["queue_draft_id"]),
+            "sender_account_id": str(item["sender_account_id"]),
+            "idempotency_key": str(item.get("idempotency_key") or f"outreach:{queue_id}"),
+            "channel": "email", "selected_channel": "email",
+            "contact_type": "email", "contact_value": str(item.get("normalized_value") or ""),
+            "email": str(item.get("normalized_value") or ""),
+            "subject": str(touch["subject"]),
+            "approved_text": str(touch["approved_text"]),
+            "generated_text": str(touch["approved_text"]),
+        }
     if is_localos_author_lane(item):
         # Local import avoids a module cycle while keeping preview, approval,
         # and dispatch on the same creator-campaign bridge resolver.
@@ -1110,6 +1169,13 @@ def run_dispatch_preflight(
 
     author_lane = is_localos_author_lane(item)
     if author_lane:
+        from services.author_template_authorization_service import previously_contacted_author
+
+        if previously_contacted_author(
+            cursor, creator_profile_id=str(item.get("creator_profile_id") or ""),
+            recipient=str(item.get("normalized_value") or ""), queue_id=queue_id,
+        ):
+            return {"allowed": False, "reason_code": "author_already_contacted", "item": item}
         cursor.execute(
             """
             SELECT reason_code
@@ -1364,12 +1430,14 @@ def run_dispatch_preflight(
             "reason_code": "preflight_passed",
             "recipient_key": current_recipient_key,
             "author_reply_sync_receipt_version": receipt.get("receipt_version"),
+            "validated_dispatch_payload": validated_dispatch_payload,
             "item": item,
         }
     return {
         "allowed": True,
         "reason_code": "preflight_passed",
         "recipient_key": current_recipient_key,
+        "validated_dispatch_payload": validated_dispatch_payload,
         "item": item,
     }
 

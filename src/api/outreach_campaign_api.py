@@ -18,6 +18,7 @@ from services.outreach_campaign_service import (
     SUPPORTED_CHANNELS,
     apply_draft_campaign_review,
     approve_campaign,
+    approve_campaign_by_author_template,
     build_pilot_readiness,
     build_preview,
     change_campaign_status,
@@ -39,6 +40,11 @@ from services.outreach_safety_service import (
     research_source_fact_fingerprint,
     run_dispatch_preflight,
     strategy_fingerprint,
+)
+from services.author_template_authorization_service import (
+    load_author_template_authorization,
+    set_author_template_authorization,
+    template_manifest,
 )
 from services.outreach_relationship_service import (
     approve_room_invitation,
@@ -967,6 +973,46 @@ def update_sender_account_permission(sender_account_id: str):
         conn.close()
 
 
+@outreach_campaign_bp.route(
+    "/api/outreach/sender-accounts/<sender_account_id>/author-template-authorization",
+    methods=["GET", "PATCH"],
+)
+def author_template_authorization_route(sender_account_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "superadmin_required"}), 403
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_sender_account(cursor, sender_account_id, user_data):
+            return jsonify({"success": False, "error": "sender_not_found"}), 404
+        manifest = template_manifest()
+        if request.method == "GET":
+            return jsonify({
+                "success": True, "manifest": manifest,
+                "authorization": load_author_template_authorization(cursor, sender_account_id=sender_account_id),
+            })
+        payload = request.get_json(silent=True) or {}
+        if type(payload.get("enabled")) is not bool:
+            return jsonify({"success": False, "error": "explicit_enabled_boolean_required"}), 400
+        if payload["enabled"] and payload.get("approved_template_sha256") != manifest["template_definition_sha256"]:
+            return jsonify({"success": False, "error": "exact_template_approval_required", "manifest": manifest}), 409
+        result = set_author_template_authorization(
+            cursor, sender_account_id=sender_account_id,
+            actor_id=str(user_data.get("user_id") or ""), enabled=payload["enabled"],
+            authorization_reference="authenticated_superadmin_template_decision",
+        )
+        conn.commit()
+        return jsonify({"success": True, "authorization": result, "external_dispatch_performed": False})
+    except (ValueError, PermissionError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        conn.close()
+
+
 @outreach_campaign_bp.delete("/api/outreach/sender-accounts/<sender_account_id>")
 def disconnect_sender_account(sender_account_id: str):
     user_data, error = _require_auth()
@@ -1417,6 +1463,26 @@ def approve_campaign_route(campaign_id: str):
     except ValueError as exc:
         conn.rollback()
         return jsonify({"success": False, "error": str(exc), "reason_code": "campaign_preflight_failed"}), 409
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/campaigns/<campaign_id>/authorize-template")
+def authorize_author_template_campaign_route(campaign_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_campaign(cursor, campaign_id, user_data):
+            return jsonify({"success": False, "error": "Campaign not found or access denied"}), 404
+        result = approve_campaign_by_author_template(cursor, campaign_id)
+        conn.commit()
+        return jsonify({"success": True, "campaign": result, "approval_mode": "author_template"})
+    except (ValueError, LookupError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
     finally:
         conn.close()
 
