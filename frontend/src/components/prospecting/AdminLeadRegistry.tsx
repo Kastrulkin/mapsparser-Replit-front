@@ -511,6 +511,21 @@ interface OutreachCampaignSetupDraft {
   senderMode: SenderMode;
 }
 
+export const outreachDefaultsForWorkstream = (workstreamType?: string) => {
+  if (workstreamType === 'creator_collaboration') {
+    return {
+      senderMode: 'localos_for_partner' as SenderMode,
+      sequenceChannels: ['email'],
+      sequenceDays: [0],
+    };
+  }
+  return {
+    senderMode: (workstreamType === 'localos_sales' ? 'localos' : 'partner_business') as SenderMode,
+    sequenceChannels: ['telegram', 'email', 'max', 'vk'],
+    sequenceDays: [0, 3, 7, 12],
+  };
+};
+
 interface OutreachSenderAccountSummary {
   id: string;
   channel?: string;
@@ -785,9 +800,12 @@ const sourceLabel = (lead: LeadItem) => {
   return 'Добавлен в работу';
 };
 
-const workstreamLabel = (workstream: LeadWorkstream) => {
+export const workstreamLabel = (workstream: LeadWorkstream) => {
   if (workstream.workstream_type === 'localos_sales') {
     return 'Лид LocalOS';
+  }
+  if (workstream.workstream_type === 'creator_collaboration') {
+    return 'Автор LocalOS';
   }
   return `Лид-партнёр · ${workstream.client_business_name || 'клиент'}`;
 };
@@ -1270,7 +1288,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     ? 'platform'
     : 'business';
   const usesPlatformSender = selectedSenderScope === 'platform';
-  const selectedSenderLabel = selectedWorkstream?.workstream_type === 'localos_sales'
+  const selectedSenderLabel = ['localos_sales', 'creator_collaboration'].includes(
+    String(selectedWorkstream?.workstream_type || ''),
+  )
     ? 'LocalOS'
     : senderMode === 'localos_for_partner'
       ? `${selectedWorkstream?.client_business_name || 'Бизнес партнёра'} через LocalOS`
@@ -1772,22 +1792,19 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender]);
 
   useEffect(() => {
+    const defaults = outreachDefaultsForWorkstream(selectedWorkstream?.workstream_type);
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
     setSenderFactsOpen(false);
-    setSequenceChannels(['telegram', 'email', 'max', 'vk']);
-    setSequenceDays([0, 3, 7, 12]);
+    setSequenceChannels(defaults.sequenceChannels);
+    setSequenceDays(defaults.sequenceDays);
     setSequenceStartAt(defaultOutreachStartValue());
     setSequenceSenders({});
     setTouchEdits({});
     setEditingTouchIndex(null);
     setTouchEditsValidated(false);
     setCampaignSetupDirty(false);
-    setSenderMode(
-      selectedWorkstream?.workstream_type === 'localos_sales'
-        ? 'localos'
-        : 'partner_business',
-    );
+    setSenderMode(defaults.senderMode);
     setManualContactOpen(false);
     setVkHandoffContact(false);
     setManualContactValue('');
@@ -1813,8 +1830,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
         let restoredCampaignSetup = false;
         if (latestTouches.length > 0) {
-          const nextChannels = ['telegram', 'email', 'max', 'vk'];
-          const nextDays = [0, 3, 7, 12];
+          const defaults = outreachDefaultsForWorkstream(selectedWorkstream?.workstream_type);
+          const nextChannels = [...defaults.sequenceChannels];
+          const nextDays = [...defaults.sequenceDays];
+          const restoredSequenceLength = selectedWorkstream?.workstream_type === 'creator_collaboration'
+            ? latestTouches.length
+            : nextChannels.length;
           const nextSenders: Record<number, string> = {};
           const firstScheduledAt = latestTouches
             .map((touch) => touch.scheduled_at)
@@ -1828,7 +1849,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             const sequenceIndex = Number.isInteger(Number(touch.sequence_index))
               ? Number(touch.sequence_index)
               : position;
-            if (sequenceIndex < 0 || sequenceIndex >= nextChannels.length) return;
+            if (sequenceIndex < 0 || sequenceIndex >= restoredSequenceLength) return;
+            if (sequenceIndex >= nextChannels.length) {
+              nextChannels.push(String(touch.channel || 'manual'));
+              nextDays.push(0);
+            }
             nextChannels[sequenceIndex] = String(touch.channel || nextChannels[sequenceIndex]);
             if (touch.sender_account_id) nextSenders[sequenceIndex] = touch.sender_account_id;
             const scheduledTimestamp = touch.scheduled_at
@@ -1859,13 +1884,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               && String(parsedValue.baseCampaignId || '') === expectedCampaignId
               && Number(parsedValue.baseCampaignVersion || 0) === expectedCampaignVersion,
             );
+            const expectedSequenceLength = outreachDefaultsForWorkstream(
+              selectedWorkstream?.workstream_type,
+            ).sequenceChannels.length;
             const validChannels = sameBaseCampaign
               && Array.isArray(parsedValue.sequenceChannels)
-              && parsedValue.sequenceChannels.length === 4
+              && parsedValue.sequenceChannels.length === expectedSequenceLength
               && parsedValue.sequenceChannels.every((channel: unknown) => typeof channel === 'string');
             const validDays = sameBaseCampaign
               && Array.isArray(parsedValue.sequenceDays)
-              && parsedValue.sequenceDays.length === 4
+              && parsedValue.sequenceDays.length === expectedSequenceLength
               && parsedValue.sequenceDays.every((day: unknown) => Number.isFinite(Number(day)));
             const validStartAt = sameBaseCampaign && typeof parsedValue.sequenceStartAt === 'string';
             const validSenders = sameBaseCampaign
@@ -2346,12 +2374,17 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setNotice('Способ представления изменён. Подготовьте новый preview и проверьте всю цепочку.');
   };
 
-  const campaignSequence = () => [
-    { channel: sequenceChannels[0], day_offset: sequenceDays[0], angle: 'signal', sender_account_id: sequenceSenders[0] || undefined },
-    { channel: sequenceChannels[1], day_offset: sequenceDays[1], angle: 'founder_story', sender_account_id: sequenceSenders[1] || undefined },
-    { channel: sequenceChannels[2], day_offset: sequenceDays[2], angle: 'proof', sender_account_id: sequenceSenders[2] || undefined },
-    { channel: sequenceChannels[3], day_offset: sequenceDays[3], angle: 'respectful_close', sender_account_id: sequenceSenders[3] || undefined },
-  ];
+  const campaignSequence = () => {
+    const angles = selectedWorkstream?.workstream_type === 'creator_collaboration'
+      ? ['signal']
+      : ['signal', 'founder_story', 'proof', 'respectful_close'];
+    return sequenceChannels.map((channel, index) => ({
+      channel,
+      day_offset: sequenceDays[index],
+      angle: angles[index] || 'respectful_close',
+      sender_account_id: sequenceSenders[index] || undefined,
+    }));
+  };
 
   const campaignTouchOverrides = ({ preserveSavedCampaign = false } = {}) => {
     const savedTouchesByIndex = new Map(
@@ -4140,7 +4173,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </Badge>
                 </div>
 
-                {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                {selectedWorkstream.workstream_type === 'creator_collaboration' ? (
+                  <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
+                    <div className="font-semibold">Приглашение автора от LocalOS</div>
+                    <p className="mt-1 text-pretty text-xs leading-5">Один email от подключённого аккаунта LocalOS. Текст появится в предпросмотре и останется на ручной проверке до подтверждения.</p>
+                  </div>
+                ) : selectedWorkstream.workstream_type === 'client_partnership' ? (
                   <fieldset className="mt-3 rounded-md bg-white p-3">
                     <legend className="text-balance px-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Кто обращается к партнёру</legend>
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -4207,7 +4245,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 </label>
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {[0, 1, 2, 3].map((index) => {
+                  {sequenceChannels.map((_sequenceChannel, index) => {
                     const channel = sequenceChannels[index];
                     const accounts = senderAccounts.filter((account) => account.channel === channel);
                     const sameChannelSteps = sequenceChannels
@@ -4546,7 +4584,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               : 'Профиль отправителя этого бизнеса'}
                           </div>
                           <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
-                            {usesPlatformSender
+                            {selectedWorkstream.workstream_type === 'creator_collaboration'
+                              ? 'Письмо отправляется от LocalOS. Имя автора и тема канала берутся из подтверждённой карточки автора; текст остаётся на ручной проверке.'
+                              : usesPlatformSender
                               ? 'В этом режиме факты об Александре и LocalOS не попадают в сообщение: текст строится от лица выбранного бизнеса.'
                               : 'Профиль используется только в кампаниях этого бизнеса. Его факты не смешиваются с профилями других отправителей.'}
                           </p>
@@ -4572,7 +4612,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         </div>
                       ) : null}
                     </div>
-                    {senderMode === 'localos_for_partner' ? (
+                    {senderMode === 'localos_for_partner' && selectedWorkstream.workstream_type === 'client_partnership' ? (
                       <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-pretty text-xs leading-5 text-sky-950">
                         Сообщение будет написано от лица «{selectedWorkstream.client_business_name || 'бизнеса клиента'}». Название, категория, услуги, аудитория и география берутся из карточки бизнеса, аудита и проверки совместимости. Профиль Александра и LocalOS во внешний текст не подставляется.
                       </div>
@@ -4785,7 +4825,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   <OutreachSuppressionManager
                     workstreamId={selectedWorkstream.id}
                     businessId={selectedWorkstream.client_business_id}
-                    scopeType={selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}
+                    scopeType={['localos_sales', 'creator_collaboration'].includes(selectedWorkstream.workstream_type) ? 'platform' : 'business'}
                     onChanged={() => void loadLeads()}
                   />
                 </div>
