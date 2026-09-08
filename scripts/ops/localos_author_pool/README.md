@@ -38,11 +38,22 @@ merely platform/domain.
 
 ## Dispatch and verification
 
+The default production owner is the existing worker (`OUTREACH_DISPATCH_ENABLED`
+with the approved business cohort). Preparation adds queued records; the worker
+checks replies and dispatches them. Do not launch a separate manual mailbox-sync
+or dispatcher while that worker is running. The reply-sync service currently has
+no cross-process per-sender lock: concurrent checks can overwrite a successful
+receipt with a transport failure. That failure must continue to block sends.
+
 `dispatch_author_pool_wave.py --wave /tmp/committed-wave.json --output /tmp/dispatch.json`
-processes only that wave through the normal dispatcher, refreshes real incoming
-mail receipts and preserves configured pacing. Do not run two operators on the
-same sender. Do not use `force_ready`, direct SMTP or another account to bypass a
-blocked gate. Stop on failed/uncertain provider outcomes and reconcile first.
+is a standalone maintenance entrypoint, **not** a second production worker. Use
+it only when the native worker is not processing this sender. It processes only
+that wave through the normal dispatcher, refreshes real incoming mail receipts
+and preserves configured pacing. Do not use `force_ready`, direct SMTP or another
+account to bypass a blocked gate. Stop on failed/uncertain provider outcomes and
+reconcile first. A receipt-only pause is resumed through the normal campaign
+service after verifying the exact row is still unsent, the grant is live and no
+reply/stop has arrived; do not clear pause fields directly.
 
 `verify_author_pool_wave.py --wave /tmp/committed-wave.json --output /tmp/proof.json --commit`
 verifies exact Sent sender, recipient, subject, body and Message-ID before writing

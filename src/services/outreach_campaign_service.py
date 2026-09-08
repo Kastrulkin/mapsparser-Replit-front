@@ -5285,7 +5285,12 @@ def change_campaign_status(
     if action not in transitions:
         raise ValueError("Unsupported campaign action")
     allowed_from, next_status = transitions[action]
-    cursor.execute("SELECT id, status, approved_snapshot_hash FROM outreach_campaigns WHERE id = %s FOR UPDATE", (campaign_id,))
+    cursor.execute(
+        """SELECT id, status, approved_snapshot_hash, scope_type, business_id,
+                  sender_mode, policy_json
+           FROM outreach_campaigns WHERE id = %s FOR UPDATE""",
+        (campaign_id,),
+    )
     campaign = _dict(cursor.fetchone())
     if not campaign:
         raise LookupError("Campaign not found")
@@ -5311,28 +5316,35 @@ def change_campaign_status(
             raise ValueError("Review edited campaign messages before resuming")
         cursor.execute(
             """
-            SELECT COUNT(*)
+            SELECT t.*, s.scope_type AS sender_scope_type,
+                   s.business_id AS sender_business_id,
+                   s.status AS sender_status,
+                   s.health_status AS sender_health_status,
+                   s.outreach_enabled AS sender_outreach_enabled,
+                   s.capabilities_json AS sender_capabilities_json,
+                   p.outreach_enabled AS telegram_outreach_enabled
             FROM outreach_campaign_touches t
-            JOIN outreach_campaigns c ON c.id = t.campaign_id
             LEFT JOIN outreach_sender_accounts s ON s.id = t.sender_account_id
             LEFT JOIN telegram_account_permissions p ON p.account_id = s.external_account_id
             WHERE t.campaign_id = %s
               AND t.channel IN ('telegram', 'email', 'vk')
-              AND (
-                  s.id IS NULL
-                  OR s.status <> 'connected'
-                  OR s.scope_type <> c.scope_type
-                  OR COALESCE(s.business_id, '') <> COALESCE(c.business_id, '')
-                  OR s.health_status IN ('paused', 'blocked')
-                  OR COALESCE((s.capabilities_json->>'direct_send')::boolean, FALSE) = FALSE
-                  OR COALESCE((s.capabilities_json->>'reply_sync')::boolean, FALSE) = FALSE
-                  OR (t.channel = 'telegram' AND COALESCE(p.outreach_enabled, FALSE) = FALSE)
-                  OR (t.channel IN ('email', 'vk') AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
-              )
             """,
             (campaign_id,),
         )
-        if int(_scalar(cursor.fetchone(), "count") or 0) > 0:
+        resume_touches = [_dict(row) for row in cursor.fetchall()]
+        sender_preflight_failed = any(
+            not touch.get("sender_account_id")
+            or touch.get("sender_status") != "connected"
+            or touch.get("sender_health_status") in {"paused", "blocked"}
+            or not isinstance(touch.get("sender_capabilities_json"), dict)
+            or touch["sender_capabilities_json"].get("direct_send") is not True
+            or touch["sender_capabilities_json"].get("reply_sync") is not True
+            or (touch.get("channel") == "telegram" and not touch.get("telegram_outreach_enabled"))
+            or (touch.get("channel") in {"email", "vk"} and not touch.get("sender_outreach_enabled"))
+            or sender_scope_preflight_reason({**campaign, **touch}) is not None
+            for touch in resume_touches
+        )
+        if sender_preflight_failed:
             raise ValueError("Sender account preflight failed")
     cursor.execute(
         "UPDATE outreach_campaigns SET status = %s, stop_reason = %s, updated_at = NOW() WHERE id = %s RETURNING id, version, status, stop_reason",
