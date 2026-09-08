@@ -152,6 +152,41 @@ def test_template_permission_replaces_only_individual_copy_approval():
     assert not campaign._apply_creator_invitation_template_contract(gate, **args)["passed"]
 
 
+def test_exact_authorized_v2_copy_accepts_its_approved_em_dash():
+    evidence = bridge()
+    rendered = render_creator_invitation_template(evidence)
+    assert "—" in rendered["body"]
+    gate = {
+        "checks": {
+            "removal": False,
+            "bridge": False,
+            "specificity": False,
+            "style_contract": False,
+        },
+        "diagnostic_codes": ["removal", "bridge", "specificity", "style_contract"],
+        "reason_codes": [
+            "DECORATIVE_PERSONALIZATION",
+            "WEAK_OFFER_BRIDGE",
+            "STYLE_VIOLATION",
+        ],
+        "blocking_reasons": ["decorative_personalization", "style_contract_violation"],
+        "passed": False,
+    }
+
+    result = campaign._apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge=evidence,
+        manual_review_context="",
+        manual_reviewer_role="",
+        template_authorization=grant(),
+    )
+
+    assert result["passed"]
+    assert result["checks"]["style_contract"] is True
+
+
 @pytest.mark.parametrize("case", ["ok", "revoked", "copy", "contact", "b2b"])
 def test_authorize_wrapper_rechecks_live_permission_and_exact_copy(monkeypatch, case):
     evidence = bridge()

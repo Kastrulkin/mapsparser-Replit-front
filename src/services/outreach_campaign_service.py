@@ -3964,9 +3964,13 @@ def _apply_creator_invitation_template_contract(
     """Accept exact author copy under manual review or a trusted template grant."""
     result = dict(gate)
     rendered = render_creator_invitation_template(bridge)
-    allowed_diagnostics = {"removal", "bridge", "specificity"}
-    allowed_reasons = {"DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"}
-    allowed_blocking = {"decorative_personalization"}
+    allowed_diagnostics = {"removal", "bridge", "specificity", "style_contract"}
+    allowed_reasons = {
+        "DECORATIVE_PERSONALIZATION",
+        "WEAK_OFFER_BRIDGE",
+        "STYLE_VIOLATION",
+    }
+    allowed_blocking = {"decorative_personalization", "style_contract_violation"}
     exact_server_copy = bool(
         rendered
         and subject == rendered["subject"]
