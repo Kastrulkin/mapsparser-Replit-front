@@ -1553,6 +1553,61 @@ def _run_yookassa_renewals_if_due() -> None:
         print(f"[YOOKASSA_RENEWALS] unexpected error: {e}", flush=True)
 
 
+def _classify_reply_sync_failures(sync_results: tuple[dict[str, Any], ...]) -> dict[str, Any]:
+    failed = 0
+    blocked_sender_ids: set[str] = set()
+    has_unscoped_failures = False
+    for result in sync_results:
+        if not isinstance(result, dict):
+            has_unscoped_failures = True
+            continue
+        raw_failed = result.get("failed")
+        if isinstance(raw_failed, bool) or not isinstance(raw_failed, int):
+            has_unscoped_failures = True
+            continue
+        reported_failed = raw_failed
+        if reported_failed < 0:
+            has_unscoped_failures = True
+            continue
+        failed += reported_failed
+
+        raw_sender_results = result.get("sender_results")
+        if raw_sender_results is None:
+            sender_results = []
+        elif isinstance(raw_sender_results, list):
+            sender_results = raw_sender_results
+        else:
+            has_unscoped_failures = True
+            sender_results = []
+
+        failed_records: list[dict[str, Any]] = []
+        malformed_record = False
+        for item in sender_results:
+            if not isinstance(item, dict):
+                malformed_record = True
+                continue
+            if str(item.get("status") or "").strip().lower() == "failed":
+                failed_records.append(item)
+
+        scoped_sender_ids = [
+            str(item.get("sender_account_id") or "").strip()
+            for item in failed_records
+        ]
+        blocked_sender_ids.update(value for value in scoped_sender_ids if value)
+        if (
+            malformed_record
+            or len(failed_records) != reported_failed
+            or any(not value for value in scoped_sender_ids)
+        ):
+            has_unscoped_failures = True
+
+    return {
+        "failed": failed,
+        "blocked_sender_ids": sorted(blocked_sender_ids),
+        "has_unscoped_failures": has_unscoped_failures,
+    }
+
+
 def _sync_outreach_replies_if_due() -> dict[str, Any]:
     global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_STATE
     if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
@@ -1593,11 +1648,12 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             if _env_bool("OUTREACH_YOUGILE_SYNC_ENABLED", False)
             else {"picked": 0, "delivered": 0, "retried": 0}
         )
-        reply_sync_failed = (
-            int(telegram_reply_sync.get("failed") or 0)
-            + int(email_reply_sync.get("failed") or 0)
-            + int(vk_reply_sync.get("failed") or 0)
-        )
+        failure_scope = _classify_reply_sync_failures((
+            telegram_reply_sync,
+            email_reply_sync,
+            vk_reply_sync,
+        ))
+        reply_sync_failed = failure_scope["failed"]
         imported = (
             int(telegram_reply_sync.get("imported") or 0)
             + int(email_reply_sync.get("imported") or 0)
@@ -1617,24 +1673,11 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
                 f"failed={reply_sync_failed}",
                 flush=True,
             )
-        failed_sender_ids = sorted({
-            str(item.get("sender_account_id") or "").strip()
-            for result in (email_reply_sync, vk_reply_sync)
-            for item in (result.get("sender_results") or [])
-            if item.get("status") == "failed" and str(item.get("sender_account_id") or "").strip()
-        })
-        accounted_failures = sum(
-            1
-            for result in (email_reply_sync, vk_reply_sync)
-            for item in (result.get("sender_results") or [])
-            if item.get("status") == "failed" and str(item.get("sender_account_id") or "").strip()
-        )
-        unscoped_failures = max(0, reply_sync_failed - accounted_failures)
         fail_closed = _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
         _OUTREACH_REPLY_SYNC_STATE = {
-            "healthy": reply_sync_failed <= 0,
-            "global_block": bool(fail_closed and unscoped_failures > 0),
-            "blocked_sender_ids": failed_sender_ids if fail_closed else [],
+            "healthy": reply_sync_failed <= 0 and not failure_scope["has_unscoped_failures"],
+            "global_block": bool(fail_closed and failure_scope["has_unscoped_failures"]),
+            "blocked_sender_ids": failure_scope["blocked_sender_ids"] if fail_closed else [],
             "cycle_started_at": cycle_started_at,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)

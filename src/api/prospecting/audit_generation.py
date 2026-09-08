@@ -1448,11 +1448,14 @@ def _load_telegram_reply_sync_candidates(
                 q.recipient_kind,
                 q.recipient_value,
                 q.sent_at,
+                q.sender_account_id,
                 l.name AS lead_name,
                 TRUE AS outreach_permission_checked,
                 permission.outreach_enabled,
                 sender.scope_type AS sender_scope_type,
-                sender.business_id AS sender_business_id
+                sender.business_id AS sender_business_id,
+                sender.external_account_id AS sender_external_account_id,
+                account.source AS sender_external_account_source
             FROM outreachsendqueue q
             JOIN prospectingleads l ON l.id = q.lead_id
             JOIN outreach_sender_accounts sender ON sender.id = q.sender_account_id
@@ -1512,7 +1515,9 @@ def _load_telegram_reply_sync_candidates(
                 sender.business_id AS sender_business_id,
                 binding.workstream_id,
                 binding.business_id,
-                binding.sender_account_id
+                binding.sender_account_id,
+                sender.external_account_id AS sender_external_account_id,
+                account.source AS sender_external_account_source
             FROM outreach_thread_bindings binding
             JOIN prospectingleads lead ON lead.id = binding.lead_id
             JOIN outreach_sender_accounts sender ON sender.id = binding.sender_account_id
@@ -1536,6 +1541,20 @@ def _load_telegram_reply_sync_candidates(
     finally:
         conn.close()
 
+def _trusted_telegram_reply_sender_account_id(item: dict[str, Any]) -> str | None:
+    sender_account_id = str(item.get("sender_account_id") or "").strip()
+    provider_account_id = str(item.get("provider_account_id") or "").strip()
+    sender_external_account_id = str(item.get("sender_external_account_id") or "").strip()
+    sender_external_account_source = str(item.get("sender_external_account_source") or "").strip()
+    if (
+        not sender_account_id
+        or not provider_account_id
+        or provider_account_id != sender_external_account_id
+        or sender_external_account_source != "telegram_app"
+    ):
+        return None
+    return sender_account_id
+
 def _sync_telegram_app_replies_for_queue_item(
     item: dict[str, Any],
     *,
@@ -1545,6 +1564,14 @@ def _sync_telegram_app_replies_for_queue_item(
     binding_id = str(item.get("binding_id") or "").strip()
     if not queue_id and not binding_id:
         return {"status": "skipped", "reason": "missing_queue_id", "imported": 0, "duplicates": 0}
+
+    if not _trusted_telegram_reply_sender_account_id(item):
+        return {
+            "status": "failed",
+            "reason": "telegram_sender_scope_unverified",
+            "imported": 0,
+            "duplicates": 0,
+        }
 
     provider_account_id = str(item.get("provider_account_id") or "").strip()
     account = _resolve_telegram_app_account(provider_account_id)
@@ -1712,17 +1739,24 @@ def _sync_telegram_app_replies(
         "noops": 0,
         "failed": 0,
         "results": [],
+        "sender_results": [],
     }
     for item in items:
         result = _sync_telegram_app_replies_for_queue_item(item)
-        summary["results"].append(
-            {
-                "queue_id": item.get("id"),
-                "lead_id": item.get("lead_id"),
-                "lead_name": item.get("lead_name"),
-                **result,
-            }
-        )
+        trusted_sender_account_id = _trusted_telegram_reply_sender_account_id(item)
+        item_result = {
+            "queue_id": item.get("id"),
+            "lead_id": item.get("lead_id"),
+            "lead_name": item.get("lead_name"),
+            **result,
+            "sender_account_id": trusted_sender_account_id,
+        }
+        summary["results"].append(item_result)
+        summary["sender_results"].append({
+            "sender_account_id": trusted_sender_account_id,
+            "status": str(result.get("status") or "failed"),
+            "error_code": str(result.get("reason") or "").strip() or None,
+        })
         if result.get("status") == "imported":
             summary["imported"] += int(result.get("imported") or 0)
             summary["duplicates"] += int(result.get("duplicates") or 0)

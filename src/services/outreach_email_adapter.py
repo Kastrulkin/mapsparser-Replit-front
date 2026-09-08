@@ -25,6 +25,10 @@ from cryptography.fernet import Fernet, InvalidToken
 SUPPORTED_SECURITY = {"ssl", "starttls"}
 DEFAULT_SYNC_LOOKBACK_DAYS = 30
 DEFAULT_COMPLETE_SYNC_MESSAGE_LIMIT = 5000
+COMPLETE_SYNC_HEADER_BATCH_SIZE = 250
+COMPLETE_SYNC_BODY_BATCH_SIZE = 20
+DEFAULT_COMPLETE_SYNC_TOTAL_TIMEOUT_SECONDS = 120
+MAX_COMPLETE_SYNC_TOTAL_TIMEOUT_SECONDS = 300
 COMPLETE_REPLY_MAILBOX_ROLES = ("all", "spam", "trash")
 EMAIL_CREDENTIAL_PREFIX = "localos-outreach-email-v1:"
 
@@ -813,6 +817,122 @@ def _imap_internal_datetime(metadata: bytes) -> datetime:
     return parsed
 
 
+def _imap_uid(metadata: bytes, *, high_watermark_uid: int) -> str:
+    match = re.search(rb"(?:^|[ (])UID\s+(\d+)(?:[ )]|$)", metadata, re.I)
+    uid = match.group(1).decode("ascii", errors="strict") if match else ""
+    if not uid or int(uid) < 1 or int(uid) > high_watermark_uid:
+        raise EmailAdapterError(
+            "email_imap_uid_invalid",
+            "IMAP returned an invalid UID inside the bounded window",
+        )
+    return uid
+
+
+def _imap_deadline_remaining(
+    client: imaplib.IMAP4 | None,
+    *,
+    deadline_at: float,
+    operation_timeout: int,
+) -> float:
+    remaining = deadline_at - time.monotonic()
+    if remaining <= 0:
+        raise EmailAdapterError(
+            "email_imap_deadline_exceeded",
+            "IMAP complete-window deadline was exceeded",
+            retryable=True,
+        )
+    socket_client = getattr(client, "sock", None)
+    set_timeout = getattr(socket_client, "settimeout", None)
+    if callable(set_timeout):
+        set_timeout(max(0.001, min(operation_timeout, remaining)))
+    return remaining
+
+
+def _imap_uid_batches(raw_uids: list[bytes], batch_size: int) -> list[list[bytes]]:
+    return [
+        raw_uids[offset:offset + batch_size]
+        for offset in range(0, len(raw_uids), batch_size)
+    ]
+
+
+def _imap_fetch_uid_batch(
+    client: imaplib.IMAP4,
+    raw_uids: list[bytes],
+    query: str,
+    *,
+    high_watermark_uid: int,
+    deadline_at: float,
+    operation_timeout: int,
+) -> dict[str, tuple[bytes, bytes]]:
+    expected_uids = [
+        raw_uid.decode("ascii", errors="strict")
+        if isinstance(raw_uid, bytes)
+        else _text(raw_uid)
+        for raw_uid in raw_uids
+    ]
+    if (
+        not expected_uids
+        or len(set(expected_uids)) != len(expected_uids)
+        or any(
+            not uid.isdigit()
+            or int(uid) < 1
+            or int(uid) > high_watermark_uid
+            for uid in expected_uids
+        )
+    ):
+        raise EmailAdapterError(
+            "email_imap_uid_invalid",
+            "IMAP returned an invalid UID inside the bounded window",
+        )
+    _imap_deadline_remaining(
+        client,
+        deadline_at=deadline_at,
+        operation_timeout=operation_timeout,
+    )
+    status, result = client.uid("fetch", ",".join(expected_uids), query)
+    _imap_deadline_remaining(
+        client,
+        deadline_at=deadline_at,
+        operation_timeout=operation_timeout,
+    )
+    if _text(status).upper() != "OK" or not result:
+        raise EmailAdapterError(
+            "email_imap_fetch_failed",
+            "IMAP batch fetch failed before the window was complete",
+            retryable=True,
+        )
+    expected_uid_set = set(expected_uids)
+    records: dict[str, tuple[bytes, bytes]] = {}
+    for item in result:
+        if not isinstance(item, tuple):
+            continue
+        if (
+            len(item) < 2
+            or not isinstance(item[0], bytes)
+            or not isinstance(item[1], bytes)
+        ):
+            raise EmailAdapterError(
+                "email_imap_fetch_failed",
+                "IMAP batch fetch returned a malformed record",
+                retryable=True,
+            )
+        uid = _imap_uid(item[0], high_watermark_uid=high_watermark_uid)
+        if uid not in expected_uid_set or uid in records:
+            raise EmailAdapterError(
+                "email_imap_fetch_failed",
+                "IMAP batch fetch did not return each requested UID exactly once",
+                retryable=True,
+            )
+        records[uid] = (item[0], item[1])
+    if set(records) != expected_uid_set:
+        raise EmailAdapterError(
+            "email_imap_fetch_failed",
+            "IMAP batch fetch did not return each requested UID exactly once",
+            retryable=True,
+        )
+    return records
+
+
 def _normalized_imap_message(
     sender_account: dict[str, Any],
     *,
@@ -989,6 +1109,7 @@ def fetch_complete_mailbox_window(
     max_messages: int = DEFAULT_COMPLETE_SYNC_MESSAGE_LIMIT,
     recipient_emails: list[str] | None = None,
     timeout: int = 20,
+    total_timeout: int = DEFAULT_COMPLETE_SYNC_TOTAL_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Fetch every UID in one bounded IMAP window or fail without a complete result."""
     if mailbox not in {"inbox", "sent", "all", "spam", "trash"}:
@@ -998,6 +1119,11 @@ def fetch_complete_mailbox_window(
     if window_end < window_start:
         raise ValueError("mailbox_window_invalid")
     safe_max_messages = min(max(0, int(max_messages)), 20000)
+    safe_total_timeout = min(
+        max(1, int(total_timeout)),
+        MAX_COMPLETE_SYNC_TOTAL_TIMEOUT_SECONDS,
+    )
+    deadline_at = time.monotonic() + safe_total_timeout
     normalized_recipient_emails = (
         normalize_recipient_scope(recipient_emails or [])
         if mailbox in COMPLETE_REPLY_MAILBOX_ROLES
@@ -1007,7 +1133,20 @@ def fetch_complete_mailbox_window(
     config = load_mailbox_config(sender_account)
     client = None
     try:
-        client = _imap_connection(config, timeout=timeout)
+        connection_deadline_remaining = _imap_deadline_remaining(
+            None,
+            deadline_at=deadline_at,
+            operation_timeout=timeout,
+        )
+        client = _imap_connection(
+            config,
+            timeout=max(0.001, min(timeout, connection_deadline_remaining)),
+        )
+        _imap_deadline_remaining(
+            client,
+            deadline_at=deadline_at,
+            operation_timeout=timeout,
+        )
         if mailbox == "sent":
             folder = _sent_mailbox(client)
         elif mailbox == "all":
@@ -1018,7 +1157,17 @@ def fetch_complete_mailbox_window(
             folder = _special_use_mailbox(client, b"\\Trash")
         else:
             folder = config.get("imap_folder") or "INBOX"
+        _imap_deadline_remaining(
+            client,
+            deadline_at=deadline_at,
+            operation_timeout=timeout,
+        )
         status, _data = client.select(_imap_mailbox_argument(folder), readonly=True)
+        _imap_deadline_remaining(
+            client,
+            deadline_at=deadline_at,
+            operation_timeout=timeout,
+        )
         if _text(status).upper() != "OK":
             raise EmailAdapterError("email_imap_folder_unavailable", "IMAP folder is unavailable")
         uidvalidity = _imap_response_number(client, "UIDVALIDITY")
@@ -1027,13 +1176,38 @@ def fetch_complete_mailbox_window(
         if high_watermark_uid > 0:
             since_token = window_start.strftime("%d-%b-%Y")
             criteria = ["UID", f"1:{high_watermark_uid}", "SINCE", since_token]
+            _imap_deadline_remaining(
+                client,
+                deadline_at=deadline_at,
+                operation_timeout=timeout,
+            )
             status, data = client.uid("search", None, *criteria)
+            _imap_deadline_remaining(
+                client,
+                deadline_at=deadline_at,
+                operation_timeout=timeout,
+            )
             if _text(status).upper() != "OK":
                 raise EmailAdapterError("email_imap_search_failed", "IMAP search failed", retryable=True)
-            raw_ids = sorted(
-                set(data[0].split() if data and data[0] else []),
-                key=lambda value: int(value),
-            )
+            searched_ids = [
+                raw_uid
+                for chunk in (data or [])
+                if isinstance(chunk, bytes)
+                for raw_uid in chunk.split()
+            ]
+            if len(set(searched_ids)) != len(searched_ids):
+                raise EmailAdapterError(
+                    "email_imap_uid_invalid",
+                    "IMAP search returned duplicate UIDs inside the bounded window",
+                )
+            for raw_uid in searched_ids:
+                uid = raw_uid.decode("ascii", errors="strict")
+                if not uid.isdigit() or int(uid) < 1 or int(uid) > high_watermark_uid:
+                    raise EmailAdapterError(
+                        "email_imap_uid_invalid",
+                        "IMAP returned an invalid UID inside the bounded window",
+                    )
+            raw_ids = sorted(searched_ids, key=lambda value: int(value))
         if len(raw_ids) > safe_max_messages:
             raise EmailAdapterError(
                 "email_imap_window_limit_exceeded",
@@ -1044,117 +1218,101 @@ def fetch_complete_mailbox_window(
         matched_uid_count = 0
         fetched_uid_count = 0
         body_checked_uid_count = 0
-        for raw_uid in raw_ids:
-            status, header_result = client.uid(
-                "fetch",
-                raw_uid,
+        scoped_headers: list[tuple[bytes, str, datetime, str]] = []
+        for header_batch in _imap_uid_batches(raw_ids, COMPLETE_SYNC_HEADER_BATCH_SIZE):
+            header_records = _imap_fetch_uid_batch(
+                client,
+                header_batch,
                 "(UID INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT AUTO-SUBMITTED CONTENT-TYPE X-FAILED-RECIPIENTS)])",
+                high_watermark_uid=high_watermark_uid,
+                deadline_at=deadline_at,
+                operation_timeout=timeout,
             )
-            if _text(status).upper() != "OK" or not header_result:
-                raise EmailAdapterError(
-                    "email_imap_fetch_failed",
-                    "IMAP message header fetch failed before the window was complete",
-                    retryable=True,
-                )
-            header_record = next(
-                (
-                    item
-                    for item in header_result
-                    if isinstance(item, tuple)
-                    and len(item) > 1
-                    and isinstance(item[0], bytes)
-                    and isinstance(item[1], bytes)
-                ),
-                None,
-            )
-            if not header_record:
-                raise EmailAdapterError(
-                    "email_imap_fetch_failed",
-                    "IMAP message headers were unavailable before the window was complete",
-                    retryable=True,
-                )
-            header_checked_uid_count += 1
-            internal_at = _imap_internal_datetime(header_record[0])
-            uid = raw_uid.decode("ascii", errors="strict") if isinstance(raw_uid, bytes) else _text(raw_uid)
-            if not uid.isdigit() or int(uid) > high_watermark_uid:
-                raise EmailAdapterError(
-                    "email_imap_uid_invalid",
-                    "IMAP returned an invalid UID inside the bounded window",
-                )
-            if internal_at < window_start or internal_at > window_end:
-                continue
-            scope_kind = (
-                _header_scope_kind(
-                    header_record[1],
-                    normalized_recipient_emails,
-                    mailbox=mailbox,
-                )
-                if normalized_recipient_emails
-                else "unscoped"
-            )
-            if not scope_kind:
-                continue
-            status, body_result = client.uid("fetch", raw_uid, "(UID INTERNALDATE BODY.PEEK[])")
-            if _text(status).upper() != "OK" or not body_result:
-                raise EmailAdapterError(
-                    "email_imap_fetch_failed",
-                    "IMAP message body fetch failed before the window was complete",
-                    retryable=True,
-                )
-            body_record = next(
-                (
-                    item
-                    for item in body_result
-                    if isinstance(item, tuple)
-                    and len(item) > 1
-                    and isinstance(item[0], bytes)
-                    and isinstance(item[1], bytes)
-                ),
-                None,
-            )
-            if not body_record:
-                raise EmailAdapterError(
-                    "email_imap_fetch_failed",
-                    "IMAP message body was unavailable before the window was complete",
-                    retryable=True,
-                )
-            body_checked_uid_count += 1
-            message = _normalized_imap_message(
-                sender_account,
-                mailbox=mailbox,
-                uid=uid,
-                raw_message=body_record[1],
-                internal_at=internal_at,
-            )
-            if scope_kind == "recipient":
-                body_scope_matches = (
-                    bool(set(message.get("to_emails") or []).intersection(normalized_recipient_emails))
-                    if mailbox == "sent"
-                    else message.get("from_email") in normalized_recipient_emails
-                )
-                if not body_scope_matches:
-                    raise EmailAdapterError(
-                        "email_imap_recipient_scope_mismatch",
-                        "IMAP message body changed outside the authorized recipient scope",
-                    )
-            elif scope_kind == "dsn":
-                dsn_recipients = set(message.get("dsn_recipient_emails") or [])
-                if not message.get("is_delivery_status_notification") or not dsn_recipients:
-                    raise EmailAdapterError(
-                        "email_imap_dsn_scope_unverified",
-                        "A potential delivery-status message could not be tied to an original recipient",
-                    )
-                if not dsn_recipients.intersection(normalized_recipient_emails):
+            for raw_uid in header_batch:
+                uid = raw_uid.decode("ascii", errors="strict")
+                header_record = header_records[uid]
+                header_checked_uid_count += 1
+                internal_at = _imap_internal_datetime(header_record[0])
+                if internal_at < window_start or internal_at > window_end:
                     continue
-            matched_uid_count += 1
-            fetched_uid_count += 1
-            messages.append(message)
+                scope_kind = (
+                    _header_scope_kind(
+                        header_record[1],
+                        normalized_recipient_emails,
+                        mailbox=mailbox,
+                    )
+                    if normalized_recipient_emails
+                    else "unscoped"
+                )
+                if scope_kind:
+                    scoped_headers.append((raw_uid, uid, internal_at, scope_kind))
+        for body_batch in [
+            scoped_headers[offset:offset + COMPLETE_SYNC_BODY_BATCH_SIZE]
+            for offset in range(0, len(scoped_headers), COMPLETE_SYNC_BODY_BATCH_SIZE)
+        ]:
+            body_records = _imap_fetch_uid_batch(
+                client,
+                [item[0] for item in body_batch],
+                "(UID INTERNALDATE BODY.PEEK[])",
+                high_watermark_uid=high_watermark_uid,
+                deadline_at=deadline_at,
+                operation_timeout=timeout,
+            )
+            for _raw_uid, uid, internal_at, scope_kind in body_batch:
+                body_record = body_records[uid]
+                if _imap_internal_datetime(body_record[0]) != internal_at:
+                    raise EmailAdapterError(
+                        "email_imap_fetch_failed",
+                        "IMAP message metadata changed before the window was complete",
+                        retryable=True,
+                    )
+                body_checked_uid_count += 1
+                message = _normalized_imap_message(
+                    sender_account,
+                    mailbox=mailbox,
+                    uid=uid,
+                    raw_message=body_record[1],
+                    internal_at=internal_at,
+                )
+                if scope_kind == "recipient":
+                    body_scope_matches = (
+                        bool(set(message.get("to_emails") or []).intersection(normalized_recipient_emails))
+                        if mailbox == "sent"
+                        else message.get("from_email") in normalized_recipient_emails
+                    )
+                    if not body_scope_matches:
+                        raise EmailAdapterError(
+                            "email_imap_recipient_scope_mismatch",
+                            "IMAP message body changed outside the authorized recipient scope",
+                        )
+                elif scope_kind == "dsn":
+                    dsn_recipients = set(message.get("dsn_recipient_emails") or [])
+                    if not message.get("is_delivery_status_notification") or not dsn_recipients:
+                        raise EmailAdapterError(
+                            "email_imap_dsn_scope_unverified",
+                            "A potential delivery-status message could not be tied to an original recipient",
+                        )
+                    if not dsn_recipients.intersection(normalized_recipient_emails):
+                        continue
+                matched_uid_count += 1
+                fetched_uid_count += 1
+                messages.append(message)
+        _imap_deadline_remaining(
+            client,
+            deadline_at=deadline_at,
+            operation_timeout=timeout,
+        )
         if _imap_status_number(client, folder, "UIDVALIDITY") != uidvalidity:
             raise EmailAdapterError(
                 "email_imap_uidvalidity_changed",
                 "IMAP folder changed while the bounded window was being read",
                 retryable=True,
             )
+        _imap_deadline_remaining(
+            client,
+            deadline_at=deadline_at,
+            operation_timeout=timeout,
+        )
         return {
             "messages": messages,
             "folder": {

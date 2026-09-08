@@ -18,6 +18,11 @@ from services.outreach_reply_sync_receipt import (
 NOW = datetime(2026, 9, 7, 11, 0, tzinfo=timezone.utc)
 
 
+def _requested_uids(message_set):
+    value = message_set.decode("ascii") if isinstance(message_set, bytes) else message_set
+    return value.split(",")
+
+
 def _sender():
     return {
         "id": "sender-1",
@@ -75,24 +80,27 @@ def test_imap_overmatch_never_fetches_unrelated_message_body(monkeypatch):
                 search_calls.append(criteria)
                 return "OK", [b"1 2"]
             query = criteria[0]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in query:
-                if uid_text == "1":
-                    return "OK", [(metadata, b"From: Author <author@example.net>\r\n\r\n")]
-                return "OK", [(
-                    metadata,
-                    b'From: "author@example.net billing" <private@example.net>\r\n\r\n',
-                )]
-            body_fetch_uids.append(uid_text)
-            message = (
-                b"From: Author <author@example.net>\r\n"
-                b"To: Founder <founder@example.org>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
-                b"Message-ID: <reply-1@example.net>\r\n"
-                b"Subject: Re: hello\r\n\r\nInterested"
-            )
-            return "OK", [(metadata, message)]
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in query:
+                    headers = (
+                        b"From: Author <author@example.net>\r\n\r\n"
+                        if uid_text == "1"
+                        else b'From: "author@example.net billing" <private@example.net>\r\n\r\n'
+                    )
+                    records.append((metadata, headers))
+                    continue
+                body_fetch_uids.append(uid_text)
+                message = (
+                    b"From: Author <author@example.net>\r\n"
+                    b"To: Founder <founder@example.org>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
+                    b"Message-ID: <reply-1@example.net>\r\n"
+                    b"Subject: Re: hello\r\n\r\nInterested"
+                )
+                records.append((metadata, message))
+            return "OK", records
 
         def logout(self):
             return None
@@ -151,38 +159,38 @@ def test_complete_window_includes_mailer_daemon_dsn_for_exact_original_recipient
         def uid(self, command, uid, *criteria):
             if command == "search":
                 return "OK", [b"1 2"]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in criteria[0]:
-                if uid_text == "1":
-                    return "OK", [(
-                        metadata,
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in criteria[0]:
+                    headers = (
                         b"From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\n"
                         b"Subject: Delivery Status Notification (Failure)\r\n"
                         b"Auto-Submitted: auto-replied\r\n"
-                        b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n",
-                    )]
-                return "OK", [(
-                    metadata,
-                    b"From: Other <other@example.org>\r\nSubject: unrelated\r\n\r\n",
-                )]
-            body_fetch_uids.append(uid_text)
-            raw = (
-                b"From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\n"
-                b"To: Founder <founder@example.org>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
-                b"Message-ID: <dsn-1@googlemail.com>\r\n"
-                b"Subject: Delivery Status Notification (Failure)\r\n"
-                b"Auto-Submitted: auto-replied\r\n"
-                b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n"
-                b"--dsn\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nAddress rejected\r\n"
-                b"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n"
-                b"Final-Recipient: rfc822; author@example.net\r\n"
-                b"Action: failed\r\nStatus: 5.1.1\r\n"
-                b"Original-Message-ID: <outbound-1@localos.pro>\r\n\r\n"
-                b"--dsn--\r\n"
-            )
-            return "OK", [(metadata, raw)]
+                        b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n"
+                        if uid_text == "1"
+                        else b"From: Other <other@example.org>\r\nSubject: unrelated\r\n\r\n"
+                    )
+                    records.append((metadata, headers))
+                    continue
+                body_fetch_uids.append(uid_text)
+                raw = (
+                    b"From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\n"
+                    b"To: Founder <founder@example.org>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
+                    b"Message-ID: <dsn-1@googlemail.com>\r\n"
+                    b"Subject: Delivery Status Notification (Failure)\r\n"
+                    b"Auto-Submitted: auto-replied\r\n"
+                    b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n"
+                    b"--dsn\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nAddress rejected\r\n"
+                    b"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n"
+                    b"Final-Recipient: rfc822; author@example.net\r\n"
+                    b"Action: failed\r\nStatus: 5.1.1\r\n"
+                    b"Original-Message-ID: <outbound-1@localos.pro>\r\n\r\n"
+                    b"--dsn--\r\n"
+                )
+                records.append((metadata, raw))
+            return "OK", records
 
         def logout(self):
             return None
@@ -387,16 +395,19 @@ def test_complete_inbox_window_applies_recipient_scope_before_body_fetch(monkeyp
         def uid(self, command, uid, *criteria):
             if command == "search":
                 return "OK", [b"1 2"]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in criteria[0]:
-                from_email = "author@example.net" if uid_text == "1" else "private@example.net"
-                return "OK", [(metadata, f"From: <{from_email}>\r\n\r\n".encode())]
-            body_fetch_uids.append(uid_text)
-            return "OK", [(metadata, (
-                b"From: Author <author@example.net>\r\nTo: Founder <founder@example.org>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <reply@example.net>\r\n\r\nInterested"
-            ))]
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in criteria[0]:
+                    from_email = "author@example.net" if uid_text == "1" else "private@example.net"
+                    records.append((metadata, f"From: <{from_email}>\r\n\r\n".encode()))
+                    continue
+                body_fetch_uids.append(uid_text)
+                records.append((metadata, (
+                    b"From: Author <author@example.net>\r\nTo: Founder <founder@example.org>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <reply@example.net>\r\n\r\nInterested"
+                )))
+            return "OK", records
 
         def logout(self):
             return None
@@ -434,16 +445,19 @@ def test_complete_sent_window_scopes_outbound_messages_by_to_header(monkeypatch)
         def uid(self, command, uid, *criteria):
             if command == "search":
                 return "OK", [b"1 2"]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in criteria[0]:
-                to_email = "author@example.net" if uid_text == "1" else "private@example.net"
-                return "OK", [(metadata, f"From: Founder <founder@example.org>\r\nTo: <{to_email}>\r\n\r\n".encode())]
-            body_fetch_uids.append(uid_text)
-            return "OK", [(metadata, (
-                b"From: Founder <founder@example.org>\r\nTo: Author <author@example.net>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <sent@example.org>\r\n\r\nHello"
-            ))]
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in criteria[0]:
+                    to_email = "author@example.net" if uid_text == "1" else "private@example.net"
+                    records.append((metadata, f"From: Founder <founder@example.org>\r\nTo: <{to_email}>\r\n\r\n".encode()))
+                    continue
+                body_fetch_uids.append(uid_text)
+                records.append((metadata, (
+                    b"From: Founder <founder@example.org>\r\nTo: Author <author@example.net>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <sent@example.org>\r\n\r\nHello"
+                )))
+            return "OK", records
 
         def logout(self):
             return None
