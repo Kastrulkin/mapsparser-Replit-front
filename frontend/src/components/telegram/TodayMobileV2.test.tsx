@@ -1,10 +1,34 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { TodayMobileV2 } from './TodayMobileV2';
 
 describe('TodayMobileV2', () => {
+  it('opens the preferred content plan in its own location', async () => {
+    const openTarget = vi.fn();
+    render(<TodayMobileV2
+      data={{ scope: { kind: 'network', id: 'network-1' },
+        preference: { primary_flow: 'content', available_flows: ['overview', 'content'] },
+        focus_action: { title: 'Обычная задача', priority: 20 },
+        work_sections: { continue_work: [{ id: 'post-1', flow: 'content', title: 'Пост на неделю', business_id: 'business-2' }] } }}
+      loading={false} slowLoading={false} command="" setCommand={vi.fn()} ask={vi.fn()}
+      openTarget={openTarget} openProgress={vi.fn()} track={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Контент-план' })).toBeVisible());
+    await userEvent.click(screen.getByRole('button', { name: 'Открыть контент-план' }));
+    expect(openTarget).toHaveBeenCalledWith('content', { kind: 'business', id: 'business-2' });
+  });
+
+  it('keeps urgent work above the preferred content plan', async () => {
+    render(<TodayMobileV2
+      data={{ preference: { primary_flow: 'content', available_flows: ['content'] },
+        work_sections: { needs_decision: [{ id: 'failed-1', title: 'Ошибка обновления', flow: 'maps', urgency: 'urgent' }] } }}
+      loading={false} slowLoading={false} command="" setCommand={vi.fn()} ask={vi.fn()}
+      openTarget={vi.fn()} openProgress={vi.fn()} track={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Ошибка обновления' })).toBeVisible());
+    expect(screen.getByRole('heading', { name: 'Контент-план', level: 2 })).toBeVisible();
+  });
+
   it('keeps the ЛокалОС assignment field visible in Russian', () => {
     render(
       <TodayMobileV2

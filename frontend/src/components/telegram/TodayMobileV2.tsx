@@ -16,6 +16,7 @@ import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import type { JourneyAction } from '@/lib/leadJourney';
 
 export type TodayFocusAction = {
+  priority?: number;
   id?: string;
   title?: string;
   reason?: string;
@@ -27,6 +28,9 @@ export type TodayFocusAction = {
 };
 
 export type TodayActivityItem = {
+  flow?: string;
+  urgency?: string;
+  preview?: string | null;
   id?: string;
   title?: string;
   description?: string;
@@ -49,6 +53,8 @@ export type CommunityPulseItem = TodayActivityItem & {
 };
 
 export type TodayPayload = {
+  preference?: { primary_flow: string; available_flows?: string[] };
+  work_sections?: { needs_decision?: TodayActivityItem[]; continue_work?: TodayActivityItem[]; results?: TodayActivityItem[] };
   scope?: { kind?: 'platform' | 'network' | 'business'; id?: string | null; name?: string; business_ids?: string[] };
   focus_action?: TodayFocusAction | null;
   active_work?: TodayActivityItem[];
@@ -181,11 +187,32 @@ export const TodayMobileV2 = ({
 }: TodayMobileV2Props) => {
   if (loading && !data) return <TodaySkeleton slow={slowLoading} />;
 
-  const focus = data?.focus_action;
-  const activeWork = data?.active_work || [];
+  const preferredFlow = data?.preference?.primary_flow;
+  const preferredScreens: Record<string, string> = { content: 'content', maps: 'cards', influencers: 'influencers', partnerships: 'partnerships', upsells: 'finance', automation: 'agents' };
+  const preferredLabels: Record<string, string> = { content: 'Контент-план', maps: 'Карты и отзывы', influencers: 'Работа с авторами', partnerships: 'Партнёрства', upsells: 'Продажи и средний чек', automation: 'ИИ-сотрудники' };
+  const decisions = data?.work_sections?.needs_decision || [];
+  const urgent = decisions.find((item) => item.urgency === 'urgent');
+  const preferredItem = [...decisions, ...(data?.work_sections?.continue_work || [])].find((item) => item.flow === preferredFlow);
+  const preferenceAllowed = preferredFlow && preferredScreens[preferredFlow] && (data?.preference?.available_flows || []).includes(preferredFlow);
+  const personalizedFocus: TodayFocusAction | null = preferenceAllowed ? {
+    id: preferredItem?.id || `priority:${preferredFlow}`,
+    title: preferredLabels[preferredFlow],
+    reason: preferredItem?.title || 'Откройте выбранное направление и продолжите работу.',
+    cta_label: preferredFlow === 'content' ? 'Открыть контент-план' : 'Продолжить работу',
+    screen: preferredScreens[preferredFlow],
+    target_scope: preferredItem?.business_id ? { kind: 'business', id: preferredItem.business_id } : undefined,
+  } : null;
+  const urgentFocus: TodayFocusAction | null = urgent ? {
+    id: urgent.id, title: urgent.title, reason: urgent.description,
+    screen: urgent.screen || preferredScreens[urgent.flow || ''] || 'tasks',
+    cta_label: 'Разобрать задачу',
+    target_scope: urgent.business_id ? { kind: 'business', id: urgent.business_id } : undefined,
+  } : null;
+  const focus = urgentFocus || ((data?.focus_action?.priority || 0) >= 100 ? data?.focus_action : personalizedFocus || data?.focus_action);
+  const activeWork = data?.work_sections?.continue_work || data?.active_work || [];
   const changes = data?.changes_24h || [];
   const pulse = data?.community_pulse || [];
-  const results = data?.completed_results || [];
+  const results = data?.work_sections?.results || data?.completed_results || [];
   const profileReminders = data?.profile_reminders || [];
   const progress = data?.progress_summary;
   const isPlatform = data?.scope?.kind === 'platform';
@@ -194,7 +221,7 @@ export const TodayMobileV2 = ({
 
   return (
     <div className="px-4">
-      {journeyActions.length ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface="telegram_mini_app" dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
+      {journeyActions.length && !personalizedFocus ? <section className="space-y-3">{journeyActions.slice(0, 3).map((action) => action.business_id ? <JourneyActionCard key={action.id} action={action} businessId={action.business_id} surface="telegram_mini_app" dark onUpdated={() => refresh?.()} /> : null)}</section> : <motion.section
         initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={spring}
@@ -234,6 +261,12 @@ export const TodayMobileV2 = ({
           <ChevronRight className="h-4 w-4" />
         </button>
       </motion.section>}
+
+      {personalizedFocus && focus !== personalizedFocus ? <section className="mt-3 rounded-2xl bg-white/[0.04] p-4">
+        <h2 className="text-balance text-lg font-semibold">{personalizedFocus.title}</h2>
+        <p className="mt-1 text-sm text-zinc-400">Ваше выбранное направление работы.</p>
+        <button type="button" onClick={() => openTarget(personalizedFocus.screen, personalizedFocus.target_scope)} className="mt-3 min-h-11 rounded-xl bg-white/[0.08] px-4 text-sm font-semibold active:scale-[0.96]">{personalizedFocus.cta_label}</button>
+      </section> : null}
 
       <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-[18px] bg-white/[0.025] p-2 text-center text-[10px] leading-4 text-zinc-600 shadow-[0_0_0_1px_rgba(255,255,255,0.055)]" aria-label="Рабочий цикл LocalOS">
         <span className="rounded-[12px] bg-white/[0.035] px-2 py-2"><b className="block text-zinc-300">Действие</b>готовый шаг</span>
