@@ -47,6 +47,7 @@ from services.contact_intelligence_service import enqueue_enrichment_job
 from services.outreach_personalization_ai import generation_contract_current
 from services.outreach_email_adapter import (
     EmailAdapterError,
+    email_error_public_details,
     normalize_mailbox_config,
     preflight_mailbox,
 )
@@ -608,6 +609,7 @@ def preflight_email_sender_connection():
             "error": str(exc),
             "reason_code": getattr(exc, "code", str(exc)),
             "messages_sent": 0,
+            **email_error_public_details(exc),
         }), 422
     finally:
         conn.close()
@@ -649,6 +651,7 @@ def connect_email_sender_account():
             "success": False,
             "error": str(exc),
             "reason_code": getattr(exc, "code", str(exc)),
+            **email_error_public_details(exc),
         }), 422
     finally:
         conn.close()
@@ -894,6 +897,7 @@ def preflight_existing_sender_account(sender_account_id: str):
             "error": str(exc),
             "reason_code": getattr(exc, "code", "sender_preflight_failed"),
             "messages_sent": 0,
+            **(email_error_public_details(exc) if isinstance(exc, EmailAdapterError) else {}),
         }), 422
     finally:
         conn.close()

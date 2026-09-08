@@ -1,5 +1,10 @@
 from datetime import datetime, timezone
 from email import policy
+import imaplib
+import json
+import smtplib
+import ssl
+import traceback
 
 import pytest
 
@@ -7,9 +12,11 @@ from services.outreach_campaign_service import channel_availability
 from services.outreach_email_adapter import (
     EMAIL_CREDENTIAL_PREFIX,
     EmailAdapterError,
+    email_error_public_details,
     encrypt_mailbox_config,
     load_mailbox_config,
     normalize_mailbox_config,
+    preflight_mailbox,
     public_mail_host_addresses,
     send_email,
 )
@@ -25,6 +32,273 @@ class _Cursor:
 
     def fetchall(self):
         return self.rows
+
+
+def _preflight_config():
+    return {
+        "email": "founder@example.org",
+        "display_name": "Founder",
+        "username": "founder@example.org",
+        "password": "safe-test-password",
+        "smtp_host": "smtp.example.org",
+        "smtp_port": 465,
+        "smtp_security": "ssl",
+        "imap_host": "imap.example.org",
+        "imap_port": 993,
+        "imap_security": "ssl",
+        "imap_folder": "INBOX",
+    }
+
+
+def test_preflight_reports_safe_smtp_auth_stage_and_numeric_status(monkeypatch):
+    provider_secret = "provider-secret-must-not-leak"
+
+    class RejectingSmtp:
+        def __init__(self, *_args, **_kwargs):
+            return None
+
+        def login(self, _username, _password):
+            raise smtplib.SMTPAuthenticationError(
+                535,
+                f"5.7.8 password rejected {provider_secret}".encode(),
+            )
+
+        def quit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.public_mail_host_addresses",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr("services.outreach_email_adapter.smtplib.SMTP_SSL", RejectingSmtp)
+
+    with pytest.raises(EmailAdapterError) as raised:
+        preflight_mailbox(_preflight_config())
+
+    public = email_error_public_details(raised.value)
+    assert raised.value.code == "email_auth_invalid"
+    assert public == {
+        "stage": "smtp_auth",
+        "provider_status": 535,
+        "provider_reason": "authentication_rejected",
+        "next_action": "Проверьте логин и пароль приложения в настройках почтового сервиса.",
+    }
+    assert "SMTP" in str(raised.value)
+    assert provider_secret not in json.dumps(public, ensure_ascii=False)
+    assert provider_secret not in str(raised.value)
+    assert provider_secret not in "".join(traceback.format_exception(raised.value))
+
+
+def test_preflight_keeps_auth_stage_but_classifies_login_timeout_as_transport(monkeypatch):
+    provider_secret = "timeout-provider-secret"
+
+    class TimingOutSmtp:
+        def __init__(self, *_args, **_kwargs):
+            return None
+
+        def login(self, _username, _password):
+            raise TimeoutError(f"login stalled {provider_secret}")
+
+        def quit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.public_mail_host_addresses",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr("services.outreach_email_adapter.smtplib.SMTP_SSL", TimingOutSmtp)
+
+    with pytest.raises(EmailAdapterError) as raised:
+        preflight_mailbox(_preflight_config())
+
+    assert raised.value.code == "email_transport_failed"
+    assert email_error_public_details(raised.value) == {
+        "stage": "smtp_auth",
+        "provider_reason": "connection_timeout",
+        "next_action": "Проверьте SMTP-сервер, порт и режим защиты SSL/STARTTLS.",
+    }
+    assert provider_secret not in "".join(traceback.format_exception(raised.value))
+
+
+def test_preflight_reports_imap_auth_only_after_smtp_succeeds(monkeypatch):
+    calls = []
+
+    class WorkingSmtp:
+        def __init__(self, *_args, **_kwargs):
+            calls.append("smtp_connect")
+
+        def login(self, _username, _password):
+            calls.append("smtp_auth")
+
+        def quit(self):
+            return None
+
+    class RejectingImap:
+        def __init__(self, *_args, **_kwargs):
+            calls.append("imap_connect")
+
+        def login(self, _username, _password):
+            calls.append("imap_auth")
+            raise imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Invalid credentials")
+
+        def logout(self):
+            return None
+
+        def shutdown(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.public_mail_host_addresses",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr("services.outreach_email_adapter.smtplib.SMTP_SSL", WorkingSmtp)
+    monkeypatch.setattr("services.outreach_email_adapter.imaplib.IMAP4_SSL", RejectingImap)
+
+    with pytest.raises(EmailAdapterError) as raised:
+        preflight_mailbox(_preflight_config())
+
+    assert calls == ["smtp_connect", "smtp_auth", "imap_connect", "imap_auth"]
+    assert email_error_public_details(raised.value) == {
+        "stage": "imap_auth",
+        "provider_reason": "authentication_rejected",
+        "next_action": "Проверьте логин и пароль приложения в настройках почтового сервиса.",
+    }
+    assert str(raised.value) == "Сервер входящей почты отклонил вход (IMAP)."
+
+
+def test_preflight_reports_tls_transport_without_raw_provider_text(monkeypatch):
+    provider_secret = "tls-provider-secret"
+
+    class BrokenTlsSmtp:
+        def __init__(self, *_args, **_kwargs):
+            raise ssl.SSLError(f"certificate failed {provider_secret}")
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.public_mail_host_addresses",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr("services.outreach_email_adapter.smtplib.SMTP_SSL", BrokenTlsSmtp)
+
+    with pytest.raises(EmailAdapterError) as raised:
+        preflight_mailbox(_preflight_config())
+
+    public = email_error_public_details(raised.value)
+    assert raised.value.code == "email_transport_failed"
+    assert public["stage"] == "smtp_connect"
+    assert public["provider_reason"] == "tls_failed"
+    assert public["next_action"] == "Проверьте SMTP-сервер, порт и режим защиты SSL/STARTTLS."
+    assert provider_secret not in json.dumps(public, ensure_ascii=False)
+    assert provider_secret not in str(raised.value)
+    assert provider_secret not in "".join(traceback.format_exception(raised.value))
+
+
+def test_preflight_reports_imap_folder_stage_without_provider_payload(monkeypatch):
+    class WorkingSmtp:
+        def __init__(self, *_args, **_kwargs):
+            return None
+
+        def login(self, _username, _password):
+            return None
+
+        def quit(self):
+            return None
+
+    class MissingInboxImap:
+        def __init__(self, *_args, **_kwargs):
+            return None
+
+        def login(self, _username, _password):
+            return None
+
+        def select(self, _folder, readonly=False):
+            assert readonly is True
+            return "NO", [b"private provider explanation"]
+
+        def logout(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_adapter.public_mail_host_addresses",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr("services.outreach_email_adapter.smtplib.SMTP_SSL", WorkingSmtp)
+    monkeypatch.setattr("services.outreach_email_adapter.imaplib.IMAP4_SSL", MissingInboxImap)
+
+    with pytest.raises(EmailAdapterError) as raised:
+        preflight_mailbox(_preflight_config())
+
+    public = email_error_public_details(raised.value)
+    assert raised.value.code == "email_imap_folder_unavailable"
+    assert public == {
+        "stage": "imap_folder",
+        "provider_reason": "folder_unavailable",
+        "next_action": "Проверьте, что IMAP включён и папка INBOX доступна.",
+    }
+    assert "private provider explanation" not in json.dumps(public, ensure_ascii=False)
+
+
+def test_email_preflight_endpoint_returns_only_allowlisted_diagnostics(monkeypatch):
+    from flask import Flask
+    from api import outreach_campaign_api
+
+    provider_secret = "raw-provider-secret"
+
+    class Connection:
+        def cursor(self, **_kwargs):
+            return object()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        outreach_campaign_api,
+        "_require_auth",
+        lambda: ({"user_id": "user-1"}, None),
+    )
+    monkeypatch.setattr(
+        outreach_campaign_api,
+        "_sender_scope",
+        lambda *_args, **_kwargs: ("platform", None),
+    )
+    monkeypatch.setattr(outreach_campaign_api, "get_db_connection", Connection)
+    monkeypatch.setattr(
+        outreach_campaign_api,
+        "preflight_mailbox",
+        lambda _config: (_ for _ in ()).throw(EmailAdapterError(
+            "email_auth_invalid",
+            "Сервер отправки отклонил вход (SMTP).",
+            stage="smtp_auth",
+            provider_status=535,
+            provider_reason="authentication_rejected",
+        )),
+    )
+    app = Flask(__name__)
+    app.register_blueprint(outreach_campaign_api.outreach_campaign_bp)
+
+    response = app.test_client().post(
+        "/api/outreach/sender-accounts/email/preflight",
+        json={"scope_type": "platform", "mailbox": _preflight_config()},
+    )
+
+    assert response.status_code == 422
+    payload = response.get_json()
+    assert payload == {
+        "success": False,
+        "error": "Сервер отправки отклонил вход (SMTP).",
+        "reason_code": "email_auth_invalid",
+        "messages_sent": 0,
+        "stage": "smtp_auth",
+        "provider_status": 535,
+        "provider_reason": "authentication_rejected",
+        "next_action": "Проверьте логин и пароль приложения в настройках почтового сервиса.",
+    }
+    assert provider_secret not in response.get_data(as_text=True)
 
 
 def test_mailbox_config_requires_smtp_imap_and_does_not_guess_credentials():
