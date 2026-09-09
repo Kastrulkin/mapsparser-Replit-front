@@ -15,6 +15,10 @@ from services import riderra_template_authorization_service as riderra
 from services import outreach_safety_service as safety
 from services import outreach_campaign_service as campaign_service
 from services.outreach_dispatch_service import bind_preflight_dispatch_item, dispatch_due_outreach_queue
+from services.outreach_reply_sync_receipt import (
+    build_email_reply_sync_receipt,
+    load_trusted_email_reply_sync_receipt,
+)
 
 
 class ApiConnection:
@@ -876,6 +880,95 @@ def test_native_dispatch_preflight_returns_only_exact_validated_riderra_payload(
     assert result["allowed"] is True
     assert result["validated_dispatch_payload"]["approved_text"] == member["body"]
     assert result["validated_dispatch_payload"]["email"] == member["recipient"]
+
+
+def test_native_dispatch_preflight_accepts_exact_fresh_v2_riderra_receipt(monkeypatch):
+    member, grant, item, touch = riderra_preflight_fixture()
+    cutoff = datetime(2026, 9, 9, 10, 4, tzinfo=timezone.utc)
+    sender = {
+        "id": riderra.SENDER_ACCOUNT_ID,
+        "scope_type": "business",
+        "business_id": riderra.BUSINESS_ID,
+        "channel": "email",
+        "sender_identity": riderra.SENDER_IDENTITY,
+        "auth_data_encrypted": "encrypted",
+    }
+    folders = [{
+        "role": role,
+        "name": name,
+        "uidvalidity": index + 1,
+        "high_watermark_uid": 0,
+        "candidate_uid_count": 0,
+        "header_checked_uid_count": 0,
+        "matched_uid_count": 0,
+        "fetched_uid_count": 0,
+        "body_checked_uid_count": 0,
+        "window_message_count": 0,
+        "recipient_scope_count": 1,
+    } for index, (role, name) in enumerate((
+        ("all", "All Mail"),
+        ("spam", "Spam"),
+        ("trash", "Trash"),
+    ))]
+    monkeypatch.setattr(
+        "services.outreach_reply_sync_receipt.mailbox_identity_fingerprint",
+        lambda _sender: "riderra-mailbox",
+    )
+    receipt = build_email_reply_sync_receipt(
+        sender,
+        recipient_emails=[member["recipient"]],
+        sync_started_at=cutoff,
+        window_started_at=cutoff - timedelta(days=45, minutes=10),
+        covered_through=cutoff,
+        completed_at=cutoff + timedelta(seconds=1),
+        folders=folders,
+        counters={"imported": 0, "duplicates": 0, "unmatched": 0},
+        message_limit=20000,
+    )
+
+    class ReceiptCursor:
+        def __init__(self):
+            self.rows = [sender, {
+                "id": "receipt-event",
+                "event_type": "reply_sync_succeeded",
+                "payload_json": receipt,
+                "created_at": cutoff + timedelta(seconds=1),
+            }]
+
+        def execute(self, _query, _params):
+            return None
+
+        def fetchone(self):
+            return self.rows.pop(0)
+
+    configure_preflight_mocks(monkeypatch, grant, member["source_fact_fingerprint"])
+
+    def trusted_receipt(_cursor, sender_account_id, **kwargs):
+        assert sender_account_id == riderra.SENDER_ACCOUNT_ID
+        assert kwargs["required_recipient_emails"] == [member["recipient"]]
+        assert kwargs["required_covered_through"] == cutoff
+        assert kwargs["max_age_seconds"] == 120
+        return load_trusted_email_reply_sync_receipt(
+            ReceiptCursor(),
+            sender_account_id,
+            required_recipient_emails=kwargs["required_recipient_emails"],
+            required_covered_through=kwargs["required_covered_through"],
+            max_age_seconds=kwargs["max_age_seconds"],
+            now=cutoff + timedelta(seconds=2),
+        )
+
+    monkeypatch.setattr(
+        "services.outreach_reply_sync_receipt.load_trusted_email_reply_sync_receipt",
+        trusted_receipt,
+    )
+    result = safety.run_dispatch_preflight(
+        PreflightCursor(item, touch, source_fingerprint=member["source_fact_fingerprint"]),
+        "queue-1",
+        author_reply_sync_started_at=cutoff,
+    )
+
+    assert result["allowed"] is True
+    assert result["riderra_reply_sync_receipt_version"] == 2
 
 
 @pytest.mark.parametrize("mutation,reason", [

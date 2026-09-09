@@ -35,6 +35,11 @@ from services.outreach_reply_tracking_service import (
     update_binding_cursor,
 )
 from services.outreach_safety_service import classify_inbound_event, record_sender_health_event
+from services.riderra_template_authorization_service import (
+    APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+    BUSINESS_ID as RIDERRA_BUSINESS_ID,
+    SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
+)
 
 
 def _dict(row: Any) -> dict[str, Any]:
@@ -93,7 +98,7 @@ def _load_queue_candidates(
             JOIN outreach_campaigns campaign ON campaign.id = touch.campaign_id
             JOIN lead_workstreams workstream ON workstream.id = q.workstream_id
             JOIN prospectingleads lead ON lead.id = q.lead_id
-            JOIN creator_profiles creator
+            LEFT JOIN creator_profiles creator
               ON lead.source_external_id = 'creator:' || creator.id::text
             LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
             WHERE q.sender_account_id = %s
@@ -101,10 +106,27 @@ def _load_queue_candidates(
               AND q.provider_name = 'native_email'
               AND q.delivery_status IN ('sent', 'delivered')
               AND q.sent_at >= NOW() - INTERVAL '45 days'
-              AND workstream.workstream_type = 'creator_collaboration'
-              AND campaign.sender_mode = 'localos_for_partner'
+              AND (
+                    (
+                        creator.id IS NOT NULL
+                        AND workstream.workstream_type = 'creator_collaboration'
+                        AND campaign.sender_mode = 'localos_for_partner'
+                    )
+                    OR (
+                        q.sender_account_id = %s
+                        AND campaign.business_id = %s
+                        AND workstream.workstream_type = 'client_partnership'
+                        AND campaign.sender_mode = 'partner_business'
+                        AND campaign.policy_json->>'approval_mode' = %s
+                    )
+              )
         """
-        params: list[Any] = [sender_account_id]
+        params: list[Any] = [
+            sender_account_id,
+            RIDERRA_SENDER_ACCOUNT_ID,
+            RIDERRA_BUSINESS_ID,
+            RIDERRA_APPROVAL_MODE,
+        ]
         if campaign_id:
             query += " AND touch.campaign_id = %s"
             params.append(campaign_id)
@@ -119,7 +141,7 @@ def _load_email_reply_scope_candidates(
     sender_account_id: str,
     campaign_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Load only approved/claimed author targets and recent author conversations."""
+    """Load only approved author or canonical Riderra recipient scopes."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -132,13 +154,25 @@ def _load_email_reply_scope_candidates(
             JOIN outreach_campaigns campaign ON campaign.id = touch.campaign_id
             JOIN lead_workstreams workstream ON workstream.id = q.workstream_id
             JOIN prospectingleads lead ON lead.id = q.lead_id
-            JOIN creator_profiles creator
+            LEFT JOIN creator_profiles creator
               ON lead.source_external_id = 'creator:' || creator.id::text
             LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
             WHERE q.sender_account_id = %s
               AND q.channel = 'email'
-              AND workstream.workstream_type = 'creator_collaboration'
-              AND campaign.sender_mode = 'localos_for_partner'
+              AND (
+                    (
+                        creator.id IS NOT NULL
+                        AND workstream.workstream_type = 'creator_collaboration'
+                        AND campaign.sender_mode = 'localos_for_partner'
+                    )
+                    OR (
+                        q.sender_account_id = %s
+                        AND campaign.business_id = %s
+                        AND workstream.workstream_type = 'client_partnership'
+                        AND campaign.sender_mode = 'partner_business'
+                        AND campaign.policy_json->>'approval_mode' = %s
+                    )
+              )
               AND contact.contact_type = 'email'
               AND COALESCE(contact.normalized_value, q.recipient_value) IS NOT NULL
               AND (
@@ -156,7 +190,12 @@ def _load_email_reply_scope_candidates(
                     )
               )
         """
-        params: list[Any] = [sender_account_id]
+        params: list[Any] = [
+            sender_account_id,
+            RIDERRA_SENDER_ACCOUNT_ID,
+            RIDERRA_BUSINESS_ID,
+            RIDERRA_APPROVAL_MODE,
+        ]
         if campaign_id:
             query += " AND touch.campaign_id = %s"
             params.append(campaign_id)
@@ -193,12 +232,27 @@ def _load_non_author_queue_candidates(
               AND q.provider_name = 'native_email'
               AND q.delivery_status IN ('sent', 'delivered')
               AND NOT (
-                  workstream.workstream_type = 'creator_collaboration'
-                  AND campaign.sender_mode = 'localos_for_partner'
-                  AND creator.id IS NOT NULL
+                  (
+                      workstream.workstream_type = 'creator_collaboration'
+                      AND campaign.sender_mode = 'localos_for_partner'
+                      AND creator.id IS NOT NULL
+                  )
+                  OR (
+                      q.sender_account_id = %s
+                      AND campaign.business_id = %s
+                      AND workstream.workstream_type = 'client_partnership'
+                      AND campaign.sender_mode = 'partner_business'
+                      AND COALESCE(campaign.policy_json->>'approval_mode', '') = %s
+                      AND q.sent_at >= NOW() - INTERVAL '45 days'
+                  )
               )
         """
-        params: list[Any] = [sender_account_id]
+        params: list[Any] = [
+            sender_account_id,
+            RIDERRA_SENDER_ACCOUNT_ID,
+            RIDERRA_BUSINESS_ID,
+            RIDERRA_APPROVAL_MODE,
+        ]
         if campaign_id:
             query += " AND touch.campaign_id = %s"
             params.append(campaign_id)

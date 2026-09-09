@@ -30,10 +30,31 @@ The normal manifest challenge and final PATCH completed, creating grant
 The unauthenticated grant endpoint still returns 401.
 
 Native rollback-only preparation and then commit both succeeded for three
-campaigns. This is **not yet proof of sending**: one first dispatch paused with
-`riderra_reply_preflight_unverified`; the exact reply-receipt gap is being
-investigated. Do not clear it manually, create replacement campaigns, run a
-parallel sync/dispatcher, or weaken freshness checks.
+campaigns. Their initial dispatch attempts stopped before SMTP with
+`riderra_reply_preflight_unverified`: the complete recipient-scope query admitted
+authors only, so Riderra received an incomplete legacy receipt. The fix admits
+only the canonical Riderra sender, business, buyer workstream, sender mode and
+approved-template policy. Author matching is preserved. Recent Riderra sent
+messages use the same Message-ID-first reply matcher; messages older than
+45 days remain in the legacy path.
+
+The one-file reply-service fix was deployed with a guarded idle-worker stop and
+restart of the same app/worker containers. Runtime configuration, image, mounts,
+dispatch limits and frontend index were verified unchanged. No replacement
+campaign, parallel sync/dispatcher or manually fabricated receipt was used.
+All three paused campaigns were resumed through the existing authenticated UI.
+
+The first post-fix native dispatch is proven for Malaca Instituto: a v2 complete
+receipt was recorded at 10:38:27.373598 UTC, preflight passed, and the existing
+queue became sent at 10:38:28.404769 UTC with a provider message ID. The bounded
+history check covered 5,926 UIDs in about 10.6 seconds and found no matching
+history. Proyecto Español Alicante subsequently reached sent as well. Exact
+Gmail Sent and CRM reconciliation is owned by the Riderra operator; database
+send state is not represented as an independently observed Gmail message.
+
+Non-blocking tracking debt: the completed campaign can retain the previous
+`needs_attention_reason` although its queue/touch are sent. Do not use that
+stale display value as a reason to resend or clear data manually.
 
 ## Existing execution path
 
@@ -66,11 +87,21 @@ Resolve those conflicts through the supported campaign lifecycle, not SQL.
   migration/loader tests were independently rerun: four passed.
 - The original production failure was reproduced before migration and passed
   afterward (pricebook POST 200, final grant PATCH 200, active grant readback).
-  This proves the audit-schema fix, not end-to-end delivery.
+- Reply-scope fix: 143 focused/adjacent tests passed, five Docker-dependent
+  PostgreSQL tests skipped. Independent review reran 123 relevant tests with
+  three PostgreSQL skips. All six staged SQL queries passed read-only EXPLAIN
+  against the actual production schema; no ANALYZE or DML was used.
+- Runtime source SHA-256:
+  `c3291dfa594a2e1978da0a372f87555db7ccb6342afbbfc5cea2d6a547ccfaa6`.
+  One-file rollback copy:
+  `/opt/seo-app/.release-backups/riderra-reply-scope-20260909.OX5cea`.
+  App/worker IDs and frontend index were preserved; all services remained
+  running after restart, local HTTP was 200 and startup logs had no traceback.
 - Settings: ten focused tests, scoped TypeScript and ESLint, independent review,
   production build and deployed asset-integrity checks passed.
 - Full-project TypeScript still has five pre-existing AdminLeadRegistry errors.
 - The settings screen, sender and all three message previews were checked in
   the authenticated browser. Existing frontend index hash stayed unchanged and
-  app/worker remained running; HTTP localhost returned 200. Provider Sent and
-  CRM reconciliation must still be verified for the new queue.
+  app/worker remained running; HTTP localhost returned 200. The native send
+  records above and the operator's independent provider evidence are tracked
+  separately.
