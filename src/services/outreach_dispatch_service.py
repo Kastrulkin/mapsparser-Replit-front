@@ -21,12 +21,13 @@ from services.outreach_safety_service import (
 def bind_preflight_dispatch_item(item: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any]:
     """Use only freshly validated bytes/recipient for template-authorized sends."""
     checked = preflight.get("item") or {}
-    if (checked.get("policy_json") or {}).get("approval_mode") != "author_template":
+    approval_mode = (checked.get("policy_json") or {}).get("approval_mode")
+    if approval_mode not in {"author_template", "riderra_template"}:
         return item
     payload = preflight.get("validated_dispatch_payload")
     if (not isinstance(payload, dict) or payload.get("id") != str(item.get("id") or "")
             or not payload.get("approved_text") or not payload.get("email")):
-        raise ValueError("author_template_dispatch_payload_missing")
+        raise ValueError(f"{approval_mode}_dispatch_payload_missing")
     return {**item, **payload}
 
 
@@ -113,11 +114,32 @@ def dispatch_due_outreach_queue(
         if not author_only_due:
             safe_batch_size = min(requested_batch_size, legacy_remaining)
         query = """
-            WITH due AS (
+            WITH cohort_activity AS (
                 SELECT
-                    q.id
+                    CASE
+                      WHEN history_campaign.scope_type='platform' THEN 'platform'
+                      WHEN history_campaign.scope_type='business' THEN 'business:' || history_campaign.business_id::text
+                      ELSE 'legacy'
+                    END AS cohort_key,
+                    MAX(history.dispatch_started_at) AS last_dispatch_at
+                FROM outreachsendqueue history
+                LEFT JOIN outreach_campaign_touches history_touch ON history_touch.id=history.campaign_touch_id
+                LEFT JOIN outreach_campaigns history_campaign ON history_campaign.id=history_touch.campaign_id
+                WHERE history.dispatch_started_at IS NOT NULL
+                GROUP BY 1
+            ), candidates AS (
+                SELECT
+                    q.id,
+                    COALESCE(q.next_retry_at,q.created_at) AS due_at,
+                    CASE
+                      WHEN candidate_campaign.scope_type='platform' THEN 'platform'
+                      WHEN candidate_campaign.scope_type='business' THEN 'business:' || candidate_campaign.business_id::text
+                      ELSE 'legacy'
+                    END AS cohort_key
                 FROM outreachsendqueue q
                 JOIN outreachsendbatches b ON b.id = q.batch_id
+                LEFT JOIN outreach_campaign_touches candidate_touch ON candidate_touch.id=q.campaign_touch_id
+                LEFT JOIN outreach_campaigns candidate_campaign ON candidate_campaign.id=candidate_touch.campaign_id
                 WHERE b.status = %s
                   AND (q.scheduled_at IS NULL OR q.scheduled_at <= NOW())
                   AND NOT EXISTS (
@@ -165,11 +187,18 @@ def dispatch_due_outreach_queue(
                     JOIN outreach_campaigns author_campaign ON author_campaign.id = author_touch.campaign_id
                     JOIN lead_workstreams author_workstream ON author_workstream.id = q.workstream_id
                     JOIN prospectingleads author_lead ON author_lead.id = q.lead_id
-                    JOIN creator_profiles author_creator
+                    LEFT JOIN creator_profiles author_creator
                       ON author_lead.source_external_id = 'creator:' || author_creator.id::text
                     WHERE author_touch.id = q.campaign_touch_id
-                      AND author_workstream.workstream_type = 'creator_collaboration'
-                      AND author_campaign.sender_mode = 'localos_for_partner'
+                      AND (
+                        (author_workstream.workstream_type = 'creator_collaboration'
+                         AND author_campaign.sender_mode = 'localos_for_partner'
+                         AND author_creator.id IS NOT NULL)
+                        OR
+                        (author_workstream.workstream_type = 'client_partnership'
+                         AND author_campaign.business_id = 'edbd961a-273f-4f15-836e-33aacc0aa0e3'
+                         AND author_campaign.policy_json->>'approval_mode' = 'riderra_template')
+                      )
                 )
             """
         if campaign_only:
@@ -211,11 +240,26 @@ def dispatch_due_outreach_queue(
                     )
             """
             params.append(p.QUEUE_STATUS_RETRY)
-        query += """
+        fairness_enabled = campaign_only and (len(cohort_business_ids) + (1 if allow_platform else 0)) > 1
+        order_clause = (
+            "candidate.cohort_rank ASC, activity.last_dispatch_at ASC NULLS FIRST, candidate.due_at ASC, candidate.id ASC"
+            if fairness_enabled
+            else "candidate.due_at ASC, candidate.id ASC"
+        )
+        query += f"""
                   )
-                ORDER BY COALESCE(q.next_retry_at, q.created_at) ASC
+            ), ranked_candidates AS (
+                SELECT candidates.*,
+                       ROW_NUMBER() OVER (PARTITION BY cohort_key ORDER BY due_at,id) AS cohort_rank
+                FROM candidates
+            ), due AS (
+                SELECT q.id
+                FROM outreachsendqueue q
+                JOIN ranked_candidates candidate ON candidate.id=q.id
+                LEFT JOIN cohort_activity activity ON activity.cohort_key=candidate.cohort_key
+                ORDER BY {order_clause}
                 LIMIT %s
-                FOR UPDATE SKIP LOCKED
+                FOR UPDATE OF q SKIP LOCKED
             )
             UPDATE outreachsendqueue q
             SET delivery_status = %s,

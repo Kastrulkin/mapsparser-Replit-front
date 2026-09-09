@@ -1916,6 +1916,19 @@ def _notify_superadmin_community_sources_if_due() -> None:
                 pass
 
 
+def _card_automation_batch_size() -> int:
+    configured_batch_size = max(
+        1,
+        min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100),
+    )
+    if (
+        _env_bool("OUTREACH_DISPATCH_ENABLED", False)
+        and _worker_role_enabled("dispatcher")
+    ):
+        return min(configured_batch_size, 1)
+    return configured_batch_size
+
+
 def _run_card_automation_if_due() -> None:
     global _LAST_CARD_AUTOMATION_AT
     if not _env_bool("CARD_AUTOMATION_ENABLED", True):
@@ -1931,7 +1944,7 @@ def _run_card_automation_if_due() -> None:
     try:
         db = DatabaseManager()
         ensure_card_automation_tables(db.conn)
-        batch_size = max(1, min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100))
+        batch_size = _card_automation_batch_size()
         result = run_due_card_automation(db.conn, batch_size=batch_size)
         if int(result.get("processed") or 0) > 0:
             print(
@@ -7842,11 +7855,11 @@ if __name__ == "__main__":
             if _worker_role_enabled("parser"):
                 process_queue()
             if _worker_role_enabled("dispatcher"):
+                _dispatch_outreach_queue_if_due()
                 _run_card_automation_if_due()
                 _run_founder_content_if_due()
                 _dispatch_social_posts_if_due()
                 _collect_social_post_metrics_if_due()
-                _dispatch_outreach_queue_if_due()
                 _process_creator_offer_distribution_if_due()
                 _dispatch_creator_notifications_if_due()
                 _notify_superadmin_outreach_replies_if_due()

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Riderra buyer approved-template membership input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["records"],
+  "properties": {
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 150,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "audience", "lead_id", "workstream_id", "contact_point_id", "recipient",
+          "company", "city", "opening_variant", "opening", "opening_source_url", "source_fact_fingerprint",
+          "content_sha256", "pricebook"
+        ],
+        "properties": {
+          "audience": {"const": "transfer_buyer"},
+          "lead_id": {"type": "string", "minLength": 1},
+          "workstream_id": {"type": "string", "minLength": 1},
+          "contact_point_id": {"type": "string", "minLength": 1},
+          "recipient": {"type": "string", "format": "email"},
+          "company": {"type": "string", "minLength": 2, "maxLength": 160},
+          "city": {"type": "string", "minLength": 1, "pattern": "^(?!.*[Bb][Ee][Rr][Ll][Ii][Nn]).*$"},
+          "opening_variant": {"enum": ["verified_opening_v1", "no_opening_v1"]},
+          "opening": {"type": "string", "maxLength": 400, "not": {"pattern": "[\\r\\n]"}},
+          "opening_source_url": {"type": "string"},
+          "source_fact_fingerprint": {"type": "string", "pattern": "^(facts:|report:)[0-9a-f]{64}$"},
+          "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "pricebook": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "spreadsheet_id", "sheet", "row", "route", "vehicle", "pax", "price",
+              "currency", "source_row_sha256", "source_artifact_sha256", "source_version"
+            ],
+            "properties": {
+              "spreadsheet_id": {"const": "17YqqHe0TgDvUgXDNq0FeYe7113R2LTZza4musWLjEUo"},
+              "sheet": {"const": "Актуальный полный"},
+              "row": {"type": "integer", "minimum": 2},
+              "route": {"type": "string", "minLength": 1},
+              "vehicle": {"type": "string", "minLength": 1},
+              "pax": {"type": "integer", "minimum": 1, "maximum": 99},
+              "price": {"type": "string", "minLength": 2},
+              "currency": {"enum": ["EUR", "USD", "GBP"]},
+              "source_row_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "source_artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "source_version": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

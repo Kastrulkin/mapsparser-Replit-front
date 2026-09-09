@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { newAuth } from '@/lib/auth_new';
 
+import { RiderraTemplateSettings } from './RiderraTemplateSettings';
+
 
 type SenderAccount = {
   id: string;
@@ -288,6 +290,13 @@ export const OutreachEmailSetup = ({
               className="mt-1 shrink-0"
             />
           </div>
+
+          <RiderraTemplateSettings
+            businessId={businessId}
+            scopeType={scopeType}
+            senderAccountId={account.id}
+            senderIdentity={account.sender_identity}
+          />
 
           {account.reply_sync_error ? (
             <div className="flex gap-3 py-4 text-sm text-amber-900">

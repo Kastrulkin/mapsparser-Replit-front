@@ -4,6 +4,7 @@ import os
 import re
 import uuid
 import hmac
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -19,6 +20,7 @@ from services.outreach_campaign_service import (
     apply_draft_campaign_review,
     approve_campaign,
     approve_campaign_by_author_template,
+    approve_campaign_by_riderra_template,
     build_pilot_readiness,
     build_preview,
     change_campaign_status,
@@ -45,6 +47,15 @@ from services.author_template_authorization_service import (
     load_author_template_authorization,
     set_author_template_authorization,
     template_manifest,
+)
+from services.riderra_template_authorization_service import (
+    AUTHORIZATION_REFERENCE as RIDERRA_AUTHORIZATION_REFERENCE,
+    SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
+    build_manifest as build_riderra_manifest,
+    load_authorization as load_riderra_authorization,
+    load_pricebook_attestation as load_riderra_pricebook_attestation,
+    record_pricebook_attestation as record_riderra_pricebook_attestation,
+    set_authorization as set_riderra_authorization,
 )
 from services.outreach_relationship_service import (
     approve_room_invitation,
@@ -1013,6 +1024,87 @@ def author_template_authorization_route(sender_account_id: str):
         conn.close()
 
 
+@outreach_campaign_bp.route(
+    "/api/outreach/sender-accounts/<sender_account_id>/riderra-template-authorization",
+    methods=["GET", "PATCH"],
+)
+def riderra_template_authorization_route(sender_account_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "superadmin_required"}), 403
+    if sender_account_id != RIDERRA_SENDER_ACCOUNT_ID:
+        return jsonify({"success": False, "error": "riderra_sender_scope_invalid"}), 404
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_sender_account(cursor, sender_account_id, user_data):
+            return jsonify({"success": False, "error": "sender_not_found"}), 404
+        if request.method == "GET":
+            return jsonify({"success": True, "authorization": load_riderra_authorization(cursor, sender_account_id=sender_account_id)})
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return jsonify({"success": False, "error": "json_object_required"}), 400
+        if type(payload.get("enabled")) is not bool or payload.get("authorization_reference") != RIDERRA_AUTHORIZATION_REFERENCE:
+            return jsonify({"success": False, "error": "explicit_riderra_decision_required"}), 400
+        records = payload.get("records") if isinstance(payload.get("records"), list) else []
+        attestation_id = str(payload.get("pricebook_attestation_id") or "")
+        if payload["enabled"]:
+            attestation = load_riderra_pricebook_attestation(cursor, attestation_id)
+            if not attestation:
+                return jsonify({"success": False, "error": "riderra_pricebook_attestation_required"}), 409
+            manifest = build_riderra_manifest(records, pricebook_attestation=attestation)
+            if payload.get("approved_manifest_sha256") != manifest["records_sha256"]:
+                return jsonify({"success": False, "error": "exact_riderra_manifest_approval_required", "manifest": manifest}), 409
+        result = set_riderra_authorization(
+            cursor, actor_id=str(user_data.get("user_id") or ""), enabled=payload["enabled"], records=records,
+            authorization_reference=payload["authorization_reference"], pricebook_attestation_id=attestation_id or None,
+        )
+        conn.commit()
+        return jsonify({"success": True, "authorization": result, "external_dispatch_performed": False})
+    except (ValueError, PermissionError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post(
+    "/api/outreach/sender-accounts/<sender_account_id>/riderra-pricebook-attestations"
+)
+def riderra_pricebook_attestation_route(sender_account_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "superadmin_required"}), 403
+    if sender_account_id != RIDERRA_SENDER_ACCOUNT_ID:
+        return jsonify({"success": False, "error": "riderra_sender_scope_invalid"}), 404
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "error": "json_object_required"}), 400
+    if not isinstance(payload.get("artifact_text"), str) or not str(payload.get("evidence_reference") or "").strip():
+        return jsonify({"success": False, "error": "pricebook_artifact_and_evidence_required"}), 400
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_sender_account(cursor, sender_account_id, user_data):
+            return jsonify({"success": False, "error": "sender_not_found"}), 404
+        result = record_riderra_pricebook_attestation(
+            cursor, actor_id=str(user_data.get("user_id") or ""),
+            artifact_bytes=payload["artifact_text"].encode("utf-8"),
+            evidence_reference=str(payload["evidence_reference"]),
+        )
+        conn.commit()
+        return jsonify({"success": True, "pricebook_attestation": result, "external_dispatch_performed": False})
+    except (ValueError, PermissionError, json.JSONDecodeError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        conn.close()
+
+
 @outreach_campaign_bp.delete("/api/outreach/sender-accounts/<sender_account_id>")
 def disconnect_sender_account(sender_account_id: str):
     user_data, error = _require_auth()
@@ -1480,6 +1572,26 @@ def authorize_author_template_campaign_route(campaign_id: str):
         result = approve_campaign_by_author_template(cursor, campaign_id)
         conn.commit()
         return jsonify({"success": True, "campaign": result, "approval_mode": "author_template"})
+    except (ValueError, LookupError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/campaigns/<campaign_id>/authorize-riderra-template")
+def authorize_riderra_template_campaign_route(campaign_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_campaign(cursor, campaign_id, user_data):
+            return jsonify({"success": False, "error": "Campaign not found or access denied"}), 404
+        result = approve_campaign_by_riderra_template(cursor, campaign_id)
+        conn.commit()
+        return jsonify({"success": True, "campaign": result, "approval_mode": "riderra_template"})
     except (ValueError, LookupError) as exc:
         conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 409
