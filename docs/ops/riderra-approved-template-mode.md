@@ -105,3 +105,25 @@ Resolve those conflicts through the supported campaign lifecycle, not SQL.
   app/worker remained running; HTTP localhost returned 200. The native send
   records above and the operator's independent provider evidence are tracked
   separately.
+
+## Buyer qualification clarification (2026-09-09)
+
+A prospective passenger-transport buyer does not need public evidence that it already offers or purchases airport transfers. Qualify by buyer type, relevant Riderra geography, confirmed organization identity, and a working organization contact. Never present potential demand as a confirmed order, volume, or interest. The exact airport route and current 005 price in the approved template are an example offer. Do not reinstate `direct official airport-transfer/pickup evidence` as a mandatory filter.
+
+## Queue state after the qualification change (2026-09-09)
+
+The first revised intake created 97 buyer workstreams: 32 Helsinki travel agencies/DMCs, the six released FEDELE schools, 46 accepted members from the 50-row Finland import, and 13 additional exact-city FEDELE schools. Four Finland rows were skipped by the native importer. The new workstreams are enrichment inputs only; they are not approved recipients and do not count as queued outbound until a native template commit creates campaign and queue rows.
+
+At the last read-only check, all 97 enrichment jobs were still `queued`, with no selected contact, native research, campaign, or send-queue row. Do not manufacture these bindings or bypass enrichment. Worker logs show repeated GigaChat HTTP 402 failures while draining the older contact-intelligence backlog. Resume template preparation only for records that later have a `confirmed_source` selected contact, fresh research, exact 005 attestation, and a successful database binding check.
+
+After one more native worker cycle, the Moscow-day outbound footprint was 19 unique companies: 13 `sent` and 6 `queued`, with no uncertain state. Recount it immediately before every grant-backed commit; the maximum remains 150 unique companies for the whole Moscow day.
+
+## Minimal recipient check (2026-09-09)
+
+Per the owner's direct instruction, qualify a new recipient from only three recipient facts: city, occupation/organization type, and a working organization email. Reuse consistent stored values and restore only missing or clearly incorrect values. Do not require separate public proof of transfer orders, transport volume, purchasing authority, personalization, or a detailed dossier.
+
+005 validates the approved message's exact route, currency, price, class, and capacity; it is not recipient-demand evidence. Contact history, duplicates, refusal/suppression, Moscow-day remaining allowance, and native permissions remain independent automatic send checks. Do not convert technical CRM binding fields into added public research or bypass the native grant, manifest, rollback preview, or database binding.
+
+On 2026-09-09 the live partnership batch endpoint was repaired by restoring flat timestamp serialization. Contact intelligence was also changed so a terminal GigaChat draft-provider error does not roll back already verified contacts and research. The job finishes as `needs_evidence`, with no generic draft or outbound queue row. This is operational resilience only: Riderra still requires the exact authenticated grant, current 005 attestation, database binding, suppression/history checks, and the approved template renderer.
+
+The resulting new Riderra intake contains 131 workstreams with current research. Of these, 113 have a selected `confirmed_source` email and can enter a future email manifest; 5 have only `valid_format` email and 13 selected contacts are non-email, so they stay out. One existing recipient, Debla, replied with a price-based refusal and is confirmed as refused in LocalOS.

@@ -241,6 +241,14 @@ _SLUG_PART_ALIASES = {
     "подковырова": "podkovirova",
 }
 
+
+def _serialize_timestamp_fields(row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(row)
+    for key, value in payload.items():
+        if isinstance(value, (datetime, date)):
+            payload[key] = value.isoformat()
+    return payload
+
 _STREET_PREFIX_PATTERN = re.compile(
     r"^(ulitsa|ulitsa\.|ul\.|street|st\.|st|prospekt|pr\.|pr|pereulok|per\.|per|naberezhnaya|nab\.|nab|bulvar|boulevard|bulevard|shosse|sh\.)\s+",
     re.IGNORECASE,
