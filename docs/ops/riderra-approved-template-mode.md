@@ -11,17 +11,31 @@ cadence have been deployed. Author invitations retain their own grant, sender,
 template, history checks and daily limit. Static frontend deployment preserves
 the running app container with `--no-recreate`; it must not reset its command.
 
-**Activation is not complete.** The first live pricebook-attestation request
-failed because `ck_outreach_sender_account_event_type` only permits seven legacy
-event types. The new `provider_snapshot_verified` event is not yet permitted.
-No Riderra template grant or new send queue was created by that failed request.
+**The audit-schema failure is fixed and the template grant is active.** The user
+separately approved the production schema change on 9 September. Migration
+`20260909_001` adds only `provider_snapshot_verified` to the existing CHECK.
+It was applied through the canonical Alembic migrator at 12:57 MSK after a full
+server-local backup, with bounded lock/statement timeouts. The validated
+constraint has the former seven values plus the new event; the audit row count
+was 96,780 immediately before and after migration. No contact or conversation
+rows were changed by the migration and no service restart was needed.
 
-The remaining change is an explicitly approved additive schema migration for
-that audit event. Do not relabel tariff verification as a successful SMTP
-preflight, remove the CHECK, delete audit rows, or bypass this failure with
-direct SMTP or fabricated approvals.
+Backup: `/opt/seo-app/data/backups/postgres/local_20260909_125052.sql.gz`
+(1,717,562,435 bytes, gzip integrity and SHA-256 checked). Its standard filename
+is covered by the existing rotation; no backup pruning was performed.
 
-## Intended execution after the migration
+The original failing POST returned 200 in the authenticated settings screen.
+The normal manifest challenge and final PATCH completed, creating grant
+`17860474-0842-4c32-bb7b-ab4dd86aae41` for the exact three-record selection.
+The unauthenticated grant endpoint still returns 401.
+
+Native rollback-only preparation and then commit both succeeded for three
+campaigns. This is **not yet proof of sending**: one first dispatch paused with
+`riderra_reply_preflight_unverified`; the exact reply-receipt gap is being
+investigated. Do not clear it manually, create replacement campaigns, run a
+parallel sync/dispatcher, or weaken freshness checks.
+
+## Existing execution path
 
 1. Use the existing authenticated superadmin settings screen to select the
    verified 005 snapshot and exact recipient records. Read the message previews.
@@ -47,12 +61,16 @@ Resolve those conflicts through the supported campaign lifecycle, not SQL.
 
 - Backend suite: 347 passed, two isolated PostgreSQL tests skipped because a
   local Docker test database was unavailable.
-- Three native SQL shapes were EXPLAINed against production read-only, without
-  ANALYZE. This did not validate the new INSERT event-type constraint; the live
-  failure above is the required missing regression.
+- New audit-event regression suite: 356 passed, three isolated PostgreSQL tests
+  skipped because a local Docker test database was unavailable. Four focused
+  migration/loader tests were independently rerun: four passed.
+- The original production failure was reproduced before migration and passed
+  afterward (pricebook POST 200, final grant PATCH 200, active grant readback).
+  This proves the audit-schema fix, not end-to-end delivery.
 - Settings: ten focused tests, scoped TypeScript and ESLint, independent review,
   production build and deployed asset-integrity checks passed.
 - Full-project TypeScript still has five pre-existing AdminLeadRegistry errors.
 - The settings screen, sender and all three message previews were checked in
-  the authenticated browser. End-to-end activation remains failing until the
-  schema migration is approved, tested and deployed.
+  the authenticated browser. Existing frontend index hash stayed unchanged and
+  app/worker remained running; HTTP localhost returned 200. Provider Sent and
+  CRM reconciliation must still be verified for the new queue.

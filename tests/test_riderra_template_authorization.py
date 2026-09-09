@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import importlib
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -192,6 +193,7 @@ def test_revocation_succeeds_with_expired_or_damaged_previous_manifest():
     result = riderra.set_authorization(cursor, actor_id="admin", enabled=False, records=[],
                                       authorization_reference=riderra.AUTHORIZATION_REFERENCE)
     assert result["state"] == "revoked"
+    assert "'permission_changed'" in cursor.calls[-1][0]
     assert cursor.calls[-1][1][3].adapted["state"] == "revoked"
 
 
@@ -349,6 +351,29 @@ def test_pricebook_attestation_requires_exact_provider():
         riderra.normalize_pricebook_attestation(artifact, "a" * 64)
     with pytest.raises(ValueError, match="attestation_invalid"):
         riderra.normalize_pricebook_attestation([], "a" * 64)
+
+
+def test_pricebook_attestation_records_only_the_migrated_snapshot_event():
+    artifact = {
+        "spreadsheet_id": riderra.PRICEBOOK_ID,
+        "sheet": riderra.PRICEBOOK_SHEET,
+        "evidence_kind": "provider_observed",
+        "provider": riderra.PRICEBOOK_PROVIDER,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "ranges": [
+            {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1:G1", "values": [["Country", "From", "To", "Type", "Pax", "Price", "Currency"]]},
+            {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1710:G1710", "values": [attestation()["rows"]["1710"]]},
+        ],
+    }
+    cursor = Cursor([{"id": "admin"}, {"id": riderra.SENDER_ACCOUNT_ID}])
+    result = riderra.record_pricebook_attestation(
+        cursor, actor_id="admin", artifact_bytes=json.dumps(artifact).encode(),
+        evidence_reference="authenticated_settings:snapshot005.json",
+    )
+    insert_sql = cursor.calls[-1][0]
+    assert "'provider_snapshot_verified'" in insert_sql
+    assert "'preflight_succeeded'" not in insert_sql
+    assert result["attestation"]["provider"] == riderra.PRICEBOOK_PROVIDER
 
 
 def test_pricebook_loader_rejects_transport_preflight_or_wrong_snapshot_kind():
