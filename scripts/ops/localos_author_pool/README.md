@@ -28,8 +28,11 @@ Those flags are outputs of evidence-backed selection, not substitutes for it.
 
 Named invitations remain the default. `--invitation-variant neutral_greeting_v1`
 requires each input record to have no `verified_first_name` and the exact
-`salutation` value `Здравствуйте!`. A confirmed name or any other salutation is
-rejected; a channel title is never used as a substitute name. The neutral subject
+`salutation` value `Здравствуйте!`, either at top level or in `greeting_policy`.
+If both fields are present they must agree; malformed policy values are rejected.
+Saved `authorization_status` is not authority: the live server grant is required.
+A confirmed name or any other salutation is rejected; a channel title is never
+used as a substitute name. The neutral subject
 is `LocalOS | сотрудничество`. The marker is applied to that candidate only, not
 to every member of a campaign. Neither the source JSON nor saved identity is
 rewritten to make a record eligible.

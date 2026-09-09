@@ -269,7 +269,18 @@ def parse_not_before(value, *, now=None):
 def select_invitation_variant(row, variant):
     selected=dict(row)
     if variant == 'neutral_greeting_v1':
-        if selected.get('verified_first_name') or selected.get('salutation') != 'Здравствуйте!':
+        policy=selected.get('greeting_policy')
+        if policy is not None and not isinstance(policy,dict):
+            raise ValueError('neutral_variant_input_not_authorized')
+        top_level_present='salutation' in selected
+        nested_present=isinstance(policy,dict) and 'salutation' in policy
+        top_level=selected.get('salutation') if top_level_present else None
+        nested=policy.get('salutation') if nested_present else None
+        if (
+            selected.get('verified_first_name')
+            or (top_level_present and nested_present and top_level != nested)
+            or (top_level if top_level_present else nested) != 'Здравствуйте!'
+        ):
             raise ValueError('neutral_variant_input_not_authorized')
         selected['author_invitation_variant']='neutral_greeting_v1'
     else:

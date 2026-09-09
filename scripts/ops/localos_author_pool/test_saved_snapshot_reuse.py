@@ -54,6 +54,19 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(selected['author_invitation_variant'],'neutral_greeting_v1');self.assertNotIn('author_invitation_variant',row)
         for bad in ({'salutation':'Здравствуйте!','verified_first_name':'Анна'},{'salutation':'Добрый день'}):
             with self.assertRaises(ValueError):helper_namespace['select_invitation_variant'](bad,'neutral_greeting_v1')
+    def test_neutral_selection_accepts_immutable_nested_salutation(self):
+        row={'greeting_policy':{'salutation':'Здравствуйте!'}}
+        selected=helper_namespace['select_invitation_variant'](row,'neutral_greeting_v1')
+        self.assertEqual(selected['author_invitation_variant'],'neutral_greeting_v1')
+        self.assertNotIn('author_invitation_variant',row)
+    def test_neutral_selection_fails_closed_on_conflicting_or_malformed_salutation(self):
+        choose=helper_namespace['select_invitation_variant']
+        for bad in (
+            {'salutation':'Здравствуйте!','greeting_policy':{'salutation':'Добрый день'}},
+            {'salutation':'Здравствуйте!','greeting_policy':'Здравствуйте!'},
+            {'greeting_policy':['Здравствуйте!']},
+        ):
+            with self.assertRaises(ValueError):choose(bad,'neutral_greeting_v1')
     def test_not_before_requires_timezone_and_twenty_minutes(self):
         now=datetime(2026,9,9,10,0,tzinfo=timezone.utc); parse=helper_namespace['parse_not_before']
         self.assertEqual(parse(None,now=now),now+timedelta(minutes=20))
