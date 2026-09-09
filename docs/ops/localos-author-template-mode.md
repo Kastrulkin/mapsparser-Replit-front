@@ -2,7 +2,11 @@
 
 The user authorized the exact `creator_invitation_name_only_v2` on 8 September
 2026, including barter **or paid** work depending on the client. Only the verified
-first name changes. Sender: `localosgo@gmail.com`. The limit is 150 unique authors
+first name changes. On 9 September the user also approved `Здравствуйте!` for
+authors without a confirmed name, with all remaining body text unchanged and
+the no-name subject `LocalOS | сотрудничество`. The current authorization v2
+manifest binds both exact variants; an old name-only grant is not enough.
+Sender: `localosgo@gmail.com`. The limit is 150 unique authors
 per Moscow calendar day, shared with manual and other author-channel activity.
 This is not approval for company outreach or Riderra.
 
@@ -18,8 +22,11 @@ This is not approval for company outreach or Riderra.
   `set_author_template_authorization`, naming the actual approving user and the
   actual decision reference. Never fabricate a browser session or review record.
 - Prepare and save a single email first-touch draft with canonical creator
-  evidence and `invitation_template: verified_name_v2`. Preview and save remain
-  non-sending operations.
+  evidence and `invitation_template: verified_name_v2` for a confirmed name, or
+  the exact per-candidate `author_invitation_variant: neutral_greeting_v1` marker
+  for the approved no-name route. Campaign-wide variant markers are ignored.
+  No name is guessed or inserted into the identity record. Preview and save
+  remain non-sending operations.
 - Call `POST /api/outreach/campaigns/{campaign_id}/authorize-template`, or
   `approve_campaign_by_author_template` from the authorized project worker.
   This rechecks the live grant and exact renderer before enrolling the draft in
@@ -49,5 +56,6 @@ failure remains a recovery action, not a response follow-up.
 
 `tests/test_author_template_authorization.py` covers real actor requirements,
 exact manifest/copy, revocation, scope, queue/draft mutation, dispatch snapshot
-binding and all-time first-touch history. Existing author daily-gate, reply-sync,
+binding, the full neutral preview path and all-time first-touch history.
+Existing author daily-gate, reply-sync,
 campaign, sender and B2B tests remain required. No schema migration is needed.

@@ -130,6 +130,9 @@ def _message_for_template_match(value: Any) -> str:
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_template_service import (
     CREATOR_NAME_ONLY_TEMPLATE_KEY,
+    CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT,
+    CREATOR_NEUTRAL_TEMPLATE_KEY,
+    CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT,
     CREATOR_INVITATION_TEMPLATE_KEY,
     CREATOR_INVITATION_TEMPLATE_VERSION,
     attach_public_audit_link,
@@ -1593,6 +1596,7 @@ def _load_creator_outreach_bridge(
         """
         SELECT candidate.id AS candidate_id,
                candidate.creator_profile_id,
+               candidate.score_snapshot_json AS candidate_score_snapshot_json,
                candidate.updated_at AS candidate_updated_at,
                candidate.score_snapshot_json->'contact_confirmation' AS contact_confirmation,
                profile.display_name AS creator_display_name,
@@ -1846,6 +1850,13 @@ def _load_creator_outreach_bridge(
         "evidence_kind": "creator_invitation_approved",
         "provider_key": _text(row.get("channel_id")),
     }
+    constraints_json = row.get("constraints_json")
+    constraints = dict(constraints_json) if isinstance(constraints_json, dict) else {}
+    constraints.pop("author_invitation_variant", None)
+    candidate_snapshot = row.get("candidate_score_snapshot_json")
+    candidate_variant = _text((candidate_snapshot if isinstance(candidate_snapshot, dict) else {}).get("author_invitation_variant"))
+    if candidate_variant:
+        constraints["author_invitation_variant"] = candidate_variant
     provenance_contract = {
         "bridge_version": CREATOR_OUTREACH_BRIDGE_VERSION,
         "creator_campaign_id": _text(row.get("creator_campaign_id")),
@@ -1870,7 +1881,7 @@ def _load_creator_outreach_bridge(
         "formats": row.get("formats_json") if isinstance(row.get("formats_json"), list) else [],
         "budget": row.get("budget_json") if isinstance(row.get("budget_json"), dict) else {},
         "period": row.get("period_json") if isinstance(row.get("period_json"), dict) else {},
-        "constraints": row.get("constraints_json") if isinstance(row.get("constraints_json"), dict) else {},
+        "constraints": constraints,
         "contact_confirmation": contact_confirmation,
     }
     provenance_evidence = {
@@ -1917,7 +1928,7 @@ def _load_creator_outreach_bridge(
         "formats": row.get("formats_json") if isinstance(row.get("formats_json"), list) else [],
         "budget": row.get("budget_json") if isinstance(row.get("budget_json"), dict) else {},
         "period": row.get("period_json") if isinstance(row.get("period_json"), dict) else {},
-        "constraints": row.get("constraints_json") if isinstance(row.get("constraints_json"), dict) else {},
+        "constraints": constraints,
     }
     bridge["source_fact_fingerprint"] = research_source_fact_fingerprint({
         "signals_json": [
@@ -3982,7 +3993,9 @@ def _apply_creator_invitation_template_contract(
     )
     grant = template_authorization or {}
     authorized_template = bool(
-        rendered and rendered.get("key") == CREATOR_NAME_ONLY_TEMPLATE_KEY
+        rendered and rendered.get("key") in {
+            CREATOR_NAME_ONLY_TEMPLATE_KEY, CREATOR_NEUTRAL_TEMPLATE_KEY,
+        }
         and grant.get("id") and grant.get("approved_by")
         and grant.get("manifest") == template_manifest()
     )
@@ -4080,9 +4093,17 @@ def build_preview(
     # Read the permission journal here, never accept a grant from preview JSON
     # or mutable creator-campaign constraints.
     author_template_authorization = {}
+    creator_constraints = (context.get("creator_outreach_bridge") or {}).get(
+        "constraints", {}
+    )
+    creator_constraints = (
+        creator_constraints if isinstance(creator_constraints, dict) else {}
+    )
     if author_lane and (
-        (context.get("creator_outreach_bridge") or {}).get("constraints", {})
-        .get("invitation_template") == "verified_name_v2"
+        creator_constraints.get("invitation_template")
+        == CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT
+        or creator_constraints.get("author_invitation_variant")
+        == CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT
     ):
         author_template_authorization = load_author_template_authorization(cursor)
     reviewer_role = _text(manual_reviewer_role) or "authorized_user"

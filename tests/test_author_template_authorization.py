@@ -135,6 +135,112 @@ def test_only_exact_first_invitation_is_authorized(case):
     assert auth.exact_author_invitation(**args) is (case == "exact")
 
 
+def test_neutral_variant_is_exact_and_requires_the_new_manifest():
+    evidence, permission = bridge(), grant()
+    evidence["creator_display_name"] = "@channel_without_name"
+    evidence["constraints"]["author_invitation_variant"] = "neutral_greeting_v1"
+    rendered = render_creator_invitation_template(evidence)
+    assert rendered["subject"] == "LocalOS | сотрудничество"
+    assert rendered["body"].startswith("Здравствуйте!\n\n")
+    args = dict(bridge=evidence, authorization=permission, sender_account_id="sender",
+                channel="email", sequence_index=0, subject=rendered["subject"], body=rendered["body"])
+    assert auth.exact_author_invitation(**args)
+    assert not auth.exact_author_invitation(**{**args, "body": rendered["body"] + "!"})
+    assert not auth.exact_author_invitation(**{**args, "subject": "Unknown | LocalOS | сотрудничество"})
+    legacy = deepcopy(permission)
+    legacy["manifest"]["authorization_version"] = 1
+    assert not auth.exact_author_invitation(**{**args, "authorization": legacy})
+
+def test_neutral_variant_passes_the_runtime_template_contract():
+    evidence, permission = bridge(), grant()
+    evidence["creator_display_name"] = "@channel_without_name"
+    evidence["constraints"]["author_invitation_variant"] = "neutral_greeting_v1"
+    rendered = render_creator_invitation_template(evidence)
+    result = campaign._apply_creator_invitation_template_contract(
+        {"passed": False, "diagnostic_codes": ["removal"], "reason_codes": ["WEAK_OFFER_BRIDGE"], "blocking_reasons": []},
+        subject=rendered["subject"], body=rendered["body"], bridge=evidence,
+        manual_review_context="", manual_reviewer_role="", template_authorization=permission,
+    )
+    assert result["passed"] and result["creator_invitation_copy_contract"]["authorized_template"]
+
+
+def _preview_context_for_author_variant(variant):
+    constraints = {"invitation_only": True}
+    if variant is not None:
+        constraints["author_invitation_variant"] = variant
+    return {
+        "workstream_type": "creator_collaboration",
+        "sender_mode": "localos_for_partner",
+        "lead_id": "lead",
+        "lead_name": "Author channel",
+        "city": "Moscow",
+        "category": "creator",
+        "source_url": "https://example.test/channel",
+        "client_business_id": "business",
+        "sender_profile": {"id": "profile"},
+        "platform_sender_profile": {"confirmed_at": "2026-09-09T10:00:00Z"},
+        "creator_outreach_bridge": {
+            **bridge(),
+            "creator_display_name": "@channel_without_name",
+            "constraints": constraints,
+        },
+        "research": {"selected_personalization_id": "candidate"},
+    }
+
+
+def _stub_author_preview_dependencies(monkeypatch, context):
+    monkeypatch.setattr(campaign, "_load_context", lambda *args: context)
+    monkeypatch.setattr(campaign, "_apply_sender_mode", lambda value, mode: value)
+    monkeypatch.setattr(campaign, "build_evidence_ledger", lambda value: [{"id": "evidence"}])
+    monkeypatch.setattr(campaign, "evaluate_sender_profile_completeness", lambda *args, **kwargs: {"ready": True})
+    monkeypatch.setattr(campaign, "channel_availability", lambda *args: {
+        "email": {"status": "ready", "contact_point_id": "contact", "sender_account_id": "sender"}
+    })
+    monkeypatch.setattr(campaign, "_suppression_status", lambda *args: {"suppressed": False})
+    monkeypatch.setattr(campaign, "build_outreach_decision", lambda *args, **kwargs: {"action": "write_now"})
+    monkeypatch.setattr(campaign, "offer_candidates", lambda *args: [{"id": "offer", "text": "Offer", "cta": "Offer"}])
+    monkeypatch.setattr(campaign, "trust_candidates", lambda *args: [{"id": "trust", "statement": "Trust"}])
+    monkeypatch.setattr(campaign, "select_offer", lambda offers, value: offers[0])
+    monkeypatch.setattr(campaign, "select_trust", lambda trusts, value: trusts[0])
+    monkeypatch.setattr(campaign, "build_personalization_candidates", lambda *args, **kwargs: [{
+        "id": "candidate", "evidence_id": "evidence", "evidence_kind": "creator_identity",
+        "source_url": "https://example.test/channel", "observed_fact": "Public channel",
+        "relevance_to_offer": "Offer", "bridge": "Offer", "recipient": "Author",
+    }])
+    monkeypatch.setattr(campaign, "_quality_gate", lambda *args, **kwargs: {
+        "passed": False, "checks": {"bridge": False}, "diagnostic_codes": ["bridge"],
+        "reason_codes": ["WEAK_OFFER_BRIDGE"], "blocking_reasons": [], "verdict": "revise",
+    })
+    monkeypatch.setattr(campaign, "_strategy_dimensions", lambda *args, **kwargs: {})
+    monkeypatch.setattr(campaign, "_review_record", lambda *args, **kwargs: {})
+
+
+def test_preview_loads_live_grant_and_applies_exact_neutral_contract(monkeypatch):
+    context = _preview_context_for_author_variant("neutral_greeting_v1")
+    _stub_author_preview_dependencies(monkeypatch, context)
+    loaded = []
+    monkeypatch.setattr(campaign, "load_author_template_authorization", lambda cursor: loaded.append(cursor) or grant())
+
+    preview = campaign.build_preview(Cursor(), "workstream", generate_ai=False)
+
+    assert len(loaded) == 1
+    contract = preview["touches"][0]["quality_gate"]["creator_invitation_copy_contract"]
+    assert contract["authorized_template"] and preview["touches"][0]["quality_gate"]["passed"]
+
+
+def test_preview_does_not_load_grant_or_admit_unknown_author_variant(monkeypatch):
+    context = _preview_context_for_author_variant("unknown_variant")
+    _stub_author_preview_dependencies(monkeypatch, context)
+    loaded = []
+    monkeypatch.setattr(campaign, "load_author_template_authorization", lambda cursor: loaded.append(cursor) or grant())
+
+    preview = campaign.build_preview(Cursor(), "workstream", generate_ai=False)
+
+    assert not loaded
+    contract = preview["touches"][0]["quality_gate"]["creator_invitation_copy_contract"]
+    assert not contract["authorized_template"] and not preview["touches"][0]["quality_gate"]["passed"]
+
+
 def test_template_permission_replaces_only_individual_copy_approval():
     evidence = bridge()
     rendered = render_creator_invitation_template(evidence)

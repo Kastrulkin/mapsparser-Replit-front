@@ -18,6 +18,8 @@ from services.outreach_template_service import (
     CREATOR_NAME_ONLY_TEMPLATE_VERSION,
     CREATOR_NAME_ONLY_SUBJECT_TEMPLATE,
     CREATOR_NAME_ONLY_BODY_TEMPLATE,
+    CREATOR_NEUTRAL_TEMPLATE_KEY, CREATOR_NEUTRAL_TEMPLATE_VERSION,
+    CREATOR_NEUTRAL_SUBJECT, CREATOR_NEUTRAL_BODY_TEMPLATE,
     TEMPLATE_LIBRARY_VERSION,
     render_creator_invitation_template,
 )
@@ -25,18 +27,15 @@ from services.outreach_template_service import (
 PERMISSION_KIND = "localos_author_template"
 SENDER_IDENTITY = "localosgo@gmail.com"
 DAILY_LIMIT = 150
-AUTHORIZATION_VERSION = 1
+AUTHORIZATION_VERSION = 2
 
 
 def template_manifest() -> dict[str, Any]:
     # Hash the same immutable text constants used by the production renderer.
-    definition = {
-        "key": CREATOR_NAME_ONLY_TEMPLATE_KEY,
-        "version": CREATOR_NAME_ONLY_TEMPLATE_VERSION,
-        "library_version": TEMPLATE_LIBRARY_VERSION,
-        "subject": CREATOR_NAME_ONLY_SUBJECT_TEMPLATE,
-        "body": CREATOR_NAME_ONLY_BODY_TEMPLATE,
-    }
+    definition = {"library_version": TEMPLATE_LIBRARY_VERSION, "variants": [
+        {"key": CREATOR_NAME_ONLY_TEMPLATE_KEY, "version": CREATOR_NAME_ONLY_TEMPLATE_VERSION, "subject": CREATOR_NAME_ONLY_SUBJECT_TEMPLATE, "body": CREATOR_NAME_ONLY_BODY_TEMPLATE},
+        {"key": CREATOR_NEUTRAL_TEMPLATE_KEY, "version": CREATOR_NEUTRAL_TEMPLATE_VERSION, "subject": CREATOR_NEUTRAL_SUBJECT, "body": CREATOR_NEUTRAL_BODY_TEMPLATE},
+    ]}
     digest = hashlib.sha256(json.dumps(
         definition, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8")).hexdigest()
@@ -50,8 +49,8 @@ def template_manifest() -> dict[str, Any]:
         "daily_limit": DAILY_LIMIT,
         "timezone": "Europe/Moscow",
         "stop_on_reply": True,
-        "template_key": CREATOR_NAME_ONLY_TEMPLATE_KEY,
-        "template_version": CREATOR_NAME_ONLY_TEMPLATE_VERSION,
+        "template_key": "creator_invitation_variants_v1",
+        "template_version": AUTHORIZATION_VERSION,
         "template_definition_sha256": digest,
     }
 
@@ -178,7 +177,7 @@ def exact_author_invitation(
         and authorization.get("manifest") == template_manifest()
         and authorization.get("sender_account_id") == str(sender_account_id)
         and channel == "email" and sequence_index == 0
-        and rendered and rendered.get("key") == CREATOR_NAME_ONLY_TEMPLATE_KEY
+        and rendered and rendered.get("key") in {CREATOR_NAME_ONLY_TEMPLATE_KEY, CREATOR_NEUTRAL_TEMPLATE_KEY}
         and subject == rendered["subject"] and body == rendered["body"]
     )
 

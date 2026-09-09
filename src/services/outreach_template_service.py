@@ -33,6 +33,11 @@ CREATOR_NAME_ONLY_BODY_TEMPLATE = (
     "Александр Демьянов\n"
     "LocalOS"
 )
+CREATOR_NEUTRAL_TEMPLATE_KEY = "creator_invitation_neutral_v1"
+CREATOR_NEUTRAL_TEMPLATE_VERSION = 1
+CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT = "neutral_greeting_v1"
+CREATOR_NEUTRAL_SUBJECT = "LocalOS | сотрудничество"
+CREATOR_NEUTRAL_BODY_TEMPLATE = "Здравствуйте!\n\n" + CREATOR_NAME_ONLY_BODY_TEMPLATE.split("\n\n", 1)[1]
 
 OUTREACH_TEMPLATES = (
     {
@@ -250,6 +255,19 @@ def _render_creator_name_only_invitation(bridge: dict[str, Any]) -> dict[str, An
     }
 
 
+def _render_creator_neutral_invitation(bridge: dict[str, Any]) -> dict[str, Any] | None:
+    constraints = bridge.get("constraints")
+    if not isinstance(constraints, dict) or constraints.get("author_invitation_variant") != CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT:
+        return None
+    return {"status": "selected", "library_version": TEMPLATE_LIBRARY_VERSION,
+            "key": CREATOR_NEUTRAL_TEMPLATE_KEY, "version": CREATOR_NEUTRAL_TEMPLATE_VERSION,
+            "subject": CREATOR_NEUTRAL_SUBJECT, "body": CREATOR_NEUTRAL_BODY_TEMPLATE,
+            "subject_sha256": hashlib.sha256(CREATOR_NEUTRAL_SUBJECT.encode("utf-8")).hexdigest(),
+            "body_sha256": hashlib.sha256(CREATOR_NEUTRAL_BODY_TEMPLATE.encode("utf-8")).hexdigest(),
+            "recipient": None, "topic": None, "channel_id": _text(bridge.get("channel_id")),
+            "evidence_id": _text(bridge.get("evidence_id"))}
+
+
 def render_creator_invitation_template(bridge: dict[str, Any]) -> dict[str, Any] | None:
     """Render approved author-invitation bytes from current public source slots."""
 
@@ -262,6 +280,9 @@ def render_creator_invitation_template(bridge: dict[str, Any]) -> dict[str, Any]
         or not _text(bridge.get("evidence_id"))
     ):
         return None
+    neutral_invitation = _render_creator_neutral_invitation(bridge)
+    if neutral_invitation:
+        return neutral_invitation
     name_only_invitation = _render_creator_name_only_invitation(bridge)
     if name_only_invitation:
         return name_only_invitation

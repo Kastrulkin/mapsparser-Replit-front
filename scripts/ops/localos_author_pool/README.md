@@ -6,9 +6,13 @@ selection files, message IDs, recipient data and detailed results stay server-si
 Do not export the production contact list. Logs intentionally contain only counts,
 reason codes and artifact hashes.
 
-The existing revocable authorization must approve the exact name-only v2 template
-and `localosgo@gmail.com`. The normal shared daily cap, history, reply-sync,
-suppression, duplicate and immutable-message checks remain in force.
+The live revocable authorization must approve the current manifest: exact named
+v2 and neutral-greeting v1 invitations from `localosgo@gmail.com`. The neutral
+variant was approved on 9 September 2026 only for authors without a confirmed
+first name; the rest of the approved text is identical. Updating code does not
+upgrade an old grant: record the actual user decision through the authorization
+service. The shared 150-per-day cap, history, reply-sync, suppression, duplicate
+and immutable-message checks remain in force.
 
 ## Inputs and preparation
 
@@ -22,11 +26,24 @@ The required name-policy fields are `style=neutral_formal_first_contact`,
 `formal_first_name_verified=true`, and `informal_form_not_expanded_or_guessed=true`.
 Those flags are outputs of evidence-backed selection, not substitutes for it.
 
+Named invitations remain the default. `--invitation-variant neutral_greeting_v1`
+requires each input record to have no `verified_first_name` and the exact
+`salutation` value `Здравствуйте!`. A confirmed name or any other salutation is
+rejected; a channel title is never used as a substitute name. The neutral subject
+is `LocalOS | сотрудничество`. The marker is applied to that candidate only, not
+to every member of a campaign. Neither the source JSON nor saved identity is
+rewritten to make a record eligible.
+
 `author_pool_wave.py --selection /tmp/selection.json --limit 20 --output /tmp/preview.json`
 performs batched, all-time provider address searches and a preparation transaction
 that is rolled back by default. Add `--commit` only for an authorized reviewed
 selection. Use a distinct output path for each run; never overwrite a committed
 wave while another process is dispatching it. Prepared records are not sent.
+
+`--not-before` accepts a timezone-aware ISO timestamp at least 20 minutes in the
+future, validated before database or mailbox access. Without it the scheduled
+time defaults to 20 minutes after preparation. Scheduling is not a delivery
+confirmation and does not bypass the worker's checks.
 
 Saved source reuse is explicit: the email must match the current `public_explicit`
 public contact and its actual verified channel. A missing evidence-row binding can
@@ -75,5 +92,6 @@ not mistake that for a missing send or fabricate a room just for tracking.
 
 `python scripts/ops/localos_author_pool/test_saved_snapshot_reuse.py` covers exact
 channel-URL isolation, stable-key reuse and refusal to manufacture fresh evidence
-when original observation time is absent. Existing author authorization, shared
+when original observation time is absent, plus neutral-variant eligibility and
+timezone-aware scheduling validation. Existing author authorization, shared
 daily-budget, SMTP/IMAP and reply-sync suites remain required.

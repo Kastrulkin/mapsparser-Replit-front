@@ -1,7 +1,9 @@
 """Execute a reviewed server-local creator selection using existing services.
 
 No contact export. Sources are reused with their original dates. No fake human
-message approvals. --commit queues exact v2 messages under the existing grant;
+message approvals. --commit queues one of the two exact approved invitation
+variants under the current live grant; a neutral greeting is only for an author
+without a confirmed first name. It never changes the original source selection;
 provider dispatch is separate and retains all normal runtime gates.
 """
 import argparse
@@ -127,13 +129,14 @@ def ensure_saved_channel_evidence(cur, pid, channel_id, source, proof):
 def prepare_one(conn,cur,row,grant,scheduled_at):
     pid=str(row['creator_profile_id'])
     email=row['email'].strip().lower()
-    first=row['verified_first_name']
+    neutral = row.get('author_invitation_variant') == 'neutral_greeting_v1'
+    first=row.get('verified_first_name')
     name_policy=row.get('name_policy') or {}
-    if name_policy.get('style')!='neutral_formal_first_contact' or name_policy.get('formal_first_name_verified') is not True or name_policy.get('informal_form_not_expanded_or_guessed') is not True:
+    if not neutral and (name_policy.get('style')!='neutral_formal_first_contact' or name_policy.get('formal_first_name_verified') is not True or name_policy.get('informal_form_not_expanded_or_guessed') is not True):
         raise ValueError('neutral_formal_name_review_required')
     channel_id=str(row['channel']['id'])
     evidence_id=str(row['evidence']['id'])
-    if not re.fullmatch(r'[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?',first):
+    if not neutral and not re.fullmatch(r'[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?',first or ''):
         raise ValueError('unverified_personal_first_name')
     cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))',('localos-author:'+email,))
     if previously_contacted_author(cur,creator_profile_id=pid,recipient=email,queue_id='saved-pool-preparation'):
@@ -153,7 +156,7 @@ def prepare_one(conn,cur,row,grant,scheduled_at):
         raise ValueError('reviewed_identity_changed_or_blocked')
     if source['stale_after']<=datetime.now(timezone.utc) or source['confidence']<0.7:
         raise ValueError('saved_evidence_expired')
-    if source['display_name'].split()[0].strip(' ,.!|').capitalize()!=first:
+    if not neutral and source['display_name'].split()[0].strip(' ,.!|').capitalize()!=first:
         raise ValueError('template_name_not_equal_verified_name')
     public_contacts=(source['commercial_metadata'] or {}).get('public_contacts') or []
     proofs=[v for v in public_contacts if str(v.get('value') or '').lower().strip()==email
@@ -184,6 +187,10 @@ def prepare_one(conn,cur,row,grant,scheduled_at):
         raise ValueError('existing_preparation_requires_reuse')
     evidence_id,source['observed_at'],source['stale_after'],source['confidence']=ensure_saved_channel_evidence(cur,pid,channel_id,source,proofs[0])
     snapshot=dict(candidate.get('score_snapshot_json') or {})
+    if neutral:
+        snapshot['author_invitation_variant']='neutral_greeting_v1'
+    else:
+        snapshot.pop('author_invitation_variant', None)
     snapshot['contact_confirmation']={'confirmed':True,'source_url':source['canonical_url'],
         'note':f"Повторное использование сохранённых публичных данных: канал {channel_id}, доказательство {evidence_id}. Новая проверка сайта не выполнялась.",
         'method':'stored_public_source_reuse','observed_at':source['observed_at'].isoformat(),
@@ -221,7 +228,9 @@ def prepare_one(conn,cur,row,grant,scheduled_at):
         log('preview_not_ready',reason_codes=codes)
         raise ValueError('preview_not_ready:'+','.join(codes))
     touch=preview['touches'][0]
-    if not touch['text'].startswith(first+', здравствуйте!'):
+    if neutral and (touch['subject'] != 'LocalOS | сотрудничество' or not touch['text'].startswith('Здравствуйте!\n\n')):
+        raise ValueError('rendered_neutral_greeting_mismatch')
+    if not neutral and not touch['text'].startswith(first+', здравствуйте!'):
         raise ValueError('rendered_name_mismatch')
     saved=persist_preview(cur,preview,user_id=ACTOR)
     approved=approve_campaign_by_author_template(cur,str(saved['id']))
@@ -244,7 +253,30 @@ parser.add_argument('--selection',required=True)
 parser.add_argument('--commit',action='store_true')
 parser.add_argument('--limit',type=int,default=20)
 parser.add_argument('--output')
+parser.add_argument('--not-before', help='ISO timestamp; must be at least 20 minutes from now')
+parser.add_argument('--invitation-variant', choices=('named', 'neutral_greeting_v1'), default='named')
 args=parser.parse_args()
+
+def parse_not_before(value, *, now=None):
+    minimum=(now or datetime.now(timezone.utc))+timedelta(minutes=20)
+    if not value:
+        return minimum
+    scheduled=datetime.fromisoformat(value.replace('Z','+00:00'))
+    if scheduled.tzinfo is None or scheduled < minimum:
+        raise ValueError('not_before_must_be_at_least_20_minutes_in_future')
+    return scheduled
+
+def select_invitation_variant(row, variant):
+    selected=dict(row)
+    if variant == 'neutral_greeting_v1':
+        if selected.get('verified_first_name') or selected.get('salutation') != 'Здравствуйте!':
+            raise ValueError('neutral_variant_input_not_authorized')
+        selected['author_invitation_variant']='neutral_greeting_v1'
+    else:
+        selected.pop('author_invitation_variant', None)
+    return selected
+
+scheduled_at=parse_not_before(args.not_before)
 with open(args.selection,encoding='utf-8') as handle:
     payload=json.load(handle)
 records=payload['records'][:max(0,min(150,args.limit))]
@@ -268,9 +300,14 @@ try:
         if email in contacted or email in emails:
             skipped.append({'profile_id':row['creator_profile_id'],'reason':'provider_history_or_duplicate'})
             continue
-        emails.add(email); row['business_id']=str(campaign['business_id']); selected.append(row)
+        try:
+            selected_row=select_invitation_variant(row,args.invitation_variant)
+        except ValueError:
+            skipped.append({'profile_id':row['creator_profile_id'],'reason':'neutral_variant_input_not_authorized'})
+            continue
+        selected_row['business_id']=str(campaign['business_id'])
+        emails.add(email); selected.append(selected_row)
     log('selection',selected=len(selected),skipped_count=len(skipped),commit=args.commit)
-    scheduled_at=datetime.now(timezone.utc)+timedelta(minutes=20)
     for row in selected:
         cur.execute('SAVEPOINT author_item')
         try:
