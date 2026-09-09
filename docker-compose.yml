@@ -301,6 +301,10 @@ services:
       - path: ./config/yougile.env
         required: false
     environment:
+      # Refresh reply evidence between short dispatch batches (120s freshness gate).
+      OUTREACH_DISPATCH_BATCH_SIZE: ${OUTREACH_DISPATCH_BATCH_SIZE:-2}
+      OUTREACH_DISPATCH_INTERVAL_SEC: ${OUTREACH_DISPATCH_INTERVAL_SEC:-60}
+      OUTREACH_REPLY_SYNC_INTERVAL_SEC: ${OUTREACH_REPLY_SYNC_INTERVAL_SEC:-60}
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app

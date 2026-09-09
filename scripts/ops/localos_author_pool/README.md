@@ -45,6 +45,15 @@ or dispatcher while that worker is running. The reply-sync service currently has
 no cross-process per-sender lock: concurrent checks can overwrite a successful
 receipt with a transport failure. That failure must continue to block sends.
 
+Keep production dispatch batches short: `OUTREACH_DISPATCH_BATCH_SIZE=2`,
+`OUTREACH_DISPATCH_INTERVAL_SEC=60`, `OUTREACH_REPLY_SYNC_INTERVAL_SEC=60`.
+The former default of 20 serial sends could age the same reply receipt beyond
+its unchanged 120-second freshness gate. Two is an internal dispatch chunk, not
+the daily author allowance. A 60-second dispatch interval also avoids a boundary
+burst between chunks. Provider limits, the live grant and daily budget still win.
+The shared dispatcher serves other configured campaigns too; check all senders
+for in-flight work before recreating it. Never raise receipt age to hide a failure.
+
 `dispatch_author_pool_wave.py --wave /tmp/committed-wave.json --output /tmp/dispatch.json`
 is a standalone maintenance entrypoint, **not** a second production worker. Use
 it only when the native worker is not processing this sender. It processes only
