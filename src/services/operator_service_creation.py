@@ -62,6 +62,15 @@ def manual_task(cursor,business_id,service):
     business=_row(cursor,cursor.fetchone()).get('data') or {}
     if business.get('yandex_url') and not any(p.startswith('yandex') for p in platforms):
         platforms.append('yandex_maps')
+    cursor.execute("SELECT map_type,url FROM businessmaplinks WHERE business_id=%s AND COALESCE(BTRIM(url),'')<>''",(business_id,))
+    for raw in cursor.fetchall():
+        link=_row(cursor,raw)
+        platform=(link.get('map_type') or '').lower()
+        if platform in {'google','google_maps','google_business'}:
+            continue
+        platform={'yandex':'yandex_maps','2gis_maps':'2gis','two_gis':'2gis'}.get(platform,platform)
+        if platform and platform not in platforms and not (platform.startswith('yandex') and any(p.startswith('yandex') for p in platforms)):
+            platforms.append(platform)
     if not platforms:
         return None,'Другие карты не подключены; задача не создана.'
     cursor.execute("SELECT m.user_id FROM business_members m JOIN users u ON u.id=m.user_id WHERE m.business_id=%s AND m.status='active' AND m.role IN ('admin','manager') AND u.is_active=TRUE ORDER BY m.user_id",(business_id,))
@@ -82,7 +91,7 @@ def manual_task(cursor,business_id,service):
 
 def create(cursor,business_id,user_id,message,request_key,args):
     authorize_actor(cursor,user_id,business_id)
-    if re.match(r'\s*(?:если|например|как\b|можно ли|не\b)',message,re.I):
+    if re.match(r'\s*(?:если|например|как\b|можно ли|не\b)',message,re.I) or re.search(r'\bне\s+(?:добав|созда|завед)',message,re.I):
         return result('Для добавления услуги дайте явную команду с названием и ценой.','clarification_required')
     name=(args.get('name') or '').strip()
     if not name or len(name)>200 or normalize(name) not in normalize(message):
@@ -201,7 +210,7 @@ def update_manual_task(cursor,business_id,user_id,message,args):
             return result('Задача уже завершена.','blocked')
         cursor.execute('UPDATE journey_actions SET user_id=%s,version=version+1,updated_at=NOW() WHERE id=%s',(args['user_id'],task_id))
         return result('Ответственный за обновление услуги назначен. Задача доступна в LocalOS; Telegram-уведомление зависит от настроек задач.')
-    if args.get('command')!='complete' or not re.search(r'выполнено|выполнил|обновил|готово|добавил.*карт',message,re.I):
+    if args.get('command')!='complete' or re.search(r'\bне\s+(?:выполн|обнов|готов|добав)',message,re.I) or not re.search(r'выполнено|выполнил|обновил|готово|добавил.*карт',message,re.I):
         return result('Подтвердите, что услуга действительно обновлена на всех площадках из задачи.','clarification_required')
     if task.get('status')=='completed':
         return result('Задача уже отмечена выполненной.')

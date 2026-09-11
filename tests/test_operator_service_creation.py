@@ -14,6 +14,7 @@ def creation(pg,monkeypatch):
     c.execute("CREATE TABLE journey_actions(id UUID PRIMARY KEY,status TEXT,user_id TEXT,journey_id UUID,business_id TEXT,lead_id TEXT,flow_type TEXT,entity_type TEXT,entity_id TEXT,action_type TEXT,priority INTEGER,due_at TIMESTAMPTZ,title TEXT,description TEXT,cta_label TEXT,cta_target_json JSONB,payload_json JSONB,source_action_id UUID,dedupe_key TEXT,version INTEGER DEFAULT 1,updated_at TIMESTAMPTZ DEFAULT NOW(),created_at TIMESTAMPTZ DEFAULT NOW())")
     c.execute("CREATE UNIQUE INDEX tasks_dedupe ON journey_actions(dedupe_key) WHERE status IN ('ready','in_progress','waiting','blocked')")
     c.execute("CREATE TABLE externalbusinessaccounts(id TEXT,business_id TEXT,source TEXT)")
+    c.execute("CREATE TABLE businessmaplinks(business_id TEXT,map_type TEXT,url TEXT)")
     c.execute("CREATE TABLE business_members(business_id TEXT,user_id TEXT,role TEXT,status TEXT)")
     c.execute("ALTER TABLE users ADD COLUMN name TEXT, ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
     c.execute("ALTER TABLE businesses ADD COLUMN currency TEXT DEFAULT 'EUR'")
@@ -221,3 +222,10 @@ def test_google_omitted_defaults_are_verified():
 @pytest.mark.parametrize('message',['Подготовь пост про новую услугу','Измени тему поста на новую услугу','Добавь в контент-план пост про новую услугу'])
 def test_service_route_does_not_steal_content_requests(message):
     assert not operator_service_creation.service_input(message)
+
+
+def test_negative_instruction_never_creates(creation):
+    _,c=creation
+    outcome=operator_service_creation.create(c,'b','u','Пожалуйста не добавляй услугу Трансфер за 50 евро','negative',{'name':'Трансфер','price':'50','currency':'EUR'})
+    assert outcome['status']=='clarification_required'
+    c.execute('SELECT COUNT(*) n FROM userservices');assert c.fetchone()['n']==0
