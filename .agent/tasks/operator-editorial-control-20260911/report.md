@@ -24,3 +24,5 @@
 Commit `ed6b20b5` запушен в GitHub и развёрнут выборочно. Пять существующих файлов объединены с серверными версиями; один новый модуль добавлен. Перед заменой проверены checksum исходников. Backup кода: `/tmp/editorial-server-base.tgz`. Миграции не требовались. Перезапуск app/worker/operator-worker/telegram-bot выполнен в tmux.
 
 Сервисы работают, Telegram healthy; новых traceback и ошибок audio delivery нет. HTTP localhost 200, POST chat без авторизации 401. Read-only проверка внутри live app: доступны четыре новых инструмента, 13 записей плана Riderra, 0 заметок editorial_notes. Примеры не сохранены как факты Riderra. Физический проход с телефона после этого обновления не выполнялся агентом.
+
+Дополнение `d95e8589`: preview должен охватывать все доступные посты выбранного периода; неполный набор требует уточнения, изменение состава после preview блокирует применение. После этой защиты: 26 PostgreSQL tests passed. Модуль обновлён на сервере с проверкой checksum, guard проверен внутри live app; HTTP 200, bot healthy, новых traceback/audio errors нет.
