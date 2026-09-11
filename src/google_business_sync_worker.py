@@ -13,7 +13,7 @@ from google.oauth2.credentials import Credentials
 
 from database_manager import DatabaseManager
 from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint, make_stats_id
-from google_business_api import GoogleBusinessAPI
+from google_business_api import GoogleBusinessAPI, GoogleBusinessAPIError
 from google_business_auth import GoogleBusinessAuth
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from base_sync_worker import BaseSyncWorker
@@ -38,13 +38,14 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def _get_api_client(self, account: dict) -> Optional[GoogleBusinessAPI]:
+    def _get_api_client(self, account: dict) -> GoogleBusinessAPI:
         """Получить API клиент для аккаунта"""
         try:
             auth_data_encrypted = account.get('auth_data_encrypted') or account.get('auth_data')
             if not auth_data_encrypted:
-                print(f"⚠️ Нет auth_data для аккаунта {account['id']}")
-                return None
+                raise GoogleBusinessAPIError(
+                    "Доступ Google Business не сохранён. Подключите Google-аккаунт заново."
+                )
             
             # Расшифровываем credentials
             auth_data_json = decrypt_auth_data(auth_data_encrypted)
@@ -62,7 +63,16 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
             return GoogleBusinessAPI(credentials)
         except Exception as e:
             print(f"❌ Ошибка создания API клиента для аккаунта {account['id']}: {e}")
-            return None
+            message = str(e)
+            if isinstance(e, GoogleBusinessAPIError):
+                raise
+            if "invalid_grant" in message.lower() or "expired or revoked" in message.lower():
+                raise GoogleBusinessAPIError(
+                    "Доступ Google истёк или был отозван. Подключите Google Business заново."
+                ) from e
+            raise GoogleBusinessAPIError(
+                "Не удалось подключиться к Google Business. Проверьте подключение и повторите попытку."
+            ) from e
     
     def _save_credentials(self, account_id: str, credentials: Credentials) -> None:
         """Сохранить обновленные credentials в БД"""
@@ -99,15 +109,11 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
 
     def list_locations(self, account: dict) -> List[Dict[str, Any]]:
         api = self._get_api_client(account)
-        if not api:
-            return []
         return api.list_accessible_locations()
     
     def _fetch_reviews(self, account: dict) -> List[ExternalReview]:
         """Получить отзывы через API"""
         api = self._get_api_client(account)
-        if not api:
-            return []
         
         location_name = account.get('external_id')
         if not location_name:
@@ -175,8 +181,6 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
     def _fetch_stats(self, account: dict) -> List[ExternalStatsPoint]:
         """Получить статистику через API"""
         api = self._get_api_client(account)
-        if not api:
-            return []
         
         location_name = account.get('external_id')
         if not location_name:
