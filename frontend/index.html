@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" translate="no" class="notranslate">
+<html lang="ru" translate="no" class="notranslate">
 
 <head>
   <meta charset="UTF-8" />
@@ -7,7 +7,22 @@
   <meta name="google" content="notranslate" />
   <script>
     // CRITICAL DEBUGGER FOR WHITE SCREEN
+    var localOSChunkReloadStorageKey = 'localos_chunk_reload_attempted';
+    var isLocalOSDynamicImportError = function (message) {
+      return /failed to fetch dynamically imported module|importing a module script failed|chunkloaderror|loading chunk/i.test(String(message || ''));
+    };
+    var reloadLocalOSAfterChunkError = function () {
+      if (sessionStorage.getItem(localOSChunkReloadStorageKey) === '1') return;
+      sessionStorage.setItem(localOSChunkReloadStorageKey, '1');
+      var nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set('__localos_reload', String(Date.now()));
+      window.location.replace(nextUrl.toString());
+    };
     window.onerror = function (msg, url, lineNo, columnNo, error) {
+      if (isLocalOSDynamicImportError(msg) || isLocalOSDynamicImportError(error && error.message)) {
+        reloadLocalOSAfterChunkError();
+        return true;
+      }
       var container = document.getElementById('debug-error-container');
       if (!container) {
         container = document.createElement('div');
@@ -32,7 +47,16 @@
       return false;
     };
     window.addEventListener('unhandledrejection', function (event) {
+      if (isLocalOSDynamicImportError(event.reason && event.reason.message)) {
+        event.preventDefault();
+        reloadLocalOSAfterChunkError();
+        return;
+      }
       window.onerror(event.reason ? event.reason.message : 'Unhandled Rejection', '', 0, 0, event.reason);
+    });
+    window.addEventListener('vite:preloadError', function (event) {
+      event.preventDefault();
+      reloadLocalOSAfterChunkError();
     });
   </script>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=los" />
@@ -94,7 +118,58 @@
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <main data-localos-static-fallback class="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-950 sm:px-8 lg:py-16">
+      <div class="mx-auto max-w-5xl">
+        <nav aria-label="Основная навигация" class="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm font-semibold">
+          <a href="/" aria-current="page">LocalOS</a>
+          <a href="/about">О продукте</a>
+          <a href="/cases">Кейсы</a>
+          <a href="/docs">Документы</a>
+          <a href="/contact">Контакты</a>
+        </nav>
+
+        <section class="max-w-4xl py-14 sm:py-20">
+          <p class="text-sm font-bold uppercase tracking-[0.14em] text-orange-700">Операционный слой для локального бизнеса</p>
+          <h1 class="mt-5 text-balance text-4xl font-bold tracking-[-0.04em] sm:text-6xl">
+            LocalOS снимает регулярную работу с владельца бизнеса
+          </h1>
+          <p class="mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-700 sm:text-xl">
+            LocalOS помогает управлять присутствием на картах, услугами, отзывами, контентом, финансами, локациями и партнёрствами. Система готовит и выполняет регулярные задачи, а важные внешние действия оставляет под контролем владельца.
+          </p>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a href="/demo" class="inline-flex min-h-12 items-center rounded-xl bg-slate-950 px-6 font-semibold text-white">Посмотреть демо</a>
+            <a href="/contact" class="inline-flex min-h-12 items-center rounded-xl border border-slate-300 bg-white px-6 font-semibold text-slate-900">Обсудить задачу</a>
+          </div>
+        </section>
+
+        <section aria-labelledby="static-capabilities-title" class="border-t border-slate-200 py-10">
+          <h2 id="static-capabilities-title" class="text-2xl font-bold">Что берёт на себя LocalOS</h2>
+          <ul class="mt-6 grid gap-4 text-slate-700 sm:grid-cols-2">
+            <li><strong class="text-slate-950">Карты и услуги.</strong> Проверяет карточки, находит слабые места и готовит изменения.</li>
+            <li><strong class="text-slate-950">Отзывы и контент.</strong> Собирает очередь работы и готовит ответы и публикации.</li>
+            <li><strong class="text-slate-950">Финансы и средний чек.</strong> Показывает ключевые показатели и следующие точки роста.</li>
+            <li><strong class="text-slate-950">Партнёрства и автоматизация.</strong> Готовит безопасные сценарии с проверкой и ручным подтверждением.</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="static-pricing-title" class="border-t border-slate-200 py-10">
+          <h2 id="static-pricing-title" class="text-2xl font-bold">Тарифы</h2>
+          <p class="mt-4 max-w-3xl text-slate-700">
+            «Карты» — 1 200 ₽ в месяц, «Привлечение» — 5 000 ₽ в месяц, «Управление» — 25 000 ₽ в месяц. Публикации, внешние отправки, платежи и массовые изменения выполняются только после подтверждения человека.
+          </p>
+        </section>
+
+        <section aria-labelledby="static-results-title" class="border-t border-slate-200 py-10">
+          <h2 id="static-results-title" class="text-2xl font-bold">Результаты на реальных задачах</h2>
+          <p class="mt-4 max-w-3xl text-slate-700">
+            В кейсах показаны исходная ситуация, выполненная работа и изменения за обозначенный период.
+          </p>
+          <a href="/cases" class="mt-5 inline-flex min-h-11 items-center font-semibold text-orange-700">Посмотреть кейсы LocalOS</a>
+        </section>
+      </div>
+    </main>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 
   <script id="localos-public-tracking-consent">

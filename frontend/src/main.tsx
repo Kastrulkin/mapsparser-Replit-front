@@ -31,6 +31,11 @@ const reloadAfterDynamicImportError = () => {
     window.location.replace(nextUrl.toString());
 };
 
+window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    reloadAfterDynamicImportError();
+});
+
 window.addEventListener('error', (event) => {
     const message = event.message || messageFromUnknown(event.error);
     if (isDynamicImportError(message)) {

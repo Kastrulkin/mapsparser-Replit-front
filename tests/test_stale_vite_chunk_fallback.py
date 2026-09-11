@@ -66,6 +66,11 @@ def test_existing_stale_page_chunk_is_replaced_with_current_build_chunk(
     monkeypatch.setattr(main, "FRONTEND_DIST_DIR", str(tmp_path))
     monkeypatch.setattr(core_public, "FRONTEND_DIST_DIR", str(tmp_path))
 
+    def fail_on_sync_log(*_args, **_kwargs) -> None:
+        raise AssertionError("stale asset fallback must not block on synchronous logging")
+
+    monkeypatch.setattr(core_public.logger, "warning", fail_on_sync_log)
+
     response = main.app.test_client().get("/assets/ContentPage-Oldhash12.js")
 
     assert response.status_code == 200

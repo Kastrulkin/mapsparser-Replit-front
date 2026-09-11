@@ -360,7 +360,6 @@ def serve_assets(filename):
     assets_dir = os.path.join(FRONTEND_DIST_DIR, 'assets')
     current_chunk = resolve_current_lazy_chunk(FRONTEND_DIST_DIR, filename)
     if current_chunk and current_chunk != filename:
-        logger.warning("Serving current Vite chunk %s for stale request %s", current_chunk, filename)
         response = send_from_directory(assets_dir, current_chunk)
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["X-LocalOS-Asset-Fallback"] = current_chunk
