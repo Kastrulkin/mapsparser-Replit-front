@@ -72,6 +72,11 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
         FROM journey_actions action
         JOIN telegramcontrolpreferences preference ON preference.user_id = action.user_id
         WHERE action.status IN ('ready', 'waiting', 'blocked')
+          AND (action.entity_type <> 'service' OR EXISTS (
+              SELECT 1 FROM business_members member JOIN users recipient ON recipient.id=member.user_id
+              WHERE member.business_id=action.business_id AND member.user_id=action.user_id
+                AND member.status='active' AND member.role IN ('admin','manager') AND recipient.is_active=TRUE
+          ))
           AND action.due_at IS NOT NULL AND action.due_at <= NOW()
           AND NULLIF(BTRIM(CAST(preference.telegram_id AS TEXT)), '') IS NOT NULL
         ORDER BY action.priority DESC, action.due_at
@@ -105,6 +110,12 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
         JOIN journey_actions action ON action.id = delivery.action_id
         WHERE delivery.sent_at IS NULL
           AND action.version = delivery.action_version
+          AND (action.entity_type <> 'service' OR EXISTS (
+              SELECT 1 FROM business_members member JOIN users recipient ON recipient.id=member.user_id
+              WHERE member.business_id=action.business_id AND member.user_id=delivery.user_id
+                AND action.user_id=delivery.user_id AND member.status='active'
+                AND member.role IN ('admin','manager') AND recipient.is_active=TRUE
+          ))
           AND action.status IN ('ready', 'waiting', 'blocked')
         ORDER BY delivery.created_at LIMIT 100
         """

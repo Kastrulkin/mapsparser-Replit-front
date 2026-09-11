@@ -117,6 +117,9 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.optimize", "Оптимизация услуг", "draft_only", "paid_compute", "credit_policy", "/dashboard/card?tab=services", ("Оптимизируй услуги",)),
     OperatorCapability("services.apply_updates", "Применение изменений услуг", "approval_required", "bulk_write", "separate_confirmation", "/dashboard/card?tab=services", ("Примени подготовленные изменения услуг",)),
     OperatorCapability("services.apply", "Применение предложений по услугам", "approval_required", "bulk_write", "separate_confirmation", "/dashboard/card?tab=services", ("Примени предложения по услугам",)),
+    OperatorCapability("services.existing_price", "Изменение цены существующей услуги", "approval_required", "write_internal", "separate_confirmation", "/dashboard/card?tab=services", ("Измени цену существующей услуги",)),
+    OperatorCapability("services.create", "Добавление услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Добавь услугу Трансфер за 50 EUR",)),
+    OperatorCapability("services.google.add", "Добавление услуги в Google", "approval_required", "external_write", "separate_confirmation", "/dashboard/card?tab=services", ("Обнови новую услугу в Google",)),
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
@@ -239,6 +242,8 @@ def _action(action: str, label: str, *, href: str = "", payload: dict[str, Any] 
 
 
 def standardize_operator_result(result: dict[str, Any], capability: str) -> dict[str, Any]:
+    if capability=='services.create' and result.get('status')=='approval_required' and (result.get('approval') or {}).get('envelope',{}).get('distribution_id'):
+        capability='services.google.add'
     value = dict(result)
     spec = CAPABILITY_BY_NAME.get(capability)
     value["capability"] = capability
@@ -1498,6 +1503,8 @@ def _operator_tool_catalog(
     ]
     from services.operator_editorial import editorial_tools
     tools.extend(editorial_tools(cursor,business_id,user_id,message))
+    from services import operator_service_creation
+    tools.extend(operator_service_creation.tools(cursor,business_id,user_id,message,'message:'+hashlib.sha256(message.encode()).hexdigest()))
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
 
 
@@ -1822,6 +1829,25 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    from services import operator_service_creation
+    service_pending = pending.get('capability') == 'services.creation.clarification'
+    if operator_service_creation.service_input(clean_message) or service_pending:
+        if clean_message.strip().lower() in {'отмена','отмени','не надо','стоп','cancel','/cancel'}:
+            return standardize_operator_result({'status':'cancelled','chat_response':'Добавление услуги отменено.'},'services.create'), {}
+        blocked = operator_subscription_block(subscription_access, 'services.create')
+        if blocked:
+            return blocked, pending
+        source_message = (str(pending.get('source_message') or '') + '\nУточнение: ' + clean_message) if service_pending else clean_message
+        request_key = str((action_payload or {}).get('request_id') or hashlib.sha256(source_message.encode()).hexdigest())
+        request_key = str(conversation_id or channel)+':'+request_key
+        selected_tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in operator_service_creation.tools(cursor,business_id,user_id,source_message,request_key)]
+        arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
+            conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=selected_tools)
+        outcome = run_paid_operator_tool_loop(cursor, **arguments) if tool_planner is None else run_operator_tool_loop(**arguments, planner=tool_planner)
+        if outcome.get('status')=='approval_required' and (outcome.get('approval') or {}).get('envelope',{}).get('distribution_id'):
+            outcome['capability']='services.google.add'
+        next_context = {'capability':'services.creation.clarification','source_message':source_message} if outcome.get('status')=='clarification_required' else {}
+        return standardize_operator_result(outcome,str(outcome.get('capability') or 'services.create')), next_context
     from services.operator_editorial import editorial_input, editorial_tools
     editorial_pending = pending.get('capability') == 'content.editorial.clarification'
     if editorial_pending and (clean_message.strip().lower() in {'отмена','отмени','не надо','стоп','cancel','/cancel'} or re.match(r'не (?:надо|нужно|меняй|изменяй|сохраняй|продолжай)\b',clean_message.strip().lower())):
@@ -2114,6 +2140,18 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'services.existing_price':
+        from services.operator_service_creation import apply_existing_price
+        result = standardize_operator_result(apply_existing_price(cursor,business_id,user_id,envelope),capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor,action_id=action_id,result=result)
+        return result, False
+    if capability == 'services.google.add':
+        from services.operator_service_creation import apply_google
+        result = standardize_operator_result(apply_google(cursor,business_id,user_id,envelope),capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor,action_id=action_id,result=result)
+        return result, False
     if capability == 'content.plan.refocus':
         from services.operator_editorial import apply_focus
         result = standardize_operator_result(apply_focus(cursor,business_id,user_id,envelope),capability)

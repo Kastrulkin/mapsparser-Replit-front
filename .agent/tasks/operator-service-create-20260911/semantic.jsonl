@@ -1,0 +1,4 @@
+{"message": "Добавь услугу Трансфер с детским креслом стоимостью 50 евро", "calls": [["services.create", {"name": "Трансфер с детским креслом", "price": "50", "currency": "EUR"}]], "status": "completed", "response": "Тест без записи"}
+{"message": "Добавь новую услугу Встреча в аэропорту за пятьдесят евро", "calls": [["services.create", {"name": "Встреча в аэропорту", "price": "50", "currency": "EUR"}]], "status": "completed", "response": "Тест без записи"}
+{"message": "Добавь услугу Массаж", "calls": [], "status": "clarification_required", "response": "Какая цена у услуги «Массаж»? Укажите сумму и валюту — в настройках бизнеса валюта не задана, и без цены создать услугу нельзя."}
+{"message": "Добавь услугу Консультация за 1500 рублей", "calls": [["services.create", {"name": "Консультация", "price": "1500", "currency": "RUB"}]], "status": "completed", "response": "Тест без записи"}
