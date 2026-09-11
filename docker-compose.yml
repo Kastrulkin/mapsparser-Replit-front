@@ -162,6 +162,10 @@ services:
       LLM_ROUTER_ENABLED: ${LLM_ROUTER_ENABLED:-false}
       OPERATOR_DEEPSEEK_ROUTER_ENABLED: ${OPERATOR_DEEPSEEK_ROUTER_ENABLED:-true}
       OPERATOR_TOOL_LOOP_ENABLED: ${OPERATOR_TOOL_LOOP_ENABLED:-true}
+      OPERATOR_VOICE_INPUT_ENABLED: ${OPERATOR_VOICE_INPUT_ENABLED:-false}
+      OPERATOR_VOICE_OUTPUT_ENABLED: ${OPERATOR_VOICE_OUTPUT_ENABLED:-false}
+      OPERATOR_VOICE_BUSINESS_IDS: ${OPERATOR_VOICE_BUSINESS_IDS:-}
+      OPERATOR_SPEECHKIT_API_KEY: ${OPERATOR_SPEECHKIT_API_KEY:-}
       LLM_SHADOW_MODE: ${LLM_SHADOW_MODE:-false}
       LLM_SHADOW_MAX_CONCURRENCY: ${LLM_SHADOW_MAX_CONCURRENCY:-4}
       LLM_DEEPSEEK_BUSINESS_IDS: ${LLM_DEEPSEEK_BUSINESS_IDS:-}
@@ -272,6 +276,7 @@ services:
       - ./data/legacy.sqlite:/app/legacy.sqlite:ro
       - ./debug_data:/app/debug_data
       - ./src:/app/src:ro
+      - ./data/operator_audio:/app/operator_audio
       - ./entrypoint.sh:/app/entrypoint.sh:ro
       - ./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro
       - ./scripts/check_content_learning_schema.py:/app/scripts/check_content_learning_schema.py:ro
@@ -405,6 +410,10 @@ services:
       LLM_ROUTER_ENABLED: ${LLM_ROUTER_ENABLED:-false}
       OPERATOR_DEEPSEEK_ROUTER_ENABLED: ${OPERATOR_DEEPSEEK_ROUTER_ENABLED:-true}
       OPERATOR_TOOL_LOOP_ENABLED: ${OPERATOR_TOOL_LOOP_ENABLED:-true}
+      OPERATOR_VOICE_INPUT_ENABLED: ${OPERATOR_VOICE_INPUT_ENABLED:-false}
+      OPERATOR_VOICE_OUTPUT_ENABLED: ${OPERATOR_VOICE_OUTPUT_ENABLED:-false}
+      OPERATOR_VOICE_BUSINESS_IDS: ${OPERATOR_VOICE_BUSINESS_IDS:-}
+      OPERATOR_SPEECHKIT_API_KEY: ${OPERATOR_SPEECHKIT_API_KEY:-}
       LLM_SHADOW_MODE: ${LLM_SHADOW_MODE:-false}
       LLM_SHADOW_MAX_CONCURRENCY: ${LLM_SHADOW_MAX_CONCURRENCY:-4}
       LLM_DEEPSEEK_BUSINESS_IDS: ${LLM_DEEPSEEK_BUSINESS_IDS:-}
@@ -533,6 +542,7 @@ services:
     volumes:
       - ./debug_data:/app/debug_data
       - ./src:/app/src:ro
+      - ./data/operator_audio:/app/operator_audio
       - ./entrypoint.sh:/app/entrypoint.sh:ro
       - ./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro
       - ./scripts/check_content_learning_schema.py:/app/scripts/check_content_learning_schema.py:ro
@@ -585,10 +595,15 @@ services:
       LLM_ROUTER_ENABLED: ${LLM_ROUTER_ENABLED:-false}
       OPERATOR_DEEPSEEK_ROUTER_ENABLED: ${OPERATOR_DEEPSEEK_ROUTER_ENABLED:-true}
       OPERATOR_TOOL_LOOP_ENABLED: ${OPERATOR_TOOL_LOOP_ENABLED:-true}
+      OPERATOR_VOICE_INPUT_ENABLED: ${OPERATOR_VOICE_INPUT_ENABLED:-false}
+      OPERATOR_VOICE_OUTPUT_ENABLED: ${OPERATOR_VOICE_OUTPUT_ENABLED:-false}
+      OPERATOR_VOICE_BUSINESS_IDS: ${OPERATOR_VOICE_BUSINESS_IDS:-}
+      OPERATOR_SPEECHKIT_API_KEY: ${OPERATOR_SPEECHKIT_API_KEY:-}
       CRYPTO_PAY_API_TOKEN: ${CRYPTO_PAY_API_TOKEN:-}
       CRYPTO_PAY_API_BASE: ${CRYPTO_PAY_API_BASE:-}
     volumes:
       - ./src:/app/src:ro
+      - ./data/operator_audio:/app/operator_audio
       - ./alembic_migrations:/app/alembic_migrations:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

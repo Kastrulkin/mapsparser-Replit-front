@@ -2013,6 +2013,16 @@ def confirm_pending_operator_action(
         if isinstance(stored, str):
             stored = json.loads(stored)
         return stored if isinstance(stored, dict) else {}, True
+    if action.get("status") in {"rejected", "cancelled", "expired"}:
+        return {"status": "blocked", "chat_response": "Подтверждение больше недоступно. Подготовьте действие заново.", "blocked_reasons": ["action_not_pending"]}, False
+    from datetime import datetime, timezone
+    expires = action.get("expires_at")
+    if isinstance(expires, str):
+        expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires and expires <= datetime.now(timezone.utc):
+        return {"status": "blocked", "chat_response": "Срок подтверждения истёк. Подготовьте действие заново.", "blocked_reasons": ["approval_expired"]}, False
     capability = str(action.get("capability") or "")
     blocked = operator_subscription_block(subscription_access, capability)
     if blocked:

@@ -1209,6 +1209,9 @@ def operator_conversation_messages(conversation_id: str):
         has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        cursor.execute("SELECT id FROM operatorconversations WHERE id=%s AND business_id=%s AND user_id=%s", (conversation_id,business_id,str(user_data.get('user_id') or user_data.get('id'))))
+        if not cursor.fetchone():
+            return jsonify({"success": False, "error": "Диалог недоступен"}), 403
         items = list_operator_messages(
             cursor,
             conversation_id=conversation_id,
@@ -1291,95 +1294,21 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
-        conversation = get_or_create_operator_conversation(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            channel=str(payload.get("channel") or "web").strip() or "web",
-            conversation_id=payload.get("conversation_id"),
-            transport_key=payload.get("transport_key"),
-        )
-        conversation_id = str(conversation.get("id") or "")
-        append_operator_message(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            role="user",
-            content=message,
-        )
-        conversation_history = list_operator_messages(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            limit=12,
-        )
-        pending_approvals = list_pending_operator_actions(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            limit=20,
-        )
-        result, next_pending_context = route_operator_message(
-            cursor,
-            subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get('is_superadmin'))),
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel=str(payload.get("channel") or "web").strip() or "web",
-            limit=payload.get("limit") or 5,
-            explicit_url=payload.get("url"),
-            pending_context=conversation_pending_context(conversation),
-            action_payload=payload,
-            conversation_id=conversation_id,
-            conversation_history=conversation_history,
-            actor_context={
-                "role": str(user_data.get("role") or "business_user"),
-                "is_superadmin": bool(user_data.get("is_superadmin")),
-                "permissions": ["business.access"],
-            },
-            pending_approvals=pending_approvals,
-            refresh_handler=refresh_reviews_from_operator,
-            ai_router_handler=classify_operator_intent_with_ai,
+        from services.operator_chat_service import process_chat
+        result = process_chat(
+            cursor, business_id=business_id, user_id=user_id,
+            channel=str(payload.get("channel") or "web"), message=message, payload=payload,
+            router=route_operator_message,
+            subscription_access=_scope_subscription_access(cursor, business_scope, bool(user_data.get("is_superadmin"))),
+            actor_context={"role": "business_owner" if owner_id == user_id else "business_user", "is_superadmin": bool(user_data.get("is_superadmin")), "permissions": ["business.access"]},
+            refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
             manual_review_handler=process_operator_chat_message,
         )
-        result["conversation_id"] = conversation_id
+        conversation_id = result["conversation_id"]
         result["mobile_route"] = _operator_mobile_route(result)
-        approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
-        approval_envelope = approval.get("envelope") if isinstance(approval.get("envelope"), dict) else {}
-        if result.get("status") == "approval_required" and approval_envelope:
-            pending_action = create_pending_operator_action(
-                cursor,
-                conversation_id=conversation_id,
-                business_id=business_id,
-                user_id=user_id,
-                capability=str(result.get("capability") or result.get("intent") or "unknown"),
-                envelope=approval_envelope,
-            )
-            action_id = str(pending_action.get("id") or "")
-            approval["action_id"] = action_id
-            result["approval"] = approval
-            result["ui_actions"] = list(result.get("ui_actions") or []) + [
-                {
-                    "action": "confirm_operator_action",
-                    "label": "Подтвердить",
-                    "href": "",
-                    "payload": {"action_id": action_id},
-                }
-            ]
-        set_operator_pending_context(cursor, conversation_id, next_pending_context)
-        append_operator_message(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            role="operator",
-            content=result.get("chat_response") or result.get("summary"),
-            capability=result.get("capability"),
-            status=result.get("status"),
-            result=result,
-        )
+        cursor.execute("UPDATE operatormessages SET result_json=%s::jsonb WHERE id=%s AND user_id=%s", (json.dumps(result,ensure_ascii=False,default=str),result.get('message_id'),user_id))
+        if payload.get('request_id'):
+            cursor.execute("UPDATE operator_chat_requests SET result_json=%s::jsonb WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s", (json.dumps(result,ensure_ascii=False,default=str),user_id,business_id,str(payload.get('channel') or 'web'),str(payload['request_id'])))
         status = str(result.get("status") or "blocked")
         review = result.get("review") if isinstance(result.get("review"), dict) else {}
         draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
@@ -1568,6 +1497,9 @@ def operator_chat():
             "conversation_id": result.get("conversation_id"),
             "operator_result": result,
         })
+    except (ValueError, PermissionError):
+        db.conn.rollback()
+        return jsonify({"success": False, "error": "Запрос или диалог недоступен. Обновите чат и повторите."}), 400
     except Exception:
         db.conn.rollback()
         error_id = str(uuid.uuid4())
@@ -4462,3 +4394,7 @@ def operator_events():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
         db.close()
+
+# Voice extends the same Operator API and authentication surface.
+from api.operator_audio_api import register_audio_routes
+register_audio_routes(operator_bp)

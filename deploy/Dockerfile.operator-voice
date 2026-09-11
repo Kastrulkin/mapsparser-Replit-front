@@ -1,0 +1,9 @@
+# Add audio dependencies to the exact deployed runtime without replacing its packages.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+USER root
+RUN apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+ARG RUNTIME_USER=root
+USER ${RUNTIME_USER}

@@ -41,13 +41,14 @@ def get_or_create_operator_conversation(
         cursor.execute(
             """
             SELECT * FROM operatorconversations
-            WHERE id = %s AND business_id = %s AND user_id = %s
+            WHERE id = %s AND business_id = %s AND user_id = %s AND channel = %s
             """,
-            (requested_id, business_id, user_id),
+            (requested_id, business_id, user_id, channel),
         )
         existing = _row(cursor, cursor.fetchone())
         if existing:
             return existing
+        raise ValueError("Диалог недоступен в этом канале или бизнесе")
     if clean_transport_key:
         cursor.execute(
             """
@@ -181,11 +182,14 @@ def create_pending_operator_action(
     user_id: str,
     capability: str,
     envelope: dict[str, Any],
+    request_key: str = "",
 ) -> dict[str, Any]:
     stable_source = json.dumps(envelope, ensure_ascii=False, sort_keys=True, default=str)
     idempotency_key = hashlib.sha256(
         f"{business_id}|{user_id}|{capability}|{stable_source}".encode("utf-8")
     ).hexdigest()[:32]
+    if request_key:
+        idempotency_key = hashlib.sha256(f"{idempotency_key}|{request_key}".encode()).hexdigest()[:32]
     action_id = str(uuid.uuid4())
     cursor.execute(
         """
@@ -215,7 +219,7 @@ def get_operator_action(cursor: Any, *, action_id: str, business_id: str, user_i
     cursor.execute(
         """
         SELECT * FROM operatoractions
-        WHERE id = %s AND business_id = %s AND user_id = %s
+        WHERE id = %s AND business_id = %s AND user_id = %s FOR UPDATE
         """,
         (action_id, business_id, user_id),
     )

@@ -41,6 +41,7 @@ RUN set -eux; \
     libexpat1-dev \
     gcc \
     postgresql-client \
+    ffmpeg \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -111,8 +112,8 @@ COPY --chown=localos:localos --from=frontend-builder /app/frontend/dist ./fronte
 COPY entrypoint.sh /app/entrypoint.sh
 RUN set -eux; \
     chmod +x /app/entrypoint.sh \
-    && mkdir -p /app/debug_data /app/uploads /home/localos/.cache /ms-playwright \
-    && chown -R localos:localos /app/debug_data /app/uploads /home/localos /ms-playwright
+    && mkdir -p /app/debug_data /app/uploads /app/operator_audio /home/localos/.cache /ms-playwright \
+    && chown -R localos:localos /app/debug_data /app/uploads /app/operator_audio /home/localos /ms-playwright
 
 # Flask CLI (flask db upgrade) нужен PYTHONPATH с /app для FLASK_APP=src.main:app; приложение — /app/src
 ENV PYTHONPATH=/app:/app/src

@@ -18,7 +18,7 @@ CSP_REPORT_ONLY = (
 )
 
 PERMISSIONS_POLICY = (
-    "camera=(), microphone=(), geolocation=(self), payment=(self), usb=()"
+    "camera=(), microphone=(self), geolocation=(self), payment=(self), usb=()"
 )
 HSTS_POLICY = "max-age=31536000; includeSubDomains"
 

@@ -2075,6 +2075,8 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
             InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}"),
             InlineKeyboardButton("❌ Отклонить", callback_data=f"operator_reject:{action_id}"),
         ])
+    if result.get("message_id"):
+        rows.append([InlineKeyboardButton("Прослушать", callback_data="voice_speech:" + result["message_id"])])
     rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
     return InlineKeyboardMarkup(rows)
 
@@ -3929,6 +3931,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = str(update.effective_user.id)
     data = query.data
+    from services.operator_telegram_voice import callback
+    import sys
+    if await callback(update, context, sys.modules[__name__]):
+        return
     db_user_id = get_user_id_from_telegram(user_id)
     
     if not db_user_id:
@@ -4212,12 +4218,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
+            from services.operator_audio import authorize_actor
+            _actor, access = authorize_actor(cursor, str(business_ctx["user_id"]), str(business_ctx["business_id"]))
             result, _idempotent = confirm_pending_operator_action(
                 cursor,
                 action_id=action_id,
                 business_id=str(business_ctx.get("business_id") or ""),
                 user_id=str(business_ctx.get("user_id") or ""),
-                subscription_access=get_subscription_access(str(business_ctx.get("business_id") or "")),
+                subscription_access=access,
             )
             conn.commit()
             await query.edit_message_text(
@@ -4244,6 +4252,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
+            from services.operator_audio import authorize_actor
+            authorize_actor(cursor, str(business_ctx["user_id"]), str(business_ctx["business_id"]))
             result, _idempotent = reject_pending_operator_action(
                 cursor,
                 action_id=action_id,
@@ -5544,6 +5554,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
     user_id = str(update.effective_user.id)
     text = update.message.text
+    from services.operator_telegram_voice import correction
+    import sys
+    if await correction(update, context, sys.modules[__name__]):
+        return
     reply_to_message = getattr(update.message, "reply_to_message", None)
     reply_to_message_id = int(getattr(reply_to_message, "message_id", 0) or 0)
     if reply_to_message_id:
@@ -5673,186 +5687,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         business_ctx = {**business_ctx, "telegram_name": update.effective_user.full_name}
-        if should_route_operator_message(text):
-            operator_payload = build_operator_chat_payload(business_ctx, text)
-            await update.message.reply_text(
-                str(operator_payload.get("text") or "Команда обработана."),
-                reply_markup=_build_operator_result_markup(operator_payload.get("result") or {}),
-            )
-            return
-        operator_intent = classify_operator_chat_intent(text)
-        if classify_bulk_review_reply_intent(text):
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            try:
-                business_id = str(business_ctx.get("business_id") or "")
-                owner_id = str(business_ctx.get("user_id") or "")
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_message_received",
-                    channel="telegram",
-                    status="received",
-                    input_summary={"message": text[:500]},
-                )
-                result = generate_review_reply_drafts_for_unanswered_reviews(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    limit=5,
-                    channel="telegram",
-                )
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_tool_executed",
-                    channel="telegram",
-                    action_key="review_replies_generate",
-                    status=str(result.get("status") or "blocked"),
-                    reason_code=",".join(result.get("blocked_reasons") or []) or None,
-                    input_summary={"intent": "bulk_review_replies_generate"},
-                    output_summary={
-                        "status": result.get("status"),
-                        "charged_credits": result.get("charged_credits"),
-                        "drafts_count": len(result.get("drafts") or []),
-                    },
-                    metadata={
-                        "credit_charged": bool(result.get("credit_charged")),
-                        "paid_actions_performed": bool(result.get("credit_charged")),
-                        "external_writes_performed": False,
-                        "manual_publication_only": True,
-                    },
-                )
-                conn.commit()
-                await update.message.reply_text(
-                    format_bulk_review_reply_result_for_telegram(result),
-                    reply_markup=_build_reviews_menu(),
-                )
-            except Exception:
-                conn.rollback()
-                await update.message.reply_text(
-                    "Не удалось подготовить ответы на отзывы. Попробуйте ещё раз или откройте кабинет.",
-                    reply_markup=_build_reviews_menu(),
-                )
-            finally:
-                conn.close()
-            return
-        if operator_intent == "manual_review_add_and_reply_generate":
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            try:
-                business_id = str(business_ctx.get("business_id") or "")
-                owner_id = str(business_ctx.get("user_id") or "")
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_message_received",
-                    channel="telegram",
-                    status="received",
-                    input_summary={"message": text[:500]},
-                )
-                result = process_operator_chat_message(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    message=text,
-                    channel="telegram",
-                )
-                record_operator_event(
-                    cursor,
-                    business_id=business_id,
-                    user_id=owner_id,
-                    event_type="operator_tool_executed",
-                    channel="telegram",
-                    action_key="review_replies_generate",
-                    status=str(result.get("status") or "blocked"),
-                    reason_code=",".join(result.get("blocked_reasons") or []) or None,
-                    input_summary={"intent": operator_intent},
-                    output_summary={"status": result.get("status"), "charged_credits": result.get("charged_credits")},
-                    metadata={
-                        "credit_charged": bool(result.get("credit_charged")),
-                        "paid_actions_performed": bool(result.get("credit_charged")),
-                        "external_writes_performed": False,
-                    },
-                )
-                conn.commit()
-                response_text = str(result.get("chat_response") or "Команда обработана.")
-                if result.get("status") == "completed" and result.get("reply_text"):
-                    response_text = (
-                        response_text
-                        + "\n\n"
-                        + "Чтобы опубликовать ответ, скопируйте текст из сообщения и вставьте его в кабинете карты. "
-                        + "LocalOS не публиковал ответ во внешнюю систему."
-                    )
-                await update.message.reply_text(
-                    response_text,
-                    reply_markup=_build_reviews_menu(),
-                )
-            except Exception:
-                conn.rollback()
-                await update.message.reply_text(
-                    "Не удалось обработать отзыв в LocalOS. Попробуйте ещё раз или откройте кабинет.",
-                    reply_markup=_build_reviews_menu(),
-                )
-            finally:
-                conn.close()
-            return
-        client_intent = classify_client_intent(text)
-        if client_intent == "today":
-            await update.message.reply_text(build_today_text(business_ctx), reply_markup=_build_client_main_menu())
-            return
-        if client_intent == "card":
-            await update.message.reply_text(build_card_text(business_ctx), reply_markup=_build_card_menu())
-            return
-        if client_intent == "reviews":
-            await update.message.reply_text(build_reviews_text(business_ctx), reply_markup=_build_reviews_menu())
-            return
-        if client_intent == "refresh_jobs":
-            await update.message.reply_text(build_refresh_jobs_text(business_ctx), reply_markup=_build_reviews_menu())
-            return
-        if client_intent == "refresh_retry":
-            await update.message.reply_text(build_refresh_retry_text(business_ctx, text), reply_markup=_build_reviews_menu())
-            return
-        if client_intent == "growth":
-            await update.message.reply_text(build_growth_text(business_ctx), reply_markup=_build_growth_menu())
-            return
-        if client_intent == "automation":
-            await update.message.reply_text(
-                "\n\n".join([automation_intro_text(), build_automation_text(business_ctx)]),
-                reply_markup=_build_automation_menu(),
-            )
-            return
-        if client_intent == "subscription":
-            await update.message.reply_text(build_subscription_text(business_ctx), reply_markup=_build_subscription_menu(business_ctx))
-            return
-        if client_intent == "help":
-            await update.message.reply_text(ask_localos_intro_text(), reply_markup=_build_ask_localos_menu())
-            return
-        if client_intent == "approvals":
-            business_ctx_with_actor = {
-                **business_ctx,
-                "telegram_id": user_id,
-                "telegram_name": update.effective_user.full_name,
-            }
-            _ok, approvals_text, approvals_markup = _build_pending_approvals_view(business_ctx_with_actor)
-            await update.message.reply_text(approvals_text, reply_markup=approvals_markup)
-            return
-        if client_intent == "businesses":
-            await businesses_command(update, context)
-            return
-        if client_intent == "cabin":
-            urls = get_web_urls()
-            await update.message.reply_text(
-                f"Изменять данные бизнеса лучше в личном кабинете.\n\nОткрыть: {urls['profile']}",
-                reply_markup=_build_client_more_menu(),
-            )
-            return
-        if client_intent == "":
-            await update.message.reply_text(build_operator_chat_text(business_ctx, text), reply_markup=_build_ask_localos_menu())
-            return
+        business_ctx["operator_payload"] = {"request_id": f"tg:{update.effective_chat.id}:{update.message.message_id}"}
+        import asyncio
+        operator_payload = await asyncio.to_thread(build_operator_chat_payload, business_ctx, text)
+        await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
+        return
 
     if state == 'waiting_transaction':
         await handle_transaction_text(update, context, user_id, text)
@@ -6401,7 +6240,24 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Операция отменена")
 
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from services.operator_telegram_voice import receive_voice
+    import sys
+    await receive_voice(update, context, sys.modules[__name__])
+
+
+async def _stop_operator_voice(application: Application):
+    import asyncio
+    task = application.bot_data.get("operator_voice_delivery")
+    if task:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def _configure_bot_commands(application: Application):
+    import asyncio
+    from services.operator_telegram_voice import delivery_loop
+    application.bot_data["operator_voice_delivery"] = asyncio.create_task(delivery_loop(application))
     """Настроить нижнее меню команд Telegram."""
     await application.bot.set_my_commands(
         [
@@ -6429,7 +6285,7 @@ def main():
     
     try:
         proxy_url = resolve_telegram_http_proxy()
-        builder = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(_configure_bot_commands)
+        builder = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(_configure_bot_commands).post_shutdown(_stop_operator_voice)
         if proxy_url:
             # PTB/httpx can hang on long polling through the HTTP proxy when
             # getUpdates shares the same request transport. Separate request
@@ -6478,6 +6334,7 @@ def main():
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
+        application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         application.add_error_handler(_telegram_error_handler)

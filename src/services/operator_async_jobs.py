@@ -11,6 +11,7 @@ from typing import Any
 JOB_STATUSES = {"queued", "running", "waiting_for_review", "completed", "failed", "cancelled"}
 TERMINAL_JOB_STATUSES = {"completed", "failed", "cancelled"}
 RETRYABLE_JOB_KINDS = {
+    "audio_transcription", "audio_speech",
     "content_plan_generate",
     "content_draft_generate",
     "finance_document_recognize",
@@ -18,6 +19,7 @@ RETRYABLE_JOB_KINDS = {
     "diagnostics_retry",
 }
 CANCELLABLE_JOB_KINDS = {
+    "audio_transcription", "audio_speech",
     "content_plan_generate",
     "content_draft_generate",
     "finance_document_recognize",
@@ -455,6 +457,8 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
     claim_db = DatabaseManager()
     claimed: dict[str, Any] | None = None
     try:
+        from services.operator_audio import cleanup_audio
+        cleanup_audio(claim_db.conn.cursor())
         recover_stale_operator_async_jobs(claim_db.conn.cursor())
         claimed = claim_next_operator_async_job(claim_db.conn.cursor())
         claim_db.conn.commit()
@@ -476,7 +480,11 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
     heartbeat = _OperatorJobHeartbeat(job_id, lease_token)
     heartbeat.start()
     try:
-        if kind == "content_plan_generate":
+        if kind in {"audio_transcription", "audio_speech"}:
+            from services.operator_audio import process_audio_job
+            result = process_audio_job(claimed)
+            status, stage, progress = "completed", "Аудио обработано", 100
+        elif kind == "content_plan_generate":
             from services.content_plan_service import create_generated_content_plan
 
             result = create_generated_content_plan(
@@ -520,7 +528,7 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
     except Exception as exc:
         fail_db = DatabaseManager()
         try:
-            update_operator_async_job(
+            failed_update = update_operator_async_job(
                 fail_db.conn.cursor(),
                 job_id=job_id,
                 status="failed",
@@ -529,6 +537,8 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
                 error=str(exc),
                 lease_token=lease_token,
             )
+            if failed_update and kind in {"audio_transcription", "audio_speech"}:
+                fail_db.conn.cursor().execute("UPDATE operator_audio_assets SET status='failed' WHERE job_id=%s AND status IN ('queued','processing')", (job_id,))
             fail_db.conn.commit()
         finally:
             fail_db.close()

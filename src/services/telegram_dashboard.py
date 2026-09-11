@@ -490,95 +490,14 @@ def route_operator_chat_for_telegram(
     limit: Any = 5,
     transport_key: Any = None,
 ) -> dict[str, Any]:
-    persistence_enabled = hasattr(cursor, "execute") and hasattr(cursor, "fetchone")
-    conversation = get_or_create_operator_conversation(
-        cursor,
-        business_id=business_id,
-        user_id=user_id,
-        channel="telegram",
-        transport_key=transport_key or user_id,
-    ) if persistence_enabled else {"id": "", "pending_context": {}}
-    conversation_id = str(conversation.get("id") or "")
-    if persistence_enabled:
-        append_operator_message(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            role="user",
-            content=message,
-        )
-    conversation_history = (
-        list_operator_messages(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            limit=12,
-        )
-        if persistence_enabled and conversation_id
-        else []
-    )
-    pending_approvals = (
-        list_pending_operator_actions(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            limit=20,
-        )
-        if persistence_enabled and conversation_id
-        else []
-    )
-    result, next_pending_context = route_operator_message(
-        cursor,
-        business_id=business_id,
-        user_id=user_id,
-        message=message,
-        channel="telegram",
-        limit=limit,
-        pending_context=conversation_pending_context(conversation),
-        conversation_id=conversation_id,
-        conversation_history=conversation_history,
-        actor_context={
-            "role": "business_owner",
-            "is_superadmin": False,
-            "permissions": ["business.access"],
-        },
-        pending_approvals=pending_approvals,
-        refresh_handler=refresh_reviews_from_operator,
-        ai_router_handler=classify_operator_intent_with_ai,
-        manual_review_handler=process_operator_chat_message,
-        subscription_access=get_subscription_access(business_id),
-    )
-    result["conversation_id"] = conversation_id
-    if persistence_enabled:
-        approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
-        envelope = approval.get("envelope") if isinstance(approval.get("envelope"), dict) else {}
-        if result.get("status") == "approval_required" and envelope:
-            pending_action = create_pending_operator_action(
-                cursor,
-                conversation_id=conversation_id,
-                business_id=business_id,
-                user_id=user_id,
-                capability=str(result.get("capability") or result.get("intent") or "unknown"),
-                envelope=envelope,
-            )
-            action_id = str(pending_action.get("id") or "")
-            approval["action_id"] = action_id
-            result["approval"] = approval
-        set_operator_pending_context(cursor, conversation_id, next_pending_context)
-        append_operator_message(
-            cursor,
-            conversation_id=conversation_id,
-            business_id=business_id,
-            user_id=user_id,
-            role="operator",
-            content=result.get("chat_response") or result.get("summary"),
-            capability=result.get("capability"),
-            status=result.get("status"),
-            result=result,
-        )
-    return result
+    from services.operator_chat_service import process_chat
+    from services.operator_audio import authorize_actor
+    actor, access = authorize_actor(cursor, user_id, business_id)
+    return process_chat(cursor, business_id=business_id, user_id=user_id, channel="telegram",
+        message=message, payload={"limit": limit, **(transport_key if isinstance(transport_key, dict) else {})},
+        router=route_operator_message, actor_context=actor, subscription_access=access,
+        refresh_handler=refresh_reviews_from_operator, ai_router_handler=classify_operator_intent_with_ai,
+        manual_review_handler=process_operator_chat_message)
 
 
 def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
@@ -644,7 +563,7 @@ def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) 
             user_id=user_id,
             message=message_text,
             limit=5,
-            transport_key=business_ctx.get("telegram_id") or user_id,
+            transport_key=business_ctx.get("operator_payload") or {},
         )
         tool_trace = result.get("tool_trace") if isinstance(result.get("tool_trace"), list) else []
         for tool_step in tool_trace:

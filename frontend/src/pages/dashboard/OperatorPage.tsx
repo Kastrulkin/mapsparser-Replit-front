@@ -1,3 +1,4 @@
+import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
@@ -33,6 +34,8 @@ type DashboardContext = {
 };
 
 type OperatorChatResult = {
+  message_id?: string;
+  input_type?: string;
   status: 'completed' | 'blocked' | 'unsupported' | string;
   intent?: string;
   chat_response?: string;
@@ -142,6 +145,8 @@ type OperatorChatResult = {
 };
 
 type RefreshResult = {
+  message_id?: string;
+  input_type?: string;
   status: 'completed' | 'processing' | 'failed' | 'blocked' | string;
   queue_id?: string;
   queue_status?: string;
@@ -241,10 +246,13 @@ export const OperatorPage = () => {
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
+  const activeBusiness = useRef(currentBusinessId);
+  activeBusiness.current = currentBusinessId;
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatSendInFlightRef = useRef(false);
+  const pendingRequest = useRef({ businessId: "", text: "", id: "" });
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
@@ -253,6 +261,7 @@ export const OperatorPage = () => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyVersion = useRef(0);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyRetry, setHistoryRetry] = useState(0);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
@@ -263,9 +272,11 @@ export const OperatorPage = () => {
       setMessages([]);
       return;
     }
+    setMessages([]); setConversationId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
     const storedConversationId = window.localStorage.getItem(storageKey);
     let cancelled = false;
+    const version = ++historyVersion.current;
     setHistoryLoading(true);
     setHistoryError(null);
     const request = storedConversationId
@@ -276,7 +287,7 @@ export const OperatorPage = () => {
           params: { business_id: currentBusinessId, channel: 'web', limit: 100 },
         });
     request.then((response) => {
-      if (cancelled) return;
+      if (cancelled || version !== historyVersion.current) return;
       const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
       const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
       setConversationId(loadedConversationId);
@@ -337,9 +348,12 @@ export const OperatorPage = () => {
     ]);
   };
 
-  const sendOperatorChatMessage = async (overrideText?: string) => {
+  const sendOperatorChatMessage = async (overrideText?: string, source?: VoiceSubmission) => {
     const text = (overrideText || chatMessage).trim();
     if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
+    if (pendingRequest.current.businessId !== currentBusinessId || pendingRequest.current.text !== text) pendingRequest.current = { businessId: currentBusinessId, text, id: crypto.randomUUID() };
+    historyVersion.current++;
+    setHistoryLoading(false);
     chatSendInFlightRef.current = true;
     setChatLoading(true);
     try {
@@ -348,11 +362,15 @@ export const OperatorPage = () => {
         message: text,
         conversation_id: conversationId,
         channel: 'web',
+        request_id: pendingRequest.current.id,
+        ...source,
       });
+      if (activeBusiness.current !== currentBusinessId) return;
       const result = response.data.operator_result || {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
+      pendingRequest.current = { businessId: "", text: "", id: "" };
       appendPair(text, result);
       const nextConversationId = response.data.conversation_id || result.conversation_id;
       if (nextConversationId) {
@@ -361,6 +379,8 @@ export const OperatorPage = () => {
       }
       if (!overrideText) setChatMessage('');
     } catch (err) {
+      if (activeBusiness.current !== currentBusinessId) return;
+      if (source) throw err;
       appendPair(text, {
         status: 'blocked',
         intent: 'error',
@@ -648,6 +668,7 @@ export const OperatorPage = () => {
                   )}
                 >
                   <div className="whitespace-pre-wrap">{message.text}</div>
+                  {message.role === 'operator' && currentBusinessId && <OperatorSpeech key={`${currentBusinessId}:${message.id}`} businessId={currentBusinessId} messageId={message.result?.message_id || message.id} prepare={message.result?.input_type === 'voice'} />}
                   {message.role === 'operator' && message.result ? (
                     <OperatorResultActions
                       result={message.result}
@@ -678,6 +699,8 @@ export const OperatorPage = () => {
         </div>
 
         <div className="border-t border-slate-200 bg-white px-4 py-4">
+          {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+
           <div className="flex flex-col gap-3 lg:flex-row">
             <textarea
               className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"

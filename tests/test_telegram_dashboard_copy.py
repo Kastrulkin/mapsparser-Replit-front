@@ -2,7 +2,7 @@ import telegram_bot
 import pytest
 from subscription_manager import build_subscription_capabilities
 from services.telegram_static_answers import guest_welcome_text, tariff_detail_text
-from services import telegram_dashboard
+from services import telegram_dashboard, operator_chat_service, operator_audio
 from services.telegram_response_router import classify_client_intent
 from telegram_bot import (
     _build_control_main_menu,
@@ -18,6 +18,13 @@ from telegram_bot import (
 
 @pytest.fixture(autouse=True)
 def isolated_subscription(monkeypatch):
+    monkeypatch.setattr(operator_audio, 'authorize_actor', lambda *args: ({'role': 'business_owner', 'permissions': ['business.access']}, build_subscription_capabilities(tier='concierge', status='active')))
+    monkeypatch.setattr(operator_chat_service, 'find_latest_operator_conversation', lambda *args, **kwargs: {})
+    monkeypatch.setattr(operator_chat_service, 'get_or_create_operator_conversation', lambda *args, **kwargs: {'id': 'conversation-1', 'pending_context': {}})
+    monkeypatch.setattr(operator_chat_service, 'append_operator_message', lambda *args, **kwargs: 'message-1')
+    monkeypatch.setattr(operator_chat_service, 'set_operator_pending_context', lambda *args, **kwargs: None)
+    monkeypatch.setattr(operator_chat_service, 'list_operator_messages', lambda *args, **kwargs: [])
+    monkeypatch.setattr(operator_chat_service, 'list_pending_operator_actions', lambda *args, **kwargs: [])
     monkeypatch.setattr(telegram_dashboard, 'get_subscription_access', lambda _business_id: build_subscription_capabilities(tier='concierge', status='active'))
 
 
@@ -294,7 +301,7 @@ def test_telegram_operator_ai_fallback_routes_card_refresh(monkeypatch) -> None:
     monkeypatch.setattr(telegram_dashboard, "refresh_reviews_from_operator", refresh)
 
     result = telegram_dashboard.route_operator_chat_for_telegram(
-        object(),
+        type("Cursor", (), {"execute": lambda self, *args: None})(),
         business_id="biz-1",
         user_id="user-1",
         message="надо посмотреть что там с салоном",
@@ -313,14 +320,14 @@ def test_telegram_operator_passes_same_conversation_context_to_tool_loop(monkeyp
     cursor = type("PersistentCursor", (), {"execute": lambda self, *_args, **_kwargs: None, "fetchone": lambda self: None})()
 
     monkeypatch.setattr(
-        telegram_dashboard,
+        operator_chat_service,
         "get_or_create_operator_conversation",
         lambda *_args, **_kwargs: {"id": "conversation-1", "pending_context": {}},
     )
-    monkeypatch.setattr(telegram_dashboard, "append_operator_message", lambda *_args, **_kwargs: {})
-    monkeypatch.setattr(telegram_dashboard, "set_operator_pending_context", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(operator_chat_service, "append_operator_message", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(operator_chat_service, "set_operator_pending_context", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        telegram_dashboard,
+        operator_chat_service,
         "list_operator_messages",
         lambda *_args, **_kwargs: [
             {"role": "user", "content": "Работаем с этой точкой"},
@@ -328,7 +335,7 @@ def test_telegram_operator_passes_same_conversation_context_to_tool_loop(monkeyp
         ],
     )
     monkeypatch.setattr(
-        telegram_dashboard,
+        operator_chat_service,
         "list_pending_operator_actions",
         lambda *_args, **_kwargs: [{"id": "action-1", "capability": "services.apply", "status": "pending"}],
     )

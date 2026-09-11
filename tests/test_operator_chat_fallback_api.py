@@ -58,6 +58,7 @@ def _client(monkeypatch):
             "status": "available",
         },
     )
+    monkeypatch.setattr(operator_api, "_scope_subscription_access", lambda *args: {"active": True, "capabilities": ["operator", "maps", "maps.reviews", "maps.services", "social_content"]})
     monkeypatch.setattr(operator_api, "record_operator_event", lambda *args, **kwargs: None)
     return app.test_client()
 
@@ -198,7 +199,7 @@ def test_operator_chat_ai_manual_review_guard_does_not_add_review(monkeypatch) -
     assert "manual_review_text_not_explicit" in result["blocked_reasons"]
     assert result["external_writes_performed"] is False
     assert result["ai_router"]["intent"] == "manual_review_add_and_reply"
-    assert calls == {"process": 1, "ai": 1}
+    assert calls == {"process": 0, "ai": 1}
 
 
 def test_operator_chat_returns_structured_error_without_leaking_exception(monkeypatch) -> None:
@@ -224,7 +225,7 @@ def test_operator_action_confirm_passes_authenticated_tenant_scope(monkeypatch) 
     client = _client(monkeypatch)
     calls = []
 
-    def confirm(cursor, *, action_id, business_id, user_id):
+    def confirm(cursor, *, action_id, business_id, user_id, subscription_access=None):
         calls.append((action_id, business_id, user_id))
         return {"status": "completed", "chat_response": "Готово."}, False
 

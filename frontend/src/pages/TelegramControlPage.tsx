@@ -1,3 +1,4 @@
+import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -141,6 +142,7 @@ type ReviewResult = {
 };
 
 type OperatorMessage = {
+  input_type?: string;
   id?: string;
   role: 'user' | 'operator';
   text: string;
@@ -329,6 +331,10 @@ export const TelegramControlPage = () => {
   const [reviewActionBusy, setReviewActionBusy] = useState('');
   const [messages, setMessages] = useState<OperatorMessage[]>([]);
   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
+  const [operatorConversationId, setOperatorConversationId] = useState<string | null>(null);
+  const operatorSending = useRef(false);
+  const operatorHistoryVersion = useRef(0);
+  const pendingOperatorRequest = useRef({ businessId: "", text: "", id: "" });
   const [moduleData, setModuleData] = useState<ModuleData>({});
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleSaving, setModuleSaving] = useState(false);
@@ -647,27 +653,25 @@ export const TelegramControlPage = () => {
 
   useEffect(() => { if (tab === 'reviews') void loadReviews(reviewStatus); }, [tab, reviewStatus, reviewSource, reviewRating, reviewLocation, scope?.kind, scope?.id]);
 
+  useEffect(() => {
+    operatorHistoryVersion.current++;
+    setMessages([]); setOperatorConversationId(null); setHistoryLoadedFor(''); setOperatorBusy(false);
+  }, [scope?.kind, scope?.id]);
   const loadOperatorHistory = async () => {
-    if (preview || !scope?.kind || bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only') return;
-    const scopeKey = `${scope.kind}:${scope.id || 'all'}`;
+    if (preview || scope?.kind !== 'business' || !scope.id) return;
+    const scopeKey = `${scope.kind}:${scope.id}`;
     if (historyLoadedFor === scopeKey) return;
+    const version = scopeRequestVersion.current;
+    const historyVersion = operatorHistoryVersion.current;
     try {
       const params = scopeQuery(scope);
-      const result = await fetch(`/api/operator/mobile/operator/history?${params.toString()}`, { headers: authHeaders() }).then(readJson<{ items?: Array<{ id?: string; role?: string; content?: string; status?: string; capability?: string; created_at?: string; result_json?: { mobile_route?: { screen?: string }; approval?: { action_id?: string } } }> }>);
-      setMessages((result.items || []).map((item) => ({
-        id: item.id,
-        role: item.role === 'user' ? 'user' : 'operator',
-        text: item.content || '',
-        status: item.status,
-        capability: item.capability,
-        created_at: item.created_at,
-        screen: item.result_json?.mobile_route?.screen,
-        action_id: item.status === 'approval_required' ? item.result_json?.approval?.action_id : undefined,
-      })));
+      const result = await fetch(`/api/operator/mobile/operator/history?${params}`, { headers: authHeaders() }).then(readJson<{ conversation?: { id?: string }; items?: Array<{ id?: string; role?: string; content?: string; status?: string; capability?: string; result_json?: { input_type?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }> }>);
+      if (version !== scopeRequestVersion.current || historyVersion !== operatorHistoryVersion.current) return;
+      setOperatorConversationId(result.conversation?.id || null);
+      setMessages((result.items || []).map((item) => ({ id: item.id, role: item.role === 'user' ? 'user' : 'operator', text: item.content || '', status: item.status, capability: item.capability, screen: item.result_json?.mobile_route?.screen, action_id: item.result_json?.approval?.action_id })));
       setHistoryLoadedFor(scopeKey);
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить историю.'); }
+    } catch (failure) { if (version === scopeRequestVersion.current) setError(failure instanceof Error ? failure.message : 'Не удалось загрузить историю.'); }
   };
-
   useEffect(() => { if (tab === 'operator') void loadOperatorHistory(); }, [tab, scope?.kind, scope?.id]);
 
   const loadModule = async (moduleKey = module, quietly = false, requestVersion = scopeRequestVersion.current) => {
@@ -829,28 +833,31 @@ export const TelegramControlPage = () => {
     openMobileTarget(resolveMobileAttentionScreen(item), item.target_scope);
   };
 
-  const askOperator = async (event: FormEvent) => {
-    event.preventDefault();
-    const text = command.trim();
-    if (!text) return;
+  const sendOperator = async (text: string, source?: VoiceSubmission) => {
+    if (!text.trim() || operatorSending.current) return;
     if (scope?.kind !== 'business' || !scope.id) { setPicker(true); setError('Для команды выберите одну точку.'); return; }
-    setMessages((current) => [...current, { role: 'user', text }]); setCommand(''); setOperatorBusy(true); setTab('operator');
+    const version = scopeRequestVersion.current;
+    if (pendingOperatorRequest.current.businessId !== scope.id || pendingOperatorRequest.current.text !== text) pendingOperatorRequest.current = { businessId: scope.id, text, id: crypto.randomUUID() };
+    operatorHistoryVersion.current++;
+    operatorSending.current = true; setOperatorBusy(true); setTab('operator');
     try {
       const result = await fetch('/api/operator/chat', {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: 'telegram_mini_app' }),
-      }).then(readJson<{ operator_result?: { chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
-      setMessages((current) => [...current, {
-        role: 'operator',
-        text: result.operator_result?.chat_response || result.operator_result?.summary || 'Готово. Результат добавлен в задачи.',
-        status: result.operator_result?.status,
-        capability: result.operator_result?.capability,
-        screen: result.operator_result?.mobile_route?.screen,
-        action_id: result.operator_result?.approval?.action_id,
-      }]);
-      await loadWorkspace();
-    } catch (requestError) { setMessages((current) => [...current, { role: 'operator', text: requestError instanceof Error ? requestError.message : 'Не смог разобрать запрос.' }]); }
-    finally { setOperatorBusy(false); }
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: 'telegram_mini_app', conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...source }),
+      }).then(readJson<{ conversation_id?: string; operator_result?: { message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
+      if (version !== scopeRequestVersion.current) return;
+      pendingOperatorRequest.current = { businessId: "", text: "", id: "" };
+      setOperatorConversationId(result.conversation_id || null);
+      setMessages((current) => [...current, { role: 'user', text }, { role: 'operator', id: result.operator_result?.message_id,
+        input_type: result.operator_result?.input_type, text: result.operator_result?.chat_response || result.operator_result?.summary || 'Проверьте результат в заданиях.',
+        status: result.operator_result?.status, capability: result.operator_result?.capability, screen: result.operator_result?.mobile_route?.screen, action_id: result.operator_result?.approval?.action_id }]);
+      setCommand(''); await loadWorkspace();
+    } catch (failure) {
+      if (version !== scopeRequestVersion.current) return;
+      if (source) throw failure;
+      setError(failure instanceof Error ? failure.message : 'Не удалось отправить запрос.');
+    } finally { operatorSending.current = false; if (version === scopeRequestVersion.current) setOperatorBusy(false); }
   };
+  const askOperator = async (event: FormEvent) => { event.preventDefault(); await sendOperator(command); };
 
   const resolveOperatorAction = async (actionId: string, decision: OperatorActionDecision) => {
     if (scope?.kind !== 'business' || !scope.id || operatorActionBusy) return;
@@ -975,7 +982,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'feed' ? bootstrap?.navigation?.find((item) => item.key === 'feed')?.status === 'read_only' ? <Screen title="Лента" subtitle="Главные темы и сигналы из вашей индустрии."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'feed')} /></Screen> : <CommunityFeedMobile scope={scope} preview={preview} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} openTarget={openMobileTarget} /> : null}
             {!picker && tab === 'reviews' ? bootstrap?.navigation?.find((item) => item.key === 'reviews')?.status === 'read_only' ? <Screen title="Отзывы" subtitle="Новые отзывы и подготовленные ответы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'reviews')} /></Screen> : <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'progress' ? <Screen title="Прогресс" subtitle="Выполненные шаги, текущие проблемы и одно следующее действие.">{bootstrap?.navigation?.find((item) => item.key === 'progress')?.status === 'read_only' ? <LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'progress')} /> : <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} />}</Screen> : null}
-            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
+            {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
@@ -1007,7 +1014,7 @@ const Today = ({ summary, tasks, command, setCommand, ask, openTask }: { summary
   const primary = tasks[0];
   return <div className="px-4">
     <section className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />Главное на сегодня</div><div className="mt-4 flex items-start gap-4"><div className="min-w-0 flex-1"><h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">{primary?.title || 'Новых задач нет'}</h1><p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">{primary?.description || 'По последним загруженным данным решений от вас сейчас не требуется.'}</p></div>{primary?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{primary.count}</b> : <Check className="h-8 w-8 text-emerald-400" />}</div>{primary ? <PrimaryButton onClick={() => openTask(primary)}>Открыть задачу</PrimaryButton> : null}</section>
-    <form onSubmit={ask} className="mt-3 rounded-[22px] bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.07]"><label className="px-1 text-xs font-medium text-zinc-500">Что сделать?</label><div className="mt-2 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" /><button aria-label="Отправить" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></div><p className="px-1 pt-2 text-[11px] leading-4 text-zinc-600">Опишите задачу. Внешние действия всегда попросят подтверждение.</p></form>
+  <form onSubmit={ask} className="mt-3 rounded-[22px] bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.07]"><label className="px-1 text-xs font-medium text-zinc-500">Что сделать?</label><div className="mt-2 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" /><button aria-label="Отправить" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></div><p className="px-1 pt-2 text-[11px] leading-4 text-zinc-600">Опишите задачу. Внешние действия всегда попросят подтверждение.</p></form>
     {tasks.slice(1, 3).map((item) => <TaskRow key={item.id || item.title} item={item} onClick={() => openTask(item)} />)}
     <section className="mt-6"><h2 className="text-lg font-semibold tracking-[-0.025em]">Что уже сделано</h2><div className="mt-3 grid grid-cols-2 gap-2">{(summary?.metrics || []).slice(0, 4).map((metric) => <div key={metric.key} className="rounded-[20px] bg-white/[0.035] p-4 ring-1 ring-inset ring-white/[0.06]"><small className="text-zinc-600">{metric.label}</small><b className="mt-1 block text-2xl tabular-nums">{metric.value ?? '—'}</b><span className="mt-1 block truncate text-[10px] text-zinc-700">{metric.source_label || metric.source || 'ЛокалОС'}</span></div>)}</div></section>
   </div>;
@@ -1061,7 +1068,8 @@ const FilterSelect = ({ label, value, setValue, options }: { label: string; valu
 
 const ResponseBox = ({ label, text }: { label: string; text: string }) => <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex items-center justify-between"><small className="font-semibold text-primary">{label}</small><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(text)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div><p className="text-sm leading-6 text-zinc-300">{text}</p></div>;
 
-const Operator = ({ messages, busy, actionBusy, command, setCommand, ask, resolveAction, openScreen }: {
+const Operator = ({ businessId, conversationId, sendVoice, messages, busy, actionBusy, command, setCommand, ask, resolveAction, openScreen }: {
+  businessId: string; conversationId: string | null; sendVoice: (text: string, source: VoiceSubmission) => Promise<void>;
   messages: OperatorMessage[];
   busy: boolean;
   actionBusy: { actionId: string; decision: OperatorActionDecision } | null;
@@ -1076,6 +1084,7 @@ const Operator = ({ messages, busy, actionBusy, command, setCommand, ask, resolv
       const resolving = Boolean(message.action_id && actionBusy?.actionId === message.action_id);
       return <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}>
         <p className="whitespace-pre-wrap text-pretty">{message.text}</p>
+        {businessId && message.role === 'operator' && message.id && <OperatorSpeech key={`${businessId}:${message.id}`} businessId={businessId} messageId={message.id} prepare={message.input_type === 'voice'} headers={authOnlyHeaders} />}
         {message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 flex items-center gap-1 text-[10px] text-emerald-400"><Check className="h-3 w-3" />Готово</small> : null}
         {message.role === 'operator' && message.status === 'rejected' ? <small className="mt-2 flex items-center gap-1 text-[10px] text-zinc-500"><X className="h-3 w-3" />Отклонено</small> : null}
         {message.role === 'operator' && message.status === 'approval_required' && message.action_id ? <div className="mt-3 rounded-[18px] bg-black/20 p-2 ring-1 ring-inset ring-amber-300/15">
@@ -1091,6 +1100,7 @@ const Operator = ({ messages, busy, actionBusy, command, setCommand, ask, resolv
     }) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}
     {busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Определяю задачу и готовлю результат…</div> : null}
   </div>
+    {businessId && <OperatorVoiceInput key={businessId} businessId={businessId} channel="telegram_mini_app" conversationId={conversationId} onSubmit={sendVoice} disabled={busy} headers={authOnlyHeaders} />}
   <form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></form>
 </Screen>;
 

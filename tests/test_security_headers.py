@@ -64,3 +64,10 @@ def test_nonproduction_response_does_not_enable_hsts(monkeypatch):
     response = main.app.test_client().get("/")
 
     assert "Strict-Transport-Security" not in response.headers
+
+
+def test_operator_allows_same_origin_microphone_without_camera_access():
+    response = main.app.test_client().get('/dashboard/operator')
+    policy = response.headers.get('Permissions-Policy', '')
+    assert 'microphone=(self)' in policy
+    assert 'camera=()' in policy
