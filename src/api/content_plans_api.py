@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import os
 
 from flask import Blueprint, jsonify, request, current_app, send_file
 from itsdangerous import URLSafeTimedSerializer, BadSignature
@@ -30,7 +31,10 @@ content_plans_bp = Blueprint("content_plans", __name__, url_prefix="/api/content
 
 
 def _export_signer():
-    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="content-plan-export-v1")
+    secret = os.getenv("CONTENT_PLAN_EXPORT_TOKEN_SECRET") or current_app.config.get("SECRET_KEY") or os.getenv("EXTERNAL_AUTH_SECRET_KEY")
+    if not secret:
+        raise RuntimeError("Content plan export signing secret is not configured")
+    return URLSafeTimedSerializer(secret, salt="content-plan-export-v1")
 
 
 def _export_plan(user_id, plan_id, session_context=None):

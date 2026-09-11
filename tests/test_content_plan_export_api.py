@@ -1,8 +1,26 @@
 from io import BytesIO
 from flask import Flask
+import pytest
 from api import content_plans_api
 
 api = content_plans_api
+
+
+def test_export_signer_uses_deployment_secret_without_flask_secret(monkeypatch):
+    monkeypatch.delenv('CONTENT_PLAN_EXPORT_TOKEN_SECRET', raising=False)
+    monkeypatch.setenv('EXTERNAL_AUTH_SECRET_KEY', 'configured-deployment-secret')
+    app = Flask(__name__)
+    with app.app_context():
+        signer = api._export_signer()
+        assert signer.loads(signer.dumps({'plan': 'p1'})) == {'plan': 'p1'}
+
+
+def test_export_signer_fails_closed_without_any_secret(monkeypatch):
+    monkeypatch.delenv('CONTENT_PLAN_EXPORT_TOKEN_SECRET', raising=False)
+    monkeypatch.delenv('EXTERNAL_AUTH_SECRET_KEY', raising=False)
+    app = Flask(__name__)
+    with app.app_context(), pytest.raises(RuntimeError):
+        api._export_signer()
 
 
 def client(monkeypatch):
