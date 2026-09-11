@@ -554,6 +554,11 @@ services:
         condition: service_healthy
     command: ["python", "src/worker.py"]
 
+  operator-worker:
+    extends:
+      service: worker
+    command: ["python", "-u", "src/operator_worker.py"]
+
   telegram-bot:
     image: seo-app-telegram-bot
     build:
