@@ -1736,17 +1736,21 @@ def _attach_ai_router(result: dict[str, Any], ai_router: dict[str, Any]) -> dict
 
 
 def _content_read_request(message):
-    lowered = message.lower().replace('-', ' ')
-    return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')))
-            and any(word in lowered for word in ('покажи', 'показать', 'видишь', 'какой', 'какие'))
-            and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост'))
-            and not re.search(r'\b(опубликуй|опубликовать|публикуй|размести|отправь)\b', lowered))
+    lowered = message.lower().replace('-', ' ').strip(' .?!')
+    if re.search(r'\b(опубликуй|опубликовать|публикуй|размести|отправь|создай|составь|подготовь|сделай)\b', lowered):
+        return False
+    if lowered in {'контент план', 'мой контент план', 'наш контент план'}:
+        return True
+    return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ', 'последн', 'крайний')))
+            and any(word in lowered for word in ('покажи', 'показать', 'пришли', 'видишь', 'какой', 'какие'))
+            and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост')))
 
 
 def _read_requested_content(cursor, business_id, message):
     from services.operator_query import render_operator_query
     lowered = message.lower()
-    upcoming = any(word in lowered for word in ('следующ', 'ближайш', 'будет', 'после', 'предстоящ'))
+    latest = bool(re.search(r'\b(последн\w*|крайний)\b', lowered))
+    upcoming = not latest and (any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')) or bool(re.search(r'\bпосле\b', lowered)))
     filters = []
     if upcoming:
         cutoff = datetime.now(ZoneInfo('Europe/Moscow')).date()
@@ -1760,7 +1764,7 @@ def _read_requested_content(cursor, business_id, message):
         filters = [{'field': 'scheduled_for', 'operator': 'gte', 'value': cutoff.isoformat()}]
     result = execute_operator_query(cursor, business_id=business_id, arguments={
         'resource': 'content', 'filters': filters, 'sort_by': 'scheduled_for',
-        'sort_direction': 'asc' if upcoming else 'desc', 'limit': 50, 'view': 'full'})
+        'sort_direction': 'asc' if upcoming else 'desc', 'limit': 1 if latest else 50, 'view': 'full' if upcoming or latest else 'compact'})
     if result.get('status') != 'completed':
         return result
     if upcoming:
