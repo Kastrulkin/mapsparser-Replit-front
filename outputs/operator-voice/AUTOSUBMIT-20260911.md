@@ -9,3 +9,7 @@
 Проверки: 85 focused backend tests passed, включая реальные формулировки, сохранение защиты публикации, смену бизнеса и повтор доставки. Изменение интерфейса в этой поставке относится к Telegram-боту; браузерная проверка расшифровки пока сохранена.
 
 Голос использует существующие возможности Оператора. Это исправление не добавляет отсутствующие доменные действия и не подтверждает, что весь функционал LocalOS доступен через чат. Реальный повтор пользователем с телефона после выкладки ещё требуется.
+
+Развёрнуто: commit `54232006`, GitHub push successful. Три backend-файла объединены с текущими серверными версиями без конфликтов; baseline `/tmp/voice-auto-server-base.tgz`. Перезапущены только app/worker/operator-worker/telegram-bot через tmux. Миграций и изменения данных бизнеса не было.
+
+Production read-only проверка route_operator_message для telegram/web/telegram_mini_app: completed, operator.query, материал `e591bc45-ae29-4e72-a085-50074018935f`, дата 2026-09-12. Подтверждено отсутствие external writes. HTTP localhost 200, защищённый audio/config без авторизации 401. Bot healthy, Application started, в новых логах нет traceback и ошибок voice delivery. Новый auto_submit присутствует в файле внутри bot-контейнера.
