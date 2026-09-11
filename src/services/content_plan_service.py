@@ -2171,7 +2171,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
-            LIMIT 1
+            LIMIT 1 FOR UPDATE OF i
             """,
             (item_id,),
         )
@@ -4688,6 +4688,9 @@ def _build_content_brief_v1(
         sources.append({"id": "owner_detail", "type": "owner", "label": "Добавлено владельцем", "fact": detail_answer})
     if story_facts:
         sources.append({"id": "story_facts", "type": "owner", "label": "Факты истории", "fact": story_facts})
+    editorial_focus = _clean_brief_answer(metadata.get('editorial_focus'),1500)
+    if editorial_focus:
+        goal = editorial_focus + '. ' + goal
     source_answer = _clean_brief_answer(answers.get("source"), 500)
     if source_answer:
         sources.append({"id": "owner_source", "type": "owner", "label": "Источник владельца", "fact": source_answer})
@@ -5069,6 +5072,7 @@ def _content_generation_v2_prompt(
         f"Редакторский бриф:\n{_content_brief_prompt_block(brief)}\n\n"
         f"Подтверждённое описание бизнеса от владельца: {business_description or 'нет дополнительного описания'}\n"
         f"Клиенты бизнеса со слов владельца: {audience_description or 'нет дополнительного описания'}\n"
+        f"Пожелание пользователя к тону: {voice_preferences.get('tone_instruction') or 'не задано'}. Применяй стиль, не добавляя новых фактов.\n"
         f"Голос бизнеса: {voice.get('summary') or 'спокойный, конкретный, без рекламных клише'}\n"
         f"Запрещённые формулировки: {', '.join(voice.get('forbidden_phrases') or []) or 'нет дополнительных'}\n"
         f"Эталонные публикации:\n{examples}"
@@ -5090,7 +5094,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
-            LIMIT 1
+            LIMIT 1 FOR UPDATE OF i
             """,
             (item_id,),
         )
@@ -5145,6 +5149,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
         generation_v2 = _content_generation_v2_enabled()
         content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
+        from services.operator_editorial import editorial_evidence
+        content_evidence = editorial_evidence(cursor,str(item.get('business_id') or '')) + content_evidence
         content_brief = _build_content_brief_v1(item, business_facts, content_evidence)
         editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5) if generation_v2 else []
         editorial_pattern_context = _format_editorial_pattern_context(editorial_patterns)
@@ -5254,6 +5260,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             f"{industry_pattern_context}\n\n"
             "Верни только готовый текст новости."
         )
+        from services.operator_editorial import editorial_prompt
+        prompt += "\n\n" + editorial_prompt(cursor,str(item.get("business_id") or ""))
         generated_text = ""
         generation_source = "ai"
         generation_error_reason = ""

@@ -308,6 +308,8 @@ def generate_news_draft_from_operator(
         pipeline_id=idempotency_key,
     )
     news_prompt = _build_news_prompt(source_text=source_text, business=business)
+    from services.operator_editorial import editorial_prompt
+    news_prompt += '\n\n' + editorial_prompt(cursor,business_id)
     if knowledge_context:
         news_prompt += (
             "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "

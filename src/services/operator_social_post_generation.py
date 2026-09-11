@@ -191,6 +191,8 @@ def generate_social_post_draft_from_operator(
         pipeline_id=idempotency_key,
     )
     post_prompt = _build_social_post_prompt(source_text=source_text, business=business)
+    from services.operator_editorial import editorial_prompt
+    post_prompt += '\n\n' + editorial_prompt(cursor,business_id)
     if knowledge_context:
         post_prompt += (
             "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "

@@ -292,7 +292,7 @@ def update_content_voice(actor: AuthContext | str, business_id: str, payload: di
     user_id = auth.user_id
     current = get_content_voice(auth, business_id)
     summary = str(payload.get("summary") if "summary" in payload else current.get("summary") or "").strip()[:600]
-    preferences = payload.get("preferences") if isinstance(payload.get("preferences"), dict) else current.get("preferences") or {}
+    preferences = {**(current.get("preferences") or {}), **(payload.get("preferences") if isinstance(payload.get("preferences"), dict) else {})}
     forbidden = payload.get("forbidden_phrases") if isinstance(payload.get("forbidden_phrases"), list) else current.get("forbidden_phrases") or []
     ctas = payload.get("typical_ctas") if isinstance(payload.get("typical_ctas"), list) else current.get("typical_ctas") or []
     reference_ids = payload.get("reference_example_ids") if isinstance(payload.get("reference_example_ids"), list) else current.get("reference_example_ids") or []

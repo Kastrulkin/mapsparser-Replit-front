@@ -108,6 +108,9 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("social_post.generate", "Черновик поста", "draft_only", "paid_compute", "credit_policy", "/dashboard/content", ("Подготовь пост для соцсетей",)),
     OperatorCapability("content_plan.generate", "Контент-план", "available", "write_internal", "explicit_command", "/dashboard/content", ("Сделай контент-план на 30 дней",), "content_plan.item.create_draft"),
     OperatorCapability("content.create_plan", "Черновик контент-плана", "draft_only", "write_internal", "explicit_command", "/dashboard/content", ("Подготовь контент-план",), "content_plan.item.create_draft"),
+    OperatorCapability("content.item.edit", "Правка темы поста", "available", "write_internal", "explicit_command", "/dashboard/content", ("Измени тему поста на 15 сентября",)),
+    OperatorCapability("content.plan.refocus", "Изменение акцента плана", "available", "bulk_write", "separate_confirmation", "/dashboard/content", ("В этом месяце делаем акцент на новой услуге",)),
+    OperatorCapability("content.memory.add", "Факты, история и тон бизнеса", "available", "write_internal", "explicit_command", "/dashboard/content", ("Запомни для будущих текстов историю компании",)),
     OperatorCapability("content.history", "История контента и черновиков", "available", "read_only", "none", "/dashboard/content", ("Покажи последние черновики",)),
     OperatorCapability("services.read", "Список услуг", "available", "read_only", "none", "/dashboard/card?tab=services", ("Выдай 3 верхние услуги", "Покажи первые 5 услуг")),
     OperatorCapability("services.prepare_updates", "Подготовка изменений услуг", "draft_only", "paid_compute", "credit_policy", "/dashboard/card?tab=services", ("Найди услуги без цен и подготовь исправления",)),
@@ -1493,6 +1496,8 @@ def _operator_tool_catalog(
             "execute": lambda _arguments: build_operator_help_response(),
         },
     ]
+    from services.operator_editorial import editorial_tools
+    tools.extend(editorial_tools(cursor,business_id,user_id,message))
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
 
 
@@ -1817,6 +1822,25 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    from services.operator_editorial import editorial_input, editorial_tools
+    editorial_pending = pending.get('capability') == 'content.editorial.clarification'
+    if editorial_pending and (clean_message.strip().lower() in {'отмена','отмени','не надо','стоп','cancel','/cancel'} or re.match(r'не (?:надо|нужно|меняй|изменяй|сохраняй|продолжай)\b',clean_message.strip().lower())):
+        return standardize_operator_result({'status':'cancelled','chat_response':'Правка отменена.'},'content.item.edit'), {}
+    if editorial_input(clean_message) or editorial_pending:
+        blocked = operator_subscription_block(subscription_access, 'content.item.edit')
+        if blocked:
+            return blocked, pending
+        source_message = (str(pending.get('source_message') or '') + '\nУточнение: ' + clean_message) if editorial_pending else clean_message
+        tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in editorial_tools(cursor,business_id,user_id,source_message)]
+        arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
+            conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=tools)
+        if tool_planner is None:
+            result = run_paid_operator_tool_loop(cursor, **arguments)
+        else:
+            result = run_operator_tool_loop(**arguments, planner=tool_planner)
+        capability = str(result.get('capability') or 'content.item.edit')
+        next_context = {'capability':'content.editorial.clarification','source_message':source_message} if result.get('status')=='clarification_required' else {}
+        return standardize_operator_result(result,capability), next_context
     direct_commands = (
         (pending.get('capability') == 'services.price.update' or _is_service_price_intent(clean_message), 'services.price.update'),
         (_is_services_inventory_intent(clean_message) or _is_services_read_intent(clean_message), 'services.read'),
@@ -2090,6 +2114,12 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'content.plan.refocus':
+        from services.operator_editorial import apply_focus
+        result = standardize_operator_result(apply_focus(cursor,business_id,user_id,envelope),capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor,action_id=action_id,result=result)
+        return result, False
     orchestrator_action_id = str(envelope.get("orchestrator_action_id") or "").strip()
     if orchestrator_action_id:
         execution = (action_orchestrator or OPERATOR_ACTION_ORCHESTRATOR).resolve_human_decision(
