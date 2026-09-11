@@ -795,6 +795,21 @@ def build_content_plan_skeleton(
             }
         )
 
+    excluded = context.get('excluded_plan_themes')
+    if isinstance(excluded, list):
+        normalize = lambda text: re.sub(r'[^\w]+', ' ', str(text).casefold().replace('ё', 'е')).strip()
+        used = {normalize(theme) for theme in excluded}
+        fresh = []
+        for candidate in candidates:
+            key = normalize(candidate.get('theme'))
+            if key and key not in used:
+                fresh.append(candidate)
+                used.add(key)
+        candidates = fresh
+        if not candidates:
+            from services.operator_plan_continuation import PlanClarification
+            raise PlanClarification('В доступных данных не осталось новых тем. Добавьте услуги или события для следующего плана.')
+        items_target = min(items_target, len(candidates))
     candidates = _apply_learning_feedback(context, candidates)
     selected_candidates = _pick_candidates(candidates, items_target)
     selected_items: list[dict[str, Any]] = []

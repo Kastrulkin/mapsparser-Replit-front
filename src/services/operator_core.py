@@ -1643,7 +1643,10 @@ def _update_one_service_price(cursor: Any, *, business_id: str, message: str) ->
 
 def _is_content_plan_intent(message: str) -> bool:
     lowered = str(message or "").lower().replace("-", " ")
-    return "контент план" in lowered and any(marker in lowered for marker in ("созд", "сдел", "состав", "подготов"))
+    if re.search(r'\bне\s+(?:создавай|создавать|делай|готовь|продолжай)\b', lowered):
+        return False
+    return "контент план" in lowered and bool(re.search(
+        r'\b(?:создай|создать|сделай|сделать|составь|составить|подготовь|подготовить|продолжи|продолжить|сгенерируй)\b|нужен\s+(?:новый|следующий)', lowered))
 
 
 def _content_plan_period(message: str) -> int:
@@ -1651,25 +1654,33 @@ def _content_plan_period(message: str) -> int:
     return int(match.group(1)) if match else 30
 
 
-def _create_content_plan(*, business_id: str, user_id: str, message: str) -> dict[str, Any]:
+def _create_content_plan(*, business_id: str, user_id: str, message: str, request_id: str | None = None) -> dict[str, Any]:
     from services.content_plan_service import create_generated_content_plan
 
     period_days = _content_plan_period(message)
-    plan = create_generated_content_plan(
-        user_id,
-        business_id,
-        scope_type="single_location",
-        scope_target_id=business_id,
-        period_days=period_days,
-        density="standard",
-        content_mix={},
-    )
+    from services.operator_plan_continuation import continuation_requested, PlanClarification
+    try:
+        plan = create_generated_content_plan(
+            user_id,
+            business_id,
+            scope_type="single_location",
+            scope_target_id=business_id,
+            period_days=period_days,
+            density="standard",
+            content_mix={},
+            continuation_message=message if continuation_requested(message) else None,
+            operator_request_id=request_id,
+        )
+    except PlanClarification as error:
+        return standardize_operator_result({'status': 'clarification_required', 'chat_response': str(error), 'external_writes_performed': False}, 'content_plan.generate')
     plan_id = str(plan.get("id") or plan.get("plan", {}).get("id") or "")
     href = f"/dashboard/content?plan_id={plan_id}" if plan_id else "/dashboard/content"
     result = {
         "status": "completed",
         "intent": "content_plan.generate",
-        "chat_response": f"Создал контент-план на {period_days} дней.",
+        "chat_response": f"Создал новый контент-план на {period_days} дней: {plan.get('period_start')} — {plan.get('period_end')}. Старые планы сохранены."
+            + (' Темы предыдущего плана учтены; одинаковые названия исключены.' if continuation_requested(message) else '')
+            + ' Это план тем; тексты постов и публикация выполняются отдельно.' ,
         "content_plan": plan,
         "external_writes_performed": False,
         "result_ref": _result_ref("content_plan.generate", plan_id, href=href, label="Открыть контент-план"),
@@ -1870,7 +1881,7 @@ def route_operator_message(
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("новост", "пост", "канал", "соцсет")):
         return _manual_result("content.publish_external"), {}
     if _is_content_plan_intent(clean_message):
-        return _create_content_plan(business_id=business_id, user_id=user_id, message=clean_message), {}
+        return _create_content_plan(business_id=business_id, user_id=user_id, message=clean_message, request_id=str((action_payload or {}).get('request_id') or '') or None), {}
     if classify_product_explanation_intent(clean_message):
         return standardize_operator_result(
             build_product_feature_explanation(clean_message),
