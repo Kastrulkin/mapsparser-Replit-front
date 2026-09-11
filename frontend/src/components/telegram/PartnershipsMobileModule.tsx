@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { PartnershipResults } from '../prospecting/PartnershipResults';
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -247,7 +248,7 @@ const Empty = ({ title, text }: { title: string; text: string }) => (
   </div>
 );
 
-export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
+export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scope; openBusiness?: (businessId: string) => void }) => {
   const businessId = scope?.kind === "business" ? String(scope.id || "") : "";
   const requestedLeadId = new URLSearchParams(window.location.search).get("item_type") === "partner"
     ? new URLSearchParams(window.location.search).get("item_id") || ""
@@ -262,7 +263,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
   const [outcomes, setOutcomes] = useState<Outcomes>({});
   const [sourceQuality, setSourceQuality] = useState<SourceQuality>({});
   const [blockers, setBlockers] = useState<Blockers>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -726,6 +727,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
     next = { text: `Соберите пакет из ${counts.ready} писем`, tab: "send" };
   else next = { text: "Посмотрите ответы и результат", tab: "analytics" };
 
+  if (scope?.kind === 'network') return <PartnershipResults scope={scope} mobile openWork={id => { if (id) openBusiness?.(id); else setError('Выберите карточку партнёра, чтобы открыть работу по его точке.'); }} />;
   if (!businessId)
     return (
       <div className="rounded-[22px] bg-amber-500/10 p-4 text-sm leading-6 text-amber-200 ring-1 ring-inset ring-amber-400/20">
@@ -795,12 +797,14 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
       ) : null}
       {!loading && tab === "overview" ? (
         <div className="space-y-3">
+          <PartnershipResults scope={scope || {}} mobile openWork={() => setTab('leads')} />
+          <details><summary className="min-h-11 cursor-pointer py-3">Работа с кандидатами и отправками</summary>
           <section className="rounded-[24px] bg-gradient-to-br from-orange-500/[0.14] to-white/[0.035] p-5 ring-1 ring-inset ring-orange-400/20">
             <small className="font-semibold uppercase tracking-[0.13em] text-orange-400">
               Партнёрства
             </small>
             <h2 className="mt-2 text-xl font-semibold text-balance">
-              ЛокалОС ведёт кандидатов до ответа
+              Поиск и переговоры
             </h2>
             <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">
               Поиск, отбор, предложение и результаты собраны в одном маршруте.
@@ -843,6 +847,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
               ))}
             </div>
           </section>
+          </details>
         </div>
       ) : null}
       {!loading && tab === "leads" ? (

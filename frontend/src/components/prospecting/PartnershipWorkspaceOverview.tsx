@@ -44,11 +44,11 @@ export function PartnershipWorkspaceOverview({
     <>
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title={copy.title}
-        description={copy.description}
+        title={language === 'ru' ? 'Партнёрства' : copy.title}
+        description={language === 'ru' ? 'Договорённости с партнёрами и инструкции сотрудникам. Поиск и переговоры — в рабочих вкладках.' : copy.description}
       />
 
-      <DashboardCompactMetricsRow
+      {workspaceView !== 'overview' ? <DashboardCompactMetricsRow
         items={[
           { label: copy.candidates, value: rawLeadCount, hint: copy.candidatesHint },
           { label: copy.pipeline, value: pipelineLeadCount, hint: copy.pipelineHint },
@@ -56,14 +56,14 @@ export function PartnershipWorkspaceOverview({
           { label: copy.queue, value: visibleBatchesCount, hint: copy.queueHint },
           { label: copy.replies, value: visibleReactionsCount, hint: copy.repliesHint },
         ]}
-      />
+      /> : null}
 
-      <DashboardActionPanel
+      {workspaceView !== 'overview' ? <DashboardActionPanel
         title={copy.nextStep}
         description={copy.nextStepDescription}
         status={!currentBusinessId ? copy.selectBusiness : `${copy.currentLayer}: ${workspaceLabelByValue[workspaceView] || copy.workspace}.`}
         tone={!currentBusinessId ? 'amber' : 'default'}
-      />
+      /> : null}
 
       <div className="rounded-3xl border border-slate-200/80 bg-white/92 p-3 shadow-sm">
         <ProspectingWorkspaceTabs

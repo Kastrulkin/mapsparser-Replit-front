@@ -1,4 +1,5 @@
 import { QueueHeader } from './QueueHeader';
+import { PlanDownload } from '../PlanDownload';
 import { QueueSummary } from './QueueSummary';
 import { SocialFilterHeader } from './SocialFilterHeader';
 import { SocialNextStepPanel } from './SocialNextStepPanel';
@@ -13,6 +14,7 @@ export const ContentQueueView = ({ scope }) => {
   return (
     <div className={activeZone === 'queue' ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'hidden'}>
       <QueueHeader scope={scope} />
+      {currentPlan?.id ? <PlanDownload key={currentPlan.id} planId={currentPlan.id} dirty={Boolean(scope.editorItemId) || Object.keys(scope.draftEdits || {}).length > 0 || Object.keys(scope.themeEdits || {}).length > 0 || Object.keys(scope.dateEdits || {}).length > 0} /> : null}
       {currentPlan?.items && currentPlan.items.length > 0 ? (
         <div className="mt-6 space-y-4">
           <QueueSummary scope={scope} />

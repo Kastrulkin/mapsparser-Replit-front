@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { PartnershipResults } from '@/components/prospecting/PartnershipResults';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { newAuth } from '@/lib/auth_new';
 import { Button } from '@/components/ui/button';
@@ -806,7 +807,7 @@ const toPilotCohort = (value: string): PilotCohort => {
 };
 
 export const PartnershipSearchPage: React.FC = () => {
-  const { currentBusinessId, currentBusiness, user } = useOutletContext<any>();
+  const { currentBusinessId, currentBusiness, user, controlScope, onControlScopeChange } = useOutletContext<any>();
   const currentBusinessRef = useRef(currentBusinessId);
   currentBusinessRef.current = currentBusinessId;
   const partnershipAccess = getCapabilityAccessForBusiness(currentBusiness, 'partnerships');
@@ -2491,6 +2492,7 @@ export const PartnershipSearchPage: React.FC = () => {
     void updateLeadStageOptimistic(lead.id, PIPELINE_POSTPONED, deferred);
   };
 
+  if (controlScope?.kind === 'network') return <div className="space-y-4"><h1 className="text-2xl font-semibold">Партнёрства сети</h1><PartnershipResults scope={controlScope} openWork={id => { if (id) onControlScopeChange?.({ kind: 'business', id }); }} /></div>;
   if (!partnershipAccess.allowed && currentBusinessId) {
     return (
       <div className="space-y-6 pb-24">
@@ -2605,6 +2607,9 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
 
           {workspaceView === 'overview' ? (
+            <>
+            <PartnershipResults scope={controlScope || { kind: 'business', id: currentBusinessId }} openWork={() => setWorkspaceView('pipeline')} />
+            <details><summary className="min-h-11 cursor-pointer py-3">Работа с кандидатами и отправками</summary>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -2696,6 +2701,8 @@ export const PartnershipSearchPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            </details>
+            </>
           ) : null}
 
           {workspaceView === 'raw' ? (

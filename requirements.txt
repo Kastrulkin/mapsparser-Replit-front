@@ -28,4 +28,5 @@ pysocks
 python-socks[asyncio]
 pypdf
 openpyxl
+reportlab>=4.0,<5
 boto3

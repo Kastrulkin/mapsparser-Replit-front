@@ -1131,7 +1131,14 @@ def _update_domain(cursor: Any, action: dict[str, Any], command: str, payload: d
                 note=str(payload.get("note") or payload.get("outcome") or "reply"),
             )
     if flow == "partnership" and entity_type == "lead_workstream" and entity_id:
-        if command == "mark_launched":
+        if command == "save_terms":
+            from services.partnership_results import save_agreement
+            cursor.execute("SELECT agreement_json FROM lead_workstreams WHERE id=%s AND client_business_id=%s FOR UPDATE", (entity_id, action.get("business_id")))
+            agreement_row = _row(cursor, cursor.fetchone())
+            current = agreement_row.get("agreement_json") or {}
+            terms = {**(current.get("terms") or {}), "details": payload.get("details")}
+            save_agreement(cursor, entity_id, [str(action.get("business_id"))], "save", {"revision": current.get("revision", 0), "terms": terms}, str(action.get("execution_user_id") or action.get("user_id") or ""))
+        elif command == "mark_launched":
             cursor.execute(
                 "UPDATE lead_workstreams SET partnership_launched_at = COALESCE(partnership_launched_at, NOW()), partnership_outcome_json = partnership_outcome_json || %s, updated_at = NOW() WHERE id = %s",
                 (Json({"mechanic": payload.get("mechanic"), "promo_code": payload.get("promo_code")}), entity_id),
@@ -1325,7 +1332,7 @@ def execute_command(
     if command not in allowed:
         raise JourneyError("Команда недоступна для этого действия", 409, "command_not_allowed")
     next_type, result_status, next_due_at, merged_payload = _next_action_spec(action, command, payload)
-    domain_updates = _update_domain(cursor, action, command, payload)
+    domain_updates = _update_domain(cursor, {**action, "execution_user_id": user_id}, command, payload)
     merged_payload.update(domain_updates)
     completed_at = datetime.now(timezone.utc) if result_status == "completed" else None
     cursor.execute(

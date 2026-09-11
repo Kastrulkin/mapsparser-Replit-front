@@ -1,4 +1,5 @@
 import React from 'react';
+import { PlanDownload } from '../PlanDownload';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Globe, Lock, Sparkles, Trash2, Wand2 } from 'lucide-react';
@@ -20,6 +21,7 @@ export const ContentPlanView = ({ scope }) => {
   return (
     <>
       <div className={activeZone === 'plan' ? 'space-y-6' : 'hidden'}>
+      {currentPlan?.id ? <PlanDownload key={currentPlan.id} planId={currentPlan.id} dirty={Boolean(scope.editorItemId) || Object.keys(scope.draftEdits || {}).length > 0 || Object.keys(scope.themeEdits || {}).length > 0 || Object.keys(scope.dateEdits || {}).length > 0} /> : null}
       {selectedScopeDescription ? (
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4 text-sm text-indigo-950">
           <div className="font-semibold">

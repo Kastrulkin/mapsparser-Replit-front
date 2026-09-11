@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import sys
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app, send_file
+from itsdangerous import URLSafeTimedSerializer, BadSignature
+from services.content_plan_export import fingerprint, render_export
 
 from auth_system import verify_session
 from core.auth_helpers import verify_business_access
@@ -25,6 +27,76 @@ from services.content_plan_service import (
 
 
 content_plans_bp = Blueprint("content_plans", __name__, url_prefix="/api/content-plans")
+
+
+def _export_signer():
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="content-plan-export-v1")
+
+
+def _export_plan(user_id, plan_id, session_context=None):
+    plan = get_content_plan(user_id, plan_id)
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT is_superadmin, is_active FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise PermissionError("Нет доступа")
+        admin = row.get("is_superadmin") if hasattr(row, "get") else row[0]
+        active = row.get("is_active") if hasattr(row, "get") else row[1]
+        if not active:
+            raise PermissionError("Нет доступа")
+        for business_id in {plan["business_id"], *(item.get("business_id") for item in plan["items"] if item.get("business_id"))}:
+            allowed, _ = verify_business_access(cursor, business_id, {**(session_context or {}), "user_id": user_id, "is_superadmin": bool(admin)})
+            if not allowed:
+                raise PermissionError("Нет доступа ко всем точкам плана")
+        access = get_capability_access(plan["business_id"], "maps.news", bool(admin))
+        if not access.get("allowed"):
+            raise PermissionError("Экспорт недоступен на текущем тарифе")
+        return plan
+    finally:
+        db.close()
+
+
+@content_plans_bp.route("/<plan_id>/export", methods=["POST"])
+def content_plan_export_prepare(plan_id):
+    user, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify(error="Некорректный запрос"), 400
+    file_format = payload.get("format")
+    if not isinstance(file_format, str) or file_format not in {"xlsx", "pdf"}:
+        return jsonify(error="Выберите Excel или PDF"), 400
+    try:
+        plan = _export_plan(str(user["user_id"]), plan_id, user)
+    except PermissionError:
+        return jsonify(error="Нет доступа к плану"), 403
+    except ValueError:
+        return jsonify(error="План не найден"), 404
+    token = _export_signer().dumps({"user_id": str(user["user_id"]), "session_kind": user.get("session_kind", "standard"), "scope_business_id": user.get("scope_business_id"), "plan_id": plan_id, "format": file_format, "fingerprint": fingerprint(plan)})
+    return jsonify(success=True, download_url=f"/api/content-plans/download/{token}", filename=f"content-plan-{plan_id}.{file_format}", expires_in=300)
+
+
+@content_plans_bp.route("/download/<token>", methods=["GET"])
+def content_plan_export_download(token):
+    try:
+        data = _export_signer().loads(token, max_age=300)
+        plan = _export_plan(data["user_id"], data["plan_id"], data)
+        if fingerprint(plan) != data["fingerprint"]:
+            return jsonify(error="План изменился. Подготовьте файл ещё раз."), 409
+        output = render_export(plan, data["format"])
+    except BadSignature:
+        return jsonify(error="Ссылка недействительна или устарела"), 410
+    except (PermissionError, ValueError):
+        return jsonify(error="План недоступен"), 403
+    response = send_file(output, mimetype="application/pdf" if data["format"] == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, download_name=f"content-plan-{data['plan_id']}.{data['format']}")
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Access-Control-Allow-Origin"] = "https://web.telegram.org"
+    current_app.logger.info("content_plan_download_success plan_id=%s format=%s", data['plan_id'], data['format'])
+    return response
 
 
 def _content_plan_business_id(cursor):

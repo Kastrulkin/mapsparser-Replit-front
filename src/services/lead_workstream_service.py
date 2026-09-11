@@ -558,6 +558,7 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
             )
             for row in cur.fetchall() or []:
                 payload = dict(row)
+                payload.pop("agreement_json", None)  # Private terms use the scope-checked results API only.
                 if payload.get("room_id"):
                     payload["room"] = {
                         "id": payload.pop("room_id"),
@@ -772,6 +773,7 @@ def create_workstream(
     existing = cur.fetchone()
     if existing:
         payload = dict(existing)
+        payload.pop("agreement_json", None)
         payload["reused"] = True
         return payload
 
@@ -790,6 +792,7 @@ def create_workstream(
         (workstream_id, lead_id, normalized_type, client_business_id or "", actor_id or ""),
     )
     payload = dict(cur.fetchone())
+    payload.pop("agreement_json", None)
     from services.contact_intelligence_service import enqueue_enrichment_job
 
     enrichment_job = enqueue_enrichment_job(cur, workstream_id)
@@ -832,6 +835,8 @@ def resolve_workstream(
         tuple(params),
     )
     rows = [dict(row) for row in cur.fetchall() or []]
+    for row in rows:
+        row.pop("agreement_json", None)
     if not rows:
         raise LookupError("Lead workstream not found")
     if not workstream_id and len(rows) > 1:
@@ -882,4 +887,6 @@ def update_workstream(
     row = cur.fetchone()
     if not row:
         raise LookupError("Lead workstream not found")
-    return dict(row)
+    payload = dict(row)
+    payload.pop("agreement_json", None)
+    return payload

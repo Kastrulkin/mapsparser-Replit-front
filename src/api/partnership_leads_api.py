@@ -1,11 +1,68 @@
 """Partnership lead lifecycle routes."""
 from __future__ import annotations
+import sys
 
 from flask import Blueprint
 
 from services import partnership_leads_service as service
+from flask import jsonify, request, current_app
+from api.content_plans_api import _require_auth
+from database_manager import DatabaseManager
+from services.telegram_control_scope import resolve_control_scope
+from services.partnership_results import read_results, save_agreement
+from core.auth_helpers import verify_business_access
 
 partnership_leads_bp = Blueprint("partnership_leads_api", __name__)
+
+
+@partnership_leads_bp.route('/api/partnership/results', methods=['GET'])
+@partnership_leads_bp.route('/api/partnership/results/<workstream_id>', methods=['POST'])
+def partnership_results(workstream_id=None):
+    user, error = _require_auth()
+    if error:
+        return error
+    payload = (request.get_json(silent=True) or {}) if request.method == 'POST' else request.args
+    if not hasattr(payload, 'get') or payload.get('scope_type', 'business') not in {'business', 'network'}:
+        return jsonify(error='Недоступный контекст'), 403
+    if not payload.get('scope_id') and not payload.get('business_id'):
+        return jsonify(error='Выберите бизнес или сеть'), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        scope = resolve_control_scope(cursor, user_id=str(user['user_id']), requested_kind=str(payload.get('scope_type') or 'business'), requested_id=payload.get('scope_id') or payload.get('business_id'))
+        if not scope or scope.get('kind') not in {'business', 'network'}:
+            return jsonify(error='Выберите доступный бизнес или сеть'), 403
+        ids = scope.get('business_ids') or []
+        for business_id in ids:
+            allowed, _ = verify_business_access(cursor, business_id, user)
+            if not allowed:
+                return jsonify(error='Нет доступа к точке'), 403
+            access_error = service._partnership_write_access(business_id, user)
+            if access_error:
+                return access_error
+        if workstream_id:
+            data = save_agreement(cursor, workstream_id, ids, str(payload.get('command') or ''), payload, str(user['user_id']))
+            db.conn.commit()
+            current_app.logger.info('partnership_agreement_action workstream_id=%s command=%s revision=%s', workstream_id, payload.get('command'), data.get('revision'))
+            return jsonify(success=True, agreement=data)
+        items = read_results(cursor, ids)
+        cursor.execute('SELECT id, name FROM businesses WHERE id=ANY(%s) ORDER BY name, id', (list(ids),))
+        locations = [dict(row) if hasattr(row, 'keys') else {'id': row[0], 'name': row[1]} for row in cursor.fetchall()]
+        confirmed = [item for item in items if (item.get('agreement_json') or {}).get('status') == 'confirmed']
+        launched = [item for item in confirmed if item.get('partnership_launched_at')]
+        return jsonify(success=True, scope=scope, items=items, locations=locations, counts={
+            'partners': len({str(item.get('company_id') or item['id']) for item in confirmed}),
+            'launched': len(launched), 'preparing': len(confirmed) - len(launched),
+            'needs_decision': sum(bool(item.get('agreement_json')) and (item['agreement_json'].get('status') != 'confirmed' or item['agreement_json'].get('instruction_terms_version') != item['agreement_json'].get('terms_version')) for item in items),
+        })
+    except PermissionError:
+        db.conn.rollback()
+        return jsonify(error='Партнёр недоступен'), 403
+    except ValueError:
+        db.conn.rollback()
+        return jsonify(error=str(sys.exc_info()[1])), 409
+    finally:
+        db.close()
 
 @partnership_leads_bp.route('/api/partnership/leads', methods=['GET'])
 def partnership_list_leads():
