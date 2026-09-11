@@ -119,6 +119,9 @@ def prepare_focus(cursor,business_id,user_id,message,arguments):
         if change.get('version')!=_version(row): return _result('План изменился. Нужно обновить список постов.', 'blocked')
         selected.append({'id':row['id'],'version':_version(row),'theme':theme,'date':str(row['scheduled_for'])})
         seen.add(row['id'])
+    expected={row['id'] for row in rows if row['status'] in EDITABLE and row['plan_status']!='archived' and period_start<=row['scheduled_for']<=period_end}
+    if seen!=expected:
+        return _result(f'В этом периоде {len(expected)} доступных постов. Нужно включить их все в preview или выбрать более узкий период (до 20 постов).', 'clarification_required')
     plan_id=rows[0]['plan_id']
     cursor.execute('SELECT updated_at FROM contentplans WHERE id=%s AND business_id=%s',(plan_id,business_id))
     plan_version=str(_row(cursor,cursor.fetchone()).get('updated_at'))
@@ -137,6 +140,10 @@ def apply_focus(cursor,business_id,user_id,envelope):
     changes=envelope['changes']
     if not changes or any(not rows.get(change['id']) or _version(rows[change['id']])!=change['version'] or rows[change['id']]['status'] not in EDITABLE for change in changes):
         return _result('Один из постов изменился после preview. Ничего не применено; подготовьте изменения заново.', 'blocked')
+    start=date.fromisoformat(envelope['period_start']);end=date.fromisoformat(envelope['period_end'])
+    expected={row['id'] for row in rows.values() if row['status'] in EDITABLE and row['plan_status']!='archived' and start<=row['scheduled_for']<=end}
+    if expected!={change['id'] for change in changes}:
+        return _result('Состав постов за период изменился. Подготовьте новое preview.', 'blocked')
     for change in changes:
         _change(cursor,rows[change['id']],change['theme'],envelope['focus'],user_id,focus=envelope['focus'])
     cursor.execute("UPDATE contentplans SET generated_plan_json=jsonb_set(COALESCE(generated_plan_json,'{}'::jsonb),'{editorial_focus}',%s::jsonb),updated_at=clock_timestamp() WHERE id=%s AND business_id=%s",

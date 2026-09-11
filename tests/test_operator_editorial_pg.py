@@ -192,3 +192,11 @@ def test_focus_and_memory_six_inputs_share_journal(editorial,channel,voice,opera
     else:
         assert first['status']=='completed'
         assert len(operator_editorial.read_context(c,'b','u',{})['saved_notes'])==1
+
+
+def test_month_focus_never_silently_changes_only_subset(editorial):
+    _,c=editorial
+    args=focus_args(c);args['changes']=args['changes'][:1]
+    result=operator_editorial.prepare_focus(c,'b','u','акцент на семейных поездках',args)
+    assert result['status']=='clarification_required'
+    assert target(c)['theme']=='Тема А'
