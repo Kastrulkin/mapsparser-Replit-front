@@ -1,0 +1,5 @@
+{"config": {"input_enabled": true, "output_enabled": true}}
+{"channel": "web", "text_status": "completed", "voice_status": "completed", "message_id": "04c60c95-577e-48fb-9aec-17a04533e789", "transcription_id": "330409d8-a68e-464e-996e-5e115eece283", "speech_id": "acfee33f-ded3-4d5f-b427-125e11862aa5", "dedupe": true, "private_audio": true, "source_deleted": true}
+{"channel": "telegram_mini_app", "text_status": "completed", "voice_status": "completed", "message_id": "545682f3-0dc2-46f9-bec0-0ce8085e0334", "transcription_id": "08cab4ef-f874-41cc-b3b0-e05fecb2a38e", "speech_id": "159e6453-d33b-4b5c-bad0-4bef83d71fb4", "dedupe": true, "private_audio": true, "source_deleted": true}
+{"channel": "telegram", "text_status": "completed", "voice_status": "completed", "message_id": "01f81d99-c43e-416e-a2cf-2d5e8f8f7f5c", "transcription_id": "07e8f9b3-c5e8-4790-a476-7050e9be6ded", "speech_id": "c1487c7a-953b-4f06-9c93-ad80e61aa41f", "dedupe": true, "private_audio": true, "source_deleted": true}
+LIVE_ACCEPTANCE_OK
