@@ -6256,8 +6256,9 @@ async def _stop_operator_voice(application: Application):
 
 async def _configure_bot_commands(application: Application):
     import asyncio
+    import sys
     from services.operator_telegram_voice import delivery_loop
-    application.bot_data["operator_voice_delivery"] = asyncio.create_task(delivery_loop(application))
+    application.bot_data["operator_voice_delivery"] = asyncio.create_task(delivery_loop(application, sys.modules[__name__]))
     """Настроить нижнее меню команд Telegram."""
     await application.bot.set_my_commands(
         [

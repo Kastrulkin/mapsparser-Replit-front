@@ -52,8 +52,8 @@ async def receive_voice(update, context, host):
         content=bytes(await file.download_as_bytearray())
         await asyncio.to_thread(transaction,lambda cursor:create_transcription(cursor,content=content,user_id=business['user_id'],business_id=business['business_id'],
             channel='telegram',conversation_id=None,request_id=f'tg:{update.effective_chat.id}:{update.message.message_id}',
-            metadata={'chat_id':update.effective_chat.id,'business_name':business['business_name'],'delivery':'pending'}))
-        await update.message.reply_text('Распознаю запись. Затем покажу текст для проверки.')
+            metadata={'chat_id':update.effective_chat.id,'business_name':business['business_name'],'delivery':'pending','auto_submit':True}))
+        await update.message.reply_text('Распознаю запись, покажу текст и сразу обработаю команду.')
     except (ValueError,PermissionError):
         await update.message.reply_text('Не удалось принять голосовое. Проверьте доступ, лимит запросов или отправьте команду текстом.')
 
@@ -135,7 +135,30 @@ async def correction(update,context,host):
         return True
 
 
-async def delivery_loop(application):
+async def submit_recognized_voice(application, host, asset):
+    """Replay uses the same journal key, including after a delivery restart."""
+    metadata = asset['metadata_json']
+    chat_id = metadata['chat_id']
+    business = await asyncio.to_thread(host._control_scope_business_context, str(chat_id))
+    if not business or business['business_id'] != asset['business_id'] or business['user_id'] != asset['user_id']:
+        await application.bot.send_message(chat_id=chat_id, text='Выбранный бизнес изменился. Отправьте команду заново для нужного бизнеса.')
+        return
+    if not metadata.get('transcript_delivered'):
+        await application.bot.send_message(chat_id=chat_id, text='Распознано · '+str(metadata.get('business_name') or 'бизнес')+':\n\n'+asset['transcript'][:3500])
+        await asyncio.to_thread(transaction, lambda cursor: cursor.execute(
+            "UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"transcript_delivered\":true}'::jsonb WHERE id=%s", (asset['id'],)))
+    business = dict(business)
+    business['operator_payload'] = {'conversation_id': asset['conversation_id'], 'transcription_id': asset['id'], 'request_id': 'voice:'+asset['id']}
+    payload = await asyncio.to_thread(host.build_operator_chat_payload, business, asset['transcript'])
+    if not metadata.get('result_delivered'):
+        await application.bot.send_message(chat_id=chat_id, text=payload['text'], reply_markup=host._build_operator_result_markup(payload['result']))
+        await asyncio.to_thread(transaction, lambda cursor: cursor.execute(
+            "UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"result_delivered\":true}'::jsonb WHERE id=%s", (asset['id'],)))
+    if not payload['result'].get('error_code'):
+        await queue_reply_speech(payload['result'], business, application)
+
+
+async def delivery_loop(application, host):
     while True:
         try:
             def pending(cursor):
@@ -146,24 +169,29 @@ async def delivery_loop(application):
                 cursor.execute("""SELECT asset.*,job.status job_status FROM operator_audio_assets asset
                     JOIN operator_async_jobs job ON job.id=asset.job_id
                     WHERE asset.channel='telegram' AND asset.metadata_json->>'delivery'='pending'
-                    AND asset.expires_at>NOW() AND job.status IN ('completed','failed','cancelled') LIMIT 10""")
+                    AND asset.expires_at>NOW() AND job.status IN ('completed','failed','cancelled') ORDER BY asset.created_at, asset.id LIMIT 10""")
                 return [_row(cursor,row) for row in cursor.fetchall()]
             assets=await asyncio.to_thread(transaction,pending)
             for asset in assets:
                 try:
-                    await asyncio.to_thread(transaction,lambda cursor:authorize_actor(cursor,asset['user_id'],asset['business_id']))
-                except PermissionError:
-                    await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"blocked\"}'::jsonb WHERE id=%s",(asset['id'],)))
-                    continue
-                metadata=asset['metadata_json']; chat_id=metadata['chat_id']
-                if asset['job_status']!='completed':
-                    await application.bot.send_message(chat_id=chat_id,text='Не удалось обработать аудио. Текстовые команды доступны; попробуйте новую запись.')
-                elif asset['kind']=='transcription' and asset['status']=='ready':
-                    await application.bot.send_message(chat_id=chat_id,text='Проверьте команду для '+str(metadata.get('business_name') or 'бизнеса')+':\n\n'+asset['transcript'][:3500],reply_markup=review_markup(asset['id']))
-                elif asset['kind']=='speech' and asset.get('path'):
-                    content=await asyncio.to_thread(private_path(asset['path']).read_bytes)
-                    await application.bot.send_voice(chat_id=chat_id,voice=content)
-                await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"sent\"}'::jsonb WHERE id=%s",(asset['id'],)))
+                    try:
+                        await asyncio.to_thread(transaction,lambda cursor:authorize_actor(cursor,asset['user_id'],asset['business_id']))
+                    except PermissionError:
+                        await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"blocked\"}'::jsonb WHERE id=%s",(asset['id'],)))
+                        continue
+                    metadata=asset['metadata_json']; chat_id=metadata['chat_id']
+                    if asset['job_status']!='completed':
+                        await application.bot.send_message(chat_id=chat_id,text='Не удалось обработать аудио. Текстовые команды доступны; попробуйте новую запись.')
+                    elif asset['kind']=='transcription' and metadata.get('auto_submit') and asset['status'] in {'ready','submitted'}:
+                        await submit_recognized_voice(application, host, asset)
+                    elif asset['kind']=='transcription' and asset['status']=='ready':
+                        await application.bot.send_message(chat_id=chat_id,text='Проверьте команду для '+str(metadata.get('business_name') or 'бизнеса')+':\n\n'+asset['transcript'][:3500],reply_markup=review_markup(asset['id']))
+                    elif asset['kind']=='speech' and asset.get('path'):
+                        content=await asyncio.to_thread(private_path(asset['path']).read_bytes)
+                        await application.bot.send_voice(chat_id=chat_id,voice=content)
+                    await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"sent\"}'::jsonb WHERE id=%s",(asset['id'],)))
+                except Exception:
+                    logger.warning('Operator audio item delivery failed; continuing other items')
         except asyncio.CancelledError:
             return
         except Exception:

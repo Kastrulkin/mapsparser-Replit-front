@@ -1735,6 +1735,45 @@ def _attach_ai_router(result: dict[str, Any], ai_router: dict[str, Any]) -> dict
     return combined
 
 
+def _content_read_request(message):
+    lowered = message.lower().replace('-', ' ')
+    return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')))
+            and any(word in lowered for word in ('покажи', 'показать', 'видишь', 'какой', 'какие'))
+            and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост'))
+            and not re.search(r'\b(опубликуй|опубликовать|публикуй|размести|отправь)\b', lowered))
+
+
+def _read_requested_content(cursor, business_id, message):
+    from services.operator_query import render_operator_query
+    lowered = message.lower()
+    upcoming = any(word in lowered for word in ('следующ', 'ближайш', 'будет', 'после', 'предстоящ'))
+    filters = []
+    if upcoming:
+        cutoff = datetime.now(ZoneInfo('Europe/Moscow')).date()
+        months = ('января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря')
+        match = re.search(r'после\s+(\d{1,2})\s+('+'|'.join(months)+r')(?:\s+(20\d{2}))?', lowered)
+        if match:
+            try:
+                cutoff = date(int(match.group(3) or cutoff.year), months.index(match.group(2))+1, int(match.group(1))) + timedelta(days=1)
+            except ValueError:
+                return {'status': 'needs_input', 'chat_response': 'Уточните дату: такого дня нет в календаре.'}
+        filters = [{'field': 'scheduled_for', 'operator': 'gte', 'value': cutoff.isoformat()}]
+    result = execute_operator_query(cursor, business_id=business_id, arguments={
+        'resource': 'content', 'filters': filters, 'sort_by': 'scheduled_for',
+        'sort_direction': 'asc' if upcoming else 'desc', 'limit': 50, 'view': 'full'})
+    if result.get('status') != 'completed':
+        return result
+    if upcoming:
+        items = [item for item in result['items'] if item.get('status') not in {'published', 'cancelled', 'archived'}][:1]
+        result['items'] = items
+        result['count'] = len(items)
+        result['chat_response'] = ('Следующий материал в сохранённом контент-плане:\n\n'+
+            render_operator_query(result['query'], items, len(items)) if items else
+            'В сохранённом контент-плане не нашёл будущего неопубликованного материала по указанной дате.')
+        result['chat_response'] += '\n\nДата в плане не подтверждает постановку на автопубликацию или публикацию во внешнем канале.'
+    return result
+
+
 def route_operator_message(
     cursor: Any,
     *,
@@ -1816,6 +1855,11 @@ def route_operator_message(
             message=clean_message,
             fallback_limit=limit,
         ), {}
+    if _content_read_request(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'content.read')
+        if blocked:
+            return blocked, pending
+        return standardize_operator_result(_read_requested_content(cursor, business_id, clean_message), 'operator.query'), {}
     lowered_message = clean_message.lower()
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("отзыв", "яндекс", "картах", "карты")):
         return _manual_result("reviews.publish_external"), {}
