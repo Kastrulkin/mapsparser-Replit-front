@@ -52,7 +52,7 @@ ACTION_COMMANDS = {
     "select_next_partner": ("start_next_cycle",),
     "complete_map_task": ("complete",),
     "refresh_data": ("complete",),
-    "compare_snapshot": ("complete", "retry_refresh"),
+    "compare_snapshot": ("complete", "refresh", "retry_refresh"),
     "start_next_map_plan": ("start_next_cycle",),
     "prepare_content": ("prepare",),
     "review_content": ("save_draft",),
@@ -726,6 +726,21 @@ def claim_reserved_journey(cursor: Any, *, user_id: str) -> tuple[dict[str, Any]
     return _claim_loaded_journey(cursor, journey=journey, user_id=user_id, business_id=business_id)
 
 
+def _due(value: Any) -> bool:
+    if not value:
+        return False
+    if isinstance(value, datetime):
+        observed = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    else:
+        try:
+            observed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if not observed.tzinfo:
+                observed = observed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return False
+    return observed <= datetime.now(timezone.utc)
+
+
 def serialize_action(action: dict[str, Any]) -> dict[str, Any]:
     payload = _json_object(action.get("payload_json"))
     target = _json_object(action.get("cta_target_json"))
@@ -752,6 +767,7 @@ def serialize_action(action: dict[str, Any]) -> dict[str, Any]:
         "flow_type": str(action.get("flow_type") or ""),
         "entity_type": str(action.get("entity_type") or ""),
         "entity_id": str(action.get("entity_id") or "") or None,
+        "growth_cycle_id": str(action.get("growth_cycle_id") or "") or None,
         "action_type": action_type,
         "status": action_status,
         "priority": int(action.get("priority") or 0),
@@ -764,7 +780,7 @@ def serialize_action(action: dict[str, Any]) -> dict[str, Any]:
         "cta_target": target,
         "payload": payload,
         "allowed_commands": (
-            [] if action_type == "compare_snapshot" and action_status == "waiting"
+            (["refresh"] if _due(action.get("due_at")) else []) if action_type == "compare_snapshot" and action_status == "waiting"
             else ["retry_refresh"] if action_type == "compare_snapshot" and action_status == "blocked"
             else list(ACTION_COMMANDS.get(action_type, ()))
         ),
@@ -998,10 +1014,20 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
                 current_payload["task_title"] = str(tasks[index + 1].get("title") or "Следующая задача по картам")
                 current_payload["task_reason"] = str(tasks[index + 1].get("reason") or "Следующий пункт недельного плана.")
             return "complete_map_task", "completed", None, current_payload
+        if current_payload.get("managed_growth_cycle"):
+            checkpoints = current_payload.get("measurement_days") if isinstance(current_payload.get("measurement_days"), list) else [14, 28]
+            first_days = int(checkpoints[0] if checkpoints else 14)
+            current_payload["checkpoint_index"] = 0
+            current_payload["checkpoint_days"] = first_days
+            current_payload["measurement_started_at"] = datetime.now(timezone.utc).isoformat()
+            return "compare_snapshot", "completed", datetime.now(timezone.utc) + timedelta(days=first_days), current_payload
         return "refresh_data", "completed", None, current_payload
     if action_type == "refresh_data":
         current_payload["refresh_requested"] = True
         return "compare_snapshot", "completed", None, current_payload
+    if action_type == "compare_snapshot" and command == "refresh":
+        current_payload["verification_status"] = "measurement_refresh_requested"
+        return "refresh_data", "completed", None, current_payload
     if action_type == "compare_snapshot" and command == "retry_refresh":
         refresh_error = str(current_payload.get("refresh_error") or "").lower()
         if any(marker in refresh_error for marker in ("hard limit", "usage limit", "monthly limit", "quota")):
@@ -1010,6 +1036,15 @@ def _next_action_spec(action: dict[str, Any], command: str, payload: dict[str, A
         current_payload.pop("refresh_error", None)
         return "refresh_data", "completed", None, current_payload
     if action_type == "compare_snapshot" and command == "complete":
+        if current_payload.get("managed_growth_cycle"):
+            checkpoints = current_payload.get("measurement_days") if isinstance(current_payload.get("measurement_days"), list) else [14, 28]
+            current_index = int(current_payload.get("checkpoint_index") or 0)
+            if current_index + 1 < len(checkpoints):
+                current_days = int(checkpoints[current_index])
+                next_days = int(checkpoints[current_index + 1])
+                current_payload["checkpoint_index"] = current_index + 1
+                current_payload["checkpoint_days"] = next_days
+                return "compare_snapshot", "completed", datetime.now(timezone.utc) + timedelta(days=max(1, next_days - current_days)), current_payload
         current_payload["cycle_completed"] = True
         return "start_next_map_plan", "completed", None, current_payload
     if action_type == "start_next_map_plan":
@@ -1074,6 +1109,20 @@ def _update_domain(cursor: Any, action: dict[str, Any], command: str, payload: d
     entity_type = str(action.get("entity_type") or "")
     entity_id = str(action.get("entity_id") or "")
     flow = str(action.get("flow_type") or "")
+    action_payload = _json_object(action.get("payload_json"))
+    growth_cycle_id = str(action.get("growth_cycle_id") or action_payload.get("growth_cycle_id") or (entity_id if entity_type == "card_growth_cycle" else ""))
+    if flow == "maps" and action_payload.get("managed_growth_cycle") and growth_cycle_id:
+        from services.card_growth_service import complete_growth_cycle, mark_growth_cycle_waiting, prepare_next_growth_cycle, record_growth_measurement
+        if str(action.get("action_type") or "") == "complete_map_task" and command == "complete":
+            mark_growth_cycle_waiting(cursor, growth_cycle_id)
+        elif str(action.get("action_type") or "") == "compare_snapshot" and command == "complete":
+            checkpoint_days = int(action_payload.get("checkpoint_days") or 14)
+            domain_updates["measurement"] = record_growth_measurement(cursor, growth_cycle_id, checkpoint_days)
+            checkpoints = action_payload.get("measurement_days") if isinstance(action_payload.get("measurement_days"), list) else [14, 28]
+            if int(action_payload.get("checkpoint_index") or 0) + 1 >= len(checkpoints):
+                complete_growth_cycle(cursor, growth_cycle_id)
+        elif str(action.get("action_type") or "") == "start_next_map_plan" and command == "start_next_cycle":
+            domain_updates.update(prepare_next_growth_cycle(cursor, growth_cycle_id, str(action.get("execution_user_id") or action.get("user_id") or "")))
     if flow == "influencer" and str(action.get("action_type") or "") == "browse_creators" and command == "complete":
         cursor.execute(
             """
@@ -1368,5 +1417,12 @@ def execute_command(
             payload=merged_payload, source_action_id=action_id,
             status="waiting" if next_type in {"check_reply", "compare_snapshot"} else "ready", due_at=next_due_at,
         )
+        next_growth_cycle_id = merged_payload.get("growth_cycle_id") or action.get("growth_cycle_id")
+        if next_growth_cycle_id:
+            cursor.execute(
+                "UPDATE journey_actions SET growth_cycle_id=%s WHERE id=%s RETURNING *",
+                (next_growth_cycle_id, next_action["id"]),
+            )
+            next_action = serialize_action(_row(cursor, cursor.fetchone()))
     _maybe_create_upgrade(cursor, action=updated)
     return {"action": serialize_action(updated), "next_action": next_action, "idempotent_replay": False}

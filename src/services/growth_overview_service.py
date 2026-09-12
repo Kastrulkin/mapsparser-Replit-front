@@ -1272,6 +1272,23 @@ def _load_growth_overview_with_cursor(cursor: Any, connection: Any, scope: dict[
         combined_activity = action_activity + list(overview.get("recent_activity") or [])
         combined_activity.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
         overview["recent_activity"] = combined_activity[:12]
+    try:
+        from services.card_growth_service import build_card_growth
+        card_growth = build_card_growth(cursor, scope)
+        overview.update(card_growth)
+        if card_growth.get("focus_action"):
+            _reset_growth_loop_focus(overview, scope, card_growth["focus_action"])
+    except Exception:
+        connection.rollback()
+        logger.warning("Managed card growth state is unavailable", exc_info=True)
+        overview.update({
+            "policy_version": None,
+            "goal": {"status": "unavailable", "options": []},
+            "card_state": {"status": "unavailable", "locations": []},
+            "baseline": {"status": "unavailable"},
+            "next_actions": [],
+            "measurement": {"status": "unavailable", "checkpoints": []},
+        })
     return overview
 
 

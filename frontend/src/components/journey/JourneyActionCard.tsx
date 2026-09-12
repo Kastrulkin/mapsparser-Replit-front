@@ -13,6 +13,7 @@ const commandLabel: Record<string, string> = {
   save_terms: 'Сохранить условия', mark_launched: 'Партнёрство запущено', mark_published: 'Размещение вышло',
   add_result: 'Добавить результат', complete: 'Готово', start_next_cycle: 'Начать следующий цикл', open_upgrade: 'Выбрать тариф',
   prepare: 'Подготовить черновик', save_draft: 'Сохранить черновик', schedule: 'Добавить в календарь',
+  refresh: 'Обновить данные', retry_refresh: 'Повторить обновление',
   save_configuration: 'Сохранить настройку', approve: 'Подтвердить план', link_run: 'Проверить завершённый запуск',
 };
 

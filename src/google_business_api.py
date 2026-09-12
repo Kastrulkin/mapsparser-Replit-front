@@ -271,6 +271,35 @@ class GoogleBusinessAPI:
                 params=camel_params,
             )
 
+    def get_search_keywords(self, location_name: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        start_parts = self._date_parts(start_date)
+        end_parts = self._date_parts(end_date)
+        performance_location = self._performance_location_name(location_name)
+        base_params: List[tuple[str, Any]] = [
+            ("monthlyRange.startMonth.year", start_parts["year"]),
+            ("monthlyRange.startMonth.month", start_parts["month"]),
+            ("monthlyRange.endMonth.year", end_parts["year"]),
+            ("monthlyRange.endMonth.month", end_parts["month"]),
+            ("pageSize", 100),
+        ]
+        results: List[Dict[str, Any]] = []
+        page_token = ""
+        while True:
+            params = list(base_params)
+            if page_token:
+                params.append(("pageToken", page_token))
+            response = self._performance_json(
+                "GET",
+                f"{performance_location}/searchkeywords/impressions/monthly",
+                params=params,
+            )
+            counts = response.get("searchKeywordsCounts") if isinstance(response, dict) else []
+            if isinstance(counts, list):
+                results.extend(item for item in counts if isinstance(item, dict))
+            page_token = str(response.get("nextPageToken") or "") if isinstance(response, dict) else ""
+            if not page_token:
+                return results
+
     def get_legacy_insights(self, location_name: str, start_date: str, end_date: str) -> Dict[str, Any]:
         """Получить legacy insights, если discovery v4 доступен."""
         metrics = [

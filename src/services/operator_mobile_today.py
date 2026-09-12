@@ -407,7 +407,7 @@ def _load_active_work(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]
             JOIN agent_blueprints bp ON bp.id = r.blueprint_id
             LEFT JOIN businesses b ON b.id = bp.business_id
             WHERE (%s OR bp.business_id = ANY(%s))
-              AND r.status IN ('pending', 'queued', 'running', 'processing')
+              AND r.status IN ('pending', 'queued', 'running', 'processing', 'waiting_provider')
             ORDER BY COALESCE(r.started_at, r.updated_at) DESC
             LIMIT 8
             """,
@@ -420,7 +420,7 @@ def _load_active_work(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]
                 "id": f"agent:{item.get('id')}",
                 "kind": "agent_run",
                 "title": str(item.get("agent_name") or "ИИ-сотрудник выполняет задачу"),
-                "stage": "Ждёт запуска" if status in {"pending", "queued"} else "Выполняет работу",
+                "stage": "Ожидает результата записи в таблицу" if status == "waiting_provider" else "Ждёт запуска" if status in {"pending", "queued"} else "Выполняет работу",
                 "status": "in_progress",
                 "progress": None,
                 "business_id": item.get("business_id"),
@@ -1196,18 +1196,22 @@ def _load_journey_actions(cursor: Any, scope: dict[str, Any]) -> list[dict[str, 
 def _journey_focus(action: dict[str, Any] | None) -> dict[str, Any] | None:
     if not action:
         return None
+    waiting_for_measurement = action.get("flow_type") == "maps" and action.get("action_type") == "compare_snapshot" and action.get("status") == "waiting"
+    due_at = action.get("due_at")
     return {
         "id": action.get("id"),
-        "title": action.get("title"),
-        "reason": action.get("description"),
-        "expected_outcome": "После подтверждения LocalOS зафиксирует результат и покажет следующий шаг.",
-        "expected_result": "После подтверждения LocalOS зафиксирует результат и покажет следующий шаг.",
+        "title": f"Ждём данные до {str(due_at)[:10]}" if waiting_for_measurement and due_at else action.get("title"),
+        "reason": "Исправление зафиксировано. До контрольной даты новая гипотеза не запускается." if waiting_for_measurement else action.get("description"),
+        "expected_outcome": "Сравним показы и действия с базовым периодом." if waiting_for_measurement else "После подтверждения LocalOS зафиксирует результат и покажет следующий шаг.",
+        "expected_result": "Сравним показы и действия с базовым периодом." if waiting_for_measurement else "После подтверждения LocalOS зафиксирует результат и покажет следующий шаг.",
         "cta_label": action.get("cta_label"),
         "screen": "journey_action",
         "priority": int(action.get("priority") or 0) + 150,
         "target_scope": {"kind": "business", "id": action.get("business_id")},
         "source": "lead_journey",
         "action_id": action.get("id"),
+        "due_at": due_at,
+        "waiting_for_measurement": waiting_for_measurement,
     }
 
 
@@ -1243,6 +1247,12 @@ def build_mobile_today(
         "network_summary": progress.get("network_summary") if isinstance(progress, dict) else None,
         "problem_locations": progress.get("problem_locations") if isinstance(progress, dict) else [],
         "location_breakdown": progress.get("location_breakdown") if isinstance(progress, dict) else [],
+        "goal": progress.get("goal") if isinstance(progress, dict) else None,
+        "card_state": progress.get("card_state") if isinstance(progress, dict) else None,
+        "baseline": progress.get("baseline") if isinstance(progress, dict) else None,
+        "next_actions": progress.get("next_actions") if isinstance(progress, dict) else [],
+        "measurement": progress.get("measurement") if isinstance(progress, dict) else None,
+        "policy_version": progress.get("policy_version") if isinstance(progress, dict) else None,
         "active_work": _load_active_work(cursor, scope),
         "changes_24h": _load_changes(cursor, scope, cutoff),
         "community_pulse": _load_community_pulse(cursor, scope, cutoff),
@@ -1267,7 +1277,8 @@ def build_mobile_progress(
     progress = _load_progress(scope, growth_loader)
     observed_at = datetime.now(timezone.utc)
     content_action = _load_story_facts_action(cursor, scope, observed_at)
-    focus = select_daily_focus(summary, progress, scope, content_action)
+    journey_actions = _load_journey_actions(cursor, scope)
+    focus = _journey_focus(journey_actions[0] if journey_actions else None) or select_daily_focus(summary, progress, scope, content_action)
     if not isinstance(progress, dict):
         return {
             "scope": scope,
@@ -1300,6 +1311,12 @@ def build_mobile_progress(
         "network_summary": progress.get("network_summary"),
         "problem_locations": progress.get("problem_locations") or [],
         "location_breakdown": progress.get("location_breakdown") or [],
+        "goal": progress.get("goal"),
+        "card_state": progress.get("card_state"),
+        "baseline": progress.get("baseline"),
+        "next_actions": progress.get("next_actions") or [],
+        "measurement": progress.get("measurement"),
+        "policy_version": progress.get("policy_version"),
         "summary": _progress_summary(progress),
         "areas": _mobile_progress_areas(progress),
         "recent_results": progress.get("recent_achievements") or [],

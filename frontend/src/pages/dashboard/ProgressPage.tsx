@@ -24,6 +24,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
+import { ManagedCardGrowthPanel, type ManagedCardGrowth } from '@/components/growth/ManagedCardGrowthPanel';
 import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
@@ -100,7 +101,7 @@ type GrowthAchievement = {
   occurred_at: string;
 };
 
-type GrowthOverview = {
+type GrowthOverview = ManagedCardGrowth & {
   summary: {
     completed_milestones: number;
     total_milestones: number;
@@ -171,6 +172,21 @@ const formatDate = (value: string | null | undefined, language: Language) => {
 
 const formatMoney = (value: number, language: Language) =>
   new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value);
+
+const managedFactStatus = (state?: string) => ({
+  observed: 'Проверено',
+  missing: 'Нужно заполнить',
+  unknown: 'Нет достоверных данных',
+  not_applicable: 'Не применяется',
+  blocked: 'Источник недоступен',
+}[state || ''] || 'Нет данных');
+
+const managedFactLabel = (fact?: string) => ({
+  access: 'Доступ', verified: 'Подтверждение', duplicate: 'Дубли', category: 'Категория',
+  contacts: 'Контакты', schedule: 'Расписание', action_path: 'Запись или заказ',
+  services: 'Услуги', prices: 'Цены', reviews: 'Отзывы', review_responses: 'Ответы на отзывы',
+  photos: 'Фотографии', publications: 'Публикации',
+}[fact || ''] || fact || 'Характеристика');
 
 const AreaRow = ({
   area,
@@ -369,7 +385,7 @@ export const ProgressPage = () => {
     setSelectedAuditBusinessId(null);
     setParseStatus('idle');
     parseStatusRef.current = 'idle';
-  }, [currentBusinessId, scopeId]);
+  }, [currentBusinessId, requestedAudit, requestedMapsSection, scopeId]);
 
   useEffect(() => {
     if (requestedMapsSection) setExpandedArea('maps');
@@ -479,7 +495,9 @@ export const ProgressPage = () => {
   const networkLocations = overview?.scope?.locations || [];
   const recentAchievements = Array.isArray(overview?.recent_achievements) ? overview.recent_achievements : [];
   const selectedAuditLocation = networkLocations.find((location) => location.id === selectedAuditBusinessId);
+  const selectedManagedLocation = overview?.card_state?.locations?.find((location) => location.business_id === (selectedAuditBusinessId || currentBusinessId));
   const currentMission = overview?.focus_action || overview?.growth_loop?.focus || overview?.growth_loop?.current_mission || overview?.growth_loop?.mission || null;
+  const hasManagedCardGrowth = Boolean(overview?.card_state);
   const openProblemLocation = (location: NonNullable<GrowthOverview['problem_locations']>[number]) => {
     onBusinessChange?.(location.business_id);
     onControlScopeChange?.({ kind: 'business', id: location.business_id, name: location.business_name });
@@ -562,7 +580,27 @@ export const ProgressPage = () => {
         )}
       />
 
-      {mapJourneyActions.length ? <section aria-label="План по картам" className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">На этой неделе</h2><p className="mt-1 text-pretty text-sm text-slate-600">Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнить результат.</p></div>{mapJourneyActions.map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
+      {hasManagedCardGrowth ? (
+        <ManagedCardGrowthPanel businessId={currentBusinessId} growth={overview} onUpdated={refreshAll} />
+      ) : null}
+
+      {mapJourneyActions.length ? <section aria-label="Главное действие" className="space-y-3"><div><h2 className="text-balance text-xl font-semibold text-slate-950">{hasManagedCardGrowth ? 'Главное действие' : 'На этой неделе'}</h2><p className="mt-1 text-pretty text-sm text-slate-600">{hasManagedCardGrowth ? 'Сначала выполните этот шаг. После него LocalOS дождётся контрольной даты и сравнит результат.' : 'Выполняйте по одному пункту. После последнего LocalOS предложит обновить данные и сравнить результат.'}</p></div>{mapJourneyActions.slice(0, hasManagedCardGrowth ? 1 : undefined).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={refreshAll} />)}</section> : null}
+
+      {hasManagedCardGrowth && !mapJourneyActions.length && currentMission ? (
+        <section aria-label="Главное действие" className="border-y border-slate-200 py-5">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Главное действие</div>
+              <h2 className="mt-2 text-balance text-xl font-semibold text-slate-950">{currentMission.title}</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{currentMission.reason}</p>
+              {currentMission.expected_outcome ? <p className="mt-2 text-sm text-slate-700"><strong>Ожидаемый результат:</strong> {currentMission.expected_outcome}</p> : null}
+            </div>
+            <Button type="button" className="min-h-11 w-full md:w-auto" onClick={openMission}>
+              {currentMission.cta_label || 'Продолжить'}<ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
@@ -571,7 +609,7 @@ export const ProgressPage = () => {
         </div>
       ) : null}
 
-      <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} />
+      {!hasManagedCardGrowth ? <DataHealthRhythmStrip dataHealth={overview.data_health} onImport={() => navigate('/dashboard/finance?tab=import')} compact showImportAction={!currentMission?.cta_url?.includes('/finance')} /> : null}
 
       {(overview.analytics_level?.label || overview.rhythm?.label) ? <div className="flex flex-wrap gap-2 text-sm text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-1.5">{runtime.analytics}: {localizedAnalyticsLevel(language, overview.analytics_level?.level, overview.analytics_level?.label) || runtime.inProgress}</span>{overview.analytics_level?.next_unlock ? <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{runtime.nextLevel}: {localizedAnalyticsNext(language, overview.analytics_level.level, overview.analytics_level.next_unlock)}</span> : null}{overview.rhythm?.label ? <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-900">{runtime.rhythm}: {localizedRhythm(language, overview.rhythm.status, overview.rhythm.label)}</span> : null}</div> : null}
 
@@ -588,7 +626,7 @@ export const ProgressPage = () => {
         <NetworkDashboardPage embedded businessId={currentBusinessId} />
       ) : null}
 
-      <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
+      {!hasManagedCardGrowth ? <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
         <div data-tour-target="progress-summary">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.confirmedPath}</div>
           <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
@@ -628,9 +666,9 @@ export const ProgressPage = () => {
             </>
           ) : null}
         </div>
-      </section>
+      </section> : null}
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      {!hasManagedCardGrowth ? <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-4 md:px-6" data-tour-target="progress-areas">
           <h2 className="text-lg font-semibold text-slate-950">{copy.growthAreas}</h2>
           <p className="mt-1 text-sm text-slate-600">{copy.growthAreasDescription}</p>
@@ -675,7 +713,7 @@ export const ProgressPage = () => {
             ) : undefined}
           />
         ))}
-      </section>
+      </section> : null}
 
       {showFullAudit ? (
         <section
@@ -724,6 +762,34 @@ export const ProgressPage = () => {
               <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
               {parseStatus === 'queued' ? copy.parseQueued : copy.parseProcessing}
             </div>
+          ) : null}
+
+          {selectedManagedLocation?.providers.length ? (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label="Состояние по площадкам">
+              <div className="border-b border-slate-200 px-5 py-4 md:px-6">
+                <h3 className="font-semibold text-slate-950">Состояние по площадкам</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Каждый вывод привязан к источнику и дате снимка. Неизвестные данные не считаются отсутствующими.</p>
+              </div>
+              <div className="divide-y divide-slate-200">
+                {selectedManagedLocation.providers.map((provider) => (
+                  <details key={provider.provider} className="px-5 py-4 md:px-6">
+                    <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                      <span className="font-semibold text-slate-950">{provider.provider_label}</span>
+                      <span className="text-xs text-slate-500">Снимок: {formatDate(provider.observed_at, language) || 'не получен'}</span>
+                    </summary>
+                    <div className="mt-3 divide-y divide-slate-100 border-y border-slate-100">
+                      {Object.entries(provider.facts).map(([factName, fact]) => (
+                        <div key={factName} className="grid gap-1 py-3 text-sm md:grid-cols-[minmax(140px,0.45fr)_minmax(130px,0.35fr)_minmax(0,1fr)] md:gap-4">
+                          <span className="font-medium text-slate-800">{managedFactLabel(factName)}</span>
+                          <span className={fact.state === 'missing' || fact.state === 'blocked' ? 'text-amber-800' : 'text-slate-600'}>{managedFactStatus(fact.state)}</span>
+                          <span className="text-slate-500">{fact.evidence || `Источник: ${fact.source || provider.provider_label}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           <CardAuditPanel

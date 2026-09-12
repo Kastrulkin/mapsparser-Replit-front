@@ -199,6 +199,14 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
         except Exception:
             print(f"⚠️ Google Business Profile statistics skipped for account {account['id']}")
             return []
+        try:
+            search_keywords = api.get_search_keywords(
+                location_name,
+                start_date.isoformat() + 'Z',
+                end_date.isoformat() + 'Z',
+            )
+        except GoogleBusinessAPIError:
+            search_keywords = []
 
         daily_data: Dict[str, Dict[str, int]] = {}
         series_groups = insights.get("multiDailyMetricTimeSeries") if isinstance(insights, dict) else []
@@ -224,16 +232,34 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
                         daily_data[day_key] = {
                             'views_total': 0,
                             'clicks_total': 0,
-                            'actions_total': 0
+                            'actions_total': 0,
+                            'calls': 0,
+                            'website_clicks': 0,
+                            'directions': 0,
+                            'messages': 0,
+                            'bookings': 0,
                         }
                     metric_value = _parse_performance_value(dated_value.get("value"))
                     if metric_name.startswith("BUSINESS_IMPRESSIONS_"):
                         daily_data[day_key]['views_total'] += metric_value
-                    elif metric_name in {"WEBSITE_CLICKS", "CALL_CLICKS", "BUSINESS_DIRECTION_REQUESTS"}:
+                    elif metric_name == "WEBSITE_CLICKS":
                         daily_data[day_key]['clicks_total'] += metric_value
                         daily_data[day_key]['actions_total'] += metric_value
-                    elif metric_name in {"BUSINESS_CONVERSATIONS", "BUSINESS_BOOKINGS"}:
+                        daily_data[day_key]['website_clicks'] += metric_value
+                    elif metric_name == "CALL_CLICKS":
+                        daily_data[day_key]['clicks_total'] += metric_value
                         daily_data[day_key]['actions_total'] += metric_value
+                        daily_data[day_key]['calls'] += metric_value
+                    elif metric_name == "BUSINESS_DIRECTION_REQUESTS":
+                        daily_data[day_key]['clicks_total'] += metric_value
+                        daily_data[day_key]['actions_total'] += metric_value
+                        daily_data[day_key]['directions'] += metric_value
+                    elif metric_name == "BUSINESS_CONVERSATIONS":
+                        daily_data[day_key]['actions_total'] += metric_value
+                        daily_data[day_key]['messages'] += metric_value
+                    elif metric_name == "BUSINESS_BOOKINGS":
+                        daily_data[day_key]['actions_total'] += metric_value
+                        daily_data[day_key]['bookings'] += metric_value
 
         stats = []
         for day_key, day_data in daily_data.items():
@@ -248,7 +274,11 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
                 actions_total=day_data['actions_total'],
                 rating=None,
                 reviews_total=None,
-                raw_payload=insights
+                raw_payload={
+                    "metrics": day_data,
+                    "search_queries": search_keywords,
+                    "source": "google_business_performance",
+                }
             ))
         
         return stats

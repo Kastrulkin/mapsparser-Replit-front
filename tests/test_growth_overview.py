@@ -249,6 +249,12 @@ class _FakeConnection:
     def cursor(self):
         return object()
 
+    def commit(self):
+        return None
+
+    def rollback(self):
+        return None
+
 
 class _FakeDatabase:
     def __init__(self):
@@ -289,3 +295,25 @@ def test_growth_overview_endpoint_returns_normalized_contract(monkeypatch):
     assert payload["success"] is True
     assert len(payload["areas"]) == 5
     assert payload["focus_action"]["cta_url"]
+
+
+def test_growth_goal_endpoint_confirms_selected_goal(monkeypatch):
+    calls = []
+    monkeypatch.setattr(growth_overview_api, "require_auth_from_request", lambda: {"user_id": "user-1"})
+    monkeypatch.setattr(growth_overview_api, "verify_business_access", lambda cursor, business_id, user_data: (True, "user-1"))
+    monkeypatch.setattr(growth_overview_api, "DatabaseManager", _FakeDatabase)
+
+    def confirm(cursor, *, business_id, user_id, goal):
+        calls.append((business_id, user_id, goal))
+        return {"cycle": {"id": "cycle-1", "goal": goal}, "created": True}
+
+    monkeypatch.setattr(growth_overview_api, "confirm_growth_goal", confirm)
+
+    response = _app().test_client().put(
+        "/api/business/business-1/growth-goal",
+        json={"goal": "bookings"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["cycle"]["goal"] == "bookings"
+    assert calls == [("business-1", "user-1", "bookings")]
