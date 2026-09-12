@@ -121,6 +121,8 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.create", "Добавление услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Добавь услугу Трансфер за 50 EUR",)),
     OperatorCapability("services.google.add", "Добавление услуги в Google", "approval_required", "external_write", "separate_confirmation", "/dashboard/card?tab=services", ("Обнови новую услугу в Google",)),
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
+    OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
+    OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
     OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
@@ -837,6 +839,7 @@ def _operator_tool_catalog(
     limit: Any,
     refresh_handler: Callable[..., dict[str, Any]],
     action_orchestrator: ActionOrchestrator | None = None,
+    work_request_key=None, work_message_id=None, work_saved=None,
 ) -> list[dict[str, Any]]:
     query_tool = operator_query_tool_contract()
     query_tool["execute"] = lambda arguments: execute_operator_query(
@@ -1524,6 +1527,9 @@ def _operator_tool_catalog(
         tools.extend(operator_finance_daily.tools(cursor,business_id,user_id,message,channel,None,action_orchestrator))
     from services import operator_service_creation
     tools.extend(operator_service_creation.tools(cursor,business_id,user_id,message,'message:'+hashlib.sha256(message.encode()).hexdigest()))
+    from services import work_journal, operator_work_journal
+    if work_journal.enabled(business_id):
+        tools.extend(operator_work_journal.tools(cursor,business_id,user_id,channel,message,work_message_id,work_request_key or str(uuid.uuid4()),work_saved if work_saved is not None else [],action_orchestrator))
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
 
 
@@ -1848,6 +1854,31 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    from services import work_journal, operator_work_journal
+    work_pending=pending.get('capability')=='work.journal' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|отмен|[0-9]',clean_message,re.I))))
+    if work_journal.enabled(business_id) and (operator_work_journal.matches(clean_message) or work_pending or (action_payload or {}).get('input_context')=='work_journal'):
+        if clean_message.casefold() in {'стоп','/cancel','не надо'}:
+            return standardize_operator_result(operator_work_journal.result('Уточнение отменено. Уже сохранённые заметки можно отменить отдельно.','cancelled'),'work.journal'),{}
+        saved=[]
+        source=(str(pending.get('source_message') or '')+'\nУточнение: '+clean_message) if work_pending else clean_message
+        message_id=next((r.get('id') for r in reversed(conversation_history or []) if r.get('role')=='user'),None)
+        request_key=str((action_payload or {}).get('request_id') or message_id or hashlib.sha256(source.encode()).hexdigest())
+        selected=operator_work_journal.tools(cursor,business_id,user_id,channel,source,message_id,request_key,saved,action_orchestrator,previous_saved=pending.get('saved_entries'))
+        from services import operator_finance_daily, finance_daily
+        if finance_daily.enabled(business_id):selected.extend(operator_finance_daily.tools(cursor,business_id,user_id,source,channel,message_id,action_orchestrator))
+        arguments=dict(business_id=business_id,user_id=user_id,message=source,conversation_id=conversation_id,conversation_history=conversation_history,
+            actor_context=actor_context,pending_approvals=pending_approvals,business_timezone=finance_daily.settings(cursor,business_id).get('timezone'),
+            tools=[_normalize_tool_contract(t,business_id=business_id) for t in selected])
+        outcome=run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
+        if saved:
+            if outcome.get('status')=='completed' and any(not r.get('booking_id') and not r['is_voided'] and r['facts_json'].get('outcome') not in {None,'note'} for r in saved):outcome['status']='clarification_required'
+            summary='\n'.join(('Отменил запись: ' if r['is_voided'] else 'Записал: ')+str(r['facts_json'].get('quote') or '') for r in saved)
+            outcome['chat_response']=summary+'\n'+str(outcome.get('chat_response') or '')
+            outcome['journal_entries']=saved
+            outcome['result_ref']={'entity_id':saved[-1]['id'],'href':'/dashboard/work-journal?business_id='+business_id+'&entry='+saved[-1]['id'],'label':'Открыть запись'}
+            outcome.setdefault('ui_actions',[]).extend({'action':'open_journal','label':label,'href':'/dashboard/work-journal?entry='+saved[-1]['id']+'&mode='+mode+'&business_id='+business_id} for label,mode in [('Исправить запись','edit'),('Отменить запись','void')])
+        next_context={'capability':'work.journal','source_message':source,'saved_entries':(pending.get('saved_entries') or [])+saved,'stage':'approval' if outcome.get('status')=='approval_required' else 'clarification'} if outcome.get('status') in {'clarification_required','approval_required'} else {}
+        return standardize_operator_result(outcome,outcome.get('capability') or 'work.journal'),next_context
     from services import finance_daily, operator_finance_daily
     finance_pending = pending.get('capability') == 'finance.daily.input' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|[0-9]',clean_message,re.I))))
     if finance_daily.enabled(business_id) and (operator_finance_daily.finance_input(clean_message) or finance_pending):
@@ -2039,6 +2070,8 @@ def route_operator_message(
         return _manual_result(manual_capability), {}
 
     if tool_loop_active:
+        work_saved=[]
+        work_message_id=next((r.get('id') for r in reversed(conversation_history or []) if r.get('role')=='user'),None)
         tools = _operator_tool_catalog(
             cursor,
             business_id=business_id,
@@ -2048,6 +2081,7 @@ def route_operator_message(
             limit=limit,
             refresh_handler=run_refresh,
             action_orchestrator=action_orchestrator,
+            work_request_key=str((action_payload or {}).get("request_id") or work_message_id or uuid.uuid4()),work_message_id=work_message_id,work_saved=work_saved,
         )
         tools = [tool for tool in tools if not operator_subscription_block(subscription_access, tool.get('capability') or tool['name'])]
         if tool_planner is None:
@@ -2075,6 +2109,14 @@ def route_operator_message(
                 planner=tool_planner,
             )
         capability = str(tool_result.get("capability") or "operator.help")
+        if work_saved:
+            if tool_result.get('status')=='completed' and any(not r.get('booking_id') and not r['is_voided'] and r['facts_json'].get('outcome') not in {None,'note'} for r in work_saved):tool_result['status']='clarification_required'
+            tool_result['journal_entries']=work_saved
+            tool_result['result_ref']={'entity_id':work_saved[-1]['id'],'href':'/dashboard/work-journal?business_id='+business_id+'&entry='+work_saved[-1]['id'],'label':'Открыть запись'}
+            tool_result['chat_response']='\n'.join('Записал: '+str(r['facts_json'].get('quote') or '') for r in work_saved)+'\n'+str(tool_result.get('chat_response') or '')
+            tool_result.setdefault('ui_actions',[]).extend({'action':'open_journal','label':label,'href':'/dashboard/work-journal?entry='+work_saved[-1]['id']+'&mode='+mode+'&business_id='+business_id} for label,mode in [('Исправить запись','edit'),('Отменить запись','void')])
+            pending_work={'capability':'work.journal','source_message':clean_message,'saved_entries':work_saved,'stage':'clarification'} if tool_result.get('status')=='clarification_required' else {}
+            return standardize_operator_result(tool_result,capability),pending_work
         return standardize_operator_result(tool_result, capability), {}
 
     if should_use_ai_intent_router(clean_message):
@@ -2217,7 +2259,7 @@ def confirm_pending_operator_action(
                 "external_writes_performed": False,
             }, False
         backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if capability == "finance.daily.write" and backend_result.get("status") in {"blocked","error","failed"}:
+        if capability in {"finance.daily.write","work.policy"} and backend_result.get("status") in {"blocked","error","failed"}:
             return standardize_operator_result(backend_result,capability), False
         backend_chat_response = str(backend_result.get("chat_response") or "").strip()
         if backend_chat_response:

@@ -155,6 +155,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/telegram-radar',
       tooltip: demoCopy.telegramRadarHint,
     },
+    { id: 'work-journal', label: 'Рабочий журнал', icon: BadgeDollarSign, path: '/dashboard/work-journal', tooltip: 'Наблюдения, результаты и рекомендации для команды' },
     {
       id: 'average-ticket',
       label: demoCopy.upsells,

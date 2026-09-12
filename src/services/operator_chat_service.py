@@ -31,6 +31,10 @@ def process_chat(cursor, *, business_id, user_id, channel, message, router,
     conversation_id = str(conversation.get("id") or "")
     request_id = str(payload.get("request_id") or "").strip()
     digest = hashlib.sha256(json.dumps([message, payload.get("transcription_id"), payload.get("url")], ensure_ascii=False).encode()).hexdigest()
+    if payload.get("input_context"):
+        digest = hashlib.sha256((digest + str(payload["input_context"])).encode()).hexdigest()
+    if payload.get("work_change_hash"):
+        digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
     if request_id:
         cursor.execute("SELECT * FROM operator_chat_requests WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s FOR UPDATE",
                        (user_id, business_id, channel, request_id))

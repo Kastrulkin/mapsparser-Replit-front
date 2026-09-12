@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   BadgeCheck,
@@ -257,6 +257,7 @@ const emptyLinkDraft: AverageTicketAddon = {
 
 export const AverageTicketPage = () => {
   const { currentBusinessId, user } = useOutletContext<OutletContext>();
+  const currentScope=useRef(currentBusinessId); currentScope.current=currentBusinessId;
   const isDemoMode = Boolean(user?.demo_mode);
   const { toast } = useToast();
   const { language } = useLanguage();
@@ -278,6 +279,8 @@ export const AverageTicketPage = () => {
     compatibility: 'same_visit',
     status: 'draft',
   });
+  const [policyApproval, setPolicyApproval] = useState<{ id: string; text: string; businessId: string } | null>(null);
+  useEffect(() => { setPolicyApproval(null); setOverview(null); }, [currentBusinessId]);
   const [packageOpen, setPackageOpen] = useState(false);
   const [packageDraft, setPackageDraft] = useState({
     name: '',
@@ -308,7 +311,7 @@ export const AverageTicketPage = () => {
     setLoading(true);
     try {
       const data = await newAuth.makeRequest(`/average-ticket/overview?business_id=${encodeURIComponent(currentBusinessId)}`);
-      setOverview(data);
+      if (currentScope.current===currentBusinessId) setOverview(data);
     } catch (error) {
       toast({
         title: copy.loadError,
@@ -367,9 +370,10 @@ export const AverageTicketPage = () => {
     try {
       const data = await newAuth.makeRequest(`/average-ticket/matrix/${overview.latest_matrix.id}/link?business_id=${encodeURIComponent(currentBusinessId)}`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, request_id: crypto.randomUUID() }),
       });
-      refreshFromResponse(data);
+      if (data.status === 'approval_required' && data.approval?.action_id) setPolicyApproval({ id: data.approval.action_id, text: data.chat_response, businessId: currentBusinessId });
+      else refreshFromResponse(data);
       setEditLink(null);
     } catch (error) {
       toast({
@@ -388,9 +392,10 @@ export const AverageTicketPage = () => {
     try {
       const data = await newAuth.makeRequest(`/average-ticket/matrix/${overview.latest_matrix.id}/link?business_id=${encodeURIComponent(currentBusinessId)}`, {
         method: 'POST',
-        body: JSON.stringify(manualLink),
+        body: JSON.stringify({ ...manualLink, request_id: crypto.randomUUID() }),
       });
-      refreshFromResponse(data);
+      if (data.status === 'approval_required' && data.approval?.action_id) setPolicyApproval({ id: data.approval.action_id, text: data.chat_response, businessId: currentBusinessId });
+      else refreshFromResponse(data);
       setManualLinkOpen(false);
     } catch (error) {
       toast({
@@ -454,6 +459,7 @@ export const AverageTicketPage = () => {
         method: 'POST',
         body: JSON.stringify({
           event_type: eventType,
+          request_id: crypto.randomUUID(),
           matrix_id: overview?.latest_matrix?.id,
           link_id: addon.id,
           booking_id: item.booking_id,
@@ -486,6 +492,8 @@ export const AverageTicketPage = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
+      {policyApproval?.businessId === currentBusinessId && <section className="space-y-3 rounded-xl border bg-card p-4"><p className="whitespace-pre-wrap">{policyApproval.text}</p><Button disabled={saving} onClick={async () => { setSaving(true); try { const result = await newAuth.makeRequest(`/operator/actions/${policyApproval.id}/confirm`, { method: 'POST', body: JSON.stringify({ business_id: currentBusinessId }) }); if (result.status === 'blocked' || result.operator_result?.status === 'blocked') throw new Error(result.chat_response || result.operator_result?.chat_response || 'Подготовьте новое подтверждение.'); setPolicyApproval(null); await loadOverview(); } catch (error) { toast({ title: 'Не удалось подтвердить', description: error instanceof Error ? error.message : 'Повторите запрос.', variant: 'destructive' }); } finally { setSaving(false); } }}>Подтвердить изменение связок</Button><Button variant="outline" disabled={saving} onClick={async () => { setSaving(true); try { await newAuth.makeRequest(`/operator/actions/${policyApproval.id}/reject`, { method: 'POST', body: JSON.stringify({ business_id: currentBusinessId }) }); setPolicyApproval(null); } catch (error) { toast({ title: 'Не удалось отклонить', description: error instanceof Error ? error.message : 'Повторите запрос.', variant: 'destructive' }); } finally { setSaving(false); } }}>Отклонить</Button></section>}
+
       <DashboardPageHeader
         eyebrow="LocalOS"
         title={copy.title}

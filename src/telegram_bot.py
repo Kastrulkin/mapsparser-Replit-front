@@ -2068,6 +2068,10 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
     if href:
         absolute_href = href if href.startswith("http") else str(os.getenv("PUBLIC_BASE_URL") or "https://localos.pro").rstrip("/") + href
         rows.append([InlineKeyboardButton(str(result_ref.get("label") or "Открыть результат"), url=absolute_href)])
+    for action in result.get('ui_actions') or []:
+        target=str(action.get('href') or '')
+        if action.get('action')=='open_journal' and target.startswith('/dashboard/work-journal?'):
+            rows.append([InlineKeyboardButton(str(action.get('label') or 'Открыть запись'),url=str(os.getenv('PUBLIC_BASE_URL') or 'https://localos.pro').rstrip('/')+target)])
     approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
     action_id = str(approval.get("action_id") or "").strip()
     if action_id:

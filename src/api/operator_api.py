@@ -108,6 +108,7 @@ MOBILE_NAVIGATION_CAPABILITIES = {
     "cards": "maps",
     "content": "social_content",
     "services": "maps.services",
+    "work_journal": "operator",
     "finance": "finance",
     "partnerships": "partnerships",
     "influencers": "influencers",
@@ -318,6 +319,8 @@ def _mobile_navigation(
         if company_registry_miniapp_enabled:
             items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
+    if kind == 'business':
+        items.append({'key':'work_journal','label':'Рабочий журнал','group':'more','status':'available','supported_scopes':['business'],'available_actions':['open'],'version':1})
     if enforce_capabilities:
         for item in items:
             capability = MOBILE_NAVIGATION_CAPABILITIES.get(str(item.get("key") or ""))

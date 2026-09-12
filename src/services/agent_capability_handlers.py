@@ -106,6 +106,7 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "normalizes finance transaction proposals; LocalOS write requires a separate approval/apply flow",
         "approval_required": True,
     },
+    "work.policy.apply": {"risk":"owner_policy_write","approval_required":True,"side_effects":"versioned owner rules after approval"},
     "finance.daily.apply_operator": {"risk": "localos_finance_write", "side_effects": "applies one versioned finance fact after explicit approval", "approval_required": True},
     "finance.transaction.apply_operator": {
         "risk": "localos_finance_write",
@@ -165,6 +166,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "sheets.append_row_request": ("production_external_write", True),
     "google_sheets.update_cells": ("production_external_write", True),
     "finance.transaction.create": ("request_only", False),
+    "work.policy.apply": ("production_internal_write",True),
     "finance.daily.apply_operator": ("production_internal_write", True),
     "finance.transaction.apply_operator": ("production_internal_write", True),
     "finance.sales_import.apply_operator": ("production_internal_write", True),
@@ -247,6 +249,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "google_sheets.update_cells": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
+        "work.policy.apply": _handle_work_policy,
         "finance.daily.apply_operator": _handle_finance_daily_apply_operator,
         "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
         "finance.sales_import.apply_operator": _handle_finance_sales_import_apply_operator,
@@ -2106,3 +2109,8 @@ def _count_recipients(payload: Dict[str, Any]) -> int:
 def _handle_finance_daily_apply_operator(envelope, user_data):
     from services.finance_daily import handle_apply
     return handle_apply(envelope, user_data)
+
+
+def _handle_work_policy(envelope,user_data):
+    from services.work_recommendations import handle_policy
+    return handle_policy(envelope,user_data)

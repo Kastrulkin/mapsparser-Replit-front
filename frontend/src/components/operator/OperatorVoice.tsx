@@ -31,8 +31,8 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
-export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, onSubmit, headers = voiceHeaders }: {
-  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean;
+export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = false, onSubmit, headers = voiceHeaders }: {
+  businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean;
   onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider;
 }) {
   const [available, setAvailable] = useState(false);
@@ -98,7 +98,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       if (signal.aborted) return;
       const submission = { transcription_id: queued.asset_id, conversation_id: queued.conversation_id, request_id: `voice:${queued.asset_id}` };
       setText(result.transcript); setSource(submission);
-      if (result.auto_submit_finance) {
+      if (directSubmit || result.auto_submit_finance || result.auto_submit_work) {
         await onSubmit(result.transcript, submission);
         if (!signal.aborted) { setSource(null); setClip(null); asset.current = ''; }
       }
@@ -120,7 +120,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       <Button type="button" disabled={disabled || busy || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Отправить Оператору</Button></div>}
     {(clip || recording || busy || source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {error && <p role="alert" className="text-sm">{error}</p>}
-    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Финансовая команда сразу перейдёт к проверке итогов перед сохранением.</p>
+    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Рабочая заметка сохранится с возможностью отмены. Финансовые записи и изменение правил потребуют подтверждения.</p>
   </div>;
 }
 

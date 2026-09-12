@@ -136,7 +136,12 @@ def finance_transcription_result(cursor,asset,text):
     if enabled(asset['business_id']):
         cursor.execute('SELECT pending_context FROM operatorconversations WHERE id=%s AND user_id=%s AND business_id=%s',(asset['conversation_id'],asset['user_id'],asset['business_id']))
         pending=(_row(cursor,cursor.fetchone()).get('pending_context') or {}).get('capability')=='finance.daily.input'
-    return {'asset_id':asset['id'],'transcript':text,'conversation_id':asset['conversation_id'],
+    from services import work_journal, operator_work_journal
+    work_auto=work_journal.enabled(asset['business_id']) and operator_work_journal.matches(text or '')
+    if work_journal.enabled(asset['business_id']):
+        cursor.execute('SELECT pending_context FROM operatorconversations WHERE id=%s AND user_id=%s AND business_id=%s',(asset['conversation_id'],asset['user_id'],asset['business_id']))
+        work_auto=work_auto or (_row(cursor,cursor.fetchone()).get('pending_context') or {}).get('capability')=='work.journal'
+    return {'asset_id':asset['id'],'transcript':text,'conversation_id':asset['conversation_id'],'auto_submit_work':work_auto,
             'auto_submit_finance':enabled(asset['business_id']) and (finance_input(text or '') or pending)}
 
 

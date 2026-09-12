@@ -132,6 +132,7 @@ const WebAnalyticsPage = lazy(() =>
     default: module.WebAnalyticsPage,
   })),
 );
+const WorkJournalPage = lazy(() => import("./pages/dashboard/WorkJournalPage"));
 const AverageTicketPage = lazy(() =>
   import("./pages/dashboard/AverageTicketPage").then((module) => ({
     default: module.AverageTicketPage,
@@ -357,6 +358,7 @@ const AppShell = () => {
             <Route path="finance" element={<FinancePage />} />
             <Route path="web-analytics" element={featureFlags.webTracking ? <WebAnalyticsPage /> : <Navigate to="/dashboard/progress" replace />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />
+            <Route path="work-journal" element={<WorkJournalPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
             <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />

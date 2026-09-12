@@ -135,6 +135,7 @@ from api.agent_prospecting_api import agent_prospecting_bp
 from api.agent_builder_api import agent_builder_bp
 from api.agent_blueprints_api import agent_blueprints_bp
 from api.capabilities_api import capabilities_bp, PHASE1_ACTION_ORCHESTRATOR
+from api.work_journal_api import work_journal_bp
 from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
@@ -337,6 +338,7 @@ app.register_blueprint(agent_builder_bp)
 app.register_blueprint(agent_blueprints_bp)
 app.register_blueprint(capabilities_bp)
 app.register_blueprint(average_ticket_bp)
+app.register_blueprint(work_journal_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)
 app.register_blueprint(auth_user_bp)

@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import sys
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -89,6 +90,17 @@ def _require_business_access():
             }),
             402,
         )
+    from services import work_journal
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        from services import work_recommendations
+        protected=work_journal.enabled(business_id) or (work_journal.installed(cursor) and work_recommendations.policy(cursor,business_id)['version']>0)
+        if protected:
+            work_journal.scope(cursor,business_id,user_data.get('user_id'),write=request.method not in {'GET','OPTIONS'},owner_only=request.method not in {'GET','OPTIONS'} and not request.path.endswith('/events'))
+    except PermissionError:
+        return user_data,business_id,(jsonify({'error':'Нет права на это действие.'}),403)
+    finally:db.close()
     return user_data, business_id, None
 
 
@@ -662,6 +674,8 @@ def _active_links_for_service(matrix, service_id, service_name):
 def _load_events(cursor, business_id, start_date=None, end_date=None):
     params = [business_id]
     filters = ["business_id = %s"]
+    from services import work_journal
+    if work_journal.installed(cursor):filters.append('NOT is_voided')
     if start_date:
         filters.append("event_date >= %s")
         params.append(start_date)
@@ -908,6 +922,15 @@ def get_average_ticket_overview():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        from services import work_journal, work_recommendations
+        shared=None
+        if work_journal.installed(cursor) and (work_journal.enabled(business_id) or work_recommendations.policy(cursor,business_id)['rules_json']):
+            actor=work_journal.scope(cursor,business_id,user_data.get('user_id'))
+            try:shared=work_recommendations.recommend(cursor,business_id,user_data.get('user_id'),{'date':request.args.get('date')})
+            except ValueError:
+                shared={'status':'clarification_required','items':[],'message':'Укажите дату или часовой пояс бизнеса.'}
+            if not actor['all_visits']:
+                return jsonify({'success':True,'services':work_recommendations.catalog(cursor,business_id),'latest_matrix':{},'stats':{},'kpis':{},'daily_plan':shared['items'],'events':[],'packages':[],'work_recommendations':shared})
         business = _load_business(cursor, business_id)
         services = _load_services(cursor, business_id)
         latest = _load_latest_matrix(cursor, business_id)
@@ -920,7 +943,7 @@ def get_average_ticket_overview():
         )
         packages = _load_packages(cursor, business_id)
         target_date = request.args.get("date") or date.today().isoformat()
-        daily_plan = _load_daily_plan(cursor, business_id, services, matrix or {}, target_date)
+        daily_plan = shared["items"] if shared is not None else _load_daily_plan(cursor, business_id, services, matrix or {}, target_date)
         kpis = _load_finance_metrics(cursor, business_id, events, matrix or {})
         return jsonify(
             {
@@ -933,6 +956,7 @@ def get_average_ticket_overview():
                 "stats": _matrix_stats(matrix or {}),
                 "kpis": kpis,
                 "daily_plan": daily_plan,
+                "work_recommendations": shared,
                 "events": events,
                 "packages": packages,
                 "finance_link": "/dashboard/finance",
@@ -1030,6 +1054,14 @@ def generate_average_ticket_matrix():
         if error_note:
             matrix["generation_note"] = error_note
 
+        from services import work_journal, work_recommendations
+        if work_journal.enabled(business_id):
+            cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('work-journal:'+business_id,))
+            existing=work_recommendations.matrix(cursor,business_id).get('matrix_json') or {}
+            cursor.execute('''INSERT INTO business_upsell_policies(business_id,matrix_json) VALUES (%s,%s::jsonb)
+                ON CONFLICT(business_id) DO UPDATE SET matrix_json=COALESCE(business_upsell_policies.matrix_json,EXCLUDED.matrix_json)''',(business_id,json.dumps(existing)))
+            for row in matrix.get('upsell_matrix') or []:
+                for addon in row.get('recommended_addons') or []:addon['status']='draft'
         matrix_id = str(uuid.uuid4())
         source_hash = _services_hash(services)
         cursor.execute(
@@ -1106,6 +1138,12 @@ def update_average_ticket_link(matrix_id):
         if not updated:
             return jsonify({"error": "Связка не найдена"}), 404
 
+        from services import work_journal
+        if work_journal.enabled(business_id):
+            from api.work_journal_api import create_policy_preview
+            preview=create_policy_preview(cursor,business_id,user_data.get('user_id'),{'kind':'matrix','matrix_id':matrix_id,'matrix_json':matrix,'message':'Изменить связки допродаж','request_id':data.get('request_id')})
+            db.conn.commit()
+            return jsonify(preview)
         cursor.execute(
             """
             UPDATE averageticketmatrices
@@ -1117,6 +1155,9 @@ def update_average_ticket_link(matrix_id):
         db.conn.commit()
         latest = _load_latest_matrix(cursor, business_id)
         return jsonify({"success": True, "latest_matrix": latest, "stats": _matrix_stats(matrix)})
+    except (PermissionError,ValueError):
+        if db:db.conn.rollback()
+        return jsonify({'error':str(sys.exception())}),403 if isinstance(sys.exception(),PermissionError) else 409
     except Exception:
         if db:
             db.conn.rollback()
@@ -1195,6 +1236,12 @@ def create_average_ticket_link(matrix_id):
             if str(addon.get("id") or "") == link_id or str(addon.get("service_id") or "") == addon_service_id:
                 return jsonify({"error": "Такая связка уже есть"}), 409
         target_row.setdefault("recommended_addons", []).append(new_link)
+        from services import work_journal
+        if work_journal.enabled(business_id):
+            from api.work_journal_api import create_policy_preview
+            preview=create_policy_preview(cursor,business_id,user_data.get('user_id'),{'kind':'matrix','matrix_id':matrix_id,'matrix_json':matrix,'message':'Изменить связки допродаж','request_id':data.get('request_id')})
+            db.conn.commit()
+            return jsonify(preview)
         cursor.execute(
             """
             UPDATE averageticketmatrices
@@ -1206,6 +1253,9 @@ def create_average_ticket_link(matrix_id):
         db.conn.commit()
         latest = _load_latest_matrix(cursor, business_id)
         return jsonify({"success": True, "latest_matrix": latest, "stats": _matrix_stats(matrix)})
+    except (PermissionError,ValueError):
+        if db:db.conn.rollback()
+        return jsonify({'error':str(sys.exception())}),403 if isinstance(sys.exception(),PermissionError) else 409
     except Exception:
         if db:
             db.conn.rollback()
@@ -1238,6 +1288,17 @@ def create_average_ticket_event():
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        from services import work_journal
+        if work_journal.enabled(business_id):
+            translated={'bought':'performed','package_bought':'performed','package_offered':'offered'}.get(event_type,event_type)
+            if translated not in {'offered','declined','interested','performed'}:
+                return jsonify({'error':'Этот результат нужно оформить отдельной командой Оператора.'}),409
+            row=work_journal.save_note(cursor,business_id,user_data.get('user_id'),'web',None,data.get('request_id') or str(uuid.uuid4()),
+                data.get('notes') or 'Отметка результата предложения',{'quote':data.get('notes') or 'Отметка результата предложения','outcome':translated,
+                'booking_id':data.get('booking_id'),'service_id':data.get('main_service_id'),'addon_service_id':data.get('addon_service_id')})
+            db.conn.commit()
+            return jsonify({'success':True,'event_id':row['id'],'journal_entry':row,'message':'Рабочий результат записан. Финансовая продажа не создана.'})
+
         cursor.execute(
             """
             INSERT INTO averageticketevents
