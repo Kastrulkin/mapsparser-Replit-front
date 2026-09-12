@@ -106,6 +106,7 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "normalizes finance transaction proposals; LocalOS write requires a separate approval/apply flow",
         "approval_required": True,
     },
+    "finance.daily.apply_operator": {"risk": "localos_finance_write", "side_effects": "applies one versioned finance fact after explicit approval", "approval_required": True},
     "finance.transaction.apply_operator": {
         "risk": "localos_finance_write",
         "side_effects": "creates exactly one approved LocalOS finance transaction for the selected tenant",
@@ -164,6 +165,7 @@ CAPABILITY_RUNTIME_STATUS = {
     "sheets.append_row_request": ("production_external_write", True),
     "google_sheets.update_cells": ("production_external_write", True),
     "finance.transaction.create": ("request_only", False),
+    "finance.daily.apply_operator": ("production_internal_write", True),
     "finance.transaction.apply_operator": ("production_internal_write", True),
     "finance.sales_import.apply_operator": ("production_internal_write", True),
     "billing.reserve": ("manual_only", False),
@@ -245,6 +247,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "google_sheets.update_cells": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
+        "finance.daily.apply_operator": _handle_finance_daily_apply_operator,
         "finance.transaction.apply_operator": _handle_finance_transaction_apply_operator,
         "finance.sales_import.apply_operator": _handle_finance_sales_import_apply_operator,
         "partnership.audit_card": _handle_partnership_audit_card,
@@ -1606,6 +1609,9 @@ def _handle_finance_sales_import_apply_operator(envelope: Dict[str, Any], user_d
                 ("description", description),
                 ("notes", description),
                 ("source", "operator_chat"),
+                ("currency", row.get("currency")),
+                ("receipt_id", row.get("receipt_id")),
+                ("sale_type", row.get("sale_type")),
                 ("services", json.dumps([{"name": row["title"], "sale_type": row["sale_type"]}], ensure_ascii=False)),
             ]
             for field, value in optional_values:
@@ -2095,3 +2101,8 @@ def _count_recipients(payload: Dict[str, Any]) -> int:
     if isinstance(audience, list):
         return len(audience)
     return 0
+
+
+def _handle_finance_daily_apply_operator(envelope, user_data):
+    from services.finance_daily import handle_apply
+    return handle_apply(envelope, user_data)

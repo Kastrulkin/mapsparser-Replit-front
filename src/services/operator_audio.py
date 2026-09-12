@@ -129,6 +129,17 @@ def create_speech(cursor, *, user_id, message_id):
     return queue_asset(cursor,asset)
 
 
+def finance_transcription_result(cursor,asset,text):
+    from services.finance_daily import enabled
+    from services.operator_finance_daily import finance_input
+    pending=False
+    if enabled(asset['business_id']):
+        cursor.execute('SELECT pending_context FROM operatorconversations WHERE id=%s AND user_id=%s AND business_id=%s',(asset['conversation_id'],asset['user_id'],asset['business_id']))
+        pending=(_row(cursor,cursor.fetchone()).get('pending_context') or {}).get('capability')=='finance.daily.input'
+    return {'asset_id':asset['id'],'transcript':text,'conversation_id':asset['conversation_id'],
+            'auto_submit_finance':enabled(asset['business_id']) and (finance_input(text or '') or pending)}
+
+
 def consume_transcription(cursor, asset_id, user_id, business_id, conversation_id, text):
     asset = load_asset(cursor,asset_id,user_id,business_id)
     if not enabled('transcription',business_id):
@@ -197,7 +208,7 @@ def process_audio_job(claimed):
         if not enabled(asset['kind'],asset['business_id']):
             raise ValueError('Голосовая функция отключена')
         if asset['status'] in {'ready','submitted'}:
-            return {'asset_id':asset['id'],'transcript':asset.get('transcript'),'conversation_id':asset['conversation_id'], 'audio_url':'/api/operator/audio/'+asset['id']}
+            return finance_transcription_result(cursor,asset,asset.get('transcript'))
         if asset['status'] == 'cancelled':
             raise ValueError('Запись отменена')
         cursor.execute("UPDATE operator_audio_assets SET status='processing' WHERE id=%s AND status IN ('queued','failed')", (asset['id'],))
@@ -234,7 +245,7 @@ def process_audio_job(claimed):
             cursor.execute("UPDATE operator_audio_assets SET transcript=%s,status='ready',path=NULL WHERE id=%s",(text,asset['id']))
             if asset.get('path'):
                 private_path(asset['path']).unlink(missing_ok=True)
-            result={'asset_id':asset['id'],'transcript':text,'conversation_id':asset['conversation_id']}
+            result=finance_transcription_result(cursor,asset,text)
         else:
             cursor.execute('SELECT content FROM operatormessages WHERE id=%s AND user_id=%s',(asset['message_id'],asset['user_id']))
             text = str(_row(cursor,cursor.fetchone()).get('content') or '')[:1000]

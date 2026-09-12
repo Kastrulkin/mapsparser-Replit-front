@@ -45,3 +45,18 @@ it('keeps text available when synthesis fails and never calls chat', async () =>
   expect(screen.getByText('Пост подготовлен')).toBeInTheDocument();
   expect(fetchMock.mock.calls.every(([input]) => !String(input).endsWith('/chat'))).toBe(true);
 });
+
+it.each(['web', 'telegram_mini_app'])('sends financial transcription directly to the approval flow in %s', async (channel) => {
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:recording'), revokeObjectURL: vi.fn() }));
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+    if (String(input).includes('/config')) return reply({ input_enabled: true });
+    if (String(input).includes('/transcriptions')) return reply({ asset_id: 'a', job_id: 'j', conversation_id: 'c' }, 202);
+    return reply({ job: { status: 'completed', result: { transcript: '10 продаж, выручка 350 евро', auto_submit_finance: true } } });
+  }));
+  const submit = vi.fn(() => Promise.resolve()); const user = userEvent.setup();
+  render(<OperatorVoiceInput businessId="b" channel={channel} onSubmit={submit} headers={headers} />);
+  await user.upload(await screen.findByLabelText('Загрузить аудио'), new File(['voice'], 'voice.ogg', { type: 'audio/ogg' }));
+  await user.click(screen.getByText('Распознать запись'));
+  await waitFor(() => expect(submit).toHaveBeenCalledExactlyOnceWith('10 продаж, выручка 350 евро', { transcription_id: 'a', conversation_id: 'c', request_id: 'voice:a' }));
+  expect(screen.queryByText('Отправить Оператору')).not.toBeInTheDocument();
+});

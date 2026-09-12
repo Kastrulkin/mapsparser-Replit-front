@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, FileSpreadsheet, MessageCircle, Send, Wallet } from 'lucide-react';
 
+import { FinanceDailyPanel } from '@/components/FinanceDailyPanel';
 import FinanceFirstStep from '@/components/FinanceFirstStep';
 import FinanceImportPanel from '@/components/FinanceImportPanel';
 import FinanceThresholdsPanel from '@/components/FinanceThresholdsPanel';
@@ -35,6 +36,7 @@ export const FinancePage = () => {
   const copy = getFinancePageCopy(language);
   const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
   const [searchParams] = useSearchParams();
+  const [dailyActive, setDailyActive] = useState(false);
   const [dataHealth, setDataHealth] = useState<GrowthDataHealth | null>(null);
   const [crmRequestOpen, setCrmRequestOpen] = useState(false);
   const [crmName, setCrmName] = useState('');
@@ -96,7 +98,9 @@ export const FinancePage = () => {
         icon={Wallet}
       />
 
-      <FinanceFirstStep
+      <FinanceDailyPanel businessId={currentBusinessId} onActive={setDailyActive} />
+      {dailyActive && <FinanceImportPanel currentBusinessId={currentBusinessId} />}
+      {!dailyActive && <FinanceFirstStep
         currentBusinessId={currentBusinessId}
         dataHealth={dataHealth}
         initialTab={searchParams.get('tab') === 'import' ? 'settings' : 'overview'}
@@ -158,7 +162,7 @@ export const FinancePage = () => {
             </DashboardSection>
           </div>
         )}
-      />
+      />}
     </div>
   );
 };

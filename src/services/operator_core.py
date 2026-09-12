@@ -121,6 +121,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.create", "Добавление услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Добавь услугу Трансфер за 50 EUR",)),
     OperatorCapability("services.google.add", "Добавление услуги в Google", "approval_required", "external_write", "separate_confirmation", "/dashboard/card?tab=services", ("Обнови новую услугу в Google",)),
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
+    OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
     OperatorCapability("finance.prepare_transaction", "Подготовка финансовой операции", "approval_required", "financial_write_request", "separate_confirmation", "/dashboard/finance", ("Добавь расход 5000 на рекламу",), "finance.transaction.apply_operator"),
@@ -612,7 +613,22 @@ def _rows_from_cursor(cursor: Any) -> list[dict[str, Any]]:
 
 def _read_finance_summary(cursor: Any, *, business_id: str, days: Any) -> dict[str, Any]:
     clean_days = max(1, min(int(days or 30), 366))
-    period_end = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    from services import finance_daily
+    if finance_daily.installed(cursor):
+        config=finance_daily.day_context(cursor,business_id)
+        cursor.execute('SELECT 1 FROM finance_daily_events WHERE business_id=%s LIMIT 1',(business_id,))
+        has_financial_facts=bool(cursor.fetchone())
+        if not config.get('today') and (finance_daily.enabled(business_id) or has_financial_facts):
+            return {'status':'clarification_required','chat_response':'Укажите точные даты периода или сохраните часовой пояс бизнеса.','external_writes_performed':False}
+        if config.get('today'):
+            period_end=date.fromisoformat(config['today'])
+            period_start=period_end-timedelta(days=clean_days-1)
+            report=finance_daily.read_period(cursor,business_id,period_start,period_end)
+            values=next(iter(report['currencies'].values())) if len(report['currencies'])==1 else {}
+            return {'status':'completed','chat_response':'Финансовые данные по дням и валютам: '+json.dumps(report['currencies'],ensure_ascii=False),
+                    'financial_daily':report,'income':values.get('revenue'),'expense':values.get('expenses'),'average_ticket':values.get('average_check'),
+                    'transactions_count':values.get('checks'),'external_writes_performed':False}
+    period_end = datetime.now(ZoneInfo("UTC")).date()
     period_start = period_end - timedelta(days=clean_days - 1)
     cursor.execute(
         """
@@ -1503,6 +1519,9 @@ def _operator_tool_catalog(
     ]
     from services.operator_editorial import editorial_tools
     tools.extend(editorial_tools(cursor,business_id,user_id,message))
+    from services import finance_daily, operator_finance_daily
+    if finance_daily.enabled(business_id):
+        tools.extend(operator_finance_daily.tools(cursor,business_id,user_id,message,channel,None,action_orchestrator))
     from services import operator_service_creation
     tools.extend(operator_service_creation.tools(cursor,business_id,user_id,message,'message:'+hashlib.sha256(message.encode()).hexdigest()))
     return [_normalize_tool_contract(tool, business_id=business_id) for tool in tools]
@@ -1829,6 +1848,22 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    from services import finance_daily, operator_finance_daily
+    finance_pending = pending.get('capability') == 'finance.daily.input' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|[0-9]',clean_message,re.I))))
+    if finance_daily.enabled(business_id) and (operator_finance_daily.finance_input(clean_message) or finance_pending):
+        if clean_message.casefold().strip() in {'отмена','отмени','стоп','не надо','не нужно','/cancel'}:
+            return standardize_operator_result({'status':'cancelled','chat_response':'Финансовый ввод отменён.'},'finance.daily.write'), {}
+        source_message = (str(pending.get('source_message') or '')+'\nУточнение: '+clean_message) if finance_pending else clean_message
+        message_ref=next((item.get('id') for item in reversed(conversation_history or []) if item.get('role')=='user'),None)
+        selected = operator_finance_daily.tools(cursor,business_id,user_id,source_message,channel,message_ref,action_orchestrator,pending.get('draft') if finance_pending else None)
+        selected.extend(tool for tool in _operator_tool_catalog(cursor,business_id=business_id,user_id=user_id,message=source_message,channel=channel,limit=limit,refresh_handler=run_refresh,action_orchestrator=action_orchestrator) if tool.get('name')=='finance.ingest_sales')
+        arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
+            conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,
+            business_timezone=finance_daily.settings(cursor,business_id).get("timezone"),
+            tools=[_normalize_tool_contract(tool,business_id=business_id) for tool in selected])
+        outcome = run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
+        next_context={'capability':'finance.daily.input','source_message':source_message,'draft':outcome.get('financial_draft'),'stage':'approval' if outcome.get('status')=='approval_required' else 'clarification'} if outcome.get('status') in {'clarification_required','approval_required'} else {}
+        return standardize_operator_result(outcome,outcome.get('capability') or 'finance.daily.write'),next_context
     from services import operator_service_creation
     service_pending = pending.get('capability') == 'services.creation.clarification'
     if operator_service_creation.service_input(clean_message) or service_pending:
@@ -2182,6 +2217,8 @@ def confirm_pending_operator_action(
                 "external_writes_performed": False,
             }, False
         backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        if capability == "finance.daily.write" and backend_result.get("status") in {"blocked","error","failed"}:
+            return standardize_operator_result(backend_result,capability), False
         backend_chat_response = str(backend_result.get("chat_response") or "").strip()
         if backend_chat_response:
             confirmation_message = backend_chat_response

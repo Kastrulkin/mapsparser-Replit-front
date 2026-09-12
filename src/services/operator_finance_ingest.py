@@ -33,7 +33,7 @@ def finance_sales_ingest_tool_contract() -> dict[str, Any]:
             "Используйте, когда пользователь вставил одну или несколько фактических продаж и хочет внести их в Финансы. "
             "Преобразуйте каждую продажу в transaction_date YYYY-MM-DD, amount, title, sale_type и notes. "
             "sale_type: service — основная услуга, upsell — допродажа, cross_sell — товар или отдельная кросс-продажа. "
-            "Для «сегодня» и «вчера» используйте current_time и Europe/Moscow. "
+            "Для «сегодня» и «вчера» используйте сохранённый часовой пояс бизнеса; если он неизвестен, уточните точную дату. "
             "Если непонятно, является ли число суммой одной строки или общим итогом, или если в документе несколько валют, не вызывайте инструмент: верните action=clarification с одним конкретным вопросом. "
             "Не используйте для простого чтения статистики или плана продаж. Запись произойдёт только после preview и подтверждения."
         ),
@@ -51,6 +51,8 @@ def finance_sales_ingest_tool_contract() -> dict[str, Any]:
                             "transaction_date": {"type": "string", "maxLength": 10},
                             "amount": {"type": "number", "minimum": 0.01, "maximum": 99999999.99},
                             "title": {"type": "string", "maxLength": 300},
+                            "currency": {"type": "string"},
+                            "receipt_id": {"type": "string"},
                             "sale_type": {"type": "string", "enum": ["service", "upsell", "cross_sell"]},
                             "notes": {"type": "string", "maxLength": 1000},
                         },
@@ -86,7 +88,7 @@ def _amount(value: Any) -> Decimal | None:
     return amount.quantize(Decimal("0.01"))
 
 
-def _transaction_date(value: Any, message: str) -> str:
+def _transaction_date(value: Any, message: str, timezone_name=None) -> str:
     text = str(value or "").strip()
     if text:
         try:
@@ -99,7 +101,8 @@ def _transaction_date(value: Any, message: str) -> str:
                     continue
             return ""
     lowered = message.casefold()
-    today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    if not timezone_name: return ""
+    today = datetime.now(ZoneInfo(timezone_name)).date()
     if any(marker in lowered for marker in ("сегодня", "today")):
         return today.isoformat()
     if any(marker in lowered for marker in ("вчера", "yesterday")):
@@ -126,6 +129,8 @@ def normalize_finance_sales(
     *,
     business_id: str,
     message: str,
+    timezone_name=None,
+    currency=None,
 ) -> dict[str, Any]:
     source = arguments if isinstance(arguments, dict) else {}
     raw_rows = source.get("transactions") if isinstance(source.get("transactions"), list) else []
@@ -145,7 +150,7 @@ def normalize_finance_sales(
             errors.append(f"Строка {index}: не удалось распознать поля.")
             continue
         amount = _amount(raw.get("amount"))
-        transaction_date = _transaction_date(raw.get("transaction_date") or raw.get("date"), message)
+        transaction_date = _transaction_date(raw.get("transaction_date") or raw.get("date"), message, timezone_name)
         title = _clean_text(raw.get("title") or raw.get("service") or raw.get("description"), 300)
         sale_type = str(raw.get("sale_type") or "service").strip().lower()
         row_errors = []
@@ -167,6 +172,8 @@ def normalize_finance_sales(
             "sale_type": sale_type,
             "notes": _clean_text(raw.get("notes"), 1000),
             "transaction_type": "income",
+            "currency": raw.get("currency") or currency,
+            "receipt_id": raw.get("receipt_id"),
             "source": "operator_chat",
             "source_hash": source_hash,
             "import_batch_id": import_batch_id,
@@ -227,9 +234,13 @@ def build_finance_sales_preview(
     message: str,
     arguments: Any,
 ) -> dict[str, Any]:
-    normalized = normalize_finance_sales(arguments, business_id=business_id, message=message)
+    from services.finance_daily import enabled, settings
+    config=settings(cursor,business_id) if enabled(business_id) else {}
+    normalized = normalize_finance_sales(arguments, business_id=business_id, message=message,timezone_name=config.get("timezone"),currency=config.get("currency"))
     rows = list(normalized.get("rows") or [])
     errors = list(normalized.get("errors") or [])
+    if enabled(business_id) and any(not row.get("currency") for row in rows):
+        errors.append("Укажите валюту продаж или сохраните валюту бизнеса.")
     result_ref = finance_result_ref()
     if errors:
         question = errors[0] + " Уточните эту строку или откройте импорт продаж."

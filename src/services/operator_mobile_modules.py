@@ -185,6 +185,21 @@ def _finance(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _analytics(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
+    from services.finance_daily import installed, day_context, canonical_report
+    platform, business_ids = _business_filter(scope)
+    if not platform and len(business_ids)==1 and installed(cursor):
+        from datetime import timedelta
+        config=day_context(cursor,business_ids[0])
+        if config.get('today'):
+            end=date.fromisoformat(config['today']);start=end-timedelta(days=29)
+            report=canonical_report(cursor,business_ids[0],start,end)
+            if report is not None:
+                items=[]
+                labels={'revenue':'Выручка до возвратов','net_revenue':'После возвратов','checks':'Чеки','average_check':'Средний чек','upsell_share':'Доля чеков с допом'}
+                for currency,values in report['currencies'].items():
+                    for key,title in labels.items():
+                        items.append({'id':'daily-'+currency+'-'+key,'kind':'analytics_metric','metric_key':key,'title':title+' · '+currency,'amount':values.get(key),'previous_amount':None,'unit':'%' if key=='upsell_share' else '' if key=='checks' else currency,'period_label':'Последние 30 дней'})
+                return items
     if not _table_exists(cursor, "financialtransactions"):
         return []
     platform, business_ids = _business_filter(scope)

@@ -58,6 +58,7 @@ def run_paid_operator_tool_loop(
     conversation_history: Any = None,
     actor_context: Any = None,
     pending_approvals: Any = None,
+    business_timezone: str | None = "UTC",
 ) -> dict[str, Any]:
     preflight = build_paid_action_preflight(
         cursor,
@@ -128,6 +129,7 @@ def run_paid_operator_tool_loop(
             actor_context=actor_context,
             pending_approvals=pending_approvals,
             tools=tools,
+            business_timezone=business_timezone,
         )
     except Exception:
         release = finalize_reserved_action_credits(

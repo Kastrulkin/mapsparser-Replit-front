@@ -574,6 +574,15 @@ def _finance_snapshot_for_period(cursor, business_id, start_date, end_date):
     payload = _load_finance_payload(cursor, business_id, start_date, end_date)
     thresholds = _load_finance_thresholds(cursor, business_id)
     snapshot = calculate_finance_snapshot(payload, thresholds)
+    from services.finance_daily import canonical_report, overlay_snapshot
+    daily = canonical_report(cursor,business_id,start_date,end_date)
+    snapshot = overlay_snapshot(snapshot,daily)
+    if daily is not None:
+        payload["financial_daily"] = daily
+        # Preserve source periods and values; never prorate revenue into selected days.
+        cursor.execute('SELECT to_jsonb(s) data FROM finance_service_metrics s WHERE business_id=%s AND period_start<=%s AND period_end>=%s',(business_id,end_date,start_date))
+        payload['services']=[row['data'] for row in cursor.fetchall()]
+        snapshot['services']=payload['services']
     return payload, thresholds, snapshot
 
 
@@ -2144,6 +2153,13 @@ def update_transaction(transaction_id):
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
+        from services.finance_daily import installed
+        if installed(cursor):
+            cursor.execute('SELECT 1 FROM finance_daily_events WHERE target_id=%s LIMIT 1',(transaction_id,))
+            if cursor.fetchone():
+                db.close()
+                return jsonify({'error':'Исправьте эту запись через Оператора: требуется новое подтверждение с сохранением истории.'}),409
+
         fields = []
         params = []
         if 'transaction_date' in data:
@@ -2208,6 +2224,12 @@ def delete_transaction(transaction_id):
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
+        from services.finance_daily import installed
+        if installed(cursor):
+            cursor.execute('SELECT 1 FROM finance_daily_events WHERE target_id=%s LIMIT 1',(transaction_id,))
+            if cursor.fetchone():
+                db.close()
+                return jsonify({'error':'Отмените эту запись через Оператора: история должна сохраниться.'}),409
         cursor.execute("DELETE FROM financialtransactions WHERE id = %s", (transaction_id,))
         db.conn.commit()
         db.close()
@@ -2597,6 +2619,18 @@ def get_financial_metrics():
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
 
+        from services.finance_daily import canonical_report
+        daily = canonical_report(cursor,business_id,start_date,end_date)
+        if daily is not None:
+            values = next(iter(daily['currencies'].values())) if len(daily['currencies'])==1 else {}
+            db.close()
+            return jsonify({'success':True,'financial_daily':daily,'currency':next(iter(daily['currencies'])) if len(daily['currencies'])==1 else None,
+                'metrics':{'total_revenue':values.get('revenue'),'total_orders':values.get('checks'),'average_check':values.get('average_check'),
+                           'refunds':values.get('refunds'),'net_revenue':values.get('net_revenue'),'upsell_share':values.get('upsell_share'),
+                           'new_clients':None,'returning_clients':None,'retention_rate':None,'revenue_growth':None},
+                'growth':{'revenue_growth':None,'orders_growth':None},
+                'period':{'start_date':start_date,'end_date':end_date,'type':period}})
+
         # Формируем WHERE условие с учётом business_id
         where_clause = "transaction_date BETWEEN %s AND %s"
         where_params = [start_date, end_date]
@@ -2965,3 +2999,40 @@ def calculate_roi():
 
     except Exception as e:
         return jsonify({"error": f"Ошибка расчета ROI: {str(e)}"}), 500
+
+
+@finance_bp.route('/api/finance/daily', methods=['GET'])
+def get_daily_finance():
+    user,business_id,error=_require_finance_user_and_business()
+    if error:return error
+    from services.finance_daily import installed, read_period, day_context, enabled
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        if not installed(cursor):return jsonify({'enabled':False,'days':[],'currencies':{}})
+        context=day_context(cursor,business_id)
+        start=request.args.get('start') or context.get('today')
+        end=request.args.get('end') or start
+        if not start:
+            cursor.execute('SELECT MAX(date) latest_date FROM finance_daily_summaries WHERE business_id=%s',(business_id,))
+            latest=cursor.fetchone()
+            start=latest['latest_date'] if latest else None
+            end=start
+        if not start:return jsonify({'enabled':enabled(business_id),'settings':context,'days':[],'currencies':{}})
+        return jsonify({'enabled':enabled(business_id),**read_period(cursor,business_id,start,end)})
+    except ValueError:
+        return jsonify({'error':'Укажите корректный период.'}),400
+    finally:db.close()
+
+
+@finance_bp.route('/api/finance/daily/<target_id>/history', methods=['GET'])
+def get_daily_finance_history(target_id):
+    user,business_id,error=_require_finance_user_and_business()
+    if error:return error
+    from services.operator_conversations import _row
+    db=DatabaseManager()
+    try:
+        cursor=db.conn.cursor()
+        cursor.execute('SELECT kind,before_json,after_json,user_id,channel,created_at FROM finance_daily_events WHERE business_id=%s AND target_id=%s ORDER BY created_at DESC LIMIT 100',(business_id,target_id))
+        return jsonify({'items':[_row(cursor,row) for row in cursor.fetchall()]})
+    finally:db.close()

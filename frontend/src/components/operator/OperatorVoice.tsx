@@ -96,7 +96,12 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       asset.current = queued.asset_id;
       const result = await waitJob(queued.job_id, businessId, headers, signal);
       if (signal.aborted) return;
-      setText(result.transcript); setSource({ transcription_id: queued.asset_id, conversation_id: queued.conversation_id, request_id: `voice:${queued.asset_id}` });
+      const submission = { transcription_id: queued.asset_id, conversation_id: queued.conversation_id, request_id: `voice:${queued.asset_id}` };
+      setText(result.transcript); setSource(submission);
+      if (result.auto_submit_finance) {
+        await onSubmit(result.transcript, submission);
+        if (!signal.aborted) { setSource(null); setClip(null); asset.current = ''; }
+      }
     } catch (failure) { if (!signal.aborted) setError(failure instanceof Error ? failure.message : 'Ошибка распознавания'); }
     finally { if (!signal.aborted) setBusy(false); }
   };
@@ -115,7 +120,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       <Button type="button" disabled={disabled || busy || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Отправить Оператору</Button></div>}
     {(clip || recording || busy || source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {error && <p role="alert" className="text-sm">{error}</p>}
-    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Проверьте текст перед отправкой.</p>
+    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Финансовая команда сразу перейдёт к проверке итогов перед сохранением.</p>
   </div>;
 }
 

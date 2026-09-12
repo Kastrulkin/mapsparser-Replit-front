@@ -248,6 +248,7 @@ def run_operator_tool_loop(
     pending_approvals: Any = None,
     planner: OperatorPlanner | None = None,
     max_steps: int = MAX_OPERATOR_TOOL_STEPS,
+    business_timezone: str | None = "UTC",
 ) -> dict[str, Any]:
     tool_map = {
         str(tool.get("name") or ""): tool
@@ -276,8 +277,8 @@ def run_operator_tool_loop(
                 if bool(tool.get("planner_visible", True))
             ],
             "observations": observations,
-            "current_time": datetime.now(ZoneInfo("Europe/Moscow")).isoformat(),
-            "current_timezone": "Europe/Moscow",
+            "current_time": datetime.now(ZoneInfo(business_timezone)).isoformat() if business_timezone else None,
+            "current_timezone": business_timezone,
             "step": step_index + 1,
             "max_steps": safe_max_steps,
         }
