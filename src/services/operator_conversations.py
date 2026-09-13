@@ -249,6 +249,8 @@ def list_pending_operator_actions(
 
 
 def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
+    from services.operator_request_history import action_finished
+    action_finished(cursor, action_id, 'completed', result)
     cursor.execute(
         """
         UPDATE operatoractions
@@ -278,6 +280,8 @@ def finish_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any
 
 
 def reject_operator_action(cursor: Any, *, action_id: str, result: dict[str, Any]) -> None:
+    from services.operator_request_history import action_finished
+    action_finished(cursor, action_id, 'rejected', result)
     cursor.execute(
         """
         UPDATE operatoractions

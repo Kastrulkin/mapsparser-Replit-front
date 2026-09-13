@@ -1,4 +1,5 @@
 import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
+import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
@@ -56,6 +57,7 @@ type OperatorChatResult = {
     name?: string;
     title?: string;
     status?: string;
+    unavailable_reason?: string;
     examples?: string[];
   }>;
   summary?: string;
@@ -273,6 +275,7 @@ export const OperatorPage = () => {
       return;
     }
     setMessages([]); setConversationId(null);
+    chatSendInFlightRef.current = false; setChatLoading(false); setConfirmingActionId(null); setRejectingActionId(null);
     const storageKey = `localos_operator_conversation_${currentBusinessId}`;
     const storedConversationId = window.localStorage.getItem(storageKey);
     let cancelled = false;
@@ -388,8 +391,10 @@ export const OperatorPage = () => {
         blocked_reasons: ['operator_chat_request_failed'],
       });
     } finally {
-      chatSendInFlightRef.current = false;
-      setChatLoading(false);
+      if (activeBusiness.current === currentBusinessId) {
+        chatSendInFlightRef.current = false;
+        setChatLoading(false);
+      }
     }
   };
 
@@ -544,11 +549,13 @@ export const OperatorPage = () => {
       const response = await api.post(`/operator/actions/${encodeURIComponent(actionId)}/confirm`, {
         business_id: currentBusinessId,
       });
+      if (activeBusiness.current !== currentBusinessId) return;
       appendOperatorResult(
         response.data.operator_result || { status: 'blocked', chat_response: 'Не удалось выполнить подтверждённое действие.' },
         'approval',
       );
     } catch (err) {
+      if (activeBusiness.current !== currentBusinessId) return;
       appendOperatorResult(
         {
           status: 'blocked',
@@ -557,7 +564,7 @@ export const OperatorPage = () => {
         'approval-error',
       );
     } finally {
-      setConfirmingActionId(null);
+      if (activeBusiness.current === currentBusinessId) setConfirmingActionId(null);
     }
   };
 
@@ -568,11 +575,13 @@ export const OperatorPage = () => {
       const response = await api.post(`/operator/actions/${encodeURIComponent(actionId)}/reject`, {
         business_id: currentBusinessId,
       });
+      if (activeBusiness.current !== currentBusinessId) return;
       appendOperatorResult(
         response.data.operator_result || { status: 'blocked', chat_response: 'Не удалось отклонить действие.' },
         'rejection',
       );
     } catch (err) {
+      if (activeBusiness.current !== currentBusinessId) return;
       appendOperatorResult(
         {
           status: 'blocked',
@@ -581,7 +590,7 @@ export const OperatorPage = () => {
         'rejection-error',
       );
     } finally {
-      setRejectingActionId(null);
+      if (activeBusiness.current === currentBusinessId) setRejectingActionId(null);
     }
   };
 
@@ -608,6 +617,8 @@ export const OperatorPage = () => {
         businessId={currentBusinessId}
         businessName={businessName}
       />
+
+      {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
@@ -1108,16 +1119,19 @@ type OperatorCapabilityItem = {
   name?: string;
   title?: string;
   status?: string;
+  unavailable_reason?: string;
   examples?: string[];
 };
 
 const capabilityGroup = (status: string | undefined) => {
+  if (status === 'disabled') return 'disabled';
   if (status === 'request_only' || status === 'manual') return 'section';
   if (status === 'gap') return 'manual';
   return 'chat';
 };
 
 const capabilityStatusLabel = (status: string | undefined) => {
+  if (status === 'disabled') return 'Недоступно';
   if (status === 'draft_only') return 'Готовлю черновик';
   if (status === 'approval_required') return 'После подтверждения';
   if (status === 'request_only' || status === 'manual') return 'Открою раздел';
@@ -1138,6 +1152,7 @@ const OperatorCapabilitiesPanel = ({
     { key: 'chat', title: 'Могу выполнить в чате' },
     { key: 'section', title: 'Открою нужный раздел' },
     { key: 'manual', title: 'Пока только вручную' },
+    { key: 'disabled', title: 'Не включено для этого бизнеса' },
   ];
 
   return (
@@ -1157,6 +1172,7 @@ const OperatorCapabilitiesPanel = ({
                     <div key={item.name || item.title} className="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div className="min-w-0">
                         <div className="font-medium text-slate-950">{item.title || 'Возможность LocalOS'}</div>
+                        {item.unavailable_reason && <p className="text-xs text-slate-500">{item.unavailable_reason}</p>}
                         {item.examples?.[0] ? (
                           <div className="text-pretty text-xs text-slate-500">Например: «{item.examples[0]}»</div>
                         ) : null}

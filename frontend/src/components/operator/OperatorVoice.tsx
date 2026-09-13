@@ -31,7 +31,7 @@ async function waitJob(jobId: string, businessId: string, headers: HeadersProvid
   throw new Error('Обработка занимает больше времени. Результат доступен в заданиях.');
 }
 
-export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = false, onSubmit, headers = voiceHeaders }: {
+export function OperatorVoiceInput({ businessId, channel, conversationId, disabled, directSubmit = true, onSubmit, headers = voiceHeaders }: {
   businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean;
   onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider;
 }) {
@@ -116,9 +116,10 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     </div>}
     {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
     {clip && !source && <Button type="button" disabled={busy || disabled} onClick={() => void transcribe()}>{busy ? 'Распознаю…' : 'Распознать запись'}</Button>}
-    {source && <div className="space-y-2"><label className="block text-sm">Проверьте команду<textarea className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
-      <Button type="button" disabled={disabled || busy || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Отправить Оператору</Button></div>}
-    {(clip || recording || busy || source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
+    {text && !source && <p role="status" className="text-sm">Распознано: {text}</p>}
+    {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : 'Команда'}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
+      {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Повторить отправку</Button>}</div>}
+    {(clip || recording || busy || source) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
     {error && <p role="alert" className="text-sm">{error}</p>}
     <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Рабочая заметка сохранится с возможностью отмены. Финансовые записи и изменение правил потребуют подтверждения.</p>
   </div>;

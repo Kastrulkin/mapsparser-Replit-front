@@ -1,0 +1,384 @@
+{
+  "status": "recordings_pending",
+  "notes": "Ожидаемые сценарии для отдельного тестового бизнеса. Реальных записей и оценки 27/30 пока нет. Не создавать эти сведения в Riderra. Неоднозначные даты, услуги и визиты требуют уточнения; внешний Google всегда требует отдельного подтверждения.",
+  "cases": [
+    {
+      "id": "ru-01",
+      "intent": "help",
+      "text": "Что ты умеешь?",
+      "expected": {},
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-02",
+      "intent": "content.read",
+      "text": "Покажи следующий пост, который будет опубликован в Google",
+      "expected": {
+        "selection": "next_unpublished"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-03",
+      "intent": "content.read",
+      "text": "Покажи последний пост в контент-плане",
+      "expected": {
+        "selection": "latest_scheduled"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-04",
+      "intent": "content.read",
+      "text": "Ты видишь контент-план?",
+      "expected": {
+        "selection": "upcoming"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-05",
+      "intent": "content.read",
+      "text": "Покажи следующий пост после одиннадцатого сентября",
+      "expected": {
+        "after": "September 11; business year"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-06",
+      "intent": "content.plan",
+      "text": "Двенадцатого заканчивается план. Подготовь следующий, старый сохрани",
+      "expected": {
+        "preserve_old": true
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-07",
+      "intent": "content.edit",
+      "text": "Замени тему следующего поста: как ухаживать за кожей осенью",
+      "expected": {
+        "topic": "как ухаживать за кожей осенью"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-08",
+      "intent": "content.focus",
+      "text": "В этом месяце делаем акцент на косметологии",
+      "expected": {
+        "focus": "косметология"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-09",
+      "intent": "company.fact",
+      "text": "Мы работаем с проблемной кожей двадцать пять лет",
+      "expected": {
+        "experience_years": 25
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-10",
+      "intent": "company.fact",
+      "text": "Я создала компанию, потому что сама столкнулась с проблемной кожей",
+      "expected": {
+        "source": "owner_statement"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-11",
+      "intent": "services.create",
+      "text": "Добавь услугу уход за кожей, стоимость тридцать пять евро",
+      "expected": {
+        "name": "уход за кожей",
+        "price": "35",
+        "currency": "EUR"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-12",
+      "intent": "services.create",
+      "text": "Добавь трансфер из аэропорта за сорок пять евро пятьдесят центов",
+      "expected": {
+        "name": "трансфер из аэропорта",
+        "price": "45.50",
+        "currency": "EUR"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-13",
+      "intent": "services.create",
+      "text": "Добавь ещё один уход за кожей за сорок евро",
+      "expected": {
+        "similar_service": "clarify_create_or_update"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-14",
+      "intent": "finance.daily",
+      "text": "Сегодня десять продаж, два допа, выручка триста пятьдесят евро, возврат двадцать",
+      "expected": {
+        "checks": 10,
+        "upsell_checks": 2,
+        "revenue": "350",
+        "refunds": "20",
+        "net_revenue": "330"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-15",
+      "intent": "finance.daily",
+      "text": "Итого стало двенадцать чеков, выручка четыреста евро",
+      "expected": {
+        "mode": "set",
+        "checks": 12,
+        "revenue": "400"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-16",
+      "intent": "finance.daily",
+      "text": "Добавь ещё две продажи и пятьдесят евро",
+      "expected": {
+        "mode": "add",
+        "checks": 2,
+        "revenue": "50"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-17",
+      "intent": "finance.transaction",
+      "text": "Запиши расход двадцать три евро семьдесят пять центов на материалы",
+      "expected": {
+        "kind": "expense",
+        "amount": "23.75"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-18",
+      "intent": "finance.daily",
+      "text": "Нет, выручка триста восемьдесят евро",
+      "expected": {
+        "correction": true,
+        "revenue": "380"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-19",
+      "intent": "finance.read",
+      "text": "Покажи, что записано за вчера",
+      "expected": {
+        "date": "yesterday_in_business_zone"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-20",
+      "intent": "work.observation",
+      "text": "Клиент отказался от ухода, сказал, что дорого",
+      "expected": {
+        "outcome": "declined",
+        "reason": "дорого"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-21",
+      "intent": "work.observation",
+      "text": "Предложила домашний набор следующему клиенту",
+      "expected": {
+        "outcome": "offered"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-22",
+      "intent": "work.observation",
+      "text": "Клиент заинтересовался уходом",
+      "expected": {
+        "outcome": "interested"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-23",
+      "intent": "work.observation",
+      "text": "Уход оказали, клиент доволен",
+      "expected": {
+        "outcome": "performed",
+        "financial_write": false
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-24",
+      "intent": "work.question",
+      "text": "А если клиент откажется от ухода?",
+      "expected": {
+        "persist_fact": false
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-25",
+      "intent": "work.question",
+      "text": "Например, клиент сказал, что дорого",
+      "expected": {
+        "persist_fact": false
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-26",
+      "intent": "work.correct",
+      "text": "Исправь последнюю заметку: отказался потому что спешил",
+      "expected": {
+        "correction": true,
+        "reason": "спешил"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-27",
+      "intent": "work.undo",
+      "text": "Отмени последнюю рабочую заметку",
+      "expected": {
+        "void": true,
+        "preserve_history": true
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-28",
+      "intent": "work.recommend",
+      "text": "Что предложить следующему клиенту?",
+      "expected": {
+        "scope": "assigned_next_visit"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-29",
+      "intent": "work.recommend",
+      "text": "Что предложить клиентам сегодня?",
+      "expected": {
+        "scope": "authorized_location_day"
+      },
+      "confirmation": false,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    },
+    {
+      "id": "ru-30",
+      "intent": "work.policy",
+      "text": "На этой неделе сначала предлагайте уход, домашний набор не предлагайте",
+      "expected": {
+        "prioritize": "уход",
+        "ban": "домашний набор",
+        "period": "business_week"
+      },
+      "confirmation": true,
+      "audio_file": null,
+      "first_pass": null,
+      "after_correction": null
+    }
+  ]
+}

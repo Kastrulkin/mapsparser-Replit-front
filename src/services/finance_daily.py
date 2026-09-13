@@ -40,8 +40,8 @@ def authorize(cursor,business_id,user_id,write=False):
 
 
 def settings(cursor,business_id):
-    cursor.execute('SELECT * FROM business_finance_settings WHERE business_id=%s',(business_id,))
-    return _row(cursor,cursor.fetchone()) or {'business_id':business_id,'version':0,'currency':None,'timezone':None}
+    from services.business_input_settings import resolve
+    return resolve(cursor, business_id)
 
 
 def fingerprint(value):
@@ -86,8 +86,12 @@ def day_context(cursor,business_id):
 
 
 def prepare(cursor,business_id,user_id,args,channel,message_ref):
-    authorize(cursor,business_id,user_id,True)
     kind=args.get('kind','daily')
+    if kind=='settings':
+        from services.business_input_settings import authorize_write
+        authorize_write(cursor,business_id,user_id)
+    else:
+        authorize(cursor,business_id,user_id,True)
     config=settings(cursor,business_id)
     if kind=='transaction' and args.get('transaction_id'):
         cursor.execute('SELECT to_jsonb(t) data FROM financialtransactions t WHERE id=%s AND business_id=%s',(args['transaction_id'],business_id))
@@ -105,7 +109,7 @@ def prepare(cursor,business_id,user_id,args,channel,message_ref):
             ZoneInfo(zone or '')
         except (ZoneInfoNotFoundError,ValueError):
             raise ValueError('Уточните часовой пояс бизнеса, например Europe/Tallinn.')
-        return {'kind':kind,'before_version':config['version'],'data':{'currency':currency,'timezone':zone},'channel':channel,'message_ref':message_ref}
+        return {'kind':kind,'before_version':config['version'],'before_fingerprint':fingerprint(config),'data':{'currency':currency,'timezone':zone},'channel':channel,'message_ref':message_ref}
     if kind not in {'daily','transaction'}:
         raise ValueError('Неизвестный вид финансовой записи.')
     currency=(args.get('currency') or config.get('currency') or '').upper()
@@ -199,7 +203,11 @@ def preview_text(envelope):
 
 
 def apply(cursor,business_id,user_id,envelope,action_id):
-    authorize(cursor,business_id,user_id,True)
+    if envelope.get('kind')=='settings':
+        from services.business_input_settings import authorize_write
+        authorize_write(cursor,business_id,user_id)
+    else:
+        authorize(cursor,business_id,user_id,True)
     if not action_id:raise ValueError('Отсутствует подтверждённое действие.')
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('finance-daily:'+business_id,))
     cursor.execute('SELECT after_json FROM finance_daily_events WHERE business_id=%s AND action_id=%s',(business_id,action_id))
@@ -210,10 +218,15 @@ def apply(cursor,business_id,user_id,envelope,action_id):
         if not re.fullmatch('[A-Z]{3}',data.get('currency') or ''):raise ValueError('Неверная валюта.')
         ZoneInfo(data.get('timezone') or '')
         before=settings(cursor,business_id)
-        if before['version']!=envelope['before_version']:
+        if before['version']!=envelope['before_version'] or (envelope.get('before_fingerprint') and envelope['before_fingerprint']!=fingerprint(before)):
             raise ValueError('Настройки изменились. Подготовьте новое подтверждение.')
         cursor.execute('''INSERT INTO business_finance_settings(business_id,currency,timezone) VALUES (%s,%s,%s)
             ON CONFLICT(business_id) DO UPDATE SET currency=EXCLUDED.currency,timezone=EXCLUDED.timezone,version=business_finance_settings.version+1,updated_at=NOW()''',(business_id,data['currency'],data['timezone']))
+        cursor.execute('SELECT to_jsonb(b) data FROM businesses b WHERE id=%s',(business_id,))
+        legacy=_row(cursor,cursor.fetchone()).get('data') or {}
+        for field in ('currency','timezone'):
+            if field in legacy:
+                cursor.execute('UPDATE businesses SET '+field+'=%s WHERE id=%s',(data[field],business_id))
         target_id=business_id;after=settings(cursor,business_id)
     elif kind=='daily':
         cursor.execute('SELECT * FROM finance_daily_summaries WHERE business_id=%s AND date=%s AND currency=%s FOR UPDATE',(business_id,envelope['date'],envelope['currency']))
@@ -380,7 +393,7 @@ def handle_apply(envelope,user_data):
     try:
         saved=apply(db.conn.cursor(),envelope.get('tenant_id'),user_id,envelope.get('payload') or {},envelope.get('action_id'))
         db.conn.commit()
-        return {'status':'completed','chat_response':'Финансовые данные сохранены. '+('Запись отменена; история сохранена.' if saved.get('is_voided') else 'Итоги и детализация доступны в финансах.'),
+        return {'status':'completed','chat_response':('Валюта и часовой пояс бизнеса сохранены.' if (envelope.get('payload') or {}).get('kind')=='settings' else 'Финансовые данные сохранены. '+('Запись отменена; история сохранена.' if saved.get('is_voided') else 'Итоги и детализация доступны в финансах.')),
                 'saved':saved,'localos_write_performed':True,'provider_write_performed':False}
     except (ValueError,PermissionError):
         import sys

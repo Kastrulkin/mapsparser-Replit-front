@@ -123,6 +123,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
+    OperatorCapability("settings.input", "Валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
     OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
@@ -214,7 +215,7 @@ def should_route_operator_message(message: Any) -> bool:
     )
 
 
-def operator_capability_catalog() -> list[dict[str, Any]]:
+def operator_capability_catalog(business_id=None, subscription_access=None) -> list[dict[str, Any]]:
     catalog = []
     for item in CAPABILITIES:
         serialized = asdict(item)
@@ -225,6 +226,19 @@ def operator_capability_catalog() -> list[dict[str, Any]]:
             serialized["backend_contract"] = dict(backend_meta)
         else:
             serialized["runtime"] = {"capability": backend_name, "runtime_status": "operator_native", "beta_enabled": True}
+        if business_id:
+            from services import finance_daily, work_journal, operator_request_history
+            disabled = ((item.name.startswith('work.') and not work_journal.enabled(business_id))
+                        or (item.name == 'finance.daily.write' and not finance_daily.enabled(business_id)))
+            if disabled:
+                serialized['status'] = 'disabled'
+                serialized['unavailable_reason'] = 'Пилот не включён для этого бизнеса'
+            if operator_subscription_block(subscription_access, item.name):
+                serialized['status'] = 'disabled'
+                serialized['unavailable_reason'] = 'Недоступно на текущем тарифе'
+            serialized['channels'] = ['web', 'telegram', 'telegram_mini_app']
+            from services.operator_audio import enabled
+            serialized['input_types'] = ['text', 'voice'] if enabled('transcription', business_id) else ['text']
         catalog.append(serialized)
     return catalog
 
@@ -1798,10 +1812,15 @@ def _read_requested_content(cursor, business_id, message):
     from services.operator_query import render_operator_query
     lowered = message.lower()
     latest = bool(re.search(r'\b(последн\w*|крайний)\b', lowered))
-    upcoming = not latest and (any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')) or bool(re.search(r'\bпосле\b', lowered)))
+    requested_next = any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')) or bool(re.search(r'\bпосле\b', lowered))
+    upcoming = not latest and (requested_next or ('контент' in lowered and not re.search(r'прошл|истори|архив', lowered)))
     filters = []
     if upcoming:
-        cutoff = datetime.now(ZoneInfo('Europe/Moscow')).date()
+        from services.business_input_settings import resolve
+        zone = resolve(cursor, business_id).get('timezone')
+        if not zone:
+            return {'status': 'clarification_required', 'chat_response': 'Чтобы определить ближайший пост, укажите часовой пояс бизнеса. Сохраню его после подтверждения.'}
+        cutoff = datetime.now(ZoneInfo(zone)).date()
         months = ('января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря')
         match = re.search(r'после\s+(\d{1,2})\s+('+'|'.join(months)+r')(?:\s+(20\d{2}))?', lowered)
         if match:
@@ -1812,14 +1831,16 @@ def _read_requested_content(cursor, business_id, message):
         filters = [{'field': 'scheduled_for', 'operator': 'gte', 'value': cutoff.isoformat()}]
     result = execute_operator_query(cursor, business_id=business_id, arguments={
         'resource': 'content', 'filters': filters, 'sort_by': 'scheduled_for',
-        'sort_direction': 'asc' if upcoming else 'desc', 'limit': 1 if latest else 50, 'view': 'full' if upcoming or latest else 'compact'})
+        'sort_direction': 'asc' if upcoming else 'desc', 'limit': 1 if latest else 50, 'view': 'full' if requested_next or latest else 'compact'})
     if result.get('status') != 'completed':
         return result
     if upcoming:
-        items = [item for item in result['items'] if item.get('status') not in {'published', 'cancelled', 'archived'}][:1]
+        items = [item for item in result['items'] if item.get('status') not in {'published', 'cancelled', 'archived'}]
+        if requested_next:
+            items = items[:1]
         result['items'] = items
         result['count'] = len(items)
-        result['chat_response'] = ('Следующий материал в сохранённом контент-плане:\n\n'+
+        result['chat_response'] = (('Следующий материал в сохранённом контент-плане:\n\n' if requested_next else 'Предстоящие материалы сохранённого контент-плана:\n\n')+
             render_operator_query(result['query'], items, len(items)) if items else
             'В сохранённом контент-плане не нашёл будущего неопубликованного материала по указанной дате.')
         result['chat_response'] += '\n\nДата в плане не подтверждает постановку на автопубликацию или публикацию во внешнем канале.'
@@ -1854,6 +1875,10 @@ def route_operator_message(
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message
     pending = pending_context if isinstance(pending_context, dict) else {}
+    from services.business_input_settings import route_setup
+    setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
+    if setup:
+        return setup
     from services import work_journal, operator_work_journal
     work_pending=pending.get('capability')=='work.journal' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|отмен|[0-9]',clean_message,re.I))))
     if work_journal.enabled(business_id) and (operator_work_journal.matches(clean_message) or work_pending or (action_payload or {}).get('input_context')=='work_journal'):
@@ -1990,7 +2015,9 @@ def route_operator_message(
         blocked = operator_subscription_block(subscription_access, 'content.read')
         if blocked:
             return blocked, pending
-        return standardize_operator_result(_read_requested_content(cursor, business_id, clean_message), 'operator.query'), {}
+        response = _read_requested_content(cursor, business_id, clean_message)
+        context = {'capability': 'settings.input', 'source_message': clean_message} if response.get('status') == 'clarification_required' else {}
+        return standardize_operator_result(response, 'operator.query'), context
     lowered_message = clean_message.lower()
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("отзыв", "яндекс", "картах", "карты")):
         return _manual_result("reviews.publish_external"), {}
@@ -2005,7 +2032,24 @@ def route_operator_message(
         ), {}
     if classify_operator_help_intent(clean_message):
         result = build_operator_help_response()
-        result["capability_catalog"] = operator_capability_catalog()
+        result["capability_catalog"] = operator_capability_catalog(business_id, subscription_access)
+        from services.operator_request_history import enabled
+        if enabled(business_id):
+            options = []
+            for capability, text in [('reviews.read', 'Показать отзывы и подготовить ответы'),
+                ('services.create', 'Добавить услугу с ценой, показать статус обновления карт'),
+                ('content.read', 'Показать актуальный контент-план или выбранный пост'),
+                ('content.item.edit', 'Изменить тему поста, подготовить черновик и учесть сведения о компании'),
+                ('finance.read', 'Показать финансовые данные')]:
+                if not operator_subscription_block(subscription_access, capability):
+                    options.append(text)
+            from services import finance_daily, work_journal
+            if finance_daily.enabled(business_id) and not operator_subscription_block(subscription_access, 'finance.daily.write'):
+                options.append('Внести дневной итог, расход или возврат после подтверждения')
+            if work_journal.enabled(business_id):
+                options.append('Сохранить рабочую заметку, показать доступные рекомендации допродаж')
+            result['chat_response'] = 'В выбранном бизнесе можно:\n' + '\n'.join('• ' + text for text in options)
+            result['chat_response'] += '\n\nДоступ к данным и изменениям зависит от вашей роли. Финансы, изменение правил и защищённые действия требуют подтверждения. Публикации и обновления внешних карт зависят от подключённой интеграции; неподдерживаемую запись передам на ручной шаг.'
         return standardize_operator_result(result, "operator.help"), {}
     if classify_unanswered_reviews_status_intent(clean_message) and not tool_loop_active:
         return standardize_operator_result(
@@ -2259,7 +2303,7 @@ def confirm_pending_operator_action(
                 "external_writes_performed": False,
             }, False
         backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if capability in {"finance.daily.write","work.policy"} and backend_result.get("status") in {"blocked","error","failed"}:
+        if capability in {"finance.daily.write","work.policy","settings.input"} and backend_result.get("status") in {"blocked","error","failed"}:
             return standardize_operator_result(backend_result,capability), False
         backend_chat_response = str(backend_result.get("chat_response") or "").strip()
         if backend_chat_response:
@@ -2291,6 +2335,31 @@ def confirm_pending_operator_action(
             capability,
         )
         finish_operator_action(cursor, action_id=action_id, result=result)
+        if capability == 'settings.input':
+            from services.operator_chat_service import process_chat
+            from services.operator_audio import authorize_actor
+            actor, access = authorize_actor(cursor, user_id, business_id)
+            from services.operator_conversations import set_operator_pending_context
+            set_operator_pending_context(cursor, envelope['resume_conversation_id'], {})
+            if not envelope.get('resume_message'):
+                return result, False
+            from services.business_input_settings import resolve
+            current_zone = resolve(cursor, business_id).get('timezone')
+            source_time = envelope.get('resume_received_at')
+            relative_date = re.search(r'сегодня|вчера|завтра|недел|месяц|следующ', envelope['resume_message'], re.I)
+            if relative_date and source_time and current_zone and datetime.fromisoformat(source_time).astimezone(ZoneInfo(current_zone)).date() != datetime.now(ZoneInfo(current_zone)).date():
+                result['status'] = 'clarification_required'
+                result['chat_response'] = 'Настройки сохранены. Пока мы их уточняли, сменился день. Укажите дату и повторите исходную команду: «' + envelope['resume_message'] + '».'
+                cursor.execute('UPDATE operatoractions SET result_json=%s::jsonb WHERE id=%s', (json.dumps(result, ensure_ascii=False, default=str), action_id))
+                return result, False
+            resumed = process_chat(cursor, business_id=business_id, user_id=user_id,
+                input_origin='settings_resume',
+                channel=envelope['resume_channel'], message=envelope['resume_message'], router=route_operator_message,
+                payload={'conversation_id': envelope['resume_conversation_id'], 'request_id': 'settings-resume:' + action_id},
+                actor_context=actor, subscription_access=access)
+            resumed['chat_response'] = 'Валюта и часовой пояс сохранены.\n\n' + (resumed.get('chat_response') or '')
+            cursor.execute('UPDATE operatoractions SET result_json=%s::jsonb WHERE id=%s', (json.dumps(resumed, ensure_ascii=False, default=str), action_id))
+            return resumed, False
         return result, False
     if capability == "services.price.update":
         service_id = str(envelope.get("service_id") or "").strip()

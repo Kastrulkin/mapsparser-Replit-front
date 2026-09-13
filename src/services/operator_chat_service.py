@@ -9,9 +9,45 @@ from services.operator_conversations import (
 )
 
 
-def process_chat(cursor, *, business_id, user_id, channel, message, router,
+def process_chat(cursor, **kwargs):
+    from services import operator_request_history
+    if not operator_request_history.enabled(kwargs['business_id']):
+        return _process_chat(cursor, **kwargs)
+    payload = dict(kwargs.get('payload') or {})
+    import uuid
+    payload.setdefault('request_id', str(uuid.uuid4()))
+    kwargs['payload'] = payload
+    receipt_id = operator_request_history.receive(kwargs['business_id'], kwargs['user_id'],
+                                                  kwargs['channel'], kwargs['message'], payload, kwargs.get('input_origin', 'user'))
+    cursor.execute('SAVEPOINT operator_request_execution')
+    try:
+        result = _process_chat(cursor, **kwargs)
+        from services.operator_audio import authorize_actor
+        _, current_access = authorize_actor(cursor, kwargs['user_id'], kwargs['business_id'])
+        from services.operator_core import operator_subscription_block
+        result_capability = result.get('capability') or 'operator.help'
+        query = result.get('query')
+        resource = query.get('resource') if isinstance(query, dict) else None
+        if resource in {'content', 'services', 'reviews'}:
+            result_capability = resource + '.read'
+        if result.get('status') != 'blocked' and operator_subscription_block(current_access, result_capability):
+            raise PermissionError('Доступ изменился во время обработки команды')
+    except Exception:
+        import sys
+        category = 'access' if isinstance(sys.exception(), PermissionError) else 'understanding' if isinstance(sys.exception(), ValueError) else 'execution'
+        cursor.execute('ROLLBACK TO SAVEPOINT operator_request_execution')
+        cursor.execute('RELEASE SAVEPOINT operator_request_execution')
+        operator_request_history.fail(receipt_id, category)
+        raise
+    cursor.execute('RELEASE SAVEPOINT operator_request_execution')
+    result['request_audit_id'] = receipt_id
+    operator_request_history.complete(cursor, receipt_id, result)
+    return result
+
+
+def _process_chat(cursor, *, business_id, user_id, channel, message, router,
                  payload=None, actor_context=None, subscription_access=None,
-                 refresh_handler=None, ai_router_handler=None, manual_review_handler=None):
+                 refresh_handler=None, ai_router_handler=None, manual_review_handler=None, input_origin='user'):
     payload = payload or {}
     if not isinstance(message, str) or not message.strip() or len(message) > 10000 or len(str(payload.get("request_id") or "")) > 200:
         raise ValueError("Проверьте длину команды и идентификатор запроса")
@@ -20,6 +56,10 @@ def process_chat(cursor, *, business_id, user_id, channel, message, router,
     # Lock before resolving the active conversation, including first-message races.
     cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
                    (f"operator:{user_id}:{business_id}:{channel}",))
+    from services.operator_request_history import enabled
+    if enabled(business_id):
+        from services.operator_audio import authorize_actor
+        actor_context, subscription_access = authorize_actor(cursor, user_id, business_id)
     selected_id = payload.get('conversation_id')
     if not selected_id:
         selected_id = find_latest_operator_conversation(cursor,business_id=business_id,user_id=user_id,channel=channel).get('id')
@@ -49,7 +89,7 @@ def process_chat(cursor, *, business_id, user_id, channel, message, router,
         consume_transcription(cursor, transcript, user_id, business_id, conversation_id, message)
     user_message_id = append_operator_message(cursor, conversation_id=conversation_id, business_id=business_id,
                             user_id=user_id, role="user", content=message,
-                            result={"input_type": "voice" if transcript else "text", "transcription_id": transcript})
+                            result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
     result, pending = router(
         cursor, business_id=business_id, user_id=user_id, channel=channel, message=message,
         conversation_id=conversation_id, pending_context=conversation_pending_context(conversation),
@@ -60,6 +100,7 @@ def process_chat(cursor, *, business_id, user_id, channel, message, router,
         refresh_handler=refresh_handler, ai_router_handler=ai_router_handler, manual_review_handler=manual_review_handler,
     )
     result["conversation_id"] = conversation_id
+    result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}
     if result.get("status") == "approval_required" and approval.get("envelope"):
         action = create_pending_operator_action(cursor, conversation_id=conversation_id,

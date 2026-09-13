@@ -1,8 +1,9 @@
+import pytest
 from services import operator_core, operator_query
 
 
 def setup_items(monkeypatch):
-    items = [{'title': f'Пост {n}', 'scheduled_for': f'2026-09-{n:02}', 'status': 'edited', 'draft_text': 'Длинный текст ' * 100} for n in range(1,14)]
+    items = [{'title': f'Пост {n}', 'scheduled_for': f'2099-09-{n:02}', 'status': 'edited', 'draft_text': 'Длинный текст ' * 100} for n in range(1,14)]
     monkeypatch.setattr(operator_query, '_load_module_items', lambda *args, **kwargs: (items, {}))
 
 
@@ -28,3 +29,9 @@ def test_read_phrasings_and_publish_boundary():
         assert operator_core._content_read_request(message), message
     for message in ['Опубликуй последний пост', 'Создай контент план', 'Отправь пост в канал', 'Покажи опубликованные вчера посты']:
         assert not operator_core._content_read_request(message), message
+
+
+@pytest.fixture(autouse=True)
+def explicit_business_timezone(monkeypatch):
+    from services import business_input_settings
+    monkeypatch.setattr(business_input_settings, 'resolve', lambda *args: {'timezone': 'Europe/Tallinn', 'currency': 'EUR', 'version': 1})

@@ -1260,6 +1260,41 @@ def current_operator_conversation():
         db.close()
 
 
+@operator_bp.route('/requests', methods=['GET'])
+@operator_bp.route('/requests/<receipt_id>', methods=['GET'])
+@operator_bp.route('/requests/<receipt_id>/feedback', methods=['POST'])
+def operator_request_history(receipt_id=None):
+    from services import operator_request_history
+    user = require_auth_from_request()
+    if not user:
+        return jsonify({'error': 'Требуется авторизация'}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = request.args.get('business_id') or payload.get('business_id')
+    if not business_id:
+        return jsonify({'error': 'Выберите бизнес'}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        # Preserve session restrictions (including a demo session's business).
+        if not verify_business_access(cursor, business_id, user)[0]:
+            raise PermissionError('Нет доступа к бизнесу')
+        user_id = user.get('user_id') or user.get('id')
+        if request.method == 'POST':
+            result = operator_request_history.feedback(cursor, business_id, user_id, receipt_id, payload.get('comment'))
+            db.conn.commit()
+        elif receipt_id:
+            result = operator_request_history.detail(cursor, business_id, user_id, receipt_id)
+        else:
+            result = operator_request_history.list_requests(cursor, business_id, user_id, request.args)
+        return jsonify(result)
+    except PermissionError:
+        return jsonify({'error': str(sys.exception())}), 403
+    except ValueError:
+        return jsonify({'error': str(sys.exception())}), 400
+    finally:
+        db.close()
+
+
 @operator_bp.route("/chat", methods=["POST"])
 def operator_chat():
     user_data = require_auth_from_request()

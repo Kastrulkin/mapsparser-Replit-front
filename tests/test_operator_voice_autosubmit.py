@@ -79,3 +79,9 @@ def test_voice_retry_keeps_same_execution_key_and_skips_delivered_messages(monke
     asyncio.run(operator_telegram_voice.submit_recognized_voice(app, host, asset))
     assert calls == ['voice:a']
     app.bot.send_message.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def explicit_business_timezone(monkeypatch):
+    from services import business_input_settings
+    monkeypatch.setattr(business_input_settings, 'resolve', lambda *args: {'timezone': 'Europe/Tallinn', 'currency': 'EUR', 'version': 1})

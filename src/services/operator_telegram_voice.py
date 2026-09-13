@@ -151,7 +151,13 @@ async def submit_recognized_voice(application, host, asset):
     business['operator_payload'] = {'conversation_id': asset['conversation_id'], 'transcription_id': asset['id'], 'request_id': 'voice:'+asset['id']}
     payload = await asyncio.to_thread(host.build_operator_chat_payload, business, asset['transcript'])
     if not metadata.get('result_delivered'):
-        await application.bot.send_message(chat_id=chat_id, text=payload['text'], reply_markup=host._build_operator_result_markup(payload['result']))
+        from services.operator_request_history import mark_delivery
+        try:
+            await application.bot.send_message(chat_id=chat_id, text=payload['text'], reply_markup=host._build_operator_result_markup(payload['result']))
+        except Exception:
+            await asyncio.to_thread(mark_delivery, payload['result'].get('request_audit_id'), 'failed')
+            raise
+        await asyncio.to_thread(mark_delivery, payload['result'].get('request_audit_id'), 'delivered')
         await asyncio.to_thread(transaction, lambda cursor: cursor.execute(
             "UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"result_delivered\":true}'::jsonb WHERE id=%s", (asset['id'],)))
     if not payload['result'].get('error_code'):

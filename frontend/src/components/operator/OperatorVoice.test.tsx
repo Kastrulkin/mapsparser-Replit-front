@@ -15,7 +15,7 @@ it('does not show recording when voice is disabled', async () => {
   expect(screen.queryByText('Записать голосом')).not.toBeInTheDocument();
 });
 
-it('requires review and sends corrected transcript once', async () => {
+it('submits a general voice command once without a review step', async () => {
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:recording'), revokeObjectURL: vi.fn() }));
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
@@ -28,11 +28,8 @@ it('requires review and sends corrected transcript once', async () => {
   render(<OperatorVoiceInput businessId="b" channel="telegram_mini_app" onSubmit={submit} headers={headers} />);
   await user.upload(await screen.findByLabelText('Загрузить аудио'), new File(['voice'], 'voice.ogg', { type: 'audio/ogg' }));
   await user.click(screen.getByText('Распознать запись'));
-  const review = await screen.findByLabelText('Проверьте команду');
-  expect(submit).not.toHaveBeenCalled();
-  await user.clear(review); await user.type(review, 'Цена 1500');
-  await user.click(screen.getByText('Отправить Оператору'));
-  expect(submit).toHaveBeenCalledExactlyOnceWith('Цена 1500', { transcription_id: 'a', conversation_id: 'c', request_id: 'voice:a' });
+  await waitFor(() => expect(submit).toHaveBeenCalledExactlyOnceWith('Цена 500', { transcription_id: 'a', conversation_id: 'c', request_id: 'voice:a' }));
+  expect(screen.queryByText('Отправить Оператору')).not.toBeInTheDocument();
 });
 
 it('keeps text available when synthesis fails and never calls chat', async () => {

@@ -5694,7 +5694,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         business_ctx["operator_payload"] = {"request_id": f"tg:{update.effective_chat.id}:{update.message.message_id}"}
         import asyncio
         operator_payload = await asyncio.to_thread(build_operator_chat_payload, business_ctx, text)
-        await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
+        from services.operator_request_history import mark_delivery
+        try:
+            await update.message.reply_text(operator_payload['text'], reply_markup=_build_operator_result_markup(operator_payload['result']))
+        except Exception:
+            await asyncio.to_thread(mark_delivery, operator_payload['result'].get('request_audit_id'), 'failed')
+            raise
+        await asyncio.to_thread(mark_delivery, operator_payload['result'].get('request_audit_id'), 'delivered')
         return
 
     if state == 'waiting_transaction':

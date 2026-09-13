@@ -17,8 +17,8 @@ it('saves text through Operator and cancels with a version and unique request',a
   return reply({enabled:true,role:'member',items:saved?[{...note,is_voided:cancelled}]:[]});
  });vi.stubGlobal('fetch',mock);
  render(<WorkJournal businessId="b" headers={headers}/>);
- await user.type(await screen.findByLabelText('Сообщение Оператору'),'Клиент отказался');await user.click(screen.getByRole('button',{name:'Отправить',exact:true}));
- await screen.findByText('Записал отказ');await user.click(await screen.findByRole('button',{name:'Отменить запись',exact:true}));
+ await user.type(await screen.findByLabelText('Сообщение Оператору'),'Клиент отказался');await user.click(screen.getByRole('button',{name:'Отправить'}));
+ await screen.findByText('Записал отказ');await user.click(await screen.findByRole('button',{name:'Отменить запись'}));
  await waitFor(()=>expect(cancelled).toBe(true));expect(mock.mock.calls.filter(([,i])=>i?.method==='PATCH')).toHaveLength(1);
 });
 it('ignores delayed journal data after business changes',async()=>{
@@ -33,7 +33,7 @@ it('ignores delayed journal data after business changes',async()=>{
 it('view-only notes have no edit controls',async()=>{
  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).includes('/audio/')?reply({input_enabled:false}):reply({enabled:true,role:'viewer',items:[{...note,can_edit:false}]})));
  render(<WorkJournal businessId="b" headers={headers}/>);await screen.findAllByText('Клиент отказался');
- expect(screen.queryByRole('button',{name:'Исправить',exact:true})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Исправить'})).not.toBeInTheDocument();
 });
 it('clears private entries when access is revoked',async()=>{
  let revoked=false;const user=userEvent.setup();

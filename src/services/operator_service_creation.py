@@ -44,6 +44,8 @@ def context(cursor,business_id,user_id,args):
     authorize_actor(cursor,user_id,business_id)
     cursor.execute('SELECT to_jsonb(b) data FROM businesses b WHERE id=%s',(business_id,))
     business=_row(cursor,cursor.fetchone()).get('data') or {}
+    from services.business_input_settings import resolve
+    business.update(resolve(cursor, business_id))
     cursor.execute('SELECT id,name,price,currency FROM userservices WHERE business_id=%s AND COALESCE(is_active,TRUE)=TRUE ORDER BY name LIMIT 300',(business_id,))
     services=[_row(cursor,row) for row in cursor.fetchall()]
     cursor.execute('''SELECT d.id,d.service_id,s.name,d.google_status,d.google_error,d.manual_task_id,j.status manual_status,j.user_id responsible_user_id
@@ -52,7 +54,7 @@ def context(cursor,business_id,user_id,args):
     distributions=[_row(cursor,row) for row in cursor.fetchall()]
     cursor.execute("SELECT m.user_id,u.name FROM business_members m JOIN users u ON u.id=m.user_id WHERE m.business_id=%s AND m.status='active' AND m.role IN ('admin','manager') AND u.is_active=TRUE",(business_id,))
     managers=[_row(cursor,row) for row in cursor.fetchall()]
-    return result('Услуги и статусы обновления карт.',services=services,currency=business.get('currency'),distributions=distributions,managers=managers)
+    return result('Услуги и статусы обновления карт.' if services else 'В справочнике пока нет услуг. Продиктуйте название реальной услуги, стоимость и валюту, чтобы добавить первую.',services=services,currency=business.get('currency'),distributions=distributions,managers=managers)
 
 
 def manual_task(cursor,business_id,service):
@@ -104,6 +106,8 @@ def create(cursor,business_id,user_id,message,request_key,args):
         return result('Уточните стоимость услуги числом, не больше двух знаков после запятой.','clarification_required')
     cursor.execute('SELECT to_jsonb(b) data FROM businesses b WHERE id=%s',(business_id,))
     business=_row(cursor,cursor.fetchone()).get('data') or {}
+    from services.business_input_settings import resolve
+    business.update(resolve(cursor, business_id))
     currency=(args.get('currency') or business.get('currency') or '').upper()
     if currency not in {'RUB','EUR','USD','KZT','BYN','GBP','GEL','AMD','AED','UZS','KGS','TRY'}:
         return result('Уточните валюту стоимости услуги.','clarification_required')
