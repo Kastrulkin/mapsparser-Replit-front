@@ -1,0 +1,1 @@
+PASS: legacy blocking reproduced; migrated-schema fast path allows independent receipt transaction

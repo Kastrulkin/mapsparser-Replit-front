@@ -129,6 +129,14 @@ def normalize_telegram_bot_username(value: Any) -> str:
 
 
 def ensure_agent_security_tables(cursor) -> None:
+    # Existing production schemas are managed by Alembic. Even CREATE INDEX IF
+    # NOT EXISTS takes relation locks until commit and can block durable receipts
+    # written through a second connection during an Operator request.
+    cursor.execute("SELECT to_regclass('agent_clients') clients, to_regclass('agent_action_ledger') ledger, to_regclass('agent_discovery_events') discovery")
+    existing = cursor.fetchone()
+    values = list(existing.values()) if isinstance(existing, dict) else existing
+    if values and len(values) == 3 and all(values):
+        return
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS agent_clients (

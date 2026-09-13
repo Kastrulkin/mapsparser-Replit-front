@@ -1,0 +1,89 @@
+{
+  "revision": "deb0f637 + audit schema lock fix",
+  "restore_exit": 0,
+  "restore_checks": [
+    "4959 MB",
+    "0",
+    "20260912_finance_daily"
+  ],
+  "migration_exit": 0,
+  "migration_checks": [
+    "20260913_operator_request_audit",
+    "0"
+  ],
+  "live_smoke_exit": 0,
+  "live_checks": [
+    {
+      "channel": "web",
+      "input": "text",
+      "message_id": "b3918c1e-b57b-4674-95b8-96332d444a09",
+      "audit_id": "477fa8f0-cade-544a-9bc7-2c484a27d5df",
+      "status": "completed",
+      "duplicate_suppressed": true
+    },
+    {
+      "channel": "web",
+      "input": "voice",
+      "message_id": "8a085772-9420-4ffe-a51b-aa6248377770",
+      "audit_id": "2a0c078d-2243-502c-a0a4-cf5c4cb5b06c",
+      "status": "completed",
+      "duplicate_suppressed": true
+    },
+    {
+      "channel": "web",
+      "tts_download": true
+    },
+    {
+      "channel": "telegram_mini_app",
+      "input": "text",
+      "message_id": "e7645263-b81b-45bf-932b-cd1cd30e4a77",
+      "audit_id": "5e2eb073-ae2d-5e8e-b159-31edbb1114ca",
+      "status": "completed",
+      "duplicate_suppressed": true
+    },
+    {
+      "channel": "telegram_mini_app",
+      "input": "voice",
+      "message_id": "a425fa61-f912-4021-aa3c-e371869e4f6e",
+      "audit_id": "a5b75a86-a2d1-504e-85c4-f95546c0e373",
+      "status": "completed",
+      "duplicate_suppressed": true
+    },
+    {
+      "channel": "telegram_mini_app",
+      "tts_download": true
+    },
+    {
+      "channel": "telegram",
+      "input": "text",
+      "message_id": "52ec49c6-bc6c-440f-bff8-977e977afcd9",
+      "audit_id": "4eedcba9-c1e4-5135-8c61-46d7ac1ded21",
+      "status": "completed",
+      "duplicate_suppressed": true
+    },
+    {
+      "channel": "telegram",
+      "input": "voice",
+      "message_id": "be272c44-6db1-412a-a956-099ff23e1418",
+      "audit_id": "3e21397c-e13c-54a9-8cad-41eb2484ac25",
+      "status": "completed",
+      "duplicate_suppressed": true
+    },
+    {
+      "channel": "telegram",
+      "tts_download": true
+    },
+    {
+      "passed": 6,
+      "note": "server HTTP/common-channel checks; not physical Telegram/device tests"
+    }
+  ],
+  "browser": {
+    "real_riderra_history": true,
+    "transcript_and_response": true,
+    "duplicates_visible": 1,
+    "speech_ready": true,
+    "console_errors": []
+  },
+  "physical_devices_tested": false
+}
