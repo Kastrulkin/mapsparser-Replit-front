@@ -150,8 +150,16 @@ class DatabaseManager:
         """Контекстный менеджер: выход"""
         if exc_type is not None:
             self.rollback_and_close()
-        else:
-            self.close()
+        elif self.conn and not self._closed:
+            try:
+                self.conn.commit()
+            except Exception:
+                self.rollback_and_close()
+                raise
+            try:
+                self.conn.close()
+            finally:
+                self._closed = True
         return False
 
     def _sanitize_business_payload(self, business: Dict[str, Any]) -> Dict[str, Any]:

@@ -18,6 +18,12 @@ def require_auth_from_request():
     return verify_session(token)
 
 
+def session_allows_business(user_data: dict, business_id: str) -> bool:
+    """Session restriction only; callers must still authorize business membership."""
+    return (str(user_data.get('session_kind') or 'standard') != 'demo'
+            or str(user_data.get('scope_business_id') or '').strip() == str(business_id))
+
+
 def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[bool, str | None]:
     """
     Проверяет доступ пользователя к бизнесу.
@@ -33,9 +39,7 @@ def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[b
             - owner_id: ID владельца бизнеса или None если бизнес не найден
     """
     user_id = user_data.get('user_id') or user_data.get('id')
-    session_kind = str(user_data.get('session_kind') or 'standard')
-    demo_scope_business_id = str(user_data.get('scope_business_id') or '').strip()
-    if session_kind == 'demo' and demo_scope_business_id != str(business_id):
+    if not session_allows_business(user_data, business_id):
         return False, None
 
     cursor.execute(

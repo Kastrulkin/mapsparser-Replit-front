@@ -206,6 +206,7 @@ def process_audio_job(claimed):
     from services.operator_speechkit import SpeechKit
     db = DatabaseManager()
     normalized = None
+    consumed_source = None
     started_at = time.monotonic()
     try:
         cursor = db.conn.cursor()
@@ -213,6 +214,8 @@ def process_audio_job(claimed):
         if not enabled(asset['kind'],asset['business_id']):
             raise ValueError('Голосовая функция отключена')
         if asset['status'] in {'ready','submitted'}:
+            if asset['kind'] == 'speech':
+                return {'asset_id':asset['id'],'audio_url':'/api/operator/audio/'+asset['id'],'message_id':asset['message_id']}
             return finance_transcription_result(cursor,asset,asset.get('transcript'))
         if asset['status'] == 'cancelled':
             raise ValueError('Запись отменена')
@@ -249,7 +252,7 @@ def process_audio_job(claimed):
             authorize_actor(cursor,asset['user_id'],asset['business_id'])
             cursor.execute("UPDATE operator_audio_assets SET transcript=%s,status='ready',path=NULL WHERE id=%s",(text,asset['id']))
             if asset.get('path'):
-                private_path(asset['path']).unlink(missing_ok=True)
+                consumed_source = private_path(asset['path'])
             result=finance_transcription_result(cursor,asset,text)
         else:
             cursor.execute('SELECT content FROM operatormessages WHERE id=%s AND user_id=%s',(asset['message_id'],asset['user_id']))
@@ -281,9 +284,23 @@ def process_audio_job(claimed):
             db.conn.rollback()
             raise ValueError('Обработка отменена или передана другому исполнителю')
         db.conn.commit()
+        # The input is no longer needed only once the transcript is durable.
+        if consumed_source:
+            try:
+                consumed_source.unlink(missing_ok=True)
+            except OSError:
+                logging.getLogger(__name__).warning('operator_audio_source_cleanup_failed')
         logging.getLogger(__name__).info('operator_audio_completed kind=%s elapsed_ms=%s',asset['kind'],round((time.monotonic()-started_at)*1000))
         return result
     finally:
-        if normalized:
-            normalized.unlink(missing_ok=True)
-        db.close()
+        try:
+            # Legacy DatabaseManager.close commits; never let cleanup commit a
+            # partial audio result after provider, classification or access failure.
+            db.conn.rollback()
+            if normalized:
+                try:
+                    normalized.unlink(missing_ok=True)
+                except OSError:
+                    logging.getLogger(__name__).warning('operator_audio_normalized_cleanup_failed')
+        finally:
+            db.close()

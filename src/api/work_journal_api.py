@@ -3,6 +3,7 @@ import sys
 import uuid
 from flask import Blueprint, jsonify, request
 from auth_system import verify_session
+from core.auth_helpers import session_allows_business
 from database_manager import DatabaseManager
 from services import work_journal, work_recommendations, operator_work_journal
 from services.operator_conversations import _row
@@ -14,21 +15,27 @@ def actor():
     header=request.headers.get('Authorization','')
     user=verify_session(header[7:]) if header.startswith('Bearer ') else None
     if not user:raise PermissionError('Требуется авторизация.')
-    return user.get('user_id') or user.get('id')
+    return user
 
 
 def dispatch(handler):
     db=DatabaseManager()
     try:
-        user=actor();data=request.get_json(silent=True) or {};business=request.args.get('business_id') or data.get('business_id')
+        session=actor();data=request.get_json(silent=True) or {};business=request.args.get('business_id') or data.get('business_id')
         if not business:raise ValueError('Выберите бизнес.')
+        if not session_allows_business(session,business):raise PermissionError('Нет доступа к бизнесу в этой сессии.')
+        user=session.get('user_id') or session.get('id')
         value=handler(db.conn.cursor(),business,user,data)
+        response=jsonify(value)
         if request.method!='GET':db.conn.commit()
-        return jsonify(value)
+        return response
     except PermissionError:
         db.conn.rollback();return jsonify({'error':str(sys.exception())}),403
     except ValueError:
         db.conn.rollback();return jsonify({'error':str(sys.exception())}),409
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:db.close()
 
 

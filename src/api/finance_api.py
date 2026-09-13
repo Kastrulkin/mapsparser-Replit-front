@@ -1050,6 +1050,7 @@ def get_finance_dashboard():
 
 @finance_bp.route('/api/finance/manual-entry', methods=['POST', 'OPTIONS'])
 def add_finance_manual_entry():
+    db = None
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -1062,24 +1063,28 @@ def add_finance_manual_entry():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         inserted = _insert_finance_manual_payload(cursor, business_id, data)
-        db.conn.commit()
         payload, thresholds, snapshot = _finance_snapshot_for_period(
             cursor,
             business_id,
             data.get('period_start') or data.get('from') or default_period_range()[0],
             data.get('period_end') or data.get('to') or default_period_range()[1],
         )
-        db.close()
-
-        return jsonify({
+        response = jsonify({
             "success": True,
             "business_id": business_id,
             "inserted": inserted,
             "thresholds": thresholds,
             "dashboard": snapshot,
         })
+        db.conn.commit()
+        return response
     except Exception:
-        return jsonify({"error": f"Ошибка сохранения финансовых данных: {str(sys.exc_info()[1])}"}), 500
+        if db is not None:
+            db.conn.rollback()
+        return internal_error_response("Не удалось сохранить финансовые данные")
+    finally:
+        if db is not None:
+            db.close()
 
 
 @finance_bp.route('/api/finance/recalculate', methods=['POST', 'OPTIONS'])
