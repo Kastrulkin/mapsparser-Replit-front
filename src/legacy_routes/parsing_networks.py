@@ -231,7 +231,9 @@ def delete_service(service_id):
 
 @app.route('/api/client-info', methods=['GET', 'POST', 'PUT', 'OPTIONS'])
 def client_info():
+    db = None
     try:
+        from services.business_input_settings import profile_fields, save_profile_settings
         # Preflight
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -367,6 +369,7 @@ def client_info():
                                 "isActive": is_active_val,
                                 "returnedName": business_name or "",
                             }
+                        payload.update(profile_fields(cursor, current_business_id))
                         db.close()
                         return jsonify(payload)
                     else:
@@ -407,6 +410,9 @@ def client_info():
             if not current_business_id:
                 db.close()
                 return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "website": "", "site": "", "services": [], "mapLinks": [], "owner": None})
+            allowed, _ = verify_business_access(cursor, current_business_id, user_data)
+            if not allowed:
+                return jsonify({'error': 'Нет доступа к этому бизнесу'}), 403
             cursor.execute(
                 "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, site, website FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                 (current_business_id,),
@@ -480,6 +486,7 @@ def client_info():
             }
             if getattr(app, "debug", False):
                 payload["_debug"] = {"foundBusiness": True, "isActive": is_active_val, "returnedName": business_name or ""}
+            payload.update(profile_fields(cursor, current_business_id))
             db.close()
             return jsonify(payload)
 
@@ -500,6 +507,12 @@ def client_info():
             else:
                 # Если бизнеса нет, используем user_id как business_id для обратной совместимости
                 business_id = user_id
+
+        allowed, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not allowed or (owner_id != user_id and not user_data.get('is_superadmin')):
+            return jsonify({'error': 'Нет права изменять профиль бизнеса'}), 403
+        if any(data.get(field) for field in ('currency', 'timezone')):
+            save_profile_settings(cursor, business_id, user_id, data, str(data.get('settingsRequestId') or uuid.uuid4()))
 
         # Сохраняем ссылки на карты в businessmaplinks (Postgres-only, ClientInfo не используется)
         map_links = None
@@ -553,8 +566,8 @@ def client_info():
                 inserted_count += cursor.rowcount
                 print(f"📝 INSERT mapLink: id={link_id}, business_id={business_id}, url={url}, map_type={map_type}")
 
-            db.conn.commit()
-            print(f"📝 mapLinks: commit() выполнен (DELETE + {inserted_count} INSERT)")
+            # Commit with the complete profile response.
+            print(f"📝 mapLinks: изменения подготовлены ({inserted_count} ссылок)")
 
             # Парсим ll=lon,lat из первой ссылки на Яндекс.Карты и сохраняем в businesses
             for url in valid_links:
@@ -565,7 +578,7 @@ def client_info():
                             "UPDATE businesses SET geo_lon = %s, geo_lat = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                             (geo_lon, geo_lat, business_id),
                         )
-                        db.conn.commit()
+                        # Commit with the complete profile response.
                         print(f"📝 geo: business_id={business_id} geo_lon={geo_lon} geo_lat={geo_lat} из ll в ссылке")
                     break
 
@@ -690,12 +703,13 @@ def client_info():
                         updates.append('updated_at = CURRENT_TIMESTAMP')
                         params.append(business_id)
                         cursor.execute(f"UPDATE businesses SET {', '.join(updates)} WHERE id = %s", params)
-                        db.conn.commit()
+                        # Commit with the complete profile response.
                         print(f"✅ Обновлён бизнес: {business_id}")
         except Exception as e:
             print(f"⚠️ Ошибка синхронизации с Businesses: {e}")
             import traceback
             traceback.print_exc()
+            raise
 
         # Возвращаем полные данные бизнеса после сохранения
         response_data = {
@@ -727,10 +741,15 @@ def client_info():
                     "site": website,
                 })
 
-        db.close()
-        return jsonify(response_data)
+        if business_id:
+            response_data.update(profile_fields(cursor, business_id))
+        response = jsonify(response_data)
+        db.conn.commit()
+        return response
 
     except Exception as e:
+        if db is not None:
+            db.conn.rollback()
         import traceback
         print(f"❌ Ошибка в /api/client-info: {e}")
         print(f"❌ Method: {request.method}")
@@ -745,7 +764,10 @@ def client_info():
             print(f"❌ Ошибка логирования request: {log_err}")
         print("❌ Traceback:")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 409 if isinstance(e, ValueError) else 500
+    finally:
+        if db is not None:
+            db.rollback_and_close()
 
 @app.route('/api/business/<string:business_id>/parse-status', methods=['GET'])
 def get_parse_status(business_id):

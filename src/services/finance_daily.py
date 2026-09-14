@@ -103,6 +103,8 @@ def prepare(cursor,business_id,user_id,args,channel,message_ref):
     if kind=='settings':
         from services.business_input_settings import validate_patch
         data = validate_patch(args, config)
+        if data.get('timezone') and config.get('city'):
+            data.setdefault('city', config['city'])
         return {'kind':kind,'before_version':config['version'],'before_fingerprint':fingerprint(config),'data':data,'channel':channel,'message_ref':message_ref}
     if kind not in {'daily','transaction'}:
         raise ValueError('Неизвестный вид финансовой записи.')

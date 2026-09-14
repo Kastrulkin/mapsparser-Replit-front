@@ -17,7 +17,7 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_SECONDS = 120
 
 
-def authorize_actor(cursor, user_id, business_id):
+def authorize_actor(cursor, user_id, business_id, check_subscription=True):
     cursor.execute('SELECT id, is_active, is_superadmin FROM users WHERE id=%s', (user_id,))
     user = _row(cursor, cursor.fetchone())
     if not user or not user.get('is_active'):
@@ -31,7 +31,7 @@ def authorize_actor(cursor, user_id, business_id):
     access = build_subscription_capabilities(tier=business.get('subscription_tier') or '',
         status=business.get('subscription_status') or '', subscription_ends_at=business.get('subscription_ends_at'),
         is_superadmin=bool(user.get('is_superadmin')))
-    if not capability_access_payload(access, 'operator').get('allowed'):
+    if check_subscription and not capability_access_payload(access, 'operator').get('allowed'):
         raise PermissionError('Оператор недоступен на текущем тарифе')
     return {'role': 'business_owner' if owner == user_id else 'business_user',
             'is_superadmin': bool(user.get('is_superadmin')), 'permissions': ['business.access']}, access

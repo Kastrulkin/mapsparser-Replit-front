@@ -178,6 +178,9 @@ export const ProfilePage = () => {
     businessType: '',
     address: '',
     city: '',
+    currency: '',
+    timezone: '',
+    settingsVersion: 0,
     citySuggestion: '',
     website: '',
     workingHours: '',
@@ -188,6 +191,9 @@ export const ProfilePage = () => {
     businessType: '',
     address: '',
     city: '',
+    currency: '',
+    timezone: '',
+    settingsVersion: 0,
     citySuggestion: '',
     website: '',
     workingHours: '',
@@ -243,6 +249,8 @@ export const ProfilePage = () => {
     businessType: String(value.businessType || '').trim(),
     address: String(value.address || '').trim(),
     city: String(value.city || '').trim(),
+    currency: String(value.currency || '').trim(),
+    timezone: String(value.timezone || '').trim(),
     website: String(value.website || '').trim(),
     workingHours: String(value.workingHours || '').trim(),
     mapLinks: normalizeMapLinks(value.mapLinks),
@@ -498,6 +506,9 @@ export const ProfilePage = () => {
           businessType: businessType,
           address: data.address || '',
           city: data.city ?? '',
+          currency: data.currency || '',
+          timezone: data.timezone || '',
+          settingsVersion: data.settingsVersion || 0,
           citySuggestion: data.citySuggestion ?? '',
           website: data.website || data.site || '',
           workingHours: data.workingHours || t.dashboard.profile.workingHoursPlaceholder,
@@ -764,6 +775,9 @@ export const ProfilePage = () => {
           businessType: businessType,
           address: reloadData.address || '',
           city: reloadData.city ?? '',
+          currency: reloadData.currency || '',
+          timezone: reloadData.timezone || '',
+          settingsVersion: reloadData.settingsVersion || 0,
           citySuggestion: reloadData.citySuggestion ?? '',
           website: reloadData.website || reloadData.site || '',
           workingHours: reloadData.workingHours || t.dashboard.profile.workingHoursPlaceholder,
@@ -1247,7 +1261,7 @@ export const ProfilePage = () => {
               <input
                 type="text"
                 value={clientInfo.city}
-                onChange={(e) => setClientInfo({ ...clientInfo, city: e.target.value })}
+                onChange={(e) => setClientInfo({ ...clientInfo, city: e.target.value, timezone: '' })}
                 disabled={!editClientInfo}
                 placeholder={!clientInfo.city && clientInfo.citySuggestion
                   ? (t.dashboard.profile.citySuggestionPlaceholder || 'Похоже на: {city}').replace('{city}', clientInfo.citySuggestion)
@@ -1268,6 +1282,19 @@ export const ProfilePage = () => {
                 </Button>
               )}
             </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="business-currency">{isRu ? 'Валюта бизнеса' : 'Business currency'}</label>
+            <input id="business-currency" value={clientInfo.currency} maxLength={3} list="profile-currencies" disabled={!editClientInfo} placeholder="EUR"
+              onChange={event => setClientInfo({ ...clientInfo, currency: event.target.value.toUpperCase() })}
+              className="w-full px-4 py-2.5 border rounded-xl disabled:bg-gray-50" />
+            <datalist id="profile-currencies">{['EUR','RUB','USD','THB','KZT','GBP','AED','GEL','AMD','BYN'].map(code => <option key={code} value={code} />)}</datalist>
+            <p className="text-sm text-gray-500">{isRu ? 'Оператор использует этот город и эту валюту, в том числе для голосовых команд.' : 'The Operator uses this city and currency, including for voice commands.'}</p>
+            <details><summary className="text-sm cursor-pointer">{isRu ? 'Часовой пояс' : 'Time zone'}</summary>
+              <input aria-label={isRu ? 'Часовой пояс бизнеса' : 'Business time zone'} value={clientInfo.timezone} disabled={!editClientInfo} placeholder="Europe/Tallinn"
+                onChange={event => setClientInfo({ ...clientInfo, timezone: event.target.value })} className="w-full mt-2 px-4 py-2.5 border rounded-xl disabled:bg-gray-50" />
+              <p className="text-xs text-gray-500">{isRu ? 'Определяется по сохранённому городу. Для неоднозначного города укажите явно.' : 'Determined from the saved city. Specify it for an ambiguous city.'}</p>
+            </details>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">

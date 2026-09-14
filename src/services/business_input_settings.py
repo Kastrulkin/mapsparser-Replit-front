@@ -6,7 +6,7 @@ from services.operator_conversations import _row
 
 def authorize_write(cursor, business_id, user_id):
     from services.operator_audio import authorize_actor
-    actor, _ = authorize_actor(cursor, user_id, business_id)
+    actor, _ = authorize_actor(cursor, user_id, business_id, False)
     if actor.get('role') != 'business_owner' and not actor.get('is_superadmin'):
         raise PermissionError('Сохранить валюту и часовой пояс может владелец бизнеса.')
 
@@ -167,7 +167,58 @@ def resolve(cursor, business_id):
                 value = None
         # A disagreement is surfaced for confirmation, never silently resolved.
         result[field] = None if field in result['conflicts'] else value
+    # The profile's city is authoritative. The settings copy only binds an
+    # explicit timezone to the city for which it was confirmed.
+    if 'city' in business:
+        city = str(business.get('city') or '').strip() or None
+        result['city'] = city
+        result['conflicts'] = [field for field in result['conflicts'] if field != 'city']
+        bound_city = configured.get('city')
+        if (not result.get('timezone') and 'timezone' not in result['conflicts']) or (bound_city and bound_city != city):
+            result['timezone'] = city_timezone(city)
+            result['conflicts'] = [field for field in result['conflicts'] if field != 'timezone']
+        elif city and not bound_city and not business.get('timezone'):
+            result['timezone'] = city_timezone(city)
     return result
+
+
+def city_timezone(city):
+    if not city:
+        return None
+    value = str(city).strip().casefold()
+    if value in CITY_ZONES:
+        return CITY_ZONES[value][1]
+    from zoneinfo import available_timezones
+    matches = [z for z in available_timezones() if '/' in z and z.split('/')[-1].replace('_', ' ').casefold() == value]
+    return matches[0] if len(matches) == 1 else None
+
+
+def save_profile_settings(cursor, business_id, user_id, data, request_id):
+    # The profile Save button explicitly confirms these fields.
+    from services import finance_daily
+    authorize_write(cursor, business_id, user_id)
+    cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('finance-daily:' + business_id,))
+    current = resolve(cursor, business_id)
+    patch = {field: str(data[field]).strip() for field in ('city', 'currency', 'timezone')
+             if data.get(field) is not None and str(data[field]).strip() != str(current.get(field) or '')}
+    # A blank currency/zone does not erase a known default.
+    patch = {key: value for key, value in patch.items() if value}
+    if not patch:
+        return current
+    if data.get('settingsVersion') is not None and data['settingsVersion'] != current['version']:
+        raise ValueError('Настройки изменились. Обновите страницу перед сохранением.')
+    if patch.get('city') and not patch.get('timezone'):
+        zone = city_timezone(patch['city'])
+        if zone:
+            patch['timezone'] = zone
+    envelope = finance_daily.prepare(cursor, business_id, user_id, {'kind': 'settings', **patch},
+                                     data.get('channel') if data.get('channel') in {'web','telegram_mini_app'} else 'web', None)
+    return finance_daily.apply(cursor, business_id, user_id, envelope, 'profile-settings:' + request_id)
+
+
+def profile_fields(cursor, business_id):
+    settings = resolve(cursor, business_id)
+    return {'currency': settings.get('currency') or '', 'timezone': settings.get('timezone') or '', 'settingsVersion': settings['version']}
 
 
 def validate_patch(args, current):

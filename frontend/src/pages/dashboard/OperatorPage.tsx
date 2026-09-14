@@ -1,4 +1,3 @@
-import { BusinessInputSettings } from '@/components/operator/BusinessInputSettings';
 import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -619,7 +618,7 @@ export const OperatorPage = () => {
         businessName={businessName}
       />
 
-      {currentBusinessId && <BusinessInputSettings key={`settings:${currentBusinessId}`} businessId={currentBusinessId} onSubmit={sendOperatorChatMessage} disabled={chatLoading || historyLoading} />}
+      {currentBusinessId && <Link to="/dashboard/profile" className="text-sm text-primary underline">{language === 'ru' ? 'Город и валюта — в «Профиль и бизнес»' : 'City and currency — Profile and business'}</Link>}
 
       {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
 
