@@ -15,7 +15,7 @@ from psycopg2.extras import Json
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from core.email_delivery import send_email
-from services.creator_city_service import available_creator_cities, canonicalize_city
+from services.creator_city_service import available_creator_cities, canonicalize_city, city_search_terms
 from services.creator_offer_distribution_service import activate_pending_offers, update_offer_preferences
 from services.creator_promotion_service import add_metric_snapshot
 
@@ -25,6 +25,7 @@ RELATIONSHIP_STAGES = (
     "needs_details", "declined", "paid_only", "invalid_contact", "paused",
 )
 TERMINAL_REPLY_STAGES = {"replied", "interested", "needs_details", "declined", "paid_only", "paused"}
+CREATOR_REPRESENTATION_TYPES = ("independent", "agency", "manager", "unknown")
 
 
 def creator_portal_feature_state() -> dict[str, bool]:
@@ -207,7 +208,7 @@ def add_contact_event(cursor: Any, *, profile_id: str, event_type: str, channel:
 
 def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
                        stage: str | None = None, stages: list[str] | None = None, limit: int = 100,
-                       offset: int = 0) -> dict[str, Any]:
+                       offset: int = 0, filters: dict[str, Any] | None = None) -> dict[str, Any]:
     if stage and stage not in RELATIONSHIP_STAGES:
         raise ValueError("Недопустимый статус")
     requested_stages = [item for item in (stages or []) if item]
@@ -224,6 +225,70 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
     elif requested_stages:
         scope += " AND r.stage = ANY(%s)"
         params.append(requested_stages)
+
+    requested_filters = filters or {}
+    city = canonicalize_city(requested_filters.get("city"))
+    if city:
+        terms = [f"%{term}%" for term in city_search_terms(city)]
+        scope += (
+            " AND (LOWER(REGEXP_REPLACE(COALESCE(taxonomy.home_city, p.primary_city, ''), "
+            "'[^[:alnum:]]+', ' ', 'g')) ILIKE ANY(%s) "
+            "OR LOWER(REGEXP_REPLACE(taxonomy.content_geographies_json::text, '[^[:alnum:]]+', ' ', 'g')) ILIKE ANY(%s) "
+            "OR LOWER(REGEXP_REPLACE(taxonomy.audience_geography_json::text, '[^[:alnum:]]+', ' ', 'g')) ILIKE ANY(%s))"
+        )
+        params.extend([terms, terms, terms])
+
+    topic = str(requested_filters.get("topic") or "").strip()
+    if topic:
+        pattern = f"%{topic}%"
+        scope += (
+            " AND (p.topics_json::text ILIKE %s OR COALESCE(taxonomy.primary_topic, '') ILIKE %s "
+            "OR taxonomy.secondary_topics_json::text ILIKE %s OR taxonomy.content_styles_json::text ILIKE %s)"
+        )
+        params.extend([pattern, pattern, pattern, pattern])
+
+    platform = str(requested_filters.get("platform") or "").strip().lower()
+    if platform:
+        scope += " AND EXISTS (SELECT 1 FROM creator_channels filter_channel WHERE filter_channel.creator_profile_id = p.id AND filter_channel.platform = %s)"
+        params.append(platform)
+
+    audience_size_band = str(requested_filters.get("audience_size_band") or "").strip().lower()
+    if audience_size_band:
+        if audience_size_band not in {"nano", "micro", "mid", "macro", "unknown"}:
+            raise ValueError("Недопустимый размер аудитории")
+        scope += " AND COALESCE(taxonomy.audience_size_band, 'unknown') = %s"
+        params.append(audience_size_band)
+
+    barter = str(requested_filters.get("barter") or "").strip().lower()
+    if barter == "yes":
+        scope += " AND commercial.accepts_barter IS TRUE"
+    elif barter == "no":
+        scope += " AND commercial.accepts_barter IS FALSE"
+    elif barter == "unknown":
+        scope += " AND commercial.accepts_barter IS NULL"
+    elif barter:
+        raise ValueError("Недопустимый фильтр бартера")
+
+    representation = str(requested_filters.get("representation") or "").strip().lower()
+    if representation:
+        if representation not in CREATOR_REPRESENTATION_TYPES:
+            raise ValueError("Недопустимый тип представительства")
+        scope += (
+            " AND COALESCE(NULLIF(commercial.metadata_json ->> 'representation_type', ''), "
+            "NULLIF(p.metadata_json ->> 'representation_type', ''), 'unknown') = %s"
+        )
+        params.append(representation)
+
+    profile_type = str(requested_filters.get("profile_type") or "").strip().lower()
+    if profile_type:
+        scope += " AND p.profile_type = %s"
+        params.append(profile_type)
+
+    query = str(requested_filters.get("query") or "").strip()
+    if query:
+        pattern = f"%{query}%"
+        scope += " AND (p.display_name ILIKE %s OR COALESCE(p.description, '') ILIKE %s)"
+        params.extend([pattern, pattern])
     params.extend([limit, offset])
     cursor.execute(
         f"""
@@ -236,6 +301,8 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
                taxonomy.content_geographies_json, taxonomy.audience_types_json,
                taxonomy.audience_size_band, taxonomy.content_styles_json,
                taxonomy.classification_status, taxonomy.evidence_json,
+               COALESCE(NULLIF(commercial.metadata_json ->> 'representation_type', ''),
+                        NULLIF(p.metadata_json ->> 'representation_type', ''), 'unknown') AS representation_type,
                account.status AS account_status,
                COALESCE(pending_offers.count, 0) AS pending_offers_count,
                COALESCE(channels.items, '[]'::jsonb) AS channels,
@@ -283,6 +350,18 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
         items.append(_ready(item))
     cursor.execute(
         f"""
+        SELECT COUNT(*) AS count
+        FROM creator_profiles p
+        JOIN creator_relationships r ON r.creator_profile_id = p.id
+        LEFT JOIN creator_commercial_profiles commercial ON commercial.creator_profile_id = p.id
+        LEFT JOIN creator_profile_taxonomy taxonomy ON taxonomy.creator_profile_id = p.id
+        WHERE TRUE {scope}
+        """,
+        tuple(params[1:-2]),
+    )
+    filtered_total = int(_dict(cursor.fetchone()).get("count") or 0)
+    cursor.execute(
+        f"""
         SELECT r.stage, COUNT(*) AS count FROM creator_relationships r
         JOIN creator_profiles p ON p.id = r.creator_profile_id
         WHERE TRUE {scope_base}
@@ -291,7 +370,41 @@ def list_relationships(cursor: Any, *, business_id: str, is_superadmin: bool,
         tuple([] if is_superadmin else [business_id]),
     )
     counts = {str(row["stage"]): int(row["count"]) for row in cursor.fetchall()}
-    return {"items": items, "counts": counts, "total": sum(counts.values()), "limit": limit, "offset": offset}
+    cursor.execute(
+        """
+        SELECT DISTINCT COALESCE(taxonomy.home_city, p.primary_city) AS city
+        FROM creator_profiles p
+        JOIN creator_relationships r ON r.creator_profile_id = p.id
+        LEFT JOIN creator_profile_taxonomy taxonomy ON taxonomy.creator_profile_id = p.id
+        WHERE COALESCE(taxonomy.home_city, p.primary_city) IS NOT NULL
+          AND NULLIF(TRIM(COALESCE(taxonomy.home_city, p.primary_city)), '') IS NOT NULL
+        ORDER BY city
+        LIMIT 300
+        """
+    )
+    cities = [canonicalize_city(row["city"]) for row in cursor.fetchall()]
+    cursor.execute(
+        """
+        SELECT DISTINCT platform FROM creator_channels
+        WHERE NULLIF(TRIM(platform), '') IS NOT NULL
+        ORDER BY platform
+        """
+    )
+    platforms = [str(row["platform"]) for row in cursor.fetchall()]
+    return {
+        "items": items,
+        "counts": counts,
+        "total": sum(counts.values()),
+        "filtered_total": filtered_total,
+        "limit": limit,
+        "offset": offset,
+        "filters": {
+            "cities": sorted(set(cities)),
+            "platforms": platforms,
+            "audience_size_bands": ["nano", "micro", "mid", "macro", "unknown"],
+            "representation_types": list(CREATOR_REPRESENTATION_TYPES),
+        },
+    }
 
 
 def relationship_detail(cursor: Any, *, profile_id: str, business_id: str,

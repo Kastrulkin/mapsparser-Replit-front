@@ -261,9 +261,20 @@ def relationships_list():
         stages = [item.strip() for item in str(request.args.get("stages") or "").split(",") if item.strip()]
         limit = min(max(int(request.args.get("limit") or 100), 1), 500)
         offset = max(int(request.args.get("offset") or 0), 0)
+        filters = {
+            "query": request.args.get("query"),
+            "city": request.args.get("city"),
+            "topic": request.args.get("topic"),
+            "platform": request.args.get("platform"),
+            "audience_size_band": request.args.get("audience_size_band"),
+            "barter": request.args.get("barter"),
+            "representation": request.args.get("representation"),
+            "profile_type": request.args.get("profile_type"),
+        }
         registry = list_relationships(cursor, business_id=business_id,
                                       is_superadmin=bool(user.get("is_superadmin")),
-                                      stage=stage, stages=stages, limit=limit, offset=offset)
+                                      stage=stage, stages=stages, limit=limit, offset=offset,
+                                      filters=filters)
         return jsonify({"success": True, "registry": registry})
     except ValueError as exc:
         return _json_error(str(exc), 400)
