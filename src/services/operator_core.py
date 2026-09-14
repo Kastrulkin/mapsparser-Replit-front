@@ -1801,6 +1801,9 @@ def _content_read_request(message):
     lowered = message.lower().replace('-', ' ').strip(' .?!')
     if re.search(r'\b(опубликуй|опубликовать|публикуй|размести|отправь|создай|составь|подготовь|сделай)\b', lowered):
         return False
+    if ('запланир' in lowered and re.search(r'пост|публикаци', lowered)
+            and re.search(r'есть|како|покажи|посмотри|пришли', lowered)):
+        return True
     if lowered in {'контент план', 'мой контент план', 'наш контент план'}:
         return True
     return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ', 'последн', 'крайний')))
@@ -1812,10 +1815,11 @@ def _read_requested_content(cursor, business_id, message):
     from services.operator_query import render_operator_query
     lowered = message.lower()
     latest = bool(re.search(r'\b(последн\w*|крайний)\b', lowered))
-    requested_next = any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')) or bool(re.search(r'\bпосле\b', lowered))
+    requested_next = any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ', 'запланир')) or bool(re.search(r'\bпосле\b', lowered))
     upcoming = not latest and (requested_next or ('контент' in lowered and not re.search(r'прошл|истори|архив', lowered)))
     filters = []
     zone = None
+    explicit_date = False
     if upcoming:
         from services.business_input_settings import resolve
         zone = resolve(cursor, business_id).get('timezone')
@@ -1825,6 +1829,7 @@ def _read_requested_content(cursor, business_id, message):
         months = ('января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря')
         match = re.search(r'после\s+(\d{1,2})\s+('+'|'.join(months)+r')(?:\s+(20\d{2}))?', lowered)
         if match:
+            explicit_date = True
             try:
                 cutoff = date(int(match.group(3) or (cutoff.year if cutoff else datetime.now(ZoneInfo('UTC')).year)), months.index(match.group(2))+1, int(match.group(1))) + timedelta(days=1)
             except ValueError:
@@ -1845,6 +1850,25 @@ def _read_requested_content(cursor, business_id, message):
         result['chat_response'] = (('Следующий материал в сохранённом контент-плане:\n\n' if requested_next else 'Предстоящие материалы сохранённого контент-плана:\n\n')+
             render_operator_query(result['query'], items, len(items)) if items else
             'В сохранённом контент-плане не нашёл неопубликованного материала по указанным условиям.')
+        if not items:
+            saved = execute_operator_query(cursor, business_id=business_id, arguments={
+                'resource': 'content', 'filters': [], 'sort_by': 'scheduled_for',
+                'sort_direction': 'desc', 'limit': 50, 'view': 'compact'})
+            if saved.get('status') == 'completed':
+                if result.get('result_is_partial') or saved.get('result_is_partial'):
+                    result['chat_response'] = 'В проверенной части контент-плана будущих постов нет. Поиск неполный; откройте полный план для проверки остальных материалов.'
+                elif not saved.get('items'):
+                    result['chat_response'] = 'В текущем контент-плане пока нет постов. Можно подготовить новый контент-план.'
+                else:
+                    result['chat_response'] = ('В текущем контент-плане нет неопубликованных постов после указанной даты.' if explicit_date else
+                        'В текущем контент-плане нет постов, запланированных на сегодня или будущие даты.' if zone else
+                        'В текущем контент-плане нет неопубликованных постов.')
+                    dates = [str(item['scheduled_for'])[:10] for item in saved['items'] if item.get('scheduled_for')]
+                    if dates:
+                        result['chat_response'] += ' Последняя дата в плане — ' + max(dates) + '.'
+                    if any(item.get('status') not in {'published', 'cancelled', 'archived'} for item in saved['items']):
+                        result['chat_response'] += ' Есть материалы с прошедшими датами или без даты, не отмеченные опубликованными.'
+                    result['chat_response'] += ' Можно подготовить следующий план, сохранив старый.'
         if not zone:
             result['chat_response'] += '\n\nПорядок — по датам в плане, без отсечения прошедших дней: часовой пояс бизнеса не задан.'
         result['chat_response'] += '\n\nДата в плане не подтверждает постановку на автопубликацию или публикацию во внешнем канале.'

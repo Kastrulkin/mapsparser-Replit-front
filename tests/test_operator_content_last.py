@@ -35,3 +35,32 @@ def test_read_phrasings_and_publish_boundary():
 def explicit_business_timezone(monkeypatch):
     from services import business_input_settings
     monkeypatch.setattr(business_input_settings, 'resolve', lambda *args: {'timezone': 'Europe/Tallinn', 'currency': 'EUR', 'version': 1})
+
+
+def test_expired_plan_explains_last_date_and_remaining_drafts(monkeypatch):
+    monkeypatch.setattr(operator_query, '_load_module_items', lambda *args, **kwargs: ([
+        {'title': 'Старый черновик', 'scheduled_for': '2020-09-12', 'status': 'edited'},
+    ], {}))
+    for message in ['Какой следующий пост запланирован у рейдеры по контент плану',
+                    'По какой указанной дате просто любой у нас есть хоть какойто пост запланированный для райдера']:
+        assert operator_core._content_read_request(message)
+        result = operator_core._read_requested_content(None, 'b', message)
+        assert result['status'] == 'completed' and result['items'] == []
+        assert 'нет постов, запланированных на сегодня или будущие даты' in result['chat_response']
+        assert '2020-09-12' in result['chat_response']
+        assert 'не отмеченные опубликованными' in result['chat_response']
+        assert 'Можно подготовить' in result['chat_response']
+
+
+def test_future_item_is_found_for_any_scheduled_post_question(monkeypatch):
+    setup_items(monkeypatch)
+    result = operator_core._read_requested_content(None, 'b', 'Есть хоть какой-то запланированный пост?')
+    assert result['items'][0]['title'] == 'Пост 1'
+    assert 'нет постов' not in result['chat_response']
+
+
+def test_empty_plan_is_distinct_from_expired(monkeypatch):
+    monkeypatch.setattr(operator_query, '_load_module_items', lambda *args, **kwargs: ([], {}))
+    result = operator_core._read_requested_content(None, 'b', 'Какой следующий пост?')
+    assert 'пока нет постов' in result['chat_response']
+    assert 'Последняя дата' not in result['chat_response']

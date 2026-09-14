@@ -60,7 +60,7 @@ def test_next_post_excludes_published_and_old_items(monkeypatch):
     assert observed[0]['business_id'] == 'riderra'
     assert observed[0]['arguments']['filters'][0]['value'] == '2026-09-12'
     assert result['items'] == []
-    assert 'не нашёл' in result['chat_response']
+    assert 'нет неопубликованных постов после указанной даты' in result['chat_response']
 
 
 def test_historical_query_not_replaced_with_future_plan():
