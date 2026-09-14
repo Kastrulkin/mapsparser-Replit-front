@@ -73,6 +73,8 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     digest = hashlib.sha256(json.dumps([message, payload.get("transcription_id"), payload.get("url")], ensure_ascii=False).encode()).hexdigest()
     if payload.get("input_context"):
         digest = hashlib.sha256((digest + str(payload["input_context"])).encode()).hexdigest()
+    if payload.get("work_entry_id") or payload.get("work_action_id"):
+        digest=hashlib.sha256((digest+json.dumps([payload.get("work_entry_id"),payload.get("work_action_id")])).encode()).hexdigest()
     if payload.get("work_change_hash"):
         digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
     if request_id:

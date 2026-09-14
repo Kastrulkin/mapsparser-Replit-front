@@ -32,6 +32,7 @@ class LLMTaskDefinition:
     fallback_data_class: str = ""
     pipeline_stage: str = ""
     quality_gate: str = "non_empty"
+    thinking_enabled: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class LLMTaskRequest:
 class LLMTaskResult:
     status: str
     content: str = ""
+    finish_reason: str = ""
     parsed_data: dict[str, Any] | list[Any] | None = None
     provider: str = "none"
     model: str = ""

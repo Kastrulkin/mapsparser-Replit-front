@@ -49,6 +49,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "review_reply",
         "news_generation",
         "content_plan_generation_v2",
+        "content_plan_direction",
         "social_post_generation",
         "service_optimization",
         "service_copy_generation",
@@ -688,3 +689,20 @@ def test_deepseek_adapter_adds_json_instruction_when_caller_omits_it(monkeypatch
     assert result.status == "completed"
     assert "JSON" in captured["body"]["messages"][0]["content"]
     assert captured["body"]["response_format"] == {"type": "json_object"}
+
+
+def test_operator_truncation_has_one_bounded_recovery(monkeypatch):
+    calls=[]
+    def generate(request,definition,**kwargs):
+        calls.append(definition.max_tokens)
+        return LLMTaskResult(status='truncated_response',provider='deepseek',finish_reason='length',usage={'completion_tokens':definition.max_tokens})
+    monkeypatch.setenv('LLM_ROUTER_ENABLED','true')
+    monkeypatch.setenv('LLM_DEEPSEEK_BUSINESS_IDS','business-1')
+    monkeypatch.setattr(gateway,'_generate_once',generate)
+    monkeypatch.setattr(gateway,'_record_llm_usage',lambda *args,**kwargs:None)
+    result=gateway.run_llm_task(LLMTaskRequest(task_key='operator_tool_plan',prompt='Команда',business_id='business-1'))
+    assert calls==[1200,2400]
+    assert result.status=='truncated_response'
+    assert result.finish_reason=='length'
+    assert result.usage['completion_tokens']==3600
+    assert get_task_definition('operator_tool_plan').thinking_enabled is False

@@ -214,9 +214,11 @@ def _task(
     allow_text_fallback: bool = False,
     fallback_data_class: str = "",
     pipeline_stage: str = "",
+    thinking_enabled: bool | None = None,
 ) -> LLMTaskDefinition:
     return LLMTaskDefinition(
         task_key=key,
+        thinking_enabled=thinking_enabled,
         primary_provider=provider,
         model_profile=profile,
         data_class=data_class,
@@ -240,7 +242,7 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "content_plan_direction": _task(
         "content_plan_direction", profile="gigachat_max", response_kind="json",
         schema={"type": "object", "properties": {"groups": {"type": "array"}, "items": {"type": "array"}, "error": {"type": "string"}}},
-        max_tokens=8000, temperature=0.2, timeout=60, prompt_version="content_plan_direction_v1", allow_text_fallback=True,
+        max_tokens=6000, temperature=0.2, timeout=60, prompt_version="content_plan_direction_v2", allow_text_fallback=True, thinking_enabled=False,
     ),
     "content_plan_generation_v2": _task(
         "content_plan_generation_v2",
@@ -391,7 +393,8 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
             },
             "required": ["action"],
         },
-        max_tokens=900,
+        max_tokens=1200,
+        thinking_enabled=False,
         temperature=0.0,
         timeout=20,
         shadow_allowed=False,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 import os
 import threading
 
@@ -190,7 +191,7 @@ def _generate_with_provider_fallback(
         )
 
     primary_model = _gigachat_primary_model(definition)
-    models = GIGACHAT_MODEL_CHAINS.get(primary_model, (primary_model,))
+    models = (primary_model,) if request.task_key in {"operator_tool_plan","content_plan_direction"} else GIGACHAT_MODEL_CHAINS.get(primary_model, (primary_model,))
     attempts: list[dict[str, str]] = []
     result = LLMTaskResult(status="provider_unavailable", provider="gigachat", model=primary_model)
     for model in models:
@@ -253,6 +254,7 @@ def _run_shadow_request(
                 request,
                 definition,
             )
+            corrected_result.attempt_chain=[*first_result.attempt_chain,{"status":first_result.status,"finish_reason":first_result.finish_reason,"completion_tokens":first_result.usage.get("completion_tokens",0)},*corrected_result.attempt_chain]
             corrected_result.usage = _combined_usage(first_result, corrected_result)
             corrected_result.latency_ms += first_result.latency_ms
             result = corrected_result
@@ -288,6 +290,8 @@ def _usage_metadata(
 ) -> dict[str, object]:
     return {
         "response_kind": definition.response_kind,
+        "finish_reason": result.finish_reason,
+        "reasoning_tokens": result.usage.get("reasoning_tokens", 0),
         "correction_attempted": correction_attempted,
         "validation_errors": result.validation_errors[:8],
         "pipeline_id": request.pipeline_id,
@@ -378,7 +382,7 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
     )
     first_result = result
     correction_attempted = False
-    if result.status in {"invalid_json", "schema_invalid"}:
+    if result.status in {"invalid_json", "schema_invalid"} or (request.task_key == "operator_tool_plan" and result.status in {"empty_response", "truncated_response", "provider_error", "provider_unavailable", "provider_timeout"}):
         correction_attempted = True
         correction = (
             request.prompt
@@ -386,13 +390,17 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
             + "Ошибки схемы: "
             + json.dumps(result.validation_errors, ensure_ascii=False)
         )
+        recovery_definition=definition
+        if request.task_key=="operator_tool_plan" and result.status=="truncated_response":
+            recovery_definition=replace(definition,max_tokens=min(definition.max_tokens*2,2400))
         corrected_result = _generate_with_provider_fallback(
             request,
-            definition,
+            recovery_definition,
             provider=provider,
             prompt=correction,
             shadow=request.shadow,
         )
+        corrected_result.attempt_chain=[*first_result.attempt_chain,{"status":first_result.status,"finish_reason":first_result.finish_reason,"completion_tokens":first_result.usage.get("completion_tokens",0)},*corrected_result.attempt_chain]
         corrected_result.usage = _combined_usage(first_result, corrected_result)
         corrected_result.latency_ms += first_result.latency_ms
         result = corrected_result
@@ -406,6 +414,7 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
         definition.primary_provider == "gigachat"
         and provider == "gigachat"
         and definition.allow_text_fallback
+        and not (request.task_key=="content_plan_direction" and correction_attempted)
         and result.status != "completed"
         and not request.shadow
         and (not definition.fallback_data_class or bool(request.fallback_prompt))

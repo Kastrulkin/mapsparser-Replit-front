@@ -43,6 +43,8 @@ services:
         VITE_BROWSER_COOKIE_AUTH_ENABLED: ${VITE_BROWSER_COOKIE_AUTH_ENABLED:-false}
     restart: unless-stopped
     environment:
+      OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
+      OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS: ${OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS:-}
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
@@ -309,6 +311,8 @@ services:
       - path: ./config/yougile.env
         required: false
     environment:
+      OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
+      OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS: ${OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS:-}
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
@@ -574,6 +578,8 @@ services:
     # The app service owns schema migrations. The lean Telegram image starts the bot directly.
     entrypoint: []
     environment:
+      OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
+      OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS: ${OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       PYTHONPATH: /app:/app/src
       API_BASE_URL: http://app:8000

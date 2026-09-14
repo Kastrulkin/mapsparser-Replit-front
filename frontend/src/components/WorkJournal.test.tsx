@@ -42,3 +42,21 @@ it('clears private entries when access is revoked',async()=>{
  await user.click(screen.getByRole('button',{name:'Обновить'}));await screen.findByRole('alert');
  expect(screen.queryByText('Клиент отказался')).not.toBeInTheDocument();
 });
+it('reviews an observation with its version and clears the inbox on revoked access',async()=>{
+ const user=userEvent.setup();let revoked=false;let accepted=false;
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+  const path=String(input);
+  if(path.includes('/audio/'))return reply({input_enabled:false});
+  if(path.includes('/decision')){expect(JSON.parse(String(init?.body))).toMatchObject({business_id:'b',version:1,status:'in_progress',decision:'Проверить встречу'});accepted=true;return reply({entry:{...note,version:2}});}
+  if(path.includes('/review?'))return revoked?Promise.resolve(new Response(JSON.stringify({error:'Право отозвано'}),{status:403})):reply({items:[note]});
+  return reply({enabled:true,role:'manager',can_review:true,items:[],members:[]});
+ }));
+ render(<WorkJournal businessId="b" headers={headers}/>);
+ await user.click(await screen.findByRole('button',{name:'На разбор'}));
+ await user.click(await screen.findByRole('button',{name:'Разобрать'}));
+ await user.type(screen.getByLabelText('Комментарий руководства'),'Проверить встречу');
+ await user.click(screen.getByRole('button',{name:'Сохранить решение'}));
+ await waitFor(()=>expect(accepted).toBe(true));revoked=true;
+ await user.click(screen.getByRole('button',{name:'Показать'}));
+ await screen.findByRole('alert');expect(screen.queryByText('Клиент отказался')).not.toBeInTheDocument();
+});

@@ -1,7 +1,7 @@
 import { BusinessInputSettings } from '@/components/operator/BusinessInputSettings';
 import { WorkJournal } from '@/components/WorkJournal';
 import { FinanceDailyPanel } from '@/components/FinanceDailyPanel';
-import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
+import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission, waitForOperatorResult } from '@/components/operator/OperatorVoice';
 import { PlanDownload } from '@/components/content-plan/PlanDownload';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -849,8 +849,10 @@ export const TelegramControlPage = () => {
     try {
       const result = await fetch('/api/operator/chat', {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ business_id: scope.id, message: text, channel: 'telegram_mini_app', conversation_id: operatorConversationId, request_id: pendingOperatorRequest.current.id, ...source }),
-      }).then(readJson<{ conversation_id?: string; operator_result?: { message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
+      }).then(readJson<{ conversation_id?: string; operator_result?: { async_job_id?: string; message_id?: string; input_type?: string; chat_response?: string; summary?: string; status?: string; capability?: string; mobile_route?: { screen?: string }; approval?: { action_id?: string } } }>);
       if (version !== scopeRequestVersion.current) return;
+      if(result.operator_result)result.operator_result=await waitForOperatorResult(result.operator_result,scope.id,authOnlyHeaders,()=>version===scopeRequestVersion.current);
+      if(version!==scopeRequestVersion.current)return;
       pendingOperatorRequest.current = { businessId: "", text: "", id: "" };
       setOperatorConversationId(result.conversation_id || null);
       setMessages((current) => [...current, { role: 'user', text }, { role: 'operator', id: result.operator_result?.message_id,

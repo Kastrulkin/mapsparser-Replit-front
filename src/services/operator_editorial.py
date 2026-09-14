@@ -55,15 +55,15 @@ def read_context(cursor, business_id, user_id, arguments):
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     profile=_row(cursor,cursor.fetchone())
     notes=(profile.get('preferences_json') or {}).get('editorial_notes') or []
-    return {'status':'completed','items':[{**{key:row.get(key) for key in ('id','plan_id','theme','goal','scheduled_for','status','plan_status')},'version':_version(row)} for row in rows], 'plans':plans,
-            'saved_notes':notes[-30:], 'external_writes_performed':False}
+    return {'status':'completed','items':[{**{key:row.get(key) for key in (('id','plan_id','theme','goal','scheduled_for','status','plan_status') if arguments.get('include_details') else ('id','plan_id','theme','scheduled_for','status','plan_status'))},'version':_version(row)} for row in rows], 'plans':plans,
+            'saved_notes':notes[-5:], 'external_writes_performed':False}
 
 
 def _change(cursor,row,theme,brief,user_id,focus=None):
     metadata=dict(row.get('metadata_json') or {})
     history=list(metadata.get('operator_edit_history') or [])
     history.append({'theme':row['theme'],'goal':row.get('goal'),'draft_text':row.get('draft_text'),
-        'usernews_id':row.get('usernews_id'),'source_before':{key:row.get(key) for key in ('content_type','source_kind','source_ref','seo_keyword','service_id','transaction_id')},'metadata_before':{key:value for key,value in metadata.items() if key!='operator_edit_history'},
+        'scheduled_for':str(row.get('scheduled_for')),'status':row.get('status'),'usernews_id':row.get('usernews_id'),'source_before':{key:row.get(key) for key in ('content_type','source_kind','source_ref','seo_keyword','service_id','transaction_id')},'metadata_before':{key:value for key,value in metadata.items() if key!='operator_edit_history'},
         'actor':user_id,'at':datetime.now(timezone.utc).isoformat()})
     # Existing generated variants must not look current after a topic change.
     metadata={key:value for key,value in metadata.items() if key not in {'content_generation_v2','content_brief_v1','brief_answers','operator_edit_history','publication_objective'}}
@@ -131,6 +131,9 @@ def prepare_focus(cursor,business_id,user_id,message,arguments):
 
 
 def apply_focus(cursor,business_id,user_id,envelope):
+    if envelope.get('kind')=='revision':
+        from services.operator_plan_revision import apply
+        return apply(cursor,business_id,user_id,envelope)
     authorize_actor(cursor,user_id,business_id)
     if envelope.get('business_id')!=business_id: return _result('Чужой план.', 'blocked')
     cursor.execute('SELECT updated_at FROM contentplans WHERE id=%s AND business_id=%s FOR UPDATE',(envelope['plan_id'],business_id))
@@ -187,18 +190,23 @@ def editorial_prompt(cursor,business_id):
         {'facts_and_story':selected,'tone':preferences.get('tone_instruction')},ensure_ascii=False) if notes else ''
 
 
-def editorial_tools(cursor,business_id,user_id,message):
+def editorial_tools(cursor,business_id,user_id,message,channel="web"):
     string=lambda maximum: {'type':'string','maxLength':maximum}
     target={'item_id':string(100),'plan_id':string(100),'version':string(64)}
+    from services import operator_plan_revision
     tools=[
         {'name':'content.editorial_context','capability':'content.history','title':'Посты и сохранённые сведения для редактирования',
          'description':'Перед правкой прочитай план: id, даты, темы, версии и заметки. Пользователю называй только даты и темы, без технических ID и названий инструментов. Если указан месяц, выбирай только его даты. Если цель неоднозначна, уточни. Возвращает до 200 записей выбранного или последнего плана.',
-         'input_schema':{'type':'object','properties':{'plan_id':string(100)}},'risk_class':'read_only',
+         'input_schema':{'type':'object','properties':{'plan_id':string(100),'include_details':{'type':'boolean'}}},'risk_class':'read_only',
          'execute':lambda args:read_context(cursor,business_id,user_id,args)},
         {'name':'content.edit_item','capability':'content.item.edit','title':'Изменить тему и бриф поста',
          'description':'Меняет один неопубликованный пост по явной просьбе пользователя. theme и brief — точные цитаты надиктованной новой темы/информации, без слов команды и без выдуманных фактов. Нужна версия из editorial_context. Сохраняет старый текст в истории и помечает необходимость новой генерации. Не создаёт новый план.',
          'input_schema':{'type':'object','required':['item_id','version','theme'],'properties':{**target,'theme':string(500),'brief':string(6000)}},
          'risk_class':'write_internal_draft','execute':lambda args:edit_item(cursor,business_id,user_id,message,args),'deterministic_response':True},
+        {'name':'content.rebuild_plan','capability':'content.plan.refocus','title':'Переработать темы и расписание плана',
+         'description':'Переработать текущий или выбранный план, изменить число постов, частоту и распределение тем. Одно подтверждение перед применением. Передай post_count и interval_days из команды (один в неделю = 7 дней); план сам вычислит даты. Если число неясно — уточни. Не создавать новый план вместо правки. По умолчанию выбран последний действующий план.',
+         'input_schema':{'type':'object','required':['post_count','interval_days'],'properties':{'selector':{'type':'string','enum':['latest','today','current']},'plan_id':string(100),'post_count':{'type':'integer','minimum':1,'maximum':90},'interval_days':{'type':'integer','minimum':1,'maximum':90},'start_date':string(10),'extend_period':{'type':'boolean'}}},
+         'risk_class':'bulk_write','approval_required':True,'prepare_approval':lambda args:operator_plan_revision.prepare(cursor,business_id,user_id,message,{**args,"_channel":channel},queue=True),'deterministic_preparation_response':True},
         {'name':'content.refocus_plan','capability':'content.plan.refocus','title':'Изменить акцент контент-плана',
          'description':'Готовит preview новых тем до 20 неопубликованных постов выбранного периода. Сначала editorial_context. focus — точная цитата пожелания. changes — предложенные новые темы, соответствующие пожеланию, без новых фактических утверждений. Если период не указан, уточни его. Все темы будут показаны пользователю до применения. Сохраняет даты и старые тексты. Не создавать новый план вместо правки.',
          'input_schema':{'type':'object','required':['plan_id','focus','changes','period_start','period_end'],'properties':{'plan_id':string(100),'focus':string(1500),'period_start':string(10),'period_end':string(10),
@@ -208,6 +216,9 @@ def editorial_tools(cursor,business_id,user_id,message):
          'description':'Сохраняет только реальные сведения о выбранном бизнесе со слов пользователя, его историю или пожелание к тону для будущих текстов. Не сохраняй примеры, гипотезы, вопросы и отрицания. quote — точная полная цитата из текущего сообщения. Не сокращай историю и не добавляй факты. kind company_fact/founder_story/tone. Не использовать для акцента одного месяца — это refocus_plan.',
          'input_schema':{'type':'object','required':['kind','quote'],'properties':{'kind':{'type':'string','enum':['company_fact','founder_story','tone']},'quote':string(6000)}},
          'risk_class':'write_internal_draft','execute':lambda args:remember(cursor,business_id,user_id,message,args),'deterministic_response':True}]
+    import os
+    pilots={value.strip() for value in os.getenv('OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS','').split(',') if value.strip()}
+    if business_id not in pilots:tools=[tool for tool in tools if tool['name']!='content.rebuild_plan']
     for tool in tools:
         for key in ('execute','prepare_approval'):
             if key in tool:
@@ -224,8 +235,14 @@ def editorial_evidence(cursor,business_id):
 
 
 def _invoke(handler,arguments):
+    from services.operator_plan_continuation import PlanClarification
+    from services.content_plan_direction import PlanGenerationError
     try:
         return handler(arguments)
+    except PlanGenerationError:
+        return _result(str(sys.exception()), 'failed')
+    except PlanClarification:
+        return _result(str(sys.exception()), 'clarification_required')
     except PermissionError:
         return _result('Нет доступа к изменению контента этого бизнеса.', 'denied')
     except ValueError:

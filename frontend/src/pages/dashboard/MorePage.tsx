@@ -6,6 +6,7 @@ const sections = [
     title: 'Бизнес',
     items: [
       { title: 'Профиль компании', description: 'Данные, услуги и точки присутствия.', route: '/dashboard/profile', icon: Building2 },
+      { title: 'Рабочий журнал', description: 'Сообщить наблюдение, разобрать предложения и поручить работу.', route: '/dashboard/work-journal', icon: MessageSquare },
       { title: 'Финансы', description: 'Выручка, загрузка и средний чек.', route: '/dashboard/finance', icon: CreditCard },
       { title: 'Средний чек', description: 'Идеи допродаж и пакетных предложений.', route: '/dashboard/average-ticket', icon: WalletCards },
     ],

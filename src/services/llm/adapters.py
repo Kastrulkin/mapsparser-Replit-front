@@ -19,6 +19,7 @@ def _usage_dict(value: Any) -> dict[str, int]:
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": int(usage.get("total_tokens") or prompt_tokens + completion_tokens),
+        "reasoning_tokens": int((usage.get("completion_tokens_details") or {}).get("reasoning_tokens") or 0),
     }
 
 
@@ -192,6 +193,8 @@ class DeepSeekAdapter:
             "temperature": definition.temperature,
             "max_tokens": definition.max_tokens,
         }
+        if definition.thinking_enabled is not None:
+            body["thinking"] = {"type": "enabled" if definition.thinking_enabled else "disabled"}
         if expects_json:
             body["response_format"] = {"type": "json_object"}
         headers = {
@@ -200,7 +203,8 @@ class DeepSeekAdapter:
         }
         started = time.monotonic()
         last_error = ""
-        for attempt in range(2):
+        attempts = 1 if request.task_key in {"operator_tool_plan", "content_plan_direction"} else 2
+        for attempt in range(attempts):
             try:
                 response = requests.post(
                     f"{self.base_url}/chat/completions",
@@ -208,7 +212,7 @@ class DeepSeekAdapter:
                     json=body,
                     timeout=definition.timeout_seconds,
                 )
-                if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
+                if response.status_code in {429, 500, 502, 503, 504} and attempt + 1 < attempts:
                     last_error = f"HTTP_{response.status_code}"
                     time.sleep(0.4)
                     continue
@@ -217,24 +221,28 @@ class DeepSeekAdapter:
                 choices = payload.get("choices") if isinstance(payload.get("choices"), list) else []
                 message = choices[0].get("message") if choices and isinstance(choices[0], dict) else {}
                 content = str(message.get("content") or "") if isinstance(message, dict) else ""
+                finish = str(choices[0].get("finish_reason") or "") if choices and isinstance(choices[0], dict) else ""
                 result = LLMTaskResult(
-                    status="completed" if content else "empty_response",
+                    status="provider_refusal" if finish == "content_filter" or (isinstance(message,dict) and message.get("refusal")) else "truncated_response" if finish == "length" else "completed" if content else "empty_response",
+                    finish_reason=finish,
                     content=content,
                     provider=self.provider,
                     model=str(payload.get("model") or model),
                     usage=_usage_dict(payload.get("usage")),
                     latency_ms=int((time.monotonic() - started) * 1000),
-                    fallback_reason="" if content else "DEEPSEEK_EMPTY_RESPONSE",
+                    fallback_reason="DEEPSEEK_OUTPUT_LIMIT" if finish == "length" else "" if content else "DEEPSEEK_EMPTY_RESPONSE",
                     shadow=shadow,
                     provider_request_id=str(payload.get("id") or ""),
                 )
                 return result
             except Exception:
                 last_error = str(sys.exc_info()[1])[:240]
-                if attempt == 0:
+                failure = sys.exception()
+                failure_status = "provider_timeout" if isinstance(failure, requests.Timeout) else "provider_error"
+                if attempt + 1 < attempts:
                     time.sleep(0.4)
         result = LLMTaskResult(
-            status="provider_error",
+            status=failure_status,
             provider=self.provider,
             model=model,
             latency_ms=int((time.monotonic() - started) * 1000),

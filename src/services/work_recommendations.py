@@ -136,6 +136,10 @@ def validate_rules(cursor,business_id,rules):
 
 
 def prepare_policy(cursor,business_id,user_id,args):
+    if args.get('kind')=='reviewer':
+        from services import work_review
+        work_review.require_review(cursor,business_id,user_id)
+        return {**work_review.prepare_grant(cursor,business_id,user_id,args),'examples':[]}
     work_journal.scope(cursor,business_id,user_id,True,True)
     before=policy(cursor,business_id);current_matrix=matrix(cursor,business_id)
     kind=args.get('kind','rules')
@@ -197,6 +201,9 @@ def prepare_policy(cursor,business_id,user_id,args):
 
 
 def apply_policy(cursor,business_id,user_id,envelope,action_id):
+    if envelope.get('kind')=='reviewer':
+        from services import work_review
+        return work_review.apply_grant(cursor,business_id,user_id,envelope,action_id)
     work_journal.scope(cursor,business_id,user_id,True,True)
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('work-journal:'+business_id,))
     work_journal.scope(cursor,business_id,user_id,True,True)

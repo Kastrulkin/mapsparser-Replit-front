@@ -1,4 +1,4 @@
-import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
+import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission, waitForOperatorResult, voiceHeaders } from '@/components/operator/OperatorVoice';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
@@ -369,10 +369,12 @@ export const OperatorPage = () => {
         ...source,
       });
       if (activeBusiness.current !== currentBusinessId) return;
-      const result = response.data.operator_result || {
+      const initialResult = response.data.operator_result || {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
+      const result=await waitForOperatorResult(initialResult,currentBusinessId,voiceHeaders,()=>activeBusiness.current===currentBusinessId);
+      if(activeBusiness.current!==currentBusinessId)return;
       pendingRequest.current = { businessId: "", text: "", id: "" };
       appendPair(text, result);
       const nextConversationId = response.data.conversation_id || result.conversation_id;

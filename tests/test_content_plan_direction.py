@@ -42,3 +42,37 @@ def test_invalid_generation_never_becomes_success(monkeypatch,failure):
     plan=skeleton()
     with pytest.raises(PlanClarification):content_plan_direction.apply_direction(plan,{},'3 поста про Азию','b','u')
     assert all('theme' not in item for item in plan['items'])
+
+
+def test_large_plan_generated_in_bounded_batches_and_globally_validated(monkeypatch):
+    calls=[]
+    def generate(prompt,*args):
+        calls.append(prompt)
+        if len(calls)==1:return json.dumps({'groups':[{'label':'Азия','mode':'part','value':None},{'label':'Другое','mode':'remainder','value':None}]})
+        payload=json.loads(prompt.split('\n',1)[1])
+        assert len(payload['slots'])<=10
+        start=len(payload['previous_themes'])
+        return json.dumps({'items':[{'group':group,'theme':f'Тема {start+i}','goal':'Совет'} for i,group in enumerate(payload['slots'])]})
+    monkeypatch.setattr(content_plan_direction,'_generate',generate)
+    plan={'items':[{'scheduled_for':f'2026-10-{i+1:02d}'} for i in range(21)]}
+    result=content_plan_direction.apply_direction(plan,{},'Часть постов про Азию','b','u')
+    assert len(calls)==4 and result['meta']['editorial_counts']==[11,10]
+
+
+def test_completed_batches_survive_a_failed_later_batch(monkeypatch):
+    cache={};calls=[];failed=False
+    def checkpoint(prompt,value):
+        if value is not None:cache[prompt]=value
+        return cache.get(prompt)
+    def generate(prompt,*args):
+        nonlocal failed
+        calls.append(prompt)
+        if 'На этом этапе верни только groups' in prompt:return json.dumps({'groups':[{'label':'Темы','mode':'all','value':None}]})
+        data=json.loads(prompt.split('\n',1)[1]);start=len(data['previous_themes'])
+        if start==10 and not failed:failed=True;raise RuntimeError('timeout')
+        return json.dumps({'items':[{'group':0,'theme':f'Тема {start+i}','goal':'Совет'} for i in range(len(data['slots']))]})
+    monkeypatch.setattr(content_plan_direction,'_generate',generate)
+    def plan():return {'items':[{'scheduled_for':f'2026-10-{i+1:02d}'} for i in range(13)]}
+    with pytest.raises(PlanClarification):content_plan_direction.apply_direction(plan(),{},'Создай план','b','u',generation_cache=checkpoint)
+    result=content_plan_direction.apply_direction(plan(),{},'Создай план','b','u',generation_cache=checkpoint)
+    assert len(calls)==4 and len(result['items'])==13

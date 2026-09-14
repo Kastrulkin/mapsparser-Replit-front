@@ -12,7 +12,7 @@ JOB_STATUSES = {"queued", "running", "waiting_for_review", "completed", "failed"
 TERMINAL_JOB_STATUSES = {"completed", "failed", "cancelled"}
 RETRYABLE_JOB_KINDS = {
     "audio_transcription", "audio_speech",
-    "content_plan_generate",
+    "content_plan_generate", "content_plan_revision",
     "content_draft_generate",
     "finance_document_recognize",
     "finance_crm_sync",
@@ -20,7 +20,7 @@ RETRYABLE_JOB_KINDS = {
 }
 CANCELLABLE_JOB_KINDS = {
     "audio_transcription", "audio_speech",
-    "content_plan_generate",
+    "content_plan_generate", "content_plan_revision",
     "content_draft_generate",
     "finance_document_recognize",
     "finance_crm_sync",
@@ -484,6 +484,10 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
             from services.operator_audio import process_audio_job
             result = process_audio_job(claimed)
             status, stage, progress = "completed", "Аудио обработано", 100
+        elif kind == "content_plan_revision":
+            from services.operator_plan_revision import process_job
+            result = process_job(claimed)
+            status, stage, progress = "completed", "Предпросмотр готов", 100
         elif kind == "content_plan_generate":
             from services.content_plan_service import create_generated_content_plan
 
@@ -537,6 +541,9 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
                 error=str(exc),
                 lease_token=lease_token,
             )
+            if failed_update and kind=="content_plan_revision":
+                from services.operator_plan_revision import record_failure
+                record_failure(fail_db.conn.cursor(),claimed)
             if failed_update and kind in {"audio_transcription", "audio_speech"}:
                 fail_db.conn.cursor().execute("UPDATE operator_audio_assets SET status='failed' WHERE job_id=%s AND status IN ('queued','processing')", (job_id,))
             fail_db.conn.commit()

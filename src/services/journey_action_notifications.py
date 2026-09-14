@@ -61,17 +61,21 @@ def _tasks_enabled(preferences: Any, business_id: str) -> bool:
 
 
 def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
-    if not journey_enabled("JOURNEY_NOTIFICATIONS_ENABLED"):
+    general_notifications = journey_enabled("JOURNEY_NOTIFICATIONS_ENABLED")
+    if not general_notifications and not os.getenv('OPERATOR_WORK_REVIEW_BUSINESS_IDS', '').strip():
         return []
     cursor = conn.cursor()
+    from services import work_review_notifications
+    work_review_notifications.collect(cursor)
     cursor.execute(
         """
-        SELECT action.id, action.version, action.business_id, action.user_id, action.title,
+        SELECT action.entity_type, action.id, action.version, action.business_id, action.user_id, action.title,
                action.description, action.cta_label, action.due_at,
                preference.telegram_id, preference.notification_preferences_json
         FROM journey_actions action
         JOIN telegramcontrolpreferences preference ON preference.user_id = action.user_id
         WHERE action.status IN ('ready', 'waiting', 'blocked')
+          AND (%s OR action.flow_type='work_journal')
           AND (action.entity_type <> 'service' OR EXISTS (
               SELECT 1 FROM business_members member JOIN users recipient ON recipient.id=member.user_id
               WHERE member.business_id=action.business_id AND member.user_id=action.user_id
@@ -81,12 +85,15 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
           AND NULLIF(BTRIM(CAST(preference.telegram_id AS TEXT)), '') IS NOT NULL
         ORDER BY action.priority DESC, action.due_at
         LIMIT 100
-        """
+        """, (general_notifications,)
     )
-    for value in cursor.fetchall() or []:
-        action = _row(cursor, value)
+    actions=[_row(cursor,value) for value in (cursor.fetchall() or [])]
+    for action in actions:
         business_id = str(action.get("business_id") or "")
-        if not _tasks_enabled(action.get("notification_preferences_json"), business_id):
+        is_review=action.get("entity_type") in {"work_digest","work_observation"}
+        if is_review and not work_review_notifications.recipient_allowed(cursor,business_id,action.get("user_id"),action.get("entity_type")):
+            continue
+        if not is_review and not _tasks_enabled(action.get("notification_preferences_json"), business_id):
             continue
         action_id = str(action.get("id") or "")
         version = int(action.get("version") or 1)
@@ -105,10 +112,11 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
         )
     cursor.execute(
         """
-        SELECT delivery.dedupe_key, delivery.telegram_id, delivery.message_text, delivery.reply_markup_json
+        SELECT action.entity_type, action.business_id, action.user_id, delivery.dedupe_key, delivery.telegram_id, delivery.message_text, delivery.reply_markup_json
         FROM journey_action_notification_deliveries delivery
         JOIN journey_actions action ON action.id = delivery.action_id
         WHERE delivery.sent_at IS NULL
+          AND (%s OR action.flow_type='work_journal')
           AND action.version = delivery.action_version
           AND (action.entity_type <> 'service' OR EXISTS (
               SELECT 1 FROM business_members member JOIN users recipient ON recipient.id=member.user_id
@@ -118,9 +126,10 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
           ))
           AND action.status IN ('ready', 'waiting', 'blocked')
         ORDER BY delivery.created_at LIMIT 100
-        """
+        """, (general_notifications,)
     )
-    return [{"dedupe_key": str(item.get("dedupe_key") or ""), "telegram_id": str(item.get("telegram_id") or ""), "message": str(item.get("message_text") or ""), "reply_markup": _json_object(item.get("reply_markup_json"))} for item in (_row(cursor, value) for value in (cursor.fetchall() or []))]
+    deliveries=[_row(cursor,value) for value in (cursor.fetchall() or [])]
+    return [{"dedupe_key": str(item.get("dedupe_key") or ""), "telegram_id": str(item.get("telegram_id") or ""), "message": str(item.get("message_text") or ""), "reply_markup": _json_object(item.get("reply_markup_json"))} for item in deliveries if item.get("entity_type") not in {"work_digest","work_observation"} or work_review_notifications.recipient_allowed(cursor,item.get("business_id"),item.get("user_id"),item.get("entity_type"))]
 
 
 def mark_journey_action_notification_sent(conn: Any, dedupe_key: str) -> bool:

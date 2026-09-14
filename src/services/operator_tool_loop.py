@@ -25,7 +25,7 @@ def _clean_history(history: Any) -> list[dict[str, str]]:
         content = str(item.get("content") or item.get("text") or "").strip()
         if role not in {"user", "operator", "assistant"} or not content:
             continue
-        cleaned.append({"role": "assistant" if role == "operator" else role, "content": content[:2000]})
+        cleaned.append({"role": "assistant" if role == "operator" else role, "content": content})
     return cleaned[-12:]
 
 
@@ -77,6 +77,7 @@ def _planner_prompt(state: dict[str, Any]) -> str:
             "Не придумывай данные и не утверждай, что действие выполнено, пока нет observation.",
             "Вызывай по одному инструменту за шаг. Для ответа используй только факты из контекста и observations.",
             "Если инструмента нет, честно объясни ограничение. Не запрашивай и не раскрывай секреты.",
+            "Ссылки @refN — точные серверные ссылки. Передавай их без изменений в параметры инструментов.",
             "Верни только JSON одного из видов:",
             '{"action":"tool_call","tool":"tool.name","arguments":{}}',
             '{"action":"final","message":"ответ пользователю"}',
@@ -256,6 +257,8 @@ def run_operator_tool_loop(
         for tool in tools
         if isinstance(tool, dict) and str(tool.get("name") or "")
     }
+    from services.operator_context import PlannerContext
+    context_builder = PlannerContext(message)
     observations: list[dict[str, Any]] = []
     trace: list[dict[str, Any]] = []
     seen_calls: set[str] = set()
@@ -270,20 +273,20 @@ def run_operator_tool_loop(
             "conversation_id": conversation_id,
             "message": str(message or "").strip(),
             "actor": _clean_actor_context(actor_context),
-            "conversation_history": _clean_history(conversation_history),
+            "conversation_history": context_builder.history(_clean_history(conversation_history)),
             "pending_approvals": _clean_pending_approvals(pending_approvals),
-            "tools": [
+            "tools": context_builder.tools([
                 _public_tool(tool)
                 for tool in tool_map.values()
                 if bool(tool.get("planner_visible", True))
-            ],
-            "observations": observations,
+            ]),
+            "observations": context_builder.encode(observations),
             "current_time": datetime.now(ZoneInfo(business_timezone)).isoformat() if business_timezone else None,
             "current_timezone": business_timezone,
             "step": step_index + 1,
             "max_steps": safe_max_steps,
         }
-        decision = plan(state)
+        decision = context_builder.decode(plan(state))
         if not isinstance(decision, dict):
             decision = {"action": "error", "message": "Модель вернула неверный план."}
         action = str(decision.get("action") or "").strip().lower()

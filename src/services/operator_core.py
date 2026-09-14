@@ -1535,7 +1535,7 @@ def _operator_tool_catalog(
         },
     ]
     from services.operator_editorial import editorial_tools
-    tools.extend(editorial_tools(cursor,business_id,user_id,message))
+    tools.extend(editorial_tools(cursor,business_id,user_id,message,channel))
     from services import finance_daily, operator_finance_daily
     if finance_daily.enabled(business_id):
         tools.extend(operator_finance_daily.tools(cursor,business_id,user_id,message,channel,None,action_orchestrator))
@@ -1913,16 +1913,36 @@ def route_operator_message(
     if pending.get('capability') == 'settings.input':
         pending = {}
     from services import work_journal, operator_work_journal
+    from services.operator_context import PlannerContext
+    incoming_domains=PlannerContext(clean_message).domains
+    pending_domain={'work.journal':'work','finance.daily.input':'finance','services.creation.clarification':'services','content.editorial.clarification':'content'}.get(pending.get('capability'))
+    if pending_domain and incoming_domains and pending_domain not in incoming_domains:
+        pending={}
     work_pending=pending.get('capability')=='work.journal' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|отмен|[0-9]',clean_message,re.I))))
     if work_journal.enabled(business_id) and (operator_work_journal.matches(clean_message) or work_pending or (action_payload or {}).get('input_context')=='work_journal'):
         if clean_message.casefold() in {'стоп','/cancel','не надо'}:
             return standardize_operator_result(operator_work_journal.result('Уточнение отменено. Уже сохранённые заметки можно отменить отдельно.','cancelled'),'work.journal'),{}
         saved=[]
         source=(str(pending.get('source_message') or '')+'\nУточнение: '+clean_message) if work_pending else clean_message
+        selected_entry=(action_payload or {}).get('work_entry_id')
+        if selected_entry:
+            actor=work_journal.scope(cursor,business_id,user_id)
+            entry=work_journal.read_entry(cursor,business_id,actor,selected_entry)
+            source+='\nВыбрана рабочая запись '+entry['id']+'; версия '+str(entry['version'])
+            selected_action=(action_payload or {}).get('work_action_id')
+            if selected_action:
+                from services import work_review
+                linked=work_review.links(cursor,business_id,user_id,selected_entry)
+                action=next((item for item in linked if str(item['id'])==str(selected_action)),None)
+                if not action:raise PermissionError('Нет доступа к связанной задаче.')
+                source+='\nВыбрана задача '+str(action['id'])+'; версия '+str(action.get('version') or '')
         message_id=next((r.get('id') for r in reversed(conversation_history or []) if r.get('role')=='user'),None)
         request_key=str((action_payload or {}).get('request_id') or message_id or hashlib.sha256(source.encode()).hexdigest())
         selected=operator_work_journal.tools(cursor,business_id,user_id,channel,source,message_id,request_key,saved,action_orchestrator,previous_saved=pending.get('saved_entries'))
         from services import operator_finance_daily, finance_daily
+        if 'content' in incoming_domains:
+            from services.operator_editorial import editorial_tools
+            selected.extend(editorial_tools(cursor,business_id,user_id,source,channel))
         if finance_daily.enabled(business_id):selected.extend(operator_finance_daily.tools(cursor,business_id,user_id,source,channel,message_id,action_orchestrator))
         arguments=dict(business_id=business_id,user_id=user_id,message=source,conversation_id=conversation_id,conversation_history=conversation_history,
             actor_context=actor_context,pending_approvals=pending_approvals,business_timezone=finance_daily.settings(cursor,business_id).get('timezone'),
@@ -1981,10 +2001,14 @@ def route_operator_message(
         if blocked:
             return blocked, pending
         source_message = (str(pending.get('source_message') or '') + '\nУточнение: ' + clean_message) if editorial_pending else clean_message
-        tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in editorial_tools(cursor,business_id,user_id,source_message)]
+        tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in editorial_tools(cursor,business_id,user_id,source_message,channel)]
         arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
             conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=tools)
-        if tool_planner is None:
+        from services.operator_plan_revision import explicit_schedule
+        schedule=explicit_schedule(source_message) if not editorial_pending and any(tool.get("name")=="content.rebuild_plan" for tool in tools) else None
+        if tool_planner is None and schedule:
+            result=run_paid_operator_tool_loop(cursor,**arguments,planner=lambda state:{'action':'tool_call','tool':'content.rebuild_plan','arguments':schedule})
+        elif tool_planner is None:
             result = run_paid_operator_tool_loop(cursor, **arguments)
         else:
             result = run_operator_tool_loop(**arguments, planner=tool_planner)

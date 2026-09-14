@@ -106,6 +106,11 @@ def read_entry(cursor,business_id,actor,entry_id):
     cursor.execute('SELECT * FROM business_work_journal WHERE id=%s AND business_id=%s',(entry_id,business_id))
     row=_row(cursor,cursor.fetchone())
     if not row:raise PermissionError('Запись журнала не найдена.')
+    from services import work_review
+    if work_review.available(cursor):
+        reviewer=work_review.can_review(cursor,business_id,actor['user_id'])
+        if not reviewer and row['user_id']!=actor['user_id']:raise PermissionError('Нет доступа к записи журнала.')
+        return work_review.sanitize(row,reviewer)
     if not actor['all_visits'] and row['user_id']!=actor['user_id']:
         if not row.get('booking_id'):raise PermissionError('Нет доступа к записи журнала.')
         booking(cursor,business_id,actor,row['booking_id'])
@@ -116,7 +121,12 @@ def list_entries(cursor,business_id,user_id,query='',target_date=None):
     actor=scope(cursor,business_id,user_id)
     params=[business_id]
     access=''
-    if not actor['all_visits']:
+    from services import work_review
+    review_enabled=work_review.available(cursor)
+    reviewer=work_review.can_review(cursor,business_id,user_id) if review_enabled else False
+    if review_enabled and not reviewer:
+        access=' AND user_id=%s';params.append(user_id)
+    elif not review_enabled and not actor['all_visits']:
         access=' AND user_id=%s';params.append(user_id)
         if actor['master_id']:
             access=' AND (user_id=%s OR booking_id IN (SELECT id FROM bookings WHERE business_id=j.business_id AND master_id=%s))';params.append(actor['master_id'])
@@ -129,13 +139,20 @@ def list_entries(cursor,business_id,user_id,query='',target_date=None):
         if not zone:raise ValueError('Для фильтра по местному дню сохраните часовой пояс бизнеса.')
         clause=' AND (j.occurred_at AT TIME ZONE %s)::date=%s';params.extend([zone,day])
     cursor.execute('SELECT j.* FROM business_work_journal j WHERE business_id=%s'+access+" AND COALESCE(facts_json->>'quote',original_text) ILIKE %s"+clause+' ORDER BY occurred_at DESC,id DESC LIMIT 100',tuple(params))
-    return [_row(cursor,row) for row in cursor.fetchall()]
+    rows=[_row(cursor,row) for row in cursor.fetchall()]
+    return [work_review.sanitize(row,reviewer) for row in rows] if review_enabled else rows
 
 
 def history(cursor,business_id,user_id,entry_id):
     actor=scope(cursor,business_id,user_id);read_entry(cursor,business_id,actor,entry_id)
-    cursor.execute("SELECT * FROM business_work_history WHERE business_id=%s AND target_id=%s AND kind='note' ORDER BY created_at DESC LIMIT 100",(business_id,entry_id))
-    return [_row(cursor,row) for row in cursor.fetchall()]
+    from services import work_review
+    reviewer=work_review.available(cursor) and work_review.can_review(cursor,business_id,user_id)
+    cursor.execute("SELECT * FROM business_work_history WHERE business_id=%s AND target_id=%s AND (kind='note' OR %s) ORDER BY created_at DESC LIMIT 100",(business_id,entry_id,reviewer))
+    rows=[_row(cursor,row) for row in cursor.fetchall()]
+    if not reviewer:
+        for row in rows:
+            for field in ('before_json','after_json'):row[field]=work_review.sanitize(row[field] or {},False)
+    return rows
 
 
 def _audit(cursor,business_id,user_id,channel,kind,target_id,request_key,before,after):
@@ -157,7 +174,8 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
         if replay['after_json'].get('request_hash')!=request_hash:raise ValueError('Идентификатор запроса уже использован для другого изменения.')
         read_entry(cursor,business_id,actor,replay['after_json']['id'])
         logging.getLogger(__name__).info('work_journal_event status=duplicate')
-        return replay['after_json']
+        from services import work_review
+        return work_review.sanitize(replay['after_json'],work_review.can_review(cursor,business_id,user_id)) if work_review.available(cursor) else replay['after_json']
     entry_id=args.get('id');before=read_entry(cursor,business_id,actor,entry_id) if entry_id else {}
     if before and before['user_id']!=user_id and actor['role']!='owner':raise PermissionError('Исправлять запись может её автор или владелец.')
     if before and args.get('version')!=before['version']:raise ValueError('Запись уже изменена. Откройте её заново.')
@@ -189,7 +207,10 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
         cursor.execute('SELECT user_id FROM operator_async_jobs WHERE id=%s AND business_id=%s',(task_id,business_id))
         task=_row(cursor,cursor.fetchone())
         if not task or (task.get('user_id')!=user_id and actor['role']!='owner'):raise PermissionError('Нет доступа к этой задаче.')
-    occurred=args.get('occurred_at') or before.get('occurred_at') or datetime.now(timezone.utc)
+    unknown_time=bool(re.search(r'в прошлый раз|когда-то|недавно',quote,re.I)) and not bool(re.search(r'\d',quote))
+    explicit_time=args.get('occurred_at') if not unknown_time else None
+    facts['event_time_known']=bool(explicit_time) or (bool(before) and bool(facts.get('event_time_known')) and not unknown_time)
+    occurred=explicit_time or before.get('occurred_at') or datetime.now(timezone.utc)
     if isinstance(occurred,str):occurred=datetime.fromisoformat(occurred.replace('Z','+00:00'))
     if not occurred.tzinfo:raise ValueError('Укажите время с часовым поясом.')
     event_date=event_day(cursor,business_id,occurred) if booking_id and outcome in {'offered','declined','interested','performed'} and not args.get('void') else None
@@ -199,7 +220,18 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
         ON CONFLICT(id) DO UPDATE SET facts_json=EXCLUDED.facts_json,booking_id=EXCLUDED.booking_id,service_id=EXCLUDED.service_id,task_id=EXCLUDED.task_id,
             occurred_at=EXCLUDED.occurred_at,version=business_work_journal.version+1,is_voided=%s,updated_at=NOW() RETURNING *''',
         (entry_id,business_id,user_id,channel,message_id,request_key,original,json.dumps(facts),booking_id,service_id,task_id,occurred,bool(args.get('void'))))
-    after=_row(cursor,cursor.fetchone());after['request_hash']=request_hash
+    after=_row(cursor,cursor.fetchone())
+    from services import work_review
+    if work_review.enabled(business_id):
+        category=args.get('category',before.get('category','other'))
+        if category not in work_review.CATEGORIES:raise ValueError('Неизвестная категория заметки.')
+        urgent=bool(re.search(r'\bсрочно\b',quote,re.I)) and not bool(re.search(r'\bне\s+срочно\b',quote,re.I))
+        cursor.execute('UPDATE business_work_journal SET category=%s,urgent=%s WHERE id=%s RETURNING *',(category,urgent,entry_id))
+        after=_row(cursor,cursor.fetchone())
+        if before and not args.get('void'):
+            cursor.execute("UPDATE business_work_journal SET review_status='new',decision='' WHERE id=%s RETURNING *",(entry_id,))
+            after=_row(cursor,cursor.fetchone())
+    after['request_hash']=request_hash
     after['change_source']={'message_id':message_id,'channel':channel,'user_id':user_id,'text':original}
     # Unlinked observations do not become attributed visit results.
     cursor.execute('UPDATE averageticketevents SET is_voided=TRUE WHERE journal_id=%s',(entry_id,))
@@ -211,7 +243,7 @@ def save_note(cursor,business_id,user_id,channel,message_id,request_key,original
             (str(uuid.uuid4()),business_id,entry_id,booking_id,service_id or visit.get('service_id'),facts.get('addon_service_id'),outcome,event_date,visit.get('master_id'),reason,user_id))
     _audit(cursor,business_id,user_id,channel,'note',entry_id,request_key,before,after)
     logging.getLogger(__name__).info('work_journal_event status=%s channel=%s','cancelled' if after['is_voided'] else 'corrected' if before else 'saved',channel)
-    return after
+    return work_review.sanitize(after,work_review.can_review(cursor,business_id,user_id)) if work_review.available(cursor) else after
 
 
 def event_day(cursor,business_id,occurred):

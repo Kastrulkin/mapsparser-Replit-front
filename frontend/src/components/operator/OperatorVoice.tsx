@@ -152,3 +152,16 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
   if (!available || !url) return null;
   return <div className="mt-2"><audio aria-label="Озвученный ответ" controls src={url} /></div>;
 }
+
+export async function waitForOperatorResult<T extends { async_job_id?: string }>(result: T, businessId: string, headers: HeadersProvider, isCurrent: () => boolean): Promise<T> {
+  if (!result.async_job_id) return result;
+  const query=new URLSearchParams({scope_type:'business',scope_id:businessId});
+  for(let attempt=0;attempt<150 && isCurrent();attempt++) {
+    const body=await jsonRequest(`/api/operator/mobile/jobs/${result.async_job_id}?${query}`,{headers:headers()});
+    if(!isCurrent())return result;
+    if(body.job?.status==='completed')return body.job.result;
+    if(['failed','cancelled'].includes(body.job?.status))return {...result,status:body.job.status,chat_response:'Подготовить изменение не удалось. План остался прежним. '+(body.job.error || '')};
+    await new Promise<void>(resolve=>window.setTimeout(resolve,2000));
+  }
+  return result;
+}

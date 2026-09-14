@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request
 from auth_system import verify_session
 from core.auth_helpers import session_allows_business
 from database_manager import DatabaseManager
-from services import work_journal, work_recommendations, operator_work_journal
+from services import work_journal, work_recommendations, operator_work_journal, work_review
 from services.operator_conversations import _row
 
 work_journal_bp=Blueprint('work_journal_api',__name__)
@@ -54,6 +54,11 @@ def journal():
         rows=work_journal.list_entries(cursor,business,user,request.args.get('query',''),request.args.get('date'))
         for row in rows:row['can_edit']=current['role']=='owner' or row['user_id']==user
         response={'enabled':work_journal.enabled(business),'items':rows,'role':current['role'],'policy':work_recommendations.policy(cursor,business)}
+        response['review_enabled']=work_review.enabled(business)
+        response['can_review']=response['review_enabled'] and work_review.can_review(cursor,business,user)
+        if response['can_review']:
+            cursor.execute("SELECT m.user_id,m.role,COALESCE(to_jsonb(u)->>'name',to_jsonb(u)->>'email',m.user_id) name FROM business_members m JOIN users u ON u.id=m.user_id WHERE m.business_id=%s AND m.status='active'",(business,))
+            response['members']=[_row(cursor,row) for row in cursor.fetchall()]
         if current['role']=='owner':
             cursor.execute("SELECT id,kind,before_json,after_json,created_at FROM business_work_history WHERE business_id=%s AND kind<>'note' ORDER BY created_at DESC LIMIT 30",(business,))
             response['policy_history']=[_row(cursor,r) for r in cursor.fetchall()]
@@ -87,3 +92,28 @@ def create_policy_preview(cursor,business,user,data,channel='web'):
 @work_journal_bp.route('/api/work-journal/policy/preview',methods=['POST'])
 def preview():
     return dispatch(lambda c,b,u,d:create_policy_preview(c,b,u,d))
+
+
+@work_journal_bp.route('/api/work-journal/review',methods=['GET'])
+def review_inbox():
+    return dispatch(lambda c,b,u,d:{'items':work_review.list_inbox(c,b,u,request.args.get('status','new') or None,request.args.get('category') or None)})
+
+
+@work_journal_bp.route('/api/work-journal/<entry_id>/decision',methods=['POST'])
+def review_decision(entry_id):
+    return dispatch(lambda c,b,u,d:{'entry':work_review.decision(c,b,u,entry_id,d)})
+
+
+@work_journal_bp.route('/api/work-journal/<entry_id>/actions',methods=['GET','POST'])
+def review_actions(entry_id):
+    return dispatch(lambda c,b,u,d:({'action':work_review.create_action(c,b,u,entry_id,d)} if request.method=='POST' else {'items':work_review.links(c,b,u,entry_id)}))
+
+
+@work_journal_bp.route('/api/work-journal/<entry_id>/actions/complete',methods=['POST'])
+def complete_review_action(entry_id):
+    return dispatch(lambda c,b,u,d:{'action':work_review.complete_action(c,b,u,entry_id,d)})
+
+
+@work_journal_bp.route('/api/work-journal/digest-settings',methods=['GET','POST'])
+def review_digest_settings():
+    return dispatch(lambda c,b,u,d:work_review.digest_settings(c,b,u,d if request.method=='POST' else None))

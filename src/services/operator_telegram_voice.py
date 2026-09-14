@@ -177,6 +177,7 @@ async def delivery_loop(application, host):
                     WHERE asset.channel='telegram' AND asset.metadata_json->>'delivery'='pending'
                     AND asset.expires_at>NOW() AND job.status IN ('completed','failed','cancelled') ORDER BY asset.created_at, asset.id LIMIT 10""")
                 return [_row(cursor,row) for row in cursor.fetchall()]
+            await deliver_plan_previews(application,host)
             assets=await asyncio.to_thread(transaction,pending)
             for asset in assets:
                 try:
@@ -206,3 +207,27 @@ async def delivery_loop(application, host):
         except Exception:
             logger.warning('Operator audio delivery failed; retrying without message content')
         await asyncio.sleep(3)
+
+
+async def deliver_plan_previews(application,host):
+    def pending(cursor):
+        cursor.execute("""SELECT j.*,p.telegram_id FROM operator_async_jobs j
+            JOIN telegramcontrolpreferences p ON p.user_id=j.user_id
+            WHERE j.kind='content_plan_revision' AND j.status IN ('completed','failed')
+            AND j.payload_json->>'channel'='telegram' AND NOT (j.payload_json ? 'telegram_delivered')
+            ORDER BY j.created_at LIMIT 10""")
+        return [_row(cursor,value) for value in cursor.fetchall()]
+    jobs=await asyncio.to_thread(transaction,pending)
+    for job in jobs:
+        chat_id=job['telegram_id']
+        business=await asyncio.to_thread(host._control_scope_business_context,str(chat_id))
+        if not business or business['business_id']!=job['business_id'] or business['user_id']!=job['user_id']:
+            delivery='scope_changed'
+        else:
+            try:await asyncio.to_thread(transaction,lambda cursor:authorize_actor(cursor,job['user_id'],job['business_id']))
+            except PermissionError:delivery='access_revoked'
+            else:
+                result=job.get('result_json') or {'status':'failed','chat_response':'Подготовить изменение плана не удалось. План остался прежним.'}
+                await application.bot.send_message(chat_id=chat_id,text=result['chat_response'][:3500]+('\nПолный предпросмотр сохранён в диалоге Оператора в приложении.' if len(result['chat_response'])>3500 else ''),reply_markup=host._build_operator_result_markup(result))
+                delivery='sent'
+        await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_async_jobs SET payload_json=payload_json || %s::jsonb WHERE id=%s",(json.dumps({'telegram_delivered':delivery}),job['id'])))

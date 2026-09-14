@@ -59,6 +59,7 @@ def run_paid_operator_tool_loop(
     actor_context: Any = None,
     pending_approvals: Any = None,
     business_timezone: str | None = "UTC",
+    planner=None,
 ) -> dict[str, Any]:
     preflight = build_paid_action_preflight(
         cursor,
@@ -120,7 +121,9 @@ def run_paid_operator_tool_loop(
         }
 
     try:
+        planner_options={"planner":planner} if planner is not None else {}
         result = run_operator_tool_loop(
+            **planner_options,
             business_id=business_id,
             user_id=user_id,
             message=message,
