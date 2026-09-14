@@ -26,7 +26,7 @@ const aliases: Record<string, string[]> = {
   'Батуми': ['батуми', 'batumi'],
 };
 
-const normalize = (value: string) => value.toLowerCase().replace(/ё/g, 'е').replace(/[^0-9a-zа-я]+/g, ' ').trim();
+const normalize = (value: unknown) => String(value ?? '').toLowerCase().replace(/ё/g, 'е').replace(/[^0-9a-zа-я]+/g, ' ').trim();
 
 const editDistance = (left: string, right: string) => {
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
@@ -44,10 +44,11 @@ const editDistance = (left: string, right: string) => {
   return previous[right.length];
 };
 
-const matches = (city: string, query: string) => {
+const matches = (city: unknown, query: string) => {
   const needle = normalize(query);
   if (!needle) return true;
-  const candidates = [normalize(city), ...(aliases[city] || []).map(normalize)];
+  const canonicalCity = typeof city === 'string' ? city : '';
+  const candidates = [normalize(canonicalCity), ...(aliases[canonicalCity] || []).map(normalize)];
   return candidates.some((candidate) => candidate.includes(needle) || needle.includes(candidate)
     || editDistance(candidate, needle) <= Math.max(1, Math.floor(Math.max(candidate.length, needle.length) * 0.2)));
 };
@@ -57,13 +58,17 @@ export const CreatorCityCombobox = ({ label = 'Город', value, options, onCh
   const [query, setQuery] = useState(value);
   const [activeIndex, setActiveIndex] = useState(0);
   const listboxId = useId();
-  const filtered = useMemo(() => options.filter((city) => matches(city, query)).slice(0, 40), [options, query]);
+  const availableCities = useMemo(
+    () => options.filter((city): city is string => typeof city === 'string' && Boolean(city.trim())),
+    [options],
+  );
+  const filtered = useMemo(() => availableCities.filter((city) => matches(city, query)).slice(0, 40), [availableCities, query]);
   useEffect(() => setQuery(value), [value]);
   useEffect(() => setActiveIndex(0), [query]);
   const select = (city: string) => { setQuery(city); onChange(city); setOpen(false); };
   const settle = () => {
     if (!query.trim()) { onChange(''); return; }
-    const exact = options.find((city) => normalize(city) === normalize(query));
+    const exact = availableCities.find((city) => normalize(city) === normalize(query));
     if (exact) select(exact);
     else if (filtered.length === 1) select(filtered[0]);
     else setQuery(value);
