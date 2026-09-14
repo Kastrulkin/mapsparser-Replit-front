@@ -312,8 +312,8 @@ def _seasonal_cta(topic: str) -> str:
 
 def _fallback_goal(business_name: str) -> str:
     return (
-        f"Показать, что карточка {_quoted(business_name)} ведётся регулярно, "
-        "даже если данных для более точной темы пока мало."
+        f"Помочь клиенту {_quoted(business_name)} понять, какие вопросы задать перед заказом. "
+        "Использовать только подтверждённые сведения об услугах."
     )
 
 
@@ -735,33 +735,7 @@ def build_content_plan_skeleton(
                 }
             )
 
-    if _content_mix_value(content_mix, "audit"):
-        for signal in audit_signals[:8]:
-            signal_title = _safe_text(signal.get("title"))
-            signal_problem = _safe_text(signal.get("problem"))
-            if not signal_title and not signal_problem:
-                continue
-            theme = _audit_theme(signal)
-            source_ref = _clean_audit_signal_text(_safe_text(signal.get("evidence") or signal_title or signal_problem))
-            base_score = _audit_strength(signal)
-            weak_zone_score = _weak_zone_bonus(signal)
-            coverage_score = _undercovered_bonus(theme, recent_blob)
-            candidates.append(
-                {
-                    "content_type": "audit",
-                    "theme": theme,
-                    "goal": _audit_goal(signal),
-                    "source_kind": "audit_signal",
-                    "source_ref": source_ref or theme,
-                    "cta_hint": _audit_cta(signal),
-                    "strength_score": base_score + weak_zone_score + coverage_score,
-                    "ranking_reasons": [
-                        _ranking_reason("audit_signal_strength", base_score),
-                        _ranking_reason("weak_zone_priority", weak_zone_score),
-                        _ranking_reason("undercovered_weak_zone", coverage_score),
-                    ],
-                }
-            )
+    # Audit defects are operational tasks, never customer-facing post topics.
 
     if _content_mix_value(content_mix, "seasonal"):
         seasonal_topics = [
@@ -786,7 +760,7 @@ def build_content_plan_skeleton(
         candidates.append(
             {
                 "content_type": "seasonal",
-                "theme": f"Обновление карточки {business_name}",
+                "theme": f"Как выбрать подходящую услугу в {business_name}",
                 "goal": _fallback_goal(business_name),
                 "source_kind": "fallback",
                 "source_ref": business_name,

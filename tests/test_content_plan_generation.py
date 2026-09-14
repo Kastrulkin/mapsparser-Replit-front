@@ -45,7 +45,10 @@ class _FakeDraftCursor:
     def execute(self, query, params=None):
         self.executed.append((query, params))
         compact_query = " ".join(str(query).split()).lower()
-        if compact_query.startswith("select i.id, i.plan_id"):
+        if "to_regclass('contentplans')" in compact_query:
+            self.description = [("has_plans",), ("has_items",), ("has_item_metadata",)]
+            self.row = (True, True, True)
+        elif compact_query.startswith("select i.id, i.plan_id"):
             self.description = [
                 ("id",),
                 ("plan_id",),
@@ -199,7 +202,7 @@ def test_content_plan_skeleton_respects_allowed_period_and_sources():
     assert any(item["content_type"] == "service" for item in plan["items"])
     assert any(item["content_type"] == "seo" for item in plan["items"])
     assert any(item["content_type"] == "sales" for item in plan["items"])
-    assert any(item["content_type"] == "audit" for item in plan["items"])
+    assert all(item["source_kind"] != "audit_signal" for item in plan["items"])
 
 
 @pytest.mark.parametrize(
@@ -255,7 +258,7 @@ def test_content_plan_skeleton_uses_grounded_goals_for_each_signal_type():
     assert "«Латте»" in items_by_type["service"]["goal"]
     assert "«кофе рядом»" in items_by_type["seo"]["goal"]
     assert "«Капучино»" in items_by_type["sales"]["goal"]
-    assert "«Мало свежих новостей»" in items_by_type["audit"]["goal"]
+    assert "audit" not in items_by_type
 
 
 def test_content_plan_audit_service_gap_becomes_client_service_intro():
@@ -289,9 +292,9 @@ def test_content_plan_audit_service_gap_becomes_client_service_intro():
     )
 
     item = plan["items"][0]
-    assert item["theme"] == "Знакомство с услугами и процедурами"
-    assert "Не писать о пробелах карточки" in item["goal"]
-    assert content_plan_service._normalize_publication_objective(item) == "service_intro"
+    assert item["source_kind"] == "fallback"
+    assert "карточк" not in item["theme"]
+    assert "Общее описание услуг" not in item["theme"]
 
 
 def test_content_plan_skeleton_prioritizes_stronger_seo_signal():
@@ -1904,12 +1907,12 @@ def test_content_plan_generator_prioritizes_weak_audit_search_zone():
         },
     )
 
-    assert "маникюр рядом" in plan["items"][0]["source_ref"]
+    assert all(item["source_kind"] != "audit_signal" for item in plan["items"])
     assert "Недопокрытый поисковый сценарий" not in plan["items"][0]["theme"]
     assert "Закрыть слабую зону" not in plan["items"][0]["theme"]
     assert "Закрыть слабое место" not in plan["items"][0]["goal"]
-    assert plan["items"][0]["theme"] == "Почему выбрать вас по запросу «маникюр рядом»"
-    assert any(reason["label"] == "weak_zone_priority" for reason in plan["items"][0]["ranking_reasons"])
+    assert "карточк" not in plan["items"][0]["theme"]
+    assert not any(reason["label"] == "weak_zone_priority" for reason in plan["items"][0]["ranking_reasons"])
 
 
 def test_classify_text_edit_distinguishes_minor_and_major_changes():

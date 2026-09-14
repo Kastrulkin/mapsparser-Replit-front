@@ -52,3 +52,29 @@ def test_creation_preserves_previous_plan_and_crash_retry_returns_same_plan(data
     c.execute('SELECT theme,scheduled_for FROM contentplanitems WHERE plan_id=%s',(first['id'],));items=c.fetchall()
     assert items and all(item['theme']!='Подсветить услугу: Трансфер' for item in items)
     assert all(date(2026,9,13)<=item['scheduled_for']<=date(2026,10,12) for item in items)
+
+
+def test_directed_creation_is_atomic_and_retry_does_not_regenerate(database,monkeypatch):
+    import json
+    from services import content_plan_direction
+    calls=[]
+    def generate(prompt,*args):
+        calls.append(prompt)
+        import re
+        count=int(re.search(r'Слотов: (\d+)',prompt).group(1))
+        return json.dumps({'groups':[{'label':'Япония','mode':'all','value':None}],
+            'items':[{'group':0,'theme':f'Япония: совет {i}','goal':'Помочь путешественнику'} for i in range(count)]})
+    monkeypatch.setattr(content_plan_direction,'_generate',generate)
+    kwargs=dict(scope_type='single_location',scope_target_id='b',period_days=30,density='standard',content_mix={},
+        editorial_brief='Все посты про Японию',operator_request_id='voice:directed')
+    plan=content_plan_service.create_generated_content_plan('u','b',**kwargs)
+    repeat=content_plan_service.create_generated_content_plan('u','b',**kwargs)
+    assert plan['id']==repeat['id'] and len(calls)==1
+    cursor=database.cursor();cursor.execute('SELECT theme FROM contentplanitems WHERE plan_id=%s',(plan['id'],))
+    assert all('Япония' in row['theme'] for row in cursor.fetchall())
+    monkeypatch.setattr(content_plan_direction,'_generate',lambda *args:'broken')
+    kwargs['operator_request_id']='voice:invalid'
+    from services.operator_plan_continuation import PlanClarification
+    with pytest.raises(PlanClarification):content_plan_service.create_generated_content_plan('u','b',**kwargs)
+    cursor.execute("SELECT count(*) n FROM contentplans WHERE business_id='b'")
+    assert cursor.fetchone()['n']==2

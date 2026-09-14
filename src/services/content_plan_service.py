@@ -1769,6 +1769,7 @@ def create_generated_content_plan(
     density: str,
     content_mix: dict[str, Any] | None,
     continuation_message: str | None = None,
+    editorial_brief: str | None = None,
     operator_request_id: str | None = None,
 ) -> dict[str, Any]:
     db = DatabaseManager()
@@ -1821,6 +1822,10 @@ def create_generated_content_plan(
             content_mix=content_mix if isinstance(content_mix, dict) else {},
             period_start=continuation['period_start'] if continuation else None,
         )
+        if editorial_brief:
+            from services.content_plan_direction import apply_direction
+            skeleton = apply_direction(skeleton, context, editorial_brief, business_id, user_id)
+            context = {**context, 'editorial_brief': editorial_brief}
         skeleton.setdefault('meta', {})
         if operator_request_id:
             skeleton['meta']['operator_request_id'] = operator_request_id

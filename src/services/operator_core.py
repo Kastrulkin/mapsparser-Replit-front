@@ -1035,7 +1035,7 @@ def _operator_tool_catalog(
             "execute": lambda arguments: _create_content_plan(
                 business_id=business_id,
                 user_id=user_id,
-                message=str(arguments.get("brief") or message),
+                message=message,
             ),
         },
         {
@@ -1720,10 +1720,12 @@ def _create_content_plan(*, business_id: str, user_id: str, message: str, reques
             density="standard",
             content_mix={},
             continuation_message=message if continuation_requested(message) else None,
+            editorial_brief=message,
             operator_request_id=request_id,
         )
     except PlanClarification as error:
         return standardize_operator_result({'status': 'clarification_required', 'chat_response': str(error), 'external_writes_performed': False}, 'content_plan.generate')
+    direction = (plan.get("generated_plan_json") or {}).get("meta", {}).get("editorial_summary") or ""
     plan_id = str(plan.get("id") or plan.get("plan", {}).get("id") or "")
     href = f"/dashboard/content?plan_id={plan_id}" if plan_id else "/dashboard/content"
     result = {
@@ -1731,6 +1733,7 @@ def _create_content_plan(*, business_id: str, user_id: str, message: str, reques
         "intent": "content_plan.generate",
         "chat_response": f"Создал новый контент-план на {period_days} дней: {plan.get('period_start')} — {plan.get('period_end')}. Старые планы сохранены."
             + (' Темы предыдущего плана учтены; одинаковые названия исключены.' if continuation_requested(message) else '')
+            + (' Распределение тем: ' + direction + '.' if direction else '')
             + ' Это план тем; тексты постов и публикация выполняются отдельно.' ,
         "content_plan": plan,
         "external_writes_performed": False,
