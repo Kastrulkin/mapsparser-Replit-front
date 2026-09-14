@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CircleAlert, Loader2, Megaphone, RefreshCw, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, CheckCircle2, CircleAlert, Loader2, Megaphone, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import { AccessPreview } from '@/components/access/AccessBoundary';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { Button } from '@/components/ui/button';
-import { InfluencerCreatorCard } from '@/features/influencers/InfluencerCreatorCard';
 import { CreatorCityCombobox } from '@/features/influencers/CreatorCityCombobox';
 import { CreatorOfferBuilder } from '@/features/influencers/CreatorOfferBuilder';
 import {
   influencerWorkspaceQuery,
+  influencerAudienceLabel,
+  influencerPlatformLabel,
+  influencerTopicLabel,
   type InfluencerCreator,
   type InfluencerWorkspaceData,
   type InfluencerWorkspaceFilters,
@@ -43,6 +45,23 @@ const offerText = (workspace?: InfluencerWorkspaceData | null) => {
   const briefService = workspace?.latest_search?.brief?.service;
   if (typeof briefService === 'string' && briefService.trim()) return `Предложите автору «${briefService.trim()}» за подтверждённый результат. Условия можно уточнить до подготовки сообщений.`;
   return 'Выберите услугу, которую можно предложить автору за подтверждённый результат. LocalOS подготовит понятную механику бартера.';
+};
+
+const creatorPriceLabel = (creator: InfluencerCreator) => {
+  if (creator.price_min || creator.price_max) {
+    const amount = creator.price_min && creator.price_max && creator.price_min !== creator.price_max
+      ? `${creator.price_min.toLocaleString('ru-RU')}–${creator.price_max.toLocaleString('ru-RU')}`
+      : (creator.price_min || creator.price_max || 0).toLocaleString('ru-RU');
+    return `${amount} ${creator.currency || '₽'}`;
+  }
+  return creator.accepts_barter === true ? 'Бартер' : 'Не указана';
+};
+
+const creatorConfirmationLabel = (creator: InfluencerCreator) => {
+  if (creator.confirmation_status === 'creator_confirmed') return 'Автор подтвердил';
+  if (creator.confirmation_status === 'business_confirmed') return 'Проверено LocalOS';
+  if (creator.confirmation_status === 'expired') return 'Нужно обновить';
+  return 'Нужно уточнить';
 };
 
 export const InfluencersPage = () => {
@@ -172,7 +191,7 @@ export const InfluencersPage = () => {
           </div>
         </section>
 
-        {loading && !workspace ? <div className="grid min-h-64 place-items-center rounded-3xl bg-white"><span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Загружаем авторов</span></div> : creators.length ? <div className={cn('grid gap-4 md:grid-cols-2 xl:grid-cols-3', workspace?.preview?.limited && 'pointer-events-none select-none')} aria-label={workspace?.preview?.limited ? 'Превью каталога инфлюенсеров' : 'Каталог инфлюенсеров'}>{creators.map((creator) => <InfluencerCreatorCard key={creator.result_id} creator={creator} busy={busy === creator.id} onToggleShortlist={(item) => void updateShortlist(item)} onExclude={(item) => void excludeCreator(item)} />)}</div> : <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-12 text-center"><Search className="mx-auto h-7 w-7 text-slate-400" /><h2 className="mt-4 text-xl font-semibold text-slate-950">Подходящих авторов пока не видно</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Измените фильтры. Новые авторы будут добавляться в эту же базу.</p></div>}
+        {loading && !workspace ? <div className="grid min-h-64 place-items-center rounded-3xl bg-white"><span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Загружаем авторов</span></div> : creators.length ? <section className={cn('overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm', workspace?.preview?.limited && 'pointer-events-none select-none')} aria-label={workspace?.preview?.limited ? 'Превью каталога инфлюенсеров' : 'Каталог инфлюенсеров'}><div className="overflow-x-auto"><table className="min-w-[1420px] w-full border-collapse text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-4 py-3 font-semibold">Автор</th><th className="px-4 py-3 font-semibold">Аудитория</th><th className="px-4 py-3 font-semibold">Описание</th><th className="px-4 py-3 font-semibold">Темы и площадки</th><th className="px-4 py-3 font-semibold">Условия</th><th className="px-4 py-3 font-semibold">Стоимость</th><th className="px-4 py-3 font-semibold">Подтверждение</th><th className="px-4 py-3 font-semibold"><span className="sr-only">Действия</span></th></tr></thead><tbody className="divide-y divide-slate-100">{creators.map((creator) => { const shortlisted = creator.disposition === 'shortlisted' || creator.shortlist_status === 'shortlisted'; const excluded = creator.disposition === 'excluded' || creator.shortlist_status === 'rejected'; const topics = [creator.primary_topic, ...(creator.topics || []), ...(creator.content_styles || [])].filter((value): value is string => Boolean(value)).slice(0, 3); return <tr key={creator.result_id} className="align-top transition-colors hover:bg-slate-50/70"><td className="w-52 px-4 py-4"><strong className="block text-slate-950">{creator.display_name}</strong><span className="mt-1 block text-xs text-slate-500">{influencerPlatformLabel(creator.platform)} · {[creator.city, creator.area].filter(Boolean).join(' · ') || 'География уточняется'}</span></td><td className="w-28 px-4 py-4 font-semibold tabular-nums text-slate-950">{influencerAudienceLabel(creator)}</td><td className="max-w-80 px-4 py-4 text-sm leading-5 text-slate-600"><p className="line-clamp-3">{creator.description || 'Описание не добавлено'}</p></td><td className="w-56 px-4 py-4"><div className="flex flex-wrap gap-1.5">{topics.length ? topics.map((topic) => <span key={topic} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{influencerTopicLabel(topic)}</span>) : <span className="text-xs text-slate-500">Не указаны</span>}</div><p className="mt-2 text-xs text-slate-500">{(creator.platforms || []).map(influencerPlatformLabel).join(' · ') || influencerPlatformLabel(creator.platform)}</p></td><td className="w-44 px-4 py-4 text-sm text-slate-700"><p>{creator.accepts_barter === true ? 'Готов к бартеру' : creator.accepts_barter === false ? 'Только оплата' : 'Не уточнены'}</p>{creator.formats?.length ? <p className="mt-1 text-xs text-slate-500">{creator.formats.slice(0, 3).join(' · ')}</p> : null}{creator.availability_text ? <p className="mt-1 text-xs text-slate-500">{creator.availability_text}</p> : null}</td><td className="w-32 px-4 py-4 font-medium text-slate-950">{creatorPriceLabel(creator)}</td><td className="w-44 px-4 py-4"><span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', creator.confirmation_status === 'creator_confirmed' || creator.confirmation_status === 'business_confirmed' ? 'text-emerald-700' : 'text-slate-500')}><CheckCircle2 className="h-4 w-4" />{creatorConfirmationLabel(creator)}</span>{creator.confirmed_at ? <p className="mt-1 text-xs text-slate-500">{new Date(creator.confirmed_at).toLocaleDateString('ru-RU')}</p> : null}</td><td className="w-44 px-4 py-4"><div className="flex flex-col gap-2">{creator.public_url ? <a href={creator.public_url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-slate-700"><ArrowRight className="h-3.5 w-3.5" />Площадка</a> : null}<button type="button" disabled={busy === creator.id} onClick={() => void updateShortlist(creator)} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold disabled:opacity-50', shortlisted ? 'bg-emerald-700 text-white' : 'bg-slate-950 text-white')}>{excluded ? 'Вернуть' : shortlisted ? 'Подходит' : 'Отметить'}</button>{!excluded ? <button type="button" disabled={busy === creator.id} onClick={() => void excludeCreator(creator)} className="min-h-8 text-xs font-semibold text-slate-500 hover:text-rose-700 disabled:opacity-50">Не подходит</button> : null}</div></td></tr>; })}</tbody></table></div></section> : <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-12 text-center"><Search className="mx-auto h-7 w-7 text-slate-400" /><h2 className="mt-4 text-xl font-semibold text-slate-950">Подходящих авторов пока не видно</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Измените фильтры. Новые авторы будут добавляться в эту же базу.</p></div>}
         {workspace?.preview?.limited ? <section className="overflow-hidden rounded-[28px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_18px_45px_-34px_rgba(15,23,42,0.45)] sm:p-6" aria-labelledby="influencer-preview-title"><div className="relative h-32 overflow-hidden rounded-[20px] bg-slate-100" aria-hidden="true"><div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 blur-[7px]"><span className="rounded-2xl bg-white shadow-sm" /><span className="rounded-2xl bg-white shadow-sm" /><span className="rounded-2xl bg-white shadow-sm" /></div><div className="absolute inset-0 bg-gradient-to-b from-white/10 to-white/80" /></div><div className="relative -mt-5 rounded-[20px] bg-white p-5 text-center shadow-[0_0_0_1px_rgba(15,23,42,0.07)]"><h2 id="influencer-preview-title" className="text-balance text-xl font-semibold text-slate-950">В каталоге ещё <span className="tabular-nums">{workspace.preview.hidden_count || 0}</span> авторов</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">Вы увидели стабильное превью из 10 публичных карточек. Полный каталог, shortlist, сообщения и результаты откроются на тарифе «Привлечение».</p><Link to="/dashboard/profile?focus=subscription#subscription" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.96]">Открыть полный подбор — тариф «Привлечение»</Link></div></section> : null}
         {workspace?.cursor ? <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} className="min-h-11 w-full">{loadingMore ? 'Загружаем…' : 'Показать ещё'}</Button> : null}
       </> : null}

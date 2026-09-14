@@ -22,6 +22,12 @@ export type InfluencerCreator = {
   content_styles?: string[];
   formats?: string[];
   accepts_barter?: boolean | null;
+  price_min?: number | null;
+  price_max?: number | null;
+  currency?: string | null;
+  availability_text?: string | null;
+  confirmation_status?: 'observed' | 'creator_confirmed' | 'business_confirmed' | 'expired' | null;
+  confirmed_at?: string | null;
   contactability?: string;
   verification_status?: string;
   score?: number;
@@ -115,3 +121,24 @@ const influencerPlatformLabels: Record<string, string> = {
 };
 
 export const influencerPlatformLabel = (platform?: string) => influencerPlatformLabels[platform || ''] || platform || 'Площадка';
+
+const influencerTopicLabels: Record<string, string> = {
+  local_places: 'Места рядом',
+  guides_and_selections: 'Подборки и гиды',
+  food_cafes: 'Еда и рестораны',
+  family_parenting: 'Семья и дети',
+  beauty_wellness: 'Красота и здоровье',
+  personal_lifestyle: 'Лайфстайл',
+  visual_ugc: 'Визуальный контент',
+  reviews: 'Обзоры',
+  events_entertainment: 'События и досуг',
+  travel: 'Путешествия',
+  expert: 'Экспертный контент',
+  education: 'Образование',
+  fashion: 'Стиль и мода',
+  home_design: 'Дом и интерьер',
+  sports_fitness: 'Спорт и фитнес',
+  business: 'Бизнес',
+};
+
+export const influencerTopicLabel = (topic?: string) => influencerTopicLabels[topic || ''] || topic || 'Не указана';
