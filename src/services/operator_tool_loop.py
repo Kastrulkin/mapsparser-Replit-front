@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -337,6 +338,23 @@ def run_operator_tool_loop(
                 and not bool(last_outcome.get("external_writes_performed"))
             )
             if successful_read:
+                unfinished_change = last_tool_name == 'content.editorial_context' or bool(re.search(
+                    r'\b(?:измени|изменить|передел|обнови|созда|сдела|делать|добав|удали|замени|перенеси|сохрани|исправ)', message, re.I))
+                if unfinished_change:
+                    only_reads = all(item.get('risk_class') in {'read_only', 'privileged_read', 'support_read'} for item in trace)
+                    failure_text = ('Изменить контент-план не удалось. Он остался прежним.'
+                        if only_reads and last_tool_name == 'content.editorial_context' else
+                        'Не удалось выполнить запрошенное действие. Успел только прочитать данные; изменения не выполнялись.'
+                        if only_reads else 'Не удалось завершить задачу. Часть шагов уже выполнена; проверьте сохранённые результаты перед повтором.')
+                    return {
+                        **last_outcome, 'status': 'failed', 'intent': 'operator_tool_loop',
+                        'capability': str(last_tool.get('capability') or last_tool_name),
+                        'chat_response': failure_text, 'summary': failure_text,
+                        'planner_failed': True, 'planner_error_code': error_code,
+                        'blocked_reasons': [error_code], 'tool_trace': trace,
+                        'tool_calls': len(trace), 'planner_steps': step_index + 1,
+                        'external_writes_performed': any(item.get('external_writes_performed') for item in observations),
+                    }
                 return {
                     **last_outcome,
                     "status": last_status or "completed",

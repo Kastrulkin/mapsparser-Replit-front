@@ -463,3 +463,16 @@ def test_tool_loop_does_not_substitute_other_dates_when_requested_content_day_is
 
     assert result["chat_response"] == "В контент-плане нет постов за 2026-08-25."
     assert "Пост за другой день" not in result["chat_response"]
+
+
+def test_editorial_context_read_is_not_success_when_planner_fails():
+    decisions=iter([{'action':'tool_call','tool':'content.editorial_context','arguments':{}},
+        {'action':'error','error_code':'DEEPSEEK_EMPTY_RESPONSE'}])
+    result=run_operator_tool_loop(business_id='b',user_id='u',
+        message='И делать текущий созданный сегодня контент план для райдеры по 1 посту в неделю',
+        tools=[_tool('content.editorial_context',lambda args:{'status':'completed','items':[], 'external_writes_performed':False})],
+        planner=lambda state:next(decisions))
+    assert result['status']=='failed'
+    assert result['chat_response']=='Изменить контент-план не удалось. Он остался прежним.'
+    assert result['summary']==result['chat_response']
+    assert result['planner_failed']
