@@ -103,6 +103,11 @@ from services.superadmin_telegram_notifications import (
     mark_community_source_notification_sent,
     mark_outreach_reply_notification_sent,
 )
+from services.riderra_systematic_outreach_service import (
+    format_run_notification,
+    mark_run_notified,
+    prepare_systematic_batch,
+)
 from services.founder_content_editorial import (
     format_founder_content_telegram_message,
     mark_founder_content_delivered,
@@ -193,6 +198,7 @@ _OUTREACH_REPLY_SYNC_STATE = {
     "blocked_sender_ids": [],
 }
 _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
+_LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT = 0.0
 _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
@@ -1691,6 +1697,54 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             "cycle_started_at": None,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
+
+
+def _prepare_riderra_systematic_outreach_if_due() -> None:
+    global _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT
+    if not _env_bool("RIDERRA_SYSTEMATIC_OUTREACH_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_INTERVAL_SEC", "3600")))
+    if now - _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT < interval_sec:
+        return
+    _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+        result = prepare_systematic_batch(
+            cursor,
+            target_count=max(1, min(int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_TARGET", "150")), 150)),
+        )
+        db.conn.commit()
+        print(
+            "[RIDERRA_SYSTEMATIC_OUTREACH] "
+            f"status={result.get('status')} eligible={result.get('eligible_count')} "
+            f"selected={result.get('selected_count')} queued={result.get('queued_count')} "
+            f"capacity={result.get('remaining_daily_capacity')}",
+            flush=True,
+        )
+        if not result.get("should_notify"):
+            return
+        recipients = load_superadmin_telegram_recipients(db.conn)
+        message = format_run_notification(result)
+        sent_to = [telegram_id for telegram_id in recipients if _send_telegram_plain_message(telegram_id, message)]
+        if recipients and len(sent_to) == len(recipients):
+            mark_run_notified(cursor, str(result.get("run_id") or ""))
+            db.conn.commit()
+    except Exception as exc:
+        if db:
+            try:
+                db.conn.rollback()
+            except Exception:
+                pass
+        print(f"[RIDERRA_SYSTEMATIC_OUTREACH] error: {exc}", flush=True)
+    finally:
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 def _dispatch_outreach_queue_if_due() -> None:
@@ -7855,6 +7909,7 @@ if __name__ == "__main__":
             if _worker_role_enabled("parser"):
                 process_queue()
             if _worker_role_enabled("dispatcher"):
+                _prepare_riderra_systematic_outreach_if_due()
                 _dispatch_outreach_queue_if_due()
                 _run_card_automation_if_due()
                 _run_founder_content_if_due()

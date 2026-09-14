@@ -127,3 +127,33 @@ Per the owner's direct instruction, qualify a new recipient from only three reci
 On 2026-09-09 the live partnership batch endpoint was repaired by restoring flat timestamp serialization. Contact intelligence was also changed so a terminal GigaChat draft-provider error does not roll back already verified contacts and research. The job finishes as `needs_evidence`, with no generic draft or outbound queue row. This is operational resilience only: Riderra still requires the exact authenticated grant, current 005 attestation, database binding, suppression/history checks, and the approved template renderer.
 
 The resulting new Riderra intake contains 131 workstreams with current research. Of these, 113 have a selected `confirmed_source` email and can enter a future email manifest; 5 have only `valid_format` email and 13 selected contacts are non-email, so they stay out. One existing recipient, Debla, replied with a price-based refusal and is confirmed as refused in LocalOS.
+
+## Systematic preparation (prepared 14 September 2026)
+
+The standing authorization is a separate append-only permission. It freezes the
+Riderra business, `riderracs@gmail.com`, the approved template definition,
+allowed template slots, the 005 pricebook, the Moscow timezone and the shared
+limit of 150 unique companies per day. It does not contain recipients and does
+not bypass an exact batch manifest. Each worker run derives a new closed manifest
+from the current eligible CRM rows and a fresh provider-observed 005 snapshot.
+
+The dispatcher worker runs preparation before normal outbound dispatch when
+`RIDERRA_SYSTEMATIC_OUTREACH_ENABLED=true`. The default target is the remaining
+part of the 150-company Moscow-day allowance and can be lowered with
+`RIDERRA_SYSTEMATIC_OUTREACH_TARGET`. Repeated runs are serialized and all
+existing campaign, suppression, reply, recipient, company and daily-limit checks
+remain in force.
+
+Eligibility uses the agreed minimum recipient facts: city, organization type and
+a confirmed organization email, plus current native research needed for an
+immutable source fingerprint. Berlin, prior campaigns, suppressed recipients,
+stale research and cities without an exact airport-to-city 005 row are excluded.
+The route selector deterministically prefers an airport-origin standard sedan,
+then a standard minivan, using the current row's own currency and price.
+
+Every run is recorded in `riderra_outreach_runs`. When the available pool is
+smaller than the current target, the available remainder is still queued. One
+deduplicated Telegram notice reports target, eligible and queued counts, shortage,
+exclusion reasons, missing-route cities and the next corrective action. A broken
+Google Sheets refresh or missing/revoked standing authorization stops preparation
+before campaign creation and produces a separate actionable notice.

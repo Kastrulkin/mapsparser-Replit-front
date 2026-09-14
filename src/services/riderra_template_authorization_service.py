@@ -18,6 +18,7 @@ from services.outreach_safety_service import research_source_fact_fingerprint
 
 
 PERMISSION_KIND = "riderra_buyer_template"
+STANDING_PERMISSION_KIND = "riderra_buyer_template_standing"
 PRICEBOOK_ATTESTATION_KIND = "riderra_pricebook_snapshot"
 APPROVAL_MODE = "riderra_template"
 BUSINESS_ID = "edbd961a-273f-4f15-836e-33aacc0aa0e3"
@@ -33,6 +34,7 @@ MANIFEST_VERSION = 1
 TEMPLATE_VERSION = "riderra-buyer-first-email-v1"
 APPROVED_TEMPLATE_ARTIFACT_SHA256 = "00862a0e8b463746a58f4008702d5151690f416ecd12548e412f9fc2ef524237"
 APPROVED_TEMPLATE_DEFINITION_SHA256 = "40ad6f4afa17cc1180ca65902194d6da4fb8802ea9171dbcb05ea70de83d7854"
+STANDING_POLICY_VERSION = 1
 
 SUBJECT_TEMPLATE = "{company} | Riderra | {city} airport transfers"
 
@@ -289,6 +291,122 @@ def _latest_event(cursor: Any, sender_account_id: str) -> dict[str, Any]:
     return dict(row) if row else {}
 
 
+def standing_policy() -> dict[str, Any]:
+    """Return the immutable scope that may create exact per-batch grants."""
+    variants = {
+        "verified_opening_v1": hashlib.sha256(BODY_TEMPLATE.encode("utf-8")).hexdigest(),
+        "no_opening_v1": hashlib.sha256(BODY_WITHOUT_OPENING_TEMPLATE.encode("utf-8")).hexdigest(),
+    }
+    definition = {
+        "subject_template": SUBJECT_TEMPLATE,
+        "body_variants": variants,
+        "allowed_variant_ids": sorted(variants),
+    }
+    if _hash(definition) != APPROVED_TEMPLATE_DEFINITION_SHA256:
+        raise ValueError("riderra_approved_template_definition_changed")
+    return {
+        "policy_version": STANDING_POLICY_VERSION,
+        "scope": "riderra_buyer_first_email",
+        "business_id": BUSINESS_ID,
+        "sender_account_id": SENDER_ACCOUNT_ID,
+        "sender_identity": SENDER_IDENTITY,
+        "workstream_type": "client_partnership",
+        "audience": "transfer_buyer",
+        "channels": ["email"],
+        "daily_limit": DAILY_LIMIT,
+        "timezone": TIMEZONE,
+        "template_version": TEMPLATE_VERSION,
+        "template_definition_sha256": APPROVED_TEMPLATE_DEFINITION_SHA256,
+        "approved_template_artifact_sha256": APPROVED_TEMPLATE_ARTIFACT_SHA256,
+        "allowed_slot_names": [
+            "company", "city", "opening", "route", "price", "vehicle", "pax",
+        ],
+        "allowed_opening_variants": sorted(variants),
+        "pricebook_id": PRICEBOOK_ID,
+        "pricebook_sheet": PRICEBOOK_SHEET,
+        "excluded_cities": ["Berlin"],
+    }
+
+
+def _latest_standing_event(cursor: Any, sender_account_id: str) -> dict[str, Any]:
+    cursor.execute(
+        """SELECT event.id,event.event_type,event.actor_id,event.payload_json,event.created_at,
+                  COALESCE(actor.is_active,FALSE) AND COALESCE(actor.is_superadmin,FALSE) AS actor_authorized
+           FROM outreach_sender_account_events event LEFT JOIN users actor ON actor.id=event.actor_id
+           WHERE event.sender_account_id=%s AND event.event_type='permission_changed'
+             AND event.payload_json->>'permission_kind'=%s
+           ORDER BY event.created_at DESC,event.id DESC LIMIT 1""",
+        (sender_account_id, STANDING_PERMISSION_KIND),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else {}
+
+
+def load_standing_authorization(
+    cursor: Any, *, sender_account_id: str = SENDER_ACCOUNT_ID,
+) -> dict[str, Any]:
+    sender = _canonical_sender(cursor, sender_account_id)
+    event = _latest_standing_event(cursor, sender_account_id) if sender else {}
+    payload = event.get("payload_json") if isinstance(event.get("payload_json"), dict) else {}
+    capabilities = sender.get("capabilities_json") if isinstance(sender.get("capabilities_json"), dict) else {}
+    policy = standing_policy()
+    if (
+        not event or event.get("event_type") != "permission_changed"
+        or payload.get("permission_kind") != STANDING_PERMISSION_KIND
+        or payload.get("state") != "active"
+        or payload.get("grant_id") != str(event.get("id"))
+        or payload.get("authorization_reference") != AUTHORIZATION_REFERENCE
+        or payload.get("policy") != policy
+        or sender_account_id != SENDER_ACCOUNT_ID
+        or not event.get("actor_authorized") or not event.get("created_at")
+        or sender.get("status") != "connected" or not sender.get("outreach_enabled")
+        or sender.get("health_status") in {"paused", "blocked"}
+        or capabilities.get("direct_send") is not True or capabilities.get("reply_sync") is not True
+    ):
+        return {}
+    return {
+        "id": str(event["id"]),
+        "state": "active",
+        "approved_by": str(event["actor_id"]),
+        "approved_at": event["created_at"],
+        "sender_account_id": sender_account_id,
+        "authorization_reference": AUTHORIZATION_REFERENCE,
+        "policy": policy,
+    }
+
+
+def set_standing_authorization(
+    cursor: Any, *, actor_id: str, enabled: bool, authorization_reference: str,
+) -> dict[str, Any]:
+    if type(enabled) is not bool or authorization_reference != AUTHORIZATION_REFERENCE:
+        raise ValueError("riderra_template_explicit_user_reference_required")
+    cursor.execute("SELECT id FROM users WHERE id=%s AND is_active=TRUE AND is_superadmin=TRUE", (actor_id,))
+    if not cursor.fetchone():
+        raise PermissionError("riderra_template_superadmin_required")
+    cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"riderra-standing:{SENDER_ACCOUNT_ID}",))
+    if not _canonical_sender(cursor, SENDER_ACCOUNT_ID):
+        raise ValueError("riderra_template_sender_scope_invalid")
+    previous = _latest_standing_event(cursor, SENDER_ACCOUNT_ID)
+    previous_payload = previous.get("payload_json") if isinstance(previous.get("payload_json"), dict) else {}
+    event_id = str(uuid.uuid4())
+    payload = {
+        "permission_kind": STANDING_PERMISSION_KIND,
+        "state": "active" if enabled else "revoked",
+        "grant_id": event_id if enabled else previous_payload.get("grant_id"),
+        "authorization_reference": authorization_reference,
+        "policy": standing_policy(),
+        "revokes_all_prior_grants": not enabled,
+        "replaces_event_id": str(previous.get("id") or "") or None,
+    }
+    cursor.execute(
+        """INSERT INTO outreach_sender_account_events
+           (id,sender_account_id,event_type,actor_id,payload_json,created_at)
+           VALUES(%s,%s,'permission_changed',%s,%s,clock_timestamp())""",
+        (event_id, SENDER_ACCOUNT_ID, actor_id, Json(payload)),
+    )
+    return {"id": event_id, "state": payload["state"], "policy": payload["policy"]}
+
+
 def record_pricebook_attestation(cursor: Any, *, actor_id: str, artifact_bytes: bytes,
                                  evidence_reference: str) -> dict[str, Any]:
     """Import one provider-observed frozen snapshot; it does not read Sheets."""
@@ -380,6 +498,11 @@ def load_authorization(cursor: Any, *, sender_account_id: str = SENDER_ACCOUNT_I
         manifest = build_manifest((payload.get("manifest") or {}).get("records") or [], pricebook_attestation=attestation)
     except (TypeError, ValueError):
         return {}
+    standing_authorization_id = str(payload.get("standing_authorization_id") or "")
+    if standing_authorization_id:
+        standing = load_standing_authorization(cursor, sender_account_id=sender_account_id)
+        if not standing or standing.get("id") != standing_authorization_id:
+            return {}
     capabilities = sender.get("capabilities_json") if isinstance(sender.get("capabilities_json"), dict) else {}
     if (
         sender_account_id != SENDER_ACCOUNT_ID or not event.get("actor_authorized") or not event.get("created_at")
@@ -396,7 +519,8 @@ def load_authorization(cursor: Any, *, sender_account_id: str = SENDER_ACCOUNT_I
 
 
 def set_authorization(cursor: Any, *, actor_id: str, enabled: bool, records: list[dict[str, Any]],
-                      authorization_reference: str, pricebook_attestation_id: str | None = None) -> dict[str, Any]:
+                      authorization_reference: str, pricebook_attestation_id: str | None = None,
+                      standing_authorization_id: str | None = None) -> dict[str, Any]:
     if type(enabled) is not bool or authorization_reference != AUTHORIZATION_REFERENCE:
         raise ValueError("riderra_template_explicit_user_reference_required")
     cursor.execute("SELECT id FROM users WHERE id=%s AND is_active=TRUE AND is_superadmin=TRUE", (actor_id,))
@@ -408,6 +532,14 @@ def set_authorization(cursor: Any, *, actor_id: str, enabled: bool, records: lis
     previous = _latest_event(cursor, SENDER_ACCOUNT_ID)
     previous_payload = previous.get("payload_json") if isinstance(previous.get("payload_json"), dict) else {}
     if enabled:
+        if standing_authorization_id:
+            standing = load_standing_authorization(cursor)
+            if (
+                not standing
+                or standing.get("id") != standing_authorization_id
+                or standing.get("approved_by") != actor_id
+            ):
+                raise PermissionError("riderra_standing_authorization_required")
         attestation = load_pricebook_attestation(cursor, str(pricebook_attestation_id or ""))
         if not attestation:
             raise ValueError("riderra_pricebook_attestation_required")
@@ -420,6 +552,8 @@ def set_authorization(cursor: Any, *, actor_id: str, enabled: bool, records: lis
                "grant_id": event_id if enabled else previous_payload.get("grant_id"),
                "manifest": manifest, "authorization_reference": authorization_reference,
                "pricebook_attestation_id": str(pricebook_attestation_id or previous_payload.get("pricebook_attestation_id") or "") or None,
+               "standing_authorization_id": standing_authorization_id,
+               "derived_automatically": bool(enabled and standing_authorization_id),
                "revokes_all_prior_grants": not enabled,
                "replaces_event_id": str(previous.get("id") or "") or None}
     cursor.execute(

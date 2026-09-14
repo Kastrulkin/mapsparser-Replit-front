@@ -121,14 +121,20 @@ class GoogleSheetsAppendAdapter:
             "updated_cells": payload.get("updatedCells"),
         }
 
-    def read_range_values(self, spreadsheet_id: str, range_value: str) -> list[list[Any]]:
+    def read_range_values(
+        self,
+        spreadsheet_id: str,
+        range_value: str,
+        *,
+        value_render_option: str = "FORMULA",
+    ) -> list[list[Any]]:
         credentials = _refresh_credentials_if_needed(dict(self.credentials))
         token = str(credentials.get("token") or "").strip()
         if not token:
             raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
         request_kwargs = {
-            "params": {"majorDimension": "ROWS", "valueRenderOption": "FORMULA"},
+            "params": {"majorDimension": "ROWS", "valueRenderOption": value_render_option},
             "headers": {"Authorization": f"Bearer {token}"},
             "timeout": self.timeout_seconds,
         }

@@ -68,3 +68,6 @@ def test_outreach_due_check_precedes_card_automation_in_dispatcher_loop():
     assert calls.index("_dispatch_outreach_queue_if_due") < calls.index(
         "_run_card_automation_if_due"
     )
+    assert calls.index("_prepare_riderra_systematic_outreach_if_due") < calls.index(
+        "_dispatch_outreach_queue_if_due"
+    )

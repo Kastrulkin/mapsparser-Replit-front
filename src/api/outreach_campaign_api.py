@@ -53,9 +53,11 @@ from services.riderra_template_authorization_service import (
     SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
     build_manifest as build_riderra_manifest,
     load_authorization as load_riderra_authorization,
+    load_standing_authorization as load_riderra_standing_authorization,
     load_pricebook_attestation as load_riderra_pricebook_attestation,
     record_pricebook_attestation as record_riderra_pricebook_attestation,
     set_authorization as set_riderra_authorization,
+    set_standing_authorization as set_riderra_standing_authorization,
 )
 from services.outreach_relationship_service import (
     approve_room_invitation,
@@ -1014,6 +1016,52 @@ def author_template_authorization_route(sender_account_id: str):
             cursor, sender_account_id=sender_account_id,
             actor_id=str(user_data.get("user_id") or ""), enabled=payload["enabled"],
             authorization_reference="authenticated_superadmin_template_decision",
+        )
+        conn.commit()
+        return jsonify({"success": True, "authorization": result, "external_dispatch_performed": False})
+    except (ValueError, PermissionError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.route(
+    "/api/outreach/sender-accounts/<sender_account_id>/riderra-standing-authorization",
+    methods=["GET", "PATCH"],
+)
+def riderra_standing_authorization_route(sender_account_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not user_data.get("is_superadmin"):
+        return jsonify({"success": False, "error": "superadmin_required"}), 403
+    if sender_account_id != RIDERRA_SENDER_ACCOUNT_ID:
+        return jsonify({"success": False, "error": "riderra_sender_scope_invalid"}), 404
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_sender_account(cursor, sender_account_id, user_data):
+            return jsonify({"success": False, "error": "sender_not_found"}), 404
+        if request.method == "GET":
+            return jsonify({
+                "success": True,
+                "authorization": load_riderra_standing_authorization(
+                    cursor, sender_account_id=sender_account_id,
+                ),
+            })
+        payload = request.get_json(silent=True) or {}
+        if (
+            not isinstance(payload, dict)
+            or type(payload.get("enabled")) is not bool
+            or payload.get("authorization_reference") != RIDERRA_AUTHORIZATION_REFERENCE
+        ):
+            return jsonify({"success": False, "error": "explicit_riderra_decision_required"}), 400
+        result = set_riderra_standing_authorization(
+            cursor,
+            actor_id=str(user_data.get("user_id") or ""),
+            enabled=payload["enabled"],
+            authorization_reference=payload["authorization_reference"],
         )
         conn.commit()
         return jsonify({"success": True, "authorization": result, "external_dispatch_performed": False})

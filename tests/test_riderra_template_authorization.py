@@ -660,8 +660,8 @@ def test_dispatch_claims_author_and_noncreator_riderra_on_isolated_postgres(post
             CREATE TEMP TABLE outreachsendqueue (
               id text PRIMARY KEY,batch_id text,lead_id text,draft_id text,workstream_id text,
               campaign_touch_id text,sender_account_id text,scheduled_at timestamptz,sent_at timestamptz,
-              delivery_status text,next_retry_at timestamptz,created_at timestamptz,dispatch_started_at timestamptz,
-              updated_at timestamptz,attempts int,provider_message_id text,error_text text,
+                  delivery_status text,next_retry_at timestamptz,created_at timestamptz,dispatch_started_at timestamptz,
+                  updated_at timestamptz,last_attempt_at timestamptz,attempts int,provider_message_id text,error_text text,
               idempotency_key text,channel text,recipient_value text
             );
             INSERT INTO outreachsendbatches VALUES ('batch','approved');
@@ -685,9 +685,9 @@ def test_dispatch_claims_author_and_noncreator_riderra_on_isolated_postgres(post
               ('touch-author','campaign-author','queued','Author subject','contact-author'),
               ('touch-riderra','campaign-riderra','queued','Riderra subject','contact-riderra');
             INSERT INTO outreachsendqueue VALUES
-              ('queue-author','batch','lead-author','draft-author','ws-author','touch-author','sender-a',NOW(),NULL,'queued',NULL,NOW()-INTERVAL '2 minutes',NULL,NOW(),0,NULL,NULL,NULL,'email','author@example.test'),
-              ('queue-riderra','batch','lead-riderra','draft-riderra','ws-riderra','touch-riderra','sender-r',NOW(),NULL,'queued',NULL,NOW()-INTERVAL '1 minute',NULL,NOW(),0,NULL,NULL,NULL,'email','buyer@example.test'),
-              ('queue-sent','batch','lead-sent',NULL,'ws-sent',NULL,NULL,NOW(),NOW(),'sent',NULL,NOW(),NOW(),NOW(),1,NULL,NULL,NULL,'email','legacy@example.test');
+                  ('queue-author','batch','lead-author','draft-author','ws-author','touch-author','sender-a',NOW(),NULL,'queued',NULL,NOW()-INTERVAL '2 minutes',NULL,NOW(),NULL,0,NULL,NULL,NULL,'email','author@example.test'),
+                  ('queue-riderra','batch','lead-riderra','draft-riderra','ws-riderra','touch-riderra','sender-r',NOW(),NULL,'queued',NULL,NOW()-INTERVAL '1 minute',NULL,NOW(),NULL,0,NULL,NULL,NULL,'email','buyer@example.test'),
+                  ('queue-sent','batch','lead-sent',NULL,'ws-sent',NULL,NULL,NOW(),NOW(),'sent',NULL,NOW(),NOW(),NOW(),NOW(),1,NULL,NULL,NULL,'email','legacy@example.test');
             """,
             (riderra.BUSINESS_ID,),
         )
