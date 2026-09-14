@@ -882,7 +882,7 @@ def queue_business_parse_apify():
         row = cur.fetchone()
         map_url = ""
         if row:
-            map_url = str(row.get("url") if hasattr(row, "get") else row[0]).strip()
+            map_url = normalize_map_url(row.get("url") if hasattr(row, "get") else row[0])
         if not map_url:
             return jsonify({"error": "Map link is not configured for this business"}), 400
 

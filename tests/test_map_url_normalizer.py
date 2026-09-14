@@ -1,4 +1,34 @@
 from core.map_url_normalizer import is_google_map_url, normalize_map_url
+import pytest
+
+
+@pytest.mark.parametrize("value", [
+    "https://maps.google.com/?cid=3265699317834998350%29",
+    " https://maps.google.com/?cid=3265699317834998350) ",
+    '<https://maps.google.com/?cid=3265699317834998350>',
+    '[Riderra](https://maps.google.com/?cid=3265699317834998350)',
+    'maps.google.com/?cid=3265699317834998350',
+    '//maps.google.com/?cid=3265699317834998350',
+])
+def test_pasted_google_cid(value):
+    expected = 'https://maps.google.com/?cid=3265699317834998350'
+    assert normalize_map_url(value) == expected
+    assert normalize_map_url(normalize_map_url(value)) == expected
+    assert is_google_map_url(value)
+
+
+def test_preserves_parentheses_in_google_query():
+    value = 'https://www.google.com/maps?q=Riderra+%28Tallinn%29'
+    assert normalize_map_url(value) == value
+
+
+def test_does_not_guess_broken_cid():
+    value = 'https://maps.google.com/?cid=123abc%29'
+    assert normalize_map_url(value) == value
+
+
+def test_pasted_yandex_link():
+    assert normalize_map_url('yandex.ru/maps/org/test/123/reviews)') == 'https://yandex.ru/maps/org/test/123'
 
 
 def test_normalize_yandex_reviews_url_to_business_card_url():
