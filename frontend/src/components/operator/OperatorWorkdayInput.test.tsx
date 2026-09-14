@@ -13,7 +13,7 @@ it('uploads a file into the conversation without automatically executing a task'
   const user = userEvent.setup(); const selected = vi.fn();
   const fetcher = vi.fn((url: RequestInfo | URL, options?: RequestInit) => {
     if (String(url).includes('/workday/config')) return reply(config);
-    if (String(url).includes('/disk/status')) return reply({ configured: false, connection: { status: 'disconnected' }, photos: [] });
+    if (String(url).includes('/disk/status') || String(url).includes('/google-drive/status')) return reply({ configured: false, connection: { status: 'disconnected' }, photos: [] });
     expect(String(url)).toBe('/api/operator/attachments');
     expect(options?.body).toBeInstanceOf(FormData);
     return reply({ attachment: { id: 'a' }, conversation_id: 'conversation' });
@@ -41,4 +41,15 @@ it('does not restore stale business settings after switching scope', async () =>
   view.rerender(<OperatorWorkdayInput businessId="new" channel="web" headers={headers} onConversation={vi.fn()} />);
   resolveOld(new Response(JSON.stringify(config)));
   await waitFor(() => expect(screen.queryByText('Настройки рабочего пилота')).not.toBeInTheDocument());
+});
+
+
+it('offers Google independently and keeps local uploads available without OAuth credentials', async () => {
+  vi.stubGlobal('fetch', vi.fn((url: RequestInfo | URL) => String(url).includes('/workday/config') ? reply(config) : reply({ configured: false, connection: { status: 'disconnected' }, photos: [] })));
+  render(<OperatorWorkdayInput businessId="b" channel="web" headers={headers} onConversation={vi.fn()} />);
+  await screen.findByRole('button', { name: 'Фото или файл' });
+  await userEvent.click(screen.getByText('Настройки рабочего пилота'));
+  expect(screen.getByRole('button', { name: 'Подключить Google Диск' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Подключить Яндекс Диск' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Фото или файл' })).toBeEnabled();
 });

@@ -488,6 +488,10 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
             from services.operator_colleagues import process_job
             result = process_job(claimed)
             status, stage, progress = "completed", "Проверен результат отправки", 100
+        elif kind == "google_drive_sync":
+            from services.google_drive import process_job
+            result = process_job(claimed)
+            status, stage, progress = "completed", "Проверено сохранение фото Google Диска", 100
         elif kind == "yandex_disk_sync":
             from services.yandex_disk import process_job
             result = process_job(claimed)

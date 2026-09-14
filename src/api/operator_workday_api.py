@@ -76,6 +76,48 @@ def register_workday_routes(bp):
         finally:
             db.close()
 
+    @bp.route('/google-drive/status',methods=['GET'])
+    def operator_google_drive_status():
+        from services import google_drive
+        return run(lambda c,b,u,a,p:google_drive.status(c,b))
+
+    @bp.route('/google-drive/connect',methods=['POST'])
+    def operator_google_drive_connect():
+        from services import google_drive
+        return run(lambda c,b,u,a,p:google_drive.begin(c,b,u))
+
+    @bp.route('/google-drive/disconnect',methods=['POST'])
+    def operator_google_drive_disconnect():
+        from services import google_drive
+        return run(lambda c,b,u,a,p:google_drive.disconnect(c,b,u))
+
+    @bp.route('/google-drive/retry',methods=['POST'])
+    def operator_google_drive_retry():
+        from services import google_drive
+        def retry(c,b,u,a,p):
+            operator_workday.authorize(c,b,u,owner=True)
+            c.execute("UPDATE operator_async_jobs SET status='queued',attempt_count=0,error_text=NULL,next_attempt_at=NOW(),completed_at=NULL WHERE business_id=%s AND kind='google_drive_sync' AND status='failed'",(b,))
+            return {'queued':google_drive.queue_operator_photos(c,b,u)}
+        return run(retry)
+
+    @bp.route('/google-drive/callback',methods=['GET'])
+    def operator_google_drive_callback():
+        from services import google_drive
+        from flask import redirect
+        from requests import RequestException
+        db=DatabaseManager()
+        try:
+            c=db.conn.cursor()
+            business,user=google_drive.finish(c,request.args.get('state',''),request.args.get('code',''))
+            google_drive.queue_operator_photos(c,business,user)
+            db.conn.commit()
+            return redirect('/dashboard/operator')
+        except (ValueError,PermissionError,RequestException):
+            db.conn.rollback()
+            return 'Не удалось подключить Диск. Вернитесь в LocalOS и начните подключение заново.',400
+        finally:
+            db.close()
+
     @bp.route('/workday/config',methods=['GET'])
     def operator_workday_config():
         def config(cursor,business,user,actor,payload):

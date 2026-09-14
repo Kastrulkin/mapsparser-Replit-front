@@ -174,6 +174,8 @@ def classify(cursor,business_id,user_id,attachment_id,purpose,conversation_id):
         photo_id=photo['id']
         from services import yandex_disk
         yandex_disk.queue(cursor,business_id,user_id,photo_id)
+        from services import google_drive
+        google_drive.queue(cursor,business_id,user_id,photo_id)
     if purpose!='content' and not text:
         text=extract_text(item,business_id,user_id)
     cursor.execute('UPDATE operator_attachments SET purpose=%s,photo_asset_id=%s,extracted_text=%s WHERE id=%s',

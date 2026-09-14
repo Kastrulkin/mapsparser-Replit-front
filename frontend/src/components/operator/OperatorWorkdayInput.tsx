@@ -11,6 +11,7 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
   headers?: () => Record<string, string>; onConversation: (id: string) => void;
 }) {
   const [config, setConfig] = useState<Config | null>(null);
+  const [googleDrive, setGoogleDrive] = useState<Disk | null>(null);
   const [disk, setDisk] = useState<Disk | null>(null);
   const [recipient, setRecipient] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,13 +30,16 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
     return data;
   }
   async function refresh() {
+    const signal = lifetime.current.signal;
     const current = await request(`workday/config?business_id=${encodeURIComponent(businessId)}`);
     setConfig(current); setRecipient(current.recipient_user_id || '');
+    try { setGoogleDrive(await request(`google-drive/status?business_id=${encodeURIComponent(businessId)}`)); }
+    catch { signal.throwIfAborted(); setGoogleDrive(null); }
     setDisk(await request(`disk/status?business_id=${encodeURIComponent(businessId)}`));
   }
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
-    setConfig(null); setDisk(null); setError(''); setNotice(''); setBusy(false);
+    setConfig(null); setDisk(null); setGoogleDrive(null); setError(''); setNotice(''); setBusy(false);
     void refresh().catch(() => { if (!controller.signal.aborted) setConfig(null); });
     return () => controller.abort();
   }, [businessId, channel]);
@@ -96,6 +100,17 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
           </>}
         </div>
         {!disk?.configured && <p className="text-muted-foreground">Подключение Диска ещё не настроено в LocalOS. Работа с фото доступна.</p>}
+        <p>Google Диск: {googleDrive?.connection.status === 'connected' ? 'подключён' : googleDrive?.connection.status === 'needs_reconnect' ? 'доступ отозван — подключите заново' : 'не подключён'}. Фото сначала сохраняются в LocalOS.</p>
+        {googleDrive?.photos.some(row => row.status === 'needs_retry') && <p>Некоторые фотографии ждут повторной синхронизации.</p>}
+        <div className="flex flex-wrap gap-2">
+          {googleDrive?.connection.status !== 'connected' ? <Button type="button" variant="outline" disabled={busy || !googleDrive?.configured} onClick={() => void perform(async () => {
+            const body = await request('google-drive/connect', { business_id: businessId }); window.location.assign(body.url);
+          })}>Подключить Google Диск</Button> : <>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => void perform(async () => { await request('google-drive/retry', { business_id: businessId }); await refresh(); setNotice('Синхронизация поставлена в очередь.'); })}>Синхронизировать фото с Google</Button>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => void perform(async () => { await request('google-drive/disconnect', { business_id: businessId }); await refresh(); })}>Отключить Google Диск</Button>
+          </>}
+        </div>
+        {!googleDrive?.configured && <p className="text-muted-foreground">Подключение Google Диска ещё не настроено в LocalOS. Работа с фото доступна.</p>}
       </div>
     </details>}
   </div>;
