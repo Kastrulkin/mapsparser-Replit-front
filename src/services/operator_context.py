@@ -6,7 +6,7 @@ DOMAINS = {
     'finance': r'выруч|расход|доход|чек|финанс|продаж|возврат',
     'services': r'услуг|прайс|цен[ауы]',
     'reviews': r'отзыв|рейтинг',
-    'work': r'журнал|жалоб|недоволь|плохо встрет|сотрудник|заметк|предложени|иде[яию]|допродаж',
+    'work': r'журнал|жалоб|недоволь|плохо встрет|сотрудник|заметк|предложени|иде[яию]|допродаж|план[её]р|расписани|коллег',
     'settings': r'город|валют|часов.{0,10}пояс',
 }
 
@@ -42,7 +42,17 @@ class PlannerContext:
         return value
 
     def history(self, history):
-        # Keep recent clarification turns in full; omit older unrelated topics.
+        # Keep exchanges together: short answers depend on the preceding question.
         if not self.domains: return history[-6:]
-        return [item for index, item in enumerate(history) if any(
-            re.search(DOMAINS[domain], item['content'], re.I) for domain in self.domains)][-6:]
+        selected = []
+        relevant = False
+        for item in history:
+            if item.get('role') == 'user':
+                domains = PlannerContext(item.get('content', '')).domains
+                if domains:
+                    relevant = bool(domains & self.domains)
+                    if not relevant:
+                        selected = []
+            if relevant:
+                selected.append(item)
+        return selected[-6:]

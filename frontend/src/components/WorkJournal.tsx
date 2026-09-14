@@ -47,6 +47,14 @@ export function WorkJournal({ businessId, headers = defaultHeaders, embedded = f
   }, [businessId, query, day, request]);
   useEffect(() => { setData(null); setText(''); setAnswer(null); setConversation(undefined); setEditing(null); setHistory({}); setError(''); setQuery(''); setDay(''); setBusy(false); setTab('journal'); setInbox([]); setReviewing(null); setReason(''); setAssignee(''); setReviewerId(''); setDigestTime('18:00'); setLinked({}); setSelectedObservation(null); setSelectedTask(null); }, [businessId]);
   useEffect(()=>{if(data?.can_review===false){setInbox([]);setReviewing(null);setLinked({});setHistory({});setReason('');setSelectedObservation(null);setSelectedTask(null);}},[data?.can_review]);
+  useEffect(() => {
+    if (data?.role !== 'owner' || !data.review_enabled) return;
+    const business=businessId; const controller=new AbortController();
+    void request(`/work-journal/digest-settings?${new URLSearchParams({business_id:business || ''})}`,{signal:controller.signal})
+      .then(value=>{if(scope.current===business && !controller.signal.aborted)setDigestTime(value.local_time);})
+      .catch(failure=>{if(scope.current===business && !controller.signal.aborted)setError(failure.message);});
+    return ()=>controller.abort();
+  },[businessId,data?.role,data?.review_enabled,request]);
   useEffect(() => { const controller = new AbortController(); void load(controller.signal).catch((failure) => { if (!controller.signal.aborted) setError(failure.message); }); return () => controller.abort(); }, [load]);
   useEffect(() => {
     const params=new URLSearchParams(window.location.search); const id=params.get('entry');

@@ -60,3 +60,28 @@ it('reviews an observation with its version and clears the inbox on revoked acce
  await user.click(screen.getByRole('button',{name:'Показать'}));
  await screen.findByRole('alert');expect(screen.queryByText('Клиент отказался')).not.toBeInTheDocument();
 });
+it('restores the saved digest time when the journal opens',async()=>{
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>{
+  const path=String(input);
+  if(path.includes('/audio/'))return reply({input_enabled:false});
+  if(path.includes('/digest-settings'))return reply({local_time:'09:30',enabled:true});
+  return reply({enabled:true,role:'owner',review_enabled:true,can_review:true,items:[],members:[]});
+ }));
+ render(<WorkJournal businessId="b" headers={headers}/>);
+ await waitFor(()=>expect(screen.getByLabelText('Время дневной сводки в часовом поясе бизнеса')).toHaveValue('09:30'));
+});
+it('ignores old digest settings after changing the business',async()=>{
+ let resolveOld:(value:Response)=>void=()=>{};
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>{
+  const path=String(input);
+  if(path.includes('/audio/'))return reply({input_enabled:false});
+  if(path.includes('/digest-settings'))return path.includes('business_id=a')?new Promise<Response>(resolve=>{resolveOld=resolve;}):reply({local_time:'11:00',enabled:true});
+  return reply({enabled:true,role:'owner',review_enabled:true,can_review:true,items:[],members:[]});
+ }));
+ const view=render(<WorkJournal businessId="a" headers={headers}/>);
+ await screen.findByLabelText('Время дневной сводки в часовом поясе бизнеса');
+ view.rerender(<WorkJournal businessId="b" headers={headers}/>);
+ await waitFor(()=>expect(screen.getByLabelText('Время дневной сводки в часовом поясе бизнеса')).toHaveValue('11:00'));
+ resolveOld(new Response(JSON.stringify({local_time:'09:30'})));
+ await waitFor(()=>expect(screen.getByLabelText('Время дневной сводки в часовом поясе бизнеса')).toHaveValue('11:00'));
+});

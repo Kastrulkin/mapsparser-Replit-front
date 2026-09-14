@@ -61,3 +61,9 @@ Deployed at 13:20 UTC with both new allowlists restricted to Riderra. Alembic is
 Live authenticated browser: journal and review filters loaded with no console errors. Added a discoverable journal link under More → Business. Final production frontend build passed. No test observations or customer messages were inserted into Riderra.
 
 Backup: `/Users/alexdemyanov/Backups/LocalOS/20260914-voice-journal/database.dump` (private permissions, SHA256 and full archive-read verification beside it). Targeted daily pilot checks scheduled in the current Codex task through 21 September; automation `riderra-2`. Physical-device and seven-day gates remain outstanding.
+
+## Additional obvious-case regressions — 14 September
+
+Reproduced and fixed three defects: semantic history filtering dropped short clarification answers; the weekly-plan shortcut accepted a negated or explanatory mutation phrase; the journal always displayed 18:00 instead of loading saved digest time. History now retains question/answer exchanges within the current topic, the shortcut requires an explicit imperative, and digest settings reload with cancellation/business isolation. Questions and negated commands continue through normal interpretation, not the deterministic mutation shortcut.
+
+New tests cover short numeric clarification, content/finance topic switches, negation/hypothesis/question variants, saved digest time and a delayed settings response from another business. Final regression: 590 backend tests and 28 frontend tests passed. Red/green logs are in `/tmp/localos-extra-checks/`. No business records or customer messages were created by these checks.

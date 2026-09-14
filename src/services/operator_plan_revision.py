@@ -171,7 +171,7 @@ def process_job(claimed):
 def explicit_schedule(message):
     """Only resolve unambiguous arithmetic; prose topics remain with the generator."""
     if re.match(r'\s*(если|например|как|можно ли)\b',message,re.I):return None
-    if not re.search(r'измен|переработ|помен|замен',message,re.I):return None
+    if not re.match(r'\s*(?:пожалуйста[, ]+)?(?:измени|измените|переработай|переработайте|поменяй|поменяйте|замени|замените)\b',message,re.I):return None
     if not re.search(r'(?:один|1)\s+пост\w*\s+в\s+недел|еженедель',message,re.I):return None
     numbers={'один':1,'одна':1,'два':2,'две':2,'три':3,'четыре':4,'пять':5,'шесть':6,'семь':7,'восемь':8,'девять':9,'десять':10}
     pattern=r'\b(\d+|'+'|'.join(numbers)+r')\s+(?:пост\w*\s+)?(?:про|о)\s+'
