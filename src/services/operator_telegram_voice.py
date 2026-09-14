@@ -68,7 +68,7 @@ async def queue_reply_speech(result,business,context):
     try:
         await asyncio.to_thread(transaction,queue)
     except (ValueError,PermissionError):
-        await context.bot.send_message(chat_id=business['telegram_id'],text='Озвучивание недоступно. Текст ответа сохранён.')
+        logger.info('Operator reply speech skipped; text response retained')
 
 
 async def callback(update,context,host):
@@ -187,6 +187,9 @@ async def delivery_loop(application, host):
                         continue
                     metadata=asset['metadata_json']; chat_id=metadata['chat_id']
                     if asset['job_status']!='completed':
+                        if asset['kind']=='speech':
+                            await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"sent\"}'::jsonb WHERE id=%s",(asset['id'],)))
+                            continue
                         await application.bot.send_message(chat_id=chat_id,text='Не удалось обработать аудио. Текстовые команды доступны; попробуйте новую запись.')
                     elif asset['kind']=='transcription' and metadata.get('auto_submit') and asset['status'] in {'ready','submitted'}:
                         await submit_recognized_voice(application, host, asset)

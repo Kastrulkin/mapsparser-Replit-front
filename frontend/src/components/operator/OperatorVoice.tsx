@@ -129,7 +129,7 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
   messageId: string; businessId: string; prepare?: boolean; headers?: HeadersProvider;
 }) {
   const [available, setAvailable] = useState(false); const [url, setUrl] = useState('');
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const controller = useRef(new AbortController()); const objectUrl = useRef(''); const started = useRef(false);
   useEffect(() => {
     const next = new AbortController(); controller.current = next;
@@ -137,7 +137,7 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
     return () => { next.abort(); URL.revokeObjectURL(objectUrl.current); };
   }, [businessId, messageId]);
   const load = async () => {
-    if (busy || url) return; setBusy(true); setError(''); const signal = controller.current.signal;
+    if (busy || url) return; setBusy(true); const signal = controller.current.signal;
     try {
       const queued = await jsonRequest(`/api/operator/messages/${messageId}/speech`, { method: 'POST', headers: headers(), signal });
       const result = await waitJob(queued.job_id, businessId, headers, signal);
@@ -145,10 +145,10 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
       if (!response.ok) throw new Error('Аудио недоступно');
       const blob = await response.blob(); if (signal.aborted) return;
       objectUrl.current = URL.createObjectURL(blob); setUrl(objectUrl.current);
-    } catch (failure) { if (!signal.aborted) setError(failure instanceof Error ? failure.message : 'Озвучивание недоступно'); }
+    } catch { /* Keep the text reply and allow retry with the listen button. */ }
     finally { if (!signal.aborted) setBusy(false); }
   };
   useEffect(() => { if (available && prepare && !started.current) { started.current = true; void load(); } }, [available, prepare]);
   if (!available) return null;
-  return <div className="mt-2">{url ? <audio aria-label="Озвученный ответ" controls src={url} /> : <Button type="button" variant="ghost" disabled={busy} onClick={() => void load()}><Volume2 className="mr-2 h-4 w-4" />{busy ? 'Готовлю аудио…' : 'Прослушать'}</Button>}{error && <p role="status" className="text-xs">{error}. Текст ответа сохранён.</p>}</div>;
+  return <div className="mt-2">{url ? <audio aria-label="Озвученный ответ" controls src={url} /> : <Button type="button" variant="ghost" disabled={busy} onClick={() => void load()}><Volume2 className="mr-2 h-4 w-4" />{busy ? 'Готовлю аудио…' : 'Прослушать'}</Button>}</div>;
 }

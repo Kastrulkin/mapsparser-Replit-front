@@ -38,7 +38,8 @@ it('keeps text available when synthesis fails and never calls chat', async () =>
   const user = userEvent.setup();
   render(<div>Пост подготовлен<OperatorSpeech businessId="b" messageId="m" headers={headers} /></div>);
   await user.click(await screen.findByText('Прослушать'));
-  expect(await screen.findByText(/Текст ответа сохранён/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Прослушать')).toBeEnabled());
+  expect(screen.queryByText(/Текст ответа сохранён|Сервис недоступен|Озвучивание недоступно/)).not.toBeInTheDocument();
   expect(screen.getByText('Пост подготовлен')).toBeInTheDocument();
   expect(fetchMock.mock.calls.every(([input]) => !String(input).endsWith('/chat'))).toBe(true);
 });
