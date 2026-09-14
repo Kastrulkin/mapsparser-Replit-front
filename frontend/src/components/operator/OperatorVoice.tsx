@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Square, Volume2 } from 'lucide-react';
+import { Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { browserCookieAuthEnabled, browserCookieValue } from '@/lib/browserSessionFetch';
 import { newAuth } from '@/lib/auth_new';
@@ -149,6 +149,6 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
     finally { if (!signal.aborted) setBusy(false); }
   };
   useEffect(() => { if (available && prepare && !started.current) { started.current = true; void load(); } }, [available, prepare]);
-  if (!available) return null;
-  return <div className="mt-2">{url ? <audio aria-label="Озвученный ответ" controls src={url} /> : <Button type="button" variant="ghost" disabled={busy} onClick={() => void load()}><Volume2 className="mr-2 h-4 w-4" />{busy ? 'Готовлю аудио…' : 'Прослушать'}</Button>}</div>;
+  if (!available || !url) return null;
+  return <div className="mt-2"><audio aria-label="Озвученный ответ" controls src={url} /></div>;
 }

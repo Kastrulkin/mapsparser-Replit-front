@@ -2079,8 +2079,6 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
             InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}"),
             InlineKeyboardButton("❌ Отклонить", callback_data=f"operator_reject:{action_id}"),
         ])
-    if result.get("message_id"):
-        rows.append([InlineKeyboardButton("Прослушать", callback_data="voice_speech:" + result["message_id"])])
     rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
     return InlineKeyboardMarkup(rows)
 

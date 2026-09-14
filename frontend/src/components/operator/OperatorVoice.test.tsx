@@ -35,10 +35,9 @@ it('submits a general voice command once without a review step', async () => {
 it('keeps text available when synthesis fails and never calls chat', async () => {
   const fetchMock = vi.fn((input: RequestInfo | URL) => String(input).includes('/config') ? reply({ output_enabled: true }) : reply({ error: 'Сервис недоступен' }, 400));
   vi.stubGlobal('fetch', fetchMock);
-  const user = userEvent.setup();
-  render(<div>Пост подготовлен<OperatorSpeech businessId="b" messageId="m" headers={headers} /></div>);
-  await user.click(await screen.findByText('Прослушать'));
-  await waitFor(() => expect(screen.getByText('Прослушать')).toBeEnabled());
+  render(<div>Пост подготовлен<OperatorSpeech businessId="b" messageId="m" prepare headers={headers} /></div>);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(screen.queryByText('Прослушать')).not.toBeInTheDocument();
   expect(screen.queryByText(/Текст ответа сохранён|Сервис недоступен|Озвучивание недоступно/)).not.toBeInTheDocument();
   expect(screen.getByText('Пост подготовлен')).toBeInTheDocument();
   expect(fetchMock.mock.calls.every(([input]) => !String(input).endsWith('/chat'))).toBe(true);
