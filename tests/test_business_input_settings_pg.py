@@ -83,3 +83,129 @@ def test_settings_confirmation_resumes_once_and_keeps_finance_confirmation(daily
         assert calls == ['Сегодня 10 продаж']
         assert first['status'] == second['status'] == 'approval_required'
         assert first['approval']['action_id'] != action['id']
+
+
+@pytest.mark.parametrize('message', ['У Riderra есть неотвеченные отзывы', 'Какое время работы сейчас указано', 'Покажи контент план', 'Подготовь пост про Пхукет'])
+def test_settings_do_not_capture_unrelated_task(daily, monkeypatch, message):
+    _, cursor = daily
+    cursor.execute('DELETE FROM business_finance_settings')
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    old = {'capability': 'settings.input', 'source_message': 'Когда следующий пост', 'settings': {}}
+    assert business_input_settings.route_setup(cursor, 'b', 'u', 'telegram', message, old, 'c', None) is None
+
+
+def test_next_post_requires_timezone_not_currency(daily, monkeypatch):
+    _, cursor = daily
+    cursor.execute('DELETE FROM business_finance_settings')
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    response, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Когда следующий пост', {}, 'c', None)
+    assert pending['required_fields'] == ['timezone']
+    assert 'валюту' not in response['chat_response']
+    cursor.execute("INSERT INTO business_finance_settings(business_id,timezone) VALUES ('b','Europe/Tallinn')")
+    assert business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Когда следующий пост', {}, 'c', None) is None
+
+
+@pytest.mark.parametrize('channel', ['web', 'telegram', 'telegram_mini_app'])
+@pytest.mark.parametrize('text', ['Поставь город Пхукет и валюту баты', 'Сохрани настройки бизнеса: город: Пхукет; валюта: THB'])
+def test_city_currency_preview_and_confirm(daily, monkeypatch, channel, text):
+    _, cursor = daily
+    cursor.execute('ALTER TABLE business_finance_settings ADD COLUMN city TEXT')
+    def prepare(**kwargs):
+        return {'status': 'approval_required', 'approval': {'envelope': {}}, 'payload': kwargs['payload']}
+    monkeypatch.setattr(operator_core, '_prepare_registered_capability_approval', prepare)
+    result, _ = business_input_settings.route_setup(cursor, 'b', 'u', channel, text, {}, 'c', None)
+    assert result['payload']['data'] == {'city': 'Пхукет', 'currency': 'THB', 'timezone': 'Asia/Bangkok'}
+    assert business_input_settings.resolve(cursor, 'b')['timezone'] == 'Europe/Tallinn'
+    finance_daily.apply(cursor, 'b', 'u', result['payload'], 'set-city')
+    finance_daily.apply(cursor, 'b', 'u', result['payload'], 'set-city')
+    saved = business_input_settings.resolve(cursor, 'b')
+    assert saved['city'] == 'Пхукет' and saved['timezone'] == 'Asia/Bangkok' and saved['currency'] == 'THB'
+    cursor.execute("SELECT count(*) n FROM finance_daily_events WHERE action_id='set-city'")
+    assert cursor.fetchone()['n'] == 1
+
+
+@pytest.mark.parametrize('patch', [{'currency': 'EUR'}, {'timezone': 'Europe/Tallinn'}])
+def test_partial_settings_without_inventing_other_fields(daily, patch):
+    _, cursor = daily
+    cursor.execute('DELETE FROM business_finance_settings')
+    prepared = finance_daily.prepare(cursor, 'b', 'u', {'kind': 'settings', **patch}, 'web', 'm')
+    finance_daily.apply(cursor, 'b', 'u', prepared, 'partial')
+    saved = business_input_settings.resolve(cursor, 'b')
+    for field in ['currency', 'timezone']:
+        assert saved[field] == patch.get(field)
+
+
+def test_unknown_city_does_not_keep_previous_timezone(daily, monkeypatch):
+    _, cursor = daily
+    response, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Установи город Спрингфилд', {}, 'c', None)
+    assert response['status'] == 'clarification_required'
+    assert 'timezone' in pending['required_fields']
+    with pytest.raises(ValueError, match='нового города'):
+        finance_daily.prepare(cursor, 'b', 'u', {'kind': 'settings', 'city': 'Спрингфилд'}, 'web', 'm')
+
+
+def test_city_settings_migration_is_repeatable(daily, monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from alembic import op
+    _, cursor = daily
+    monkeypatch.setattr(op, 'execute', cursor.execute)
+    spec = importlib.util.spec_from_file_location('city_migration', Path('alembic_migrations/versions/20260914_business_input_city.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.upgrade(); module.upgrade()
+    cursor.execute('SELECT city FROM business_finance_settings')
+    assert cursor.fetchone()['city'] is None
+
+
+@pytest.mark.parametrize('message', ['Сохрани пост про город Таллин', 'Как установить город Таллин и валюту евро?', 'Например, город Таллин, валюта евро'])
+def test_content_and_examples_are_not_settings_writes(daily, message):
+    _, cursor = daily
+    assert business_input_settings.route_setup(cursor, 'b', 'u', 'web', message, {}, 'c', None) is None
+
+
+def test_explicit_reply_resumes_original_command(daily, monkeypatch):
+    _, cursor = daily
+    cursor.execute('DELETE FROM business_finance_settings')
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    _, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Когда следующий пост', {}, 'c', None)
+    monkeypatch.setattr(operator_core, '_prepare_registered_capability_approval', lambda **kwargs: {'status':'approval_required','approval':{'envelope':{}}})
+    result, _ = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Установи город Таллин', pending, 'c', None)
+    assert result['approval']['envelope']['resume_message'] == 'Когда следующий пост'
+
+
+def test_full_router_leaves_settings_for_reviews(daily, monkeypatch):
+    _, cursor = daily
+    cursor.execute('DELETE FROM business_finance_settings')
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    monkeypatch.setattr(operator_core, '_operator_tool_loop_enabled', lambda: False)
+    monkeypatch.setattr(operator_core, 'get_unanswered_reviews_status', lambda *args, **kwargs: {'status':'completed','chat_response':'Есть отзывы без ответа'})
+    result, pending = operator_core.route_operator_message(cursor, business_id='b', user_id='u', channel='telegram', message='Покажи отзывы без ответа', pending_context={'capability':'settings.input','source_message':'Когда следующий пост'})
+    assert result['status'] == 'completed'
+    assert result['capability'] != 'settings.input'
+    assert pending == {}
+
+
+@pytest.mark.parametrize('allowed', [False, True])
+def test_settings_endpoint_checks_business_access(daily, monkeypatch, allowed):
+    from flask import Flask, Blueprint
+    from api import operator_input_settings_api
+    _, cursor = daily
+    class ReadConnection:
+        def cursor(self): return cursor
+    class ReadDatabase:
+        conn = ReadConnection()
+        def rollback_and_close(self): pass
+    monkeypatch.setattr(operator_input_settings_api, 'DatabaseManager', ReadDatabase)
+    monkeypatch.setattr(operator_input_settings_api, 'require_auth_from_request', lambda: {'user_id':'u'})
+    monkeypatch.setattr(operator_input_settings_api, 'verify_business_access', lambda *args: (allowed, 'u'))
+    app = Flask(__name__)
+    bp = Blueprint('settings_test', __name__)
+    operator_input_settings_api.register_input_settings_routes(bp)
+    app.register_blueprint(bp)
+    response = app.test_client().get('/input-settings?business_id=b')
+    assert response.status_code == (200 if allowed else 403)
+    if allowed:
+        assert response.json['timezone'] == 'Europe/Tallinn'
+    else:
+        assert 'timezone' not in response.json

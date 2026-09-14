@@ -101,15 +101,9 @@ def prepare(cursor,business_id,user_id,args,channel,message_ref):
         if not args.get('date'):args['date']=str(original['transaction_date'])[:10]
         if not args.get('currency'):args['currency']=original.get('currency')
     if kind=='settings':
-        currency=(args.get('currency') or config.get('currency') or '').upper()
-        zone=args.get('timezone') or config.get('timezone')
-        if not re.fullmatch('[A-Z]{3}',currency):
-            raise ValueError('Уточните валюту трёхбуквенным кодом, например EUR или RUB.')
-        try:
-            ZoneInfo(zone or '')
-        except (ZoneInfoNotFoundError,ValueError):
-            raise ValueError('Уточните часовой пояс бизнеса, например Europe/Tallinn.')
-        return {'kind':kind,'before_version':config['version'],'before_fingerprint':fingerprint(config),'data':{'currency':currency,'timezone':zone},'channel':channel,'message_ref':message_ref}
+        from services.business_input_settings import validate_patch
+        data = validate_patch(args, config)
+        return {'kind':kind,'before_version':config['version'],'before_fingerprint':fingerprint(config),'data':data,'channel':channel,'message_ref':message_ref}
     if kind not in {'daily','transaction'}:
         raise ValueError('Неизвестный вид финансовой записи.')
     currency=(args.get('currency') or config.get('currency') or '').upper()
@@ -186,7 +180,8 @@ def prepare(cursor,business_id,user_id,args,channel,message_ref):
 
 def preview_text(envelope):
     if envelope['kind']=='settings':
-        return 'Сохранить настройки финансов: '+envelope['data']['currency']+', '+envelope['data']['timezone']+'?'
+        from services.business_input_settings import settings_summary
+        return 'Сохранить настройки бизнеса: '+settings_summary(envelope['data'])+'?'
     if envelope['kind']=='transaction':
         data=envelope['data']
         return ('Отменить' if envelope['mode']=='void' else 'Сохранить')+f" операцию { {'income':'доход', 'expense':'расход', 'refund':'возврат'}[data['transaction_type']] } за {data['transaction_date']}: {data['amount']} {data['currency']}? {data['description']}"
@@ -215,17 +210,17 @@ def apply(cursor,business_id,user_id,envelope,action_id):
     if replay:return replay['after_json']
     kind=envelope['kind'];before={};data=envelope['data']
     if kind=='settings':
-        if not re.fullmatch('[A-Z]{3}',data.get('currency') or ''):raise ValueError('Неверная валюта.')
-        ZoneInfo(data.get('timezone') or '')
         before=settings(cursor,business_id)
+        from services.business_input_settings import validate_patch
+        data=validate_patch(data,before)
         if before['version']!=envelope['before_version'] or (envelope.get('before_fingerprint') and envelope['before_fingerprint']!=fingerprint(before)):
             raise ValueError('Настройки изменились. Подготовьте новое подтверждение.')
-        cursor.execute('''INSERT INTO business_finance_settings(business_id,currency,timezone) VALUES (%s,%s,%s)
-            ON CONFLICT(business_id) DO UPDATE SET currency=EXCLUDED.currency,timezone=EXCLUDED.timezone,version=business_finance_settings.version+1,updated_at=NOW()''',(business_id,data['currency'],data['timezone']))
+        fields = [field for field in ('currency','timezone','city') if field in data]
+        cursor.execute('INSERT INTO business_finance_settings(business_id,'+','.join(fields)+') VALUES (%s,'+','.join(['%s']*len(fields))+') ON CONFLICT(business_id) DO UPDATE SET '+','.join(field+'=EXCLUDED.'+field for field in fields)+',version=business_finance_settings.version+1,updated_at=NOW()', (business_id, *(data[field] for field in fields)))
         cursor.execute('SELECT to_jsonb(b) data FROM businesses b WHERE id=%s',(business_id,))
         legacy=_row(cursor,cursor.fetchone()).get('data') or {}
-        for field in ('currency','timezone'):
-            if field in legacy:
+        for field in ('currency','timezone','city'):
+            if field in legacy and field in data:
                 cursor.execute('UPDATE businesses SET '+field+'=%s WHERE id=%s',(data[field],business_id))
         target_id=business_id;after=settings(cursor,business_id)
     elif kind=='daily':
@@ -393,7 +388,7 @@ def handle_apply(envelope,user_data):
     try:
         saved=apply(db.conn.cursor(),envelope.get('tenant_id'),user_id,envelope.get('payload') or {},envelope.get('action_id'))
         db.conn.commit()
-        return {'status':'completed','chat_response':('Валюта и часовой пояс бизнеса сохранены.' if (envelope.get('payload') or {}).get('kind')=='settings' else 'Финансовые данные сохранены. '+('Запись отменена; история сохранена.' if saved.get('is_voided') else 'Итоги и детализация доступны в финансах.')),
+        return {'status':'completed','chat_response':('Настройки бизнеса сохранены.' if (envelope.get('payload') or {}).get('kind')=='settings' else 'Финансовые данные сохранены. '+('Запись отменена; история сохранена.' if saved.get('is_voided') else 'Итоги и детализация доступны в финансах.')),
                 'saved':saved,'localos_write_performed':True,'provider_write_performed':False}
     except (ValueError,PermissionError):
         import sys

@@ -123,7 +123,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
-    OperatorCapability("settings.input", "Валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
+    OperatorCapability("settings.input", "Город, валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
     OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("finance.read", "Финансовая сводка", "available", "read_only", "none", "/dashboard/finance", ("Покажи выручку и расходы за 30 дней",)),
@@ -1879,6 +1879,8 @@ def route_operator_message(
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
         return setup
+    if pending.get('capability') == 'settings.input':
+        pending = {}
     from services import work_journal, operator_work_journal
     work_pending=pending.get('capability')=='work.journal' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|отмен|[0-9]',clean_message,re.I))))
     if work_journal.enabled(business_id) and (operator_work_journal.matches(clean_message) or work_pending or (action_payload or {}).get('input_context')=='work_journal'):

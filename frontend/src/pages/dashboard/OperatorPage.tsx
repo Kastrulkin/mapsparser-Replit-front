@@ -1,3 +1,4 @@
+import { BusinessInputSettings } from '@/components/operator/BusinessInputSettings';
 import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -617,6 +618,8 @@ export const OperatorPage = () => {
         businessId={currentBusinessId}
         businessName={businessName}
       />
+
+      {currentBusinessId && <BusinessInputSettings key={`settings:${currentBusinessId}`} businessId={currentBusinessId} onSubmit={sendOperatorChatMessage} disabled={chatLoading || historyLoading} />}
 
       {currentBusinessId && <OperatorRequestHistory key={currentBusinessId} businessId={currentBusinessId} language={language} />}
 

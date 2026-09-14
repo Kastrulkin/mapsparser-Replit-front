@@ -1,3 +1,4 @@
+import { BusinessInputSettings } from '@/components/operator/BusinessInputSettings';
 import { WorkJournal } from '@/components/WorkJournal';
 import { FinanceDailyPanel } from '@/components/FinanceDailyPanel';
 import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission } from '@/components/operator/OperatorVoice';
@@ -990,6 +991,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
+            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} disabled={operatorBusy} onSubmit={async text => { openMobileTarget('operator'); await sendOperator(text); }} /> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
@@ -1074,7 +1076,7 @@ const FilterSelect = ({ label, value, setValue, options }: { label: string; valu
 const ResponseBox = ({ label, text }: { label: string; text: string }) => <div className="mt-4 rounded-[18px] bg-black/20 p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex items-center justify-between"><small className="font-semibold text-primary">{label}</small><button type="button" aria-label="Скопировать" onClick={() => void navigator.clipboard.writeText(text)} className="grid h-11 w-11 place-items-center text-zinc-500 active:scale-[0.96]"><Copy className="h-4 w-4" /></button></div><p className="text-sm leading-6 text-zinc-300">{text}</p></div>;
 
 const Operator = ({ businessId, conversationId, sendVoice, messages, busy, actionBusy, command, setCommand, ask, resolveAction, openScreen }: {
-  businessId: string; conversationId: string | null; sendVoice: (text: string, source: VoiceSubmission) => Promise<void>;
+  businessId: string; conversationId: string | null; sendVoice: (text: string, source?: VoiceSubmission) => Promise<void>;
   messages: OperatorMessage[];
   busy: boolean;
   actionBusy: { actionId: string; decision: OperatorActionDecision } | null;
@@ -1084,6 +1086,7 @@ const Operator = ({ businessId, conversationId, sendVoice, messages, busy, actio
   resolveAction: (actionId: string, decision: OperatorActionDecision) => void;
   openScreen: (screen: string) => void;
 }) => <Screen title="Оператор" subtitle="Напишите задачу обычными словами. Результат появится здесь или в нужном разделе.">
+  {businessId && <BusinessInputSettings key={businessId} businessId={businessId} onSubmit={sendVoice} disabled={busy} headers={authOnlyHeaders} />}
   <div className="min-h-[42vh] space-y-3">
     {messages.length ? messages.map((message, index) => {
       const resolving = Boolean(message.action_id && actionBusy?.actionId === message.action_id);

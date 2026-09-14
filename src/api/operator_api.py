@@ -308,7 +308,7 @@ def _mobile_navigation(
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available", "available_actions": ["search", "draft", "send_preview"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["partner", "partnership_reply", "outreach_touch"], "version": 2},
         {"key": "influencers", "label": "Инфлюенсеры", "group": "more", "status": "available", "available_actions": ["search", "prepare_offer", "open_workspace"], "supported_scopes": ["business"], "deep_link_targets": ["creator", "creator_candidate", "creator_collaboration"], "version": 1},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "available" if agent_runs_available else "read_only", "reason": "Запуски пока не включены для этого бизнеса" if not agent_runs_available else "", "available_actions": ["run", "open_result"] if agent_runs_available else [], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["agent", "agent_run", "agent_result"], "version": 2},
-        {"key": "settings", "label": "Настройки", "group": "more", "status": "read_only", "reason": "Сейчас доступны настройки уведомлений; подключения и тариф ещё переносятся", "available_actions": ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
+        {"key": "settings", "label": "Настройки", "group": "more", "status": "available" if kind == "business" else "read_only", "reason": "Город, валюта и уведомления" if kind == "business" else "Выберите бизнес для настройки города и валюты", "available_actions": ["notifications_update", "input_settings_preview"] if kind == "business" else ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
     ]
     company_registry_miniapp_enabled = str(os.getenv("COMPANY_REGISTRY_MINIAPP_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
     if kind == "business":
@@ -4436,3 +4436,6 @@ def operator_events():
 # Voice extends the same Operator API and authentication surface.
 from api.operator_audio_api import register_audio_routes
 register_audio_routes(operator_bp)
+
+from api.operator_input_settings_api import register_input_settings_routes
+register_input_settings_routes(operator_bp)
