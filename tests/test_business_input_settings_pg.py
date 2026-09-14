@@ -45,12 +45,28 @@ def test_employee_cannot_set_business_defaults(daily, monkeypatch):
         finance_daily.prepare(cursor, 'b', 'u', {'kind': 'settings', 'currency': 'EUR', 'timezone': 'UTC'}, 'web', 'm')
 
 
-def test_next_post_does_not_assume_moscow(daily):
+@pytest.mark.parametrize('message', ['Покажи следующий пост', 'Когда следующий пост', 'Покажи контент план'])
+def test_content_read_without_business_defaults(daily, monkeypatch, message):
     _, cursor = daily
     cursor.execute('DELETE FROM business_finance_settings')
-    result = operator_core._read_requested_content(cursor, 'b', 'Покажи следующий пост')
-    assert result['status'] == 'clarification_required'
-    assert 'часовой пояс' in result['chat_response']
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    from services import operator_query
+    monkeypatch.setattr(operator_core, '_operator_tool_loop_enabled', lambda: False)
+    monkeypatch.setattr(operator_query, '_load_module_items', lambda *args, **kwargs: ([
+        {'title': 'Опубликован', 'scheduled_for': '2020-01-01', 'status': 'published'},
+        {'title': 'Первый по плану', 'scheduled_for': '2020-01-02', 'status': 'edited'},
+        {'title': 'Позже', 'scheduled_for': '2099-01-01', 'status': 'planned'},
+    ], {}))
+    assert operator_core._content_read_request(message)
+    for channel in ['web', 'telegram', 'telegram_mini_app']:
+        result, pending = operator_core.route_operator_message(cursor, business_id='b', user_id='u',
+            channel=channel, message=message, pending_context={'capability': 'settings.input',
+                'required_fields': ['currency', 'timezone']})
+        assert result['status'] == 'completed'
+        assert result['items'][0]['title'] == 'Первый по плану'
+        assert result['query']['filters'] == []
+        assert not result['external_writes_performed']
+        assert pending == {}
 
 
 @pytest.mark.parametrize('day_changed', [False, True])
@@ -94,15 +110,12 @@ def test_settings_do_not_capture_unrelated_task(daily, monkeypatch, message):
     assert business_input_settings.route_setup(cursor, 'b', 'u', 'telegram', message, old, 'c', None) is None
 
 
-def test_next_post_requires_timezone_not_currency(daily, monkeypatch):
+def test_scheduling_still_requires_timezone(daily, monkeypatch):
     _, cursor = daily
     cursor.execute('DELETE FROM business_finance_settings')
     monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
-    response, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Когда следующий пост', {}, 'c', None)
+    response, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Опубликуй пост завтра в 10', {}, 'c', None)
     assert pending['required_fields'] == ['timezone']
-    assert 'валюту' not in response['chat_response']
-    cursor.execute("INSERT INTO business_finance_settings(business_id,timezone) VALUES ('b','Europe/Tallinn')")
-    assert business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Когда следующий пост', {}, 'c', None) is None
 
 
 @pytest.mark.parametrize('channel', ['web', 'telegram', 'telegram_mini_app'])
@@ -168,10 +181,10 @@ def test_explicit_reply_resumes_original_command(daily, monkeypatch):
     _, cursor = daily
     cursor.execute('DELETE FROM business_finance_settings')
     monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
-    _, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Когда следующий пост', {}, 'c', None)
+    _, pending = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Опубликуй пост завтра в 10', {}, 'c', None)
     monkeypatch.setattr(operator_core, '_prepare_registered_capability_approval', lambda **kwargs: {'status':'approval_required','approval':{'envelope':{}}})
     result, _ = business_input_settings.route_setup(cursor, 'b', 'u', 'web', 'Установи город Таллин', pending, 'c', None)
-    assert result['approval']['envelope']['resume_message'] == 'Когда следующий пост'
+    assert result['approval']['envelope']['resume_message'] == 'Опубликуй пост завтра в 10'
 
 
 def test_full_router_leaves_settings_for_reviews(daily, monkeypatch):

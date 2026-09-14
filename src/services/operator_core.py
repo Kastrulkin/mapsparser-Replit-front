@@ -1804,7 +1804,7 @@ def _content_read_request(message):
     if lowered in {'контент план', 'мой контент план', 'наш контент план'}:
         return True
     return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ', 'последн', 'крайний')))
-            and any(word in lowered for word in ('покажи', 'показать', 'пришли', 'видишь', 'какой', 'какие'))
+            and any(word in lowered for word in ('покажи', 'показать', 'посмотри', 'пришли', 'видишь', 'какой', 'какие', 'когда'))
             and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост')))
 
 
@@ -1815,20 +1815,22 @@ def _read_requested_content(cursor, business_id, message):
     requested_next = any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ')) or bool(re.search(r'\bпосле\b', lowered))
     upcoming = not latest and (requested_next or ('контент' in lowered and not re.search(r'прошл|истори|архив', lowered)))
     filters = []
+    zone = None
     if upcoming:
         from services.business_input_settings import resolve
         zone = resolve(cursor, business_id).get('timezone')
-        if not zone:
-            return {'status': 'clarification_required', 'chat_response': 'Чтобы определить ближайший пост, укажите часовой пояс бизнеса. Сохраню его после подтверждения.'}
-        cutoff = datetime.now(ZoneInfo(zone)).date()
+        # Reading a saved plan must not require business setup. Without a
+        # timezone use its stored ordering, not an invented local 'today'.
+        cutoff = datetime.now(ZoneInfo(zone)).date() if zone else None
         months = ('января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря')
         match = re.search(r'после\s+(\d{1,2})\s+('+'|'.join(months)+r')(?:\s+(20\d{2}))?', lowered)
         if match:
             try:
-                cutoff = date(int(match.group(3) or cutoff.year), months.index(match.group(2))+1, int(match.group(1))) + timedelta(days=1)
+                cutoff = date(int(match.group(3) or (cutoff.year if cutoff else datetime.now(ZoneInfo('UTC')).year)), months.index(match.group(2))+1, int(match.group(1))) + timedelta(days=1)
             except ValueError:
                 return {'status': 'needs_input', 'chat_response': 'Уточните дату: такого дня нет в календаре.'}
-        filters = [{'field': 'scheduled_for', 'operator': 'gte', 'value': cutoff.isoformat()}]
+        if cutoff:
+            filters = [{'field': 'scheduled_for', 'operator': 'gte', 'value': cutoff.isoformat()}]
     result = execute_operator_query(cursor, business_id=business_id, arguments={
         'resource': 'content', 'filters': filters, 'sort_by': 'scheduled_for',
         'sort_direction': 'asc' if upcoming else 'desc', 'limit': 1 if latest else 50, 'view': 'full' if requested_next or latest else 'compact'})
@@ -1842,7 +1844,9 @@ def _read_requested_content(cursor, business_id, message):
         result['count'] = len(items)
         result['chat_response'] = (('Следующий материал в сохранённом контент-плане:\n\n' if requested_next else 'Предстоящие материалы сохранённого контент-плана:\n\n')+
             render_operator_query(result['query'], items, len(items)) if items else
-            'В сохранённом контент-плане не нашёл будущего неопубликованного материала по указанной дате.')
+            'В сохранённом контент-плане не нашёл неопубликованного материала по указанным условиям.')
+        if not zone:
+            result['chat_response'] += '\n\nПорядок — по датам в плане, без отсечения прошедших дней: часовой пояс бизнеса не задан.'
         result['chat_response'] += '\n\nДата в плане не подтверждает постановку на автопубликацию или публикацию во внешнем канале.'
     return result
 
