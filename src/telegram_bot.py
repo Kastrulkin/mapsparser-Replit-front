@@ -5263,8 +5263,17 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
+async def handle_operator_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from services.operator_telegram_inputs import receive
+    if not await receive(update,context,sys.modules[__name__]):
+        await update.message.reply_text('Выберите доступный бизнес в LocalOS. Приём файлов Оператором доступен в рабочем пилоте.')
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик фото"""
+    from services.operator_telegram_inputs import receive
+    if await receive(update,context,sys.modules[__name__]):
+        return
     user_id = str(update.effective_user.id)
     
     if user_id not in user_states:
@@ -6345,6 +6354,7 @@ def main():
         application.add_handler(CallbackQueryHandler(button_callback))
         application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        application.add_handler(MessageHandler(filters.Document.ALL, handle_operator_document))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         application.add_error_handler(_telegram_error_handler)
         

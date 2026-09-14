@@ -636,7 +636,7 @@ class ActionOrchestrator:
             else:
                 self._transition(cursor, action_id, None, "validated", "resume approved action")
 
-            access_check = check_tenant_access(cursor, tenant_id, actor_user_id, is_superadmin)
+            access_check = check_tenant_access(cursor, tenant_id, actor_user_id, is_superadmin, capability)
             if not access_check.get("ok"):
                 self._transition(cursor, action_id, "validated", "failed", access_check.get("reason", "access denied"), {"error_code": access_check.get("code")})
                 cursor.execute(

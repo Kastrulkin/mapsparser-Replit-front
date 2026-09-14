@@ -4436,6 +4436,8 @@ def operator_events():
 # Voice extends the same Operator API and authentication surface.
 from api.operator_audio_api import register_audio_routes
 register_audio_routes(operator_bp)
+from api.operator_workday_api import register_workday_routes
+register_workday_routes(operator_bp)
 
 from api.operator_input_settings_api import register_input_settings_routes
 register_input_settings_routes(operator_bp)

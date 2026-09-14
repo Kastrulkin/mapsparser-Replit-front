@@ -26,6 +26,7 @@ CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 
 
 CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
+    'work.colleague.send': {'risk':'external_send','side_effects':'queues one reviewed colleague message','approval_required':True},
     "outreach.send_batch": {
         "risk": "external_send",
         "side_effects": "queues approved outreach records inside LocalOS",
@@ -147,6 +148,7 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 
 
 CAPABILITY_RUNTIME_STATUS = {
+    'work.colleague.send': ('production_external_write',True),
     "reviews.reply.draft": ("production_draft", True),
     "services.optimize": ("production_draft", True),
     "news.generate": ("production_draft", True),
@@ -232,7 +234,9 @@ def capability_runtime_contract(name: str) -> Dict[str, Any]:
 
 
 def build_capability_handlers() -> Dict[str, CapabilityHandler]:
+    from services.operator_colleagues import handle
     handlers: Dict[str, CapabilityHandler] = {
+        'work.colleague.send': handle,
         OUTREACH_SEND_BATCH_CAPABILITY: handle_outreach_send_batch,
         "reviews.reply.draft": _handle_reviews_reply_draft,
         "reviews.reply.publish_request": _handle_reviews_reply_publish_request,

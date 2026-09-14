@@ -27,6 +27,8 @@ telethon
 pysocks
 python-socks[asyncio]
 pypdf
+PyMuPDF>=1.24,<2
+Pillow>=10.4,<13
 openpyxl
 reportlab>=4.0,<5
 boto3

@@ -34,7 +34,7 @@ def _row_value(row: Any, index: int, key: str, default: Any = None) -> Any:
     return default
 
 
-def check_tenant_access(cursor, tenant_id: str, actor_user_id: str, is_superadmin: bool) -> Dict[str, Any]:
+def check_tenant_access(cursor, tenant_id: str, actor_user_id: str, is_superadmin: bool, capability: str = '') -> Dict[str, Any]:
     if not tenant_id:
         return {"ok": False, "code": "TENANT_REQUIRED", "reason": "tenant_id is required"}
 
@@ -51,6 +51,15 @@ def check_tenant_access(cursor, tenant_id: str, actor_user_id: str, is_superadmi
         return {"ok": False, "code": "TENANT_NOT_FOUND", "reason": "tenant_id not found"}
 
     if str(owner_id) != str(actor_user_id) and not is_superadmin:
+        from services.operator_workday import enabled
+        if enabled(tenant_id) and capability in {
+            'work.colleague.send', 'finance.daily.apply_operator',
+            'finance.transaction.apply_operator', 'finance.sales_import.apply_operator',
+        }:
+            cursor.execute("""SELECT m.user_id FROM business_members m JOIN users u ON u.id=m.user_id
+                WHERE m.business_id=%s AND m.user_id=%s AND m.status='active' AND m.role='manager' AND u.is_active=TRUE""",
+                (tenant_id,actor_user_id))
+            if cursor.fetchone():return {'ok':True}
         return {"ok": False, "code": "TENANT_MISMATCH", "reason": "actor has no access to tenant"}
 
     return {"ok": True}
