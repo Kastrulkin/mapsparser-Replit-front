@@ -74,6 +74,18 @@ def canonical_company_key(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip()).lower()
 
 
+def canonical_currency_price(currency: str, value: Any) -> str:
+    symbol = {"EUR": "€", "USD": "$", "GBP": "£"}.get(str(currency or "").strip())
+    if not symbol:
+        raise ValueError("riderra_pricebook_currency_invalid")
+    amount = str(value or "").strip()
+    while amount.startswith(symbol):
+        amount = amount[len(symbol):].lstrip()
+    if not amount:
+        raise ValueError("riderra_pricebook_amount_invalid")
+    return f"{symbol}{amount}"
+
+
 def _iso_timestamp(value: Any, *, require_fresh: bool = True) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -169,7 +181,7 @@ def normalize_record(record: dict[str, Any], *, pricebook_attestation: dict[str,
     if (
         not country or str(quote.get("route") or "") != f"{route_from} to a hotel in {route_to}"
         or str(quote.get("currency") or "") != currency_cell
-        or str(quote.get("price") or "") != f"{currency_symbol}{price_cell}"
+        or str(quote.get("price") or "") != canonical_currency_price(currency_cell, price_cell)
         or str(quote.get("pax") or "") != pax_cell
         or str(quote.get("vehicle") or "").lower() != re.sub(rf"\s+{re.escape(pax_cell)}\s+pax$", "", vehicle_cell, flags=re.I).lower()
     ):

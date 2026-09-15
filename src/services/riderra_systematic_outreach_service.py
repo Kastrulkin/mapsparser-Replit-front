@@ -31,6 +31,7 @@ from services.riderra_template_authorization_service import (
     PRICEBOOK_SHEET,
     SENDER_ACCOUNT_ID,
     _hash,
+    canonical_currency_price,
     load_standing_authorization,
     record_pricebook_attestation,
     render_record,
@@ -127,10 +128,7 @@ def select_pricebook_route(city: str, attestation: dict[str, Any]) -> tuple[int,
 
 
 def _currency_price(currency: str, value: Any) -> str:
-    symbol = {"EUR": "€", "USD": "$", "GBP": "£"}.get(currency)
-    if not symbol:
-        raise ValueError("riderra_pricebook_currency_invalid")
-    return f"{symbol}{str(value).strip()}"
+    return canonical_currency_price(currency, value)
 
 
 def build_candidate_record(row: dict[str, Any], attestation: dict[str, Any]) -> dict[str, Any]:

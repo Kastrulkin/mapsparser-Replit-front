@@ -109,6 +109,18 @@ def test_manifest_is_closed_exact_template_and_frozen_quote():
     assert result["daily_limit"] == 150
 
 
+def test_manifest_accepts_pricebook_cell_with_existing_currency_symbol():
+    source = attestation()
+    source["rows"]["1710"][5] = "€46"
+    item = record()
+    item["pricebook"]["source_row_sha256"] = riderra._hash(source["rows"]["1710"])
+    item["content_sha256"] = riderra.render_record(item)["content_sha256"]
+
+    member = riderra.build_manifest([item], pricebook_attestation=source)["records"][0]
+
+    assert member["pricebook"]["price"] == "€46"
+
+
 def test_approved_v8_copy_anchor_and_strict_no_opening_variant():
     item = record()
     item["opening"] = "I saw that Malaca Instituto offers Spanish-language programmes for international students in Malaga."

@@ -29,6 +29,15 @@ def attestation():
     }
 
 
+def test_pricebook_currency_symbol_is_not_duplicated():
+    current_attestation = attestation()
+    current_attestation["rows"]["3"][5] = "€39"
+    record = systematic.build_candidate_record(candidate(), current_attestation)
+
+    assert record["pricebook"]["price"] == "€39"
+    assert "for just €39 (standard sedan" in record["body"]
+
+
 def candidate(**updates):
     row = {
         "workstream_id": "ws-1",
