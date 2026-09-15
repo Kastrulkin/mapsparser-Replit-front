@@ -397,6 +397,8 @@ def media_photo_usage(asset_id: str):
         ok, error_response = _require_business(cursor, business_id, user_data)
         if not ok:
             return error_response
+        cursor.execute("SELECT id FROM photo_assets WHERE id=%s AND business_id=%s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'",(asset_id,business_id))
+        if not cursor.fetchone():raise ValueError('Фото недоступно для новых публикаций.')
         usage_type = str(payload.get("usage_type") or "publication")
         target_id = str(payload.get("target_id") or "").strip()
         target_platform = str(payload.get("target_platform") or "").strip()
@@ -487,3 +489,6 @@ def media_post_recommendation(item_id: str):
         return internal_error_response("Не удалось подобрать фотографию для публикации")
     finally:
         db.close()
+
+from api.disk_import_api import register_disk_import_routes
+register_disk_import_routes(media_intelligence_bp)

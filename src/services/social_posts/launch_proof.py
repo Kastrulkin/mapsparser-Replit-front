@@ -1209,6 +1209,9 @@ def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = 
         db.close()
 
 def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    from services.disk_import_media import selected
+    if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
+        raise ValueError("Видео с Диска размещается вручную. Откройте оригинал в материале контент-плана.")
     post_id = str(post.get("id") or "").strip()
     platform = str(post.get("platform") or "").strip()
     status = str(post.get("status") or "").strip()
@@ -1357,6 +1360,13 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
                 """,
                 ("Перед публикацией нужно заполнить текст и заново подтвердить preview", post_id),
             )
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
+        from services.disk_import_media import selected
+        if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
+            cursor.execute("UPDATE social_posts SET status='needs_manual_publish',last_error=%s,updated_at=NOW() WHERE id=%s RETURNING *",
+                ("Видео хранится на Диске. Откройте оригинал и разместите материал вручную.",post_id))
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated

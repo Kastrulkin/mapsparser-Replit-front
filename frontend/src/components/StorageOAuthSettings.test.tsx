@@ -15,7 +15,7 @@ it('saves credentials, clears the secret, and keeps it masked on read', async ()
   await userEvent.click(screen.getByRole('button', { name: 'Сохранить Google Диск' }));
   await waitFor(() => expect(field).toHaveValue(''));
   expect(field).toHaveAttribute('type', 'password');
-  expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toMatchObject({ client_secret: 'private-secret', version: 0 });
+  expect(JSON.parse(String(fetcher.mock.calls.find(call => call[1]?.method === 'POST')?.[1]?.body))).toMatchObject({ client_secret: 'private-secret', version: 0 });
   expect(screen.getByText('Сохранено.', { exact: false })).toBeInTheDocument();
 });
 it('hides credential forms on permission failure', async () => {

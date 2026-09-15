@@ -1,3 +1,4 @@
+import { GoogleDriveReaderSettings } from './GoogleDriveReaderSettings';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,7 @@ export function StorageOAuthSettings() {
     {error && <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => setReload(value => value + 1)}>Загрузить заново</Button></div>}
     {!data && !error && <p role="status">Загружаю настройки…</p>}
     {data && !data.encryption_ready && <p role="alert">Сначала настройте серверный ключ шифрования. Сохранение секретов отключено.</p>}
+    {data && <GoogleDriveReaderSettings />}
     {data?.items.map(app => <AppForm key={app.provider} app={app} enabled={data.encryption_ready} onSaved={setData} />)}
     <p className="text-sm text-muted-foreground">Яндекс: только папка приложения. Google: фотографии и папки, созданные через LocalOS. Выбор существующей папки пока не поддерживается.</p>
     <Link className="text-primary underline" to="/dashboard/operator">Перейти к подключению Диска в Операторе</Link>

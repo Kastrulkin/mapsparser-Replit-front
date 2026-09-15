@@ -290,18 +290,25 @@ def cancel_operator_async_job(
     return _public_job(_row(cursor, cursor.fetchone()))
 
 
-def claim_next_operator_async_job(cursor: Any) -> dict[str, Any] | None:
+def claim_next_operator_async_job(cursor: Any, *, background: bool = False) -> dict[str, Any] | None:
     lease_token = str(uuid.uuid4())
     cursor.execute(
         """
         SELECT *
         FROM operator_async_jobs
         WHERE status = 'queued'
+          AND (%s OR kind NOT IN ('disk_import_scan','disk_import_file'))
           AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
-        ORDER BY created_at
+        ORDER BY CASE WHEN kind IN ('disk_import_scan','disk_import_file') THEN
+          COALESCE((SELECT MAX(previous.updated_at) FROM operator_async_jobs previous
+            WHERE previous.business_id=operator_async_jobs.business_id
+            AND previous.kind IN ('disk_import_scan','disk_import_file')
+            AND previous.status IN ('running','completed','failed')), created_at)
+          ELSE created_at END, created_at
         FOR UPDATE SKIP LOCKED
         LIMIT 1
-        """
+        """,
+        (background,),
     )
     row = _row(cursor, cursor.fetchone())
     if not row:
@@ -446,7 +453,7 @@ class _OperatorJobHeartbeat:
                 database.close()
 
 
-def process_next_operator_async_job() -> dict[str, Any] | None:
+def process_next_operator_async_job(*, background: bool = False) -> dict[str, Any] | None:
     """Claim and execute one LocalOS-owned durable job.
 
     Domain queues remain authoritative for parsing and agent runs. This worker only
@@ -460,7 +467,7 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
         from services.operator_audio import cleanup_audio
         cleanup_audio(claim_db.conn.cursor())
         recover_stale_operator_async_jobs(claim_db.conn.cursor())
-        claimed = claim_next_operator_async_job(claim_db.conn.cursor())
+        claimed = claim_next_operator_async_job(claim_db.conn.cursor(), background=background)
         claim_db.conn.commit()
     except Exception:
         claim_db.conn.rollback()
@@ -488,6 +495,11 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
             from services.operator_colleagues import process_job
             result = process_job(claimed)
             status, stage, progress = "completed", "Проверен результат отправки", 100
+        elif kind in {"disk_import_scan", "disk_import_file"}:
+            from services.disk_import import process_job
+            result = process_job(claimed)
+            status = "cancelled" if result.get("status") in {"cancelled", "stale"} else "completed"
+            stage, progress = "Проверено поступление материалов" if status == "completed" else "Задание отменено после изменения источника", 100
         elif kind == "google_drive_sync":
             from services.google_drive import process_job
             result = process_job(claimed)

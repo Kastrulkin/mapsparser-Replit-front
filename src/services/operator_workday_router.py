@@ -41,7 +41,7 @@ def route(cursor, *, business_id, user_id, message, channel, payload, pending,
           orchestrator=None, planner=None):
     if not operator_workday.enabled(business_id):return None
     context=payload.get('_verified_input_context') or {}
-    explicit=bool(re.search(r'план[её]р|расписани|снимок дня|фото|фотограф|вложени|коллег',message,re.I))
+    explicit=bool(re.search(r'план[её]р|расписани|снимок дня|фото|фотограф|видео|диск|вложени|коллег',message,re.I))
     followup=pending.get('capability')=='operator.workday' and pending.get('stage')!='approval'
     if not explicit and not followup and not context.get('attachments') and not context.get('selected_object'):
         return None
@@ -57,6 +57,8 @@ def route(cursor, *, business_id, user_id, message, channel, payload, pending,
     tools=operator_workday.tools(cursor,business_id,user_id,message,source)
     from services import operator_story
     tools.extend(operator_story.tools(cursor,business_id,user_id,conversation_id,str(payload.get('request_id') or uuid_key(source))))
+    from services import disk_import_media
+    tools.extend(disk_import_media.tools(cursor,business_id,user_id))
     from services import operator_colleagues
     tools.extend(operator_colleagues.tools(cursor,business_id,user_id,channel,orchestrator))
     tools.append({'name':'operator.read_input','title':'Прочитать вложение','capability':'operator.help','risk_class':'read_only',

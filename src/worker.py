@@ -2171,7 +2171,9 @@ def _process_operator_async_job_if_due() -> None:
         return
     _LAST_OPERATOR_ASYNC_JOB_AT = now
     try:
-        result = process_next_operator_async_job()
+        from services.disk_import import schedule_due
+        schedule_due()
+        result = process_next_operator_async_job(background=True)
         if result:
             print(
                 "[OPERATOR_ASYNC_JOB] "
