@@ -594,6 +594,7 @@ services:
     # The app service owns schema migrations. The lean Telegram image starts the bot directly.
     entrypoint: []
     environment:
+      EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}
       OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
       OPERATOR_WORKDAY_BUSINESS_IDS: ${OPERATOR_WORKDAY_BUSINESS_IDS:-}
       GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
