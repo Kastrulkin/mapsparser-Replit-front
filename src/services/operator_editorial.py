@@ -15,7 +15,7 @@ EDITABLE = {'planned', 'draft_generated', 'edited'}
 def editorial_input(message):
     text = str(message).lower()
     return bool(re.search(r'\bтон(?:а|е|ом|у)?\b|тональност',text)) or any(word in text for word in ('акцент', 'фокус', 'индивидуальност', 'запомни', 'факт о', 'факты о', 'моя история')) or (
-        any(word in text for word in ('пост', 'контент', 'публикац', 'тему')) and any(word in text for word in ('измен', 'помен', 'замен', 'переработ', 'перепиш', 'расскажу')))
+        any(word in text for word in ('пост', 'контент', 'публикац', 'тему')) and any(word in text for word in ('измен', 'помен', 'замен', 'переработ', 'перепиш', 'расскажу', 'придум', 'напиши')))
 
 
 def _result(text, status='completed', **extra):
@@ -76,6 +76,8 @@ def _change(cursor,row,theme,brief,user_id,focus=None):
 
 
 def edit_item(cursor,business_id,user_id,message,arguments):
+    if re.search(r'придум|перепиш|напиши|замени\s+(?:этот\s+)?пост',message,re.I):
+        return rewrite_item(cursor,business_id,user_id,message,arguments)
     authorize_actor(cursor,user_id,business_id)
     if not re.search(r'измени|изменить|поменя|замени|заменить|перепиш|переработ|вместо|пусть|хочу|давай|сделай',message.lower()) or re.match(r'\s*(?:если|как\b|какой|покажи|можно ли)',message.lower()):
         return _result('Сформулируйте правку поста как команду: какой пост и какая новая тема.', 'clarification_required')
@@ -90,6 +92,64 @@ def edit_item(cursor,business_id,user_id,message,arguments):
     if arguments.get('version')!=_version(row): return _result('Пост изменился. Прочитайте его заново перед правкой.', 'blocked')
     _change(cursor,row,theme,brief,user_id)
     return _result(f"Изменил тему поста на {row['scheduled_for']}: «{theme}». Сохранил надиктованный бриф. Предыдущий текст сохранён в истории; новый текст ещё нужно подготовить.", item_id=row['id'],result_ref={'href':'/dashboard/content?plan_id='+row['plan_id'],'label':'Открыть план'})
+
+
+def restore_item(cursor,business_id,user_id,message,arguments):
+    if not re.search(r'верни|восстанови|отмени.{0,20}правк',message,re.I):return _result('Для возврата прежнего текста нужна явная команда.', 'clarification_required')
+    authorize_actor(cursor,user_id,business_id)
+    rows=_items(cursor,business_id,arguments.get('plan_id'),lock=True,item_id=arguments.get('item_id'))
+    if len(rows)!=1 or rows[0]['id']!=arguments.get('item_id'):return _result('Выберите пост.', 'clarification_required')
+    row=rows[0]
+    if row['status'] not in EDITABLE or row['plan_status']=='archived' or arguments.get('version')!=_version(row):return _result('Пост изменился или недоступен для правки.', 'blocked')
+    history=(row.get('metadata_json') or {}).get('operator_edit_history') or []
+    if not history:return _result('Предыдущей версии нет.', 'blocked')
+    previous=history[-1]
+    _change(cursor,row,previous['theme'],previous.get('goal'),user_id)
+    cursor.execute("UPDATE contentplanitems SET draft_text=%s,status=%s,usernews_id=%s,metadata_json=metadata_json||%s::jsonb WHERE id=%s AND business_id=%s",
+        (previous.get('draft_text'),previous['status'],previous.get('usernews_id'),json.dumps({'generation_source':'restored'}),row['id'],business_id))
+    updated=_items(cursor,business_id,row['plan_id'],item_id=row['id'])[0]
+    return _result('Вернул предыдущий текст. Дата поста сохранена.',selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':_version(updated)})
+
+
+def rewrite_item(cursor,business_id,user_id,message,arguments):
+    """Generate before mutating the selected draft; preserve its date and history."""
+    authorize_actor(cursor,user_id,business_id)
+    if re.match(r'\s*(?:не\b|если\b|как\b|можно ли)',message,re.I):
+        return _result('Изменения не выполнены.', 'clarification_required')
+    rows=_items(cursor,business_id,arguments.get('plan_id'),lock=True,item_id=arguments.get('item_id'))
+    matches=[row for row in rows if row['id']==arguments.get('item_id')]
+    if len(matches)!=1:return _result('Уточните дату или тему поста.', 'clarification_required')
+    row=matches[0]
+    if row['status'] not in EDITABLE or row['plan_status']=='archived':return _result('Опубликованный или недоступный пост нельзя переписать.', 'blocked')
+    if arguments.get('version')!=_version(row):return _result('Пост изменился. Прочитайте его заново.', 'blocked')
+    from services.operator_social_post_generation import _default_social_post_generator, _build_social_post_prompt
+    from services.operator_news_generation import _load_business_context
+    business=_load_business_context(cursor,business_id)
+    prompt=_build_social_post_prompt(source_text=message,business=business)
+    prompt+='\nЭто редакционное задание, а не готовый текст. Придумай подачу и формулировки самостоятельно. Не требуй точную формулировку от пользователя. Не выдумывай цены, скидки, гарантии, наличие услуг или ссылки. Если ссылки нет в подтверждённых данных, оставь [ссылка для бронирования].'
+    prompt+='\nПредыдущая тема: '+str(row['theme'])+'\nПредыдущий текст (не источник новых фактов): '+str(row.get('draft_text') or '')
+    prompt+='\n'+editorial_prompt(cursor,business_id)
+    try:
+        raw=_default_social_post_generator(prompt,business_id=business_id,user_id=user_id)
+        raw=re.sub(r'^```(?:json)?\s*|\s*```$','',str(raw).strip())
+        generated=json.loads(raw)
+        if not isinstance(generated,dict) or not isinstance(generated.get('post'),str):raise ValueError('invalid generation')
+        text=generated['post'].strip()
+        if len(text.strip())<30:raise ValueError('empty generation')
+        allowed=set(re.findall(r'https?://[^\s<>\]\"]+',prompt))
+        actual=set(re.findall(r'https?://[^\s<>\]\"]+',text))
+        if any(url.rstrip('.,)') not in {item.rstrip('.,)') for item in allowed} for url in actual):raise ValueError('unverified link')
+    except Exception:
+        return _result('Не удалось подготовить новый текст. Пост остался прежним.', 'failed')
+    authorize_actor(cursor,user_id,business_id)
+    theme=str(arguments.get('theme') or row['theme']).strip()[:500]
+    _change(cursor,row,theme,message,user_id)
+    cursor.execute("UPDATE contentplanitems SET draft_text=%s,status='draft_generated',metadata_json=(metadata_json-'generation_error_reason')||%s::jsonb,updated_at=clock_timestamp() WHERE id=%s AND business_id=%s",
+        (text,json.dumps({'generation_source':'operator_rewrite'}),row['id'],business_id))
+    updated=_items(cursor,business_id,row['plan_id'],item_id=row['id'])[0]
+    return _result('Переписал пост на '+str(row['scheduled_for'])+'.\n\n'+text+'\n\nПредыдущая версия сохранена в истории.',
+        item_id=row['id'],selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':_version(updated)},
+        result_ref={'href':'/dashboard/content?plan_id='+row['plan_id'],'label':'Открыть пост','entity_type':'content'})
 
 
 def prepare_focus(cursor,business_id,user_id,message,arguments):
@@ -199,8 +259,16 @@ def editorial_tools(cursor,business_id,user_id,message,channel="web"):
          'description':'Перед правкой прочитай план: id, даты, темы, версии и заметки. Пользователю называй только даты и темы, без технических ID и названий инструментов. Если указан месяц, выбирай только его даты. Если цель неоднозначна, уточни. Возвращает до 200 записей выбранного или последнего плана.',
          'input_schema':{'type':'object','properties':{'plan_id':string(100),'include_details':{'type':'boolean'}}},'risk_class':'read_only',
          'execute':lambda args:read_context(cursor,business_id,user_id,args)},
+        {'name':'content.restore_item','capability':'content.item.edit','title':'Вернуть предыдущий текст поста',
+         'description':'Только по явной просьбе отменить последнюю правку или вернуть предыдущий текст выбранного неопубликованного поста. Требуется свежая версия из editorial_context.',
+         'input_schema':{'type':'object','required':['item_id','version'],'properties':target},
+         'risk_class':'write_internal_draft','execute':lambda args:restore_item(cursor,business_id,user_id,message,args),'deterministic_response':True},
+        {'name':'content.rewrite_item','capability':'content.item.edit','title':'Придумать или переписать текст выбранного поста',
+         'description':'Используй для замени пост на пост о теме, придумай сам, напиши текст, сделай короче/живее/менее рекламно. Генерирует и сохраняет полноценный текст в той же записи плана, дата сохраняется. Не требует готового текста пользователя. Сначала прочитай editorial_context и выбери точный item_id и версию. theme — редакционный заголовок по заданию, не обязательно цитата. Факты и обещания не выдумываются. Для изменения только темы без текста используй edit_item.',
+         'input_schema':{'type':'object','required':['item_id','version','theme'],'properties':{**target,'theme':string(500)}},
+         'risk_class':'write_internal_draft','execute':lambda args:rewrite_item(cursor,business_id,user_id,message,args),'deterministic_response':True},
         {'name':'content.edit_item','capability':'content.item.edit','title':'Изменить тему и бриф поста',
-         'description':'Меняет один неопубликованный пост по явной просьбе пользователя. theme и brief — точные цитаты надиктованной новой темы/информации, без слов команды и без выдуманных фактов. Нужна версия из editorial_context. Сохраняет старый текст в истории и помечает необходимость новой генерации. Не создаёт новый план.',
+         'description':'Меняет один неопубликованный пост по явной просьбе пользователя. Только изменение темы без генерации текста. Если пользователь просит придумать или заменить сам пост, используй rewrite_item. theme и brief — точные цитаты надиктованной новой темы/информации, без слов команды и без выдуманных фактов. Нужна версия из editorial_context. Сохраняет старый текст в истории и помечает необходимость новой генерации. Не создаёт новый план.',
          'input_schema':{'type':'object','required':['item_id','version','theme'],'properties':{**target,'theme':string(500),'brief':string(6000)}},
          'risk_class':'write_internal_draft','execute':lambda args:edit_item(cursor,business_id,user_id,message,args),'deterministic_response':True},
         {'name':'content.rebuild_plan','capability':'content.plan.refocus','title':'Переработать темы и расписание плана',

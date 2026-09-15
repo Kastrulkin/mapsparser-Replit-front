@@ -1915,7 +1915,7 @@ def route_operator_message(
     from services import work_journal, operator_work_journal
     from services.operator_context import PlannerContext
     incoming_domains=PlannerContext(clean_message).domains
-    pending_domain={'work.journal':'work','finance.daily.input':'finance','services.creation.clarification':'services','content.editorial.clarification':'content'}.get(pending.get('capability'))
+    pending_domain={'work.journal':'work','finance.daily.input':'finance','services.creation.clarification':'services','content.editorial.clarification':'content','content.editorial.selected':'content'}.get(pending.get('capability'))
     if pending_domain and incoming_domains and pending_domain not in incoming_domains:
         pending={}
     work_pending=pending.get('capability')=='work.journal' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|отмен|[0-9]',clean_message,re.I))))
@@ -1993,7 +1993,7 @@ def route_operator_message(
         next_context = {'capability':'services.creation.clarification','source_message':source_message} if outcome.get('status')=='clarification_required' else {}
         return standardize_operator_result(outcome,str(outcome.get('capability') or 'services.create')), next_context
     from services.operator_editorial import editorial_input, editorial_tools
-    editorial_pending = pending.get('capability') == 'content.editorial.clarification'
+    editorial_pending = pending.get('capability') in {'content.editorial.clarification','content.editorial.selected'}
     if editorial_pending and (clean_message.strip().lower() in {'отмена','отмени','не надо','стоп','cancel','/cancel'} or re.match(r'не (?:надо|нужно|меняй|изменяй|сохраняй|продолжай)\b',clean_message.strip().lower())):
         return standardize_operator_result({'status':'cancelled','chat_response':'Правка отменена.'},'content.item.edit'), {}
     if editorial_input(clean_message) or editorial_pending:
@@ -2001,6 +2001,8 @@ def route_operator_message(
         if blocked:
             return blocked, pending
         source_message = (str(pending.get('source_message') or '') + '\nУточнение: ' + clean_message) if editorial_pending else clean_message
+        if pending.get('selected_item'):
+            source_message+='\nВыбранный пост (серверный контекст): '+json.dumps(pending['selected_item'],ensure_ascii=False)
         tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in editorial_tools(cursor,business_id,user_id,source_message,channel)]
         arguments = dict(business_id=business_id,user_id=user_id,message=source_message,conversation_id=conversation_id,
             conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,tools=tools)
@@ -2014,6 +2016,8 @@ def route_operator_message(
             result = run_operator_tool_loop(**arguments, planner=tool_planner)
         capability = str(result.get('capability') or 'content.item.edit')
         next_context = {'capability':'content.editorial.clarification','source_message':source_message} if result.get('status')=='clarification_required' else {}
+        if result.get('selected_item'):
+            next_context={'capability':'content.editorial.selected','source_message':source_message,'selected_item':result['selected_item']}
         return standardize_operator_result(result,capability), next_context
     direct_commands = (
         (pending.get('capability') == 'services.price.update' or _is_service_price_intent(clean_message), 'services.price.update'),
