@@ -15,15 +15,9 @@ from services import operator_workday
 API='https://cloud-api.yandex.net/v1/disk'
 
 
-def configuration():
-    import auth_encryption
-    if not auth_encryption.CRYPTOGRAPHY_AVAILABLE or not os.getenv('EXTERNAL_AUTH_SECRET_KEY','').strip():
-        raise ValueError('Шифрование подключения Диска не настроено оператором LocalOS.')
-    client=os.getenv('YANDEX_DISK_CLIENT_ID','')
-    secret=os.getenv('YANDEX_DISK_CLIENT_SECRET','')
-    redirect=os.getenv('YANDEX_DISK_REDIRECT_URI','https://localos.pro/api/operator/disk/callback')
-    if not client or not secret:raise ValueError('Подключение Яндекс Диска ещё не настроено оператором LocalOS.')
-    return client,secret,redirect
+def configuration(cursor=None):
+    from services import storage_oauth_settings
+    return storage_oauth_settings.configuration('yandex',cursor)
 
 
 def status(cursor,business):
@@ -33,7 +27,7 @@ def status(cursor,business):
     photos=[_row(cursor,r) for r in cursor.fetchall()]
     configured=True
     try:
-        configuration()
+        configuration(cursor)
     except ValueError:
         configured=False
     return {'connection':connection or {'status':'disconnected'},'photos':photos,'configured':configured}
@@ -41,7 +35,7 @@ def status(cursor,business):
 
 def begin(cursor,business,user):
     operator_workday.authorize(cursor,business,user,owner=True)
-    client,_,redirect=configuration()
+    client,_,redirect=configuration(cursor)
     state=secrets.token_urlsafe(32)
     cursor.execute("INSERT INTO business_disk_oauth_states(state_hash,business_id,user_id,expires_at) VALUES (%s,%s,%s,NOW()+INTERVAL '10 minutes')",
         (hashlib.sha256(state.encode()).hexdigest(),business,user))
@@ -50,7 +44,8 @@ def begin(cursor,business,user):
 
 
 def finish(cursor,state,code):
-    client,secret,redirect=configuration()
+    cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('storage-oauth:yandex',))
+    client,secret,redirect=configuration(cursor)
     cursor.execute('SELECT * FROM business_disk_oauth_states WHERE state_hash=%s AND used_at IS NULL AND expires_at>NOW() FOR UPDATE',
                    (hashlib.sha256(state.encode()).hexdigest(),))
     row=_row(cursor,cursor.fetchone())

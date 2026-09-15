@@ -201,7 +201,7 @@ def test_http_upload_settings_and_revoked_access(workday,monkeypatch):
 
 def test_oauth_state_is_single_use_and_owner_bound(workday,monkeypatch):
     _,c=workday
-    monkeypatch.setattr(yandex_disk,'configuration',lambda:('client','secret','https://localos.pro/api/operator/disk/callback'))
+    monkeypatch.setattr(yandex_disk,'configuration',lambda *args:('client','secret','https://localos.pro/api/operator/disk/callback'))
     from urllib.parse import urlparse,parse_qs
     with pytest.raises(PermissionError):yandex_disk.begin(c,'b','admin')
     link=yandex_disk.begin(c,'b','u')['url'];state=parse_qs(urlparse(link).query)['state'][0]

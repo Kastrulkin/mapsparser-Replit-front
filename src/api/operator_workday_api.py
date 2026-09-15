@@ -34,6 +34,31 @@ def register_workday_routes(bp):
         finally:
             db.close()
 
+    @bp.route('/storage-apps',methods=['GET','POST'])
+    def operator_storage_apps():
+        from services import storage_oauth_settings
+        user=require_auth_from_request()
+        if not user:return jsonify({'error':'Требуется авторизация'}),401
+        if user.get('session_kind')=='demo':return jsonify({'error':'Настройки недоступны в демо'}),403
+        db=DatabaseManager()
+        try:
+            c=db.conn.cursor();uid=str(user.get('user_id') or user.get('id') or '')
+            storage_oauth_settings.authorize(c,uid)
+            if request.method=='POST':
+                value=storage_oauth_settings.save(c,uid,request.get_json(silent=True) or {})
+            else:value=storage_oauth_settings.public_settings(c)
+            db.conn.commit()
+            response=jsonify(value);response.headers['Cache-Control']='no-store'
+            return response
+        except PermissionError:
+            db.conn.rollback()
+            return jsonify({'error':'Настройки доступны только администратору LocalOS.'}),403
+        except ValueError:
+            import sys
+            db.conn.rollback()
+            return jsonify({'error':str(sys.exception())}),400
+        finally:db.close()
+
     @bp.route('/disk/status',methods=['GET'])
     def operator_disk_status():
         from services import yandex_disk

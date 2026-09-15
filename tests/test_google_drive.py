@@ -17,7 +17,7 @@ class Response:
 def test_oauth_owner_scope_single_use_and_encryption(workday,monkeypatch):
     _,c=workday
     monkeypatch.setenv('EXTERNAL_AUTH_SECRET_KEY','unit-test-only-key')
-    monkeypatch.setattr(google_drive,'configuration',lambda:('client','secret','https://localos.pro/api/operator/google-drive/callback'))
+    monkeypatch.setattr(google_drive,'configuration',lambda *args:('client','secret','https://localos.pro/api/operator/google-drive/callback'))
     with pytest.raises(PermissionError):google_drive.begin(c,'b','admin')
     query=parse_qs(urlparse(google_drive.begin(c,'b','u')['url']).query)
     assert query['scope']==[google_drive.SCOPE] and query['access_type']==['offline']
@@ -74,7 +74,7 @@ def test_missing_credentials_and_revoked_token(workday,monkeypatch):
     _,c=workday
     monkeypatch.delenv('GOOGLE_DRIVE_CLIENT_ID',raising=False)
     assert not google_drive.status(c,'b')['configured']
-    monkeypatch.setattr(google_drive,'configuration',lambda:('c','s','redirect'))
+    monkeypatch.setattr(google_drive,'configuration',lambda *args:('c','s','redirect'))
     monkeypatch.setattr(google_drive,'decrypt_auth_data',lambda _:'{"refresh_token":"secret"}')
     monkeypatch.setattr(google_drive.requests,'post',lambda *a,**k:Response(400,{'error':'invalid_grant'}))
     with pytest.raises(ValueError,match='Подключите'):google_drive.access_token({'token_encrypted':'encrypted'})

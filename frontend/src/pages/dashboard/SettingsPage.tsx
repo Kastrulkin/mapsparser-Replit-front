@@ -1,3 +1,4 @@
+import { StorageOAuthSettings } from '@/components/StorageOAuthSettings';
 import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -232,6 +233,7 @@ const LegacySettingsPage = () => {
 
 export const SettingsPage = () => {
   const location = useLocation();
+  if (location.pathname.endsWith('/storage')) return <StorageOAuthSettings />;
 
   if (!featureFlags.settingsHubV2) {
     return <LegacySettingsPage />;

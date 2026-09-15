@@ -30,6 +30,9 @@ def workday(journal,monkeypatch):
     spec=importlib.util.spec_from_file_location('google_drive_migration',Path(__file__).parents[1]/'alembic_migrations/versions/20260914_google_drive.py')
     migration=importlib.util.module_from_spec(spec);spec.loader.exec_module(migration)
     migration.upgrade();migration.upgrade()
+    spec=importlib.util.spec_from_file_location('storage_oauth_migration',Path(__file__).parents[1]/'alembic_migrations/versions/20260915_storage_oauth.py')
+    migration=importlib.util.module_from_spec(spec);spec.loader.exec_module(migration)
+    migration.upgrade();migration.upgrade()
     monkeypatch.setenv('OPERATOR_WORKDAY_BUSINESS_IDS','b')
     return conn,c
 
