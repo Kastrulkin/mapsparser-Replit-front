@@ -63,10 +63,11 @@ def parse_settings(message):
 def required_settings(message):
     """Only intercept operations whose meaning depends on missing defaults."""
     from services.operator_core import _content_read_request
-    if _content_read_request(message):
+    from services.operator_followups import directed_note
+    if _content_read_request(message) or directed_note(message):
         return []
     relative = bool(re.search(r'сегодня|завтра|вчера|недел|месяц|следующ', message, re.I))
-    read = bool(re.search(r'покажи|выдай|како|когда|есть ли|сколько|посмотр', message, re.I))
+    read = bool(re.search(r'покажи|выдай|како|когда|есть ли|сколько|посмотр|\bкак\b|подскажи', message, re.I))
     money_write = not read and bool(re.search(r'\b(?:выруч|продаж|чек(?:а|ов|и)?\b|расход|возврат|доход)|(?:добав|созда).*услуг', message, re.I))
     fields = []
     from services.operator_finance_amounts import verify_currency
