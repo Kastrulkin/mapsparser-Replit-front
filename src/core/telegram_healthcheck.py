@@ -11,6 +11,9 @@ def healthy():
         return True
     if b'telegram_bot.py' not in Path('/proc/1/cmdline').read_bytes():
         return False
+    from core.telegram_polling import recent_poll
+    if not recent_poll():
+        return False
     try:
         with telegram_urlopen('https://api.telegram.org/bot'+token+'/getMe',timeout=8) as response:
             return response.status==200 and json.loads(response.read(65536)).get('ok') is True

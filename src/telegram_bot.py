@@ -23,6 +23,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotComm
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.request import HTTPXRequest
+from core.telegram_polling import PollingRequest
 from database_manager import get_db_connection
 from core.db_helpers import assert_schema_columns
 from core.action_orchestrator import ActionOrchestrator
@@ -6307,7 +6308,7 @@ def main():
                 write_timeout=30.0,
                 pool_timeout=60.0,
             )
-            get_updates_request = HTTPXRequest(
+            get_updates_request = PollingRequest(
                 proxy=proxy_url,
                 connection_pool_size=4,
                 connect_timeout=20.0,
@@ -6316,6 +6317,8 @@ def main():
                 pool_timeout=60.0,
             )
             builder = builder.request(request).get_updates_request(get_updates_request)
+        if not proxy_url:
+            builder = builder.get_updates_request(PollingRequest(connect_timeout=20.0,read_timeout=45.0))
         application = builder.build()
         
         # Регистрируем обработчики
@@ -6352,7 +6355,7 @@ def main():
         print(f"📡 API Base URL: {API_BASE_URL}")
         print("✅ Бот готов к работе. Ожидаю сообщения...")
         
-        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=False)
     except Exception as e:
         print(f"❌ Ошибка запуска бота: {e}")
         print(f"💡 Проверьте:")
