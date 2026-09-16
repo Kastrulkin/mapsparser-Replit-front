@@ -73,6 +73,18 @@ def test_completed_batches_survive_a_failed_later_batch(monkeypatch):
         return json.dumps({'items':[{'group':0,'theme':f'Тема {start+i}','goal':'Совет'} for i in range(len(data['slots']))]})
     monkeypatch.setattr(content_plan_direction,'_generate',generate)
     def plan():return {'items':[{'scheduled_for':f'2026-10-{i+1:02d}'} for i in range(13)]}
-    with pytest.raises(PlanClarification):content_plan_direction.apply_direction(plan(),{},'Создай план','b','u',generation_cache=checkpoint)
     result=content_plan_direction.apply_direction(plan(),{},'Создай план','b','u',generation_cache=checkpoint)
     assert len(calls)==4 and len(result['items'])==13
+
+
+def test_generation_failure_has_only_one_recovery_attempt(monkeypatch):
+    calls=[]
+    def fail(*args):
+        calls.append(1)
+        raise RuntimeError('provider down')
+    monkeypatch.setattr(content_plan_direction,'_generate',fail)
+    skeleton={'items':[{'scheduled_for':'2026-11-01'}]}
+    with pytest.raises(content_plan_direction.PlanGenerationError):
+        content_plan_direction.apply_direction(skeleton,{},'Один пост','b','u')
+    assert len(calls)==2
+    assert skeleton=={'items':[{'scheduled_for':'2026-11-01'}]}

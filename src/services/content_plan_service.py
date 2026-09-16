@@ -1777,7 +1777,14 @@ def create_generated_content_plan(
     try:
         ensure_content_plan_tables(cursor)
         allowed_horizons = get_allowed_content_plan_horizons(business_id)
+        from services.operator_plan_schedule import extract
+        explicit_schedule = extract(editorial_brief) if editorial_brief else None
         normalized_period = int(period_days or 30)
+        if explicit_schedule:
+            permitted = [day for day in allowed_horizons if day >= explicit_schedule['period_days']]
+            if not permitted:
+                raise PermissionError("Горизонт планирования недоступен на текущем тарифе")
+            normalized_period = min(permitted)
         if normalized_period not in allowed_horizons:
             raise PermissionError("Горизонт планирования недоступен на текущем тарифе")
         context = load_plan_context_for_business(user_id, business_id, scope_type, scope_target_id)
@@ -1823,6 +1830,22 @@ def create_generated_content_plan(
             period_start=continuation['period_start'] if continuation else None,
         )
         if editorial_brief:
+            if explicit_schedule:
+                if explicit_schedule['period_days'] > max(allowed_horizons):
+                    raise PermissionError("Горизонт планирования недоступен на текущем тарифе")
+                # period_days remains the legacy tariff horizon (14/30/60/90).
+                # Exact requested dates and duration live in the existing plan JSON.
+                normalized_period = min(day for day in allowed_horizons if day >= explicit_schedule['period_days'])
+                skeleton.setdefault('meta', {})['explicit_schedule'] = {
+                    'period_days': explicit_schedule['period_days'], 'dates': explicit_schedule['dates']}
+                skeleton['period_days'] = explicit_schedule['period_days']
+                skeleton['meta']['items_target'] = len(explicit_schedule['dates'])
+                skeleton['items'] = [{'scheduled_for':day} for day in explicit_schedule['dates']]
+                skeleton['period_start'] = explicit_schedule['start'].isoformat()
+                from datetime import timedelta
+                skeleton['period_end'] = (explicit_schedule['start'] + timedelta(days=explicit_schedule['period_days']-1)).isoformat()
+                skeleton['title'] = 'Контент-план с ' + skeleton['period_start']
+                context = {**context, 'editorial_allocation':explicit_schedule['groups']}
             from services.content_plan_direction import apply_direction
             skeleton = apply_direction(skeleton, context, editorial_brief, business_id, user_id)
             context = {**context, 'editorial_brief': editorial_brief}

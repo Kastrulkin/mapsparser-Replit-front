@@ -194,7 +194,7 @@ def tools(cursor,business,user,channel,request_key):
         {'name':'work.action_results','title':'Связанные задачи и результаты','description':'Читает задачи наблюдения, текущие версии, сохранённые черновики и результаты. Чужие внутренние комментарии сотрудникам не возвращаются.', 'input_schema':{'type':'object','required':['entry_id'],'properties':{'entry_id':text}},'execute':lambda args:result('Связанные действия.',items=links(cursor,business,user,args['entry_id']))},
         {'name':'work.complete_action','title':'Зафиксировать результат задачи','description':'Только по явному сообщению руководителя о ручном выполнении задачи. Сначала прочитай action_results. Сохраняет сообщённый результат, не выдумывает подтверждение API и не закрывает наблюдение автоматически.', 'input_schema':{'type':'object','required':['entry_id','action_id','version','result'],'properties':{'entry_id':text,'action_id':text,'version':{'type':'integer'},'result':text}},'risk_class':'internal_observation_write','execute':lambda args:result('Результат задачи сохранён со слов руководителя.',action=complete_action(cursor,business,user,args['entry_id'],{**args,'request_id':request_key+':complete:'+args['action_id']}))},
         {'name':'work.review_inbox','title':'Наблюдения на разбор','description':'Только владелец или управляющий с явным правом разбора. Читает исходные сообщения, версии и статусы, не меняет их.',
-         'input_schema':{'type':'object','properties':{'status':text,'category':text}},'execute':lambda args:result('Записи на разбор.',items=list_inbox(cursor,business,user,args.get('status','new'),args.get('category')))},
+         'input_schema':{'type':'object','properties':{'status':text,'category':text}},'deterministic_response':True,'execute':lambda args:inbox_result(cursor,business,user,args)},
         {'name':'work.review_decision','title':'Разобрать наблюдение','description':'По явному решению руководителя: clarification, observing, in_progress, rejected, completed. Для отклонения и закрытия обязательна причина decision. До действий сначала принять in_progress. Не считать принятие выполнением.',
          'input_schema':{'type':'object','required':['entry_id','version','status'],'properties':{**{key:text for key in ('entry_id','status','category','decision','assigned_to')},'version':{'type':'integer'}}},'execute':review,'risk_class':'internal_observation_write'},
         {'name':'work.create_action','title':'Задача по наблюдению','description':'Создать задачу назначенному участнику по принятому наблюдению, только по выбору руководителя. kind task/map_update/post_draft/client_message/bonus/work_rules. Не выводи изменение часов из плохой встречи. Для связи с ранее созданной задачей укажи existing_action_id и action_version. Черновик не отправляется. Бонус не обещается. Укажи title, text и согласованный due_at с часовым поясом.',
@@ -239,3 +239,10 @@ def digest_settings(cursor,business,user,args=None):
     cursor.execute('SELECT local_time,enabled FROM business_work_digest_settings WHERE business_id=%s',(business,))
     row=_row(cursor,cursor.fetchone())
     return {'local_time':str(row.get('local_time') or '18:00')[:5],'enabled':row.get('enabled',True)}
+
+
+def inbox_result(cursor,business,user,args):
+    from services.operator_work_journal import result
+    rows=list_inbox(cursor,business,user,args.get('status','new'),args.get('category'))
+    text='Новых записей на разбор нет.' if not rows else 'Записи на разбор:\n'+'\n'.join(str(i+1)+'. '+str(row['facts_json'].get('quote') or '') for i,row in enumerate(rows))
+    return result(text,items=rows)

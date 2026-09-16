@@ -18,6 +18,15 @@ def _generate(prompt, business_id, user_id):
 
 
 def apply_direction(skeleton, context, message, business_id, user_id, generation_cache=None):
+    for attempt in range(2):
+        try:
+            return _apply_direction(skeleton, context, message, business_id, user_id, generation_cache)
+        except PlanGenerationError:
+            if attempt:
+                raise
+
+
+def _apply_direction(skeleton, context, message, business_id, user_id, generation_cache=None):
     def generate(prompt):
         cached=generation_cache(prompt,None) if generation_cache else None
         if cached is not None:return cached
@@ -44,6 +53,9 @@ def apply_direction(skeleton, context, message, business_id, user_id, generation
 Для all/part/remainder value=null. Не заменяй явные количества другими. Не повторяй excluded_themes.
 Если задание противоречиво или превышает число слотов, верни {"error":"Один конкретный вопрос"}.
 ''' + '\nСлотов: ' + str(total) + '\nЗадание: ' + message + '\nКонтекст: ' + json.dumps(facts, ensure_ascii=False, default=str)
+    allocation = context.get('editorial_allocation') or []
+    if allocation:
+        prompt += '\nРаспределение уже проверено сервером. Используй эти groups без изменения: ' + json.dumps(allocation,ensure_ascii=False)
     if total>10:
         prompt+='\nНа этом этапе верни только groups. items не генерируй: после проверки распределения они будут запрошены пакетами.'
     try:
@@ -55,7 +67,7 @@ def apply_direction(skeleton, context, message, business_id, user_id, generation
             raise ValueError('object required')
         if data.get('error'):
             raise PlanClarification(str(data['error'])[:500])
-        groups, items = data.get('groups'), data.get('items')
+        groups, items = allocation or data.get('groups'), data.get('items')
         if not isinstance(groups, list) or not 1 <= len(groups) <= 10 or (total<=10 and (not isinstance(items, list) or len(items) != total)):
             raise ValueError('invalid size')
         counts = []; remainder = None
@@ -108,7 +120,7 @@ def apply_direction(skeleton, context, message, business_id, user_id, generation
     except PlanClarification:
         raise
     except Exception:
-        raise PlanGenerationError('Не удалось составить план с указанным распределением тем. План не сохранён. Повторите задание или укажите количество постов по каждой теме.') from None
+        raise PlanGenerationError('Не удалось составить план с указанным распределением тем. План не сохранён. Не удалось завершить генерацию; исходное задание сохранено в диалоге.') from None
     directed = []
     for slot, item in zip(slots, items):
         directed.append({'scheduled_for': slot['scheduled_for'], 'theme': item['theme'].strip(),

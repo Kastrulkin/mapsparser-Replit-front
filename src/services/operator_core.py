@@ -1731,7 +1731,7 @@ def _create_content_plan(*, business_id: str, user_id: str, message: str, reques
     result = {
         "status": "completed",
         "intent": "content_plan.generate",
-        "chat_response": f"Создал новый контент-план на {period_days} дней: {plan.get('period_start')} — {plan.get('period_end')}. Старые планы сохранены."
+        "chat_response": f"Создал новый контент-план на {((plan.get('generated_plan_json') or {}).get('meta', {}).get('explicit_schedule') or {}).get('period_days') or plan.get('period_days') or period_days} дней: {plan.get('period_start')} — {plan.get('period_end')}. Старые планы сохранены."
             + (' Темы предыдущего плана учтены; одинаковые названия исключены.' if continuation_requested(message) else '')
             + (' Распределение тем: ' + direction + '.' if direction else '')
             + ' Это план тем; тексты постов и публикация выполняются отдельно.' ,
@@ -1910,6 +1910,12 @@ def route_operator_message(
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
         return setup
+    from services import operator_followups
+    followup = operator_followups.route(cursor,business_id=business_id,user_id=user_id,channel=channel,
+        message=clean_message,history=conversation_history,conversation_id=conversation_id,
+        payload=action_payload or {},actor=actor_context,access=subscription_access)
+    if followup:
+        return followup
     if pending.get('capability') == 'settings.input':
         pending = {}
     from services import work_journal, operator_work_journal

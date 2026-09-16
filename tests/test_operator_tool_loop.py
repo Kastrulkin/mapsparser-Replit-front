@@ -198,7 +198,7 @@ def test_tool_loop_rejects_invalid_enum_and_number_before_approval_preparation()
         planner=lambda state: states.append(state) or next(decisions),
     )
 
-    assert result["status"] == "completed"
+    assert result["status"] == "blocked"
     assert prepared == []
     assert "below_minimum:amount" in states[1]["observations"][0]["details"]
     assert "invalid_enum:transaction_type" in states[1]["observations"][0]["details"]
@@ -226,7 +226,7 @@ def test_tool_loop_rejects_arguments_outside_tool_schema():
         planner=planner,
     )
 
-    assert result["status"] == "completed"
+    assert result["status"] == "blocked"
     assert calls == []
     assert states[1]["observations"][0]["error_code"] == "invalid_tool_arguments"
 

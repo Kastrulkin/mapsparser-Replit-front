@@ -119,9 +119,9 @@ def append_operator_message(
         """
         INSERT INTO operatormessages (
             id, conversation_id, business_id, user_id, role, content,
-            capability, status, result_json
+            capability, status, result_json, created_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, clock_timestamp())
         """,
         (
             message_id,
@@ -145,7 +145,7 @@ def list_operator_messages(cursor: Any, *, conversation_id: str, business_id: st
         SELECT id, role, content, capability, status, result_json, created_at
         FROM operatormessages
         WHERE conversation_id = %s AND business_id = %s
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, CASE WHEN role='user' THEN 1 ELSE 0 END
         LIMIT %s
         """,
         (conversation_id, business_id, max(1, min(int(limit or 100), 200))),

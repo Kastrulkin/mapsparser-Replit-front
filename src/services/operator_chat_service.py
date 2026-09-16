@@ -101,6 +101,8 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         action_payload=payload, explicit_url=payload.get("url"), limit=payload.get("limit") or 5,
         refresh_handler=refresh_handler, ai_router_handler=ai_router_handler, manual_review_handler=manual_review_handler,
     )
+    from services.operator_followups import remember_selection
+    remember_selection(cursor, business_id, result)
     result["conversation_id"] = conversation_id
     result['user_message_id'] = user_message_id
     approval = result.get("approval") or {}

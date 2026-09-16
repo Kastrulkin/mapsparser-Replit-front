@@ -262,6 +262,7 @@ def run_operator_tool_loop(
     observations: list[dict[str, Any]] = []
     trace: list[dict[str, Any]] = []
     seen_calls: set[str] = set()
+    empty_action_retried = False
     last_outcome: dict[str, Any] = {}
     plan = planner or plan_operator_step
     safe_max_steps = max(1, min(int(max_steps or MAX_OPERATOR_TOOL_STEPS), 8))
@@ -290,6 +291,20 @@ def run_operator_tool_loop(
         if not isinstance(decision, dict):
             decision = {"action": "error", "message": "Модель вернула неверный план."}
         action = str(decision.get("action") or "").strip().lower()
+        requires_write = bool(re.match(r'\s*(?:измени|перепиши|замени|сохрани|создай|добавь|переделай)\b', message, re.I)) or bool(re.match(r'\s*придумай\b', message, re.I) and re.search(r'пост|вместо', message, re.I))
+        if action == "final" and requires_write and last_outcome.get("status") not in {"queued", "approval_required"} and not any(
+            item.get('risk_class') not in {'read_only','privileged_read','support_read'}
+            and item.get('status') == 'completed' for item in trace
+        ):
+            rejected = any(item.get('status') == 'denied' for item in observations)
+            if not empty_action_retried and not rejected:
+                empty_action_retried = True
+                observations.append({'status':'rejected','error_code':'requested_action_not_executed',
+                    'message':'Запрошенное изменение ещё не выполнено. Выполни доступное действие или верни clarification/error. Приветствие и обещание не являются результатом.'})
+                continue
+            decision = {'action':'error','error_code':'operator_planner_failed',
+                        'message':'Не удалось выполнить запрошенное действие. Изменения не выполнены.'}
+            action = 'error'
         if action == "final":
             message_text = str(decision.get("message") or "").strip()
             if not message_text:
