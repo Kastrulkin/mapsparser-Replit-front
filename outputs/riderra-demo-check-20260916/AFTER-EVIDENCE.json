@@ -1,0 +1,1076 @@
+{
+  "matrix": {
+    "completed_cases": 60,
+    "errors": [],
+    "steps": [
+      {
+        "case": "01_help|web|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|telegram|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|web|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|web|text",
+        "step": 2,
+        "seconds": 17.6,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|web|transcript",
+        "step": 2,
+        "seconds": 35.4,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram|text",
+        "step": 2,
+        "seconds": 25.4,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram|transcript",
+        "step": 2,
+        "seconds": 21.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram_mini_app|text",
+        "step": 2,
+        "seconds": 18.7,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram_mini_app|transcript",
+        "step": 2,
+        "seconds": 50.8,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|web|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|web|text",
+        "step": 2,
+        "seconds": 59.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|web|transcript",
+        "step": 2,
+        "seconds": 24.9,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram|text",
+        "step": 2,
+        "seconds": 31.9,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram|transcript",
+        "step": 2,
+        "seconds": 27.1,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram_mini_app|text",
+        "step": 2,
+        "seconds": 39.8,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram_mini_app|transcript",
+        "step": 2,
+        "seconds": 31.6,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|web|text",
+        "step": 1,
+        "seconds": 2.8,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|web|text",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|web|transcript",
+        "step": 1,
+        "seconds": 2.7,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|web|transcript",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|telegram|text",
+        "step": 1,
+        "seconds": 2.2,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|telegram|text",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|telegram|transcript",
+        "step": 1,
+        "seconds": 2.8,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|telegram|transcript",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 2.3,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|telegram_mini_app|text",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 2.5,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|telegram_mini_app|transcript",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|web|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|telegram|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|web|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|telegram|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|web|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|telegram|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|web|text",
+        "step": 1,
+        "seconds": 2.5,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|web|transcript",
+        "step": 1,
+        "seconds": 1.5,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|telegram|text",
+        "step": 1,
+        "seconds": 2.1,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|telegram|transcript",
+        "step": 1,
+        "seconds": 1.8,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 2.5,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 1.5,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|web|text",
+        "step": 1,
+        "seconds": 1.3,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|web|transcript",
+        "step": 1,
+        "seconds": 1.3,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|telegram|text",
+        "step": 1,
+        "seconds": 1.1,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|telegram|transcript",
+        "step": 1,
+        "seconds": 1.1,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|telegram_mini_app|text",
+        "step": 1,
+        "seconds": 1.1,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 1.3,
+        "status": "completed"
+      }
+    ],
+    "plans": [
+      {
+        "case": "04_mixed_plan|web|text",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта, связь и транспорт",
+          "Что посмотреть в Таиланде: от Бангкока до островов",
+          "Китай для туриста: главные правила и советы для первого визита",
+          "Танзания: сафари, пляжи и особенности путешествия"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|web|transcript",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта, связь и первые шаги в аэропорту",
+          "Что важно знать о трансфере в Таиланде: расстояние, время в пути и особенности дорог",
+          "Китай для новичков: как сориентироваться в крупном аэропорту и добраться до отеля",
+          "Танзания: что нужно знать о трансфере из аэропорта до сафари-лоджа"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|telegram|text",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к трансферу в Таиланде: от аэропорта до отеля",
+          "Что нужно знать о междугородних поездках в Таиланде",
+          "Особенности трансферов в Китае: что учесть при планировании",
+          "Трансферы в Танзании: как добраться до сафари-парков"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|telegram|transcript",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта, связь",
+          "Что стоит знать о трансферах в Таиланде: аэропорты, курорты, особенности",
+          "Первое знакомство с Китаем: как организовать поездку и не потеряться",
+          "Сафари в Танзании: что нужно знать перед поездкой"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|telegram_mini_app|text",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к трансферу в Таиланде: от аэропорта до отеля",
+          "Что нужно знать о междугородних поездках в Таиланде",
+          "Особенности трансферов в Китае: как добраться из аэропорта в город",
+          "Трансферы в Танзании: что учесть при поездке из аэропорта в отель"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|telegram_mini_app|transcript",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта и первые шаги в аэропорту",
+          "Что учесть при планировании маршрута по Таиланду: расстояния и логистика между курортами",
+          "Первая поездка в Китай: как подготовиться к местным особенностям транспорта",
+          "Танзания для новичков: что нужно знать о дорогах и переездах между парками"
+        ]
+      }
+    ]
+  },
+  "real-voice": {
+    "completed_cases": 30,
+    "errors": [],
+    "steps": [
+      {
+        "case": "01_help|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "01_help|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|web|transcript",
+        "step": 2,
+        "seconds": 46.4,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram|transcript",
+        "step": 2,
+        "seconds": 54.8,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite|telegram_mini_app|transcript",
+        "step": 2,
+        "seconds": 26.7,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|web|transcript",
+        "step": 2,
+        "seconds": 52.9,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram|transcript",
+        "step": 2,
+        "seconds": 65.9,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative|telegram_mini_app|transcript",
+        "step": 2,
+        "seconds": 62.8,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|web|transcript",
+        "step": 1,
+        "seconds": 2.3,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|web|transcript",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|telegram|transcript",
+        "step": 1,
+        "seconds": 2.4,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|telegram|transcript",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 2.4,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch|telegram_mini_app|transcript",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|web|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|telegram|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|web|transcript",
+        "step": 1,
+        "seconds": 2.5,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|telegram|transcript",
+        "step": 1,
+        "seconds": 2.9,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 2.7,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|web|transcript",
+        "step": 1,
+        "seconds": 1.4,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|telegram|transcript",
+        "step": 1,
+        "seconds": 1.2,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox|telegram_mini_app|transcript",
+        "step": 1,
+        "seconds": 1.1,
+        "status": "completed"
+      }
+    ],
+    "plans": [
+      {
+        "case": "04_mixed_plan|web|transcript",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта и первые шаги",
+          "Трансфер из аэропорта в Таиланде: что нужно знать туристу",
+          "Китай для туриста: особенности въезда и передвижения",
+          "Танзания: как спланировать сафари и не упустить главное"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|telegram|transcript",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к трансферу в Таиланде: от аэропорта до отеля",
+          "Особенности междугородних поездок в Таиланде: что важно знать туристу",
+          "Трансфер в Китае: как не потеряться в большом аэропорту",
+          "Сафари в Танзании: как организовать трансфер до национальных парков"
+        ]
+      },
+      {
+        "case": "04_mixed_plan|telegram_mini_app|transcript",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к трансферу в Таиланде: от аэропорта до отеля",
+          "Особенности междугородних поездок в Таиланде: советы для туристов",
+          "Трансфер в Китае: что нужно знать перед поездкой",
+          "Танзания: как добраться до сафари-парков и не потеряться"
+        ]
+      }
+    ]
+  },
+  "variants": {
+    "completed_cases": 15,
+    "errors": [],
+    "steps": [
+      {
+        "case": "02_variant_1",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_variant_1",
+        "step": 2,
+        "seconds": 35.8,
+        "status": "completed"
+      },
+      {
+        "case": "02_variant_2",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_variant_2",
+        "step": 2,
+        "seconds": 30.2,
+        "status": "completed"
+      },
+      {
+        "case": "02_variant_3",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_variant_3",
+        "step": 2,
+        "seconds": 30.4,
+        "status": "completed"
+      },
+      {
+        "case": "03_variant_1",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_variant_1",
+        "step": 2,
+        "seconds": 25.6,
+        "status": "completed"
+      },
+      {
+        "case": "03_variant_2",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_variant_2",
+        "step": 2,
+        "seconds": 20.1,
+        "status": "completed"
+      },
+      {
+        "case": "03_variant_3",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_variant_3",
+        "step": 2,
+        "seconds": 36.4,
+        "status": "completed"
+      },
+      {
+        "case": "07_variant_1",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_variant_2",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_variant_3",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_variant_1",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_variant_2",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_variant_3",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      }
+    ],
+    "plans": [
+      {
+        "case": "04_mixed_plan_variant_1",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к трансферу в Таиланде: от аэропорта до отеля",
+          "Что важно знать о междугородних поездках в Таиланде",
+          "Особенности трансферов в Китае: что учесть при заказе",
+          "Трансферы в Танзании: как добраться до сафари-лоджей и пляжей"
+        ]
+      },
+      {
+        "case": "04_mixed_plan_variant_2",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к трансферу в Таиланде: от аэропорта до отеля",
+          "Что важно знать о междугородних поездках в Таиланде",
+          "Трансфер в Китае: как не потеряться в большом аэропорту",
+          "Сафари в Танзании: как организовать трансфер от аэропорта до лоджа"
+        ]
+      },
+      {
+        "case": "04_mixed_plan_variant_3",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта, связь",
+          "Что посмотреть в Таиланде: от Бангкока до островов",
+          "Китай для туриста: как организовать поездку и не потеряться",
+          "Танзания: сафари и пляжи — как спланировать маршрут"
+        ]
+      }
+    ]
+  },
+  "postdeploy": {
+    "completed_cases": 10,
+    "errors": [],
+    "steps": [
+      {
+        "case": "01_help",
+        "step": 1,
+        "seconds": 0.1,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_last_post_rewrite",
+        "step": 2,
+        "seconds": 5.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "03_creative",
+        "step": 2,
+        "seconds": 5.4,
+        "status": "completed"
+      },
+      {
+        "case": "05_topic_switch",
+        "step": 1,
+        "seconds": 2.6,
+        "status": "approval_required"
+      },
+      {
+        "case": "05_topic_switch",
+        "step": 2,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "06_complaint",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "07_wish",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "08_idea_urgent",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "09_hypothesis",
+        "step": 1,
+        "seconds": 1.9,
+        "status": "completed"
+      },
+      {
+        "case": "10_review_inbox",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      }
+    ],
+    "plans": [
+      {
+        "case": "04_mixed_plan",
+        "dates": [
+          "2026-11-01",
+          "2026-11-08",
+          "2026-11-15",
+          "2026-11-22"
+        ],
+        "topics": [
+          "Как подготовиться к поездке в Таиланд: виза, валюта, связь",
+          "Что важно знать о трансфере из аэропорта в Таиланде",
+          "Первая поездка в Китай: на что обратить внимание туристу",
+          "Танзания для новичка: сафари, пляжи и логистика"
+        ]
+      }
+    ]
+  },
+  "latency": {
+    "completed_cases": 1,
+    "errors": [],
+    "steps": [
+      {
+        "case": "02_variant_3",
+        "step": 1,
+        "seconds": 0.0,
+        "status": "completed"
+      },
+      {
+        "case": "02_variant_3",
+        "step": 2,
+        "seconds": 5.0,
+        "status": "completed"
+      }
+    ],
+    "plans": []
+  }
+}
