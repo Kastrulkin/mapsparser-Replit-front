@@ -103,6 +103,42 @@ def manifest():
     return riderra.build_manifest([record()], pricebook_attestation=attestation())
 
 
+def phuket_attestation():
+    source = attestation()
+    source["rows"] = {
+        "200": ["Thailand", "Phuket International Airport (HKT)", "Phuket town", "Standard class car", 3, "22,00", "EUR"],
+        "201": ["Thailand", "Phuket International Airport (HKT)", "PaTong, Phuket", "Standard class car", 3, "25,00", "EUR"],
+        "202": ["Thailand", "Phuket International Airport (HKT)", "Karon Beach, Phuket", "Standard minivan 8 pax", 8, "32,00", "EUR"],
+    }
+    source["row_records"] = {
+        row: {"record_id": f"price-{row}", "updated_at": "2026-09-15T10:00:00+00:00"}
+        for row in source["rows"]
+    }
+    return source
+
+
+def phuket_record():
+    source = phuket_attestation()
+    item = {
+        "audience": "transfer_buyer", "template_id": riderra.PHUKET_TEMPLATE_ID,
+        "lead_id": "lead-phuket", "workstream_id": "ws-phuket", "contact_point_id": "contact-phuket",
+        "recipient": "buyer@agency.test", "company": "Example Travel", "city": "Jaipur",
+        "source_fact_fingerprint": "facts:" + "c" * 64,
+        "pricebook_examples": [],
+    }
+    for row in (200, 201, 202):
+        values = source["rows"][str(row)]
+        metadata = source["row_records"][str(row)]
+        item["pricebook_examples"].append({
+            "row": row, "source_record_id": metadata["record_id"],
+            "source_record_updated_at": metadata["updated_at"],
+            "source_row_sha256": riderra._hash(values), "source_artifact_sha256": "a" * 64,
+            "source_version": "b" * 64,
+        })
+    item.update(riderra.render_phuket_record(item))
+    return item
+
+
 def test_manifest_is_closed_exact_template_and_frozen_quote():
     result = manifest()
     member = result["records"][0]
@@ -110,6 +146,26 @@ def test_manifest_is_closed_exact_template_and_frozen_quote():
     assert "€46 (standard minivan, up to 6 passengers)" in member["body"]
     assert member["pricebook"]["source_row_values"][1] == "Malaga Airport (AGP)"
     assert result["daily_limit"] == 150
+
+
+def test_phuket_manifest_preserves_approved_copy_and_three_database_quotes():
+    result = riderra.build_manifest([phuket_record()], pricebook_attestation=phuket_attestation())
+    member = result["records"][0]
+    assert result["template_sha256"] == riderra.PHUKET_TEMPLATE_SHA256
+    assert member["subject"] == "Example Travel | Riderra | Phuket airport transfers"
+    assert "Phuket Town: €22" in member["body"]
+    assert "Patong: €25" in member["body"]
+    assert "Karon Beach: €32" in member["body"]
+    assert [quote["source_record_id"] for quote in member["pricebook_examples"]] == [
+        "price-200", "price-201", "price-202",
+    ]
+
+
+def test_phuket_manifest_rejects_changed_price_row():
+    item = phuket_record()
+    item["pricebook_examples"][1]["row"] = 200
+    with pytest.raises(ValueError, match="quote_provenance"):
+        riderra.build_manifest([item], pricebook_attestation=phuket_attestation())
 
 
 def test_manifest_accepts_pricebook_cell_with_existing_currency_symbol():

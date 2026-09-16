@@ -32,6 +32,9 @@ DAILY_LIMIT = 150
 TIMEZONE = "Europe/Moscow"
 MANIFEST_VERSION = 2
 TEMPLATE_VERSION = "riderra-buyer-first-email-v1"
+PHUKET_TEMPLATE_ID = "riderra_buyer_phuket_examples_v1"
+PHUKET_TEMPLATE_VERSION = "1.0"
+PHUKET_TEMPLATE_SHA256 = "796ba361098d5285adcfe49420d586ba84c861150c4cdcc1387fb9615fb0619a"
 APPROVED_TEMPLATE_ARTIFACT_SHA256 = "00862a0e8b463746a58f4008702d5151690f416ecd12548e412f9fc2ef524237"
 APPROVED_TEMPLATE_DEFINITION_SHA256 = "40ad6f4afa17cc1180ca65902194d6da4fb8802ea9171dbcb05ea70de83d7854"
 STANDING_POLICY_VERSION = 2
@@ -63,6 +66,30 @@ Would you be open to trying us for a transfer from {route} for just {price} ({ve
 Best regards,
 Alex Demyanov
 Riderra"""
+
+PHUKET_SUBJECT_TEMPLATE = "{company} | Riderra | Phuket airport transfers"
+PHUKET_BODY_TEMPLATE = """Hello {company} team,
+
+I'm Alex from Riderra. Large transfer brands can add intermediaries without improving the transfer itself.
+
+We keep the chain short, so more of your payment reaches the local operator and supports better service from experienced, verified drivers. 10+ years' experience; 0.24% complaint rate. We've arranged transfers for private aviation pilots, ministers and presidents' families.
+
+Example rates from Phuket Airport (HKT):
+- Phuket Town: €22, standard car, up to 3 passengers
+- Patong: €25, standard car, up to 3 passengers
+- Karon Beach: €32, standard minivan, up to 8 passengers
+
+Would you be open to trying us on an upcoming Phuket booking? You can submit a request at https://riderra.com.
+
+Best regards,
+Alex Demyanov
+Riderra"""
+
+PHUKET_QUOTE_SPECS = (
+    ("Phuket Town", "Phuket town", "Standard class car", 3, "22,00", "EUR"),
+    ("Patong", "PaTong, Phuket", "Standard class car", 3, "25,00", "EUR"),
+    ("Karon Beach", "Karon Beach, Phuket", "Standard minivan 8 pax", 8, "32,00", "EUR"),
+)
 
 
 def _hash(value: Any) -> str:
@@ -130,6 +157,106 @@ def render_record(record: dict[str, Any]) -> dict[str, str]:
         vehicle=vehicle, pax=pax,
     )
     return {"subject": subject, "body": body, "content_sha256": hashlib.sha256((subject + "\n\n" + body).encode("utf-8")).hexdigest()}
+
+
+def render_phuket_record(record: dict[str, Any]) -> dict[str, str]:
+    company = str(record.get("company") or "").strip()
+    if not company or "\n" in company or not re.fullmatch(r"[^{}]{2,160}", company):
+        raise ValueError("riderra_template_slot_invalid")
+    subject = PHUKET_SUBJECT_TEMPLATE.format(company=company)
+    body = PHUKET_BODY_TEMPLATE.format(company=company)
+    return {"subject": subject, "body": body,
+            "content_sha256": hashlib.sha256((subject + "\n\n" + body).encode("utf-8")).hexdigest()}
+
+
+def normalize_phuket_record(record: dict[str, Any], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
+    if str(record.get("template_id") or "") != PHUKET_TEMPLATE_ID:
+        raise ValueError("riderra_phuket_template_invalid")
+    quotes = record.get("pricebook_examples") if isinstance(record.get("pricebook_examples"), list) else []
+    if len(quotes) != len(PHUKET_QUOTE_SPECS):
+        raise ValueError("riderra_phuket_quotes_invalid")
+    normalized_quotes: list[dict[str, Any]] = []
+    for quote, spec in zip(quotes, PHUKET_QUOTE_SPECS):
+        row_number = quote.get("row") if isinstance(quote, dict) else None
+        raw_cells = pricebook_attestation.get("rows", {}).get(str(row_number or ""))
+        source_record = pricebook_attestation.get("row_records", {}).get(str(row_number or "")) or {}
+        label, route_to, vehicle, pax, price, currency = spec
+        expected = ["Thailand", "Phuket International Airport (HKT)", route_to, vehicle, pax, price, currency]
+        if (
+            type(row_number) is not int or row_number < 2 or raw_cells != expected
+            or str(quote.get("source_record_id") or "") != source_record.get("record_id")
+            or str(quote.get("source_record_updated_at") or "") != source_record.get("updated_at")
+            or str(quote.get("source_row_sha256") or "") != _hash(raw_cells)
+            or str(quote.get("source_artifact_sha256") or "") != pricebook_attestation.get("artifact_sha256")
+            or str(quote.get("source_version") or "") != pricebook_attestation.get("source_version")
+        ):
+            raise ValueError("riderra_phuket_quote_provenance_invalid")
+        normalized_quotes.append({**quote, "label": label, "source_row_values": raw_cells,
+                                  "verified_at": pricebook_attestation["verified_at"]})
+    normalized = {
+        "audience": "transfer_buyer",
+        "template_id": PHUKET_TEMPLATE_ID,
+        "template_version": PHUKET_TEMPLATE_VERSION,
+        "template_sha256": PHUKET_TEMPLATE_SHA256,
+        "lead_id": str(record.get("lead_id") or "").strip(),
+        "workstream_id": str(record.get("workstream_id") or "").strip(),
+        "contact_point_id": str(record.get("contact_point_id") or "").strip(),
+        "recipient": str(record.get("recipient") or "").strip().lower(),
+        "company": str(record.get("company") or "").strip(),
+        "company_key": canonical_company_key(record.get("company")),
+        "city": str(record.get("city") or "").strip(),
+        "opening": "",
+        "opening_source_url": "",
+        "opening_variant": "no_opening_v1",
+        "source_fact_fingerprint": str(record.get("source_fact_fingerprint") or ""),
+        "pricebook_examples": normalized_quotes,
+    }
+    if (
+        not all(normalized[key] for key in ("lead_id", "workstream_id", "contact_point_id", "recipient", "company", "city"))
+        or "@" not in normalized["recipient"] or "berlin" in normalized["city"].lower()
+        or not re.fullmatch(r"(?:facts:|report:)[0-9a-f]{64}", normalized["source_fact_fingerprint"])
+    ):
+        raise ValueError("riderra_template_identity_missing")
+    rendered = render_phuket_record(normalized)
+    if str(record.get("content_sha256") or "") != rendered["content_sha256"]:
+        raise ValueError("riderra_template_content_hash_changed")
+    normalized.update(rendered)
+    return normalized
+
+
+def build_phuket_manifest(records: list[dict[str, Any]], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
+    if not str(pricebook_attestation.get("id") or ""):
+        raise ValueError("riderra_pricebook_attestation_required")
+    _iso_timestamp(pricebook_attestation.get("verified_at"))
+    normalized = [normalize_phuket_record(record, pricebook_attestation=pricebook_attestation) for record in records]
+    keys = [(item["workstream_id"], item["lead_id"], item["contact_point_id"]) for item in normalized]
+    if (
+        not normalized or len(normalized) > DAILY_LIMIT or len(keys) != len(set(keys))
+        or len({item["lead_id"] for item in normalized}) != len(normalized)
+        or len({item["company_key"] for item in normalized}) != len(normalized)
+        or len({item["recipient"] for item in normalized}) != len(normalized)
+    ):
+        raise ValueError("riderra_template_membership_invalid")
+    return {
+        "manifest_version": MANIFEST_VERSION,
+        "scope": "riderra_buyer_phuket_examples",
+        "business_id": BUSINESS_ID,
+        "sender_account_id": SENDER_ACCOUNT_ID,
+        "sender_identity": SENDER_IDENTITY,
+        "workstream_type": "client_partnership",
+        "audience": "transfer_buyer",
+        "channels": ["email"],
+        "daily_limit": DAILY_LIMIT,
+        "timezone": TIMEZONE,
+        "template_id": PHUKET_TEMPLATE_ID,
+        "template_version": PHUKET_TEMPLATE_VERSION,
+        "template_sha256": PHUKET_TEMPLATE_SHA256,
+        "pricebook_id": PRICEBOOK_ID,
+        "pricebook_sheet": PRICEBOOK_SHEET,
+        "pricebook_attestation": pricebook_attestation,
+        "records_sha256": _hash(normalized),
+        "records": normalized,
+    }
 
 
 def normalize_pricebook_attestation(artifact: dict[str, Any], artifact_sha256: str) -> dict[str, Any]:
@@ -240,6 +367,8 @@ def normalize_record(record: dict[str, Any], *, pricebook_attestation: dict[str,
 
 
 def build_manifest(records: list[dict[str, Any]], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
+    if records and all(str(record.get("template_id") or "") == PHUKET_TEMPLATE_ID for record in records):
+        return build_phuket_manifest(records, pricebook_attestation=pricebook_attestation)
     if (not str(pricebook_attestation.get("id") or "")
             or not re.fullmatch(r"[0-9a-f]{64}", str(pricebook_attestation.get("artifact_sha256") or ""))):
         raise ValueError("riderra_pricebook_attestation_required")
@@ -646,7 +775,7 @@ def exact_invitation(*, record: dict[str, Any], authorization: dict[str, Any], s
     member = manifest_record(authorization, workstream_id=str(record.get("workstream_id") or ""),
                              lead_id=str(record.get("lead_id") or ""), contact_point_id=str(record.get("contact_point_id") or ""))
     try:
-        rendered = render_record(member)
+        rendered = render_phuket_record(member) if member.get("template_id") == PHUKET_TEMPLATE_ID else render_record(member)
     except (TypeError, ValueError):
         return False
     return bool(member == record and authorization.get("sender_account_id") == SENDER_ACCOUNT_ID

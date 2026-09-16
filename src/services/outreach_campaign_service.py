@@ -5013,6 +5013,7 @@ def build_riderra_template_preview(
     """Build one native campaign preview from a live grant member."""
     from services.riderra_template_authorization_service import (
         BUSINESS_ID as RIDERRA_BUSINESS_ID,
+        PHUKET_TEMPLATE_ID as RIDERRA_PHUKET_TEMPLATE_ID,
         SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
         exact_invitation as exact_riderra_invitation,
         load_authorization as load_riderra_authorization,
@@ -5065,14 +5066,16 @@ def build_riderra_template_preview(
     suppression = _suppression_status(cursor, context)
     if suppression.get("suppressed"):
         raise ValueError("riderra_template_recipient_suppressed")
-    source_url = _text(context.get("source_url") or normalized["pricebook"].get("pricebook_id"))
+    is_phuket = normalized.get("template_id") == RIDERRA_PHUKET_TEMPLATE_ID
+    quote_context = normalized.get("pricebook_examples") if is_phuket else normalized.get("pricebook")
+    source_url = _text(context.get("source_url") or "riderra-postgresql-city-pricing")
     evidence = build_evidence_ledger(context)
     candidate = {
         "id": f"riderra:{normalized['source_fact_fingerprint']}",
         "evidence_id": f"riderra:{normalized['source_fact_fingerprint']}",
         "source_url": source_url,
         "observed_fact": normalized["opening"],
-        "relevance_to_offer": normalized["pricebook"]["route"],
+        "relevance_to_offer": "Phuket airport transfer examples" if is_phuket else quote_context["route"],
     }
     gate = {
         "passed": True, "verdict": "approve", "score": 18, "total_score": 18,
@@ -5086,13 +5089,16 @@ def build_riderra_template_preview(
         "quality_gate": gate, "channel_status": "ready", "contact_point_id": normalized["contact_point_id"],
         "sender_account_id": RIDERRA_SENDER_ACCOUNT_ID, "evidence_id": candidate["evidence_id"],
         "evidence_kind": "riderra_buyer_opening", "source_url": source_url,
-        "observation": normalized["opening"], "solution": normalized["pricebook"]["route"],
+        "observation": normalized["opening"],
+        "solution": "Phuket airport transfer examples" if is_phuket else quote_context["route"],
         "source_fact_fingerprint": normalized["source_fact_fingerprint"],
         "strategy": {"workstream_type": "client_partnership", "sender_mode": "partner_business",
                      "segment": "transfer_buyer", "template_version": normalized.get("template_version")},
         "strategy_fingerprint": stable_hash(normalized, "riderra:"),
-        "template_key": "riderra_buyer_first_email", "template_version": "riderra-buyer-first-email-v1",
-        "template_selection": {"key": "riderra_buyer_first_email", "version": "riderra-buyer-first-email-v1"},
+        "template_key": normalized.get("template_id") or "riderra_buyer_first_email",
+        "template_version": normalized.get("template_version") or "riderra-buyer-first-email-v1",
+        "template_selection": {"key": normalized.get("template_id") or "riderra_buyer_first_email",
+                               "version": normalized.get("template_version") or "riderra-buyer-first-email-v1"},
         "riderra_template_record": normalized,
     }
     return {
