@@ -6175,6 +6175,12 @@ def finalize_no_reply_campaigns(
               FROM outreach_inbound_events inbound
               WHERE inbound.campaign_id = campaign.id AND inbound.is_human = TRUE
           )
+          AND EXISTS (
+              SELECT 1
+              FROM outreach_campaign_touches touch
+              WHERE touch.campaign_id = campaign.id
+                AND touch.status IN ('manual_sent', 'sent', 'delivered')
+          )
           AND NOT EXISTS (
               SELECT 1
               FROM outreach_learning_events learning
