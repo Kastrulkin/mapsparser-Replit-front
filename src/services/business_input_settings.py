@@ -67,9 +67,16 @@ def required_settings(message):
         return []
     relative = bool(re.search(r'сегодня|завтра|вчера|недел|месяц|следующ', message, re.I))
     read = bool(re.search(r'покажи|выдай|како|когда|есть ли|сколько|посмотр', message, re.I))
-    money_write = not read and bool(re.search(r'выруч|продаж|чек|расход|возврат|доход|(?:добав|созда).*услуг', message, re.I))
+    money_write = not read and bool(re.search(r'\b(?:выруч|продаж|чек(?:а|ов|и)?\b|расход|возврат|доход)|(?:добав|созда).*услуг', message, re.I))
     fields = []
-    if money_write and not parse_settings(message).get('currency'):
+    from services.operator_finance_amounts import verify_currency
+    try:
+        explicit_currency = verify_currency(message, {}).get('currency') or parse_settings(message).get('currency')
+    except ValueError:
+        # The financial handler explains mixed currencies; settings must not
+        # intercept and silently select one of the explicitly supplied units.
+        explicit_currency = True
+    if money_write and not explicit_currency:
         fields.append('currency')
     dated = money_write or bool(re.search(r'пост|контент|визит|клиент|финанс', message, re.I))
     if relative and dated:
