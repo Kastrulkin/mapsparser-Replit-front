@@ -706,3 +706,7 @@ def test_operator_truncation_has_one_bounded_recovery(monkeypatch):
     assert result.finish_reason=='length'
     assert result.usage['completion_tokens']==3600
     assert get_task_definition('operator_tool_plan').thinking_enabled is False
+
+
+def test_social_post_generation_disables_reasoning_for_interactive_copy():
+    assert get_task_definition('social_post_generation').thinking_enabled is False
