@@ -12,6 +12,16 @@ def finance_input(message):
     return bool(re.search(r'выруч|продаж|чек|доп(?:а|ов|родаж)|расход|возврат|финанс|доход|часов.*пояс|валют',message,re.I))
 
 
+def aggregate_input(message):
+    months=r'январ\w*|феврал\w*|март\w*|апрел\w*|ма[йяе]|июн\w*|июл\w*|август\w*|сентябр\w*|октябр\w*|ноябр\w*|декабр\w*'
+    period=bool(re.search(r'месячн\w*|итог\w*\s+(?:за\s+)?(?:месяц|'+months+r')\b|(?:за|в)\s+(?:(?:прошл\w*|текущ\w*|этот|весь)\s+)?(?:месяц|'+months+r')\b|по дням данных нет',message,re.I))
+    return period and (bool(re.search(r'запиш|запис|сохрани|внеси',message,re.I)) or not re.search(r'покажи|сколько|какая|какой|\?',message,re.I))
+
+
+def aggregate_result():
+    return observation('Это итог за месяц, а не за один день. Дневная запись не создана. Месячные данные внесите через импорт в разделе «Финансы» с исходным периодом: LocalOS сохранит агрегат для сверки и не распределит его по дням.','blocked')
+
+
 def observation(text,status='completed',**extra):
     return {'status':status,'chat_response':text,'result_ref':{'href':'/dashboard/finance','label':'Открыть финансы'},'external_writes_performed':False,**extra}
 
@@ -35,6 +45,12 @@ def read(cursor,business_id,user_id,args):
     end=args.get('end') or start
     if not start:
         return observation('Укажите дату или сохраните часовой пояс бизнеса.','clarification_required')
+    def local_date(value):
+        if value in {'today','yesterday','сегодня','вчера'}:
+            if not current.get('today'):raise ValueError('Сохраните часовой пояс или укажите точную дату.')
+            return (date.fromisoformat(current['today'])-timedelta(days=1 if value in {'yesterday','вчера'} else 0)).isoformat()
+        return date.fromisoformat(value).isoformat()
+    start,end=local_date(start),local_date(end)
     report=finance_daily.read_period(cursor,business_id,start,end)
     lines=[f'Финансы за {start} — {end}.']
     for currency,values in report['currencies'].items():
@@ -48,6 +64,7 @@ def read(cursor,business_id,user_id,args):
 
 def tools(cursor,business_id,user_id,message,channel,message_ref,orchestrator=None,previous_draft=None):
     def prepare(arguments):
+        if aggregate_input(message):return aggregate_result()
         if re.search(r'\bне\s+(?:сохраня|вноси|записыва|добавля)',message,re.I) or re.match(r'\s*(?:если|например|допустим)',message,re.I):
             return observation('Финансовые данные не записаны. Для записи дайте явную команду.','clarification_required')
         try:
@@ -59,7 +76,7 @@ def tools(cursor,business_id,user_id,message,channel,message_ref,orchestrator=No
         except (ValueError,PermissionError):
             return observation(str(sys.exception()),'clarification_required')
         from services.operator_core import _prepare_registered_capability_approval
-        outcome=_prepare_registered_capability_approval(capability='finance.daily.write',tool_name='finance.prepare_facts',business_id=business_id,
+        outcome=_prepare_registered_capability_approval(cursor=cursor, capability='finance.daily.write',tool_name='finance.prepare_facts',business_id=business_id,
             user_id=user_id,channel=channel,message=message+"\n"+finance_daily.fingerprint(envelope),payload=envelope,backend_capability='finance.daily.apply_operator',orchestrator=orchestrator)
         if outcome.get('status')=='approval_required':
             cursor.execute('SELECT name FROM businesses WHERE id=%s',(business_id,))

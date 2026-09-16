@@ -243,6 +243,7 @@ def test_deterministic_query_tool_returns_after_one_compiler_step():
         user_id="user-1",
         message="Покажи последний отзыв",
         tools=[tool],
+        business_timezone="Europe/Moscow",
         planner=lambda state: planner_calls.append(state) or {
             "action": "tool_call",
             "tool": "localos.query",

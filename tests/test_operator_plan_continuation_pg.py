@@ -61,15 +61,18 @@ def test_directed_creation_is_atomic_and_retry_does_not_regenerate(database,monk
     def generate(prompt,*args):
         calls.append(prompt)
         import re
-        count=int(re.search(r'Слотов: (\d+)',prompt).group(1))
-        return json.dumps({'groups':[{'label':'Япония','mode':'all','value':None}],
-            'items':[{'group':0,'theme':f'Япония: совет {i}','goal':'Помочь путешественнику'} for i in range(count)]})
+        if 'Слотов:' in prompt:
+            return json.dumps({'groups':[{'label':'Япония','mode':'all','value':None}]})
+        batch=json.loads(prompt.split('\n',1)[1])
+        offset=len(batch['previous_themes'])
+        return json.dumps({'items':[{'group':group,'theme':f'Япония: совет {offset+i}','goal':'Помочь путешественнику'} for i,group in enumerate(batch['slots'])]})
     monkeypatch.setattr(content_plan_direction,'_generate',generate)
     kwargs=dict(scope_type='single_location',scope_target_id='b',period_days=30,density='standard',content_mix={},
         editorial_brief='Все посты про Японию',operator_request_id='voice:directed')
     plan=content_plan_service.create_generated_content_plan('u','b',**kwargs)
     repeat=content_plan_service.create_generated_content_plan('u','b',**kwargs)
-    assert plan['id']==repeat['id'] and len(calls)==1
+    assert plan['id']==repeat['id'] and len(calls)==3
+    assert len(set(calls))==3  # Allocation + two batches, no calls for replay.
     cursor=database.cursor();cursor.execute('SELECT theme FROM contentplanitems WHERE plan_id=%s',(plan['id'],))
     assert all('Япония' in row['theme'] for row in cursor.fetchall())
     monkeypatch.setattr(content_plan_direction,'_generate',lambda *args:'broken')

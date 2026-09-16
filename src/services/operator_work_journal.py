@@ -12,6 +12,38 @@ def matches(text):
     return bool(re.search(r'пожелани|комментар.{0,30}(?:руководител|администратор)|жалоб|недоволь|плохо встрет|предлагаю|есть идея|на разбор|разбор.{0,20}журнал|рабоч.{0,10}журнал|заметк|наблюден|запомни|запиши|зафиксир|сегодня.{0,50}(законч|спрашива|приш|опозда|сломал)|клиент.{0,60}(отказ|предлож|интерес|дорого)|что предлож|план предлож|правил.{0,30}(рекомен|допрод)|(?:не |сначала |теперь )предлага|допродаж|рекомендац|привяж.{0,40}(мастер|сотрудник)|назнач.{0,40}(мастер|визит)',text,re.I))
 
 
+def ban_request(cursor,business_id,user_id,channel,message,orchestrator=None):
+    """A literal ban needs a real service and a clear period, not model invention."""
+    if re.search(r'\?|\b(?:если|например|допустим)\b',message,re.I):return None
+    match=re.search(r'\bне\s+предлаг(?:ай|айте)\s+([^.!?]+)',message,re.I)
+    if not match:return None
+    if re.search(r'сначала предлаг|предлаг.{0,30}в первую очередь|измени|добавь|создай',message,re.I):
+        return result('В сообщении несколько изменений правил. Запрет пока не применён. Какое подготовить первым: запрет или другое изменение?','clarification_required')
+    try:
+        work_journal.scope(cursor,business_id,user_id,True,True)
+        name=re.sub(r'\s+(?:на этой неделе|на следующей неделе|постоянно|всегда).*$', '', match[1],flags=re.I).strip(' «»"')
+        services=work_recommendations.catalog(cursor,business_id)
+        selected=[row for row in services if (row.get('name') or '').strip().casefold()==name.casefold()]
+        if len(selected)!=1:
+            return result('Какую дополнительную услугу запретить? Назовите её как в справочнике услуг. Правила пока не изменены.','clarification_required')
+        rule={'action':'ban','addon_service_id':selected[0]['id'],'instruction':message}
+        if re.search(r'постоянно|всегда',message,re.I):rule['permanent']=True
+        elif re.search(r'на (?:этой|текущей|следующей) неделе',message,re.I):
+            from services.business_input_settings import resolve
+            from datetime import datetime,timedelta
+            from zoneinfo import ZoneInfo
+            zone=resolve(cursor,business_id).get('timezone')
+            if not zone:return result('Укажите часовой пояс бизнеса, чтобы определить границы недели.','clarification_required')
+            now=datetime.now(ZoneInfo(zone))
+            monday=(now+timedelta(days=7-now.weekday())).replace(hour=0,minute=0,second=0,microsecond=0)
+            following=bool(re.search(r'следующей неделе',message,re.I))
+            rule.update(starts_at=(monday if following else now).isoformat(),ends_at=(monday+timedelta(days=7) if following else monday).isoformat())
+        else:return result('До какой даты действует запрет или он постоянный? Правила пока не изменены.','clarification_required')
+        return prepare_approval(cursor,business_id,user_id,channel,message,{'kind':'rules','changes':[rule]},orchestrator)
+    except PermissionError:
+        return result(str(sys.exception()),'blocked')
+
+
 def result(text,status='completed',**extra):
     return {'status':status,'chat_response':text,'capability':'work.journal','result_ref':{'href':'/dashboard/work-journal','label':'Открыть рабочий журнал'},'external_writes_performed':False,**extra}
 
@@ -19,7 +51,7 @@ def result(text,status='completed',**extra):
 def prepare_approval(cursor,business_id,user_id,channel,message,args,orchestrator=None):
     from services.operator_core import _prepare_registered_capability_approval
     envelope=work_recommendations.prepare_policy(cursor,business_id,user_id,args);envelope['channel']=channel
-    output=_prepare_registered_capability_approval(capability='work.policy',tool_name='work.prepare_policy',business_id=business_id,user_id=user_id,
+    output=_prepare_registered_capability_approval(cursor=cursor, capability='work.policy',tool_name='work.prepare_policy',business_id=business_id,user_id=user_id,
         channel=channel,message=message+'\n'+work_journal.digest(envelope),payload=envelope,backend_capability='work.policy.apply',orchestrator=orchestrator)
     if output.get('status')=='approval_required':
         services={row['id']:row.get('name') or row['id'] for row in work_recommendations.catalog(cursor,business_id)}
@@ -89,7 +121,7 @@ def tools(cursor,business_id,user_id,channel,message,message_id,request_key,save
                 if not addon['time_verified']:lines.append('Нужно проверить, хватает ли времени.')
                 if addon['previous_results']:lines.append('Уже отмечено: '+', '.join({'offered':'предложено','declined':'отказался','interested':'заинтересовался','performed':'оказано со слов сотрудника'}.get(r['event_type'],r['event_type']) for r in addon['previous_results']))
             if not item['recommendations']:lines.append('Подходящих разрешённых дополнений нет.')
-        return result('\n'.join(lines),report['status'],recommendations=report)
+        return result('\n'.join(lines),report['status'],recommendations=report,**({'result_ref':{'href':'/dashboard/average-ticket','label':'Настроить допродажи'}} if report.get('setup_required') else {}))
     def prepare(args):return prepare_approval(cursor,business_id,user_id,channel,message,args,orchestrator)
     def insights(args):
         rows=work_journal.list_entries(cursor,business_id,user_id,'',args.get('date'))

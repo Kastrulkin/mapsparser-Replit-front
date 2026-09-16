@@ -476,3 +476,10 @@ def test_editorial_context_read_is_not_success_when_planner_fails():
     assert result['chat_response']=='Изменить контент-план не удалось. Он остался прежним.'
     assert result['summary']==result['chat_response']
     assert result['planner_failed']
+
+
+def test_rule_directive_read_then_model_error_is_not_success():
+    choices=iter([{'action':'tool_call','tool':'work.context','arguments':{}},{'action':'error','error_code':'empty_response'}])
+    result=run_operator_tool_loop(business_id='b',user_id='u',message='На этой неделе не предлагайте уход. Нужен результат по выбранному бизнесу.',tools=[_tool('work.context',lambda _: {'status':'completed','chat_response':'Доступный рабочий контекст.'})],planner=lambda _:next(choices))
+    assert result['status']=='failed' and result['planner_failed']
+    assert 'изменения не выполнялись' in result['chat_response']

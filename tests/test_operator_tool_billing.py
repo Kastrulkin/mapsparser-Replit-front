@@ -1,3 +1,4 @@
+import pytest
 from services import operator_tool_billing
 
 
@@ -75,7 +76,8 @@ def test_paid_tool_loop_releases_reservation_when_provider_fails(monkeypatch):
     assert finalized[0]["actual_credits"] is None
 
 
-def test_paid_tool_loop_releases_reservation_for_deepseek_empty_response(monkeypatch):
+@pytest.mark.parametrize("failure",[{"status":"blocked","blocked_reasons":["DEEPSEEK_EMPTY_RESPONSE"]},{"status":"error","error_code":"operator_planner_failed"},{"status":"failed","error_code":"empty_response"}])
+def test_paid_tool_loop_releases_reservation_for_deepseek_empty_response(monkeypatch,failure):
     monkeypatch.setattr(operator_tool_billing, "build_paid_action_preflight", lambda *_args, **_kwargs: {"status": "ready"})
     monkeypatch.setattr(
         operator_tool_billing,
@@ -96,7 +98,7 @@ def test_paid_tool_loop_releases_reservation_for_deepseek_empty_response(monkeyp
             "status": "blocked",
             "capability": "operator.help",
             "chat_response": "Оператор не смог построить безопасный план действий.",
-            "blocked_reasons": ["DEEPSEEK_EMPTY_RESPONSE"],
+            **failure,
         },
     )
 

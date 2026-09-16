@@ -134,7 +134,7 @@ def route_setup(cursor, business_id, user_id, channel, message, pending, convers
         return {'status': 'clarification_required', 'capability': 'settings.input', 'chat_response': str(sys.exception())}, next_context
     from services.operator_core import _prepare_registered_capability_approval
     preview = 'Сохранить настройки бизнеса: ' + settings_summary(envelope['data']) + '?'
-    result = _prepare_registered_capability_approval(capability='settings.input', tool_name='settings.input',
+    result = _prepare_registered_capability_approval(cursor=cursor, capability='settings.input', tool_name='settings.input',
         business_id=business_id, user_id=user_id, channel=channel, message=preview + '\n' + finance_daily.fingerprint(envelope),
         payload=envelope, backend_capability='finance.daily.apply_operator', orchestrator=orchestrator)
     if result.get('status') == 'approval_required':

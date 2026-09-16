@@ -413,7 +413,8 @@ def test_service_update_tools_expose_preview_then_separate_confirmation() -> Non
     assert pending == {}
 
 
-def test_finance_tool_creates_action_orchestrator_approval_in_selected_tenant() -> None:
+def test_finance_tool_creates_action_orchestrator_approval_in_selected_tenant(monkeypatch) -> None:
+    monkeypatch.setattr(operator_core, '_operator_action_actor', lambda user,business,cursor: {'user_id':user,'is_superadmin':False})
     orchestrator = FakeActionOrchestrator()
     result, pending = route_operator_message(
         ServiceCursor(),
@@ -445,6 +446,7 @@ def test_finance_tool_creates_action_orchestrator_approval_in_selected_tenant() 
 
 
 def test_operator_confirmation_resumes_same_orchestrator_action(monkeypatch) -> None:
+    monkeypatch.setattr(operator_core, '_operator_action_actor', lambda user,business,cursor: {'user_id':user,'is_superadmin':False})
     orchestrator = FakeActionOrchestrator()
     stored_results = []
     monkeypatch.setattr(
@@ -553,6 +555,7 @@ def test_service_price_confirmation_blocks_stale_preview(monkeypatch) -> None:
 
 
 def test_operator_rejection_cancels_same_orchestrator_action(monkeypatch) -> None:
+    monkeypatch.setattr(operator_core, '_operator_action_actor', lambda user,business,cursor: {'user_id':user,'is_superadmin':False})
     orchestrator = FakeActionOrchestrator()
     stored_results = []
     monkeypatch.setattr(

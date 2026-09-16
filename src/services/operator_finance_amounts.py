@@ -31,6 +31,8 @@ def verify_currency(message, arguments):
         raise ValueError('Укажите данные отдельно для каждой валюты — суммы разных валют не складываются.')
     if currencies:
         result['currency'] = next(iter(currencies))
+        if isinstance(result.get('values'),dict) and 'currency' in result['values']:
+            result['values'] = {key:value for key,value in result['values'].items() if key!='currency'}
     return result
 
 
@@ -53,7 +55,9 @@ def verify_revenue(message, arguments):
         return result
     values=dict(result.get('values') or {})
     if 'revenue' not in values or not re.search(r'выручк',message,re.I):return result
-    matches=list(re.finditer(r'выручк[аиу]?(?P<qualifier>\s*(?:(?:до|после)\s+возвратов)?\s*(?:составила|была|стала|итого)?\s*[:—=–-]?\s*)(?P<amount>'+_AMOUNT+')',message,re.I))
+    matches=list(re.finditer(r'выручк[аиу]?(?P<qualifier>\s*(?:(?:до|после)\s+возврат(?:ов|а\s+в|а)?)?\s*(?:составила|была|стала|итого)?\s*[:—=–-]?\s*)(?P<amount>'+_AMOUNT+')',message,re.I))
+    if len(matches)>1 and 'Уточнение:' in message:
+        matches=[matches[-1]]
     if len(matches)!=1:
         raise ValueError('Уточните сумму выручки до возвратов и сумму возвратов — покажу итог перед сохранением.')
     match=matches[0]
@@ -71,3 +75,30 @@ def verify_revenue(message, arguments):
     values['revenue']=str(amount)
     result['values']=values
     return result
+
+
+def daily_statement(message, previous=None):
+    """Parse only explicit local-day totals; ambiguous or detailed sales use the planner."""
+    if re.search(r'\?|\b(?:если|допустим|пример)\b|не (?:записывай|сохраняй)|итог месяца|за месяц',message,re.I):
+        return None
+    if not re.search(r'\b(?:сегодня|вчера)\b',message,re.I) or not re.search(r'выручк|чек',message,re.I):
+        return None
+    if re.search(r'добавь|ещ[её]|увелич|отмен',message,re.I):
+        return None
+    result={'kind':'daily','date':'yesterday' if re.search(r'\bвчера\b',message,re.I) else 'today','mode':'set'}
+    values=dict((previous or {}).get('data') or {})
+    for key,pattern in [
+        ('checks',r'('+_AMOUNT+r')\s+чек(?:а|ов)?\b(?!\s+с\s+доп)'),
+        ('upsell_checks',r'('+_AMOUNT+r')\s+(?:(?:чек(?:а|ов)?\s+)?с\s+доп\w*|допродаж\w*|до\s+продаж\w*)'),
+        ('refunds',r'\bвозврат(?:ы|ов)?\s*[:—=]?\s*('+_AMOUNT+r')'),
+        ('expenses',r'\bрасход(?:ы|ов)?\s*[:—=]?\s*('+_AMOUNT+r')'),
+    ]:
+        found=list(re.finditer(pattern,message,re.I))
+        if found:values[key]=str(_number(found[-1][1].lower()))
+    if re.search(r'выручк',message,re.I) and not re.search(r'выручк[ауи]?\s+(?:пока\s+)?не\s+знаю',message,re.I):
+        values['revenue']='0'  # Replaced by the source verifier or rejected; never persisted as a guess.
+    if not values:return None
+    result['values']=values
+    if previous:
+        result['date']=previous['date'];result['currency']=previous['currency']
+    return verify_revenue(message,verify_currency(message,result))

@@ -304,7 +304,9 @@ def _registered_capability_envelope(
     backend_capability: str | None = None,
 ) -> dict[str, Any]:
     backend_name = str(backend_capability or CAPABILITY_BY_NAME[capability].backend_capability or capability)
-    idempotency_source = f"{business_id}:{user_id}:{channel}:{backend_name}:{message.strip().lower()}"
+    from services.operator_chat_service import current_request_key
+    request_key = current_request_key.get()
+    idempotency_source = json.dumps([business_id, user_id, channel, backend_name, request_key, message.strip(), payload], sort_keys=True, default=str)
     return {
         "tenant_id": business_id,
         "actor": {"id": user_id, "type": "user", "channel": channel},
@@ -317,8 +319,22 @@ def _registered_capability_envelope(
     }
 
 
+def _operator_action_actor(user_id, business_id, cursor=None):
+    from services.operator_audio import authorize_actor
+    if cursor is None:
+        from database_manager import DatabaseManager
+        db = DatabaseManager()
+        try:
+            return _operator_action_actor(user_id, business_id, db.conn.cursor())
+        finally:
+            db.close()
+    actor, _ = authorize_actor(cursor, user_id, business_id)
+    return {"user_id": user_id, "is_superadmin": bool(actor.get("is_superadmin"))}
+
+
 def _execute_registered_capability(
     *,
+    cursor=None,
     capability: str,
     business_id: str,
     user_id: str,
@@ -339,7 +355,7 @@ def _execute_registered_capability(
     )
     execution = (orchestrator or OPERATOR_ACTION_ORCHESTRATOR).execute(
         envelope,
-        {"user_id": user_id, "is_superadmin": False},
+        _operator_action_actor(user_id, business_id, cursor),
     )
     if execution.get("success") and execution.get("status") == "pending_human":
         return standardize_operator_result(
@@ -364,10 +380,12 @@ def _execute_registered_capability(
         return standardize_operator_result(failed, capability)
     backend_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
     count = int(backend_result.get("count") or 0)
+    drafts = backend_result.get("drafts") or []
+    response_text = ("Подготовил черновик. Ничего не отправлено.\n\n" + "\n\n".join(str(draft.get("message") or "") for draft in drafts)) if drafts else f"Нашёл записей: {count}."
     completed = {
         **backend_result,
         "status": "completed",
-        "chat_response": f"Нашёл записей: {count}.",
+        "chat_response": response_text,
         "action_id": execution.get("action_id"),
         "billing": execution.get("billing") or {},
         "external_writes_performed": False,
@@ -377,6 +395,7 @@ def _execute_registered_capability(
 
 def _prepare_registered_capability_approval(
     *,
+    cursor=None,
     capability: str,
     tool_name: str,
     business_id: str,
@@ -387,7 +406,7 @@ def _prepare_registered_capability_approval(
     backend_capability: str | None = None,
     orchestrator: ActionOrchestrator | None = None,
 ) -> dict[str, Any]:
-    prepared = _execute_registered_capability(
+    prepared = _execute_registered_capability(cursor=cursor,
         capability=capability,
         business_id=business_id,
         user_id=user_id,
@@ -433,7 +452,7 @@ def _prepare_finance_sales_approval(
     )
     if preview.get("status") != "ready":
         return preview
-    prepared = _prepare_registered_capability_approval(
+    prepared = _prepare_registered_capability_approval(cursor=cursor,
         capability="finance.sales_import",
         tool_name="finance.ingest_sales",
         business_id=business_id,
@@ -1199,7 +1218,7 @@ def _operator_tool_catalog(
             "approval_required": True,
             "timeout_seconds": 30,
             "explicit_intent_markers": ("добав", "запиш", "созд", "внес", "расход", "доход"),
-            "prepare_approval": lambda arguments: _prepare_registered_capability_approval(
+            "prepare_approval": lambda arguments: _prepare_registered_capability_approval(cursor=cursor,
                 capability="finance.prepare_transaction",
                 tool_name="finance.prepare_transaction",
                 business_id=business_id,
@@ -1226,7 +1245,7 @@ def _operator_tool_catalog(
             },
             "risk_class": "read_only",
             "approval_required": False,
-            "execute": lambda arguments: _execute_registered_capability(
+            "execute": lambda arguments: _execute_registered_capability(cursor=cursor,
                 capability="appointments.read",
                 business_id=business_id,
                 user_id=user_id,
@@ -1252,7 +1271,7 @@ def _operator_tool_catalog(
             "risk_class": "draft_only",
             "approval_required": False,
             "explicit_intent_markers": ("подготов", "созд", "напиш", "чернов"),
-            "execute": lambda arguments: _execute_registered_capability(
+            "execute": lambda arguments: _execute_registered_capability(cursor=cursor,
                 capability="communications.draft",
                 business_id=business_id,
                 user_id=user_id,
@@ -1279,7 +1298,7 @@ def _operator_tool_catalog(
             "approval_required": True,
             "timeout_seconds": 30,
             "explicit_intent_markers": ("отправ", "разошл", "напомни клиент"),
-            "prepare_approval": lambda arguments: _prepare_registered_capability_approval(
+            "prepare_approval": lambda arguments: _prepare_registered_capability_approval(cursor=cursor,
                 capability="communications.prepare_send",
                 tool_name="communications.prepare_send",
                 business_id=business_id,
@@ -1347,7 +1366,7 @@ def _operator_tool_catalog(
             "risk_class": "draft_only",
             "approval_required": False,
             "explicit_intent_markers": ("подготов", "напиш", "чернов", "сообщен"),
-            "execute": lambda arguments: _execute_registered_capability(
+            "execute": lambda arguments: _execute_registered_capability(cursor=cursor,
                 capability="partnerships.prepare_message",
                 business_id=business_id,
                 user_id=user_id,
@@ -1805,12 +1824,12 @@ def _content_read_request(message):
     if re.search(r'\b(опубликуй|опубликовать|публикуй|размести|отправь|создай|составь|подготовь|сделай)\b', lowered):
         return False
     if ('запланир' in lowered and re.search(r'пост|публикаци', lowered)
-            and re.search(r'есть|како|покажи|посмотри|пришли', lowered)):
+            and re.search(r'есть|како|покажи|посмотри|пришли|увиде|посмотр|можно', lowered)):
         return True
     if lowered in {'контент план', 'мой контент план', 'наш контент план'}:
         return True
     return ((('контент план' in lowered) or any(word in lowered for word in ('следующ', 'ближайш', 'предстоящ', 'последн', 'крайний')))
-            and any(word in lowered for word in ('покажи', 'показать', 'посмотри', 'пришли', 'видишь', 'какой', 'какие', 'когда'))
+            and any(word in lowered for word in ('покажи', 'показать', 'посмотри', 'пришли', 'видишь', 'увидеть', 'посмотреть', 'какой', 'какие', 'когда'))
             and any(word in lowered for word in ('пост', 'контент план', 'публикаци', 'новост')))
 
 
@@ -1844,10 +1863,15 @@ def _read_requested_content(cursor, business_id, message):
         'sort_direction': 'asc' if upcoming else 'desc', 'limit': 1 if latest else 50, 'view': 'full' if requested_next or latest else 'compact'})
     if result.get('status') != 'completed':
         return result
+    if latest and result.get('items'):
+        result['chat_response']='Последний по дате материал в сохранённом плане:\n\n'+render_operator_query(result['query'],result['items'],len(result['items']))
     if upcoming:
         items = [item for item in result['items'] if item.get('status') not in {'published', 'cancelled', 'archived'}]
         if requested_next:
-            items = items[:1]
+            quantity = re.search(r'(?:покажи|показать|пришли)\s+(\d+|один|два|две|три|четыре|пять|десять)\b', lowered)
+            counts = {'один':1,'два':2,'две':2,'три':3,'четыре':4,'пять':5,'десять':10}
+            requested_count = min(50, int(quantity[1]) if quantity and quantity[1].isdigit() else counts.get(quantity[1],1) if quantity else (50 if re.search(r'запланир\w*\s+(?:посты|публикации)',lowered) else 1))
+            items = items[:requested_count]
         result['items'] = items
         result['count'] = len(items)
         result['chat_response'] = (('Следующий материал в сохранённом контент-плане:\n\n' if requested_next else 'Предстоящие материалы сохранённого контент-плана:\n\n')+
@@ -1910,6 +1934,16 @@ def route_operator_message(
     setup = route_setup(cursor, business_id, user_id, channel, clean_message, pending, conversation_id, action_orchestrator)
     if setup:
         return setup
+    from services.operator_query import read_reviews_request
+    if tool_planner is None and re.search(r'отзыв',clean_message,re.I):
+        blocked=operator_subscription_block(subscription_access,'reviews.read')
+        if blocked:return blocked, {}
+        review_result=read_reviews_request(cursor,business_id,clean_message)
+        if review_result is not None:return standardize_operator_result(review_result,'reviews.read'), {}
+    if tool_planner is None and _content_read_request(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'content.read')
+        if blocked:return blocked, {}
+        return standardize_operator_result(_read_requested_content(cursor,business_id,clean_message),'operator.query'), {}
     from services import operator_followups
     followup = operator_followups.route(cursor,business_id=business_id,user_id=user_id,channel=channel,
         message=clean_message,history=conversation_history,conversation_id=conversation_id,
@@ -1919,6 +1953,11 @@ def route_operator_message(
     if pending.get('capability') == 'settings.input':
         pending = {}
     from services import work_journal, operator_work_journal
+    if tool_planner is None and work_journal.enabled(business_id):
+        ban=operator_work_journal.ban_request(cursor,business_id,user_id,channel,clean_message,action_orchestrator)
+        if ban is not None:
+            next_pending={'capability':'work.journal','source_message':clean_message,'stage':'clarification'} if ban.get('status')=='clarification_required' else {}
+            return standardize_operator_result(ban,'work.policy'),next_pending
     from services.operator_context import PlannerContext
     incoming_domains=PlannerContext(clean_message).domains
     pending_domain={'work.journal':'work','finance.daily.input':'finance','services.creation.clarification':'services','content.editorial.clarification':'content','content.editorial.selected':'content'}.get(pending.get('capability'))
@@ -1966,6 +2005,8 @@ def route_operator_message(
     from services import finance_daily, operator_finance_daily
     finance_pending = pending.get('capability') == 'finance.daily.input' and (pending.get('stage')!='approval' or (bool(pending_approvals) and bool(re.match(r'нет\b|исправ|вернее|точнее|[0-9]',clean_message,re.I))))
     if finance_daily.enabled(business_id) and (operator_finance_daily.finance_input(clean_message) or finance_pending):
+        if operator_finance_daily.aggregate_input(clean_message):
+            return standardize_operator_result(operator_finance_daily.aggregate_result(),'finance.daily.write'), {}
         if clean_message.casefold().strip() in {'отмена','отмени','стоп','не надо','не нужно','/cancel'}:
             return standardize_operator_result({'status':'cancelled','chat_response':'Финансовый ввод отменён.'},'finance.daily.write'), {}
         source_message = (str(pending.get('source_message') or '')+'\nУточнение: '+clean_message) if finance_pending else clean_message
@@ -1976,7 +2017,16 @@ def route_operator_message(
             conversation_history=conversation_history,actor_context=actor_context,pending_approvals=pending_approvals,
             business_timezone=finance_daily.settings(cursor,business_id).get("timezone"),
             tools=[_normalize_tool_contract(tool,business_id=business_id) for tool in selected])
-        outcome = run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
+        from services.operator_finance_amounts import daily_statement
+        try:
+            literal=daily_statement(source_message,pending.get('draft') if finance_pending else None) if tool_planner is None else None
+            if literal is not None:
+                outcome=next(tool for tool in selected if tool['name']=='finance.prepare_facts')['prepare_approval'](literal)
+            else:
+                outcome = run_paid_operator_tool_loop(cursor,**arguments) if tool_planner is None else run_operator_tool_loop(**arguments,planner=tool_planner)
+        except ValueError:
+            import sys
+            outcome={'status':'clarification_required','chat_response':str(sys.exception())}
         next_context={'capability':'finance.daily.input','source_message':source_message,'draft':outcome.get('financial_draft'),'stage':'approval' if outcome.get('status')=='approval_required' else 'clarification'} if outcome.get('status') in {'clarification_required','approval_required'} else {}
         return standardize_operator_result(outcome,outcome.get('capability') or 'finance.daily.write'),next_context
     from services import operator_service_creation
@@ -1988,6 +2038,8 @@ def route_operator_message(
         if blocked:
             return blocked, pending
         source_message = (str(pending.get('source_message') or '') + '\nУточнение: ' + clean_message) if service_pending else clean_message
+        if re.search(r'(?:за|цена|стоимость\w*)\s+(?:минус\s*|[-−]\s*)(?:\d|один|два|три|четыре|пять|десять)',source_message.rsplit('Уточнение:',1)[-1],re.I):
+            return standardize_operator_result(operator_service_creation.result('Стоимость услуги не может быть отрицательной. Укажите цену от нуля.','clarification_required'),'services.create'), {'capability':'services.creation.clarification','source_message':source_message}
         request_key = str((action_payload or {}).get('request_id') or hashlib.sha256(source_message.encode()).hexdigest())
         request_key = str(conversation_id or channel)+':'+request_key
         selected_tools = [_normalize_tool_contract(tool,business_id=business_id) for tool in operator_service_creation.tools(cursor,business_id,user_id,source_message,request_key)]
@@ -2087,7 +2139,7 @@ def route_operator_message(
         return standardize_operator_result(response, 'operator.query'), context
     lowered_message = clean_message.lower()
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("отзыв", "яндекс", "картах", "карты")):
-        return _manual_result("reviews.publish_external"), {}
+        return standardize_operator_result({"status":"completed","chat_response":"Откройте раздел «Отзывы», выберите отзыв и подготовленный ответ. Проверьте текст и опубликуйте его вручную в кабинете площадки. Автоматическая публикация из Оператора пока не подключена. Сейчас ничего не опубликовано.","external_writes_performed":False,"result_ref":{"href":"/dashboard/reviews","label":"Открыть отзывы"}},"reviews.publish_external"), {}
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("новост", "пост", "канал", "соцсет")):
         return _manual_result("content.publish_external"), {}
     if _is_content_plan_intent(clean_message):
@@ -2351,7 +2403,7 @@ def confirm_pending_operator_action(
         execution = (action_orchestrator or OPERATOR_ACTION_ORCHESTRATOR).resolve_human_decision(
             orchestrator_action_id,
             "approved",
-            {"user_id": user_id, "is_superadmin": False},
+            _operator_action_actor(user_id, business_id, cursor),
             decision_reason="Confirmed in LocalOS Operator chat",
         )
         if not execution.get("success"):
@@ -2540,7 +2592,7 @@ def reject_pending_operator_action(
         execution = (action_orchestrator or OPERATOR_ACTION_ORCHESTRATOR).resolve_human_decision(
             orchestrator_action_id,
             "rejected",
-            {"user_id": user_id, "is_superadmin": False},
+            _operator_action_actor(user_id, business_id, cursor),
             decision_reason="Rejected in LocalOS Operator chat",
         )
         if not execution.get("success"):

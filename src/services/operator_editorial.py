@@ -15,7 +15,7 @@ EDITABLE = {'planned', 'draft_generated', 'edited'}
 def editorial_input(message):
     text = str(message).lower()
     return bool(re.search(r'\bтон(?:а|е|ом|у)?\b|тональност',text)) or any(word in text for word in ('акцент', 'фокус', 'индивидуальност', 'запомни', 'факт о', 'факты о', 'моя история')) or (
-        any(word in text for word in ('пост', 'контент', 'публикац', 'тему')) and any(word in text for word in ('измен', 'помен', 'замен', 'переработ', 'перепиш', 'расскажу', 'придум', 'напиши')))
+        any(word in text for word in ('пост', 'контент', 'публикац', 'тему')) and any(word in text for word in ('измен', 'помен', 'замен', 'переработ', 'перепиш', 'переведи', 'перевод', 'расскажу', 'придум', 'напиши')))
 
 
 def _result(text, status='completed', **extra):
@@ -76,7 +76,7 @@ def _change(cursor,row,theme,brief,user_id,focus=None):
 
 
 def edit_item(cursor,business_id,user_id,message,arguments):
-    if re.search(r'придум|перепиш|напиши|замени\s+(?:этот\s+)?пост',message,re.I):
+    if re.search(r'переведи|перевод|придум|перепиш|напиши|замени\s+(?:этот\s+)?пост',message,re.I):
         return rewrite_item(cursor,business_id,user_id,message,arguments)
     authorize_actor(cursor,user_id,business_id)
     if not re.search(r'измени|изменить|поменя|замени|заменить|перепиш|переработ|вместо|пусть|хочу|давай|сделай',message.lower()) or re.match(r'\s*(?:если|как\b|какой|покажи|можно ли)',message.lower()):
@@ -140,19 +140,30 @@ def rewrite_item(cursor,business_id,user_id,message,arguments):
     prompt=_build_social_post_prompt(source_text=message,business=business)
     prompt+='\nЭто редакционное задание, а не готовый текст. Придумай подачу и формулировки самостоятельно. Не требуй точную формулировку от пользователя. Не выдумывай цены, скидки, гарантии, наличие услуг или ссылки. Если ссылки нет в подтверждённых данных, оставь [ссылка для бронирования].'
     prompt+='\nПредыдущая тема: '+str(row['theme'])+'\nПредыдущий текст (не источник новых фактов): '+str(row.get('draft_text') or '')
+    if re.search(r'переведи|перевести|перевод',message,re.I):prompt+='\nПереведи выбранный текст на язык, указанный пользователем. Это указание имеет приоритет над языком шаблона.'
     prompt+='\nЕсли пользователь просит сохранить ссылку, перенеси исходный URL без изменений, включая параметры. Не заменяй известную ссылку заглушкой.'
     prompt+='\n'+editorial_prompt(cursor,business_id)
-    try:
-        raw=_default_social_post_generator(prompt,business_id=business_id,user_id=user_id)
-        raw=re.sub(r'^```(?:json)?\s*|\s*```$','',str(raw).strip())
-        generated=json.loads(raw)
-        if not isinstance(generated,dict) or not isinstance(generated.get('post'),str):raise ValueError('invalid generation')
-        text=preserve_requested_links(generated['post'].strip(), str(row.get('draft_text') or ''), message)
-        if len(text.strip())<30:raise ValueError('empty generation')
-        allowed=set(re.findall(r'https?://[^\s<>\]\"]+',prompt))
-        actual=set(re.findall(r'https?://[^\s<>\]\"]+',text))
-        if any(url.rstrip('.,)') not in {item.rstrip('.,)') for item in allowed} for url in actual):raise ValueError('unverified link')
-    except Exception:
+    translating=bool(re.search(r'переведи|перевести|перевод',message,re.I))
+    if translating:
+        prompt=prompt.replace('Подготовь пост для соцсетей на русском языке.','Переведи существующий текст на язык, который указал пользователь.')
+        prompt+='\nФинальная задача: '+message+'\nВерни JSON с post на запрошенном языке. Не подменяй перевод редактированием русского текста.'
+    text=None
+    for attempt in range(2):
+        try:
+            raw=_default_social_post_generator(prompt,business_id=business_id,user_id=user_id)
+            raw=re.sub(r'^```(?:json)?\s*|\s*```$','',str(raw).strip())
+            generated=json.loads(raw)
+            if not isinstance(generated,dict) or not isinstance(generated.get('post'),str):raise ValueError('invalid generation')
+            text=preserve_requested_links(generated['post'].strip(), str(row.get('draft_text') or ''), message)
+            if len(text.strip())<30:raise ValueError('empty generation')
+            if translating and re.search(r'англий',message,re.I) and len(re.findall('[А-Яа-я]',text))>20:raise ValueError('translation language mismatch')
+            allowed=set(re.findall(r'https?://[^\s<>\]\"]+',prompt))
+            actual=set(re.findall(r'https?://[^\s<>\]\"]+',text))
+            if any(url.rstrip('.,)') not in {item.rstrip('.,)') for item in allowed} for url in actual):raise ValueError('unverified link')
+            break
+        except Exception:
+            text=None
+    if text is None:
         return _result('Не удалось подготовить новый текст. Пост остался прежним.', 'failed')
     authorize_actor(cursor,user_id,business_id)
     theme=str(arguments.get('theme') or row['theme']).strip()[:500]
