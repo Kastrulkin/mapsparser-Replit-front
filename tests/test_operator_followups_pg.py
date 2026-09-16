@@ -53,3 +53,19 @@ def test_multiple_posts_do_not_set_implicit_selection(editorial):
     result={'resource':'content','items':[{'kind':'content_plan_item','id':'i','plan_id':'p'},{'kind':'content_plan_item','id':'j','plan_id':'p'}]}
     operator_followups.remember_selection(c,'b',result)
     assert 'selected_item' not in result
+
+
+def test_rewrite_preserves_booking_url_in_saved_draft(editorial,monkeypatch):
+    from services import operator_editorial,operator_social_post_generation,operator_news_generation
+    _,c=editorial
+    url='https://riderra.com/ru?lang=ru'
+    c.execute("UPDATE contentplanitems SET draft_text=%s WHERE id='i'",('Закажите трансфер: '+url,))
+    monkeypatch.setattr(operator_news_generation,'_load_business_context',lambda *a:{})
+    monkeypatch.setattr(operator_social_post_generation,'_default_social_post_generator',lambda *a,**kw:json.dumps({'post':'Закажите трансфер заранее. Бронирование: [ссылка для бронирования].'}))
+    target=operator_editorial._items(c,'b','p',item_id='i')[0]
+    result=operator_editorial.rewrite_item(c,'b','u','Перепиши короче, оставь ссылку для бронирования',{'plan_id':'p','item_id':'i','version':operator_editorial._version(target)})
+    assert result['status']=='completed'
+    c.execute("SELECT draft_text,metadata_json FROM contentplanitems WHERE id='i'")
+    saved=c.fetchone()
+    assert url in saved['draft_text'] and '[ссылка' not in saved['draft_text']
+    assert url in saved['metadata_json']['operator_edit_history'][0]['draft_text']

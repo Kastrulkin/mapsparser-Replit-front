@@ -111,6 +111,18 @@ def restore_item(cursor,business_id,user_id,message,arguments):
     return _result('Вернул предыдущий текст. Дата поста сохранена.',selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':_version(updated)})
 
 
+def preserve_requested_links(text, previous, message):
+    if not re.search(r'(?:остав|сохран)\w*[^.!?]{0,60}ссыл|ссыл[^.!?]{0,60}(?:остав|сохран)', message, re.I):
+        return text
+    links=list(dict.fromkeys(url.rstrip('.,)') for url in re.findall(r'https?://[^\s<>\]\"]+', previous)))
+    if len(links)==1:
+        text=re.sub(r'\[ссылка[^\]]*\]', lambda _:links[0], text, flags=re.I)
+    for link in links:
+        if link not in text:
+            text+='\n'+link
+    return text
+
+
 def rewrite_item(cursor,business_id,user_id,message,arguments):
     """Generate before mutating the selected draft; preserve its date and history."""
     authorize_actor(cursor,user_id,business_id)
@@ -128,13 +140,14 @@ def rewrite_item(cursor,business_id,user_id,message,arguments):
     prompt=_build_social_post_prompt(source_text=message,business=business)
     prompt+='\nЭто редакционное задание, а не готовый текст. Придумай подачу и формулировки самостоятельно. Не требуй точную формулировку от пользователя. Не выдумывай цены, скидки, гарантии, наличие услуг или ссылки. Если ссылки нет в подтверждённых данных, оставь [ссылка для бронирования].'
     prompt+='\nПредыдущая тема: '+str(row['theme'])+'\nПредыдущий текст (не источник новых фактов): '+str(row.get('draft_text') or '')
+    prompt+='\nЕсли пользователь просит сохранить ссылку, перенеси исходный URL без изменений, включая параметры. Не заменяй известную ссылку заглушкой.'
     prompt+='\n'+editorial_prompt(cursor,business_id)
     try:
         raw=_default_social_post_generator(prompt,business_id=business_id,user_id=user_id)
         raw=re.sub(r'^```(?:json)?\s*|\s*```$','',str(raw).strip())
         generated=json.loads(raw)
         if not isinstance(generated,dict) or not isinstance(generated.get('post'),str):raise ValueError('invalid generation')
-        text=generated['post'].strip()
+        text=preserve_requested_links(generated['post'].strip(), str(row.get('draft_text') or ''), message)
         if len(text.strip())<30:raise ValueError('empty generation')
         allowed=set(re.findall(r'https?://[^\s<>\]\"]+',prompt))
         actual=set(re.findall(r'https?://[^\s<>\]\"]+',text))
