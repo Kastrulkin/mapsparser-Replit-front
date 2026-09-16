@@ -19,12 +19,18 @@ def attestation():
     return {
         "id": "snapshot-1",
         "artifact_sha256": "a" * 64,
+        "source_version": "b" * 64,
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "provider": riderra.PRICEBOOK_PROVIDER,
         "rows": {
             "2": ["Finland", "Helsinki Airport (HEL)", "Helsinki", "Standard minivan 6 pax", "6", "35", "EUR"],
             "3": ["Finland", "Helsinki Airport (HEL)", "Helsinki", "Standard sedan 3 pax", "3", "39", "EUR"],
             "4": ["UK", "London Heathrow Airport (LHR)", "London", "Standard sedan 3 pax", "3", "133", "GBP"],
+        },
+        "row_records": {
+            "2": {"record_id": "price-2", "updated_at": "2026-09-15T10:00:00+00:00"},
+            "3": {"record_id": "price-3", "updated_at": "2026-09-15T10:00:00+00:00"},
+            "4": {"record_id": "price-4", "updated_at": "2026-09-15T10:00:00+00:00"},
         },
     }
 
@@ -144,6 +150,41 @@ def test_candidate_record_uses_current_005_row_and_pounds_for_uk():
     assert record["pricebook"]["price"] == "£133"
     assert "for just £133" in record["body"]
     assert record["opening_variant"] == "no_opening_v1"
+    assert record["pricebook"]["source_record_id"] == "price-4"
+    assert record["pricebook"]["source_version"] == "b" * 64
+
+
+def test_pricebook_refresh_reads_canonical_riderra_database_api(monkeypatch):
+    source = {
+        "provider": riderra.PRICEBOOK_PROVIDER,
+        "versionSha256": "b" * 64,
+        "rows": [{
+            "recordId": "price-1",
+            "updatedAt": "2026-09-15T10:00:00.000Z",
+            "values": ["Thailand", "Phuket Airport (HKT)", "Phuket", "Standard car", 3, "22,00", "EUR"],
+        }],
+    }
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return source
+
+    calls = []
+    monkeypatch.setenv("RIDERRA_PRICEBOOK_TOKEN", "secret")
+    monkeypatch.setenv("RIDERRA_PRICEBOOK_BASE_URL", "https://riderra.test/")
+    monkeypatch.setattr(systematic.requests, "get", lambda *args, **kwargs: calls.append((args, kwargs)) or Response())
+    monkeypatch.setattr(systematic, "record_pricebook_attestation", lambda *_args, **kwargs: kwargs)
+
+    result = systematic.refresh_pricebook_attestation(Cursor(), actor_id="admin")
+    artifact = __import__("json").loads(result["artifact_bytes"])
+    assert calls[0][0][0] == "https://riderra.test/api/internal/pricing/base-pricebook"
+    assert calls[0][1]["headers"]["X-Riderra-Internal-Token"] == "secret"
+    assert artifact["pricebook_id"] == riderra.PRICEBOOK_ID
+    assert artifact["source_version"] == "b" * 64
+    assert artifact["ranges"][1]["record_id"] == "price-1"
 
 
 def test_classification_sends_available_remainder_and_counts_actionable_shortage_reasons():

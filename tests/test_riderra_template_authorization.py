@@ -70,8 +70,10 @@ class Cursor:
 def attestation():
     return {
         "id": "receipt-1", "artifact_sha256": "a" * 64,
+        "source_version": "b" * 64,
         "verified_at": datetime.now(timezone.utc).isoformat(), "provider": riderra.PRICEBOOK_PROVIDER,
         "rows": {"1710": ["Spain", "Malaga Airport (AGP)", "Malaga", "Standard minivan 6 pax", 6, 46, "EUR"]},
+        "row_records": {"1710": {"record_id": "price-1710", "updated_at": "2026-09-15T10:00:00+00:00"}},
     }
 
 
@@ -85,10 +87,11 @@ def record():
         "opening_variant": "verified_opening_v1",
         "source_fact_fingerprint": "facts:" + "b" * 64,
         "pricebook": {
-            "spreadsheet_id": riderra.PRICEBOOK_ID, "sheet": riderra.PRICEBOOK_SHEET, "row": 1710,
+            "pricebook_id": riderra.PRICEBOOK_ID, "sheet": riderra.PRICEBOOK_SHEET, "row": 1710,
+            "source_record_id": "price-1710", "source_record_updated_at": "2026-09-15T10:00:00+00:00",
             "route": "Malaga Airport (AGP) to a hotel in Malaga", "vehicle": "standard minivan",
             "pax": 6, "price": "€46", "currency": "EUR", "source_row_sha256": "",
-            "source_artifact_sha256": "a" * 64, "source_version": "a" * 64,
+            "source_artifact_sha256": "a" * 64, "source_version": "b" * 64,
         },
     }
     item["pricebook"]["source_row_sha256"] = riderra._hash(attestation()["rows"]["1710"])
@@ -353,14 +356,16 @@ def test_stale_price_attestation_fails_closed():
 
 def test_pricebook_attestation_requires_exact_provider():
     artifact = {
-        "spreadsheet_id": riderra.PRICEBOOK_ID,
+        "pricebook_id": riderra.PRICEBOOK_ID,
         "sheet": riderra.PRICEBOOK_SHEET,
         "evidence_kind": "provider_observed",
         "provider": "self-asserted",
+        "source_version": "b" * 64,
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "ranges": [
             {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1:G1", "values": [["Country", "From", "To", "Type", "Pax", "Price", "Currency"]]},
-            {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1710:G1710", "values": [attestation()["rows"]["1710"]]},
+            {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1710:G1710", "values": [attestation()["rows"]["1710"]],
+             "record_id": "price-1710", "updated_at": "2026-09-15T10:00:00+00:00"},
         ],
     }
     with pytest.raises(ValueError, match="attestation_invalid"):
@@ -371,14 +376,16 @@ def test_pricebook_attestation_requires_exact_provider():
 
 def test_pricebook_attestation_records_only_the_migrated_snapshot_event():
     artifact = {
-        "spreadsheet_id": riderra.PRICEBOOK_ID,
+        "pricebook_id": riderra.PRICEBOOK_ID,
         "sheet": riderra.PRICEBOOK_SHEET,
         "evidence_kind": "provider_observed",
         "provider": riderra.PRICEBOOK_PROVIDER,
+        "source_version": "b" * 64,
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "ranges": [
             {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1:G1", "values": [["Country", "From", "To", "Type", "Pax", "Price", "Currency"]]},
-            {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1710:G1710", "values": [attestation()["rows"]["1710"]]},
+            {"range": f"'{riderra.PRICEBOOK_SHEET}'!A1710:G1710", "values": [attestation()["rows"]["1710"]],
+             "record_id": "price-1710", "updated_at": "2026-09-15T10:00:00+00:00"},
         ],
     }
     cursor = Cursor([{"id": "admin"}, {"id": riderra.SENDER_ACCOUNT_ID}])

@@ -5065,7 +5065,7 @@ def build_riderra_template_preview(
     suppression = _suppression_status(cursor, context)
     if suppression.get("suppressed"):
         raise ValueError("riderra_template_recipient_suppressed")
-    source_url = _text(context.get("source_url") or normalized["pricebook"].get("spreadsheet_id"))
+    source_url = _text(context.get("source_url") or normalized["pricebook"].get("pricebook_id"))
     evidence = build_evidence_ledger(context)
     candidate = {
         "id": f"riderra:{normalized['source_fact_fingerprint']}",

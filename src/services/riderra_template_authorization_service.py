@@ -25,16 +25,16 @@ BUSINESS_ID = "edbd961a-273f-4f15-836e-33aacc0aa0e3"
 SENDER_ACCOUNT_ID = "5e9ce7db-44d1-49dc-9aed-b35ed7174089"
 SENDER_IDENTITY = "riderracs@gmail.com"
 AUTHORIZATION_REFERENCE = "codex:019fd1f3-f2a4-7ea3-8741-0b54ffec3b7e/01a084f0-4624-7650-82d3-8c86c9771af7"
-PRICEBOOK_ID = "17YqqHe0TgDvUgXDNq0FeYe7113R2LTZza4musWLjEUo"
-PRICEBOOK_SHEET = "Актуальный полный"
-PRICEBOOK_PROVIDER = "Google Sheets via configured Google Drive connector"
+PRICEBOOK_ID = "riderra-postgresql-city-pricing"
+PRICEBOOK_SHEET = "CityPricing"
+PRICEBOOK_PROVIDER = "Riderra PostgreSQL CityPricing via internal API"
 DAILY_LIMIT = 150
 TIMEZONE = "Europe/Moscow"
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 TEMPLATE_VERSION = "riderra-buyer-first-email-v1"
 APPROVED_TEMPLATE_ARTIFACT_SHA256 = "00862a0e8b463746a58f4008702d5151690f416ecd12548e412f9fc2ef524237"
 APPROVED_TEMPLATE_DEFINITION_SHA256 = "40ad6f4afa17cc1180ca65902194d6da4fb8802ea9171dbcb05ea70de83d7854"
-STANDING_POLICY_VERSION = 1
+STANDING_POLICY_VERSION = 2
 
 SUBJECT_TEMPLATE = "{company} | Riderra | {city} airport transfers"
 
@@ -135,14 +135,18 @@ def render_record(record: dict[str, Any]) -> dict[str, str]:
 def normalize_pricebook_attestation(artifact: dict[str, Any], artifact_sha256: str) -> dict[str, Any]:
     if (not isinstance(artifact, dict)
         or
-        artifact.get("spreadsheet_id") != PRICEBOOK_ID or artifact.get("sheet") != PRICEBOOK_SHEET
+        artifact.get("pricebook_id") != PRICEBOOK_ID or artifact.get("sheet") != PRICEBOOK_SHEET
         or artifact.get("evidence_kind") != "provider_observed"
         or artifact.get("provider") != PRICEBOOK_PROVIDER
         or not re.fullmatch(r"[0-9a-f]{64}", artifact_sha256)
     ):
         raise ValueError("riderra_pricebook_attestation_invalid")
     verified_at = _iso_timestamp(artifact.get("verified_at"))
+    source_version = str(artifact.get("source_version") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", source_version):
+        raise ValueError("riderra_pricebook_attestation_invalid")
     rows: dict[str, list[Any]] = {}
+    row_records: dict[str, dict[str, str]] = {}
     header_ok = False
     for item in artifact.get("ranges") or []:
         values = item.get("values") if isinstance(item, dict) else None
@@ -153,26 +157,36 @@ def normalize_pricebook_attestation(artifact: dict[str, Any], artifact_sha256: s
             continue
         match = re.fullmatch(rf"'{re.escape(PRICEBOOK_SHEET)}'!A([1-9][0-9]+):G\1", range_name)
         if match and int(match.group(1)) >= 2 and row_values and len(row_values) == 7:
+            record_id = str(item.get("record_id") or "").strip()
+            updated_at = str(item.get("updated_at") or "").strip()
+            if not record_id:
+                raise ValueError("riderra_pricebook_record_id_missing")
+            _iso_timestamp(updated_at, require_fresh=False)
             rows[match.group(1)] = row_values
+            row_records[match.group(1)] = {"record_id": record_id, "updated_at": updated_at}
     if not header_ok or not rows:
         raise ValueError("riderra_pricebook_rows_missing")
-    return {"artifact_sha256": artifact_sha256, "verified_at": verified_at,
-            "provider": str(artifact["provider"]), "rows": rows}
+    return {"artifact_sha256": artifact_sha256, "source_version": source_version,
+            "verified_at": verified_at, "provider": str(artifact["provider"]),
+            "rows": rows, "row_records": row_records}
 
 
 def normalize_record(record: dict[str, Any], *, pricebook_attestation: dict[str, Any]) -> dict[str, Any]:
     quote = dict(record.get("pricebook") or {})
     raw_cells = pricebook_attestation.get("rows", {}).get(str(quote.get("row") or ""))
+    source_record = pricebook_attestation.get("row_records", {}).get(str(quote.get("row") or "")) or {}
     source_row_sha256 = _hash(raw_cells) if isinstance(raw_cells, list) else ""
     if (
         str(record.get("audience") or "") != "transfer_buyer"
-        or str(quote.get("spreadsheet_id") or "") != PRICEBOOK_ID
+        or str(quote.get("pricebook_id") or "") != PRICEBOOK_ID
         or str(quote.get("sheet") or "") != PRICEBOOK_SHEET
         or type(quote.get("row")) is not int or quote["row"] < 2
         or not isinstance(raw_cells, list) or len(raw_cells) != 7
         or str(quote.get("source_row_sha256") or "") != source_row_sha256
         or str(quote.get("source_artifact_sha256") or "") != pricebook_attestation.get("artifact_sha256")
-        or str(quote.get("source_version") or "") != pricebook_attestation.get("artifact_sha256")
+        or str(quote.get("source_version") or "") != pricebook_attestation.get("source_version")
+        or str(quote.get("source_record_id") or "") != source_record.get("record_id")
+        or str(quote.get("source_record_updated_at") or "") != source_record.get("updated_at")
         or not re.fullmatch(r"(?:facts:|report:)[0-9a-f]{64}", str(record.get("source_fact_fingerprint") or ""))
     ):
         raise ValueError("riderra_template_provenance_invalid")

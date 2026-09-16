@@ -132,10 +132,12 @@ The resulting new Riderra intake contains 131 workstreams with current research.
 
 The standing authorization is a separate append-only permission. It freezes the
 Riderra business, `riderracs@gmail.com`, the approved template definition,
-allowed template slots, the 005 pricebook, the Moscow timezone and the shared
+allowed template slots, the internal Riderra pricebook, the Moscow timezone and the shared
 limit of 150 unique companies per day. It does not contain recipients and does
 not bypass an exact batch manifest. Each worker run derives a new closed manifest
-from the current eligible CRM rows and a fresh provider-observed 005 snapshot.
+from the current eligible CRM rows and a fresh authenticated snapshot of Riderra
+PostgreSQL `CityPricing`. The worker reads this snapshot through Riderra's protected
+internal API. It does not depend on Google Sheets or a Google OAuth grant.
 
 The dispatcher worker runs preparation before normal outbound dispatch when
 `RIDERRA_SYSTEMATIC_OUTREACH_ENABLED=true`. The default target is the remaining
@@ -147,13 +149,15 @@ remain in force.
 Eligibility uses the agreed minimum recipient facts: city, organization type and
 a confirmed organization email, plus current native research needed for an
 immutable source fingerprint. Berlin, prior campaigns, suppressed recipients,
-stale research and cities without an exact airport-to-city 005 row are excluded.
+stale research and cities without an exact airport-to-city pricebook row are excluded.
 The route selector deterministically prefers an airport-origin standard sedan,
 then a standard minivan, using the current row's own currency and price.
 
 Every run is recorded in `riderra_outreach_runs`. When the available pool is
 smaller than the current target, the available remainder is still queued. One
 deduplicated Telegram notice reports target, eligible and queued counts, shortage,
-exclusion reasons, missing-route cities and the next corrective action. A broken
-Google Sheets refresh or missing/revoked standing authorization stops preparation
-before campaign creation and produces a separate actionable notice.
+exclusion reasons, missing-route cities and the next corrective action. A
+Riderra pricebook API failure, invalid snapshot, or missing/revoked standing
+authorization stops preparation before campaign creation and produces a separate
+actionable notice. Configure the worker with `RIDERRA_PRICEBOOK_BASE_URL` and a
+`RIDERRA_PRICEBOOK_TOKEN` accepted by Riderra's internal API.

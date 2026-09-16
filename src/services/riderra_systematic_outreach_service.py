@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import unicodedata
 import uuid
@@ -14,8 +15,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from psycopg2.extras import Json
+import requests
 
-from services.agent_google_sheets_adapter import load_google_sheets_read_adapter
 from services.outreach_campaign_service import (
     approve_campaign_by_riderra_template,
     build_riderra_template_preview,
@@ -39,7 +40,8 @@ from services.riderra_template_authorization_service import (
 )
 
 
-PRICEBOOK_RANGE = f"'{PRICEBOOK_SHEET}'!A1:G2500"
+PRICEBOOK_BASE_URL = "https://riderra.com"
+PRICEBOOK_REQUEST_TIMEOUT_SEC = 30
 ELIGIBLE_CONTACT_STATUSES = {"verified", "confirmed_source"}
 TERMINAL_LEAD_STATES = {"disqualified", "lost", "do_not_contact", "suppressed", "archived"}
 
@@ -58,20 +60,33 @@ def _city_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", " ", ascii_text.casefold()).strip()
 
 
-def _artifact_bytes(values: list[list[Any]], observed_at: datetime) -> bytes:
+def _artifact_bytes(snapshot: dict[str, Any], observed_at: datetime) -> bytes:
     ranges: list[dict[str, Any]] = []
-    for row_number, values_row in enumerate(values, start=1):
-        row = list(values_row[:7])
-        if len(row) < 7:
-            row.extend([""] * (7 - len(row)))
-        if not any(str(value or "").strip() for value in row):
-            continue
-        ranges.append({"range": f"'{PRICEBOOK_SHEET}'!A{row_number}:G{row_number}", "values": [row]})
+    ranges.append({
+        "range": f"'{PRICEBOOK_SHEET}'!A1:G1",
+        "values": [["Country", "From", "To", "Type", "Pax", "Price", "Currency"]],
+    })
+    for row_number, source_row in enumerate(snapshot.get("rows") or [], start=2):
+        if not isinstance(source_row, dict):
+            raise ValueError("riderra_pricebook_row_invalid")
+        values = source_row.get("values")
+        row = list(values) if isinstance(values, list) else []
+        record_id = str(source_row.get("recordId") or "").strip()
+        updated_at = str(source_row.get("updatedAt") or "").strip()
+        if len(row) != 7 or not record_id or not updated_at:
+            raise ValueError("riderra_pricebook_row_invalid")
+        ranges.append({
+            "range": f"'{PRICEBOOK_SHEET}'!A{row_number}:G{row_number}",
+            "values": [row],
+            "record_id": record_id,
+            "updated_at": updated_at,
+        })
     artifact = {
-        "spreadsheet_id": PRICEBOOK_ID,
+        "pricebook_id": PRICEBOOK_ID,
         "sheet": PRICEBOOK_SHEET,
         "evidence_kind": "provider_observed",
         "provider": PRICEBOOK_PROVIDER,
+        "source_version": str(snapshot.get("versionSha256") or ""),
         "verified_at": observed_at.astimezone(timezone.utc).isoformat(),
         "ranges": ranges,
     }
@@ -79,18 +94,30 @@ def _artifact_bytes(values: list[list[Any]], observed_at: datetime) -> bytes:
 
 
 def refresh_pricebook_attestation(cursor: Any, *, actor_id: str, now: datetime | None = None) -> dict[str, Any]:
-    adapter = load_google_sheets_read_adapter(cursor, business_id=BUSINESS_ID)
-    values = adapter.read_range_values(
-        PRICEBOOK_ID,
-        PRICEBOOK_RANGE,
-        value_render_option="FORMATTED_VALUE",
+    token = str(os.getenv("RIDERRA_PRICEBOOK_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("riderra_pricebook_token_missing")
+    base_url = str(os.getenv("RIDERRA_PRICEBOOK_BASE_URL") or PRICEBOOK_BASE_URL).strip().rstrip("/")
+    response = requests.get(
+        f"{base_url}/api/internal/pricing/base-pricebook",
+        headers={"X-Riderra-Internal-Token": token, "Accept": "application/json"},
+        timeout=PRICEBOOK_REQUEST_TIMEOUT_SEC,
     )
-    artifact = _artifact_bytes(values, now or datetime.now(timezone.utc))
+    response.raise_for_status()
+    snapshot = response.json()
+    if (
+        not isinstance(snapshot, dict)
+        or snapshot.get("provider") != PRICEBOOK_PROVIDER
+        or not re.fullmatch(r"[0-9a-f]{64}", str(snapshot.get("versionSha256") or ""))
+        or not snapshot.get("rows")
+    ):
+        raise ValueError("riderra_pricebook_response_invalid")
+    artifact = _artifact_bytes(snapshot, now or datetime.now(timezone.utc))
     return record_pricebook_attestation(
         cursor,
         actor_id=actor_id,
         artifact_bytes=artifact,
-        evidence_reference=f"automatic:{PRICEBOOK_ID}:{PRICEBOOK_SHEET}",
+        evidence_reference=f"automatic:{base_url}/api/internal/pricing/base-pricebook:{snapshot['versionSha256']}",
     )
 
 
@@ -136,6 +163,7 @@ def build_candidate_record(row: dict[str, Any], attestation: dict[str, Any]) -> 
     if not route:
         raise ValueError("route_price_missing")
     row_number, values = route
+    source_record = (attestation.get("row_records") or {}).get(str(row_number)) or {}
     country, route_from, route_to, vehicle_cell, pax_cell, price_cell, currency = [str(value).strip() for value in values]
     del country
     pax = int(pax_cell)
@@ -154,9 +182,11 @@ def build_candidate_record(row: dict[str, Any], attestation: dict[str, Any]) -> 
         "opening_variant": "no_opening_v1",
         "source_fact_fingerprint": source_fingerprint,
         "pricebook": {
-            "spreadsheet_id": PRICEBOOK_ID,
+            "pricebook_id": PRICEBOOK_ID,
             "sheet": PRICEBOOK_SHEET,
             "row": row_number,
+            "source_record_id": str(source_record.get("record_id") or ""),
+            "source_record_updated_at": str(source_record.get("updated_at") or ""),
             "route": f"{route_from} to a hotel in {route_to}",
             "vehicle": vehicle,
             "pax": pax,
@@ -164,7 +194,7 @@ def build_candidate_record(row: dict[str, Any], attestation: dict[str, Any]) -> 
             "currency": currency,
             "source_row_sha256": _hash(values),
             "source_artifact_sha256": attestation["artifact_sha256"],
-            "source_version": attestation["artifact_sha256"],
+            "source_version": attestation["source_version"],
         },
     }
     record.update(render_record(record))
@@ -364,11 +394,7 @@ def prepare_systematic_batch(cursor: Any, *, target_count: int = DAILY_LIMIT,
     except Exception as exc:
         cursor.execute("ROLLBACK TO SAVEPOINT riderra_pricebook_refresh")
         cursor.execute("RELEASE SAVEPOINT riderra_pricebook_refresh")
-        error_text = str(exc).casefold()
-        if "invalid_grant" in error_text:
-            error_code = "pricebook_refresh_failed:google_sheets_reauthorization_required"
-        else:
-            error_code = f"pricebook_refresh_failed:{exc.__class__.__name__}"
+        error_code = f"pricebook_refresh_failed:{exc.__class__.__name__}"
         return record_run(cursor, {**base, "status": "blocked", "error_code": error_code, "notification_required": True})
     attestation = {"id": snapshot["id"], **snapshot["attestation"]}
     rows = load_candidate_rows(cursor)
