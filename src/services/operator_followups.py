@@ -35,6 +35,11 @@ def route(cursor, *, business_id, user_id, channel, message, history, conversati
     from services.operator_core import standardize_operator_result, operator_subscription_block
     from services.operator_tool_billing import run_paid_operator_tool_loop
     if work_journal.enabled(business_id):
+        if re.match(r'\s*(?:покажи|показать)\b',message,re.I) and re.search(r'на разбор',message,re.I):
+            categories=[category for pattern,category in [('жалоб','complaint'),('пожелан','wish'),('иде[яию]','idea')]
+                        if re.search(pattern,message,re.I)]
+            args={'category':categories[0]} if len(categories)==1 else {}
+            return standardize_operator_result(work_review.inbox_result(cursor,business_id,user_id,args),'work.journal'), {}
         args = directed_note(message)
         if args:
             blocked = operator_subscription_block(access, 'work.journal')
