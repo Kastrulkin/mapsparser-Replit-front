@@ -73,6 +73,11 @@ def route(cursor, *, business_id, user_id, channel, message, history, conversati
     previous = next((r for r in reversed(history or []) if r.get('role') in {'operator','assistant'}), {})
     selected = (previous.get('result_json') or {}).get('selected_item')
     if not selected:
+        items=(previous.get('result_json') or {}).get('items') or []
+        if len(items)>1 and (previous.get('result_json') or {}).get('resource')=='content':
+            return standardize_operator_result(operator_editorial._result(
+                'Какой пост из показанного списка изменить? Назовите дату или тему.', 'clarification_required'), 'content.item.edit'), {
+                    'capability':'content.editorial.clarification','source_message':message}
         return None
     blocked = operator_subscription_block(access,'content.item.edit')
     if blocked:

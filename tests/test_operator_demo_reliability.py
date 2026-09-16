@@ -60,3 +60,8 @@ def test_real_speechkit_transcript_without_punctuation():
 def test_explicit_dates_without_frequency_are_not_silently_ignored():
     with pytest.raises(PlanClarification,match='часто'):
         extract('Создай 4 поста с 1 ноября 2026 на четыре недели')
+
+
+def test_one_post_dative_form():
+    value=extract('Контент-план с 1 ноября 2026 на четыре недели, по одному посту в неделю')
+    assert len(value['dates'])==4

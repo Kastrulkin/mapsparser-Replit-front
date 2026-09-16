@@ -68,7 +68,7 @@ def tools(cursor,business_id,user_id,channel,message,message_id,request_key,save
             cursor.execute("SELECT id,kind,created_at FROM business_work_history WHERE business_id=%s AND kind<>'note' ORDER BY created_at DESC LIMIT 10",(business_id,));data['policy_history']=[_row(cursor,r) for r in cursor.fetchall()]
         return result('Доступный рабочий контекст.',**data)
     def note(args):
-        if re.match(r'\s*(если|например|допустим)\b',message,re.I) or re.search(r'не (?:записывай|сохраняй|вноси)',message,re.I):return result('Наблюдение не записано: это пример или запрет записи.','clarification_required')
+        if re.match(r'\s*(?:а\s+)?(?:если|например|допустим)\b',message,re.I) or re.search(r'не (?:записывай|сохраняй|вноси)|это пример.{0,30}не произошед',message,re.I):return result('Наблюдение не записано: это пример или запрет записи.','clarification_required')
         if not args.get('id') and any((r.get('facts_json') or {}).get('quote')==args.get('quote') for r in previous_saved or []):
             return result('Это наблюдение уже сохранено. Для привязки или исправления используй его id и текущую version из контекста.','clarification_required')
         row=work_journal.save_note(cursor,business_id,user_id,channel,message_id,request_key+':'+str(args.get('id') or work_journal.digest(args.get('quote'))),message,args)
