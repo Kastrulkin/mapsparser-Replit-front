@@ -9,6 +9,31 @@ _WORD = '(?:'+'|'.join(_UNITS.keys() | _SCALES.keys())+')'
 _AMOUNT = r'(?:\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?(?:\s+(?:тысяч[аи]?|миллион(?:а|ов)?))?\b|'+_WORD+r'(?:\s+'+_WORD+r')*\b)'
 
 
+def verify_currency(message, arguments):
+    """Keep explicit currency even when the planner omits it or STT abbreviates it."""
+    result = dict(arguments)
+    if result.get('kind', 'daily') not in {'daily', 'transaction'}:
+        return result
+    currencies = set(re.findall(r'\b(?:RUB|EUR|USD|BYN|KZT|GBP|GEL|AMD|AED|UZS|KGS|TRY|THB)\b', message.upper()))
+    text = message.casefold()
+    if re.search(r'белорусск\w*\s+рубл\w*', text):
+        currencies.add('BYN')
+        text = re.sub(r'белорусск\w*\s+рубл\w*', '', text)
+    for pattern, currency in [
+        (r'\bруб(?:ль|ли|ля|лей|лях|лями)?\b|₽|\d\s*р\b', 'RUB'),
+        (r'\bевро\b|€', 'EUR'),
+        (r'\bдоллар\w*\b|\$', 'USD'),
+        (r'\bтенге\b', 'KZT'),
+    ]:
+        if re.search(pattern, text):
+            currencies.add(currency)
+    if len(currencies) > 1:
+        raise ValueError('Укажите данные отдельно для каждой валюты — суммы разных валют не складываются.')
+    if currencies:
+        result['currency'] = next(iter(currencies))
+    return result
+
+
 def _number(text):
     words=text.split()
     if words[0][0].isdigit():

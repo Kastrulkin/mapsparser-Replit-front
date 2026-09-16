@@ -98,7 +98,7 @@ def set_operator_pending_context(cursor: Any, conversation_id: str, context: dic
         SET pending_context = %s::jsonb, updated_at = NOW()
         WHERE id = %s
         """,
-        (json.dumps(context or {}, ensure_ascii=False), conversation_id),
+        (json.dumps(context or {}, ensure_ascii=False, default=str), conversation_id),
     )
 
 
