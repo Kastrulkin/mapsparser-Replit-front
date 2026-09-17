@@ -22,6 +22,14 @@ reports.db
 db_backups
 backups
 data
+# Production release archives may contain database dumps and resolved secrets.
+release-backups
+.release-backups
+deploy-backups
+.deploy-backups
+.deploy
+.deploy-staging
+.release
 .agent_untracked_backup_*
 .agent
 outputs
