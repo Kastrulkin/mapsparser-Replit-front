@@ -110,7 +110,12 @@ def test_finance_sales_preview_does_not_offer_reimport_for_same_source():
     assert "уже есть" in result["chat_response"]
 
 
-def test_operator_compiles_sales_list_into_one_approval_without_writing():
+def test_operator_compiles_sales_list_into_one_approval_without_writing(monkeypatch):
+    monkeypatch.setattr(
+        operator_core,
+        "_operator_action_actor",
+        lambda user_id, _business_id, _cursor: {"user_id": user_id, "is_superadmin": False},
+    )
     orchestrator = FakeActionOrchestrator()
     result, pending = route_operator_message(
         PreviewCursor(),
@@ -182,6 +187,11 @@ def test_failed_finance_confirmation_returns_manual_import_link(monkeypatch):
             "capability": "finance.sales_import",
             "envelope_json": {"orchestrator_action_id": "finance-bulk-action-1"},
         },
+    )
+    monkeypatch.setattr(
+        operator_core,
+        "_operator_action_actor",
+        lambda user_id, _business_id, _cursor: {"user_id": user_id, "is_superadmin": False},
     )
 
     result, idempotent = confirm_pending_operator_action(

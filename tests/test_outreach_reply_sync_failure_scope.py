@@ -69,9 +69,7 @@ def test_telegram_reply_sync_does_not_scope_mismatched_provider_account(monkeypa
 
 
 def test_telegram_reply_sync_does_not_scope_missing_or_wrong_channel_identity():
-    from api import admin_prospecting
-
-    audit_generation = admin_prospecting
+    from api.prospecting.telegram_reply_scope import trusted_telegram_reply_sender_account_id
 
     base = {
         "sender_account_id": "sender-telegram",
@@ -80,14 +78,14 @@ def test_telegram_reply_sync_does_not_scope_missing_or_wrong_channel_identity():
         "sender_external_account_source": "telegram_app",
     }
 
-    assert audit_generation._trusted_telegram_reply_sender_account_id(base) == "sender-telegram"
+    assert trusted_telegram_reply_sender_account_id(base) == "sender-telegram"
     for unsafe in (
         {**base, "sender_account_id": ""},
         {**base, "provider_account_id": ""},
         {**base, "sender_external_account_id": ""},
         {**base, "sender_external_account_source": "email"},
     ):
-        assert audit_generation._trusted_telegram_reply_sender_account_id(unsafe) is None
+        assert trusted_telegram_reply_sender_account_id(unsafe) is None
 
 
 def test_telegram_queue_candidates_select_trusted_sender_identity():

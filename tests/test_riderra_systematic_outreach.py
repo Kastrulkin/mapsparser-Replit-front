@@ -251,10 +251,12 @@ def test_shortage_notification_contains_counts_reasons_routes_and_next_action():
 
 
 def test_migration_adds_deduplicated_run_log_and_pending_notice_index():
-    source = Path("alembic_migrations/versions/20260914_add_riderra_systematic_outreach_runs.py").read_text()
-    assert 'down_revision = "20260909_001"' in source
+    migration = Path("alembic_migrations/versions/20260914_riderra_systematic_outreach.py")
+    source = migration.read_text()
+    assert 'down_revision = "20260914_business_input_city"' in source
     assert "UNIQUE INDEX uq_riderra_outreach_runs_fingerprint" in source
     assert "notification_required AND notified_at IS NULL" in source
+    assert not Path("alembic_migrations/versions/20260914_add_riderra_systematic_outreach_runs.py").exists()
 
 
 def test_standing_authorization_api_records_explicit_scope_without_dispatch(monkeypatch):

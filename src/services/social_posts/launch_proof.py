@@ -1209,9 +1209,8 @@ def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = 
         db.close()
 
 def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
-    from services.disk_import_media import selected
-    if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
-        raise ValueError("Видео с Диска размещается вручную. Откройте оригинал в материале контент-плана.")
+    from services.social_posts.publish_guard import assert_supervised_publish_supported
+    assert_supervised_publish_supported(cursor, post)
     post_id = str(post.get("id") or "").strip()
     platform = str(post.get("platform") or "").strip()
     status = str(post.get("status") or "").strip()
@@ -1363,20 +1362,14 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
-        from services.disk_import_media import selected
-        if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
+        from services.social_posts.publish_guard import DISK_MANUAL_PUBLISH_MESSAGE, disk_video_requires_manual_publish, validate_content_rules
+        if disk_video_requires_manual_publish(cursor, post):
             cursor.execute("UPDATE social_posts SET status='needs_manual_publish',last_error=%s,updated_at=NOW() WHERE id=%s RETURNING *",
-                ("Видео хранится на Диске. Откройте оригинал и разместите материал вручную.",post_id))
+                (DISK_MANUAL_PUBLISH_MESSAGE,post_id))
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
-        from services.content_rules import validate
-        from services.operator_social_post_generation import _default_social_post_generator
-        try:
-            validate(cursor,str(post['business_id']),user_id,
-                str(post.get('platform_text') or post.get('base_text') or ''),_default_social_post_generator)
-        except Exception:
-            raise ValueError('Публикация остановлена: текст не прошёл проверку актуальных правил бизнеса. Исправьте и подтвердите черновик заново.') from None
+        validate_content_rules(cursor, post, user_id)
         platform = str(post.get("platform") or "").strip()
         publish_mode = str(post.get("publish_mode") or "").strip()
         metadata = _json_dict(post.get("metadata_json"))

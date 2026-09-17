@@ -394,14 +394,19 @@ def test_manual_touch_historical_reply_uses_actual_time_without_provider_proof(m
 
 
 @pytest.mark.parametrize(
-    ("occurred_at", "message"),
+    ("time_case", "message"),
     [
-        (datetime.now(), "must include a timezone"),
-        (datetime.now(timezone.utc) + timedelta(minutes=2), "must not be in the future"),
+        ("naive", "must include a timezone"),
+        ("future", "must not be in the future"),
     ],
 )
-def test_manual_touch_rejects_invalid_actual_time_before_database_access(occurred_at, message):
+def test_manual_touch_rejects_invalid_actual_time_before_database_access(time_case, message):
     cursor = GateCursor({})
+    occurred_at = (
+        datetime.now()
+        if time_case == "naive"
+        else datetime.now(timezone.utc) + timedelta(minutes=2)
+    )
 
     with pytest.raises(ValueError, match=message):
         record_manual_touch(
@@ -418,13 +423,15 @@ def test_manual_touch_rejects_invalid_actual_time_before_database_access(occurre
 
 def test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt():
     safety = Path("src/services/outreach_safety_service.py").read_text(encoding="utf-8")
-    legacy_sender = Path("outputs/send_influencer_email_approved_wave.py").read_text(encoding="utf-8")
+    dispatcher = Path("scripts/ops/localos_author_pool/dispatch_author_pool_wave.py").read_text(encoding="utf-8")
     campaign = Path("src/services/outreach_campaign_service.py").read_text(encoding="utf-8")
 
     assert '"reason_code": "author_reply_preflight_unverified"' in safety
     assert '"complete_sender_window_reply_sync_receipt_missing"' in safety
     assert '"current_reply_sync_cycle_cutoff_missing"' in safety
-    assert legacy_sender.index('raise RuntimeError("author_reply_preflight_unverified")') < legacy_sender.index("send_all_now = False")
+    assert dispatcher.index("sync_email_replies(") < dispatcher.index("dispatch_due_outreach_queue(")
+    assert "force_ready=False" in dispatcher
+    assert "author_reply_sync_started_at=synced_at" in dispatcher
     assert '"author_policy_version": AUTHOR_POLICY_VERSION' in campaign
     assert '"channel_daily_limits": AUTHOR_CHANNEL_DAILY_LIMITS' in campaign
 

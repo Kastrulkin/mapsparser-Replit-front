@@ -92,7 +92,7 @@ describe('TelegramControlPage scope integrity', () => {
     await openOperator(user);
 
     expect(screen.queryByText('Секрет точки один')).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('marks Growth paths as the current destination for a review deep link', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {

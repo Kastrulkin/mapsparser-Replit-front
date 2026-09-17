@@ -62,6 +62,10 @@ from services.operator_credit_reservation import finalize_reserved_action_credit
 from services.prospecting_service import ProspectingService
 from services.telegram_account_permissions_service import assert_account_access
 from services.outreach_reply_tracking_service import record_bound_inbound_event
+from api.prospecting.telegram_reply_scope import (
+    telegram_reply_sync_outcome, telegram_reply_sync_result, telegram_reply_sync_summary,
+    trusted_telegram_reply_sender_account_id as _trusted_telegram_reply_sender_account_id,
+)
 from services.outreach_safety_service import (
     classify_inbound_event,
     load_partnership_repeat_contact_guard,
@@ -1541,20 +1545,6 @@ def _load_telegram_reply_sync_candidates(
     finally:
         conn.close()
 
-def _trusted_telegram_reply_sender_account_id(item: dict[str, Any]) -> str | None:
-    sender_account_id = str(item.get("sender_account_id") or "").strip()
-    provider_account_id = str(item.get("provider_account_id") or "").strip()
-    sender_external_account_id = str(item.get("sender_external_account_id") or "").strip()
-    sender_external_account_source = str(item.get("sender_external_account_source") or "").strip()
-    if (
-        not sender_account_id
-        or not provider_account_id
-        or provider_account_id != sender_external_account_id
-        or sender_external_account_source != "telegram_app"
-    ):
-        return None
-    return sender_account_id
-
 def _sync_telegram_app_replies_for_queue_item(
     item: dict[str, Any],
     *,
@@ -1706,18 +1696,11 @@ def _sync_telegram_app_replies_for_queue_item(
         imported += 1
         last_reaction = reaction
 
-    if imported > 0:
-        return {
-            "status": "imported",
-            "imported": imported,
-            "duplicates": duplicates,
-            "last_reaction": last_reaction,
-        }
-    return {
-        "status": "noop",
-        "imported": 0,
-        "duplicates": duplicates,
-    }
+    return telegram_reply_sync_outcome(
+        imported=imported,
+        duplicates=duplicates,
+        last_reaction=last_reaction,
+    )
 
 def _sync_telegram_app_replies(
     batch_id: str | None = None,
@@ -1729,34 +1712,16 @@ def _sync_telegram_app_replies(
         batch_id=batch_id,
         sender_account_id=sender_account_id,
     )
-    summary = {
-        "success": True,
-        "batch_id": batch_id,
-        "sender_account_id": sender_account_id,
-        "picked": len(items),
-        "imported": 0,
-        "duplicates": 0,
-        "noops": 0,
-        "failed": 0,
-        "results": [],
-        "sender_results": [],
-    }
+    summary = telegram_reply_sync_summary(
+        batch_id=batch_id,
+        sender_account_id=sender_account_id,
+        picked=len(items),
+    )
     for item in items:
         result = _sync_telegram_app_replies_for_queue_item(item)
-        trusted_sender_account_id = _trusted_telegram_reply_sender_account_id(item)
-        item_result = {
-            "queue_id": item.get("id"),
-            "lead_id": item.get("lead_id"),
-            "lead_name": item.get("lead_name"),
-            **result,
-            "sender_account_id": trusted_sender_account_id,
-        }
+        item_result, sender_result = telegram_reply_sync_result(item, result)
         summary["results"].append(item_result)
-        summary["sender_results"].append({
-            "sender_account_id": trusted_sender_account_id,
-            "status": str(result.get("status") or "failed"),
-            "error_code": str(result.get("reason") or "").strip() or None,
-        })
+        summary["sender_results"].append(sender_result)
         if result.get("status") == "imported":
             summary["imported"] += int(result.get("imported") or 0)
             summary["duplicates"] += int(result.get("duplicates") or 0)

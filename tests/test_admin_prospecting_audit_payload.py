@@ -992,7 +992,10 @@ def test_sync_telegram_app_replies_for_queue_item_records_inbound_reaction(monke
     result = _sync_telegram_app_replies_for_queue_item(
         {
             "id": "queue-1",
+            "sender_account_id": "sender-1",
             "provider_account_id": "acc-1",
+            "sender_external_account_id": "acc-1",
+            "sender_external_account_source": "telegram_app",
             "provider_message_id": "777",
             "recipient_value": "@ola",
             "sent_at": "2026-04-17T09:30:00+00:00",
@@ -1058,7 +1061,10 @@ def test_sync_telegram_app_replies_for_queue_item_counts_duplicate_as_noop(monke
     result = _sync_telegram_app_replies_for_queue_item(
         {
             "id": "queue-1",
+            "sender_account_id": "sender-1",
             "provider_account_id": "acc-1",
+            "sender_external_account_id": "acc-1",
+            "sender_external_account_source": "telegram_app",
             "provider_message_id": "777",
             "recipient_value": "@ola",
             "sent_at": "2026-04-17T09:30:00+00:00",
