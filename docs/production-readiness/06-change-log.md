@@ -146,3 +146,26 @@ Status: independently reviewed harness correction; full browser rerun pending.
 - Remove the compiled spec's independent hardcoded port18006. All staging specs inherit one base URL, with precedence `JOURNEY_STAGING_BASE_URL`, legacy `LOCALOS_STAGING_BASE_URL`, then localhost18000.
 - Baseline corrected-locale run: **95 passed / 19 failed**, 330.392s; 15 registration failures include runtime navigation races and stale copy assertions, one mobile hit-area failure, three wrong-port compiled failures. Do not classify all 19 as product defects or claim they are all resolved by these harness changes.
 - Compiled test still requires an actual approved sandbox runner result. Its fixture is not created by the basic staging seed; no skip or fabricated result added. The standalone old-port compiled script is separate follow-up work.
+
+## DB-MIG-04 — Reverse empty offer distribution without losing history
+
+Status: **FIX_PROVEN locally**, independently reviewed; no production downgrade.
+
+The final no-op dependency layer now locks its affected tables and refuses to discard preference/run/recipient data, campaign review fields, recipient-linked child records or messages that cannot satisfy the predecessor's NOT NULL collaboration constraint. Empty schema reverses in dependency order without CASCADE; compatible pre-existing portal messages survive.
+
+- Scoped final **11passed in30.69s**: four independent new-table guards, three campaign-field guards, standalone NULL-collaboration preservation, compatible predecessor-message preservation, empty reverse and concurrent writer.
+- Root aggregate work-review + portal + distribution + existing web-tracking contract: **23passed in69.89s**,70.415s captured wall, `raw/migration-rollback-chain-final.json`. The original upgrade→downgrade→upgrade obstruction is now green on disposable PostgreSQL.
+- Independent reviewer checked lossiness completeness, FK/DDL order, transaction lock lifetime and both extra message tests. Populated feature schemas intentionally fail closed; this is not permission to downgrade production or proof of restoring the real production backup.
+
+## TEST-FIXTURE-01b — Preserve outreach and audience test invariants
+
+Status: **FIX_PROVEN for these fixture groups**, independently reviewed. Test-only changes.
+
+Founder outreach's source assertion now locates the actual `restoreTouchEdits` effect boundary after the earlier callback extraction; all persisted-vs-unsaved text and storage assertions remain. Telegram shared-audience fixtures now explicitly subscribe both synthetic businesses to `community_pulse`, satisfying the current visibility contract while still asserting A's decision does not appear for B.
+
+- Red2failed7.25s (obsolete delimiter / ineligible empty result) →green2passed7.65s. Both full files **198passed in7.82s** in named tmux with local PostgreSQL and outbound network guard.
+- Reviewer verified current service eligibility and tenant decision join, and that no runtime permission/behavior or assertion was weakened. Aggregate backend rerun and browser harness preconditions remain separate.
+
+## Browser verification checkpoint after the frontend fixes
+
+Both committed frontend assets rebuilt without .env (32.856s) and copied only into the verified isolated local staging app. **33real-API browser checks passed in94.759s** across desktop, laptop and mobile:15registration/email/action-continuity and18authenticated-page quality cases. This closes the original navigation and mobile geometry reproductions for this local build. Other staging specs, compiled runner fixture and final backend-inclusive image still need final aggregate verification.

@@ -185,5 +185,49 @@ def upgrade():
 
 
 def downgrade():
-    # Distribution records and author preferences are operational history.
-    pass
+    # Never delete offers or silently make an older schema inconsistent.
+    for table_name in (
+        "creator_business_preferences",
+        "creator_campaigns",
+        "creator_notification_outbox",
+        "creator_offer_distribution_runs",
+        "creator_offer_messages",
+        "creator_offer_preferences",
+        "creator_offer_recipients",
+    ):
+        op.execute(f"LOCK TABLE {table_name} IN SHARE ROW EXCLUSIVE MODE")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM creator_business_preferences)
+               OR EXISTS (SELECT 1 FROM creator_offer_preferences)
+               OR EXISTS (SELECT 1 FROM creator_offer_distribution_runs)
+               OR EXISTS (SELECT 1 FROM creator_offer_recipients)
+               OR EXISTS (
+                   SELECT 1 FROM creator_campaigns
+                   WHERE reviewed_by IS NOT NULL
+                      OR reviewed_at IS NOT NULL
+                      OR distribution_locked_at IS NOT NULL
+               )
+               OR EXISTS (SELECT 1 FROM creator_offer_messages WHERE offer_recipient_id IS NOT NULL)
+               OR EXISTS (SELECT 1 FROM creator_notification_outbox WHERE offer_recipient_id IS NOT NULL)
+               OR EXISTS (SELECT 1 FROM creator_offer_messages WHERE collaboration_id IS NULL) THEN
+                RAISE EXCEPTION
+                    'Cannot downgrade 20260902_002 while creator offer distribution data exists; use backup/restore rollback';
+            END IF;
+        END $$
+        """
+    )
+    op.execute("DROP INDEX IF EXISTS idx_creator_notification_recipient")
+    op.execute("ALTER TABLE creator_notification_outbox DROP COLUMN IF EXISTS offer_recipient_id")
+    op.execute("DROP INDEX IF EXISTS idx_creator_offer_messages_recipient")
+    op.execute("ALTER TABLE creator_offer_messages DROP COLUMN IF EXISTS offer_recipient_id")
+    op.execute("ALTER TABLE creator_offer_messages ALTER COLUMN collaboration_id SET NOT NULL")
+    op.execute("ALTER TABLE creator_campaigns DROP COLUMN IF EXISTS distribution_locked_at")
+    op.execute("ALTER TABLE creator_campaigns DROP COLUMN IF EXISTS reviewed_at")
+    op.execute("ALTER TABLE creator_campaigns DROP COLUMN IF EXISTS reviewed_by")
+    op.execute("DROP TABLE IF EXISTS creator_offer_recipients")
+    op.execute("DROP TABLE IF EXISTS creator_offer_distribution_runs")
+    op.execute("DROP TABLE IF EXISTS creator_offer_preferences")
+    op.execute("DROP TABLE IF EXISTS creator_business_preferences")
