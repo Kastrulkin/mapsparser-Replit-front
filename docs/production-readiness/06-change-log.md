@@ -76,3 +76,14 @@ Status: **FIX_PROVEN for these fixture groups**, independently reviewed. Runtime
 - Sheets recovery tests reconnect using the same explicit `LOCALOS_TEST_DATABASE_URL` used by their isolated schema fixture. `connection.dsn` omits its password and caused five authentication failures before the provider-boundary assertions.
 - Client-info/worker combined: **11 passed in 35.44s**. Independent worker rerun: **3 passed in 30.31s**, raw `worker-fixture-review.json`. Sheets recovery/queue: **16 passed in 2.68s**, raw `sheet-provider-fixture-green.json`; reviewer approved DSN/schema isolation.
 - No application validation/permissions/schema changes, new skips, provider writes or production access. Remaining baseline hook/Telegram/browser/migration failures and final full-suite rerun are still open.
+
+## DB-MIG-02a — Safely reverse the empty work-review schema
+
+Status: **FIX_PROVEN for work-review revision rollback**, independently reviewed. The complete rollback chain is still failing on a separate creator-portal dependency; no production downgrade is authorized or performed.
+
+The former no-op downgrade left `business_work_links.action_id` referencing `journey_actions`, preventing an older revision from dropping its table. The corrected downgrade acquires `SHARE ROW EXCLUSIVE` locks in a stable order before inspecting data, refuses to discard review/link/settings data, non-default review fields or work-journal actions, and only then removes this revision's empty objects/columns and restores its predecessor's flow constraint. No CASCADE. Populated installations require a reviewed recovery/compensation plan, not a forced downgrade.
+
+- Existing full-chain migration test reproduced the retained FK. New real-PG tests verify empty upgrade/downgrade, five independent data guards and row preservation, using a UUID-named disposable database inside its own testcontainer.
+- Root review identified a check/drop race in the initial patch. A deterministic concurrent INSERT immediately after the guard was red without locks: **1 failed in 12.30s**, `/tmp/localos-db-mig02-red.log`. With locks the writer blocks and cannot commit into the removed table.
+- Final suite: **7 passed in 35.28s**, `/tmp/localos-db-mig02-locks-green.log`. Fresh reviewer checked transaction/lock lifetime, all lossy fields, exact predecessor constraint and scoped cleanup. Compilation/diff checks pass.
+- Existing `test_web_tracking_postgres.py` now passes the original journey-actions obstruction but fails later at `DROP creator_collaborations`, whose newer creator-portal downgrade is also no-op. This is tracked next, not hidden by weakening the test.

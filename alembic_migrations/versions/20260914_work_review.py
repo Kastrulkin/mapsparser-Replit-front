@@ -34,5 +34,52 @@ def upgrade():
 
 
 def downgrade():
-    # Feature rollback preserves observations, decisions and linked tasks.
-    pass
+    # Do not erase review evidence just to make an application rollback pass.
+    # A clean schema can be reversed, while an installation with work-review
+    # data must use the backup/restore rollback path instead.
+    # Share-row-exclusive locks conflict with concurrent inserts/updates while
+    # still allowing ordinary reads. Keep a stable order to avoid deadlocks.
+    for table_name in (
+        "business_work_digest_settings",
+        "business_work_journal",
+        "business_work_links",
+        "business_work_reviewers",
+        "journey_actions",
+    ):
+        op.execute(f"LOCK TABLE {table_name} IN SHARE ROW EXCLUSIVE MODE")
+    op.execute("""DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM business_work_reviewers)
+           OR EXISTS (SELECT 1 FROM business_work_links)
+           OR EXISTS (SELECT 1 FROM business_work_digest_settings)
+           OR EXISTS (
+               SELECT 1
+               FROM business_work_journal
+               WHERE category <> 'other'
+                  OR review_status <> 'new'
+                  OR assigned_to IS NOT NULL
+                  OR decision <> ''
+                  OR urgent
+           )
+           OR EXISTS (SELECT 1 FROM journey_actions WHERE flow_type = 'work_journal') THEN
+            RAISE EXCEPTION
+                'Cannot downgrade 20260914_work_review while work-review data exists; use backup/restore rollback';
+        END IF;
+    END $$""")
+    op.execute("DROP INDEX IF EXISTS work_journal_review_queue")
+    op.execute("DROP TABLE IF EXISTS business_work_links")
+    op.execute("DROP TABLE IF EXISTS business_work_reviewers")
+    op.execute("DROP TABLE IF EXISTS business_work_digest_settings")
+    op.execute("ALTER TABLE business_work_journal DROP COLUMN IF EXISTS urgent")
+    op.execute("ALTER TABLE business_work_journal DROP COLUMN IF EXISTS decision")
+    op.execute("ALTER TABLE business_work_journal DROP COLUMN IF EXISTS assigned_to")
+    op.execute("ALTER TABLE business_work_journal DROP COLUMN IF EXISTS review_status")
+    op.execute("ALTER TABLE business_work_journal DROP COLUMN IF EXISTS category")
+    op.execute("ALTER TABLE journey_actions DROP CONSTRAINT IF EXISTS ck_journey_actions_flow")
+    op.execute("""
+        ALTER TABLE journey_actions
+        ADD CONSTRAINT ck_journey_actions_flow
+        CHECK (flow_type IN (
+            'influencer', 'partnership', 'maps', 'content', 'automation', 'upgrade'
+        ))
+    """)
