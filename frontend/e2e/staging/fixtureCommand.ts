@@ -12,6 +12,22 @@ export const fixtureCommand = (...args: string[]) => {
   }
   const nativeDatabaseUrl = process.env.JOURNEY_STAGING_DATABASE_URL;
   if (nativeDatabaseUrl) {
+    let target: URL;
+    try {
+      target = new URL(nativeDatabaseUrl);
+    } catch {
+      throw new Error('Only an isolated native staging test database is allowed.');
+    }
+    if (!['postgresql:', 'postgres:'].includes(target.protocol)
+      || !['127.0.0.1', '[::1]'].includes(target.hostname)
+      || !/^\/localos_staging_[a-z0-9_]*test[a-z0-9_]*$/.test(target.pathname)
+      || target.search || target.hash) {
+      throw new Error('Only an isolated native staging test database is allowed.');
+    }
+    const fixtureEnv = { ...process.env };
+    for (const key of ['PGHOSTADDR', 'PGSERVICE', 'PGSERVICEFILE', 'PGOPTIONS']) {
+      delete fixtureEnv[key];
+    }
     return execFileSync(
       '/usr/bin/arch',
       [
@@ -24,10 +40,12 @@ export const fixtureCommand = (...args: string[]) => {
         cwd: repositoryRoot,
         encoding: 'utf8',
         env: {
-          ...process.env,
+          ...fixtureEnv,
           APP_ENV: 'staging',
           DATABASE_URL: nativeDatabaseUrl,
-          PYTHONPATH: `${resolve(repositoryRoot, 'src')}:${repositoryRoot}`,
+          PYTHON_DOTENV_DISABLED: '1',
+          // Keep any caller-provided sitecustomize network guard first.
+          PYTHONPATH: [process.env.PYTHONPATH, resolve(repositoryRoot, 'src'), repositoryRoot].filter(Boolean).join(':'),
         },
       },
     ).trim();
