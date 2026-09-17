@@ -37,6 +37,18 @@ Selected the bounded second option for local implementation. Telegram's document
 - Immutable production artifacts vs current bind mounts: prepare/test local release profile before proposing production rollout.
 - Dependency locks: capture currently working resolution and audit compatibility before incremental upgrades; no blind wholesale update.
 
+## D-008 — Test safety remains a contract, not a failing-test bypass
+
+The patched full backend run rejected a new isolated DB name without the required `test` substring. Correct the dedicated test target, never remove the guard. Nested outbound guards may reject a request earlier than an inner guard; prove the inner hook explicitly with a non-network audit event and require the actual socket attempt to be denied by a known guard. New PostgreSQL regressions use the portable project testcontainer fixture, not a developer's fixed local port/container/credentials. Preserve inherited no-egress hooks across migration subprocesses.
+
+## D-009 — Restore evidence has explicit scope
+
+The local rehearsal ties dump and source verification to one exported REPEATABLE READ snapshot, restores into a fresh UUID database and verifies cluster identity first. Equal data/counts, logical columns, constraints and Alembic revision across 288 public tables prove that limited recovery contract. They do not prove indexes/triggers/views/functions/sequences/grants or real-production backup recovery. Keep the archive and target until the audit retention/cleanup decision; do not invoke the unsafe legacy restore helper to extend coverage.
+
+## D-010 — Resource incidents are not application test verdicts
+
+Local Docker/EXT4 and PostgreSQL I/O failures during image scan/build and full tests invalidate a green-ready claim; retain failures as infrastructure evidence, not random product fixes. Shared Docker recovery affects unrelated user containers and needs explicit authorization. No factory reset, global prune or user-volume deletion. Free only exact proven disposable cache copies; run future heavy operations serially with adequate headroom and explicit shared scanner cache. Historical successes remain historical, and local volume/image integrity must be rechecked after recovery.
+
 ## D-007 — Data-preserving downgrade instead of silent no-op or CASCADE
 
 For the broken work-review rollback, compared: (1) reverse only an empty feature schema, with transaction-held writer locks and guards for every lossy field; (2) permanently forward-only migrations plus backup/restore; (3) force the older parent DROP with CASCADE. Chosen (1) repairs the documented disposable downgrade contract at limited blast radius; (2) remains the required recovery alternative for populated feature data; (3) is rejected because it conceals dependency ownership and can destroy unrelated data. Upgrade behavior is unchanged. Never infer that a successful empty rollback proves populated production rollback safety. The creator-portal obstruction is a separate revision/package and must receive the same independent data-safety analysis.

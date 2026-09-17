@@ -1,0 +1,208 @@
+{
+  "task_id": "production-readiness-20260917",
+  "overall_status": "FAIL",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "AC1 inventory, baseline and all audit areas",
+      "status": "UNKNOWN",
+      "proof": [
+        "docs/production-readiness/01-system-map.md",
+        "docs/production-readiness/02-audit-backlog.md",
+        "docs/production-readiness/PROGRESS.md"
+      ],
+      "gaps": [
+        "Architecture/security/DevOps reconnaissance complete; full area-by-area closure remains."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "All P0/P1 fixed or externally blocked with proof",
+      "status": "FAIL",
+      "proof": [
+        "b95aad11 inactive-session fix",
+        "faefef25 real CI typecheck",
+        "docs/production-readiness/06-change-log.md",
+        "21c79e4c",
+        "5e2412bb",
+        "22589aed",
+        "raw/patched-registration-quality-e2e.json",
+        "raw/data-concurrency-root-green.json",
+        "28019df1",
+        "3fadbabd"
+      ],
+      "gaps": [
+        "Reviewed local auth/webhook/scope/navigation and guarded migration fixes are committed. Historical credential revocation unknown; remaining data/role/SSRF/retry candidates require reproduction and operational P1 gaps remain. No audit deployment."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Frontend checks and real user flows",
+      "status": "UNKNOWN",
+      "proof": [
+        "raw/baseline-frontend-install.json",
+        "raw/baseline-frontend-lint.json",
+        "raw/baseline-frontend-typecheck.json",
+        "raw/baseline-frontend-unit.json",
+        "raw/baseline-frontend-build.json",
+        "raw/baseline-frontend-e2e.json",
+        "raw/frontend-patched-build.json",
+        "raw/frontend-scope-typecheck.json",
+        "raw/patched-registration-quality-e2e.json",
+        "raw/frontend-patched-lint.json",
+        "raw/frontend-patched-typecheck.json",
+        "raw/frontend-patched-unit.json",
+        "raw/frontend-patched-mocked-e2e.json"
+      ],
+      "gaps": [
+        "Patched frontend570unit/122files,72mocked browser, lint/typecheck/build pass. Real baseline95passed19failed; targeted33passed across three viewports. Full114-test aggregate not green yet; actual compiled app/profile fixture absent despite successful standalone Docker sandbox proof."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Backend and database integration suite",
+      "status": "FAIL",
+      "proof": [
+        "raw/baseline-backend-tests.json",
+        "docs/production-readiness/COMMANDS.md",
+        "c4cbbdff",
+        "bd300829",
+        "raw/migration-rollback-chain-final.json",
+        "raw/backend-patched-full-tests.json",
+        "raw/backend-test-name-recheck.json",
+        "raw/data-concurrency-root-green.json",
+        "ca8bdf0b",
+        "9aa140f0",
+        "raw/backend-final-full-tests.json",
+        "docs/production-readiness/LOCAL_DOCKER_INCIDENT_20260917.md"
+      ],
+      "gaps": [
+        "Baseline fixture/harness groups repaired; corrected-name43pass and nestedguard5pass bothmodes. New full3fadbabd suite3565passed691skipped4failed79errors interrupted by Docker/PG filesystem I/O; no green claim.668skips need isolated OPERATOR_VOICE_TEST_DSN; remaining skips classified in incident. Full authorization/retry/scope audit remains."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Docker, migrations and restore",
+      "status": "FAIL",
+      "proof": [
+        "raw/baseline-docker-build.json",
+        "raw/docker-public-build-green.json",
+        "raw/docker-public-runtime-green.json",
+        "/tmp/localos-readiness-staging-smoke.log",
+        "raw/migration-rollback-chain-final.json",
+        "raw/docker-browser-ca8-build.json",
+        "raw/docker-browser-ca8-smoke.json",
+        "raw/compiled-runner-docker-isolation.json",
+        "/private/tmp/localos-readiness-restore-72f33d10b62d43cb86c6900dbcfab506/evidence.json"
+      ],
+      "gaps": [
+        "ARM64 browser-enabled ca8 image build/nonroot offline Chromium smoke and23real-PG rollback tests pass. Restore matches288tables data/columns/constraints/revision; full schema/grants/production backup not verified.3fadbabd build failed on containerd I/O; AMD64 pending. Restore helpera04686de and compiled harnessa842d648 independently reviewed,20purefake tests pass, real execution pending local Docker recovery."
+      ]
+    },
+    {
+      "id": "AC6",
+      "text": "Security and supply-chain evidence",
+      "status": "UNKNOWN",
+      "proof": [
+        "raw/baseline-secrets-history.json",
+        "raw/baseline-secrets-source.json",
+        "raw/baseline-frontend-audit.json",
+        "SECURITY.md"
+      ],
+      "gaps": [
+        "94 baseline current scan candidates triaged as noncredentials; historic service-role/Wordstat exposure confirmed, revocation unknown. Image scan failed on Docker layer EOF, no scan verdict; next source-commit scan did not run. Final worktree, images/logs, resolved Python audit and full AI threat model pending."
+      ]
+    },
+    {
+      "id": "AC7",
+      "text": "Five-flow before/after performance",
+      "status": "UNKNOWN",
+      "proof": [
+        "docs/production-readiness/PROGRESS.md baseline command durations"
+      ],
+      "gaps": [
+        "No five-flow p50/p95/p99 baseline/load report yet; command durations alone do not satisfy this criterion."
+      ]
+    },
+    {
+      "id": "AC8",
+      "text": "Operational readiness, runbook and CI",
+      "status": "UNKNOWN",
+      "proof": [
+        "faefef25",
+        "docs/production-readiness/DECISIONS.md",
+        "docs/RUNTIME_RELEASE_20260917.md"
+      ],
+      "gaps": [
+        "Operational audit and final runbook incomplete; historical runtime snapshot maintenance is not clean release proof. Telegram transport instability remains observed."
+      ]
+    },
+    {
+      "id": "AC9",
+      "text": "Rehearsed safe partner demo",
+      "status": "UNKNOWN",
+      "proof": [
+        "/tmp/localos-readiness-staging-smoke.log synthetic seed and five-flow API smoke"
+      ],
+      "gaps": [
+        "Demo narrative, rendered rehearsal and fallback not complete."
+      ]
+    },
+    {
+      "id": "AC10",
+      "text": "All named documentation and scorecard",
+      "status": "FAIL",
+      "proof": [
+        "docs/production-readiness/PROGRESS.md",
+        "docs/production-readiness/HANDOFF.md",
+        "docs/production-readiness/DECISIONS.md",
+        "docs/production-readiness/COMMANDS.md",
+        "SECURITY.md"
+      ],
+      "gaps": [
+        "Reports 00,03,04,05,07,08,09,10 not yet authored; current reports remain working documents, not sign-off."
+      ]
+    },
+    {
+      "id": "AC11",
+      "text": "Final independent whole-diff review and aggregate verification",
+      "status": "UNKNOWN",
+      "proof": [
+        "docs/production-readiness/06-change-log.md scoped reviews"
+      ],
+      "gaps": [
+        "Final whole-diff review and aggregate rerun not performed. verdict.json UNKNOWN is intentional; raw scaffold placeholders are not evidence."
+      ]
+    }
+  ],
+  "changed_files": [
+    "docs/production-readiness",
+    "SECURITY.md",
+    "src/auth_system.py",
+    "src/api/auth_user_api.py",
+    "src/ai_agent_webhooks.py",
+    "src/core/telegram_webhook_auth.py",
+    "scripts/ci_gate_fast.sh",
+    "scripts/ci_gate_nightly.sh",
+    "Dockerfile",
+    ".dockerignore",
+    "frontend/src/components/FinanceImportPanel.tsx",
+    "frontend/src/components/DashboardLayout.tsx",
+    "frontend/src/pages/LeadJourneyPage.tsx",
+    "frontend/src/pages/dashboard/InfluencersPage.tsx",
+    "alembic_migrations/versions/20260914_work_review.py",
+    "alembic_migrations/versions/20260902_add_creator_relationships_portal.py",
+    "alembic_migrations/versions/20260902_add_creator_offer_distribution.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "git status --short --branch",
+    "git diff --check",
+    "scripts/proof_loop.sh validate production-readiness-20260917",
+    "scripts/proof_loop.sh status production-readiness-20260917"
+  ],
+  "known_gaps": [
+    "Goal remains active and incomplete; evidence is a checkpoint, not a production-ready verdict.",
+    "Raw captures are local-only; inspect exit_code, timed_out and output scope, not the capture helper's exit code.",
+    "No new production release from this audit; do not publish sensitive scan files or resolved Compose configuration."
+  ]
+}

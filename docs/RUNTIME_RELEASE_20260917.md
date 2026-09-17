@@ -51,3 +51,14 @@ Following the `bug-reproducer` workflow, a minimal Docker build used synthetic s
 - Startup emits a non-fatal warning about the optional popular-query file. `src/service_categorizer.py` uses a CWD-relative `../prompts/popular_queries_with_clicks.txt` lookup with an empty-dictionary fallback. This path was not changed by this maintenance.
 - Telegram experienced intermittent `ConnectError`/`ReadError` after startup. A host request through the same proxy also timed out, then returned HTTP 302. Polling recovered without a container restart: the successful-poll heartbeat advanced from `1789677586.179186` to `1789677767.1276252` (20:42:47 UTC), with an observed age of 1.3 seconds. No messages were sent or updates consumed by a diagnostic client. The proxy/network instability is a residual integration risk, not a proven application-code regression or a fixed network incident.
 - No external publication, message delivery, payment, or authenticated business-write smoke was initiated for verification.
+
+## Read-only follow-up — 17 September, 21:28–21:32 UTC
+
+The request to finish Docker/database maintenance was reconciled against the live server before repeating any operation. No additional build, deployment, restart or migration was performed during this follow-up.
+
+- Root filesystem: 50 GB total, 9.6 GB free, 80% used. All eight Compose services are running; the runtime image references match this release.
+- PostgreSQL postmaster start remains `2026-09-17 20:38:18.07045+00`. A read-only transaction returned revision `20260907_001`; the migration graph loaded from the running app has the same single head. No pending migration was identified.
+- The existing custom-format backup remains present, mode `0600`, size `1736112836` bytes. This follow-up checked its metadata, not a new restore rehearsal.
+- Local HTTP HEAD and local/public `/health` pass; unauthenticated `/api/auth/me` returns 401. Recent app logs contain no `Traceback`, `ERROR`, `WARNING` or `CRITICAL` markers in the sampled ten-minute window.
+- App, worker, operator-worker and PostgreSQL report restart count zero and no OOM. Telegram reports two restarts and no OOM; two exact polling-stall recovery messages corroborate those restarts. Its logs also contain transport `ConnectError`, `ReadError` and `RemoteProtocolError` signatures. At observation it is healthy, with a successful-poll heartbeat age of 42.4 seconds. The underlying Telegram transport instability is **not resolved** by the completed maintenance.
+- The separate local production-readiness audit and its uncommitted patches were not deployed. The distinction between runtime-snapshot maintenance and a clean canonical Dockerfile release remains in force.
