@@ -14,7 +14,7 @@ EDITABLE = {'planned', 'draft_generated', 'edited'}
 
 def editorial_input(message):
     text = str(message).lower()
-    return bool(re.search(r'\bтон(?:а|е|ом|у)?\b|тональност',text)) or any(word in text for word in ('акцент', 'фокус', 'индивидуальност', 'запомни', 'факт о', 'факты о', 'моя история')) or (
+    return bool(re.search(r'больше не (?:пиш|обещ|заяв)|правил.{0,20}(?:контент|пост)|не (?:пиши|обещай|заявляй)',text)) or bool(re.search(r'\bтон(?:а|е|ом|у)?\b|тональност',text)) or any(word in text for word in ('акцент', 'фокус', 'индивидуальност', 'запомни', 'факт о', 'факты о', 'моя история')) or (
         any(word in text for word in ('пост', 'контент', 'публикац', 'тему')) and any(word in text for word in ('измен', 'помен', 'замен', 'переработ', 'перепиш', 'расскажу', 'придум', 'напиши')))
 
 
@@ -95,7 +95,7 @@ def edit_item(cursor,business_id,user_id,message,arguments):
 
 
 def restore_item(cursor,business_id,user_id,message,arguments):
-    if not re.search(r'верни|восстанови|отмени.{0,20}правк',message,re.I):return _result('Для возврата прежнего текста нужна явная команда.', 'clarification_required')
+    if not re.search(r'верни|восстанови|отмени.{0,30}(?:правк|измен)',message,re.I):return _result('Для возврата прежнего текста нужна явная команда.', 'clarification_required')
     authorize_actor(cursor,user_id,business_id)
     rows=_items(cursor,business_id,arguments.get('plan_id'),lock=True,item_id=arguments.get('item_id'))
     if len(rows)!=1 or rows[0]['id']!=arguments.get('item_id'):return _result('Выберите пост.', 'clarification_required')
@@ -104,11 +104,23 @@ def restore_item(cursor,business_id,user_id,message,arguments):
     history=(row.get('metadata_json') or {}).get('operator_edit_history') or []
     if not history:return _result('Предыдущей версии нет.', 'blocked')
     previous=history[-1]
-    _change(cursor,row,previous['theme'],previous.get('goal'),user_id)
-    cursor.execute("UPDATE contentplanitems SET draft_text=%s,status=%s,usernews_id=%s,metadata_json=metadata_json||%s::jsonb WHERE id=%s AND business_id=%s",
-        (previous.get('draft_text'),previous['status'],previous.get('usernews_id'),json.dumps({'generation_source':'restored'}),row['id'],business_id))
+    current_metadata=dict(row.get('metadata_json') or {})
+    restored_metadata=dict(previous.get('metadata_before') or current_metadata)
+    restored_metadata['operator_edit_history']=history+[{
+        **{key:row.get(key) for key in ('theme','goal','draft_text','scheduled_for','status','usernews_id')},
+        'metadata_before':{key:value for key,value in current_metadata.items() if key!='operator_edit_history'},
+        'source_before':{key:row.get(key) for key in ('content_type','source_kind','source_ref','seo_keyword','service_id','transaction_id')},
+        'actor':user_id,'at':datetime.now(timezone.utc).isoformat()}]
+    source=previous.get('source_before') or row
+    cursor.execute("""UPDATE contentplanitems SET theme=%s,goal=%s,draft_text=%s,status=%s,usernews_id=%s,
+        scheduled_for=%s,metadata_json=%s::jsonb,content_type=%s,source_kind=%s,source_ref=%s,
+        seo_keyword=%s,service_id=%s,transaction_id=%s,updated_at=clock_timestamp() WHERE id=%s AND business_id=%s""",
+        (previous['theme'],previous.get('goal'),previous.get('draft_text'),previous['status'],previous.get('usernews_id'),
+         previous.get('scheduled_for'),json.dumps(restored_metadata,ensure_ascii=False,default=str),
+         source.get('content_type'),source.get('source_kind'),source.get('source_ref'),source.get('seo_keyword'),
+         source.get('service_id'),source.get('transaction_id'),row['id'],business_id))
     updated=_items(cursor,business_id,row['plan_id'],item_id=row['id'])[0]
-    return _result('Вернул предыдущий текст. Дата поста сохранена.',selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':_version(updated)})
+    return _result('Вернул предыдущую версию поста и её дату.',selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':_version(updated)})
 
 
 def preserve_requested_links(text, previous, message):
@@ -148,6 +160,8 @@ def rewrite_item(cursor,business_id,user_id,message,arguments):
         generated=json.loads(raw)
         if not isinstance(generated,dict) or not isinstance(generated.get('post'),str):raise ValueError('invalid generation')
         text=preserve_requested_links(generated['post'].strip(), str(row.get('draft_text') or ''), message)
+        from services.content_rules import enforce
+        text=enforce(cursor,business_id,user_id,text,_default_social_post_generator,message)
         if len(text.strip())<30:raise ValueError('empty generation')
         allowed=set(re.findall(r'https?://[^\s<>\]\"]+',prompt))
         actual=set(re.findall(r'https?://[^\s<>\]\"]+',text))
@@ -232,6 +246,8 @@ def remember(cursor,business_id,user_id,message,arguments):
     quote=_quote(arguments.get('quote'),message)
     kind=arguments.get('kind')
     if kind not in {'company_fact','founder_story','tone'}: raise ValueError('Неизвестный тип сведений')
+    if re.search(r'не (?:пиши|писать|обещай|обещать|заявляй|заявлять)|запрет|ограничени',quote,re.I):
+        return _result('Это правило для будущего контента. Используйте изменение правила, чтобы сохранить область действия и историю.', 'clarification_required')
     if re.match(r'\s*(?:если|допустим|например)\b',message.lower()) or re.search(r'не\s+(?:сохраняй|запоминай)',message.lower()):
         return _result('Это пример или факт, который нужно сохранить для вашего бизнеса?', 'clarification_required')
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('editorial-profile:'+business_id,))
@@ -251,6 +267,11 @@ def remember(cursor,business_id,user_id,message,arguments):
 
 
 def editorial_prompt(cursor,business_id):
+    from services.content_rules import prompt
+    return _editorial_profile_prompt(cursor,business_id)+prompt(cursor,business_id)
+
+
+def _editorial_profile_prompt(cursor,business_id):
     cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
     preferences=(_row(cursor,cursor.fetchone()).get('preferences_json') or {})
     notes=preferences.get('editorial_notes') or []
@@ -297,6 +318,37 @@ def editorial_tools(cursor,business_id,user_id,message,channel="web"):
          'description':'Сохраняет только реальные сведения о выбранном бизнесе со слов пользователя, его историю или пожелание к тону для будущих текстов. Не сохраняй примеры, гипотезы, вопросы и отрицания. quote — точная полная цитата из текущего сообщения. Не сокращай историю и не добавляй факты. kind company_fact/founder_story/tone. Не использовать для акцента одного месяца — это refocus_plan.',
          'input_schema':{'type':'object','required':['kind','quote'],'properties':{'kind':{'type':'string','enum':['company_fact','founder_story','tone']},'quote':string(6000)}},
          'risk_class':'write_internal_draft','execute':lambda args:remember(cursor,business_id,user_id,message,args),'deterministic_response':True}]
+    from services.content_rules import change, load
+    def rule_change(args):
+        cursor.execute("SELECT id FROM operatormessages WHERE business_id=%s AND user_id=%s AND role='user' ORDER BY created_at DESC,id DESC LIMIT 1",(business_id,user_id))
+        rule_request_id=_row(cursor,cursor.fetchone()).get('id') or message
+        if re.search(r'(^|[.!?]\s*)(если|допустим|например|может|а что если)\b',message,re.I) or message.rstrip().endswith('?'):
+            return _result('Обсуждаем вариант; правила пока не изменены.', 'clarification_required')
+        quote=_quote(args.get('text'),message)
+        from services.content_rules import can_manage
+        if not can_manage(cursor,user_id,business_id):
+            from services.work_journal import save_note
+            entry=save_note(cursor,business_id,user_id,channel,rule_request_id,
+                'content-rule-proposal:'+str(rule_request_id),message,{'quote':quote,'outcome':'note','category':'idea'})
+            return _result('Предложение сохранено в рабочем журнале на разбор. Действующие правила не изменены.',
+                journal_entries=[entry],result_ref={'href':'/dashboard/work-journal?business_id='+business_id+'&entry='+entry['id'],'label':'Открыть запись'})
+        rule=change(cursor,business_id=business_id,user_id=user_id,
+            request_id='operator-rule:'+str(uuid.uuid5(uuid.NAMESPACE_URL,business_id+user_id+message+str(args)+str(rule_request_id))),
+            text=quote,rule_id=args.get('rule_id'),expected_version=args.get('expected_version'),
+            status=args.get('status','active'),starts_at=args.get('starts_at'),ends_at=args.get('ends_at'),source=channel)
+        return _result('Правило '+('отменено' if rule['status']=='cancelled' else 'сохранено')+': '+rule['text']+
+            '\nНастройки: «Профиль и бизнес → Правила для контента». Старые посты не изменены.',
+            rule_id=rule['id'],rule_version=rule['version'])
+    tools.extend([
+        {'name':'content.rules.read','capability':'content.history','title':'Действующие правила контента',
+         'description':'Читать правила перед изменением или отменой: используй актуальные id и version.',
+         'input_schema':{'type':'object','properties':{}},'risk_class':'read_only',
+         'execute':lambda args: {'rules':load(cursor,business_id).get('content_rules',[])}},
+        {'name':'content.rules.change','capability':'content.memory.add','title':'Изменить правило контента',
+         'description':'Явное постоянное ограничение или временный акцент для выбранного бизнеса. Не для правки одного поста, вопроса или гипотезы. При конфликте сначала уточни замену. Сроки ISO8601 с часовым поясом бизнеса; если пояс неизвестен, уточни. Для изменения/отмены сначала прочитай правила. quote text — полная цитата пользователя. Правила других точек не меняет.',
+         'input_schema':{'type':'object','required':['text'],'properties':{'text':string(6000),'rule_id':string(100),
+            'expected_version':{'type':'integer'},'status':{'type':'string','enum':['active','cancelled']},'starts_at':string(50),'ends_at':string(50)}},
+         'risk_class':'write_internal_draft','execute':rule_change,'deterministic_response':True}])
     import os
     pilots={value.strip() for value in os.getenv('OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS','').split(',') if value.strip()}
     if business_id not in pilots:tools=[tool for tool in tools if tool['name']!='content.rebuild_plan']

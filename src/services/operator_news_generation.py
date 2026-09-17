@@ -323,6 +323,8 @@ def generate_news_draft_from_operator(
             user_id=user_id,
         )
         news_text = _normalize_news_text(generated)
+        from services.content_rules import enforce
+        news_text = enforce(cursor,business_id,user_id,news_text,generator,source_text)
     except Exception:
         release = finalize_reserved_action_credits(
             cursor,

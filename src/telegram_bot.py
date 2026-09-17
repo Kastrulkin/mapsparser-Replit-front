@@ -2080,7 +2080,6 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
             InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}"),
             InlineKeyboardButton("❌ Отклонить", callback_data=f"operator_reject:{action_id}"),
         ])
-    rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -3824,7 +3823,8 @@ async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 f"✅ Аккаунт успешно привязан!\n\n"
                 f"👤 Пользователь: {data.get('user', {}).get('name', 'Не указано')}\n"
                 f"📧 Email: {data.get('user', {}).get('email', 'Не указано')}\n\n"
-                f"Теперь вы можете использовать все функции бота!"
+                "Выберите бизнес и отправьте голосовое или текст.\n\n"
+                "Например:\n• Покажи ближайший пост.\n• Запомни для будущих текстов: …\n• Есть пожелание клиента: …"
             )
             await show_main_menu(update, context, telegram_id, data.get('user', {}).get('id'))
         else:

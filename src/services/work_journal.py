@@ -32,6 +32,10 @@ def scope(cursor,business_id,user_id,write=False,owner_only=False):
     if not owner:
         cursor.execute("SELECT role FROM business_members WHERE business_id=%s AND user_id=%s AND status='active'",(business_id,user_id))
         membership=_row(cursor,cursor.fetchone())
+        if not membership:
+            cursor.execute("""SELECT m.role FROM network_members m JOIN businesses b ON b.network_id=m.network_id
+                WHERE b.id=%s AND m.user_id=%s AND m.status='active'""",(business_id,user_id))
+            membership=_row(cursor,cursor.fetchone())
         if not membership:raise PermissionError('Доступ сотрудника к бизнесу отозван.')
         role=membership.get('role') or 'viewer'
     if owner_only and not owner:raise PermissionError('Правила и привязки сотрудников изменяет владелец бизнеса.')

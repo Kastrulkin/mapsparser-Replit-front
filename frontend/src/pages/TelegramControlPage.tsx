@@ -1,3 +1,4 @@
+import { ContentRules } from '@/components/operator/ContentRules';
 import { BusinessInputSettings } from '@/components/operator/BusinessInputSettings';
 import { WorkJournal } from '@/components/WorkJournal';
 import { FinanceDailyPanel } from '@/components/FinanceDailyPanel';
@@ -993,7 +994,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'operator' ? bootstrap?.navigation?.find((item) => item.key === 'operator')?.status === 'read_only' ? <Screen title="Оператор" subtitle="Поручения, согласования и результаты работы."><LockedModulePreview item={bootstrap.navigation.find((item) => item.key === 'operator')} /></Screen> : <Operator businessId={scope?.kind === 'business' ? scope.id || '' : ''} conversationId={operatorConversationId} sendVoice={sendOperator} messages={messages} busy={operatorBusy} actionBusy={operatorActionBusy} command={command} setCommand={setCommand} ask={askOperator} resolveAction={resolveOperatorAction} openScreen={openMobileTarget} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={visibleNavigation} onOpen={openMobileTarget} openProgress={() => openMobileTarget('progress')} onLocked={setPaywall} restartTour={() => setShowOnboarding(true)} /> : null}
             {!picker && tab === 'menu' ? <UtilityMenu navigation={visibleNavigation} onOpen={openMobileTarget} /> : null}
-            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /> : null}
+            {!picker && tab === 'more' && module === 'settings' && scope?.kind === 'business' && scope.id ? <><BusinessInputSettings key={scope.id} businessId={scope.id} headers={authOnlyHeaders} /><ContentRules key={`rules-${scope.id}`} businessId={scope.id} headers={authOnlyHeaders} /></> : null}
             {!picker && tab === 'more' && module ? <ModuleScreen module={module} focusItemId={deepLinkItemId} scope={scope} access={bootstrap?.navigation?.find((item) => item.key === (module === 'finance_import' || module === 'analytics' ? 'finance' : module))} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} trackProduct={trackProductEvent} openTasks={() => { setModule(''); setTab('tasks'); }} requestCrm={createCrmRequest} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>

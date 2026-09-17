@@ -44,11 +44,20 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   const [source, setSource] = useState<VoiceSubmission | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [delayed, setDelayed] = useState(false);
+  const [showExamples,setShowExamples]=useState(()=>sessionStorage.getItem('localos-voice-examples-hidden')!=='true');
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const lifetime = useRef(new AbortController());
   const asset = useRef('');
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const onSubmitRef = useRef(onSubmit); onSubmitRef.current = onSubmit;
+  const pendingKey = `localos-voice:${channel}:${businessId}`;
+  useEffect(() => {
+    if (!busy) { setDelayed(false); return; }
+    const timer=window.setTimeout(()=>setDelayed(true),15000);
+    return ()=>window.clearTimeout(timer);
+  },[busy]);
   const clearStream = () => { stream.current?.getTracks().forEach((track) => track.stop()); stream.current = null; };
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
@@ -56,6 +65,26 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       .then((config) => setAvailable(Boolean(config.input_enabled))).catch(() => setAvailable(false));
     return () => { controller.abort(); if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream(); };
   }, [businessId, channel]);
+  useEffect(() => {
+    const signal=lifetime.current.signal;
+    const saved=sessionStorage.getItem(pendingKey);
+    if (!saved) return;
+    async function restore() {
+      try {
+        const pending = JSON.parse(saved || '{}');
+        if (!pending.job_id || !pending.asset_id || !pending.conversation_id) { sessionStorage.removeItem(pendingKey); return; }
+        setBusy(true); asset.current=pending.asset_id;
+        const result=await waitJob(pending.job_id,businessId,headers,signal);
+        if(signal.aborted)return;
+        const submission={transcription_id:pending.asset_id,conversation_id:pending.conversation_id,request_id:`voice:${pending.asset_id}`};
+        setText(result.transcript);setSource(submission);
+        await onSubmitRef.current(result.transcript,submission);
+        if(!signal.aborted){sessionStorage.removeItem(pendingKey);setSource(null);asset.current='';}
+      } catch(failure) { if(!signal.aborted)setError(failure instanceof Error ? failure.message:'Не удалось восстановить задание'); }
+      finally { if(!signal.aborted)setBusy(false); }
+    }
+    void restore();
+  },[pendingKey]);
   useEffect(() => { if (!clip) { setClipUrl(''); return; } const url = URL.createObjectURL(clip); setClipUrl(url); return () => URL.revokeObjectURL(url); }, [clip]);
   useEffect(() => {
     if (!recording) return;
@@ -67,6 +96,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream();
     lifetime.current.abort(); lifetime.current = new AbortController();
     if (asset.current) void jsonRequest(`/api/operator/audio/${asset.current}/cancel`, { method: 'POST', headers: headers() }).catch(() => undefined);
+    sessionStorage.removeItem(pendingKey);
     asset.current = ''; setClip(null); setSource(null); setText(''); setBusy(false); setRecording(false);
   };
   const start = async () => {
@@ -94,19 +124,21 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       if (conversationId) form.append('conversation_id', conversationId);
       const queued = await jsonRequest('/api/operator/audio/transcriptions', { method: 'POST', headers: headers(), body: form, signal });
       asset.current = queued.asset_id;
+      sessionStorage.setItem(pendingKey,JSON.stringify({job_id:queued.job_id,asset_id:queued.asset_id,conversation_id:queued.conversation_id}));
       const result = await waitJob(queued.job_id, businessId, headers, signal);
       if (signal.aborted) return;
       const submission = { transcription_id: queued.asset_id, conversation_id: queued.conversation_id, request_id: `voice:${queued.asset_id}` };
       setText(result.transcript); setSource(submission);
       if (directSubmit || result.auto_submit_finance || result.auto_submit_work) {
         await onSubmit(result.transcript, submission);
-        if (!signal.aborted) { setSource(null); setClip(null); asset.current = ''; }
+        if (!signal.aborted) { sessionStorage.removeItem(pendingKey); setSource(null); setClip(null); asset.current = ''; }
       }
     } catch (failure) { if (!signal.aborted) setError(failure instanceof Error ? failure.message : 'Ошибка распознавания'); }
     finally { if (!signal.aborted) setBusy(false); }
   };
   if (!available) return null;
   return <div className="space-y-2" aria-label="Голосовая команда">
+    {showExamples && <div className="text-sm text-muted-foreground"><p>Можно сказать: «Покажи ближайший пост», «Запомни для будущих текстов: …», «Есть пожелание клиента: …».</p><Button type="button" variant="ghost" onClick={()=>{sessionStorage.setItem('localos-voice-examples-hidden','true');setShowExamples(false);}}>Скрыть подсказки</Button></div>}
     {!clip && !source && <div className="flex flex-wrap items-center gap-2">
       <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => recording ? recorder.current?.stop() : void start()}>
         {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : 'Записать голосом'}
@@ -120,8 +152,9 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : 'Команда'}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
       {!busy && <Button type="button" disabled={disabled || !text.trim()} onClick={async () => { setBusy(true); try { await onSubmit(text, source); setSource(null); setClip(null); asset.current = ''; } catch { setError('Не удалось отправить. Повторите с тем же текстом.'); } finally { setBusy(false); } }}>Повторить отправку</Button>}</div>}
     {(clip || recording || busy || source) && !(busy && source) && <Button type="button" variant="ghost" className="!bg-transparent !text-muted-foreground hover:!bg-muted" onClick={cancel}>Отменить запись</Button>}
+    {busy && <p role="status">{delayed && asset.current ? 'Задание сохранено, ещё выполняется. Повторять сообщение не нужно.' : source ? 'Обрабатываю команду…' : 'Распознаю запись…'}</p>}
     {error && <p role="alert" className="text-sm">{error}</p>}
-    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Рабочая заметка сохранится с возможностью отмены. Финансовые записи и изменение правил потребуют подтверждения.</p>
+    <p className="text-xs text-muted-foreground">До 2 минут. Распознавание — Яндекс SpeechKit. Рабочая заметка сохранится с возможностью отмены. Финансовые записи и публикации потребуют подтверждения.</p>
   </div>;
 }
 

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
 
-test('Mini App reviews voice before sending and keeps a text response', async ({ page }, testInfo) => {
+test('Mini App submits recognized voice once and keeps a text response', async ({ page }, testInfo) => {
   let chatCalls = 0;
   await page.route('https://telegram.org/js/telegram-web-app.js*', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
   await page.addInitScript(() => { localStorage.setItem('localos-mini-onboarding-v3:voice-user', 'completed'); Object.defineProperty(window, 'Telegram', { configurable: true, value: { WebApp: { initData: 'signed-test', ready: () => {}, expand: () => {} } } }); });
@@ -18,7 +18,7 @@ test('Mini App reviews voice before sending and keeps a text response', async ({
     if (path === '/api/operator/mobile/jobs/job-1') return route.fulfill({ json: { job: { status: 'completed', result: { transcript: 'Подготовь пост про мастера' } } } });
     if (path === '/api/operator/chat') {
       chatCalls++;
-      expect(route.request().postDataJSON()).toMatchObject({ message: 'Подготовь пост про нового мастера', transcription_id: 'asset-1', conversation_id: 'conversation-1', channel: 'telegram_mini_app' });
+      expect(route.request().postDataJSON()).toMatchObject({ message: 'Подготовь пост про мастера', transcription_id: 'asset-1', conversation_id: 'conversation-1', channel: 'telegram_mini_app' });
       return route.fulfill({ json: { conversation_id: 'conversation-1', operator_result: { message_id: 'reply-1', input_type: 'voice', status: 'completed', chat_response: 'Черновик поста подготовлен.' } } });
     }
     return route.fulfill({ json: { items: [], summary: { attention_items: [] } } });
@@ -28,11 +28,6 @@ test('Mini App reviews voice before sending and keeps a text response', async ({
   await page.getByRole('button', { name: 'Оператор', exact: true }).click();
   await page.getByLabel('Загрузить аудио', { exact: true }).setInputFiles({ name: 'voice.ogg', mimeType: 'audio/ogg', buffer: Buffer.from('mocked voice') });
   await page.getByRole('button', { name: 'Распознать запись' }).click();
-  await expect(page.getByLabel('Проверьте команду')).toHaveValue('Подготовь пост про мастера');
-  expect(chatCalls).toBe(0);
-  await page.screenshot({ path: testInfo.outputPath('voice-review.png'), fullPage: true });
-  await page.getByLabel('Проверьте команду').fill('Подготовь пост про нового мастера');
-  await page.getByRole('button', { name: 'Отправить Оператору' }).click();
   await expect(page.getByText('Черновик поста подготовлен.', { exact: true })).toBeVisible();
   expect(chatCalls).toBe(1);
   await page.context().grantPermissions(['microphone']);
@@ -43,7 +38,7 @@ test('Mini App reviews voice before sending and keeps a text response', async ({
   expect(chatCalls).toBe(1);
 });
 
-test('web Operator sends reviewed voice through the same chat contract', async ({ page }, testInfo) => {
+test('web Operator submits voice through the same chat contract', async ({ page }, testInfo) => {
   let calls = 0;
   await page.addInitScript(() => {
     localStorage.setItem('auth_token', 'voice-test'); localStorage.setItem('selectedBusinessId', 'voice-business'); localStorage.setItem('language', 'ru');
@@ -65,10 +60,6 @@ test('web Operator sends reviewed voice through the same chat contract', async (
   await page.goto('/dashboard/operator');
   await page.getByLabel('Загрузить аудио', { exact: true }).setInputFiles({ name: 'voice.ogg', mimeType: 'audio/ogg', buffer: Buffer.from('mocked voice') });
   await page.getByRole('button', { name: 'Распознать запись' }).click();
-  await expect(page.getByLabel('Проверьте команду')).toHaveValue('Покажи отзывы');
-  expect(calls).toBe(0);
-  await page.screenshot({ path: testInfo.outputPath('voice-review.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Отправить Оператору' }).click();
   await expect(page.getByText('Найдено четыре отзыва.', { exact: true })).toBeVisible();
   expect(calls).toBe(1);
 });

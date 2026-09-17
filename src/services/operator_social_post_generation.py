@@ -206,6 +206,8 @@ def generate_social_post_draft_from_operator(
             user_id=user_id,
         )
         post_text = _normalize_social_post_text(generated)
+        from services.content_rules import enforce
+        post_text = enforce(cursor,business_id,user_id,post_text,generator,source_text)
     except Exception:
         release = finalize_reserved_action_credits(
             cursor,

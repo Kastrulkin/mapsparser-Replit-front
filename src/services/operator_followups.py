@@ -34,6 +34,15 @@ def directed_note(message):
 def route(cursor, *, business_id, user_id, channel, message, history, conversation_id, payload, actor, access):
     from services.operator_core import standardize_operator_result, operator_subscription_block
     from services.operator_tool_billing import run_paid_operator_tool_loop
+    from services import operator_voice_followups
+    try:
+        corrected=operator_voice_followups.route(cursor,business_id=business_id,user_id=user_id,channel=channel,
+            message=message,history=history,request_id=str(payload.get('request_id') or conversation_id)+':correction')
+    except (ValueError,PermissionError):
+        import sys
+        corrected={'status':'clarification_required','chat_response':str(sys.exception())}
+    if corrected is not None:
+        return standardize_operator_result(corrected,'content.item.edit'), {}
     if work_journal.enabled(business_id):
         if re.match(r'\s*(?:покажи|показать)\b',message,re.I) and re.search(r'на разбор',message,re.I):
             categories=[category for pattern,category in [('жалоб','complaint'),('пожелан','wish'),('иде[яию]','idea')]

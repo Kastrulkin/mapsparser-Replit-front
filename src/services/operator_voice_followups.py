@@ -1,0 +1,66 @@
+"""Small, version-checked corrections to the most recent saved object."""
+import json
+import re
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+from services.operator_conversations import _row
+
+
+def requested_date(cursor,business_id,message):
+    iso=re.findall(r'\b20\d{2}-\d{2}-\d{2}\b',message)
+    if iso:return date.fromisoformat(iso[-1])
+    names={'понедельник':0,'вторник':1,'среду':2,'четверг':3,'пятницу':4,'субботу':5,'воскресенье':6}
+    matches=[(match.start(),number) for name,number in names.items() for match in re.finditer(name,message,re.I)]
+    relative=re.search(r'(?:сегодня|завтра|послезавтра)',message,re.I)
+    if not matches and not relative:return None
+    cursor.execute('SELECT timezone FROM business_finance_settings WHERE business_id=%s',(business_id,))
+    timezone_name=_row(cursor,cursor.fetchone()).get('timezone')
+    if not timezone_name:raise ValueError('Для переноса укажите точную дату или часовой пояс бизнеса.')
+    today=datetime.now(ZoneInfo(timezone_name)).date()
+    if matches:return today+timedelta(days=(max(matches)[1]-today.weekday())%7)
+    return today+timedelta(days=2 if 'послезавтра' in message.lower() else 1 if 'завтра' in message.lower() else 0)
+
+
+def route(cursor,*,business_id,user_id,channel,message,history,request_id):
+    from services import operator_editorial,content_rules,work_journal
+    previous=next((r for r in reversed(history or []) if r.get('role') in {'operator','assistant'}),{})
+    result=previous.get('result_json') or {}
+    if re.match(r'\s*(?:отмени |сделай |нет[, ]|перенеси|не завтра)',message,re.I):
+        from services.operator_core import operator_subscription_block
+        _,access=operator_editorial.authorize_actor(cursor,user_id,business_id)
+        blocked=operator_subscription_block(access,'content.item.edit')
+        if blocked:return blocked
+    undo=bool(re.match(r'\s*отмени (?:последн.{0,6} )?(?:изменение|правку|правило|запись)',message,re.I))
+    if undo and result.get('rule_id'):
+        rule=content_rules.change(cursor,business_id=business_id,user_id=user_id,request_id=request_id,
+            rule_id=result['rule_id'],expected_version=result.get('rule_version'),status='cancelled',source=channel)
+        return operator_editorial._result('Правило отменено: '+rule['text'],rule_id=rule['id'],rule_version=rule['version'])
+    entries=result.get('journal_entries') or []
+    if undo and len(entries)==1:
+        entry=entries[0]
+        saved=work_journal.save_note(cursor,business_id,user_id,channel,None,request_id,message,
+            {'id':entry['id'],'version':entry['version'],'void':True})
+        return operator_editorial._result('Запись отменена. История сохранена.',journal_entries=[saved])
+    selected=result.get('selected_item')
+    if not selected:return None
+    if undo:return operator_editorial.restore_item(cursor,business_id,user_id,message,selected)
+    if re.match(r'\s*сделай (?:его |этот пост )?(?:короче|длиннее|теплее|живее)',message,re.I):
+        return operator_editorial.rewrite_item(cursor,business_id,user_id,message,selected)
+    if not re.match(r'\s*(?:нет[, ]|перенеси|не завтра|вместо .*пятниц)',message,re.I):return None
+    target=requested_date(cursor,business_id,message)
+    if not target:return None
+    operator_editorial.authorize_actor(cursor,user_id,business_id)
+    rows=operator_editorial._items(cursor,business_id,selected.get('plan_id'),lock=True,item_id=selected['item_id'])
+    if len(rows)!=1:return operator_editorial._result('Пост недоступен. Выберите его заново.','blocked')
+    row=rows[0]
+    if row['status'] not in operator_editorial.EDITABLE or row['plan_status']=='archived' or operator_editorial._version(row)!=selected['version']:
+        return operator_editorial._result('Пост изменился. Откройте его заново перед переносом.','blocked')
+    metadata=dict(row.get('metadata_json') or {})
+    history=list(metadata.get('operator_edit_history') or [])
+    history.append({key:row.get(key) for key in ('theme','goal','draft_text','scheduled_for','status','usernews_id')})
+    metadata['operator_edit_history']=history
+    cursor.execute('UPDATE contentplanitems SET scheduled_for=%s,metadata_json=%s::jsonb,updated_at=clock_timestamp() WHERE id=%s AND business_id=%s',
+        (target,json.dumps(metadata,default=str,ensure_ascii=False),row['id'],business_id))
+    updated=operator_editorial._items(cursor,business_id,row['plan_id'],item_id=row['id'])[0]
+    return operator_editorial._result('Перенёс пост на '+target.isoformat()+'. Текст сохранён.',
+        selected_item={'item_id':row['id'],'plan_id':row['plan_id'],'version':operator_editorial._version(updated)})

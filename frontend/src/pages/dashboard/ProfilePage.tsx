@@ -1,3 +1,4 @@
+import { ContentRules } from '@/components/operator/ContentRules';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useLocation, useOutletContext, useNavigate } from 'react-router-dom';
@@ -1101,6 +1102,7 @@ export const ProfilePage = () => {
       </DashboardSection>
 
       {/* Предупреждение, если бизнес не выбран */}
+      {currentBusinessId && <ContentRules key={currentBusinessId} businessId={currentBusinessId} />}
       {!currentBusinessId && businesses && businesses.length > 1 && (
         <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100 flex gap-4">
           <div className="p-3 bg-amber-100 rounded-full h-fit">
