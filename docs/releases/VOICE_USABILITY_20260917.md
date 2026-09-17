@@ -1,6 +1,6 @@
 # Voice usability release — 2026-09-17
 
-Status: deployed to production on 2026-09-17. Runtime commit: 4124b7ef, branch codex/voice-usability-20260917 (pushed to GitVerse).
+Status: deployed to production on 2026-09-17. Runtime commit: aff55997, branch codex/voice-usability-20260917 (pushed to GitVerse).
 
 ## Delivered behavior
 
@@ -22,12 +22,16 @@ Status: deployed to production on 2026-09-17. Runtime commit: 4124b7ef, branch c
 ## Production verification
 
 - Additive migration head: `20260917_content_rules`. Backup: `/opt/seo-app/.deploy/voice-usability-20260917/before.dump` (1.7 GB); archive listing verified, no full restore.
-- Partial release of app/worker/operator-worker/telegram-bot and tested frontend. Existing hashed frontend assets retained for open tabs. Runtime source hashes matched all 21 release files before the final focused polling fix.
+- Partial release of app/worker/operator-worker/telegram-bot and tested frontend. Existing hashed frontend assets retained for open tabs. Runtime source and frontend entrypoint hashes matched all 22 release artifacts; subsequent polling/startup fixes were deployed separately.
 - HTTP 200, anonymous rules API 401, schema health check passed. Live Profile UI showed the migrated restriction and its history at the Engelsa 154 pilot location; the network parent is a different business and intentionally has no copied rule.
 - Real model rejected the prohibited cartoon claim. First repair failed safely; after passing concrete violations to the repair request, a new repair passed validation. Real check/repair run: 9.5 seconds. No post was saved or published by these probes.
 - Real SpeechKit synthesis → asynchronous STT passed with synthetic test speech: 2.9 seconds. This is provider integration, not a physical-device test.
 - GigaChat primary returned HTTP 402; the existing configured DeepSeek fallback completed the checks. Primary-provider funding remains an operational issue.
-- Intermittent Telegram proxy errors exposed two startup defects: retries reused a closed event loop, and an abandoned pre-poll transport could retain a restart watchdog. Both fixed; final polling tests: 8 passed. Network errors remain possible; saved voice work is independent of delivery.
+- Intermittent Telegram proxy errors exposed two startup defects: retries reused a closed event loop, and an abandoned pre-poll transport could retain a restart watchdog. Both fixed; final polling tests: 9 passed; startup reconnect delay capped at 30 seconds. Network errors remain possible; saved voice work is independent of delivery.
+
+## Remaining infrastructure blocker
+
+After transient successful polling, the configured Telegram proxy (`192.168.0.177:10809`) again failed connections and the receiver reported unhealthy. Direct Telegram connectivity from the server timed out. The restart/retry fixes cannot guarantee receipt while the only egress route is unavailable. Stable Telegram ingress is therefore **not accepted**, and the pilot must not be described as ready. No proxy credentials, TLS checks or network protections were changed.
 
 ## Pilot restrictions and unverified items
 
