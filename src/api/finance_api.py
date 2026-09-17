@@ -17,7 +17,7 @@ from auth_system import verify_session
 from core import finance_crm, finance_imports
 from core.api_errors import internal_error_response
 from core.finance_kpis import calculate_finance_snapshot, default_period_range, get_default_finance_thresholds
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 from core.helpers import get_business_id_from_user, get_business_owner_id
 from database_manager import DatabaseManager
 from services.gigachat_client import analyze_screenshot_with_gigachat
@@ -26,6 +26,9 @@ from subscription_manager import get_capability_access
 
 
 finance_bp = Blueprint("finance_api", __name__)
+FINANCE_READ_ONLY_POST_ENDPOINTS = {
+    "finance_api.preview_finance_import",
+}
 
 
 def _row_to_dict(cursor, row):
@@ -61,6 +64,13 @@ def _table_columns(cursor, table_name: str) -> set:
 
 # ==================== ФИНАНСОВЫЕ ЭНДПОИНТЫ ====================
 
+def _finance_request_requires_write():
+    return (
+        request.method not in {'GET', 'HEAD', 'OPTIONS'}
+        and request.endpoint not in FINANCE_READ_ONLY_POST_ENDPOINTS
+    )
+
+
 def _require_finance_user_and_business():
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
@@ -81,9 +91,14 @@ def _require_finance_user_and_business():
         return user_data, None, (jsonify({"error": "Сначала выберите бизнес"}), 400)
 
     db = DatabaseManager()
-    cursor = db.conn.cursor()
-    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
-    db.close()
+    try:
+        cursor = db.conn.cursor()
+        if _finance_request_requires_write():
+            has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
+        else:
+            has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    finally:
+        db.close()
 
     if not owner_id:
         return user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
@@ -102,6 +117,19 @@ def _require_finance_user_and_business():
         )
 
     return user_data, business_id, None
+
+
+def _finance_transaction_target_write_error(cursor, transaction, user_data):
+    if hasattr(transaction, 'get'):
+        business_id = transaction.get('business_id')
+    else:
+        business_id = transaction[2] if len(transaction) > 2 else None
+    if not business_id:
+        return None
+    has_write_access, _owner_id = verify_business_write_access(cursor, str(business_id), user_data)
+    if not has_write_access:
+        return jsonify({"error": "Нет права изменять финансы этого бизнеса"}), 403
+    return None
 
 
 @finance_bp.before_request
@@ -2161,7 +2189,7 @@ def update_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM financialtransactions WHERE id = %s LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id, business_id FROM financialtransactions WHERE id = %s LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -2170,6 +2198,10 @@ def update_transaction(transaction_id):
         if owner_id != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
+        target_error = _finance_transaction_target_write_error(cursor, row, user_data)
+        if target_error:
+            db.close()
+            return target_error
 
         from services.finance_daily import installed
         if installed(cursor):
@@ -2232,7 +2264,7 @@ def delete_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM financialtransactions WHERE id = %s LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id, business_id FROM financialtransactions WHERE id = %s LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -2241,6 +2273,10 @@ def delete_transaction(transaction_id):
         if owner_id != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
+        target_error = _finance_transaction_target_write_error(cursor, row, user_data)
+        if target_error:
+            db.close()
+            return target_error
 
         from services.finance_daily import installed
         if installed(cursor):

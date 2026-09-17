@@ -101,3 +101,54 @@ def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[b
     )
     
     return has_access, owner_id
+
+
+def verify_business_write_access(cursor, business_id: str, user_data: dict) -> tuple[bool, str | None]:
+    """Require tenant access and reject a viewer-only membership for writes.
+
+    ``verify_business_access`` deliberately remains the role-blind read/tenant
+    boundary. A person can hold both a direct and a network membership; a
+    non-viewer active membership preserves the existing write behavior.
+    """
+    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    if not has_access:
+        return False, owner_id
+
+    user_id = user_data.get('user_id') or user_data.get('id')
+    if owner_id == user_id or user_data.get('is_superadmin', False):
+        return True, owner_id
+
+    cursor.execute(
+        """
+        SELECT bm.role
+        FROM business_members bm
+        WHERE bm.business_id = %s
+          AND bm.user_id = %s
+          AND bm.status = 'active'
+        UNION ALL
+        SELECT nm.role
+        FROM network_members nm
+        JOIN businesses b ON b.network_id = nm.network_id
+        WHERE b.id = %s
+          AND nm.user_id = %s
+          AND nm.status = 'active'
+        UNION ALL
+        SELECT 'network_owner' AS role
+        FROM networks n
+        JOIN businesses b ON b.network_id = n.id
+        WHERE b.id = %s
+          AND n.owner_id = %s
+        """,
+        (business_id, user_id, business_id, user_id, business_id, user_id),
+    )
+    rows = cursor.fetchall() or []
+    roles = []
+    for row in rows:
+        if hasattr(row, 'get'):
+            role = row.get('role')
+        else:
+            role = row[0] if row else None
+        if role:
+            roles.append(str(role).strip().lower())
+
+    return any(role != 'viewer' for role in roles), owner_id
