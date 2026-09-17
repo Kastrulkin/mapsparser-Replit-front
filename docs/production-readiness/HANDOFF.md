@@ -1,16 +1,26 @@
 # Readiness handoff
 
-Updated 2026-09-17 22:48 UTC / 2026-09-18 Moscow. Goal ACTIVE, incomplete. Continue current work; do not restart baseline inventory or reduce the original scope.
+## Latest continuation — 17 September 23:22 UTC
+
+The user's repeated server-maintenance request is already satisfied by the earlier runtime-snapshot release, reconciled live again in `docs/RUNTIME_RELEASE_20260917.md`: 9.6 GB free, eight services running, DB revision equals live head, no duplicate restart/build/migration. Telegram is currently healthy but restart count increased to six. This request does not require restarting shared local Docker Desktop; its incident/recovery boundary below remains unresolved.
+
+Three packages are now committed and independently reviewed: `f1287d81` canonical network schema in journal fixtures; `0fdd3dce` pinned public contact GET; `b9a146aa` finance viewer/write and stored transaction-target authorization. Earlier mocked RBAC claims were replaced by actual native PostgreSQL/Flask red and green proof. Final clean `b9a146aa` archive: **826 passed, 5 third-party warnings, 54.58s** (55.518s captured), `raw/native-pg-security-final-b9a146aa.json`. This is a selected28-file aggregate on PG15, not the whole backend or productionPG16 suite. UX-SVC-01, UX-CONTENT-01 and UX-OP-01 route-switch candidates were reconciled as NO_BUG_PROVEN due to keyed Outlet. Working threat model `03-security-threat-model.md` distinguishes evidence from untested AI/tool boundaries.
+
+Safe native fallback: a fresh owned cluster `/private/tmp/localos-readiness-native-pg.QAg5UY/data`, PostgreSQL15.15, literal127.0.0.1:35417, synthetic role `readiness_test_owner`. Databases `readiness_native_test` and `readiness_rbac_test`; no user/production data. Initially41MB, later215MB including WAL/catalog churn. It was stopped cleanly after all tests and zero other client connections; retained, not deleted. Shared Docker was not accessed/restarted. Reuse only after `pg_ctl status`/directory validation; do not rerun `start.sh` because it intentionally requires a fresh cluster. Safe restart command inside named tmux: `/usr/local/bin/pg_ctl -D /private/tmp/localos-readiness-native-pg.QAg5UY/data -l /private/tmp/localos-readiness-native-pg.QAg5UY/postgres.log -o '-h 127.0.0.1 -p 35417 -k /private/tmp/localos-readiness-native-pg.QAg5UY -c max_connections=20 -c shared_buffers=16MB -c max_wal_size=128MB -c min_wal_size=32MB' -w start`. Inspect exact directory and loopback bindings before tests. Native pgvector extension files are installed, but full native migration/app/browser fallback has not been run yet.
+
+Final clean archive `/private/tmp/localos-readiness-security-final.YKHSLW` (b9a146aa); runner `/private/tmp/localos-readiness-native-pg.QAg5UY/security-final-tests.sh` is evidence, not blindly replayable because it extracts into that existing archive. The older `/tmp/localos-readiness-backend-final.F90et6` now contains3fadbabd plus the committed f128 journal fixture for causal713-pass replay; it is no longer an untouched3fadbabd archive. Next safe work: native full-schema/app/browser fallback, generic mutation role/object matrix, WhatsApp durable admission/reconciliation and uncertain sends; then performance, remaining scans/reports/demo. WhatsApp design review only, no implementation yet. Its processing has multi-commit/tool/provider effects, so admission-only suppression must not be called exactly-once or silently complete ambiguous outcomes.
+
+Updated 2026-09-17 23:22 UTC / 2026-09-18 Moscow. Goal ACTIVE, incomplete. Continue current work; do not restart baseline inventory or reduce the original scope.
 
 ## STOP before further Docker work
 
-Local Docker storage reports containerd/EXT4 I/O errors; host disk dropped1.3GiB. Removed only byte-identical new duplicate scanner DB/metadata, freeing1.3GiB, now2.6GiB. Original cache retained. Shared Docker restart approval requested asynchronously; not received. No production/server work. Read `LOCAL_DOCKER_INCIDENT_20260917.md` first. No broad prune/reset/volume deletion or automatic user-container restart. Pure fake-unit work may continue.
+Local Docker storage reports containerd/EXT4 I/O errors. Shared Docker restart approval was requested, not received; no reset/prune/user-volume changes. Read `LOCAL_DOCKER_INCIDENT_20260917.md` first. Host now2.4GiB free after lightweight native testing/archive; the server's9.6GB free is a different filesystem. Native isolated PostgreSQL enables actual SQL work without Docker recovery; no heavy image build/scan yet.
 
 ## Scope, source and authority
 
 - Branch: `codex/production-readiness-20260917`.
 - Baseline: `30262a5bf7b468e0a6f5a0e3d8262dbef119e075`, initially clean.
-- Current code checkpoint: `a842d648` (22 commits since baseline, before documentation checkpoint). Always read fresh git status/log.
+- Current code checkpoint: `b9a146aa` (27 commits since baseline, before later documentation). Always read fresh git status/log.
 - Original full request preserved in `.agent/tasks/production-readiness-20260917/spec.md`; AC1–AC11 cover the entire goal.
 - Local changes, synthetic isolated PostgreSQL/browser tests and local commits authorized. No new audit push, merge, deploy, production data/schema change, external send or credential rotation.
 - Prior Docker snapshot/PG restart maintenance was separately completed and reconciled read-only; see `docs/RUNTIME_RELEASE_20260917.md`. No need to repeat it. The audit patches are NOT deployed.
@@ -31,10 +41,10 @@ New: `9aa140f0` nested guard assertion, `28019df1` service compression apply row
 
 ## Current independent work / ownership
 
-- `migration_distribution_verify`: restore helper/guard tests complete;11purefake tests and independent approval. DATA-SVC committed.
-- `inactive_session_fix`: compiled staging harness/guard tests complete;9purefake tests including valid ingress/network/alias fixture, independently approved. DATA-FIN committed.
-- `readiness_patch_review`: bounded independent reviews complete; no real Docker commands while filesystem unavailable.
-- Root: incident/evidence/docs and scoped commits; no active heavy Docker process.
+- `migration_distribution_verify`: SSRF package complete/committed, idle.
+- `inactive_session_fix`: finance role/target package complete/committed, idle.
+- `readiness_patch_review`: all three latest packages approved; WhatsApp design review only; idle.
+- Root: clean final826-test aggregate complete, native cluster stopped; no active audit test/build job. Unrelated finance_patch_review/localos-voice-final tmux sessions untouched.
 
 ## Environments and evidence — do not lose or prune
 

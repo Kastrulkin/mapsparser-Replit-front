@@ -1,16 +1,18 @@
 # Production-readiness progress
 
-Updated: 2026-09-17 22:48 UTC / 18 September Moscow. **IN PROGRESS — not production-ready sign-off.**
+Latest phase: journal fixture, pinned contact GET and finance role/stored-target fixes are reviewed and committed (`f1287d81`, `0fdd3dce`, `b9a146aa`). Clean b9a archive selected aggregate: **826passed/5warnings54.58s** on isolated nativePG15. No Docker recovery or production deployment. The complete objective remains incomplete; this is not the full backend/PG16 suite.
+
+Updated: 2026-09-17 23:22 UTC / 18 September Moscow. **IN PROGRESS — not production-ready sign-off.**
 
 ## Current infrastructure interruption
 
-Local Docker/EXT4 I/O errors interrupted the next image build, image scan and final backend run. Host space fell to1.3GiB; only the audit-created duplicate public scanner cache was removed (1.3GiB; identical original retained), leaving2.6GiB. No daemon restart, volume deletion or production action. Shared local Docker restart approval requested, not received. See [incident and recovery requirements](LOCAL_DOCKER_INCIDENT_20260917.md). Do not repeat heavy Docker work yet.
+Local Docker/EXT4 I/O errors interrupted the next image build, image scan and final backend run. Host space fell to1.3GiB; only the audit-created duplicate public scanner cache was removed (1.3GiB; identical original retained), leaving2.6GiB at that checkpoint. After bounded nativeSQL tests/clean archive, now2.4GiB free. No daemon restart, volume deletion or production action. Shared local Docker restart approval requested, not received. See [incident and recovery requirements](LOCAL_DOCKER_INCIDENT_20260917.md). Do not repeat heavy Docker work yet.
 
 ## Scope and authority
 
 The whole original objective is preserved in `.agent/tasks/production-readiness-20260917/spec.md`, AC1–AC11. Local fixes, isolated synthetic tests and local commits are authorized; no new production mutation, push, merge, deployment or external sends are included. Prior runtime maintenance is a separately completed operation, not this audit's release.
 
-Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3d8262dbef119e075`, initially clean. Latest code checkpoint `a842d648`; see fresh git log for later documentation checkpoints. No intentional mutation of unrelated Docker services/volumes.
+Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3d8262dbef119e075`, initially clean. Latest code checkpoint `b9a146aa`; see fresh git log for later documentation checkpoints. No intentional mutation of unrelated Docker services/volumes.
 
 ## Phase checklist
 
@@ -26,6 +28,8 @@ Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3
 - [x] Guarded migration rollback aggregate: 23 real PostgreSQL tests pass; distribution fix committed.
 - [x] Consistent-snapshot backup restored into a new isolated database; 288 tables match in data, columns and constraints. Not a full schema/production restore proof.
 - [x] Hardened local-only restore helper and compiled fixture guards: independently reviewed; root20purefake tests passed.
+- [x] NativePG15 fallback enabled skipped Operator families:704pass4fixture failures →713pass after canonical network schema; final clean b9a security/native selection826pass.
+- [x] Contact GET DNS pinning and finance viewer/transaction-target boundaries independently reviewed and locally committed; three UI route-switch hypotheses falsified by keyed page lifecycle.
 - [ ] Actual guarded-helper execution and restore verification of remaining schema objects.
 - [ ] Full backend green: ca8 harness causes corrected; subsequent3fadbabd run3565passed691skipped4failed79errors interrupted by local Docker/PG I/O. No product-regression verdict from this environment failure.
 - [ ] Reproduce/resolve remaining data/concurrency/SSRF/RBAC/idempotency/scope candidates; confirm tenant/object/role boundaries.
@@ -107,4 +111,4 @@ Production read-only follow-up confirmed eight services and9.6GB free, unchanged
 
 ## Next step
 
-Finish pure local harness reviews/commits and preserve evidence. Shared Docker recovery needs user approval and adequate disk headroom; then revalidate local storage before final image/backend/real-browser reruns. Continue remaining data/role/SSRF/retry coverage, five-flow measurements, scans/reports/demo and final independent audit. Goal remains ACTIVE; proof overallFAIL, final verdictUNKNOWN.
+Continue from the reviewed b9a checkpoint: native full-schema/app/browser fallback can progress without shared Docker; finish generic role/object, WhatsApp replay/uncertain-send and AI/tool coverage. Contact-GET SSRF and finance role fixes are complete locally, not platform-wide closure. Shared Docker recovery still needs approval/headroom, then storage verification before image/PG16/runner reruns. Five-flow measurements, remaining scans/reports/demo and final independent audit remain. Goal ACTIVE; proof overallFAIL, final verdictUNKNOWN.

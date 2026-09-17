@@ -10,6 +10,8 @@ The original complete request and AC1–AC11 remain in spec.md. evidence.json ma
 
 ## Verified evidence groups
 
+- Latest nativeSQL/security phase: fresh loopback PostgreSQL15.15, exact owned data_directory; journal704pass4fixture failures→713pass, then cleanb9a146aa selected28-file826pass5warnings54.58s. `raw/native-pg-security-final-b9a146aa.json` exit0/no timeout55.518s. Commitsf1287d81/0fdd3dce/b9a146aa independently reviewed. Own cluster stopped afterwards; no shared Docker restart. This does not prove full backend/PG16 parity. Original false RBAC fake-label/ImportError claims were superseded by real stored-membership/HTTP-effect proof.
+
 - Clean frontend baseline:557unit,72mockedE2E, app+Node typecheck, both builds, lint0errors/1warning, npm audit0. Exact cwd/commands/duration/warnings in raw/baseline-frontend-*.json.
 - Clean backend baseline:3542passed,19failed,691skipped,1error; raw/baseline-backend-tests.json. Do not replace this baseline with later targeted results.
 - Reviewed local fixes: inactive sessions, authenticated ingress, Telegram replay admission/log redaction, finance/dashboard scope, journey navigation, mobile targets, CI typecheck, Docker public packaging and test fixtures. See docs/production-readiness/06-change-log.md for exact red/green captures, reviewer evidence and commit scope.
@@ -28,7 +30,7 @@ The original complete request and AC1–AC11 remain in spec.md. evidence.json ma
 
 Exact sanitized command captures include cwd, child exit_code, timed_out, duration_ms and bounded stdout/stderr. The capture wrapper's own successful exit only proves JSON was written. Command recipes and isolated environments are in docs/production-readiness/COMMANDS.md and HANDOFF.md.
 
-Use named tmux and credential-free archives. Reuse the existing isolated app18017/PG15417 and owned testcontainers only. Do not accidentally load local .env, hit an arbitrary development app, send providers or mutate production.
+Use named tmux and credential-free archives. Docker app18017/PG15417/testcontainers are currently unavailable pending storage recovery; do not replay them blindly. The retained native PostgreSQL cluster can be restarted using the exact owned-path command in HANDOFF. Do not load local .env, hit arbitrary development apps, send providers or mutate production.
 
 ## Unproven requirements
 

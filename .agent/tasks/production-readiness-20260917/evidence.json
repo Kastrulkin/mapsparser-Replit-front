@@ -29,10 +29,14 @@
         "raw/patched-registration-quality-e2e.json",
         "raw/data-concurrency-root-green.json",
         "28019df1",
-        "3fadbabd"
+        "3fadbabd",
+        "0fdd3dce contact GET connection pinning",
+        "b9a146aa finance role and stored-target write gates",
+        "raw/ssrf-pinned-get-root-green.json",
+        "raw/native-pg-security-final-b9a146aa.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/navigation and guarded migration fixes are committed. Historical credential revocation unknown; remaining data/role/SSRF/retry candidates require reproduction and operational P1 gaps remain. No audit deployment."
+        "Reviewed local auth/webhook/scope/navigation, data, contact-GET SSRF and finance-viewer fixes are committed. Historical credential revocation unknown; generic role/object, WhatsApp replay, uncertain send and operational P1 gaps remain. No audit deployment."
       ]
     },
     {
@@ -74,10 +78,15 @@
         "ca8bdf0b",
         "9aa140f0",
         "raw/backend-final-full-tests.json",
-        "docs/production-readiness/LOCAL_DOCKER_INCIDENT_20260917.md"
+        "docs/production-readiness/LOCAL_DOCKER_INCIDENT_20260917.md",
+        "raw/native-pg-operator-previously-skipped.json",
+        "raw/native-pg-journal-network-green.json",
+        "raw/native-pg-operator-fixture-green.json",
+        "f1287d81",
+        "raw/native-pg-security-final-b9a146aa.json"
       ],
       "gaps": [
-        "Baseline fixture/harness groups repaired; corrected-name43pass and nestedguard5pass bothmodes. New full3fadbabd suite3565passed691skipped4failed79errors interrupted by Docker/PG filesystem I/O; no green claim.668skips need isolated OPERATOR_VOICE_TEST_DSN; remaining skips classified in incident. Full authorization/retry/scope audit remains."
+        "Full3fadbabd suite3565passed691skipped4failed79errors interrupted by Docker/PG I/O; aggregate remains non-green. Fresh nativePG15 enabled704pass4fixture failures→713pass after correction; clean b9a final28-file selection826pass54.58s. PG15 evidence does not replace PG16/full-suite verification. Full authorization/retry/scope audit remains."
       ]
     },
     {
@@ -107,10 +116,12 @@
         "raw/baseline-secrets-history.json",
         "raw/baseline-secrets-source.json",
         "raw/baseline-frontend-audit.json",
-        "SECURITY.md"
+        "SECURITY.md",
+        "docs/production-readiness/03-security-threat-model.md",
+        "raw/audit-commit-secret-scan-through-0fdd.json"
       ],
       "gaps": [
-        "94 baseline current scan candidates triaged as noncredentials; historic service-role/Wordstat exposure confirmed, revocation unknown. Image scan failed on Docker layer EOF, no scan verdict; next source-commit scan did not run. Final worktree, images/logs, resolved Python audit and full AI threat model pending."
+        "94 baseline current scan candidates triaged as noncredentials; historic service-role/Wordstat exposure confirmed, revocation unknown.26audit commits through0fdd scanned:3generic-key candidates are inspected ordinary report prose, not credentials. Image scan failed on Docker layer EOF. Final worktree/images/logs/resolved Python and adversarial AI/tool evidence remain pending; threat-model document explicitly marks untested boundaries."
       ]
     },
     {

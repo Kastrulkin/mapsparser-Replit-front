@@ -1,5 +1,17 @@
 # Readiness decisions
 
+## D-012 — Native SQL proof is useful, but is not Docker/PG16 parity
+
+Use a freshly created, loopback-only native PostgreSQL cluster with synthetic data to continue actual transaction/role checks while shared Docker is unavailable. Retain exact server version, data_directory, named test databases, archive commit and no-egress environment; stop only the owned cluster after checks. PG15 results can confirm SQL defects and fixes without pretending to satisfy PG16, image, compiled-runner or full production recovery requirements. Do not replace the original acceptance criteria with easier native-only checks.
+
+## D-013 — Role proof must reach real stored data and actual effects
+
+A fake role label unused by a cursor, or ImportError for a not-yet-added helper, does not prove an authorization defect. Require actual membership rows, the real guard, a reachable API request and an effect/no-effect assertion. Authorize the stored object tenant, not only the caller-selected business. Preserve documented read/preview/HEAD behavior and existing non-viewer/legacy NULL-business semantics while recording the remaining platform role matrix separately.
+
+## D-011 — Reconcile repeated maintenance requests before repeating downtime
+
+The latest user request permits the previously deferred server Docker/database maintenance. Live evidence confirms that exact runtime-snapshot release and DB restart already occurred and no deployed migration is pending. Do not repeat downtime or apply the separate unfinished audit checkout merely to perform an action. Clean canonical-image hardening is still a distinct unfinished release; server capacity does not establish local Docker Desktop integrity or approve its shared restart.
+
 ## D-001 — Preserve the full goal, stage the evidence
 
 The new whole-project audit starts from `30262a5b`; previous release results are historical context, not fresh proof. Separate local fixes from deployment approval. Baseline tests run from a clean archive to avoid silently importing local credentials or dirty state.
