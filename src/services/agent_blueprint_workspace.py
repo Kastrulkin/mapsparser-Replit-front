@@ -1466,15 +1466,6 @@ def _parse_message_llm_json(raw_response: str) -> Dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("LLM response JSON is not an object")
     return parsed
-    return {
-        "title": "Черновик сообщения",
-        "draft_text": "\n".join(body_lines).strip(),
-        "summary": selected_facts or ["Нужны данные источника для текста сообщения."],
-        "rules_applied": rules,
-        "format": output_format,
-        "feedback_notes": feedback_notes,
-        "provenance": [item.get("source_name") for item in selected_items if item.get("source_name")],
-    }
 
 
 def _select_message_items(extracted: List[Dict[str, Any]], workflow: str) -> List[Dict[str, Any]]:

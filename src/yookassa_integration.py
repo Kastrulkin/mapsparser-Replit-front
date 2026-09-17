@@ -1185,14 +1185,6 @@ def billing_checkout_start():
         )
         payment = create_yookassa_payment_for_checkout_session(str(session.get("id") or ""))
         db.conn.commit()
-        tariff_id = str(sub.get("tariff_id") or "")
-        business_tier = str(TARIFFS.get(tariff_id, {}).get("business_tier") or tariff_id)
-        access = build_subscription_capabilities(
-            tier=business_tier,
-            status=str(sub.get("status") or ""),
-            subscription_ends_at=sub.get("next_billing_date"),
-            is_superadmin=bool(user_data.get("is_superadmin")),
-        )
         return jsonify(
             {
                 "success": True,
@@ -1307,6 +1299,14 @@ def billing_status():
             (str(sub.get("id")),),
         )
         recent_attempts = [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+        tariff_id = str(sub.get("tariff_id") or "")
+        business_tier = str(TARIFFS.get(tariff_id, {}).get("business_tier") or tariff_id)
+        access = build_subscription_capabilities(
+            tier=business_tier,
+            status=str(sub.get("status") or ""),
+            subscription_ends_at=sub.get("next_billing_date"),
+            is_superadmin=bool(user_data.get("is_superadmin")),
+        )
 
         return jsonify(
             {

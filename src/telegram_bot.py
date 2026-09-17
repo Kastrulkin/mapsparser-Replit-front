@@ -3927,11 +3927,238 @@ async def show_optimize_mode_selection(update: Update, context: ContextTypes.DEF
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
+
+async def _control_switch_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    text, markup = _build_control_switcher(user_id)
+    await query.edit_message_text(text, reply_markup=markup)
+
+
+async def _control_favorite_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    favorite = _toggle_current_control_favorite(user_id)
+    text, markup = _build_control_switcher(user_id)
+    if favorite is True:
+        text = "★ Добавлено в избранное.\n\n" + text
+    elif favorite is False:
+        text = "Избранное обновлено.\n\n" + text
+    else:
+        text = "Не удалось обновить избранное.\n\n" + text
+    await query.edit_message_text(text, reply_markup=markup)
+
+
+async def _control_search_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    state_ref = user_states.setdefault(user_id, {})
+    state_ref["state"] = "waiting_control_scope_search"
+    await query.edit_message_text(
+        "Найдите бизнес\n\nПришлите часть названия, города или адреса одним сообщением.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отмена", callback_data="control_switch")]]),
+    )
+
+
+async def _control_locations_callback(query: Any, user_id: str, control_scope: Any) -> None:
+    network_id = ""
+    if control_scope and control_scope.get("kind") == "network":
+        network_id = str(control_scope.get("id") or "")
+    elif control_scope and isinstance(control_scope.get("parent_scope"), dict):
+        network_id = str(control_scope.get("parent_scope", {}).get("id") or "")
+    if not network_id:
+        await query.edit_message_text(
+            "Сначала выберите сеть.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Сменить", callback_data="control_switch")]]),
+        )
+        return
+    text, markup = _build_network_locations_switcher(user_id, network_id)
+    await query.edit_message_text(text, reply_markup=markup)
+
+
+async def _control_scope_select_callback(query: Any, user_id: str, data: str) -> None:
+    parts = data.split(":", 2)
+    selector = parts[1] if len(parts) > 1 else ""
+    requested_id = parts[2] if len(parts) > 2 else None
+    requested_kind = {"p": "platform", "n": "network", "b": "business"}.get(selector, "")
+    selected = _resolve_telegram_control_scope(
+        user_id,
+        requested_kind=requested_kind,
+        requested_id=requested_id,
+        persist=True,
+    )
+    if not selected:
+        await query.edit_message_text(
+            "Этот раздел недоступен. Возможно, права изменились.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("К выбору", callback_data="control_switch")]]),
+        )
+        return
+    user_states.setdefault(user_id, {})["state"] = "idle"
+    if selected.get("kind") == "business":
+        user_states.setdefault(user_id, {})["active_business_id"] = str(selected.get("id") or "")
+    summary = _build_telegram_control_summary(user_id, selected)
+    await _safe_edit_message(
+        query,
+        _format_control_start(summary),
+        reply_markup=_build_control_main_menu(selected),
+    )
+
+
+CONTROL_CALLBACK_ROUTES = {
+    "control_switch": _control_switch_callback,
+    "control_favorite": _control_favorite_callback,
+    "control_search": _control_search_callback,
+    "control_locations": _control_locations_callback,
+}
+
+CONTROL_PREFIX_CALLBACK_ROUTES = (
+    ("cs:", _control_scope_select_callback),
+)
+
+
+async def _dispatch_control_callback(data: str, query: Any, user_id: str, control_scope: Any) -> bool:
+    handler = CONTROL_CALLBACK_ROUTES.get(data)
+    if handler is not None:
+        await handler(query, user_id, control_scope)
+        return True
+    for prefix, prefix_handler in CONTROL_PREFIX_CALLBACK_ROUTES:
+        if data.startswith(prefix):
+            await prefix_handler(query, user_id, data)
+            return True
+    return False
+
+async def _handle_guest_callback(query: Any, update: Update, user_id: str, data: str) -> None:
+    """Handle callbacks that are valid before a LocalOS account is linked."""
+    state_ref = user_states.setdefault(user_id, {})
+    if data == "guest_audit_start":
+        state_ref["state"] = "waiting_guest_audit_link"
+        await query.edit_message_text(
+            "Пришлите ссылку на вашу карточку бизнеса.\n\n"
+            "Подойдут Яндекс Карты, 2ГИС и Google Maps.\n\n"
+            "Я покажу, где карточка теряет клиентов: отзывы, фото, описание, услуги и активность."
+        )
+        return
+    if data == "guest_compare_start":
+        state_ref["state"] = "waiting_guest_compare_own_link"
+        await query.edit_message_text(
+            f"{guest_compare_text()}\n\nСначала пришлите ссылку на вашу карточку.",
+            reply_markup=_build_guest_menu(),
+        )
+        return
+    if data == "guest_more":
+        await query.edit_message_text("Что можно сделать после бесплатного аудита", reply_markup=_build_guest_more_menu())
+        return
+    if data == "guest_about":
+        await query.edit_message_text(guest_about_text(), reply_markup=_build_guest_more_menu())
+        return
+    if data == "guest_tariffs":
+        await query.edit_message_text(guest_tariffs_text(), reply_markup=_build_tariffs_menu("guest_more"))
+        return
+    if data == "guest_fix_localos":
+        await query.edit_message_text(tariff_detail_text("starter"), reply_markup=_build_tariff_detail_menu("starter", "guest_more"))
+        return
+    if data == "guest_bind_help":
+        await query.edit_message_text(guest_connect_account_text(), reply_markup=_build_guest_more_menu())
+        return
+    if data.startswith("crypto_pay_"):
+        tier_key = data.replace("crypto_pay_", "", 1)
+        guest_checkout = _guest_checkout_context(user_id)
+        try:
+            invoice = create_crypto_invoice_for_checkout_session(
+                tariff_id=tier_key,
+                source="telegram_guest_checkout",
+                telegram_id=user_id,
+                telegram_username=str(getattr(update.effective_user, "username", "") or ""),
+                telegram_name=str(getattr(update.effective_user, "full_name", "") or ""),
+                maps_url=str(guest_checkout.get("maps_url") or "").strip() or None,
+                normalized_maps_url=str(guest_checkout.get("normalized_maps_url") or "").strip() or None,
+                audit_slug=str(guest_checkout.get("audit_slug") or "").strip() or None,
+                audit_public_url=str(guest_checkout.get("audit_public_url") or "").strip() or None,
+                competitor_maps_url=str(guest_checkout.get("competitor_maps_url") or "").strip() or None,
+                competitor_audit_url=str(guest_checkout.get("competitor_audit_url") or "").strip() or None,
+                payload_json=guest_checkout,
+            )
+            invoice_url = str(
+                invoice.get("bot_invoice_url")
+                or invoice.get("mini_app_invoice_url")
+                or invoice.get("web_app_invoice_url")
+                or ""
+            ).strip()
+            if not invoice_url:
+                raise RuntimeError("Crypto invoice URL is missing")
+            await query.edit_message_text(
+                "💎 Оплата внутри Telegram\n\n"
+                "Я подготовил invoice на выбранный тариф.\n"
+                "Откройте его по кнопке ниже и завершите оплату. После этого нажмите «Я оплатил, проверить».",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("💎 Открыть crypto invoice", url=invoice_url)],
+                        [InlineKeyboardButton("✅ Я оплатил, проверить", callback_data=f"crypto_check_{invoice.get('invoice_id') or invoice.get('id')}")],
+                        [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
+                    ]
+                ),
+            )
+        except Exception as exc:
+            await query.edit_message_text(
+                "Не удалось подготовить оплату внутри Telegram.\n\n"
+                f"Причина: {exc}",
+                reply_markup=_build_guest_menu(),
+            )
+        return
+    if data.startswith("crypto_check_"):
+        invoice_id = data.replace("crypto_check_", "", 1).strip()
+        try:
+            client = CryptoPayClient()
+            invoices = client.get_invoices(invoice_ids=[invoice_id])
+            invoice = invoices[0] if invoices else {}
+            status = str(invoice.get("status") or "").strip().lower()
+            if status != "paid":
+                await query.edit_message_text(
+                    "Платёж ещё не подтверждён.\n\n"
+                    "Если вы уже оплатили, подождите немного и нажмите проверку ещё раз.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            [InlineKeyboardButton("🔄 Проверить ещё раз", callback_data=f"crypto_check_{invoice_id}")],
+                            [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
+                        ]
+                    ),
+                )
+                return
+            checkout_result = apply_crypto_invoice_paid(invoice)
+            audit_url = str(checkout_result.get("audit_public_url") or "").strip()
+            lines = [
+                "✅ Оплата подтверждена.",
+                "Аккаунт LocalOS создан и привязан к вашему Telegram.",
+                "Теперь платные функции можно запускать без отдельной регистрации.",
+            ]
+            if audit_url:
+                lines.extend(["", f"Ваш аудит: {audit_url}"])
+            await query.edit_message_text(
+                "\n".join(lines),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        *([[InlineKeyboardButton("🔍 Открыть аудит", url=audit_url)]] if audit_url else []),
+                        [InlineKeyboardButton("✨ Что будет после аудита", callback_data="guest_more")],
+                    ]
+                ),
+            )
+        except Exception as exc:
+            await query.edit_message_text(
+                "Не удалось подтвердить оплату.\n\n"
+                f"Причина: {exc}",
+                reply_markup=_build_guest_menu(),
+            )
+        return
+    if data.startswith("tariff_info_"):
+        tier_key = data.replace("tariff_info_", "", 1)
+        await query.edit_message_text(
+            tariff_detail_text(tier_key),
+            reply_markup=_build_tariff_detail_menu(tier_key),
+        )
+        return
+    await query.edit_message_text("❌ Аккаунт не привязан. Используйте /start <код_привязки> или вернитесь в гостевое меню.", reply_markup=_build_guest_menu())
+    return
+
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на кнопки"""
     query = update.callback_query
     await query.answer()
-    
+
     user_id = str(update.effective_user.id)
     data = query.data
     from services.operator_telegram_voice import callback
@@ -3941,207 +4168,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_user_id = get_user_id_from_telegram(user_id)
     
     if not db_user_id:
-        state_ref = user_states.setdefault(user_id, {})
-        if data == "guest_audit_start":
-            state_ref["state"] = "waiting_guest_audit_link"
-            await query.edit_message_text(
-                "Пришлите ссылку на вашу карточку бизнеса.\n\n"
-                "Подойдут Яндекс Карты, 2ГИС и Google Maps.\n\n"
-                "Я покажу, где карточка теряет клиентов: отзывы, фото, описание, услуги и активность."
-            )
-            return
-        if data == "guest_compare_start":
-            state_ref["state"] = "waiting_guest_compare_own_link"
-            await query.edit_message_text(
-                f"{guest_compare_text()}\n\nСначала пришлите ссылку на вашу карточку.",
-                reply_markup=_build_guest_menu(),
-            )
-            return
-        if data == "guest_more":
-            await query.edit_message_text("Что можно сделать после бесплатного аудита", reply_markup=_build_guest_more_menu())
-            return
-        if data == "guest_about":
-            await query.edit_message_text(guest_about_text(), reply_markup=_build_guest_more_menu())
-            return
-        if data == "guest_tariffs":
-            await query.edit_message_text(guest_tariffs_text(), reply_markup=_build_tariffs_menu("guest_more"))
-            return
-        if data == "guest_fix_localos":
-            await query.edit_message_text(tariff_detail_text("starter"), reply_markup=_build_tariff_detail_menu("starter", "guest_more"))
-            return
-        if data == "guest_bind_help":
-            await query.edit_message_text(guest_connect_account_text(), reply_markup=_build_guest_more_menu())
-            return
-        if data.startswith("crypto_pay_"):
-            tier_key = data.replace("crypto_pay_", "", 1)
-            guest_checkout = _guest_checkout_context(user_id)
-            try:
-                invoice = create_crypto_invoice_for_checkout_session(
-                    tariff_id=tier_key,
-                    source="telegram_guest_checkout",
-                    telegram_id=user_id,
-                    telegram_username=str(getattr(update.effective_user, "username", "") or ""),
-                    telegram_name=str(getattr(update.effective_user, "full_name", "") or ""),
-                    maps_url=str(guest_checkout.get("maps_url") or "").strip() or None,
-                    normalized_maps_url=str(guest_checkout.get("normalized_maps_url") or "").strip() or None,
-                    audit_slug=str(guest_checkout.get("audit_slug") or "").strip() or None,
-                    audit_public_url=str(guest_checkout.get("audit_public_url") or "").strip() or None,
-                    competitor_maps_url=str(guest_checkout.get("competitor_maps_url") or "").strip() or None,
-                    competitor_audit_url=str(guest_checkout.get("competitor_audit_url") or "").strip() or None,
-                    payload_json=guest_checkout,
-                )
-                invoice_url = str(
-                    invoice.get("bot_invoice_url")
-                    or invoice.get("mini_app_invoice_url")
-                    or invoice.get("web_app_invoice_url")
-                    or ""
-                ).strip()
-                if not invoice_url:
-                    raise RuntimeError("Crypto invoice URL is missing")
-                await query.edit_message_text(
-                    "💎 Оплата внутри Telegram\n\n"
-                    "Я подготовил invoice на выбранный тариф.\n"
-                    "Откройте его по кнопке ниже и завершите оплату. После этого нажмите «Я оплатил, проверить».",
-                    reply_markup=InlineKeyboardMarkup(
-                        [
-                            [InlineKeyboardButton("💎 Открыть crypto invoice", url=invoice_url)],
-                            [InlineKeyboardButton("✅ Я оплатил, проверить", callback_data=f"crypto_check_{invoice.get('invoice_id') or invoice.get('id')}")],
-                            [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
-                        ]
-                    ),
-                )
-            except Exception as exc:
-                await query.edit_message_text(
-                    "Не удалось подготовить оплату внутри Telegram.\n\n"
-                    f"Причина: {exc}",
-                    reply_markup=_build_guest_menu(),
-                )
-            return
-        if data.startswith("crypto_check_"):
-            invoice_id = data.replace("crypto_check_", "", 1).strip()
-            try:
-                client = CryptoPayClient()
-                invoices = client.get_invoices(invoice_ids=[invoice_id])
-                invoice = invoices[0] if invoices else {}
-                status = str(invoice.get("status") or "").strip().lower()
-                if status != "paid":
-                    await query.edit_message_text(
-                        "Платёж ещё не подтверждён.\n\n"
-                        "Если вы уже оплатили, подождите немного и нажмите проверку ещё раз.",
-                        reply_markup=InlineKeyboardMarkup(
-                            [
-                                [InlineKeyboardButton("🔄 Проверить ещё раз", callback_data=f"crypto_check_{invoice_id}")],
-                                [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
-                            ]
-                        ),
-                    )
-                    return
-                checkout_result = apply_crypto_invoice_paid(invoice)
-                audit_url = str(checkout_result.get("audit_public_url") or "").strip()
-                lines = [
-                    "✅ Оплата подтверждена.",
-                    "Аккаунт LocalOS создан и привязан к вашему Telegram.",
-                    "Теперь платные функции можно запускать без отдельной регистрации.",
-                ]
-                if audit_url:
-                    lines.extend(["", f"Ваш аудит: {audit_url}"])
-                await query.edit_message_text(
-                    "\n".join(lines),
-                    reply_markup=InlineKeyboardMarkup(
-                        [
-                            *([[InlineKeyboardButton("🔍 Открыть аудит", url=audit_url)]] if audit_url else []),
-                            [InlineKeyboardButton("✨ Что будет после аудита", callback_data="guest_more")],
-                        ]
-                    ),
-                )
-            except Exception as exc:
-                await query.edit_message_text(
-                    "Не удалось подтвердить оплату.\n\n"
-                    f"Причина: {exc}",
-                    reply_markup=_build_guest_menu(),
-                )
-            return
-        if data.startswith("tariff_info_"):
-            tier_key = data.replace("tariff_info_", "", 1)
-            await query.edit_message_text(
-                tariff_detail_text(tier_key),
-                reply_markup=_build_tariff_detail_menu(tier_key),
-            )
-            return
-        await query.edit_message_text("❌ Аккаунт не привязан. Используйте /start <код_привязки> или вернитесь в гостевое меню.", reply_markup=_build_guest_menu())
+        await _handle_guest_callback(query, update, user_id, data)
         return
-    
+
     business_ctx = resolve_business_context(user_id)
     if business_ctx:
         business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
 
     control_scope = _resolve_telegram_control_scope(user_id)
-    if data == "control_switch":
-        text, markup = _build_control_switcher(user_id)
-        await query.edit_message_text(text, reply_markup=markup)
+    if await _dispatch_control_callback(data, query, user_id, control_scope):
         return
-    if data == "control_favorite":
-        favorite = _toggle_current_control_favorite(user_id)
-        text, markup = _build_control_switcher(user_id)
-        if favorite is True:
-            text = "★ Добавлено в избранное.\n\n" + text
-        elif favorite is False:
-            text = "Избранное обновлено.\n\n" + text
-        else:
-            text = "Не удалось обновить избранное.\n\n" + text
-        await query.edit_message_text(text, reply_markup=markup)
-        return
-    if data == "control_search":
-        state_ref = user_states.setdefault(user_id, {})
-        state_ref["state"] = "waiting_control_scope_search"
-        await query.edit_message_text(
-            "Найдите бизнес\n\nПришлите часть названия, города или адреса одним сообщением.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отмена", callback_data="control_switch")]]),
-        )
-        return
-    if data == "control_locations":
-        network_id = ""
-        if control_scope and control_scope.get("kind") == "network":
-            network_id = str(control_scope.get("id") or "")
-        elif control_scope and isinstance(control_scope.get("parent_scope"), dict):
-            network_id = str(control_scope.get("parent_scope", {}).get("id") or "")
-        if not network_id:
-            await query.edit_message_text(
-                "Сначала выберите сеть.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Сменить", callback_data="control_switch")]]),
-            )
-            return
-        text, markup = _build_network_locations_switcher(user_id, network_id)
-        await query.edit_message_text(text, reply_markup=markup)
-        return
-    if data.startswith("cs:"):
-        parts = data.split(":", 2)
-        selector = parts[1] if len(parts) > 1 else ""
-        requested_id = parts[2] if len(parts) > 2 else None
-        requested_kind = {"p": "platform", "n": "network", "b": "business"}.get(selector, "")
-        selected = _resolve_telegram_control_scope(
-            user_id,
-            requested_kind=requested_kind,
-            requested_id=requested_id,
-            persist=True,
-        )
-        if not selected:
-            await query.edit_message_text(
-                "Этот раздел недоступен. Возможно, права изменились.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("К выбору", callback_data="control_switch")]]),
-            )
-            return
-        user_states.setdefault(user_id, {})["state"] = "idle"
-        if selected.get("kind") == "business":
-            user_states.setdefault(user_id, {})["active_business_id"] = str(selected.get("id") or "")
-        summary = _build_telegram_control_summary(user_id, selected)
-        await _safe_edit_message(
-            query,
-            _format_control_start(summary),
-            reply_markup=_build_control_main_menu(selected),
-        )
-        return
-
     protected_business_prefixes = (
         "operator_confirm:",
         "operator_reject:",

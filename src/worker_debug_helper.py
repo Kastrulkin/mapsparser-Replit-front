@@ -1,4 +1,7 @@
 
+from datetime import datetime
+
+
 def debug_log(msg):
     try:
         with open("worker_debug.txt", "a") as f:

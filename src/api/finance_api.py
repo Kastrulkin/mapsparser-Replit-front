@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import sys
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, Response, jsonify, request
 
@@ -20,6 +20,8 @@ from core.finance_kpis import calculate_finance_snapshot, default_period_range, 
 from core.auth_helpers import verify_business_access
 from core.helpers import get_business_id_from_user, get_business_owner_id
 from database_manager import DatabaseManager
+from services.gigachat_client import analyze_screenshot_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from subscription_manager import get_capability_access
 
 

@@ -4550,30 +4550,6 @@ def _has_cabinet_account(business_id: str) -> tuple:
         cursor.close()
         conn.close()
 
-def _ensure_column_exists(cursor, conn, table_name, column_name, column_type="TEXT"):
-    """Проверяет и добавляет колонку если её нет"""
-    # Эта функция использовалась только для SQLite (PRAGMA, ALTER TABLE on the fly).
-    # В PostgreSQL схема управляется через миграции (schema_postgres.sql),
-    # поэтому в worker'е при DB_TYPE='postgres' просто выходим.
-    if DB_TYPE == "postgres":
-        return
-
-    try:
-        # PRAGMA не поддерживает параметризованные запросы, используем f-string с проверкой
-        ALLOWED_TABLES = {"parsequeue", "cards"}
-        if table_name not in ALLOWED_TABLES:
-            raise ValueError(f"Неразрешенная таблица: {table_name}")
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = [row[1] for row in cursor.fetchall()]
-
-        if column_name not in columns:
-            print(f"📝 Добавляю поле {column_name} в {table_name}...")
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
-            conn.commit()
-    except Exception as e:
-        print(f"⚠️ Ошибка проверки колонки {column_name} в {table_name}: {e}")
-
-
 def _process_yandex_reviews_delta_task(queue_dict: Dict[str, Any]) -> None:
     queue_id = str(queue_dict.get("id") or "").strip()
     business_id = str(queue_dict.get("business_id") or "").strip()
@@ -7184,120 +7160,6 @@ def _service_rows_to_grouped_products(service_rows: List[Dict[str, Any]]) -> Lis
     return [{"category": category, "items": items} for category, items in grouped.items() if items]
 
 
-def _sync_parsed_services_to_db(business_id: str, products: list, conn, owner_id: str):
-    """
-    Синхронизирует распаршенные услуги в таблицу UserServices.
-    Добавляет новые, обновляет цены существующих.
-    """
-    if not products:
-        return
-
-    # STRICT CHECK: owner_id required
-    if not owner_id:
-        print(f"⚠️ Service sync skipped: owner_id is missing for business {business_id}")
-        # Raising error to fail fast as per plan, but let's confirm logic
-        raise ValueError(f"owner_id (str) is required for service sync for business {business_id}")
-
-    cursor = conn.cursor()
-    
-    # Старый путь синхронизации в таблицу UserServices использует SQLite-специфичные конструкции.
-    # В PostgreSQL основной источник правды по услугам — YandexBusinessSyncWorker и связанные таблицы,
-    # поэтому здесь просто выходим, чтобы не ломать worker.
-    if DB_TYPE == "postgres":
-        print(f"⚠️ Service sync via _sync_parsed_services_to_db пропущен для Postgres (business_id={business_id})")
-        return
-
-    # 1. Проверяем наличие таблицы UserServices и нужных колонок (SQLite)
-    cursor.execute("SELECT to_regclass('public.userservices')")
-    if not cursor.fetchone():
-        # Если таблицы нет, создаём (должна быть, но на всякий случай)
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserServices (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                category TEXT,
-                price INTEGER, -- цена в копейках
-                duration INTEGER DEFAULT 60,
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                user_id TEXT,
-                FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-            )
-        """
-        )
-    
-    count_new = 0
-    count_updated = 0
-    
-    print(f"👤 Syncing services for owner_id: {owner_id}")
-    
-    for category_data in products:
-
-
-        category_name = category_data.get('category', 'Разное')
-        items = category_data.get('items', [])
-        
-        for item in items:
-            name = item.get('name')
-            if not name:
-                continue
-                
-            raw_price = item.get('price', '')
-            description = item.get('description', '')
-            
-            # Парсинг цены
-            price_cents = None
-            if raw_price:
-                # Удаляем все нецифровые символы кроме разделителей
-                try:
-                    # Ищем числа в строке
-                    import re
-                    # "от 1 500 ₽" -> "1500"
-                    digits = re.sub(r'[^0-9]', '', str(raw_price))
-                    if digits:
-                        price_cents = int(digits) * 100 # В копейки
-                except:
-                    pass
-            
-            # Ищем существующую услугу по имени и business_id
-            cursor.execute(
-                """
-                SELECT id FROM userservices
-                WHERE business_id = %s AND name = %s
-                """,
-                (business_id, name),
-            )
-            row = cursor.fetchone()
-            service_id = (row[0] if isinstance(row, (list, tuple)) else row.get("id")) if row else None
-
-            if service_id:
-                cursor.execute(
-                    """
-                    UPDATE userservices
-                    SET price = %s, description = %s, category = %s, updated_at = CURRENT_TIMESTAMP, is_active = TRUE
-                    WHERE id = %s
-                    """,
-                    (price_cents, description, category_name, service_id),
-                )
-                count_updated += 1
-            else:
-                service_id = str(uuid.uuid4())
-                cursor.execute(
-                    """
-                    INSERT INTO userservices (id, business_id, user_id, name, description, category, price, is_active)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
-                    """,
-                    (service_id, business_id, owner_id, name, description, category_name, price_cents),
-                )
-                count_new += 1
-                
-    conn.commit()
-    print(f"📊 Синхронизация услуг завершена: {count_new} новых, {count_updated} обновлено.")
-
 def _process_sync_yandex_business_task(queue_dict):
     """Обработка синхронизации Яндекс.Бизнес через кабинет"""
     import signal
@@ -7532,19 +7394,12 @@ def _process_sync_yandex_business_task(queue_dict):
             except Exception:
                 pass
             
-            # The cursor and conn here refer to the ones created within the try block
-            # associated with the DatabaseManager instance.
             try:
                 if 'cursor' in locals() and cursor and not cursor.closed:
                     cursor.close()
             except Exception:
                 pass
-            try:
-                if 'conn' in locals() and conn and not conn.closed:
-                    conn.close()
-            except Exception:
-                pass
-            
+
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("""

@@ -1,6 +1,8 @@
 """Public sales-room routes."""
 from __future__ import annotations
 
+from typing import Any
+
 from flask import Blueprint
 
 from core.ai_learning import record_ai_learning_event

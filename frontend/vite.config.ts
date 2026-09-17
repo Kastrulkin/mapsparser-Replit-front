@@ -48,6 +48,38 @@ export default defineConfig({
             return "maps";
           }
 
+          if (
+            id.includes("node_modules/react/")
+            || id.includes("node_modules/react-dom/")
+            || id.includes("node_modules/scheduler/")
+          ) {
+            return "react-core";
+          }
+
+          if (id.includes("node_modules/date-fns/")) {
+            return "date-utils";
+          }
+
+          if (id.includes("node_modules/i18next/") || id.includes("node_modules/react-i18next/")) {
+            return "i18n";
+          }
+
+          if (id.includes("node_modules/zod/")) {
+            return "validation";
+          }
+
+          if (id.includes("node_modules/@xyflow/")) {
+            return "workflow-graph";
+          }
+
+          if (id.includes("node_modules/react-hook-form/") || id.includes("node_modules/@hookform/")) {
+            return "forms";
+          }
+
+          if (id.includes("node_modules/lodash/")) {
+            return "lodash";
+          }
+
           if (id.includes("node_modules")) {
             return "vendor";
           }

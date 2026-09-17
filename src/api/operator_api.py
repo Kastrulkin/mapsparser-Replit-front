@@ -911,11 +911,11 @@ def operator_inbox():
     except Exception:
         db.conn.rollback()
         error_id = str(uuid.uuid4())
-        logger.exception("Operator action confirmation failed error_id=%s action_id=%s", error_id, action_id)
+        logger.exception("Operator inbox failed error_id=%s business_id=%s", error_id, business_id)
         return jsonify({
             "success": False,
-            "error": "Не удалось подтвердить действие. Повторите позже или сообщите код ошибки поддержке.",
-            "error_code": "operator_action_confirmation_failed",
+            "error": "Не удалось загрузить входящие задачи. Повторите позже или сообщите код ошибки поддержке.",
+            "error_code": "operator_inbox_failed",
             "error_id": error_id,
         }), 500
     finally:

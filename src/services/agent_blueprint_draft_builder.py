@@ -1055,26 +1055,6 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
         "version_payload": version_payload,
         "summary": _summary("custom", sources, steps),
     }
-    if (source.get("key") == "telegram" or destination.get("key") == "telegram") and not _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
-        return {}
-    if source.get("key") == destination.get("key") and source.get("key") != "telegram":
-        return {}
-    action_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append", "занос", "созда", "запис", "импорт", "каждый", "ежеднев"]
-    if not _contains_any(lowered, action_words):
-        return {}
-    trigger = str(source.get("trigger") or "")
-    schedule = {}
-    if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "schedule", "daily"]):
-        trigger = "schedule.daily"
-        schedule = {"time": "19:00", "timezone": "business_timezone"}
-    if not trigger:
-        trigger = "manual.run"
-    return {
-        "source": source,
-        "destination": destination,
-        "trigger": trigger,
-        "schedule": schedule,
-    }
 
 
 def _review_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
