@@ -48,12 +48,15 @@ class _Database:
         return None
 
 
-def _client(monkeypatch):
+def _client(monkeypatch, *, writable=True):
     _Database.cursor = _Cursor()
     monkeypatch.setattr(finance_api, "DatabaseManager", _Database)
     monkeypatch.setattr(finance_api, "verify_session", lambda _token: {"user_id": "user-1"})
     monkeypatch.setattr(finance_api, "get_business_id_from_user", lambda _user_id, requested: requested)
     monkeypatch.setattr(finance_api, "verify_business_access", lambda _cursor, business_id, _user: (business_id == "business-2", "owner-1"))
+    # This fixture isolates ROI query scoping. Stored-role authorization itself
+    # is exercised against PostgreSQL in test_viewer_mutation_readiness.py.
+    monkeypatch.setattr(finance_api, "verify_business_write_access", lambda _cursor, business_id, _user: (writable and business_id == "business-2", "owner-1"))
     monkeypatch.setattr(finance_api, "get_capability_access", lambda *_args, **_kwargs: {"allowed": True})
     app = Flask(__name__)
     app.register_blueprint(finance_api.finance_bp)
@@ -83,3 +86,31 @@ def test_roi_read_and_write_are_scoped_to_the_selected_business(monkeypatch):
     assert roi_queries
     assert all("business_id" in query for query, _params in roi_queries)
     assert all("business-2" in params for _query, params in roi_queries)
+
+
+def test_read_only_roi_access_does_not_allow_an_insert(monkeypatch):
+    client = _client(monkeypatch, writable=False)
+    headers = {"Authorization": "Bearer test-token"}
+
+    assert client.get("/api/finance/roi?business_id=business-2", headers=headers).status_code == 200
+    response = client.post(
+        "/api/finance/roi", headers=headers,
+        json={"business_id": "business-2", "investment_amount": 1000, "returns_amount": 1500},
+    )
+
+    assert response.status_code == 403
+    assert not any("insert into roidata" in query for query, _params in _Database.cursor.executions)
+
+
+def test_foreign_roi_target_is_denied_before_query(monkeypatch):
+    client = _client(monkeypatch)
+    headers = {"Authorization": "Bearer test-token"}
+
+    assert client.get("/api/finance/roi?business_id=foreign", headers=headers).status_code == 403
+    response = client.post(
+        "/api/finance/roi", headers=headers,
+        json={"business_id": "foreign", "investment_amount": 1000, "returns_amount": 1500},
+    )
+
+    assert response.status_code == 403
+    assert not any("roidata" in query for query, _params in _Database.cursor.executions)
