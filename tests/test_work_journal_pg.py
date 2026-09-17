@@ -30,6 +30,16 @@ def journal(daily,monkeypatch):
     c.execute("INSERT INTO averageticketmatrices(id,business_id,matrix_json) VALUES ('matrix','b',%s::jsonb)",(json.dumps(matrix),))
     from alembic import op
     monkeypatch.setattr(op,'execute',c.execute)
+    # Revoked direct membership falls through to the canonical network tables.
+    for migration_name in (
+        '20250207_add_networks_and_business_network_id.py',
+        '20260729_add_network_members.py',
+    ):
+        migration_path = Path(__file__).parents[1] / 'alembic_migrations/versions' / migration_name
+        migration_spec = importlib.util.spec_from_file_location('journal_network_migration', migration_path)
+        migration_module = importlib.util.module_from_spec(migration_spec)
+        migration_spec.loader.exec_module(migration_module)
+        migration_module.upgrade()
     path=Path(__file__).parents[1]/'alembic_migrations/versions/20260912_work_journal.py'
     spec=importlib.util.spec_from_file_location('work_migration',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);module.upgrade();module.upgrade()
     c.execute("INSERT INTO business_master_bindings(business_id,user_id,master_id) VALUES ('b','master','m1')")
@@ -157,6 +167,32 @@ def test_revoked_member_cannot_read(journal):
     c.execute("UPDATE business_members SET status='revoked' WHERE user_id='master'")
     with pytest.raises(PermissionError):work_journal.list_entries(c,'b','master')
     with pytest.raises(PermissionError):work_recommendations.recommend(c,'b','master',{'booking_id':'v1'})
+
+
+@pytest.mark.parametrize(('role', 'status', 'network_id', 'can_write'), [
+    ('manager', 'active', 'network-a', True),
+    ('member', 'active', 'network-a', True),
+    ('viewer', 'active', 'network-a', False),
+    ('member', 'revoked', 'network-a', False),
+    ('manager', 'active', 'network-other', False),
+])
+def test_network_membership_fallback_respects_role_status_and_tenant(journal, role, status, network_id, can_write):
+    _, cursor = journal
+    cursor.execute("UPDATE business_members SET status='revoked' WHERE user_id='master'")
+    cursor.execute("INSERT INTO networks(id,owner_id,name) VALUES ('network-a','u','A'),('network-other','u','Other')")
+    cursor.execute("UPDATE businesses SET network_id='network-a' WHERE id='b'")
+    cursor.execute(
+        "INSERT INTO network_members(id,network_id,user_id,role,status) VALUES ('membership',%s,'master',%s,%s)",
+        (network_id, role, status),
+    )
+
+    if can_write:
+        assert note(cursor, key='network-member')['id']
+    else:
+        with pytest.raises(PermissionError):
+            note(cursor, key='network-member')
+        cursor.execute('SELECT COUNT(*) n FROM business_work_journal')
+        assert cursor.fetchone()['n'] == 0
 
 
 def test_changed_request_and_policy_replay_rejected(journal):
