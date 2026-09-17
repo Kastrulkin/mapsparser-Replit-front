@@ -460,6 +460,10 @@ pip install -r requirements.test.txt
 pytest -q
 ```
 
+Полный набор включает два Python/Playwright браузерных regression-теста. Для них заранее нужны Node.js 22, зависимости frontend (`npm --prefix frontend ci`) и Chromium соответствующей версии Python Playwright (`python -m playwright install chromium`). Тесты не устанавливают зависимости автоматически: они запускают собственный Vite на отдельном loopback-порту, перехватывают API тестовыми ответами и закрывают свой процесс после проверки, в том числе при ошибке запуска.
+
+Исторические ручные скрипты `tests/legacy` исключены из обычного pytest discovery. Старый `test_api.py`, который отправлял регистрацию/вход в произвольное приложение на `localhost:8000`, отключён и при прямом запуске завершится ошибкой с пояснением. Это архив, а не замена актуальным API-тестам. Для проверок с `LOCALOS_TEST_DATABASE_URL` используйте только отдельную тестовую PostgreSQL БД, не production и не пользовательскую рабочую базу.
+
 При **доступном Docker** (daemon запущен, `docker.from_env().ping()` успешен) прогоняются все gate-тесты для `/api/client-info`: **A–B–C–D–E–F–H** (с Postgres в testcontainers и применением миграций `flask db upgrade`) и статический тест **G** (проверка отсутствия PRAGMA/ClientInfo в runtime). Skip только если Docker реально недоступен. Дополнительно есть unit‑тест **I** (валидация результата парсинга), который не требует Docker и БД.
 
 Что проверяется:

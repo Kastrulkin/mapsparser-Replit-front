@@ -1,48 +1,23 @@
-import os
 import re
-import signal
-import subprocess
-import time
-from pathlib import Path
-from urllib.request import urlopen
 
 from playwright.sync_api import expect, sync_playwright
 import pytest
 
+from tests.e2e.vite_harness import IsolatedViteApp, guard_browser_requests
 
-APP_URL = "http://127.0.0.1:4173/dashboard/operator"
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _wait_for_app() -> None:
-    for _ in range(80):
-        try:
-            with urlopen(APP_URL, timeout=0.25) as response:
-                if response.status == 200:
-                    return
-        except Exception:
-            time.sleep(0.1)
-    raise AssertionError("Vite preview did not start")
-
-
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="module")
 def vite_app():
-    server = subprocess.Popen(
-        ["npm", "--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1", "--port", "4173"],
-        cwd=REPO_ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    app = IsolatedViteApp("/dashboard/operator")
     try:
-        _wait_for_app()
-        yield
+        app.start()
+        yield app
     finally:
-        os.killpg(server.pid, signal.SIGTERM)
-        server.wait(timeout=10)
+        app.stop()
 
 
-def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502():
+def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_502(vite_app):
+    app_url = vite_app.url
+    port = vite_app.port
     progress_puts = 0
     page_errors: list[str] = []
 
@@ -132,8 +107,8 @@ def test_guided_tour_advances_and_keeps_local_progress_when_progress_save_gets_5
 
             route.fulfill(status=200, content_type="application/json", json={"success": True})
 
-        page.route("**/api/**", handle_api)
-        page.goto(APP_URL, wait_until="domcontentloaded")
+        guard_browser_requests(page, port, handle_api)
+        page.goto(app_url, wait_until="domcontentloaded")
 
         start_button = page.get_by_role("button", name="Начать знакомство")
         expect(start_button).to_be_visible()

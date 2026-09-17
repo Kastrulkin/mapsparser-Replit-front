@@ -183,3 +183,14 @@ Default pytest discovery explicitly excludes `tests/legacy`. The archived print-
 ## Frontend aggregate checkpoint
 
 Fresh committed frontend source, reused locked install: **570unit tests /122files passed**,176.591s captured wall; lint0errors/1existing warning14.728s; app+Node typecheck36.781s. Captures `raw/frontend-patched-{unit,lint,typecheck}.json`. Existing intentional error-boundary/jsdom console diagnostics remain; no unit failures. This aggregate plus both builds and33real-API checks is not a whole-project readiness sign-off.
+
+## TEST-E2E-HARNESS — Isolate Python browser-test startup and requests
+
+Status: **FIX_PROVEN locally**, independently reviewed; test infrastructure only.
+
+Two browser regressions now require installed frontend dependencies explicitly, own a high loopback Vite port with strict binding, bound startup/diagnostics, and clean up only their process group on success or failure. Exact-origin browser interception fulfills only own-origin API and the frontend's canonical DEV `http://localhost:8000/api/*` without any network forwarding; all other origins/ports/protocols are blocked. UI/error-recovery assertions are unchanged.
+
+- Red under outbound guard:1failed+1error17.47s, fixed old ports blocked as unrelated local services. The original clean archive also lacked frontend dependencies; missing preconditions were not product defects.
+- Review found overbroad loopback mocking and orphaned Vite on failed startup. Both corrected; eight deterministic harness checks now cover allowed/denied routes and mocked failed-start cleanup, plus the two actual browser flows. Final **10passed34.24s**, `/tmp/e2e_harness_lifecycle.log`.
+- README now lists the actual Node/frontend/Chromium prerequisites and intentional legacy-script quarantine. No auto-install, runtime feature changes or real localhost API writes.
+- Separately, the full72 mocked frontend browser scenarios pass after the application fixes,112.311s captured wall, `raw/frontend-patched-mocked-e2e.json`. Their temporary audit config uses a dedicated strict port and refuses server reuse; API behavior remains mocked, not production proof.
