@@ -129,6 +129,10 @@ def _message_for_template_match(value: Any) -> str:
     return message
 from services.outreach_signal_hypothesis_service import derive_pain_signal_hypotheses
 from services.outreach_template_service import (
+    CREATOR_NAME_ONLY_TEMPLATE_KEY,
+    CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT,
+    CREATOR_NEUTRAL_TEMPLATE_KEY,
+    CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT,
     CREATOR_INVITATION_TEMPLATE_KEY,
     CREATOR_INVITATION_TEMPLATE_VERSION,
     attach_public_audit_link,
@@ -137,6 +141,11 @@ from services.outreach_template_service import (
     template_allows_two_questions,
     template_copy_matches,
     template_owner_pain_matches,
+)
+from services.author_template_authorization_service import (
+    exact_author_invitation,
+    load_author_template_authorization,
+    template_manifest,
 )
 from services.outreach_relationship_service import (
     ROOM_INVITATION_CLASSIFICATIONS,
@@ -1587,6 +1596,7 @@ def _load_creator_outreach_bridge(
         """
         SELECT candidate.id AS candidate_id,
                candidate.creator_profile_id,
+               candidate.score_snapshot_json AS candidate_score_snapshot_json,
                candidate.updated_at AS candidate_updated_at,
                candidate.score_snapshot_json->'contact_confirmation' AS contact_confirmation,
                profile.display_name AS creator_display_name,
@@ -1840,6 +1850,13 @@ def _load_creator_outreach_bridge(
         "evidence_kind": "creator_invitation_approved",
         "provider_key": _text(row.get("channel_id")),
     }
+    constraints_json = row.get("constraints_json")
+    constraints = dict(constraints_json) if isinstance(constraints_json, dict) else {}
+    constraints.pop("author_invitation_variant", None)
+    candidate_snapshot = row.get("candidate_score_snapshot_json")
+    candidate_variant = _text((candidate_snapshot if isinstance(candidate_snapshot, dict) else {}).get("author_invitation_variant"))
+    if candidate_variant:
+        constraints["author_invitation_variant"] = candidate_variant
     provenance_contract = {
         "bridge_version": CREATOR_OUTREACH_BRIDGE_VERSION,
         "creator_campaign_id": _text(row.get("creator_campaign_id")),
@@ -1864,7 +1881,7 @@ def _load_creator_outreach_bridge(
         "formats": row.get("formats_json") if isinstance(row.get("formats_json"), list) else [],
         "budget": row.get("budget_json") if isinstance(row.get("budget_json"), dict) else {},
         "period": row.get("period_json") if isinstance(row.get("period_json"), dict) else {},
-        "constraints": row.get("constraints_json") if isinstance(row.get("constraints_json"), dict) else {},
+        "constraints": constraints,
         "contact_confirmation": contact_confirmation,
     }
     provenance_evidence = {
@@ -1911,7 +1928,7 @@ def _load_creator_outreach_bridge(
         "formats": row.get("formats_json") if isinstance(row.get("formats_json"), list) else [],
         "budget": row.get("budget_json") if isinstance(row.get("budget_json"), dict) else {},
         "period": row.get("period_json") if isinstance(row.get("period_json"), dict) else {},
-        "constraints": row.get("constraints_json") if isinstance(row.get("constraints_json"), dict) else {},
+        "constraints": constraints,
     }
     bridge["source_fact_fingerprint"] = research_source_fact_fingerprint({
         "signals_json": [
@@ -3953,13 +3970,18 @@ def _apply_creator_invitation_template_contract(
     bridge: dict[str, Any],
     manual_review_context: str,
     manual_reviewer_role: str,
+    template_authorization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Adapt business-only diagnostics after the authenticated saved-draft review."""
+    """Accept exact author copy under manual review or a trusted template grant."""
     result = dict(gate)
     rendered = render_creator_invitation_template(bridge)
-    allowed_diagnostics = {"removal", "bridge", "specificity"}
-    allowed_reasons = {"DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"}
-    allowed_blocking = {"decorative_personalization"}
+    allowed_diagnostics = {"removal", "bridge", "specificity", "style_contract"}
+    allowed_reasons = {
+        "DECORATIVE_PERSONALIZATION",
+        "WEAK_OFFER_BRIDGE",
+        "STYLE_VIOLATION",
+    }
+    allowed_blocking = {"decorative_personalization", "style_contract_violation"}
     exact_server_copy = bool(
         rendered
         and subject == rendered["subject"]
@@ -3969,6 +3991,14 @@ def _apply_creator_invitation_template_contract(
         manual_review_context == "saved_draft_review"
         and manual_reviewer_role == "superadmin"
     )
+    grant = template_authorization or {}
+    authorized_template = bool(
+        rendered and rendered.get("key") in {
+            CREATOR_NAME_ONLY_TEMPLATE_KEY, CREATOR_NEUTRAL_TEMPLATE_KEY,
+        }
+        and grant.get("id") and grant.get("approved_by")
+        and grant.get("manifest") == template_manifest()
+    )
     only_business_specific_failures = bool(
         set(result.get("diagnostic_codes") or []).issubset(allowed_diagnostics)
         and set(result.get("reason_codes") or []).issubset(allowed_reasons)
@@ -3976,22 +4006,24 @@ def _apply_creator_invitation_template_contract(
     )
     contract_passed = bool(
         exact_server_copy
-        and authorized_saved_review
+        and (authorized_saved_review or authorized_template)
         and only_business_specific_failures
     )
     result["creator_invitation_copy_contract"] = {
-        "key": CREATOR_INVITATION_TEMPLATE_KEY,
-        "version": CREATOR_INVITATION_TEMPLATE_VERSION,
+        "key": rendered.get("key") if rendered else CREATOR_INVITATION_TEMPLATE_KEY,
+        "version": rendered.get("version") if rendered else CREATOR_INVITATION_TEMPLATE_VERSION,
         "passed": contract_passed,
         "exact_server_copy": exact_server_copy,
         "authorized_saved_review": authorized_saved_review,
+        "authorized_template": authorized_template,
+        "template_authorization_id": grant.get("id") if authorized_template else None,
         "subject_sha256": rendered.get("subject_sha256") if rendered else None,
         "body_sha256": rendered.get("body_sha256") if rendered else None,
         "channel_id": rendered.get("channel_id") if rendered else None,
         "evidence_id": rendered.get("evidence_id") if rendered else None,
     }
     if not contract_passed:
-        if exact_server_copy and not authorized_saved_review:
+        if exact_server_copy and not (authorized_saved_review or authorized_template):
             result["passed"] = False
             result["verdict"] = "revise"
             result["blocking_reasons"] = list(dict.fromkeys(
@@ -4058,6 +4090,22 @@ def build_preview(
         context.get("workstream_type") == "creator_collaboration"
         and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
     )
+    # Read the permission journal here, never accept a grant from preview JSON
+    # or mutable creator-campaign constraints.
+    author_template_authorization = {}
+    creator_constraints = (context.get("creator_outreach_bridge") or {}).get(
+        "constraints", {}
+    )
+    creator_constraints = (
+        creator_constraints if isinstance(creator_constraints, dict) else {}
+    )
+    if author_lane and (
+        creator_constraints.get("invitation_template")
+        == CREATOR_NAME_ONLY_TEMPLATE_CONSTRAINT
+        or creator_constraints.get("author_invitation_variant")
+        == CREATOR_NEUTRAL_TEMPLATE_CONSTRAINT
+    ):
+        author_template_authorization = load_author_template_authorization(cursor)
     reviewer_role = _text(manual_reviewer_role) or "authorized_user"
     review_context = _text(manual_review_context)
     ledger = build_evidence_ledger(context)
@@ -4478,6 +4526,7 @@ def build_preview(
                 bridge=context.get("creator_outreach_bridge") or {},
                 manual_review_context=review_context,
                 manual_reviewer_role=reviewer_role,
+                template_authorization=author_template_authorization,
             )
         strategy = _strategy_dimensions(
             context,
@@ -4681,6 +4730,7 @@ def build_preview(
                     bridge=context.get("creator_outreach_bridge") or {},
                     manual_review_context=review_context,
                     manual_reviewer_role=reviewer_role,
+                    template_authorization=author_template_authorization,
                 )
             gate["manual_review"] = {
                 "passed": bool(gate.get("passed")),
@@ -4778,6 +4828,11 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
         preview.get("workstream_type") == "creator_collaboration"
         and preview.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
     )
+    riderra_template_record = (
+        preview.get("riderra_template_record")
+        if isinstance(preview.get("riderra_template_record"), dict)
+        else {}
+    )
     if author_lane and any(
         _text(touch.get("channel")).lower() not in AUTHOR_CHANNEL_DAILY_LIMITS
         for touch in preview["touches"]
@@ -4806,6 +4861,25 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
             "author_policy_version": AUTHOR_POLICY_VERSION,
             "daily_limit": AUTHOR_DAILY_LIMIT,
             "channel_daily_limits": AUTHOR_CHANNEL_DAILY_LIMITS,
+        })
+    if riderra_template_record:
+        from services.riderra_template_authorization_service import (
+            APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+            BUSINESS_ID as RIDERRA_BUSINESS_ID,
+            DAILY_LIMIT as RIDERRA_DAILY_LIMIT,
+            TEMPLATE_VERSION as RIDERRA_TEMPLATE_VERSION,
+        )
+        if (
+            preview.get("workstream_type") != "client_partnership"
+            or str(preview.get("business_id") or "") != RIDERRA_BUSINESS_ID
+            or len(preview["touches"]) != 1
+        ):
+            raise ValueError("riderra_template_preview_scope_invalid")
+        policy.update({
+            "approval_mode": RIDERRA_APPROVAL_MODE,
+            "daily_limit": RIDERRA_DAILY_LIMIT,
+            "riderra_template_version": RIDERRA_TEMPLATE_VERSION,
+            "riderra_template_record": riderra_template_record,
         })
     cursor.execute(
         """
@@ -4868,6 +4942,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "template_version": touch.get("template_version"),
                     "template_label": (touch.get("template_selection") or {}).get("label"),
                     "template_selection": touch.get("template_selection") or {},
+                    "riderra_template_record": touch.get("riderra_template_record") or {},
                 }),
                 Json(touch["quality_gate"]),
                 touch.get("strategy_fingerprint"), Json(touch.get("strategy") or {}),
@@ -4932,7 +5007,220 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
     }
 
 
-def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str, Any]:
+def build_riderra_template_preview(
+    cursor: Any, record: dict[str, Any], *, start_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build one native campaign preview from a live grant member."""
+    from services.riderra_template_authorization_service import (
+        BUSINESS_ID as RIDERRA_BUSINESS_ID,
+        PHUKET_TEMPLATE_ID as RIDERRA_PHUKET_TEMPLATE_ID,
+        SENDER_ACCOUNT_ID as RIDERRA_SENDER_ACCOUNT_ID,
+        exact_invitation as exact_riderra_invitation,
+        load_authorization as load_riderra_authorization,
+        manifest_record as riderra_manifest_record,
+        verify_database_binding as verify_riderra_database_binding,
+    )
+
+    grant = load_riderra_authorization(cursor)
+    if not grant:
+        raise ValueError("riderra_template_authorization_required")
+    member = riderra_manifest_record(
+        grant, workstream_id=str(record.get("workstream_id") or ""), lead_id=str(record.get("lead_id") or ""),
+        contact_point_id=str(record.get("contact_point_id") or ""),
+    )
+    if not member or member != record:
+        raise ValueError("riderra_template_membership_required")
+    normalized = member
+    verify_riderra_database_binding(cursor, normalized)
+    cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"riderra-buyer:{normalized['lead_id']}",))
+    cursor.execute(
+        """SELECT campaign.id
+           FROM outreach_campaigns campaign
+           LEFT JOIN outreach_campaign_touches touch ON touch.campaign_id=campaign.id
+           LEFT JOIN outreachsendqueue queue ON queue.campaign_touch_id=touch.id
+           WHERE campaign.business_id=%s AND campaign.lead_id=%s
+             AND (campaign.status IN ('draft','approved','active','paused','completed')
+                  OR queue.delivery_status IN ('queued','sending','sent','delivered')
+                  OR lower(COALESCE(queue.error_text,'')) LIKE '%%send_uncertain%%')
+           LIMIT 1""",
+        (RIDERRA_BUSINESS_ID, normalized["lead_id"]),
+    )
+    if cursor.fetchone():
+        raise ValueError("existing_riderra_campaign_requires_reuse")
+    context = _apply_sender_mode(_load_context(cursor, normalized["workstream_id"]), SENDER_MODE_PARTNER_BUSINESS)
+    availability = channel_availability(cursor, context)
+    email = availability.get("email") or {}
+    sender_ids = {str(item.get("id") or "") for item in email.get("sender_accounts") or [] if item.get("status") == "ready"}
+    if (
+        str(context.get("lead_id") or "") != normalized["lead_id"]
+        or str(context.get("client_business_id") or "") != RIDERRA_BUSINESS_ID
+        or str(email.get("contact_point_id") or "") != normalized["contact_point_id"]
+        or str(email.get("recipient") or "").lower() != normalized["recipient"]
+        or RIDERRA_SENDER_ACCOUNT_ID not in sender_ids
+        or not exact_riderra_invitation(
+            record=normalized, authorization=grant, subject=normalized["subject"], body=normalized["body"],
+            sender_account_id=RIDERRA_SENDER_ACCOUNT_ID, channel="email", sequence_index=0,
+        )
+    ):
+        raise ValueError("riderra_template_preview_binding_changed")
+    suppression = _suppression_status(cursor, context)
+    if suppression.get("suppressed"):
+        raise ValueError("riderra_template_recipient_suppressed")
+    is_phuket = normalized.get("template_id") == RIDERRA_PHUKET_TEMPLATE_ID
+    quote_context = normalized.get("pricebook_examples") if is_phuket else normalized.get("pricebook")
+    source_url = _text(context.get("source_url") or "riderra-postgresql-city-pricing")
+    evidence = build_evidence_ledger(context)
+    candidate = {
+        "id": f"riderra:{normalized['source_fact_fingerprint']}",
+        "evidence_id": f"riderra:{normalized['source_fact_fingerprint']}",
+        "source_url": source_url,
+        "observed_fact": normalized["opening"],
+        "relevance_to_offer": "Phuket airport transfer examples" if is_phuket else quote_context["route"],
+    }
+    gate = {
+        "passed": True, "verdict": "approve", "score": 18, "total_score": 18,
+        "max_score": 18, "reason_codes": [], "blocking_reasons": [],
+        "approval_mode": "riderra_template", "exact_server_copy": True,
+    }
+    scheduled_at = start_at or datetime.now(timezone.utc)
+    touch = {
+        "sequence_index": 0, "channel": "email", "day_offset": 0, "scheduled_at": scheduled_at,
+        "angle": "riderra_buyer_offer", "subject": normalized["subject"], "text": normalized["body"],
+        "quality_gate": gate, "channel_status": "ready", "contact_point_id": normalized["contact_point_id"],
+        "sender_account_id": RIDERRA_SENDER_ACCOUNT_ID, "evidence_id": candidate["evidence_id"],
+        "evidence_kind": "riderra_buyer_opening", "source_url": source_url,
+        "observation": normalized["opening"],
+        "solution": "Phuket airport transfer examples" if is_phuket else quote_context["route"],
+        "source_fact_fingerprint": normalized["source_fact_fingerprint"],
+        "strategy": {"workstream_type": "client_partnership", "sender_mode": "partner_business",
+                     "segment": "transfer_buyer", "template_version": normalized.get("template_version")},
+        "strategy_fingerprint": stable_hash(normalized, "riderra:"),
+        "template_key": normalized.get("template_id") or "riderra_buyer_first_email",
+        "template_version": normalized.get("template_version") or "riderra-buyer-first-email-v1",
+        "template_selection": {"key": normalized.get("template_id") or "riderra_buyer_first_email",
+                               "version": normalized.get("template_version") or "riderra-buyer-first-email-v1"},
+        "riderra_template_record": normalized,
+    }
+    return {
+        "status": "ready", "workstream_id": normalized["workstream_id"], "workstream_type": "client_partnership",
+        "lead_id": normalized["lead_id"], "lead": {"name": normalized["company"], "city": normalized["city"]},
+        "scope_type": "business", "business_id": RIDERRA_BUSINESS_ID, "sender_mode": "partner_business",
+        "sender_scope_type": "business", "sender_profile_id": str((context.get("sender_profile") or {}).get("id") or ""),
+        "decision": {"action": "write_now", "reason_codes": []}, "selected_offer": {}, "selected_trust": {},
+        "evidence": evidence or [candidate], "personalization_candidates": [candidate],
+        "channel_availability": availability, "suppression": suppression, "touches": [touch],
+        "quality_gate": gate, "review_record": {}, "generation": {"source": "deterministic", "status": "ready"},
+        "sequence_issues": [], "missing": [], "riderra_template_record": normalized,
+    }
+
+
+def approve_campaign_by_author_template(cursor: Any, campaign_id: str) -> dict[str, Any]:
+    """Queue one exact first invitation using the recorded template permission.
+
+    This is a separate, explicit operation; saving/previewing a draft still does
+    not send or queue it. No per-message human review is fabricated.
+    """
+    cursor.execute(
+        """SELECT campaign.*, workstream.workstream_type
+           FROM outreach_campaigns campaign
+           JOIN lead_workstreams workstream ON workstream.id = campaign.workstream_id
+           WHERE campaign.id = %s FOR UPDATE OF campaign""", (campaign_id,),
+    )
+    campaign = _dict(cursor.fetchone())
+    if not campaign or not is_localos_author_lane(campaign):
+        raise ValueError("author_template_campaign_scope_invalid")
+    cursor.execute(
+        "SELECT * FROM outreach_campaign_touches WHERE campaign_id = %s ORDER BY sequence_index",
+        (campaign_id,),
+    )
+    touches = [_dict(row) for row in cursor.fetchall()]
+    if len(touches) != 1:
+        raise ValueError("author_template_single_first_touch_required")
+    touch = touches[0]
+    grant = load_author_template_authorization(
+        cursor, sender_account_id=str(touch.get("sender_account_id") or ""),
+    )
+    if not grant:
+        raise ValueError("author_template_authorization_required")
+    context = _apply_sender_mode(_load_context(cursor, str(campaign["workstream_id"])), SENDER_MODE_LOCALOS_FOR_PARTNER)
+    bridge = context.get("creator_outreach_bridge") or {}
+    if (str(touch.get("contact_point_id") or "") != str(bridge.get("selected_contact_point_id") or "")
+            or not exact_author_invitation(
+                bridge=bridge, subject=str(touch.get("subject") or ""),
+                body=str(touch.get("generated_text") or ""), authorization=grant,
+                sender_account_id=str(touch.get("sender_account_id") or ""),
+                channel=str(touch.get("channel") or ""),
+                sequence_index=int(touch.get("sequence_index") or 0),
+            )):
+        raise ValueError("author_template_exact_copy_or_contact_required")
+    policy = dict(campaign.get("policy_json") or {})
+    if campaign.get("status") in {"approved", "active"}:
+        if policy.get("author_template_authorization_id") == grant["id"]:
+            return {"id": campaign_id, "status": campaign["status"], "already_authorized": True}
+        raise ValueError("author_template_campaign_already_approved")
+    if campaign.get("status") != "draft":
+        raise ValueError("author_template_draft_required")
+    policy.update({
+        "approval_mode": "author_template",
+        "author_template_authorization_id": grant["id"],
+        "author_template_manifest": grant["manifest"],
+    })
+    cursor.execute("UPDATE outreach_campaigns SET policy_json = %s WHERE id = %s", (Json(policy), campaign_id))
+    return approve_campaign(cursor, campaign_id, user_id=None, template_authorization=grant)
+
+
+def approve_campaign_by_riderra_template(cursor: Any, campaign_id: str) -> dict[str, Any]:
+    """Approve one exact Riderra first email without fabricating message review."""
+    from services.riderra_template_authorization_service import (
+        APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+        BUSINESS_ID as RIDERRA_BUSINESS_ID,
+        exact_invitation as exact_riderra_invitation,
+        load_authorization as load_riderra_authorization,
+        manifest_record as riderra_manifest_record,
+        verify_database_binding as verify_riderra_database_binding,
+    )
+
+    cursor.execute(
+        """SELECT campaign.*, workstream.workstream_type
+           FROM outreach_campaigns campaign JOIN lead_workstreams workstream ON workstream.id=campaign.workstream_id
+           WHERE campaign.id=%s FOR UPDATE OF campaign""", (campaign_id,),
+    )
+    campaign = _dict(cursor.fetchone())
+    if (not campaign or campaign.get("status") != "draft" or campaign.get("workstream_type") != "client_partnership"
+            or str(campaign.get("business_id") or "") != RIDERRA_BUSINESS_ID):
+        raise ValueError("riderra_template_campaign_scope_invalid")
+    cursor.execute("SELECT * FROM outreach_campaign_touches WHERE campaign_id=%s ORDER BY sequence_index", (campaign_id,))
+    touches = [_dict(row) for row in cursor.fetchall()]
+    if len(touches) != 1:
+        raise ValueError("riderra_template_single_first_touch_required")
+    touch = touches[0]
+    record = (touch.get("message_brief_json") or {}).get("riderra_template_record") or {}
+    grant = load_riderra_authorization(cursor, sender_account_id=str(touch.get("sender_account_id") or ""))
+    member = riderra_manifest_record(
+        grant, workstream_id=str(campaign.get("workstream_id") or ""), lead_id=str(campaign.get("lead_id") or ""),
+        contact_point_id=str(touch.get("contact_point_id") or ""),
+    ) if grant else {}
+    if (not grant or not member or member != record
+            or not exact_riderra_invitation(record=record, authorization=grant,
+                subject=str(touch.get("subject") or ""), body=str(touch.get("generated_text") or ""),
+                sender_account_id=str(touch.get("sender_account_id") or ""),
+                channel=str(touch.get("channel") or ""), sequence_index=int(touch.get("sequence_index") or 0))):
+        raise ValueError("riderra_template_exact_copy_or_membership_required")
+    verify_riderra_database_binding(cursor, record)
+    policy = dict(campaign.get("policy_json") or {})
+    policy.update({"approval_mode": RIDERRA_APPROVAL_MODE, "riderra_template_authorization_id": grant["id"],
+                   "riderra_template_records_sha256": grant["manifest"]["records_sha256"]})
+    cursor.execute("UPDATE outreach_campaigns SET policy_json=%s WHERE id=%s", (Json(policy), campaign_id))
+    return approve_campaign(cursor, campaign_id, user_id=None, riderra_template_authorization=grant)
+
+
+def approve_campaign(
+    cursor: Any, campaign_id: str, *, user_id: str | None,
+    template_authorization: dict[str, Any] | None = None,
+    riderra_template_authorization: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not user_id and not template_authorization and not riderra_template_authorization:
+        raise ValueError("campaign_approval_authority_required")
     cursor.execute(
         """
         SELECT c.*, MAX(ws.workstream_type) AS workstream_type,
@@ -4952,6 +5240,33 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         raise LookupError("Campaign not found")
     if campaign.get("status") != "draft":
         raise ValueError("Only a draft campaign can be approved")
+    if ((campaign.get("policy_json") or {}).get("approval_mode") == "riderra_template"
+            and not riderra_template_authorization):
+        raise ValueError("riderra_template_authorization_required")
+    if template_authorization:
+        policy = campaign.get("policy_json") or {}
+        current_grant = load_author_template_authorization(
+            cursor, sender_account_id=template_authorization.get("sender_account_id"),
+        )
+        if (not is_localos_author_lane(campaign) or not current_grant
+                or current_grant["id"] != template_authorization.get("id")
+                or policy.get("author_template_authorization_id") != current_grant["id"]
+                or policy.get("approval_mode") != "author_template"):
+            raise ValueError("author_template_authorization_changed")
+    if riderra_template_authorization:
+        from services.riderra_template_authorization_service import (
+            APPROVAL_MODE as RIDERRA_APPROVAL_MODE,
+            load_authorization as load_riderra_authorization,
+        )
+        policy = campaign.get("policy_json") or {}
+        current_grant = load_riderra_authorization(
+            cursor, sender_account_id=riderra_template_authorization.get("sender_account_id"),
+            authorization_id=riderra_template_authorization.get("id"),
+        )
+        if (not current_grant or current_grant["id"] != riderra_template_authorization.get("id")
+                or policy.get("riderra_template_authorization_id") != current_grant["id"]
+                or policy.get("approval_mode") != RIDERRA_APPROVAL_MODE):
+            raise ValueError("riderra_template_authorization_changed")
     if is_localos_author_lane(campaign):
         policy = campaign.get("policy_json") if isinstance(campaign.get("policy_json"), dict) else {}
         channel_limits = policy.get("channel_daily_limits") if isinstance(policy.get("channel_daily_limits"), dict) else {}
@@ -5005,10 +5320,17 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
     )
     if not channels_ready:
         raise ValueError("Campaign preflight failed")
+    author_template_approval = bool(
+        template_authorization
+        and is_localos_author_lane(campaign)
+        and (campaign.get("policy_json") or {}).get("approval_mode") == "author_template"
+    )
+    deterministic_template_approval = bool(author_template_approval or riderra_template_authorization)
     if not all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
+            require_ai=False if deterministic_template_approval else None,
         )
         for touch in approval_touches
     ):
@@ -5155,7 +5477,18 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         campaign_id,
         "campaign_approved",
         actor_id=user_id,
-        payload={"version": int(result.get("version") or 0), "batch_id": batch_id},
+        payload={
+            "version": int(result.get("version") or 0), "batch_id": batch_id,
+            "approval_mode": (
+                "author_template" if template_authorization else
+                "riderra_template" if riderra_template_authorization else "manual"
+            ),
+            "template_authorization_id": (template_authorization or riderra_template_authorization or {}).get("id"),
+        },
+    )
+    result["approval_mode"] = (
+        "author_template" if template_authorization else
+        "riderra_template" if riderra_template_authorization else "manual"
     )
     return result
 
@@ -5175,7 +5508,12 @@ def change_campaign_status(
     if action not in transitions:
         raise ValueError("Unsupported campaign action")
     allowed_from, next_status = transitions[action]
-    cursor.execute("SELECT id, status, approved_snapshot_hash FROM outreach_campaigns WHERE id = %s FOR UPDATE", (campaign_id,))
+    cursor.execute(
+        """SELECT id, status, approved_snapshot_hash, scope_type, business_id,
+                  sender_mode, policy_json
+           FROM outreach_campaigns WHERE id = %s FOR UPDATE""",
+        (campaign_id,),
+    )
     campaign = _dict(cursor.fetchone())
     if not campaign:
         raise LookupError("Campaign not found")
@@ -5201,28 +5539,35 @@ def change_campaign_status(
             raise ValueError("Review edited campaign messages before resuming")
         cursor.execute(
             """
-            SELECT COUNT(*)
+            SELECT t.*, s.scope_type AS sender_scope_type,
+                   s.business_id AS sender_business_id,
+                   s.status AS sender_status,
+                   s.health_status AS sender_health_status,
+                   s.outreach_enabled AS sender_outreach_enabled,
+                   s.capabilities_json AS sender_capabilities_json,
+                   p.outreach_enabled AS telegram_outreach_enabled
             FROM outreach_campaign_touches t
-            JOIN outreach_campaigns c ON c.id = t.campaign_id
             LEFT JOIN outreach_sender_accounts s ON s.id = t.sender_account_id
             LEFT JOIN telegram_account_permissions p ON p.account_id = s.external_account_id
             WHERE t.campaign_id = %s
               AND t.channel IN ('telegram', 'email', 'vk')
-              AND (
-                  s.id IS NULL
-                  OR s.status <> 'connected'
-                  OR s.scope_type <> c.scope_type
-                  OR COALESCE(s.business_id, '') <> COALESCE(c.business_id, '')
-                  OR s.health_status IN ('paused', 'blocked')
-                  OR COALESCE((s.capabilities_json->>'direct_send')::boolean, FALSE) = FALSE
-                  OR COALESCE((s.capabilities_json->>'reply_sync')::boolean, FALSE) = FALSE
-                  OR (t.channel = 'telegram' AND COALESCE(p.outreach_enabled, FALSE) = FALSE)
-                  OR (t.channel IN ('email', 'vk') AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
-              )
             """,
             (campaign_id,),
         )
-        if int(_scalar(cursor.fetchone(), "count") or 0) > 0:
+        resume_touches = [_dict(row) for row in cursor.fetchall()]
+        sender_preflight_failed = any(
+            not touch.get("sender_account_id")
+            or touch.get("sender_status") != "connected"
+            or touch.get("sender_health_status") in {"paused", "blocked"}
+            or not isinstance(touch.get("sender_capabilities_json"), dict)
+            or touch["sender_capabilities_json"].get("direct_send") is not True
+            or touch["sender_capabilities_json"].get("reply_sync") is not True
+            or (touch.get("channel") == "telegram" and not touch.get("telegram_outreach_enabled"))
+            or (touch.get("channel") in {"email", "vk"} and not touch.get("sender_outreach_enabled"))
+            or sender_scope_preflight_reason({**campaign, **touch}) is not None
+            for touch in resume_touches
+        )
+        if sender_preflight_failed:
             raise ValueError("Sender account preflight failed")
     cursor.execute(
         "UPDATE outreach_campaigns SET status = %s, stop_reason = %s, updated_at = NOW() WHERE id = %s RETURNING id, version, status, stop_reason",
@@ -5829,6 +6174,12 @@ def finalize_no_reply_campaigns(
               SELECT 1
               FROM outreach_inbound_events inbound
               WHERE inbound.campaign_id = campaign.id AND inbound.is_human = TRUE
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM outreach_campaign_touches touch
+              WHERE touch.campaign_id = campaign.id
+                AND touch.status IN ('manual_sent', 'sent', 'delivered')
           )
           AND NOT EXISTS (
               SELECT 1

@@ -33,6 +33,7 @@ from services.outreach_personalization_ai import (
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.discovered_telegram_source_service import discovered_telegram_signals
+from services.gigachat_client import GigaChatProviderError
 from services.lead_partner_type_service import partner_types_for_category
 
 try:
@@ -2183,6 +2184,42 @@ def build_message_brief(
     return brief, readiness
 
 
+def _draft_provider_unavailable_state(
+    readiness: dict[str, Any],
+    error: Exception,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    error_message = str(error)[:1000]
+    quality = {
+        "passed": False,
+        "failures": ["Генератор черновика временно недоступен"],
+        "provider_error": error_message,
+    }
+    updated_readiness = {
+        **readiness,
+        "code": "needs_evidence",
+        "label": "Контакт и источник сохранены; черновик не подготовлен",
+        "missing": ["Повторить подготовку черновика после восстановления провайдера"],
+        "missing_items": [{
+            "code": "draft_provider_unavailable",
+            "label": "Повторить подготовку черновика после восстановления провайдера",
+        }],
+    }
+    return quality, updated_readiness
+
+
+def _is_terminal_draft_provider_error(error: Exception) -> bool:
+    return bool(
+        isinstance(error, PersonalizationGenerationError)
+        and not bool(getattr(error, "retryable", True))
+        and str(getattr(error, "code", "") or "") in {
+            "gigachat_payment_required",
+            "gigachat_auth_rejected",
+            "gigachat_request_rejected",
+            "gigachat_invalid_response",
+        }
+    )
+
+
 def _clean_sentence(value: Any, limit: int = 220) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip(" .")
     if len(text) <= limit:
@@ -3000,14 +3037,20 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     quality: dict[str, Any] = {"passed": False, "failures": readiness.get("missing") or []}
     if readiness.get("code") == "ready" and sender and best_contact:
         selected_candidate = personalization_candidates[0] if personalization_candidates else None
-        message, quality, draft_brief = prepare_first_message(
-            lead,
-            workstream,
-            brief,
-            sender,
-            best_contact,
-            selected_candidate,
-        )
+        try:
+            message, quality, draft_brief = prepare_first_message(
+                lead,
+                workstream,
+                brief,
+                sender,
+                best_contact,
+                selected_candidate,
+            )
+        except (GigaChatProviderError, PersonalizationGenerationError) as error:
+            if isinstance(error, PersonalizationGenerationError) and not _is_terminal_draft_provider_error(error):
+                raise
+            quality, readiness = _draft_provider_unavailable_state(readiness, error)
+            message = ""
         if quality.get("passed"):
             draft_hash = hashlib.sha256(
                 json.dumps(

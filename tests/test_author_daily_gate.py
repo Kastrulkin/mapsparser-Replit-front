@@ -94,7 +94,7 @@ def test_author_gate_serializes_concurrent_reservations_and_uses_moscow_day():
 
 
 def test_author_gate_counts_sending_unknown_and_manual_history_but_retry_is_idempotent():
-    cursor = GateCursor({"total_count": 200, "channel_count": 150, "duplicate_author": False})
+    cursor = GateCursor({"total_count": AUTHOR_DAILY_LIMIT, "channel_count": 150, "duplicate_author": False})
 
     result = reserve_localos_author_daily_slot(
         cursor,
@@ -143,7 +143,7 @@ def test_legacy_activity_contributes_across_all_platform_author_channels():
 
 
 def test_confirmed_send_after_later_claim_still_consumes_the_slot():
-    cursor = GateCursor({"total_count": 201, "channel_count": 150, "duplicate_author": False})
+    cursor = GateCursor({"total_count": AUTHOR_DAILY_LIMIT + 1, "channel_count": 150, "duplicate_author": False})
 
     result = reserve_localos_author_daily_slot(
         cursor,
@@ -192,7 +192,7 @@ def test_author_gate_uses_normalized_contact_to_merge_duplicate_profiles():
 
 
 def test_author_gate_enforces_total_and_channel_caps():
-    total_cursor = GateCursor({"total_count": 201, "channel_count": 1, "duplicate_author": False})
+    total_cursor = GateCursor({"total_count": AUTHOR_DAILY_LIMIT + 1, "channel_count": 1, "duplicate_author": False})
     channel_cursor = GateCursor({"total_count": 26, "channel_count": 26, "duplicate_author": False})
 
     total_result = reserve_localos_author_daily_slot(
@@ -393,39 +393,30 @@ def test_manual_touch_historical_reply_uses_actual_time_without_provider_proof(m
     assert result["evidence_kind"] == "user_confirmed"
 
 
-def test_manual_touch_rejects_naive_actual_time_before_database_access():
+@pytest.mark.parametrize(
+    ("occurred_at", "message"),
+    [
+        (datetime.now(), "must include a timezone"),
+        (datetime.now(timezone.utc) + timedelta(minutes=2), "must not be in the future"),
+    ],
+)
+def test_manual_touch_rejects_invalid_actual_time_before_database_access(occurred_at, message):
     cursor = GateCursor({})
 
-    with pytest.raises(ValueError, match="must include a timezone"):
+    with pytest.raises(ValueError, match=message):
         record_manual_touch(
             cursor,
             "campaign-1",
             "touch-1",
             "sent",
             user_id="user-1",
-            occurred_at=datetime.now(),
+            occurred_at=occurred_at,
         )
 
     assert cursor.calls == []
 
 
-def test_manual_touch_rejects_future_actual_time_before_database_access():
-    cursor = GateCursor({})
-
-    with pytest.raises(ValueError, match="must not be in the future"):
-        record_manual_touch(
-            cursor,
-            "campaign-1",
-            "touch-1",
-            "sent",
-            user_id="user-1",
-            occurred_at=datetime.now(timezone.utc) + timedelta(minutes=2),
-        )
-
-    assert cursor.calls == []
-
-
-def test_author_dispatch_remains_blocked_without_trusted_reply_window_receipt():
+def test_native_author_dispatch_remains_blocked_without_trusted_reply_window_receipt():
     safety = Path("src/services/outreach_safety_service.py").read_text(encoding="utf-8")
     legacy_sender = Path("outputs/send_influencer_email_approved_wave.py").read_text(encoding="utf-8")
     campaign = Path("src/services/outreach_campaign_service.py").read_text(encoding="utf-8")

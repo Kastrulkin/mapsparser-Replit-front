@@ -40,7 +40,7 @@ AUTHOR_CHANNEL_DAILY_LIMITS = {
     "telegram": 25,
     "vk": 25,
 }
-AUTHOR_POLICY_VERSION = "localos-author-daily-v1"
+AUTHOR_POLICY_VERSION = "localos-author-daily-v2"
 
 PARTNERSHIP_ACTIVE_LIFECYCLES = {"converted"}
 PARTNERSHIP_REPLY_LIFECYCLES = {"replied", "responded"}
@@ -822,7 +822,15 @@ def run_dispatch_preflight(
     cursor.execute(
         """
         SELECT q.id, q.lead_id, q.workstream_id, q.campaign_touch_id,
+               q.draft_id AS queue_draft_id, q.idempotency_key,
+               draft.id AS queued_draft_id, draft.status AS queued_draft_status,
+               draft.approved_text AS queued_draft_body,
+               draft.channel AS queued_draft_channel,
+               draft.contact_point_id AS queued_draft_contact_id,
+               draft.lead_id AS queued_draft_lead_id,
+               draft.workstream_id AS queued_draft_workstream_id,
                q.sender_account_id, q.delivery_status, q.recipient_key AS queue_recipient_key,
+               lead.name AS lead_name,
                t.id AS touch_id, t.status AS touch_status, t.channel,
                t.contact_point_id, t.strategy_fingerprint, t.sequence_index,
                c.id AS campaign_id, c.status AS campaign_status, c.scope_type,
@@ -841,6 +849,7 @@ def run_dispatch_preflight(
                contact.contact_type, contact.normalized_value,
                contact.verification_status AS contact_verification_status
         FROM outreachsendqueue q
+        LEFT JOIN outreachmessagedrafts draft ON draft.id = q.draft_id
         LEFT JOIN outreach_campaign_touches t ON t.id = q.campaign_touch_id
         LEFT JOIN outreach_campaigns c ON c.id = t.campaign_id
         LEFT JOIN lead_workstreams ws ON ws.id = q.workstream_id
@@ -883,10 +892,118 @@ def run_dispatch_preflight(
         (item.get("campaign_id"),),
     )
     current_touches = [_dict(row) for row in cursor.fetchall()]
+    validated_dispatch_payload = None
+    if (item.get("policy_json") or {}).get("approval_mode") == "author_template":
+        from services.author_template_authorization_service import (
+            exact_author_invitation, load_author_template_authorization,
+        )
+        from services.outreach_campaign_service import _load_context
+
+        grant = load_author_template_authorization(
+            cursor, sender_account_id=str(item.get("sender_account_id") or ""),
+        )
+        if (not is_localos_author_lane(item) or not grant
+                or grant["id"] != (item.get("policy_json") or {}).get("author_template_authorization_id")
+                or len(current_touches) != 1):
+            return {"allowed": False, "reason_code": "author_template_authorization_revoked_or_changed", "item": item}
+        bridge = _load_context(cursor, str(item.get("campaign_workstream_id") or "")).get("creator_outreach_bridge") or {}
+        touch = current_touches[0]
+        if (str(touch.get("contact_point_id") or "") != str(bridge.get("selected_contact_point_id") or "")
+                or touch.get("approved_text") != touch.get("generated_text")
+                or not exact_author_invitation(
+                    bridge=bridge, subject=str(touch.get("subject") or ""),
+                    body=str(touch.get("approved_text") or ""), authorization=grant,
+                    sender_account_id=str(item.get("sender_account_id") or ""),
+                    channel=str(touch.get("channel") or ""),
+                    sequence_index=int(touch.get("sequence_index") or 0),
+                )):
+            return {"allowed": False, "reason_code": "author_template_copy_or_contact_changed", "item": item}
+        if (not item.get("queue_draft_id")
+                or str(item["queue_draft_id"]) != str(touch.get("draft_id") or "")
+                or str(item["queue_draft_id"]) != str(item.get("queued_draft_id") or "")
+                or item.get("queued_draft_status") != "approved"
+                or item.get("queued_draft_body") != touch.get("approved_text")
+                or item.get("queued_draft_channel") != "email"
+                or str(item.get("queued_draft_contact_id") or "") != str(touch.get("contact_point_id") or "")
+                or str(item.get("queued_draft_lead_id") or "") != str(item.get("lead_id") or "")
+                or str(item.get("queued_draft_workstream_id") or "") != str(item.get("campaign_workstream_id") or "")):
+            return {"allowed": False, "reason_code": "author_template_queued_draft_changed", "item": item}
+        # Bind actual provider inputs to this validated snapshot. The dispatcher
+        # must not send its earlier mutable draft/contact snapshot after commit.
+        validated_dispatch_payload = {
+            "id": str(item["id"]), "lead_id": str(item["lead_id"]),
+            "campaign_touch_id": str(item["campaign_touch_id"]),
+            "draft_id": str(item["queue_draft_id"]),
+            "sender_account_id": str(item["sender_account_id"]),
+            "idempotency_key": str(item.get("idempotency_key") or f"outreach:{queue_id}"),
+            "channel": "email", "selected_channel": "email",
+            "contact_type": "email", "contact_value": str(item.get("normalized_value") or ""),
+            "email": str(item.get("normalized_value") or ""),
+            "subject": str(touch["subject"]),
+            "approved_text": str(touch["approved_text"]),
+            "generated_text": str(touch["approved_text"]),
+        }
+    elif (item.get("policy_json") or {}).get("approval_mode") == "riderra_template":
+        from services.riderra_template_authorization_service import (
+            exact_invitation as exact_riderra_invitation,
+            is_riderra_template_lane,
+            load_authorization as load_riderra_authorization,
+            manifest_record as riderra_manifest_record,
+            verify_database_binding as verify_riderra_database_binding,
+        )
+
+        grant = load_riderra_authorization(
+            cursor, sender_account_id=str(item.get("sender_account_id") or ""),
+            authorization_id=str((item.get("policy_json") or {}).get("riderra_template_authorization_id") or ""),
+        )
+        if (not is_riderra_template_lane(item) or not grant
+                or grant["id"] != (item.get("policy_json") or {}).get("riderra_template_authorization_id")
+                or len(current_touches) != 1):
+            return {"allowed": False, "reason_code": "riderra_template_authorization_revoked_or_changed", "item": item}
+        touch = current_touches[0]
+        record = (touch.get("message_brief_json") or {}).get("riderra_template_record") or {}
+        member = riderra_manifest_record(
+            grant, workstream_id=str(item.get("campaign_workstream_id") or ""),
+            lead_id=str(item.get("lead_id") or ""), contact_point_id=str(touch.get("contact_point_id") or ""),
+        )
+        try:
+            verify_riderra_database_binding(cursor, record)
+        except ValueError:
+            return {"allowed": False, "reason_code": "riderra_template_database_binding_changed", "item": item}
+        if (not member or member != record or touch.get("approved_text") != touch.get("generated_text")
+                or not exact_riderra_invitation(
+                    record=record, authorization=grant, subject=str(touch.get("subject") or ""),
+                    body=str(touch.get("approved_text") or ""), sender_account_id=str(item.get("sender_account_id") or ""),
+                    channel=str(touch.get("channel") or ""), sequence_index=int(touch.get("sequence_index") or 0),
+                )):
+            return {"allowed": False, "reason_code": "riderra_template_copy_quote_or_contact_changed", "item": item}
+        if (not item.get("queue_draft_id") or str(item["queue_draft_id"]) != str(touch.get("draft_id") or "")
+                or str(item["queue_draft_id"]) != str(item.get("queued_draft_id") or "")
+                or item.get("queued_draft_status") != "approved"
+                or item.get("queued_draft_body") != touch.get("approved_text")
+                or item.get("queued_draft_channel") != "email"
+                or str(item.get("queued_draft_contact_id") or "") != str(touch.get("contact_point_id") or "")
+                or str(item.get("queued_draft_lead_id") or "") != str(item.get("lead_id") or "")
+                or str(item.get("queued_draft_workstream_id") or "") != str(item.get("campaign_workstream_id") or "")):
+            return {"allowed": False, "reason_code": "riderra_template_queued_draft_changed", "item": item}
+        validated_dispatch_payload = {
+            "id": str(item["id"]), "lead_id": str(item["lead_id"]),
+            "campaign_touch_id": str(item["campaign_touch_id"]), "draft_id": str(item["queue_draft_id"]),
+            "sender_account_id": str(item["sender_account_id"]),
+            "idempotency_key": str(item.get("idempotency_key") or f"outreach:{queue_id}"),
+            "channel": "email", "selected_channel": "email", "contact_type": "email",
+            "contact_value": str(item.get("normalized_value") or ""), "email": str(item.get("normalized_value") or ""),
+            "subject": str(touch["subject"]), "approved_text": str(touch["approved_text"]),
+            "generated_text": str(touch["approved_text"]),
+        }
     if not all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
+            # An exact, live-authorized invitation is deterministic by policy,
+            # so it does not need AI provenance that this lane never creates.
+            # All malformed/revoked/template-mutated cases retain AI checks.
+            require_ai=False if validated_dispatch_payload else None,
         )
         for touch in current_touches
     ):
@@ -1110,6 +1227,13 @@ def run_dispatch_preflight(
 
     author_lane = is_localos_author_lane(item)
     if author_lane:
+        from services.author_template_authorization_service import previously_contacted_author
+
+        if previously_contacted_author(
+            cursor, creator_profile_id=str(item.get("creator_profile_id") or ""),
+            recipient=str(item.get("normalized_value") or ""), queue_id=queue_id,
+        ):
+            return {"allowed": False, "reason_code": "author_already_contacted", "item": item}
         cursor.execute(
             """
             SELECT reason_code
@@ -1217,6 +1341,16 @@ def run_dispatch_preflight(
         )
         if not author_admission.get("allowed"):
             return author_admission
+    elif (item.get("policy_json") or {}).get("approval_mode") == "riderra_template":
+        from services.riderra_template_authorization_service import (
+            previously_contacted_buyer,
+            reserve_daily_company_slot,
+        )
+        if previously_contacted_buyer(cursor, queue_id=queue_id, item=item):
+            return {"allowed": False, "reason_code": "riderra_buyer_already_contacted", "item": item}
+        riderra_admission = reserve_daily_company_slot(cursor, queue_id=queue_id, item=item)
+        if not riderra_admission.get("allowed"):
+            return riderra_admission
 
     policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
     daily_limit = max(1, int(policy.get("daily_limit") or 10))
@@ -1364,12 +1498,34 @@ def run_dispatch_preflight(
             "reason_code": "preflight_passed",
             "recipient_key": current_recipient_key,
             "author_reply_sync_receipt_version": receipt.get("receipt_version"),
+            "validated_dispatch_payload": validated_dispatch_payload,
             "item": item,
         }
+    if (item.get("policy_json") or {}).get("approval_mode") == "riderra_template":
+        if author_reply_sync_started_at is None:
+            return {"allowed": False, "reason_code": "riderra_reply_preflight_unverified",
+                    "gap": "current_reply_sync_cycle_cutoff_missing", "item": item}
+        recipient_email = str(item.get("normalized_value") or "").strip().lower()
+        if item.get("channel") != "email" or str(item.get("contact_type") or "").lower() != "email" or not recipient_email:
+            return {"allowed": False, "reason_code": "riderra_reply_preflight_unverified",
+                    "gap": "exact_recipient_scope_missing", "item": item}
+        from services.outreach_reply_sync_receipt import load_trusted_email_reply_sync_receipt
+        receipt = load_trusted_email_reply_sync_receipt(
+            cursor, str(item.get("sender_account_id") or ""),
+            required_recipient_emails=[recipient_email], required_covered_through=author_reply_sync_started_at,
+            max_age_seconds=120,
+        )
+        if not receipt:
+            return {"allowed": False, "reason_code": "riderra_reply_preflight_unverified",
+                    "gap": "complete_sender_window_reply_sync_receipt_missing", "item": item}
+        return {"allowed": True, "reason_code": "preflight_passed", "recipient_key": current_recipient_key,
+                "riderra_reply_sync_receipt_version": receipt.get("receipt_version"),
+                "validated_dispatch_payload": validated_dispatch_payload, "item": item}
     return {
         "allowed": True,
         "reason_code": "preflight_passed",
         "recipient_key": current_recipient_key,
+        "validated_dispatch_payload": validated_dispatch_payload,
         "item": item,
     }
 

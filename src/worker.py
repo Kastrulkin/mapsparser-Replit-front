@@ -104,6 +104,11 @@ from services.superadmin_telegram_notifications import (
     mark_community_source_notification_sent,
     mark_outreach_reply_notification_sent,
 )
+from services.riderra_systematic_outreach_service import (
+    format_run_notification,
+    mark_run_notified,
+    prepare_systematic_batch,
+)
 from services.founder_content_editorial import (
     format_founder_content_telegram_message,
     mark_founder_content_delivered,
@@ -194,6 +199,7 @@ _OUTREACH_REPLY_SYNC_STATE = {
     "blocked_sender_ids": [],
 }
 _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
+_LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT = 0.0
 _LAST_COMMUNITY_SOURCE_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
@@ -1554,6 +1560,61 @@ def _run_yookassa_renewals_if_due() -> None:
         print(f"[YOOKASSA_RENEWALS] unexpected error: {e}", flush=True)
 
 
+def _classify_reply_sync_failures(sync_results: tuple[dict[str, Any], ...]) -> dict[str, Any]:
+    failed = 0
+    blocked_sender_ids: set[str] = set()
+    has_unscoped_failures = False
+    for result in sync_results:
+        if not isinstance(result, dict):
+            has_unscoped_failures = True
+            continue
+        raw_failed = result.get("failed")
+        if isinstance(raw_failed, bool) or not isinstance(raw_failed, int):
+            has_unscoped_failures = True
+            continue
+        reported_failed = raw_failed
+        if reported_failed < 0:
+            has_unscoped_failures = True
+            continue
+        failed += reported_failed
+
+        raw_sender_results = result.get("sender_results")
+        if raw_sender_results is None:
+            sender_results = []
+        elif isinstance(raw_sender_results, list):
+            sender_results = raw_sender_results
+        else:
+            has_unscoped_failures = True
+            sender_results = []
+
+        failed_records: list[dict[str, Any]] = []
+        malformed_record = False
+        for item in sender_results:
+            if not isinstance(item, dict):
+                malformed_record = True
+                continue
+            if str(item.get("status") or "").strip().lower() == "failed":
+                failed_records.append(item)
+
+        scoped_sender_ids = [
+            str(item.get("sender_account_id") or "").strip()
+            for item in failed_records
+        ]
+        blocked_sender_ids.update(value for value in scoped_sender_ids if value)
+        if (
+            malformed_record
+            or len(failed_records) != reported_failed
+            or any(not value for value in scoped_sender_ids)
+        ):
+            has_unscoped_failures = True
+
+    return {
+        "failed": failed,
+        "blocked_sender_ids": sorted(blocked_sender_ids),
+        "has_unscoped_failures": has_unscoped_failures,
+    }
+
+
 def _sync_outreach_replies_if_due() -> dict[str, Any]:
     global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_STATE
     if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
@@ -1594,11 +1655,12 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             if _env_bool("OUTREACH_YOUGILE_SYNC_ENABLED", False)
             else {"picked": 0, "delivered": 0, "retried": 0}
         )
-        reply_sync_failed = (
-            int(telegram_reply_sync.get("failed") or 0)
-            + int(email_reply_sync.get("failed") or 0)
-            + int(vk_reply_sync.get("failed") or 0)
-        )
+        failure_scope = _classify_reply_sync_failures((
+            telegram_reply_sync,
+            email_reply_sync,
+            vk_reply_sync,
+        ))
+        reply_sync_failed = failure_scope["failed"]
         imported = (
             int(telegram_reply_sync.get("imported") or 0)
             + int(email_reply_sync.get("imported") or 0)
@@ -1618,24 +1680,11 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
                 f"failed={reply_sync_failed}",
                 flush=True,
             )
-        failed_sender_ids = sorted({
-            str(item.get("sender_account_id") or "").strip()
-            for result in (email_reply_sync, vk_reply_sync)
-            for item in (result.get("sender_results") or [])
-            if item.get("status") == "failed" and str(item.get("sender_account_id") or "").strip()
-        })
-        accounted_failures = sum(
-            1
-            for result in (email_reply_sync, vk_reply_sync)
-            for item in (result.get("sender_results") or [])
-            if item.get("status") == "failed" and str(item.get("sender_account_id") or "").strip()
-        )
-        unscoped_failures = max(0, reply_sync_failed - accounted_failures)
         fail_closed = _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
         _OUTREACH_REPLY_SYNC_STATE = {
-            "healthy": reply_sync_failed <= 0,
-            "global_block": bool(fail_closed and unscoped_failures > 0),
-            "blocked_sender_ids": failed_sender_ids if fail_closed else [],
+            "healthy": reply_sync_failed <= 0 and not failure_scope["has_unscoped_failures"],
+            "global_block": bool(fail_closed and failure_scope["has_unscoped_failures"]),
+            "blocked_sender_ids": failure_scope["blocked_sender_ids"] if fail_closed else [],
             "cycle_started_at": cycle_started_at,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
@@ -1649,6 +1698,54 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             "cycle_started_at": None,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
+
+
+def _prepare_riderra_systematic_outreach_if_due() -> None:
+    global _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT
+    if not _env_bool("RIDERRA_SYSTEMATIC_OUTREACH_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(300, int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_INTERVAL_SEC", "3600")))
+    if now - _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT < interval_sec:
+        return
+    _LAST_RIDERRA_SYSTEMATIC_OUTREACH_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+        result = prepare_systematic_batch(
+            cursor,
+            target_count=max(1, min(int(os.getenv("RIDERRA_SYSTEMATIC_OUTREACH_TARGET", "150")), 150)),
+        )
+        db.conn.commit()
+        print(
+            "[RIDERRA_SYSTEMATIC_OUTREACH] "
+            f"status={result.get('status')} eligible={result.get('eligible_count')} "
+            f"selected={result.get('selected_count')} queued={result.get('queued_count')} "
+            f"capacity={result.get('remaining_daily_capacity')}",
+            flush=True,
+        )
+        if not result.get("should_notify"):
+            return
+        recipients = load_superadmin_telegram_recipients(db.conn)
+        message = format_run_notification(result)
+        sent_to = [telegram_id for telegram_id in recipients if _send_telegram_plain_message(telegram_id, message)]
+        if recipients and len(sent_to) == len(recipients):
+            mark_run_notified(cursor, str(result.get("run_id") or ""))
+            db.conn.commit()
+    except Exception as exc:
+        if db:
+            try:
+                db.conn.rollback()
+            except Exception:
+                pass
+        print(f"[RIDERRA_SYSTEMATIC_OUTREACH] error: {exc}", flush=True)
+    finally:
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 def _dispatch_outreach_queue_if_due() -> None:
@@ -1874,6 +1971,19 @@ def _notify_superadmin_community_sources_if_due() -> None:
                 pass
 
 
+def _card_automation_batch_size() -> int:
+    configured_batch_size = max(
+        1,
+        min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100),
+    )
+    if (
+        _env_bool("OUTREACH_DISPATCH_ENABLED", False)
+        and _worker_role_enabled("dispatcher")
+    ):
+        return min(configured_batch_size, 1)
+    return configured_batch_size
+
+
 def _run_card_automation_if_due() -> None:
     global _LAST_CARD_AUTOMATION_AT
     if not _env_bool("CARD_AUTOMATION_ENABLED", True):
@@ -1889,7 +1999,7 @@ def _run_card_automation_if_due() -> None:
     try:
         db = DatabaseManager()
         ensure_card_automation_tables(db.conn)
-        batch_size = max(1, min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100))
+        batch_size = _card_automation_batch_size()
         result = run_due_card_automation(db.conn, batch_size=batch_size)
         if int(result.get("processed") or 0) > 0:
             print(
@@ -7693,11 +7803,12 @@ if __name__ == "__main__":
             if _worker_role_enabled("parser"):
                 process_queue()
             if _worker_role_enabled("dispatcher"):
+                _prepare_riderra_systematic_outreach_if_due()
+                _dispatch_outreach_queue_if_due()
                 _run_card_automation_if_due()
                 _run_founder_content_if_due()
                 _dispatch_social_posts_if_due()
                 _collect_social_post_metrics_if_due()
-                _dispatch_outreach_queue_if_due()
                 _process_creator_offer_distribution_if_due()
                 _dispatch_creator_notifications_if_due()
                 _notify_superadmin_outreach_replies_if_due()

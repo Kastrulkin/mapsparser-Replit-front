@@ -6,7 +6,9 @@ import pytest
 
 from services.outreach_email_adapter import EmailAdapterError, fetch_complete_mailbox_window
 from services.outreach_email_reply_service import (
+    _load_email_reply_scope_candidates,
     _load_non_author_queue_candidates,
+    _load_queue_candidates,
     sync_email_replies,
 )
 from services.outreach_reply_sync_receipt import (
@@ -18,6 +20,11 @@ from services.outreach_reply_sync_receipt import (
 NOW = datetime(2026, 9, 7, 11, 0, tzinfo=timezone.utc)
 
 
+def _requested_uids(message_set):
+    value = message_set.decode("ascii") if isinstance(message_set, bytes) else message_set
+    return value.split(",")
+
+
 def _sender():
     return {
         "id": "sender-1",
@@ -27,6 +34,119 @@ def _sender():
         "sender_identity": "founder@example.org",
         "auth_data_encrypted": "encrypted",
     }
+
+
+def test_reply_scope_query_keeps_author_guard_and_adds_only_canonical_riderra(monkeypatch):
+    from services.riderra_template_authorization_service import (
+        APPROVAL_MODE,
+        BUSINESS_ID,
+        SENDER_ACCOUNT_ID,
+    )
+
+    class ScopeCursor:
+        def __init__(self):
+            self.query = ""
+            self.params = []
+            self.calls = []
+
+        def execute(self, query, params):
+            self.query = " ".join(query.split())
+            self.params = list(params)
+            self.calls.append((self.query, self.params))
+
+        def fetchall(self):
+            common_lane_guards = (
+                "LEFT JOIN creator_profiles creator" in self.query
+                and "creator.id IS NOT NULL" in self.query
+                and "workstream.workstream_type = 'creator_collaboration'" in self.query
+                and "campaign.sender_mode = 'localos_for_partner'" in self.query
+                and "workstream.workstream_type = 'client_partnership'" in self.query
+                and "campaign.sender_mode = 'partner_business'" in self.query
+                and self.params == [
+                    SENDER_ACCOUNT_ID,
+                    SENDER_ACCOUNT_ID,
+                    BUSINESS_ID,
+                    APPROVAL_MODE,
+                ]
+            )
+            if "JOIN outreachsendbatches batch" in self.query:
+                required = common_lane_guards and "campaign.policy_json->>'approval_mode' = %s" in self.query
+            elif "AND NOT" in self.query:
+                required = (
+                    common_lane_guards
+                    and "COALESCE(campaign.policy_json->>'approval_mode', '') = %s" in self.query
+                    and "q.sent_at >= NOW() - INTERVAL '45 days'" in self.query
+                )
+            else:
+                required = (
+                    common_lane_guards
+                    and "campaign.policy_json->>'approval_mode' = %s" in self.query
+                    and "q.provider_name = 'native_email'" in self.query
+                )
+            return [{
+                "id": "queue-legacy" if "AND NOT" in self.query else "queue-riderra",
+                "delivery_status": "sent" if "JOIN outreachsendbatches batch" not in self.query else "queued",
+                "sent_at": None,
+                "campaign_id": "campaign-riderra",
+                "recipient_value": "buyer@example.test",
+            }] if required else []
+
+    cursor = ScopeCursor()
+
+    class ScopeConnection:
+        def cursor(self):
+            return cursor
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_reply_service.get_db_connection",
+        lambda: ScopeConnection(),
+    )
+
+    candidates = _load_email_reply_scope_candidates(SENDER_ACCOUNT_ID)
+    sent_candidates = _load_queue_candidates(SENDER_ACCOUNT_ID)
+    legacy_candidates = _load_non_author_queue_candidates(SENDER_ACCOUNT_ID)
+
+    assert [candidate["id"] for candidate in candidates] == ["queue-riderra"]
+    assert [candidate["id"] for candidate in sent_candidates] == ["queue-riderra"]
+    assert [candidate["id"] for candidate in legacy_candidates] == ["queue-legacy"]
+    scope_query = cursor.calls[0][0]
+    assert "contact.contact_type = 'email'" in scope_query
+    assert "batch.status = 'approved'" in scope_query
+    assert "campaign.status IN ('approved', 'active')" in scope_query
+    assert "touch.status IN ('approved', 'scheduled', 'queued')" in scope_query
+
+
+def test_non_author_scope_excludes_only_recent_canonical_riderra(monkeypatch):
+    captured = {}
+
+    class Cursor:
+        def execute(self, query, params):
+            captured["query"] = " ".join(query.split())
+            captured["params"] = list(params)
+
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.outreach_email_reply_service.get_db_connection",
+        lambda: Connection(),
+    )
+
+    _load_non_author_queue_candidates("sender-riderra")
+
+    before_exclusion, exclusion = captured["query"].split("AND NOT (", 1)
+    assert "q.sent_at >= NOW() - INTERVAL '45 days'" not in before_exclusion
+    assert "q.sent_at >= NOW() - INTERVAL '45 days'" in exclusion
 
 
 def _folder(role, *, candidates=0, matched=0):
@@ -75,24 +195,27 @@ def test_imap_overmatch_never_fetches_unrelated_message_body(monkeypatch):
                 search_calls.append(criteria)
                 return "OK", [b"1 2"]
             query = criteria[0]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in query:
-                if uid_text == "1":
-                    return "OK", [(metadata, b"From: Author <author@example.net>\r\n\r\n")]
-                return "OK", [(
-                    metadata,
-                    b'From: "author@example.net billing" <private@example.net>\r\n\r\n',
-                )]
-            body_fetch_uids.append(uid_text)
-            message = (
-                b"From: Author <author@example.net>\r\n"
-                b"To: Founder <founder@example.org>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
-                b"Message-ID: <reply-1@example.net>\r\n"
-                b"Subject: Re: hello\r\n\r\nInterested"
-            )
-            return "OK", [(metadata, message)]
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in query:
+                    headers = (
+                        b"From: Author <author@example.net>\r\n\r\n"
+                        if uid_text == "1"
+                        else b'From: "author@example.net billing" <private@example.net>\r\n\r\n'
+                    )
+                    records.append((metadata, headers))
+                    continue
+                body_fetch_uids.append(uid_text)
+                message = (
+                    b"From: Author <author@example.net>\r\n"
+                    b"To: Founder <founder@example.org>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
+                    b"Message-ID: <reply-1@example.net>\r\n"
+                    b"Subject: Re: hello\r\n\r\nInterested"
+                )
+                records.append((metadata, message))
+            return "OK", records
 
         def logout(self):
             return None
@@ -151,38 +274,38 @@ def test_complete_window_includes_mailer_daemon_dsn_for_exact_original_recipient
         def uid(self, command, uid, *criteria):
             if command == "search":
                 return "OK", [b"1 2"]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in criteria[0]:
-                if uid_text == "1":
-                    return "OK", [(
-                        metadata,
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in criteria[0]:
+                    headers = (
                         b"From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\n"
                         b"Subject: Delivery Status Notification (Failure)\r\n"
                         b"Auto-Submitted: auto-replied\r\n"
-                        b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n",
-                    )]
-                return "OK", [(
-                    metadata,
-                    b"From: Other <other@example.org>\r\nSubject: unrelated\r\n\r\n",
-                )]
-            body_fetch_uids.append(uid_text)
-            raw = (
-                b"From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\n"
-                b"To: Founder <founder@example.org>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
-                b"Message-ID: <dsn-1@googlemail.com>\r\n"
-                b"Subject: Delivery Status Notification (Failure)\r\n"
-                b"Auto-Submitted: auto-replied\r\n"
-                b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n"
-                b"--dsn\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nAddress rejected\r\n"
-                b"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n"
-                b"Final-Recipient: rfc822; author@example.net\r\n"
-                b"Action: failed\r\nStatus: 5.1.1\r\n"
-                b"Original-Message-ID: <outbound-1@localos.pro>\r\n\r\n"
-                b"--dsn--\r\n"
-            )
-            return "OK", [(metadata, raw)]
+                        b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n"
+                        if uid_text == "1"
+                        else b"From: Other <other@example.org>\r\nSubject: unrelated\r\n\r\n"
+                    )
+                    records.append((metadata, headers))
+                    continue
+                body_fetch_uids.append(uid_text)
+                raw = (
+                    b"From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>\r\n"
+                    b"To: Founder <founder@example.org>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\n"
+                    b"Message-ID: <dsn-1@googlemail.com>\r\n"
+                    b"Subject: Delivery Status Notification (Failure)\r\n"
+                    b"Auto-Submitted: auto-replied\r\n"
+                    b"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n"
+                    b"--dsn\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nAddress rejected\r\n"
+                    b"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n"
+                    b"Final-Recipient: rfc822; author@example.net\r\n"
+                    b"Action: failed\r\nStatus: 5.1.1\r\n"
+                    b"Original-Message-ID: <outbound-1@localos.pro>\r\n\r\n"
+                    b"--dsn--\r\n"
+                )
+                records.append((metadata, raw))
+            return "OK", records
 
         def logout(self):
             return None
@@ -387,16 +510,19 @@ def test_complete_inbox_window_applies_recipient_scope_before_body_fetch(monkeyp
         def uid(self, command, uid, *criteria):
             if command == "search":
                 return "OK", [b"1 2"]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in criteria[0]:
-                from_email = "author@example.net" if uid_text == "1" else "private@example.net"
-                return "OK", [(metadata, f"From: <{from_email}>\r\n\r\n".encode())]
-            body_fetch_uids.append(uid_text)
-            return "OK", [(metadata, (
-                b"From: Author <author@example.net>\r\nTo: Founder <founder@example.org>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <reply@example.net>\r\n\r\nInterested"
-            ))]
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in criteria[0]:
+                    from_email = "author@example.net" if uid_text == "1" else "private@example.net"
+                    records.append((metadata, f"From: <{from_email}>\r\n\r\n".encode()))
+                    continue
+                body_fetch_uids.append(uid_text)
+                records.append((metadata, (
+                    b"From: Author <author@example.net>\r\nTo: Founder <founder@example.org>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <reply@example.net>\r\n\r\nInterested"
+                )))
+            return "OK", records
 
         def logout(self):
             return None
@@ -434,16 +560,19 @@ def test_complete_sent_window_scopes_outbound_messages_by_to_header(monkeypatch)
         def uid(self, command, uid, *criteria):
             if command == "search":
                 return "OK", [b"1 2"]
-            uid_text = uid.decode("ascii")
-            metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
-            if "HEADER.FIELDS" in criteria[0]:
-                to_email = "author@example.net" if uid_text == "1" else "private@example.net"
-                return "OK", [(metadata, f"From: Founder <founder@example.org>\r\nTo: <{to_email}>\r\n\r\n".encode())]
-            body_fetch_uids.append(uid_text)
-            return "OK", [(metadata, (
-                b"From: Founder <founder@example.org>\r\nTo: Author <author@example.net>\r\n"
-                b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <sent@example.org>\r\n\r\nHello"
-            ))]
+            records = []
+            for uid_text in _requested_uids(uid):
+                metadata = f'{uid_text} (UID {uid_text} INTERNALDATE "07-Sep-2026 10:00:00 +0000")'.encode()
+                if "HEADER.FIELDS" in criteria[0]:
+                    to_email = "author@example.net" if uid_text == "1" else "private@example.net"
+                    records.append((metadata, f"From: Founder <founder@example.org>\r\nTo: <{to_email}>\r\n\r\n".encode()))
+                    continue
+                body_fetch_uids.append(uid_text)
+                records.append((metadata, (
+                    b"From: Founder <founder@example.org>\r\nTo: Author <author@example.net>\r\n"
+                    b"Date: Mon, 07 Sep 2026 10:00:00 +0000\r\nMessage-ID: <sent@example.org>\r\n\r\nHello"
+                )))
+            return "OK", records
 
         def logout(self):
             return None
@@ -623,7 +752,9 @@ def test_non_author_scope_keeps_old_sent_conversations_but_is_bounded(monkeypatc
     candidates = _load_non_author_queue_candidates("sender-1")
 
     assert candidates[0]["id"] == "old-sales-touch"
-    assert "q.sent_at >=" not in cursor.query
+    before_exclusion, exclusion = cursor.query.split("AND NOT (", 1)
+    assert "q.sent_at >=" not in before_exclusion
+    assert "q.sent_at >= NOW() - INTERVAL '45 days'" in exclusion
     assert "LIMIT 1001" in cursor.query
 
 
@@ -726,6 +857,101 @@ def test_clean_first_contact_scope_checks_all_special_folders_and_records_zero_r
     assert events[0]["payload"]["recipient_count"] == 1
     assert events[0]["payload"]["counters"]["matched_uid_count"] == 0
     assert any("SET last_reply_sync_at = %s" in query for query, _params in connections[0].cursor_instance.executed)
+
+
+def test_riderra_complete_scope_records_v2_and_reconciles_human_reply(monkeypatch):
+    from services.riderra_template_authorization_service import (
+        BUSINESS_ID,
+        SENDER_ACCOUNT_ID,
+        SENDER_IDENTITY,
+    )
+    from services.outreach_email_adapter import email_recipient_hashes
+    from api import admin_prospecting
+
+    recipient = "buyer@example.test"
+    provider_message_id = "<riderra-first-touch@example.test>"
+    inbound = {
+        "provider_event_id": "email:riderra:all:42",
+        "message_id": "<buyer-reply@example.test>",
+        "in_reply_to": provider_message_id,
+        "references": provider_message_id,
+        "from_email": recipient,
+        "body": "Yes, please send the details.",
+        "subject": "Re: transfer partnership",
+        "occurred_at": NOW,
+    }
+    fetch_calls, _connections, events = _install_sync_fakes(monkeypatch, messages=[inbound])
+    sender = {
+        **_sender(),
+        "id": SENDER_ACCOUNT_ID,
+        "scope_type": "business",
+        "business_id": BUSINESS_ID,
+        "sender_identity": SENDER_IDENTITY,
+        "status": "connected",
+        "outreach_enabled": True,
+    }
+    monkeypatch.setattr(
+        "services.outreach_email_reply_service._load_email_senders",
+        lambda *_args, **_kwargs: [sender],
+    )
+    monkeypatch.setattr(
+        "services.outreach_email_reply_service._load_email_reply_scope_candidates",
+        lambda *_args, **_kwargs: [{
+            "id": "queue-riderra",
+            "delivery_status": "sent",
+            "sent_at": NOW - timedelta(minutes=5),
+            "campaign_id": "campaign-riderra",
+            "recipient_value": recipient,
+        }],
+    )
+    monkeypatch.setattr(
+        "services.outreach_email_reply_service._load_queue_candidates",
+        lambda *_args, **_kwargs: [{
+            "id": "queue-riderra",
+            "provider_message_id": provider_message_id,
+            "recipient_value": recipient,
+            "sent_at": NOW - timedelta(minutes=5),
+        }],
+    )
+    monkeypatch.setattr(
+        "services.outreach_email_reply_service._load_non_author_queue_candidates",
+        lambda *_args, **_kwargs: [],
+    )
+    reactions = []
+
+    def record_reaction(queue_id, raw_reply, outcome, note, user_id, **kwargs):
+        reactions.append({
+            "queue_id": queue_id,
+            "raw_reply": raw_reply,
+            "outcome": outcome,
+            "note": note,
+            "user_id": user_id,
+            **kwargs,
+        })
+        return {"status": "recorded"}, None
+
+    monkeypatch.setattr(admin_prospecting, "_record_reaction", record_reaction)
+
+    result = sync_email_replies(sender_account_id=SENDER_ACCOUNT_ID)
+
+    assert result["success"] is True
+    assert result["imported"] == 1
+    assert fetch_calls == [
+        ("all", [recipient]),
+        ("spam", [recipient]),
+        ("trash", [recipient]),
+    ]
+    receipt = events[0]["payload"]
+    assert events[0]["event_type"] == "reply_sync_succeeded"
+    assert receipt["receipt_version"] == 2
+    assert receipt["complete"] is True
+    assert receipt["recipient_hashes"] == email_recipient_hashes([recipient])
+    assert reactions[0]["queue_id"] == "queue-riderra"
+    assert reactions[0]["note"] == "email_reply_sync"
+    assert reactions[0]["user_id"] == "system:email_reply_sync"
+    assert reactions[0]["provider_name"] == "native_email"
+    assert reactions[0]["provider_account_id"] == SENDER_ACCOUNT_ID
+    assert reactions[0]["provider_message_id"] == inbound["provider_event_id"]
 
 
 def test_unmatched_exact_scoped_message_records_failure_and_does_not_advance_sync(monkeypatch):

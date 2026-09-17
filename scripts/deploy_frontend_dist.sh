@@ -87,7 +87,7 @@ remote_exec() {
 
 remote_ensure_app_running() {
   remote_exec "\
-    docker compose up -d app >/dev/null && \
+    docker compose up -d --no-recreate app >/dev/null && \
     attempts=0 && \
     until docker compose ps --status running app | grep -q '${app_container_name}'; do \
       attempts=\$((attempts + 1)); \

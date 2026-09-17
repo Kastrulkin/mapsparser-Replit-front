@@ -15,6 +15,8 @@ from services.contact_intelligence_service import (
     json_safe,
     build_first_message,
     build_message_brief,
+    _draft_provider_unavailable_state,
+    _is_terminal_draft_provider_error,
     collect_public_website_contacts,
     enqueue_enrichment_job,
     evaluate_first_message,
@@ -31,6 +33,7 @@ from services.contact_intelligence_service import (
     fail_enrichment_job,
     upsert_contact_points,
 )
+from services.gigachat_client import GigaChatProviderError
 from services import contact_intelligence_service
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_personalization_ai import QUALITY_CRITERIA
@@ -38,6 +41,37 @@ from scripts.backfill_partnership_match_artifacts import _skip_reason
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_draft_provider_failure_preserves_contact_research_and_stays_unready():
+    quality, readiness = _draft_provider_unavailable_state(
+        {"code": "ready", "missing": [], "missing_items": []},
+        GigaChatProviderError(code="payment_required", status_code=402, retryable=False),
+    )
+
+    assert quality == {
+        "passed": False,
+        "failures": ["Генератор черновика временно недоступен"],
+        "provider_error": "GigaChat request rejected (HTTP 402)",
+    }
+    assert readiness["code"] == "needs_evidence"
+    assert readiness["missing_items"] == [{
+        "code": "draft_provider_unavailable",
+        "label": "Повторить подготовку черновика после восстановления провайдера",
+    }]
+
+
+def test_terminal_wrapped_provider_failure_is_preserved_without_marking_ready():
+    error = PersonalizationGenerationError(
+        "gigachat_payment_required",
+        "GigaChat request rejected (HTTP 402)",
+        retryable=False,
+    )
+
+    assert _is_terminal_draft_provider_error(error) is True
+    assert _is_terminal_draft_provider_error(
+        PersonalizationGenerationError("ai_generation_invalid", "bad response")
+    ) is False
 
 
 class EnrichmentJobCursor:
