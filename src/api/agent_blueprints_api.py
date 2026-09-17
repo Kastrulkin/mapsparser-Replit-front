@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Blueprint, Response, jsonify, request
 
-from core.auth_helpers import require_auth_from_request, verify_business_access
+from core.auth_helpers import require_auth_from_request, verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from services.agent_blueprint_runner import (
     AgentBlueprintRunner,
@@ -69,6 +69,18 @@ from api.agent_builder_api import (
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
+
+
+AGENT_READ_ONLY_POST_ENDPOINTS = {
+    "agent_blueprints_api.preflight_agent_blueprint_run",
+}
+
+
+def _agent_request_requires_write() -> bool:
+    return (
+        request.method not in {"GET", "HEAD", "OPTIONS"}
+        and request.endpoint not in AGENT_READ_ONLY_POST_ENDPOINTS
+    )
 
 
 @agent_blueprints_bp.route("/api/agent-templates", methods=["GET"])
@@ -417,7 +429,8 @@ def _load_personas_by_id(cursor, persona_ids: list[str]) -> dict:
 
 
 def _require_business_access(cursor, business_id: str, user_data: dict):
-    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    access_check = verify_business_write_access if _agent_request_requires_write() else verify_business_access
+    has_access, owner_id = access_check(cursor, business_id, user_data)
     if not owner_id:
         return False, _json_error("Business not found", 404, "BUSINESS_NOT_FOUND")
     if not has_access:
