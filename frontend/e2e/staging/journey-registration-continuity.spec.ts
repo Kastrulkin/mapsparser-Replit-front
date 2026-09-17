@@ -48,9 +48,15 @@ for (const scenario of scenarios) {
     await page.locator('#register-business-address').fill('Тестовая улица, 10');
     await page.locator('#register-business-city').fill('Санкт-Петербург');
     await page.locator('input[type="checkbox"]').check();
+    const registrationResponse = page.waitForResponse((response) => (
+      response.url().endsWith('/api/auth/register-with-business') && response.request().method() === 'POST'
+    ));
     await page.getByRole('button', { name: /Зарегистрироваться|Sign up/ }).click();
 
-    await expect(page.getByText(/Регистрация почти завершена|Registration is almost complete|pending moderation/).first()).toBeVisible();
+    const registration = await registrationResponse;
+    expect(registration.ok()).toBe(true);
+    expect(await registration.json()).toMatchObject({ success: true });
+    await expect(page.getByRole('button', { name: /Отправить письмо ещё раз|Resend verification email/ })).toBeVisible();
     const verificationToken = fixtureCommand('verification-token', email);
     await page.goto(`/verify-email?token=${encodeURIComponent(verificationToken)}`);
 

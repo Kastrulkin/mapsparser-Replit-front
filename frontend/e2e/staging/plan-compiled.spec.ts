@@ -2,8 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { fixtureCommand } from './fixtureCommand';
 
-test.use({ baseURL: process.env.LOCALOS_STAGING_BASE_URL || 'http://127.0.0.1:18006' });
-
 const businessId = () => fixtureCommand('owner-business-id');
 
 const expectVisibleChildWithinViewport = async (page: Page, locator: Locator) => {

@@ -136,3 +136,13 @@ The isolated mobile browser measured the influencer table's platform link / shor
 
 - Targeted red **1 failed / 1 passed**, green **2 passed in 3.36s**; focused lint clean. Independent combined run **13 passed** and app/Node typecheck exit0.
 - This is a narrow three-control fix, not a claim of whole-site accessibility compliance.
+
+## TEST-E2E-02 — Align real-API browser harness with its contracts
+
+Status: independently reviewed harness correction; full browser rerun pending.
+
+- Browser fixtures/assertions describe Russian workflows; explicitly set `ru-RU` rather than relying on the default English browser locale.
+- Registration previously expected obsolete success copy even when the screen showed successful creation and email confirmation instructions. Assert the actual POST is successful with `success:true`, then require the visible resend-verification action. Token continuity, email verification, action route and cookie checks are unchanged.
+- Remove the compiled spec's independent hardcoded port18006. All staging specs inherit one base URL, with precedence `JOURNEY_STAGING_BASE_URL`, legacy `LOCALOS_STAGING_BASE_URL`, then localhost18000.
+- Baseline corrected-locale run: **95 passed / 19 failed**, 330.392s; 15 registration failures include runtime navigation races and stale copy assertions, one mobile hit-area failure, three wrong-port compiled failures. Do not classify all 19 as product defects or claim they are all resolved by these harness changes.
+- Compiled test still requires an actual approved sandbox runner result. Its fixture is not created by the basic staging seed; no skip or fabricated result added. The standalone old-port compiled script is separate follow-up work.

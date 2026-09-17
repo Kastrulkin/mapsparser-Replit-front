@@ -7,7 +7,9 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: process.env.JOURNEY_STAGING_BASE_URL || 'http://127.0.0.1:18000',
+    baseURL: process.env.JOURNEY_STAGING_BASE_URL || process.env.LOCALOS_STAGING_BASE_URL || 'http://127.0.0.1:18000',
+    // These fixtures and accessible-name assertions describe the Russian journey.
+    locale: 'ru-RU',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -17,4 +19,3 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'], viewport: { width: 393, height: 852 } } },
   ],
 });
-
