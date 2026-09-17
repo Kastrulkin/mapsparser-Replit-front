@@ -43,3 +43,17 @@ Targeted read-only production checks. Business activity window: since 2026-09-15
 - Physical iOS/Android, actual Telegram voice delivery and client-specific external sends remain NOT RUN. Seven-day pilot gate remains incomplete; final assessment due 21 September.
 
 Aggregate results recorded quietly: known Telegram outage unchanged, no new actionable regression established by this targeted check.
+
+## 2026-09-17, 19:00–19:05 UTC — fourth scheduled check
+
+Targeted read-only production checks. Activity window: since 2026-09-16 19:40 UTC. Monitoring changed no production records, configuration, services or recipients.
+
+- App, both workers and Telegram running after a recent separate deployment (approximately one minute of uptime at the first snapshot). Telegram health is healthy and a recent successful poll is present. Local HTTP and public HTTPS Operator return 200. All three Riderra pilot allowlists remain enabled. The general worker has resumed since yesterday's stopped state.
+- The known Telegram connectivity incident is not proven resolved: retained last-30-minute logs contain 128 NetworkError, 193 ConnectError and 192 traceback mentions; zero TimedOut. These overlap in exception chains and are not separate missed messages. Current successful polling is a short recovery sample after restart, not continuous availability. The active implementation task already reported this same unstable proxy; no duplicate incident alert.
+- Four completed audio_transcription jobs (mean completion interval 4 seconds) and four completed audio_speech jobs (mean 3 seconds), maximum one attempt. No content_plan_revision jobs. Logs contain zero DEEPSEEK_EMPTY_RESPONSE, content_plan_revision or SpeechKit mentions; absence of revision activity limits the conclusion.
+- Five Telegram request receipts, all completed; latest at 10:12:04 UTC. No later Riderra request validates the evening release. Completed receipts do not establish the correctness of requested business mutations or identify physical devices.
+- Eight completed DeepSeek operator_tool_plan calls: mean input 8,252 tokens, maximum 20,155; mean latency 1,265 ms. Previous mean input was 4,244 / maximum 20,193 and mean latency 1,323 ms. Input mean exceeds the 3–6k control target; the workload is small and unmatched, so do not infer a causal regression. No content_plan_direction calls in this window.
+- No new journal observations, no journal notification deliveries and no operatoractions rows in the window. Duplicate action, observation and notification keys: zero. No/limited mutation activity cannot demonstrate real-use deduplication reliability.
+- Physical iOS/Android, a complete user control scenario and client-specific sends remain unverified. Audio jobs are not device evidence. Seven-day pilot remains incomplete; final assessment due 21 September.
+
+Quiet result: the acknowledged proxy incident persists with only tentative recovery; no new actionable incident established. More organic activity and a sustained stable polling window are needed.
