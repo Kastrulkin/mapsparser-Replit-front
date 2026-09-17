@@ -4,11 +4,18 @@ Webhook endpoints для получения сообщений от WABA и Tele
 """
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
+import hashlib
+import hmac
 import os
 import requests
 import json
+import uuid
 from ai_agent import process_message, get_business_info
 from core.telegram_token_store import decode_telegram_bot_token
+from core.telegram_webhook_auth import (
+    TELEGRAM_WEBHOOK_SECRET_HEADER,
+    has_valid_telegram_webhook_secret,
+)
 from core.telegram_network import build_requests_proxy_kwargs
 from core.telegram_agent_transport import (
     evaluate_and_record_telegram_agent_transport,
@@ -17,6 +24,29 @@ from services.agent_legacy_migration import business_agent_enabled_for_channel
 from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
+
+
+def _has_valid_whatsapp_signature(raw_body: bytes) -> bool:
+    """Validate Meta's request HMAC before touching webhook payload data."""
+    app_secret = str(os.getenv("WHATSAPP_APP_SECRET") or "").strip()
+    header = str(request.headers.get("X-Hub-Signature-256") or "").strip()
+    prefix = "sha256="
+
+    if not app_secret or not header.startswith(prefix):
+        return False
+
+    supplied_digest = header[len(prefix):]
+    if len(supplied_digest) != 64 or any(
+        character not in "0123456789abcdef" for character in supplied_digest
+    ):
+        return False
+
+    expected_digest = hmac.new(
+        app_secret.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected_digest, supplied_digest)
 
 def send_whatsapp_message(phone_id: str, access_token: str, to: str, message: str) -> bool:
     """Отправить сообщение через WhatsApp Business API"""
@@ -90,34 +120,6 @@ def find_business_by_waba_phone_id(phone_id: str) -> dict:
         db.close()
 
 
-def find_business_by_telegram_token(bot_token: str) -> dict | None:
-    token = str(bot_token or "").strip()
-    if not token:
-        return None
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, telegram_bot_token
-            FROM Businesses
-            WHERE telegram_bot_token IS NOT NULL
-              AND NULLIF(TRIM(telegram_bot_token), '') IS NOT NULL
-            """
-        )
-        for row in cursor.fetchall() or []:
-            row_dict = dict(row)
-            candidate = decode_telegram_bot_token(row_dict.get("telegram_bot_token"))
-            if candidate and candidate == token:
-                runtime_gate = business_agent_enabled_for_channel(cursor, str(row_dict.get("id") or ""))
-                row_dict["ai_agent_enabled"] = bool(runtime_gate.get("enabled"))
-                row_dict["agent_runtime_source"] = runtime_gate.get("source")
-                row_dict["legacy_field_status"] = runtime_gate.get("legacy_field_status")
-                return row_dict
-        return None
-    finally:
-        db.close()
-
 @ai_webhooks_bp.route('/api/webhooks/whatsapp', methods=['POST', 'GET'])
 def whatsapp_webhook():
     """Webhook для получения сообщений от WhatsApp Business API"""
@@ -127,36 +129,65 @@ def whatsapp_webhook():
             mode = request.args.get('hub.mode')
             token = request.args.get('hub.verify_token')
             challenge = request.args.get('hub.challenge')
-            
-            verify_token = os.getenv('WHATSAPP_VERIFY_TOKEN', 'local_verify_token')
-            
-            if mode == 'subscribe' and token == verify_token:
+            verify_token = str(os.getenv('WHATSAPP_VERIFY_TOKEN') or '').strip()
+
+            if (
+                verify_token
+                and mode == 'subscribe'
+                and token is not None
+                and hmac.compare_digest(verify_token.encode("utf-8"), token.encode("utf-8"))
+            ):
+                if challenge is None:
+                    return jsonify({"error": "Verification challenge required"}), 400
                 print("✅ WhatsApp webhook верифицирован")
                 return challenge, 200
-            else:
-                print("❌ WhatsApp webhook верификация не удалась")
-                return jsonify({"error": "Verification failed"}), 403
-        
-        # POST запрос - получение сообщения
-        data = request.get_json()
-        
-        if not data:
+
+            print("❌ WhatsApp webhook верификация не удалась")
+            return jsonify({"error": "Verification failed"}), 403
+
+        raw_body = request.get_data(cache=True)
+        if not str(os.getenv("WHATSAPP_APP_SECRET") or "").strip():
+            return jsonify({"error": "Webhook signing is not configured"}), 503
+        if not _has_valid_whatsapp_signature(raw_body):
+            return jsonify({"error": "Invalid webhook signature"}), 403
+
+        # Parse only an authenticated request. Silent parsing avoids a 500 on malformed JSON.
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
             return jsonify({"error": "No data"}), 400
-        
+
         # Обрабатываем структуру WABA webhook
         entry = data.get('entry', [])
+        if not isinstance(entry, list):
+            return jsonify({"error": "Invalid webhook payload"}), 400
         if not entry:
             return jsonify({"status": "ok"}), 200
-        
+
         for entry_item in entry:
+            if not isinstance(entry_item, dict):
+                continue
             changes = entry_item.get('changes', [])
+            if not isinstance(changes, list):
+                continue
             for change in changes:
+                if not isinstance(change, dict):
+                    continue
                 value = change.get('value', {})
+                if not isinstance(value, dict):
+                    continue
                 messages = value.get('messages', [])
-                
+                if not isinstance(messages, list):
+                    continue
                 for message in messages:
+                    if not isinstance(message, dict):
+                        continue
                     from_number = message.get('from', '')
-                    message_text = message.get('text', {}).get('body', '')
+                    message_text_data = message.get('text', {})
+                    message_text = (
+                        message_text_data.get('body', '')
+                        if isinstance(message_text_data, dict)
+                        else ''
+                    )
                     message_id = message.get('id', '')
                     
                     if not message_text or not from_number:
@@ -166,7 +197,12 @@ def whatsapp_webhook():
                     
                     # Находим бизнес по phone_id из webhook
                     # В WABA webhook phone_number_id указывает на бизнес, который получил сообщение
-                    phone_id = value.get('metadata', {}).get('phone_number_id', '')
+                    metadata = value.get('metadata', {})
+                    phone_id = (
+                        metadata.get('phone_number_id', '')
+                        if isinstance(metadata, dict)
+                        else ''
+                    )
                     if not phone_id:
                         # Пробуем получить из другого места в структуре
                         phone_id = entry_item.get('id', '')
@@ -206,101 +242,89 @@ def whatsapp_webhook():
 
 @ai_webhooks_bp.route('/api/webhooks/telegram', methods=['POST'])
 def telegram_webhook():
-    """Webhook для получения сообщений от Telegram ботов пользователей"""
+    """Handle a business-scoped Telegram callback after authenticating it."""
+    raw_business_id = str(request.args.get("business_id") or "").strip()
+    supplied_secret = str(request.headers.get(TELEGRAM_WEBHOOK_SECRET_HEADER) or "")
+    secret_is_malformed = len(supplied_secret) != 64 or any(
+        character not in "0123456789abcdef" for character in supplied_secret
+    )
+    if request.headers.get("X-Bot-Token") or request.args.get("bot_token") or secret_is_malformed:
+        return jsonify({"error": "Webhook authentication failed"}), 403
     try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({"error": "No data"}), 400
-        
-        # Telegram webhook структура
-        message = data.get('message', {})
-        if not message:
+        business_id = str(uuid.UUID(raw_business_id))
+    except (TypeError, ValueError, AttributeError):
+        return jsonify({"error": "Webhook authentication failed"}), 403
+
+    database = DatabaseManager()
+    try:
+        cursor = database.conn.cursor()
+        cursor.execute(
+            "SELECT id, telegram_bot_token FROM Businesses WHERE id = %s LIMIT 1",
+            (business_id,),
+        )
+        row = cursor.fetchone()
+        row_dict = dict(row) if row else {}
+        stored_bot_token = decode_telegram_bot_token(row_dict.get("telegram_bot_token"))
+        if not stored_bot_token or not has_valid_telegram_webhook_secret(
+            supplied_secret, stored_bot_token, business_id
+        ):
+            return jsonify({"error": "Webhook authentication failed"}), 403
+
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid webhook payload"}), 400
+        if "bot_token" in data:
+            return jsonify({"error": "Invalid webhook payload"}), 400
+
+        message = data.get("message")
+        if message is None:
             return jsonify({"status": "ok"}), 200
-        
-        chat_id = str(message.get('chat', {}).get('id', ''))
-        from_user = message.get('from', {})
-        user_id = str(from_user.get('id', ''))
-        username = from_user.get('username', '')
-        first_name = from_user.get('first_name', '')
-        message_text = message.get('text', '')
-        
-        # Получаем bot_token из заголовка или параметров запроса
-        bot_token = request.headers.get('X-Bot-Token') or request.args.get('bot_token') or data.get('bot_token')
-        
-        if not message_text or not chat_id:
+        if not isinstance(message, dict):
+            return jsonify({"error": "Invalid webhook payload"}), 400
+        chat = message.get("chat")
+        from_user = message.get("from")
+        if not isinstance(chat, dict) or not isinstance(from_user, dict):
+            return jsonify({"error": "Invalid webhook payload"}), 400
+
+        chat_id = str(chat.get("id") or "")
+        user_id = str(from_user.get("id") or "")
+        username = str(from_user.get("username") or "")
+        first_name = str(from_user.get("first_name") or "")
+        message_text = message.get("text")
+        if not isinstance(message_text, str) or not message_text or not chat_id:
+            return jsonify({"status": "ok"}), 200
+
+        runtime_gate = business_agent_enabled_for_channel(cursor, business_id)
+        if not bool(runtime_gate.get("enabled")):
             return jsonify({"status": "ok"}), 200
 
         agent_transport_decision = {"allow_normal_routing": True, "code": "HUMAN_SENDER"}
         if bool(from_user.get("is_bot")):
-            agent_transport_db = DatabaseManager()
-            try:
-                agent_transport_decision = evaluate_and_record_telegram_agent_transport(
-                    agent_transport_db.conn.cursor(),
-                    data,
-                    local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
-                    ip=request.headers.get("X-Forwarded-For", request.remote_addr or ""),
-                    user_agent=request.headers.get("User-Agent", ""),
-                )
-                agent_transport_db.conn.commit()
-            finally:
-                agent_transport_db.close()
+            agent_transport_decision = evaluate_and_record_telegram_agent_transport(
+                cursor,
+                data,
+                local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
+                ip=request.headers.get("X-Forwarded-For", request.remote_addr or ""),
+                user_agent=request.headers.get("User-Agent", ""),
+            )
+            database.conn.commit()
         if not agent_transport_decision.get("allow_normal_routing"):
-            print(
-                "⚠️ Telegram agent transport blocked: "
-                f"{agent_transport_decision.get('code')} "
-                f"{agent_transport_decision.get('ledger_payload')}"
-            )
-            return jsonify({
-                "status": "ignored",
-                "reason": agent_transport_decision.get("code"),
-            }), 200
-        
-        print(f"📱 Получено Telegram сообщение от {user_id} ({username}): {message_text}")
-        
-        # Находим бизнес по токену бота
-        if not bot_token:
-            return jsonify({"error": "bot_token required"}), 400
-        
-        row = find_business_by_telegram_token(bot_token)
-        
-        if not row:
-            print(f"⚠️ Бизнес не найден для токена бота")
-            return jsonify({"status": "ok"}), 200
-        
-        business_id = row.get("id") if isinstance(row, dict) else row[0]
-        raw_enabled = row.get("ai_agent_enabled") if isinstance(row, dict) else False
-        ai_agent_enabled = bool(raw_enabled)
-        
-        if not ai_agent_enabled:
-            print(f"⚠️ ИИ агент отключен для бизнеса {business_id}")
-            return jsonify({"status": "ok"}), 200
+            return jsonify({"status": "ignored", "reason": agent_transport_decision.get("code")}), 200
 
-        trigger_db = DatabaseManager()
-        try:
-            trigger_result = dispatch_telegram_message_to_agent_blueprints(
-                trigger_db.conn.cursor(),
-                str(business_id),
-                {
-                    "message_text": message_text,
-                    "telegram_user_id": user_id,
-                    "telegram_username": username,
-                    "telegram_first_name": first_name,
-                    "chat_id": chat_id,
-                    "message_id": str(message.get("message_id") or ""),
-                },
-            )
-            trigger_db.conn.commit()
-        except Exception:
-            trigger_db.conn.rollback()
-            raise
-        finally:
-            trigger_db.close()
+        trigger_result = dispatch_telegram_message_to_agent_blueprints(
+            cursor,
+            business_id,
+            {
+                "message_text": message_text,
+                "telegram_user_id": user_id,
+                "telegram_username": username,
+                "telegram_first_name": first_name,
+                "chat_id": chat_id,
+                "message_id": str(message.get("message_id") or ""),
+            },
+        )
+        database.conn.commit()
         if trigger_result.get("matched_count"):
-            print(
-                "✅ Telegram сообщение запустило agent blueprint workflow: "
-                f"{trigger_result.get('started_runs')}"
-            )
             return jsonify(
                 {
                     "status": "ok",
@@ -310,47 +334,31 @@ def telegram_webhook():
                     },
                 }
             ), 200
-        
-        # Обрабатываем сообщение через ИИ агента
-        client_phone = f"tg_{user_id}"  # Используем формат tg_ для Telegram
-        client_name = first_name or username or None
-        
+
         result = process_message(
             business_id=business_id,
-            client_phone=client_phone,
-            client_name=client_name,
-            message=message_text
+            client_phone=f"tg_{user_id}",
+            client_name=first_name or username or None,
+            message=message_text,
         )
-        
-        if result.get('success') and result.get('response'):
-            # Отправляем ответ через Telegram
+        if result.get("success") and result.get("response"):
             send_telegram_message(
-                bot_token=bot_token,
+                bot_token=stored_bot_token,
                 chat_id=chat_id,
-                message=result['response']
+                message=result["response"],
             )
-        
         return jsonify({"status": "ok"}), 200
-        
-    except Exception as e:
-        print(f"❌ Ошибка обработки Telegram webhook: {e}")
+    except Exception:
+        database.conn.rollback()
+        print("❌ Ошибка обработки Telegram webhook")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Webhook processing failed"}), 500
+    finally:
+        database.close()
+
 
 @ai_webhooks_bp.route('/api/webhooks/telegram/<bot_token>', methods=['POST'])
 def telegram_webhook_with_token(bot_token: str):
-    """Webhook для Telegram с токеном в URL (альтернативный вариант)"""
-    try:
-        data = request.get_json()
-        if data:
-            data['bot_token'] = bot_token
-        else:
-            data = {'bot_token': bot_token}
-        
-        # Перенаправляем на основной обработчик
-        request._cached_json = data
-        return telegram_webhook()
-    except Exception as e:
-        print(f"❌ Ошибка обработки Telegram webhook с токеном: {e}")
-        return jsonify({"error": str(e)}), 500
+    """Deny the retired raw-token URL without inspecting its value or payload."""
+    return jsonify({"error": "Webhook endpoint retired; rebind required"}), 410

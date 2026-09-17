@@ -22,9 +22,9 @@
 3. Перейдите в раздел "WhatsApp" → "Configuration"
 4. В поле "Webhook URL" укажите:
    ```
-   https://localhost/api/webhooks/whatsapp
+   https://localos.pro/api/webhooks/whatsapp
    ```
-5. В поле "Verify Token" укажите токен из `.env` файла (по умолчанию: `local_verify_token`)
+5. В поле "Verify Token" укажите значение `WHATSAPP_VERIFY_TOKEN` из `.env`. Это должен быть уникальный случайный секрет: fallback-значения нет.
 6. Сохраните изменения
 
 ### 3. Подписка на события
@@ -63,22 +63,54 @@
 
 ### 3. Настройка Webhook
 
-Для каждого бота нужно настроить webhook отдельно. Используйте один из вариантов:
+Для каждого бота webhook настраивается отдельно. URL содержит только
+несекретный UUID бизнеса: `https://localos.pro/api/webhooks/telegram?business_id=<business-uuid>`.
+Токен бота в URL, query и `X-Bot-Token` запрещены. Telegram передаёт
+`secret_token` в callback как `X-Telegram-Bot-Api-Secret-Token`.
 
-#### Вариант 1: Webhook с токеном в URL (рекомендуется)
+Секрет вычисляется из текущего токена бота и UUID бизнеса. Его не нужно
+хранить отдельно, но после смены токена webhook надо перевязать. Одноразовый
+операторский шаг в доверенной среде, только после одобрения изменения
+подключения (без secret в shell history; этот пример не выполняется аудитом):
 
-```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
-  -d "url=https://localhost/api/webhooks/telegram/<YOUR_BOT_TOKEN>"
+```python
+from getpass import getpass
+import hashlib, hmac, json, uuid
+from urllib.request import Request, urlopen
+
+business_id = str(uuid.UUID(input("Business UUID: ").strip()))
+bot_token = getpass("Telegram bot token: ").strip()
+secret_token = hmac.new(
+    bot_token.encode(),
+    f"localos.telegram.webhook.v1:{business_id}".encode(),
+    hashlib.sha256,
+).hexdigest()
+body = json.dumps({
+    "url": f"https://localos.pro/api/webhooks/telegram?business_id={business_id}",
+    "secret_token": secret_token,
+}).encode()
+request = Request(
+    f"https://api.telegram.org/bot{bot_token}/setWebhook",
+    data=body,
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    response = urlopen(request, timeout=15)
+    try:
+        result = json.loads(response.read())
+    finally:
+        response.close()
+    if result.get("ok") is not True:
+        raise RuntimeError("Webhook registration rejected")
+except Exception:
+    # Не выводите исключение HTTP: URL Telegram API содержит токен бота.
+    raise RuntimeError("Webhook registration failed; inspect provider status securely") from None
 ```
 
-#### Вариант 2: Webhook с токеном в заголовке
-
-```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
-  -H "X-Bot-Token: <YOUR_BOT_TOKEN>" \
-  -d "url=https://localhost/api/webhooks/telegram"
-```
+`/api/webhooks/telegram/<bot_token>` закрыт и возвращает `410`; сначала
+перевяжите брендированного бота. `X-Bot-Token` в запросе `setWebhook` не
+настраивает заголовок будущих callback-запросов Telegram.
 
 ### 4. Включение ИИ агента
 
@@ -92,8 +124,11 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
 Добавьте в `.env` файл:
 
 ```bash
-# WhatsApp Webhook Verify Token
-WHATSAPP_VERIFY_TOKEN=local_verify_token
+# WhatsApp Webhook Verify Token (unique random secret; required for GET verification)
+WHATSAPP_VERIFY_TOKEN=<unique-random-verify-token>
+
+# Meta App Secret (required for HMAC validation of every WhatsApp POST)
+WHATSAPP_APP_SECRET=<meta-app-secret>
 
 # GigaChat (для ИИ агента)
 GIGACHAT_CLIENT_ID=your_client_id
@@ -139,7 +174,8 @@ GIGACHAT_CLIENT_SECRET=your_client_secret
 
 - Токены WABA и Telegram хранятся в базе данных в зашифрованном виде
 - Webhook endpoints требуют правильной структуры запросов
-- WhatsApp webhook требует верификации через verify token
+- WhatsApp GET webhook требует настроенный verify token; известного fallback-значения нет
+- Каждый WhatsApp POST до разбора JSON проверяется по заголовку Meta `X-Hub-Signature-256` (HMAC-SHA256 от сырых байтов тела с `WHATSAPP_APP_SECRET`)
 - Telegram webhook проверяет токен бота перед обработкой
 
 ## Ограничения
@@ -148,4 +184,3 @@ GIGACHAT_CLIENT_SECRET=your_client_secret
 - Для WhatsApp требуется активный WABA аккаунт
 - Для Telegram требуется собственный бот
 - Ответы генерируются через GigaChat API (требуется настройка)
-

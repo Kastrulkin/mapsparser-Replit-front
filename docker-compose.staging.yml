@@ -42,6 +42,7 @@ x-staging-blank-provider-credentials: &staging-blank-provider-credentials
   VK_OAUTH_CLIENT_ID: ""
   VK_OAUTH_STATE_SECRET: ""
   WHATSAPP_VERIFY_TOKEN: ""
+  WHATSAPP_APP_SECRET: ""
   YANDEX_AI_API_KEY: ""
   YANDEX_WORDSTAT_API_KEY: ""
   YANDEX_WORDSTAT_CLIENT_ID: ""

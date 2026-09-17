@@ -168,9 +168,9 @@ New agent clients are created as `sandbox` by default. Direct publish, payment, 
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
-| `POST|GET` | `/api/webhooks/whatsapp` | `beta` | WABA inbound. |
-| `POST` | `/api/webhooks/telegram` | `beta` | Telegram inbound. |
-| `POST` | `/api/webhooks/telegram/<bot_token>` | `beta` | Token URL variant. |
+| `POST|GET` | `/api/webhooks/whatsapp` | `beta` | GET requires the configured verify token; POST requires raw-body HMAC-SHA256 in `X-Hub-Signature-256` using `WHATSAPP_APP_SECRET`. |
+| `POST` | `/api/webhooks/telegram?business_id=<business-uuid>` | `beta` | Telegram inbound; requires `X-Telegram-Bot-Api-Secret-Token`. |
+| `POST` | `/api/webhooks/telegram/<bot_token>` | `retired` | Always returns `410`; rebind with the business UUID endpoint. |
 
 ## Not Yet Documented as Public API
 
