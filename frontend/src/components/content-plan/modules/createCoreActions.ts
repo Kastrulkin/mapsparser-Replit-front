@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { newAuth } from '@/lib/auth_new';
-import { _socialOpenClawReadinessDetails, _socialApprovalSummary, _socialWorkerEnvLines, _socialLaunchRunbookClipboardLines, _socialAttributionFeedback, _readStoredPreferences, _writeStoredPreferences, _isValidItemFilterKey, _isValidContentLanguageKey, _isValidViewPresetKey, _inferViewPresetKey, _removeRecordKeys, copyTextToClipboard } from './helpers';
-import type { ScopeOption, SocialPost, SocialPublishRehearsalBulk, SocialRecommendationPayload, SocialAttributionEventType, ContentMixKey } from './types';
+import { useEffect } from 'react';
+import { _inferViewPresetKey, _isValidContentLanguageKey, _isValidItemFilterKey, _isValidViewPresetKey, _readStoredPreferences, _removeRecordKeys, _socialApprovalSummary, _socialAttributionFeedback, _socialLaunchRunbookClipboardLines, _socialOpenClawReadinessDetails, _socialWorkerEnvLines, _writeStoredPreferences, copyTextToClipboard } from './helpers.logic';
+import type { ContentMixKey, ScopeOption, SocialAttributionEventType, SocialPost, SocialPublishRehearsalBulk, SocialRecommendationPayload } from './types';
 
 export const useCoreActions = (scope) => {
   const {
@@ -127,7 +128,7 @@ export const useCoreActions = (scope) => {
     }
   };
 
-  const loadSocialPosts = async (planId: string) => {
+  const loadSocialPosts = useLatestCallback(async (planId: string) => {
     if (!planId) return;
     setSocialPostsLoading(true);
     try {
@@ -175,7 +176,7 @@ export const useCoreActions = (scope) => {
     } finally {
       setSocialPostsLoading(false);
     }
-  };
+  });
 
   const loadContext = async (scopeKey?: string) => {
     if (!businessId) return;
@@ -234,7 +235,7 @@ export const useCoreActions = (scope) => {
       return;
     }
     void loadSocialPosts(currentPlan.id);
-  }, [currentPlan?.id]);
+  }, [currentPlan?.id, loadSocialPosts, setSocialPostsByItem, setSocialSummary, setSocialQueueGroups, setSocialPostsLoading]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -254,12 +255,12 @@ export const useCoreActions = (scope) => {
       const nextKey = `${pointScopeOption.scope_type}:${pointScopeOption.scope_target_id}`;
       if (selectedScopeKey !== nextKey) setSelectedScopeKey(nextKey);
     }
-  }, [contentMode, networkScopeOption, pointScopeOption, scopeOptions.length, selectedScopeKey]);
+  }, [contentMode, networkScopeOption, pointScopeOption, scopeOptions.length, selectedScopeKey, setSelectedScopeKey]);
 
   useEffect(() => {
     if (availableWeeks.some((week) => week.key === selectedWeekKey)) return;
     setSelectedWeekKey('all');
-  }, [availableWeeks, selectedWeekKey]);
+  }, [availableWeeks, selectedWeekKey, setSelectedWeekKey]);
 
   useEffect(() => {
     if (visibleItems.length === 0) {
@@ -269,13 +270,13 @@ export const useCoreActions = (scope) => {
     }
     if (selectedQueueItemId && visibleItems.some((item) => item.id === selectedQueueItemId)) return;
     setSelectedQueueItemId(visibleItems[0].id);
-  }, [editorItemId, selectedQueueItemId, visibleItems]);
+  }, [editorItemId, selectedQueueItemId, setEditorItemId, setSelectedQueueItemId, visibleItems]);
 
   useEffect(() => {
     if (!editorItemId) return;
     if (visibleItems.some((item) => item.id === editorItemId)) return;
     setEditorItemId('');
-  }, [editorItemId, visibleItems]);
+  }, [editorItemId, setEditorItemId, visibleItems]);
 
   useEffect(() => {
     setSelectedItemIds((prev) => {
@@ -286,7 +287,7 @@ export const useCoreActions = (scope) => {
       }
       return next;
     });
-  }, [visibleItems]);
+  }, [setSelectedItemIds, visibleItems]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -316,7 +317,7 @@ export const useCoreActions = (scope) => {
     if (_isValidViewPresetKey(stored.selectedViewPreset)) {
       setSelectedViewPreset(stored.selectedViewPreset);
     }
-  }, [businessId]);
+  }, [businessId, setContentLanguage, setDateFromFilter, setDateToFilter, setLastFocusLocationKey, setLastFocusWeekKey, setSelectedItemFilter, setSelectedViewPreset, setSortMode]);
 
   useEffect(() => {
     if (selectedViewPreset !== 'focus') return;
@@ -326,7 +327,7 @@ export const useCoreActions = (scope) => {
     if (selectedWeekKey !== 'all') {
       setLastFocusWeekKey(selectedWeekKey);
     }
-  }, [selectedViewPreset, selectedItemLocationKey, selectedWeekKey]);
+  }, [selectedViewPreset, selectedItemLocationKey, selectedWeekKey, setLastFocusLocationKey, setLastFocusWeekKey]);
 
   useEffect(() => {
     setSelectedViewPreset(_inferViewPresetKey({
@@ -339,16 +340,7 @@ export const useCoreActions = (scope) => {
       dateToFilter,
       sortMode,
     }));
-  }, [
-    selectedItemFilter,
-    selectedSignalFilter,
-    selectedPlanTargetKey,
-    selectedItemLocationKey,
-    selectedWeekKey,
-    dateFromFilter,
-    dateToFilter,
-    sortMode,
-  ]);
+  }, [selectedItemFilter, selectedSignalFilter, selectedPlanTargetKey, selectedItemLocationKey, selectedWeekKey, dateFromFilter, dateToFilter, sortMode, setSelectedViewPreset]);
 
   useEffect(() => {
     if (!businessId) return;

@@ -52,9 +52,12 @@ jobs:
       - name: Install locked frontend dependencies
         working-directory: frontend
         run: npm ci
-      - name: TypeScript changed-module check
+      - name: Full frontend TypeScript check
         working-directory: frontend
-        run: python ../scripts/check_frontend_typecheck_scope.py
+        run: npm run typecheck
+      - name: Frontend lint ratchet
+        working-directory: frontend
+        run: npm run lint
       - name: Frontend behavioral regressions
         working-directory: frontend
         run: npm run test -- src/components/agents/CompiledScriptBuilder.test.tsx src/components/DashboardSidebar.i18n.test.tsx src/pages/dashboard/TodayPage.test.tsx src/pages/dashboard/OperatorPage.i18n.test.tsx src/pages/dashboard/InfluencersPage.test.tsx src/pages/dashboard/InfluencerPromotionPage.test.tsx

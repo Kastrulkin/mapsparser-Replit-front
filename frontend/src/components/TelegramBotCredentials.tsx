@@ -1,16 +1,17 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useState, useEffect } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import type { BusinessRecord } from '@/types/business';
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Send } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface TelegramBotCredentialsProps {
   businessId: string | null;
-  business: any;
+  business: Partial<Pick<BusinessRecord, 'id' | 'telegram_bot_token_configured' | 'telegram_bot_token_masked' | 'telegram_chat_id'>> | null;
   onSaved?: () => void;
 }
 

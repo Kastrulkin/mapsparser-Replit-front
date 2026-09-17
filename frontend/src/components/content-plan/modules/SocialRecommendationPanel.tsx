@@ -1,6 +1,5 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
-import { _socialPlatformLabel, _socialLearningReadinessClassName, _socialLearningConfidenceLabel, _socialLearningChecklistStatusLabel, _socialInsightMetricLine } from './helpers';
+import { _socialInsightMetricLine, _socialLearningChecklistStatusLabel, _socialLearningConfidenceLabel, _socialLearningReadinessClassName, _socialPlatformLabel } from './helpers.logic';
 
 export const SocialRecommendationPanel = ({ scope }) => {
   const {

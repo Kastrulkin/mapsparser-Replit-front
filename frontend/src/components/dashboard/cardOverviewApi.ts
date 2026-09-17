@@ -1,4 +1,5 @@
 import { newAuth } from '@/lib/auth_new';
+import { isRecord } from '@/lib/record';
 
 type ParseRefreshPolicy = {
   can_refresh: boolean;
@@ -33,8 +34,8 @@ const jsonRequest = async (path: string, init?: RequestInit) => {
   return { response, data };
 };
 
-export const normalizeParseRefreshPolicy = (value: any): ParseRefreshPolicy => {
-  const source = value && typeof value === 'object' ? value : {};
+export const normalizeParseRefreshPolicy = (value: unknown): ParseRefreshPolicy => {
+  const source = isRecord(value) ? value : {};
   return {
     can_refresh: Boolean(source.can_refresh ?? true),
     reason: String(source.reason || '').trim() || null,
@@ -126,13 +127,13 @@ const normalizeMapSource = (source: unknown) => {
   return normalized;
 };
 
-export const extractMapSources = (data: any, externalPosts: any[]): MapSourcesResult => {
+export const extractMapSources = (data: { mapLinks?: Array<{ url?: string }> } | null, externalPosts: Array<{ source?: string }>): MapSourcesResult => {
   const sources = new Set<string>();
   let hasConfiguredMapLink = false;
   let hasSupportedConfiguredMapLink = false;
 
   if (Array.isArray(data?.mapLinks)) {
-    data.mapLinks.forEach((link: any) => {
+    data.mapLinks.forEach((link) => {
       const url = String(link?.url || '').trim().toLowerCase();
       if (!url) return;
       hasConfiguredMapLink = true;

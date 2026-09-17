@@ -1,6 +1,6 @@
+import { CheckCircle2, FileSpreadsheet, MessageCircle, Send, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, FileSpreadsheet, MessageCircle, Send, Wallet } from 'lucide-react';
 
 import { FinanceDailyPanel } from '@/components/FinanceDailyPanel';
 import FinanceFirstStep from '@/components/FinanceFirstStep';
@@ -10,17 +10,17 @@ import FinancialMetrics from '@/components/FinancialMetrics';
 import ROICalculator from '@/components/ROICalculator';
 import TransactionTable from '@/components/TransactionTable';
 import {
-  DashboardPageHeader,
-  DashboardSection,
+	DashboardPageHeader,
+	DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+import type { GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import type { GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getFinancePageCopy } from '@/i18n/financePageCopy';
 import { newAuth } from '@/lib/auth_new';
 import { trackProductEvent } from '@/lib/productEvents';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { getFinancePageCopy } from '@/i18n/financePageCopy';
 
 const crmStatusLabel = (status: string | undefined, labels: ReturnType<typeof getFinancePageCopy>['status']) => {
   if (status === 'reviewing') return labels.reviewing;

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { diskRequest } from './DiskImportPanel';
+import { useEffect, useRef, useState } from 'react';
+import { diskRequest } from './DiskImportPanel.logic';
 export function GoogleDriveReaderSettings() {
   const keyInput = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<{ configured: boolean; client_email: string; version: number } | null>(null);

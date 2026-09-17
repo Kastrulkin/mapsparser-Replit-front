@@ -1,9 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { TrendingUp, Heart, Loader2 } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
-import { useState } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { Button } from "@/components/ui/button";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/design-tokens';
+import { Heart, Loader2, TrendingUp } from "lucide-react";
+import { useState } from 'react';
 
 const Hero = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);

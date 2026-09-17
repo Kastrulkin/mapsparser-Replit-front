@@ -1,15 +1,16 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Alert, AlertDescription } from './ui/alert';
-import { Loader2, MessageCircle, CheckCircle2, Clock3 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import type { BusinessRecord } from '@/types/business';
+import { CheckCircle2, Clock3, Loader2, MessageCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Alert, AlertDescription } from './ui/alert';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Input } from './ui/input';
 
 interface WhatsAppConnectionProps {
   currentBusinessId?: string | null;
-  business?: any;
+  business?: Partial<Pick<BusinessRecord, 'whatsapp_phone' | 'whatsapp_verified'>> | null;
 }
 
 const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusinessId, business }) => {

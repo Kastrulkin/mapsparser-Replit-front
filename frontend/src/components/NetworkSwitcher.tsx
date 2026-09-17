@@ -1,8 +1,9 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { getApiEndpoint } from '../config/api';
-import { ChevronDown, Building2, Network } from 'lucide-react';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { Building2, ChevronDown, Network } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { getApiEndpoint } from '../config/api';
 
 interface NetworkLocation {
   id: string;
@@ -30,11 +31,7 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
   const closeSwitcher = useCallback(() => setIsOpen(false), []);
   useClickOutside(switcherRef, closeSwitcher, { enabled: isOpen });
 
-  useEffect(() => {
-    if (networkId) {
-      loadNetworkLocations();
-    }
-  }, [networkId]);
+
 
   useEffect(() => {
     if (locations.length > 0) {
@@ -43,7 +40,7 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
     }
   }, [locations, currentLocationId]);
 
-  const loadNetworkLocations = async () => {
+  const loadNetworkLocations = useLatestCallback(async () => {
     if (!networkId) return;
 
     setLoading(true);
@@ -65,7 +62,13 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (networkId) {
+      loadNetworkLocations();
+    }
+  }, [loadNetworkLocations, networkId]);
 
   const handleLocationSelect = (location: NetworkLocation) => {
     setSelectedLocation(location);

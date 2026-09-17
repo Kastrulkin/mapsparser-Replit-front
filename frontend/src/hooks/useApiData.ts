@@ -1,17 +1,18 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import { useEffect, useRef, useState } from 'react';
 
-interface UseApiDataOptions<T> {
-  transform?: (data: any) => T;
+interface UseApiDataOptions<T, Input> {
+  transform?: (data: Input) => T;
   onSuccess?: (data: T) => void;
   onError?: (error: string) => void;
   keepPreviousData?: boolean;
   dataScopeKey?: string | null;
 }
 
-export function useApiData<T>(
+export function useApiData<T, Input = T>(
   endpoint: string | null,
-  options?: RequestInit & UseApiDataOptions<T>
+  options?: RequestInit & UseApiDataOptions<T, Input>
 ) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,11 +21,14 @@ export function useApiData<T>(
   const dataRef = useRef<T | null>(null);
   const scopeRef = useRef<string | null | undefined>(options?.dataScopeKey);
 
+  const getOptions = useLatestCallback(() => options);
+  const dataScopeKey = options?.dataScopeKey;
   useEffect(() => {
-    const keepPreviousData = Boolean(options?.keepPreviousData);
-    const scopeChanged = scopeRef.current !== options?.dataScopeKey;
+    const requestSettings = getOptions();
+    const keepPreviousData = Boolean(requestSettings?.keepPreviousData);
+    const scopeChanged = scopeRef.current !== requestSettings?.dataScopeKey;
     if (scopeChanged) {
-      scopeRef.current = options?.dataScopeKey;
+      scopeRef.current = requestSettings?.dataScopeKey;
       dataRef.current = null;
       setData(null);
     }
@@ -50,7 +54,7 @@ export function useApiData<T>(
       keepPreviousData: _keepPreviousData,
       dataScopeKey: _dataScopeKey,
       ...requestOptions
-    } = options || {};
+    } = requestSettings || {};
 
     const token = browserBearerToken();
     fetch(endpoint, {
@@ -66,6 +70,7 @@ export function useApiData<T>(
         return res.json();
       })
       .then((responseData) => {
+        if (controller.signal.aborted) return;
         if (responseData.success !== false) {
           const transformedData: T = transform
             ? transform(responseData.data || responseData)
@@ -92,7 +97,7 @@ export function useApiData<T>(
       });
 
     return () => controller.abort();
-  }, [endpoint, options?.dataScopeKey]);
+  }, [endpoint, dataScopeKey, getOptions]);
 
   return { data, loading, refreshing, error };
 }

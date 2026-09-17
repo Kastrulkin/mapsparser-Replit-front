@@ -1,10 +1,9 @@
-import React from 'react';
-import { PlanDownload } from '../PlanDownload';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Globe, Lock, Sparkles, Trash2, Wand2 } from 'lucide-react';
-import { _contentTypeLabel, _scopeChipLabel, _planTargetLabel, _learningCapabilityLabel, _networkQualityReasonLabel, _sourceKindLabel, _normalizeContentLanguage, _formatPlanItemDate } from './helpers';
-import { PERIOD_OPTIONS, DENSITY_OPTIONS, CONTENT_MIX_OPTIONS, CONTENT_LANGUAGE_OPTIONS } from './constants';
+import { PlanDownload } from '../PlanDownload';
+import { CONTENT_LANGUAGE_OPTIONS, CONTENT_MIX_OPTIONS, DENSITY_OPTIONS, PERIOD_OPTIONS } from './constants';
+import { _contentTypeLabel, _formatPlanItemDate, _learningCapabilityLabel, _networkQualityReasonLabel, _normalizeContentLanguage, _planTargetLabel, _scopeChipLabel, _sourceKindLabel } from './helpers.logic';
 
 export const ContentPlanView = ({ scope }) => {
   const {

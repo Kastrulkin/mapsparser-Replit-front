@@ -1,14 +1,16 @@
-import { subscriptionPlanCopy } from '@/content/subscriptionPlanCopy';
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { subscriptionPlanCopy } from '@/content/subscriptionPlanCopy';
 import { useToast } from '@/hooks/use-toast';
-import { useSearchParams } from 'react-router-dom';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { cn } from '@/lib/utils';
-import { DESIGN_TOKENS } from '@/lib/design-tokens';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
-import { Check, Crown, Zap, Shield, Star, Rocket, CreditCard, CalendarClock, Link2Off, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { BusinessRecord } from '@/types/business';
+import type { LucideIcon } from 'lucide-react';
+import { CalendarClock, Check, CreditCard, Crown, Link2Off, RefreshCw, Rocket, Shield, Star, Zap } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 interface SubscriptionTier {
   id: string;
@@ -19,7 +21,7 @@ interface SubscriptionTier {
   lead?: string;
   features: string[];
   stripe_price_id?: string;
-  icon?: any;
+  icon?: LucideIcon;
   popular?: boolean;
 }
 
@@ -69,7 +71,7 @@ const paymentProviderForLanguage = (language: string): 'yookassa' | 'stripe' => 
   language === 'ru' ? 'yookassa' : 'stripe'
 );
 
-export const SubscriptionManagement = ({ businessId, business }: { businessId: string | null; business: any }) => {
+export const SubscriptionManagement = ({ businessId, business }: { businessId: string | null; business: Partial<Pick<BusinessRecord, 'subscription_id' | 'subscription_tier' | 'subscription_status' | 'subscription_ends_at' | 'trial_ends_at' | 'moderation_status'>> | null }) => {
   const [subscription, setSubscription] = useState<BusinessSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [billingLoading, setBillingLoading] = useState(false);
@@ -184,7 +186,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     }
   };
 
-  const loadBillingStatus = async (options?: { silent?: boolean }) => {
+  const loadBillingStatus = useLatestCallback(async (options?: { silent?: boolean }) => {
     if (!businessId || !browserAuthenticationAvailable(token)) return;
     if (!options?.silent) {
       setBillingLoading(true);
@@ -205,7 +207,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         setBillingLoading(false);
       }
     }
-  };
+  });
 
   useEffect(() => {
     if (paymentStatus === 'success') {
@@ -273,7 +275,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     return () => {
       aborted = true;
     };
-  }, [businessId, checkoutReturnTo, language, toast, searchParams]);
+  }, [businessId, checkoutReturnTo, language, toast, searchParams, token]);
 
   useEffect(() => {
     if (business) {
@@ -291,30 +293,15 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
   useEffect(() => {
     void loadBillingStatus();
-  }, [businessId]);
+  }, [businessId, loadBillingStatus]);
 
   useEffect(() => {
     setUnlinkConfirmed(false);
   }, [businessId, subscription?.id, subscription?.payment_method_linked]);
 
-  useEffect(() => {
-    if (autoCheckoutStartedRef.current) return;
-    if (processing) return;
-    if (paymentStatus !== 'required') return;
-    if (paymentSource !== 'pricing' || !autoStartCheckout) return;
 
-    const tierId = selectedTierFromUrl || 'starter';
-    if (!tierId) return;
 
-    if (subscription && subscription.status === 'active' && subscription.tier === tierId) {
-      return;
-    }
-
-    autoCheckoutStartedRef.current = true;
-    handleSubscribe(tierId);
-  }, [autoStartCheckout, paymentSource, paymentStatus, selectedTierFromUrl, subscription, processing]);
-
-  const handleSubscribe = async (tierId: string) => {
+  const handleSubscribe = useLatestCallback(async (tierId: string) => {
     if (!businessId) {
       toast({
         title: t.common.error,
@@ -367,7 +354,24 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     } finally {
       setProcessing(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (autoCheckoutStartedRef.current) return;
+    if (processing) return;
+    if (paymentStatus !== 'required') return;
+    if (paymentSource !== 'pricing' || !autoStartCheckout) return;
+
+    const tierId = selectedTierFromUrl || 'starter';
+    if (!tierId) return;
+
+    if (subscription && subscription.status === 'active' && subscription.tier === tierId) {
+      return;
+    }
+
+    autoCheckoutStartedRef.current = true;
+    handleSubscribe(tierId);
+  }, [autoStartCheckout, paymentSource, paymentStatus, selectedTierFromUrl, subscription, processing, handleSubscribe]);
 
   const handleUnlinkCard = async () => {
     if (!businessId || !token || !subscription?.id) {

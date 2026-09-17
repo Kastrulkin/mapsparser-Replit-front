@@ -1,7 +1,8 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { errorMessage } from '@/lib/errorMessage';
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 interface SprintTask {
   id: string;
@@ -89,8 +90,8 @@ const Sprint = () => {
         } else {
           setError('Не удалось загрузить спринт');
         }
-      } catch (err: any) {
-        setError('Ошибка загрузки спринта: ' + err.message);
+      } catch (err: unknown) {
+        setError('Ошибка загрузки спринта: ' + errorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -100,9 +101,9 @@ const Sprint = () => {
   }, [businessId]);
 
   const handleTaskAction = async (taskId: string, action: 'done' | 'postponed' | 'help_needed') => {
-    setTasks(prevTasks => 
-      prevTasks.map(task => 
-        task.id === taskId 
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId
           ? { ...task, status: action === 'done' ? 'done' : action === 'postponed' ? 'postponed' : 'help_needed' }
           : task
       )
@@ -148,24 +149,24 @@ const Sprint = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleTaskAction(task.id, 'done')}
                       className={task.status === 'done' ? 'bg-green-100' : ''}
                     >
                       Сделано
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleTaskAction(task.id, 'postponed')}
                       className={task.status === 'postponed' ? 'bg-yellow-100' : ''}
                     >
                       Перенести
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleTaskAction(task.id, 'help_needed')}
                       className={task.status === 'help_needed' ? 'bg-red-100' : ''}

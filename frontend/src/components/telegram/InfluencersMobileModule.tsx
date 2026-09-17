@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, CreditCard, Loader2, Megaphone, RefreshCw, Send } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
 import { InfluencerCreatorCard } from '@/features/influencers/InfluencerCreatorCard';
 import {
-  influencerWorkspaceQuery,
-  type InfluencerCreator,
-  type InfluencerWorkspaceData,
-  type InfluencerWorkspaceFilters,
+	influencerWorkspaceQuery,
+	type InfluencerCreator,
+	type InfluencerWorkspaceData,
+	type InfluencerWorkspaceFilters,
 } from '@/features/influencers/influencerWorkspace';
-import { mobileAuthHeaders, mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
 import type { JourneyAction } from '@/lib/leadJourney';
-import type { MobileScope } from './ScopeProvider';
+import { mobileAuthHeaders, mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
+import type { MobileScope } from './ScopeProvider.logic';
 
 type InfluencersMobileModuleProps = {
   scope?: MobileScope;
@@ -56,7 +56,7 @@ export const InfluencersMobileModule = ({ scope, focusItemId }: InfluencersMobil
     } finally {
       setLoading(false);
     }
-  }, [businessId, filters.audience_size_band, filters.barter, filters.city, filters.contactable, filters.format, filters.platform, filters.shortlisted, filters.topic]);
+  }, [businessId, filters]);
 
   useEffect(() => { void load(); }, [load]);
 

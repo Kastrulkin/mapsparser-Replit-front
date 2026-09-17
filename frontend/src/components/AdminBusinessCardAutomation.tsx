@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { newAuth } from '@/lib/auth_new';
+import { errorMessage } from '@/lib/errorMessage';
 import { Bot, CalendarClock, MessageSquareReply, Newspaper, RefreshCcw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 type AutomationSettings = {
   news_enabled?: boolean;
@@ -174,7 +176,7 @@ export const AdminBusinessCardAutomation = ({ businessId, businessName }: Props)
     [settings],
   );
 
-  const loadSnapshot = async () => {
+  const loadSnapshot = useLatestCallback(async () => {
     if (!businessId) return;
     try {
       setLoading(true);
@@ -182,20 +184,20 @@ export const AdminBusinessCardAutomation = ({ businessId, businessName }: Props)
       setSettings(data.settings || {});
       setEvents(Array.isArray(data.recent_events) ? data.recent_events : []);
       setCounters(data.counters || {});
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить настройки автоматизации',
+        description: errorMessage(error) || 'Не удалось загрузить настройки автоматизации',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     void loadSnapshot();
-  }, [businessId]);
+  }, [businessId, loadSnapshot]);
 
   const applyInterval = (
     action: 'news' | 'review_sync' | 'review_reply',
@@ -322,10 +324,10 @@ export const AdminBusinessCardAutomation = ({ businessId, businessName }: Props)
         title: 'Сохранено',
         description: 'Расписания автоматизации обновлены',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось сохранить расписание',
+        description: errorMessage(error) || 'Не удалось сохранить расписание',
         variant: 'destructive',
       });
     } finally {
@@ -347,10 +349,10 @@ export const AdminBusinessCardAutomation = ({ businessId, businessName }: Props)
         title: 'Запуск выполнен',
         description: data.result?.message || 'Операция выполнена',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось запустить операцию',
+        description: errorMessage(error) || 'Не удалось запустить операцию',
         variant: 'destructive',
       });
     } finally {

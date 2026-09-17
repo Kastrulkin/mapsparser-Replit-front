@@ -1,25 +1,25 @@
-import React from 'react';
-import { AlertCircle, ArrowUpRight, Camera, Globe, MessageSquare, ReceiptText, RefreshCw, Star, TrendingUp } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  AuditCtaPanel,
-  AuditHero,
-  AuditHowToRead,
-  AuditMetricCard,
-  AuditProblemBlock,
+	AuditCtaPanel,
+	AuditHero,
+	AuditHowToRead,
+	AuditMetricCard,
+	AuditProblemBlock,
 } from '@/components/audit/AuditDisplayPrimitives';
 import {
-  auditScoreBusinessLabel,
-  compactAuditText,
-  formatAuditMoney,
-  formatAuditMoneyRange,
-  formatAuditNumber,
-  formatAuditRating,
-  formatAuditScore,
-  localosOperationalHelp,
+	auditScoreBusinessLabel,
+	compactAuditText,
+	formatAuditMoney,
+	formatAuditMoneyRange,
+	formatAuditNumber,
+	formatAuditRating,
+	formatAuditScore,
+	localosOperationalHelp,
 } from '@/components/audit/auditDisplayUtils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApiData } from '@/hooks/useApiData';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { AlertCircle, ArrowUpRight, Camera, Globe, MessageSquare, ReceiptText, RefreshCw, Star, TrendingUp } from 'lucide-react';
+import React from 'react';
 
 interface CardAuditPanelProps {
   businessId?: string | null;

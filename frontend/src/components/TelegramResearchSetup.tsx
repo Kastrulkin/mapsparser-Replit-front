@@ -1,15 +1,15 @@
+import { Check, ChevronRight, Loader2, MessageSquareText, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronRight, Loader2, MessageSquareText, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 type ResearchSource = {
   id: string;

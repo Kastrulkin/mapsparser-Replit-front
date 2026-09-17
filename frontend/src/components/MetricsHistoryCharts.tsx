@@ -1,19 +1,20 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AddMetricModal } from './AddMetricModal';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AddMetricModal } from './AddMetricModal';
 
 // --- TYPES ---
 
@@ -46,7 +47,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
 
     // --- FETCH DATA ---
 
-    const fetchHistory = async () => {
+    const fetchHistory = useLatestCallback(async () => {
         try {
             setLoading(true);
             const token = browserBearerToken();
@@ -67,13 +68,13 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
         } finally {
             setLoading(false);
         }
-    };
+    });
 
     useEffect(() => {
         if (businessId) {
             fetchHistory();
         }
-    }, [businessId]);
+    }, [businessId, fetchHistory]);
 
     // --- HANDLERS ---
 

@@ -1,26 +1,25 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { useLanguage } from '@/i18n/LanguageContext';
 import {
-  DollarSign,
-  Package,
-  CreditCard,
-  ArrowUpRight,
-  ArrowDownRight,
-  RefreshCw,
-  Users,
-  Repeat,
-  Heart,
-  TrendingUp,
-  PieChart as PieChartIcon,
-  Wallet
+	ArrowDownRight,
+	ArrowUpRight,
+	CreditCard,
+	DollarSign,
+	Heart,
+	Package,
+	PieChart as PieChartIcon,
+	RefreshCw,
+	Repeat,
+	TrendingUp,
+	Users
 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { cn } from '../lib/utils';
-import { DESIGN_TOKENS } from '../lib/design-tokens';
+import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface FinancialMetricsProps {
   onRefresh?: () => void;
@@ -67,7 +66,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState('month');
 
-  const loadMetrics = async (selectedPeriod: string = period) => {
+  const loadMetrics = useLatestCallback(async (selectedPeriod: string = period) => {
     if (!currentBusinessId) {
       setLoading(false);
       return;
@@ -113,11 +112,11 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     loadMetrics();
-  }, [currentBusinessId]);
+  }, [currentBusinessId, loadMetrics]);
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);

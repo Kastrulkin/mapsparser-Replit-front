@@ -1,33 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
+import { newAuth } from '@/lib/auth_new';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { errorMessage } from '@/lib/errorMessage';
+import type { DashboardOutletContext } from '@/types/business';
+import {
+	Calendar,
+	ChevronLeft,
+	ChevronRight,
+	Copy,
+	Edit3,
+	Globe,
+	MapPin,
+	MessageSquare,
+	Plus,
+	Quote,
+	Send,
+	Settings2,
+	Sparkles,
+	Star,
+	X
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
-import {
-  MessageSquare,
-  Sparkles,
-  Copy,
-  Edit3,
-  Send,
-  Save,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Trash2,
-  Plus,
-  Globe,
-  Settings2,
-  Calendar,
-  MapPin,
-  User,
-  Star,
-  Quote
-} from 'lucide-react';
-import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import { newAuth } from '@/lib/auth_new';
+import { Textarea } from './ui/textarea';
 
 type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
 type ReviewFilterPreset = 'all' | 'negative' | 'needs_reply';
@@ -83,7 +83,7 @@ export default function ReviewReplyAssistant({
   onOpenLocation,
   initialFilter = 'all',
 }: ReviewReplyAssistantProps) {
-  const { currentBusinessId, onBusinessChange, user } = useOutletContext<any>();
+  const { currentBusinessId, onBusinessChange, user } = useOutletContext<DashboardOutletContext>();
   const { language: interfaceLanguage, t } = useLanguage();
   const listCopy = reviewListCopy[interfaceLanguage] || reviewListCopy.en;
   const [tone, setTone] = useState<Tone>('professional');
@@ -119,18 +119,20 @@ export default function ReviewReplyAssistant({
     { value: 'zh', label: '中文' },
   ];
 
-  const loadExamples = async () => {
+  const loadExamples = useLatestCallback(async () => {
     if (user?.demo_mode) {
       setExamples([]);
       return;
     }
     try {
       const data = await newAuth.makeRequest('/review-examples');
-      if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
-    } catch { }
-  };
+      if (data.success) setExamples((data.examples || []).map((e: { id: string; text: string }) => ({ id: e.id, text: e.text })));
+    } catch (error) {
+      console.error('Failed to load optional saved content:', error);
+    }
+  });
 
-  const loadExternalReviews = async () => {
+  const loadExternalReviews = useLatestCallback(async () => {
     // Сбрасываем страницу при загрузке новых отзывов
     setCurrentPage(1);
     if (!currentBusinessId) return;
@@ -156,17 +158,17 @@ export default function ReviewReplyAssistant({
           return next;
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Ошибка загрузки отзывов:', e);
     } finally {
       setLoadingReviews(false);
     }
-  };
+  });
 
   useEffect(() => {
     loadExamples();
     loadExternalReviews();
-  }, [currentBusinessId, aggregateScope, selectedSource, interfaceLanguage, user?.demo_mode]);
+  }, [currentBusinessId, aggregateScope, selectedSource, interfaceLanguage, user?.demo_mode, loadExamples, loadExternalReviews]);
 
   useEffect(() => {
     setReviewFilter(initialFilter);
@@ -200,7 +202,7 @@ export default function ReviewReplyAssistant({
       });
       if (data.success) { setExampleInput(''); await loadExamples(); }
       else setError(data.error || t.dashboard.card.reviewReply.errorAddExample);
-    } catch (e: any) { setError(e.message || t.dashboard.card.reviewReply.errorAddExample); }
+    } catch (e: unknown) { setError(errorMessage(e) || t.dashboard.card.reviewReply.errorAddExample); }
   };
 
   const deleteExample = async (id: string) => {
@@ -209,7 +211,7 @@ export default function ReviewReplyAssistant({
         method: 'DELETE'
       });
       if (data.success) await loadExamples(); else setError(data.error || t.dashboard.card.reviewReply.errorDeleteExample);
-    } catch (e: any) { setError(e.message || t.dashboard.card.reviewReply.errorDeleteExample); }
+    } catch (e: unknown) { setError(errorMessage(e) || t.dashboard.card.reviewReply.errorDeleteExample); }
   };
 
   const handleGenerate = async (reviewText?: string, reviewId?: string) => {
@@ -262,8 +264,8 @@ export default function ReviewReplyAssistant({
           setIsEditing(false);
         }
       }
-    } catch (e: any) {
-      setError(e.message || t.dashboard.card.reviewReply.errorGenerate);
+    } catch (e: unknown) {
+      setError(errorMessage(e) || t.dashboard.card.reviewReply.errorGenerate);
     } finally {
       if (reviewId) {
         setGeneratingForReviewId(null);
@@ -308,8 +310,8 @@ export default function ReviewReplyAssistant({
       } else {
         setError(data.error || t.dashboard.card.reviewReply.errorSave);
       }
-    } catch (e: any) {
-      setError(e.message || t.dashboard.card.reviewReply.errorSave);
+    } catch (e: unknown) {
+      setError(errorMessage(e) || t.dashboard.card.reviewReply.errorSave);
     } finally {
       setSaving(false);
     }

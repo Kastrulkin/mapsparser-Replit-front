@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { Switch } from './ui/switch';
-import { StickyBottomHorizontalScrollbar } from './ui/sticky-bottom-horizontal-scrollbar';
-import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash, X } from 'lucide-react';
+import { errorMessage } from '@/lib/errorMessage';
+import { AlertTriangle, ArrowLeftRight, CircleSlash, Copy, ExternalLink, Loader2, Play, RefreshCw, Trash2, X } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useToast } from '../hooks/use-toast';
+import { useLanguage } from '../i18n/LanguageContext.logic';
 import { newAuth } from '../lib/auth_new';
 import { browserAuthenticationAvailable } from '../lib/browserSessionFetch';
-import { useToast } from '../hooks/use-toast';
-import { useLanguage } from '../i18n/LanguageContext';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { StickyBottomHorizontalScrollbar } from './ui/sticky-bottom-horizontal-scrollbar';
+import { Switch } from './ui/switch';
 
 const TASKS_FETCH_LIMIT = 500;
 
@@ -206,10 +207,10 @@ export const ParsingManagement: React.FC = () => {
         throw new Error(data.error || 'Ошибка загрузки настроек парсинга');
       }
       setUseApifyMapParsing(Boolean(data.settings?.use_apify_map_parsing));
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Не удалось загрузить настройки парсинга',
+        description: errorMessage(e) || 'Не удалось загрузить настройки парсинга',
         variant: 'destructive',
       });
     } finally {
@@ -241,10 +242,10 @@ export const ParsingManagement: React.FC = () => {
           ? 'По умолчанию включён парсинг через Apify для Яндекс.Карт и 2ГИС.'
           : 'По умолчанию включён нативный парсинг (Playwright).',
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Не удалось сохранить настройки парсинга',
+        description: errorMessage(e) || 'Не удалось сохранить настройки парсинга',
         variant: 'destructive',
       });
     } finally {
@@ -293,9 +294,9 @@ export const ParsingManagement: React.FC = () => {
       if (statsData.success) setStats(statsData.stats);
 
       setError(null);
-    } catch (e: any) {
-      console.error('Ошибка загрузки данных:', e?.message, e);
-      setError(e?.message || 'Ошибка загрузки данных');
+    } catch (e: unknown) {
+      console.error('Ошибка загрузки данных:', errorMessage(e), e);
+      setError(errorMessage(e) || 'Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }
@@ -353,10 +354,10 @@ export const ParsingManagement: React.FC = () => {
           silent: false,
           successDescription: 'Возврат из CAPTCHA зафиксирован. Продолжение парсинга запрошено автоматически.',
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         toast({
           title: t.common.error,
-          description: e.message || 'Не удалось автоматически продолжить парсинг после CAPTCHA',
+          description: errorMessage(e) || 'Не удалось автоматически продолжить парсинг после CAPTCHA',
           variant: 'destructive',
         });
       }
@@ -403,10 +404,10 @@ export const ParsingManagement: React.FC = () => {
 
       await loadTasks();
       await loadStats();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Ошибка перезапуска задачи',
+        description: errorMessage(e) || 'Ошибка перезапуска задачи',
         variant: 'destructive',
       });
     }
@@ -436,10 +437,10 @@ export const ParsingManagement: React.FC = () => {
 
       await loadTasks();
       await loadStats();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Ошибка удаления задачи',
+        description: errorMessage(e) || 'Ошибка удаления задачи',
         variant: 'destructive',
       });
     }
@@ -469,10 +470,10 @@ export const ParsingManagement: React.FC = () => {
 
       await loadTasks();
       await loadStats();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Ошибка переключения задачи',
+        description: errorMessage(e) || 'Ошибка переключения задачи',
         variant: 'destructive',
       });
     }
@@ -504,10 +505,10 @@ export const ParsingManagement: React.FC = () => {
       });
 
       await loadData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Ошибка открытия CAPTCHA',
+        description: errorMessage(e) || 'Ошибка открытия CAPTCHA',
         variant: 'destructive',
       });
     }
@@ -525,10 +526,10 @@ export const ParsingManagement: React.FC = () => {
 
     try {
       await resumeCaptchaTask(taskId, { confirmFirst: true });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Ошибка продолжения после капчи',
+        description: errorMessage(e) || 'Ошибка продолжения после капчи',
         variant: 'destructive',
       });
     }
@@ -552,10 +553,10 @@ export const ParsingManagement: React.FC = () => {
         description: data.message || 'CAPTCHA-сессия сброшена',
       });
       await loadData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Ошибка сброса CAPTCHA-сессии',
+        description: errorMessage(e) || 'Ошибка сброса CAPTCHA-сессии',
         variant: 'destructive',
       });
     }
@@ -580,10 +581,10 @@ export const ParsingManagement: React.FC = () => {
         description: data.message || 'Сетевой парсинг возобновлён',
       });
       await loadData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Не удалось возобновить сетевой парсинг',
+        description: errorMessage(e) || 'Не удалось возобновить сетевой парсинг',
         variant: 'destructive',
       });
     }
@@ -608,10 +609,10 @@ export const ParsingManagement: React.FC = () => {
         description: data.message || 'Batch поставлен на паузу',
       });
       await loadData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Не удалось поставить batch на паузу',
+        description: errorMessage(e) || 'Не удалось поставить batch на паузу',
         variant: 'destructive',
       });
     }
@@ -636,10 +637,10 @@ export const ParsingManagement: React.FC = () => {
         description: data.message || 'Ошибочные задачи возвращены в очередь',
       });
       await loadData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Не удалось вернуть ошибочные задачи в очередь',
+        description: errorMessage(e) || 'Не удалось вернуть ошибочные задачи в очередь',
         variant: 'destructive',
       });
     }
@@ -664,10 +665,10 @@ export const ParsingManagement: React.FC = () => {
         description: data.message || 'Проблемная точка пропущена, batch продолжен',
       });
       await loadData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: t.common.error,
-        description: e.message || 'Не удалось пропустить проблемную точку',
+        description: errorMessage(e) || 'Не удалось пропустить проблемную точку',
         variant: 'destructive',
       });
     }

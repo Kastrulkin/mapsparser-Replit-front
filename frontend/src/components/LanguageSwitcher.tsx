@@ -1,12 +1,11 @@
-import { useState } from 'react';
-import { useLanguage, Language } from '@/i18n/LanguageContext';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Language, useLanguage } from '@/i18n/LanguageContext.logic';
 import { Globe } from 'lucide-react';
 
 const languages: { code: Language; name: string; flag: string }[] = [

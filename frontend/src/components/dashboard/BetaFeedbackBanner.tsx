@@ -1,21 +1,21 @@
+import { AlertTriangle, Loader2, MessageSquareWarning } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { AlertTriangle, Loader2, MessageSquareWarning } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { api } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { operatorPageCopyForLanguage } from '@/pages/dashboard/operatorPageCopy';
+import { api } from '@/services/api';
 
 type BetaFeedbackBannerProps = {
   area: 'agents' | 'operator';

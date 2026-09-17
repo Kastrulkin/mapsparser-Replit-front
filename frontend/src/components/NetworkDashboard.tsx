@@ -1,10 +1,11 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getApiEndpoint } from '../config/api';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useLanguage } from '@/i18n/LanguageContext';
 
 interface NetworkDashboardProps {
   networkId: string;
@@ -37,11 +38,9 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
   const [period, setPeriod] = useState('month');
   const { t, language } = useLanguage();
 
-  useEffect(() => {
-    loadNetworkStats();
-  }, [networkId, period]);
 
-  const loadNetworkStats = async () => {
+
+  const loadNetworkStats = useLatestCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -61,11 +60,15 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
         setError(data.error || t.dashboard.network.errorLoading);
       }
     } catch (error) {
-      setError(t.error);
+      setError(t.common.error);
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadNetworkStats();
+  }, [loadNetworkStats, networkId, period]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat(language === 'ru' ? 'ru-RU' : 'en-US', {

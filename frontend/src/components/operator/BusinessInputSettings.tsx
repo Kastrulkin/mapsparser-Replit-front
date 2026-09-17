@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { voiceHeaders } from './OperatorVoice';
+import { useEffect, useId, useRef, useState } from 'react';
+import { voiceHeaders } from './OperatorVoice.logic';
 
 type Settings = { city?: string | null; currency?: string | null; timezone?: string | null; can_edit?: boolean; conflicts?: string[]; version?: number; error?: string };
 
@@ -10,7 +10,7 @@ export function BusinessInputSettings({ businessId, disabled, headers = voiceHea
 }) {
   const id = useId();
   const generation = useRef(0);
-  useEffect(() => { generation.current++; return () => { generation.current++; }; }, [businessId]);
+  useEffect(() => { const requestGeneration = generation; requestGeneration.current++; return () => { requestGeneration.current++; }; }, [businessId]);
   const [open, setOpen] = useState(true);
   const [saved, setSaved] = useState<Settings | null>(null);
   const [city, setCity] = useState('');

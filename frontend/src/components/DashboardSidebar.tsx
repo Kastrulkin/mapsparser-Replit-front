@@ -1,38 +1,37 @@
-import { Link, useLocation } from 'react-router-dom';
 import {
-  User,
-  FileText,
-  TrendingUp,
-  DollarSign,
-  BadgeDollarSign,
-  Settings,
-  Calendar,
-  MessageSquare,
-  Menu,
-  X,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Sparkles,
-  Bot,
-  Radar,
-  BarChart3,
-  Megaphone,
-  CircleEllipsis,
-  UsersRound,
-  Handshake,
-  Map,
+	BadgeDollarSign,
+	BarChart3,
+	Bot,
+	Calendar,
+	CircleEllipsis,
+	DollarSign,
+	FileText,
+	Handshake,
+	Map,
+	Megaphone,
+	Menu,
+	MessageSquare,
+	PanelLeftClose,
+	PanelLeftOpen,
+	Radar,
+	Settings,
+	Sparkles,
+	TrendingUp,
+	User,
+	UsersRound,
+	X,
 } from 'lucide-react';
-import { Button } from './ui/button';
 import { useState } from 'react';
-import { useLanguage } from '../i18n/LanguageContext';
+import { Link, useLocation } from 'react-router-dom';
 import logo from '../assets/images/logo.png';
-import { cn } from '../lib/utils';
-import { DESIGN_TOKENS } from '../lib/design-tokens';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
+import { featureFlags } from '../config/featureFlags';
+import { useLanguage } from '../i18n/LanguageContext.logic';
 import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
-import { featureFlags } from '../config/featureFlags';
+import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 const influencerNavigationCopy = {
   ru: { label: 'Инфлюенсеры', hint: 'Подберите местных авторов, согласуйте условия и следите за размещениями.' },

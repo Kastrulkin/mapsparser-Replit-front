@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { diskRequest } from './DiskImportPanel';
+import { useEffect, useRef, useState } from 'react';
+import { diskRequest } from './DiskImportPanel.logic';
 type Video = { id: string; name: string; original_url: string; mime_type: string; available: boolean; size_bytes?: number; duration_ms?: number };
 type Listing = { videos: Video[]; selected: Video[]; item_version: string; warnings?: string[] };
 

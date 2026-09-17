@@ -1,8 +1,8 @@
-import { type ReactNode, useMemo, useState } from 'react';
 import { Bot, CheckCircle2, Clock3, FileCheck2, MapPinned, MessageCircle, Newspaper, Play, ShieldCheck } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 
 type DemoAgentCopy = {

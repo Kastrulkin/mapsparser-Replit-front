@@ -1,4 +1,4 @@
-import type { Language } from '@/i18n/LanguageContext';
+import type { Language } from '@/i18n/LanguageContext.logic';
 import type { AgentExecutionMode, EmployeeWorkspaceState } from './types';
 
 type DeepCopy = {

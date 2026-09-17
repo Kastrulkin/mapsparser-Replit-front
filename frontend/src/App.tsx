@@ -1,13 +1,14 @@
-import { Suspense, lazy, useEffect, useState } from "react";
-import { Toaster } from "./components/ui/toaster";
-import { Toaster as Sonner } from "./components/ui/sonner";
-import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
-import { CurrencyProvider } from "./contexts/CurrencyContext";
-import { featureFlags } from "./config/featureFlags";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { JourneyWorkspaceFocus } from "./components/journey/JourneyWorkspaceFocus";
+import { Toaster as Sonner } from "./components/ui/sonner";
+import { Toaster } from "./components/ui/toaster";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { featureFlags } from "./config/featureFlags";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
+import { LanguageProvider } from './i18n/LanguageContext';
+import { useLanguage } from './i18n/LanguageContext.logic';
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));

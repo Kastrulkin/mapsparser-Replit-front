@@ -1,36 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Button } from './ui/button';
-import { newAuth } from '../lib/auth_new';
-import { LanguageSwitcher } from './LanguageSwitcher';
-import { useCurrency } from '../contexts/CurrencyContext';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { BusinessSwitcher } from './BusinessSwitcher';
-import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
-import { LogOut, LogIn, Settings, Bell, Search, UserCircle } from 'lucide-react';
-import { cn } from '../lib/utils';
-import type { ControlScope } from './DashboardLayout';
-import { useLanguage } from '../i18n/LanguageContext';
+import type { User } from '@/lib/auth_new';
+import type { BusinessRecord } from '@/types/business';
+import { LogIn, LogOut, Settings, UserCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCurrency } from '../contexts/CurrencyContext.logic';
+import { useLanguage } from '../i18n/LanguageContext.logic';
 import { getDashboardShellCopy } from '../i18n/dashboardShellCopy';
-import { DESIGN_TOKENS } from '../lib/design-tokens';
+import { newAuth } from '../lib/auth_new';
+import { cn } from '../lib/utils';
+import { BusinessSwitcher } from './BusinessSwitcher';
+import type { ControlScope } from './DashboardLayout';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle
 } from './ui/alert-dialog';
+import { Button } from './ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface DashboardHeaderProps {
-  businesses?: any[];
+  businesses?: BusinessRecord[];
   currentBusinessId?: string | null;
   onBusinessChange?: (businessId: string) => void;
   isSuperadmin?: boolean;
-  user?: any;
-  currentBusiness?: any;
+  user?: User;
+  currentBusiness?: BusinessRecord;
   controlScope?: ControlScope | null;
   onControlScopeChange?: (scope: ControlScope) => void;
 }
@@ -51,7 +51,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const navigate = useNavigate();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {

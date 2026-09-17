@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { newAuth } from '@/lib/auth_new';
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
+import { useEffect, useRef, useState } from 'react';
 
 type Scope = { kind?: string; id?: string | null };
 type Agreement = { relationship_status?: string; source_summary?: string; launch_status?: string; revision?: number; status?: string; terms?: Record<string, string>; terms_version?: number; instruction?: string; instruction_terms_version?: number; instruction_draft?: string; history?: Array<{ command: string; at: string; previous?: { instruction?: string; terms?: Record<string, string> } }> };
@@ -31,7 +32,7 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
   const request = async (path: string, options: RequestInit = {}) => mobile
     ? fetch(`/api${path}`, { ...options, headers: mobileJsonHeaders() }).then(readMobileJson<Results>)
     : newAuth.makeRequest(path, options);
-  const load = async (current = version.current) => {
+  const load = useLatestCallback(async (current = version.current) => {
     if (!scope.id) { setLoading(false); return; }
     try {
       const data = await request(`/partnership/results?${query}`);
@@ -39,13 +40,13 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
       if (current === version.current) { setResult(data); setError(''); }
     } catch (failure) { if (current === version.current) { setResult(null); setSelected(''); setTerms({}); setInstruction(''); setError(failure instanceof Error ? failure.message : 'Не удалось загрузить договорённости'); } }
     finally { if (current === version.current) setLoading(false); }
-  };
+  });
   useEffect(() => {
     version.current += 1; setResult(null); setSelected(''); setTerms({}); setInstruction(''); setError(''); setBusy(false); setLoading(true); setChooseLocation(false);
     setSearch('');
     void load();
     return () => { version.current += 1; };
-  }, [scope.kind, scope.id]);
+  }, [scope.kind, scope.id, load]);
   const partner = result?.items.find(item => item.id === selected);
   const agreement = partner?.agreement_json || {};
   const open = (item: Partner) => { setSelected(item.id); setTerms(item.agreement_json?.terms || {}); setInstruction(item.agreement_json?.instruction_draft || ''); setEditing(!item.agreement_json?.terms); };
@@ -60,7 +61,7 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
     } catch (failure) { if (current === version.current) setError(failure instanceof Error ? failure.message : 'Не удалось сохранить'); }
     finally { if (current === version.current) setBusy(false); }
   };
-  useEffect(() => { setInstruction(agreement.instruction_draft || ''); }, [selected, agreement.revision]);
+  useEffect(() => { setInstruction(agreement.instruction_draft || ''); }, [selected, agreement.revision, agreement.instruction_draft]);
   const normalize = (value: string) => value.toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
   const matching = (result?.items || []).filter(item => normalize([item.name, item.business_name, item.agreement_json?.terms?.details, item.agreement_json?.terms?.contact].filter(Boolean).join(' ')).includes(normalize(search)));
   const confirmed = matching.filter(isPartner);

@@ -1,13 +1,17 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Check, RefreshCw, Search, Trash2, TrendingUp, X } from 'lucide-react';
-import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { useOutletContext } from 'react-router-dom';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { errorMessage } from '@/lib/errorMessage';
+import type { DashboardOutletContext } from '@/types/business';
+import { Check, RefreshCw, Search, Trash2, TrendingUp, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 
 interface Keyword {
+    keyword_with_city?: string;
     keyword: string;
     views: number;
     category: string;
@@ -103,7 +107,7 @@ const additionalSeoOperationalCopy: Record<string, Record<string, string>> = {
 
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { language, t } = useLanguage();
-    const { user } = useOutletContext<any>();
+    const { user } = useOutletContext<DashboardOutletContext>();
     const demoMode = Boolean(user?.demo_mode);
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
@@ -128,7 +132,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [negativeLoading, setNegativeLoading] = useState(false);
     const operationalCopy = seoOperationalCopy[language] || additionalSeoOperationalCopy[language] || seoOperationalCopy.en;
 
-    const loadKeywords = async () => {
+    const loadKeywords = useLatestCallback(async () => {
         setLoading(true);
         if (demoMode) {
             const demoKeywords = getDemoShowcaseData(language).keywords;
@@ -154,14 +158,14 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             } else {
                 setError(data.error);
             }
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         } finally {
             setLoading(false);
         }
-    };
+    });
 
-    const loadNegativeKeywords = async () => {
+    const loadNegativeKeywords = useLatestCallback(async () => {
         if (demoMode) {
             setNegativeKeywords([]);
             return;
@@ -183,12 +187,12 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             } else {
                 setError(data.error || operationalCopy.loadNegativeError);
             }
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         } finally {
             setNegativeLoading(false);
         }
-    };
+    });
 
     const addNegativeKeyword = async () => {
         if (!businessId) return;
@@ -222,8 +226,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             setNegativePhrase('');
             setSuccess(operationalCopy.negativeAdded);
             await Promise.all([loadNegativeKeywords(), loadKeywords()]);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         }
     };
 
@@ -258,8 +262,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             setNegativeBulkText('');
             setSuccess(data.message || operationalCopy.bulkAdded);
             await Promise.all([loadNegativeKeywords(), loadKeywords()]);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         }
     };
 
@@ -282,8 +286,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 return;
             }
             await Promise.all([loadNegativeKeywords(), loadKeywords()]);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         }
     };
 
@@ -313,8 +317,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                     : '';
                 setError(`${data.error || operationalCopy.updateError}${superadminDetails}`);
             }
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         } finally {
             setUpdating(false);
         }
@@ -352,8 +356,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 }
                 return next;
             });
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         }
     };
 
@@ -383,8 +387,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 return;
             }
             setSuggestions((data.items || []).filter((item: Keyword) => !rejectedSuggestions.has(item.keyword)));
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         } finally {
             setSearching(false);
         }
@@ -415,8 +419,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             setSuccess(operationalCopy.keywordAdded);
             setSuggestions(prev => prev.filter(s => s.keyword !== item.keyword));
             await loadKeywords();
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(errorMessage(e));
         }
     };
 
@@ -428,7 +432,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     useEffect(() => {
         loadKeywords();
         loadNegativeKeywords();
-    }, [businessId, showBlocked, language, demoMode]);
+    }, [businessId, showBlocked, language, demoMode, loadKeywords, loadNegativeKeywords]);
 
     const categories = ['all', ...Object.keys(grouped)];
     const displayedKeywords = (activeCategory === 'all'
@@ -437,7 +441,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     ).filter((k) => {
         const q = tableQuery.trim().toLowerCase();
         if (q) {
-            const keywordText = `${(k as any).keyword_with_city || ''} ${k.keyword} ${k.category}`.toLowerCase();
+            const keywordText = `${k.keyword_with_city || ''} ${k.keyword} ${k.category}`.toLowerCase();
             if (!keywordText.includes(q)) return false;
         }
 
@@ -447,7 +451,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         return true;
     });
 
-    const seoCopy = t.dashboard.card.seoKeywords || {};
+    const seoCopy = t.dashboard.card.seoKeywords;
     const fallbackSeoCopy = {
         title: language === 'ru' ? 'SEO-запросы' : language === 'tr' ? 'SEO sorguları' : `SEO · ${operationalCopy.findQueries}`,
         subtitle: operationalCopy.searchPlaceholder,
@@ -706,7 +710,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                         ) : (
                             displayedKeywords.map((k) => (
                                 <tr key={k.keyword} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{(k as any).keyword_with_city || k.keyword}</td>
+                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{k.keyword_with_city || k.keyword}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                             {formatCategory(k.category)}

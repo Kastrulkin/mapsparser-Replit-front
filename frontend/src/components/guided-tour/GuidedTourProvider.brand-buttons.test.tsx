@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DemoModeBanner, GuidedTourProvider } from './GuidedTourProvider';
 
-vi.mock('@/i18n/LanguageContext', () => ({
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: 'ru' }),
 }));
 vi.mock('@/lib/auth_new', () => ({

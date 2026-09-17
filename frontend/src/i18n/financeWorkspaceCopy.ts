@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 export interface FinanceWorkspaceCopy {
   period: string; presets: [string, string, string, string, string, string, string]; quality: string; ready: string; refresh: string;

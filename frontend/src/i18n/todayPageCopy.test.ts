@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 import { getTodayPageCopy } from './todayPageCopy';
 
 const languages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];

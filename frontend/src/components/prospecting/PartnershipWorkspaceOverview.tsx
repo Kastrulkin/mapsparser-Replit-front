@@ -1,10 +1,10 @@
-import { ProspectingWorkspaceTabs } from '@/components/prospecting/ProspectingWorkspaceChrome';
 import {
-  DashboardActionPanel,
-  DashboardCompactMetricsRow,
-  DashboardPageHeader,
+	DashboardActionPanel,
+	DashboardCompactMetricsRow,
+	DashboardPageHeader,
 } from '@/components/dashboard/DashboardPrimitives';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { ProspectingWorkspaceTabs } from '@/components/prospecting/ProspectingWorkspaceChrome';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 
 type PartnershipWorkspaceOverviewProps = {

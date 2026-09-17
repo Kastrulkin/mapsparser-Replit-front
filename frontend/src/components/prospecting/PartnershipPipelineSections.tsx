@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import type { DragEventHandler } from 'react';
-import { AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
+import { AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import type { DragEventHandler } from 'react';
+import { useEffect, useState } from 'react';
 
 type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
@@ -389,7 +389,7 @@ const EditableLeadBasics = ({
   const [draft, setDraft] = useState<LeadBasicsPatch>(() => getLeadBasicsDraft(lead));
 
   useEffect(() => {
-    setDraft(getLeadBasicsDraft(lead));
+    setDraft({ name: String(lead.name || '').trim(), category: String(lead.category || '').trim(), city: String(lead.city || '').trim(), address: String(lead.address || '').trim() });
   }, [lead.id, lead.name, lead.category, lead.city, lead.address]);
 
   useEffect(() => {

@@ -1,27 +1,14 @@
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
-import { DashboardSidebar } from './DashboardSidebar';
-import { DashboardHeader } from './DashboardHeader';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import type { BusinessRecord } from '@/types/business';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { newAuth, type User } from '../lib/auth_new';
-import { getCapabilityAccessForBusiness, type SubscriptionAccessPayload, type SubscriptionCapability } from '../lib/subscriptionAccess';
+import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
+import { DashboardHeader } from './DashboardHeader';
+import { DashboardSidebar } from './DashboardSidebar';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
 
-type DashboardBusiness = {
-  id: string;
-  name: string;
-  description?: string;
-  moderation_status?: string;
-  entity_group?: string;
-  is_lead_business?: boolean;
-  subscription_tier?: string | null;
-  subscription_status?: string | null;
-  subscription_ends_at?: string | null;
-  subscription_access?: SubscriptionAccessPayload;
-  network_id?: string | null;
-  network_name?: string | null;
-  web_tracking_available?: boolean;
-  creator_promotion_available?: boolean;
-};
+type DashboardBusiness = BusinessRecord;
 
 export type ControlScope = {
   kind: 'business' | 'network';
@@ -196,7 +183,7 @@ export const DashboardLayout = () => {
     window.sessionStorage.setItem('localos_checkout_return_to', `${location.pathname}${location.search}`);
   }, [location.pathname, location.search]);
 
-  const handleBusinessChange = async (businessId: string) => {
+  const handleBusinessChange = useLatestCallback(async (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
       setCurrentBusinessId(businessId);
@@ -206,7 +193,7 @@ export const DashboardLayout = () => {
       localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
       localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
     }
-  };
+  });
 
   const appliedBusinessLink = useRef('');
   useEffect(() => {
@@ -218,7 +205,7 @@ export const DashboardLayout = () => {
     // business switch is not overwritten by a query parameter left in the URL.
     appliedBusinessLink.current = linkKey;
     void handleBusinessChange(requestedBusiness);
-  }, [location.pathname, location.search, businesses]);
+  }, [location.pathname, location.search, businesses, handleBusinessChange]);
 
   const updateBusiness = (businessId: string, updates: Partial<DashboardBusiness>) => {
     const updatedBusinesses = businesses.map(b =>

@@ -8,7 +8,7 @@ import { LEAD_JOURNEY_STORAGE_KEY, leadJourneyKeyForFlow } from '@/lib/leadJourn
 import LeadJourneyPage from './LeadJourneyPage';
 
 vi.mock('@/components/SeoMeta', () => ({ default: () => null }));
-vi.mock('@/i18n/LanguageContext', () => ({
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: window.localStorage.getItem('language') || 'ru' }),
 }));
 

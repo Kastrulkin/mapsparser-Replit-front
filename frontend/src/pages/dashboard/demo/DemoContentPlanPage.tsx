@@ -1,10 +1,10 @@
+import { CalendarDays, Check, ChevronRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { CalendarDays, Check, ChevronRight, FileText, ShieldCheck, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 
 type Copy = {

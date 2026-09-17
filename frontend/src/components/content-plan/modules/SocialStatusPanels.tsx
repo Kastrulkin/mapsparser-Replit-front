@@ -1,6 +1,5 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
-import { _socialOpenClawReadinessDetails, _socialOpenClawReadinessOperational, _socialOpenClawReadinessTitle, _socialOpenClawOwnerCheckSummary, _normalizeSocialChannelFilter, _socialChannelFilterLabel, _socialPlatformLabel, _socialSettingsPathForPlatform, _socialChannelConnectionStateLabel, _socialPublishModeLabel, _socialQueueGroupLabel, _socialQueueGroupNextAction } from './helpers';
+import { _normalizeSocialChannelFilter, _socialChannelConnectionStateLabel, _socialChannelFilterLabel, _socialOpenClawOwnerCheckSummary, _socialOpenClawReadinessDetails, _socialOpenClawReadinessOperational, _socialOpenClawReadinessTitle, _socialPlatformLabel, _socialPublishModeLabel, _socialQueueGroupLabel, _socialQueueGroupNextAction, _socialSettingsPathForPlatform } from './helpers.logic';
 
 export const SocialStatusPanels = ({ scope }) => {
   const {

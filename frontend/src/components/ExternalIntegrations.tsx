@@ -1,16 +1,17 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { ChannelControlCenter } from "@/components/ChannelControlCenter";
+import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/use-toast";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from "@/lib/auth_new";
 import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
-import { useToast } from "@/components/ui/use-toast";
-import { useLanguage } from "@/i18n/LanguageContext";
-import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
-import { ChannelControlCenter } from "@/components/ChannelControlCenter";
+import { errorMessage } from '@/lib/errorMessage';
 import { Building2, Database, ImageIcon, KeyRound, Send, Sparkles } from "lucide-react";
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 interface ExternalAccount {
   id: string;
@@ -322,10 +323,10 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
         throw new Error(data.error || t.dashboard.settings.external.error);
       }
       setAccounts(data.accounts || []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || t.dashboard.settings.external.error,
+        title: t.common.error,
+        description: errorMessage(e) || t.dashboard.settings.external.error,
         variant: "destructive",
       });
     } finally {
@@ -377,14 +378,14 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       } catch {
         setSocialTelegramTransport(null);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSocialReadiness([]);
       setSocialReadinessSummary({});
       setSocialOpenClawReadiness(null);
       setSocialTelegramTransport(null);
       toast({
-        title: t.error,
-        description: e.message || 'Не удалось получить готовность каналов публикации',
+        title: t.common.error,
+        description: errorMessage(e) || 'Не удалось получить готовность каналов публикации',
         variant: "destructive",
       });
     } finally {
@@ -395,7 +396,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const handleGoogleConnect = async (purpose: 'google_sheets' | 'google_business' = 'google_business') => {
     if (!currentBusinessId) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.settings.external.selectBusiness,
         variant: "destructive",
       });
@@ -421,10 +422,10 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
         throw new Error(data.error || "Не удалось начать подключение Google");
       }
       window.location.href = data.auth_url;
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || "Ошибка подключения Google",
+        title: t.common.error,
+        description: errorMessage(e) || "Ошибка подключения Google",
         variant: "destructive",
       });
       setGoogleBusy(false);
@@ -459,16 +460,16 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
         );
       }
       toast({
-        title: t.success,
+        title: t.common.success,
         description: locations.length ? `Найдено карточек: ${locations.length}` : "Google подключён, но карточки не вернулись",
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       setGoogleLocations([]);
-      setGoogleLocationsMessage(e.message || 'Не удалось получить карточки Google Business Profile');
-      setGoogleLocationsActionUrl(e.activationUrl || null);
+      setGoogleLocationsMessage(errorMessage(e) || 'Не удалось получить карточки Google Business Profile');
+      setGoogleLocationsActionUrl(e && typeof e === 'object' && 'activationUrl' in e && typeof e.activationUrl === 'string' ? e.activationUrl : null);
       toast({
-        title: t.error,
-        description: e.message || "Ошибка загрузки карточек Google",
+        title: t.common.error,
+        description: errorMessage(e) || "Ошибка загрузки карточек Google",
         variant: "destructive",
       });
     } finally {
@@ -499,13 +500,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Не удалось привязать карточку Google");
       }
-      toast({ title: t.success, description: "Карточка Google привязана к бизнесу" });
+      toast({ title: t.common.success, description: "Карточка Google привязана к бизнесу" });
       await loadAccounts();
       await loadSocialReadiness();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || "Ошибка привязки карточки Google",
+        title: t.common.error,
+        description: errorMessage(e) || "Ошибка привязки карточки Google",
         variant: "destructive",
       });
     } finally {
@@ -534,7 +535,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const handleTogglePhotoIntelligence = async (checked: boolean) => {
     if (!currentBusinessId) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.settings.external.selectBusiness,
         variant: "destructive",
       });
@@ -552,14 +553,14 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
         }),
       });
       toast({
-        title: t.success,
+        title: t.common.success,
         description: checked ? 'Обработка фото включена' : 'Обработка фото выключена',
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       setPhotoIntelligenceEnabled(previousValue);
       toast({
-        title: t.error,
-        description: e.message || 'Не удалось обновить обработку фото',
+        title: t.common.error,
+        description: errorMessage(e) || 'Не удалось обновить обработку фото',
         variant: "destructive",
       });
     } finally {
@@ -585,13 +586,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Не удалось синхронизировать Google");
       }
-      toast({ title: t.success, description: "Отзывы и статистика Google синхронизированы" });
+      toast({ title: t.common.success, description: "Отзывы и статистика Google синхронизированы" });
       await loadAccounts();
       await loadSocialReadiness();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || "Ошибка синхронизации Google",
+        title: t.common.error,
+        description: errorMessage(e) || "Ошибка синхронизации Google",
         variant: "destructive",
       });
     } finally {
@@ -626,18 +627,18 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || t.error);
+        throw new Error(data.error || t.common.error);
       }
       toast({
-        title: t.success,
+        title: t.common.success,
         description: t.dashboard.settings.external.successDisconnect,
       });
       await loadAccounts();
       await loadSocialReadiness();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || t.error,
+        title: t.common.error,
+        description: errorMessage(e) || t.common.error,
         variant: "destructive",
       });
     } finally {
@@ -648,7 +649,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const handleSaveMaton = async () => {
     if (!currentBusinessId) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.settings.external.selectBusiness,
         variant: "destructive",
       });
@@ -656,7 +657,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     }
     if (!matonApiKey.trim()) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: "Введите API-ключ Maton.ai",
         variant: "destructive",
       });
@@ -690,15 +691,15 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
 
       setMatonApiKey('');
       toast({
-        title: t.success,
+        title: t.common.success,
         description: "Ключ Maton.ai сохранён",
       });
       await loadAccounts();
       await loadSocialReadiness();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || "Ошибка сохранения ключа Maton.ai",
+        title: t.common.error,
+        description: errorMessage(e) || "Ошибка сохранения ключа Maton.ai",
         variant: "destructive",
       });
     } finally {
@@ -709,7 +710,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const handleConnectVk = async () => {
     if (!currentBusinessId) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.settings.external.selectBusiness,
         variant: "destructive",
       });
@@ -719,7 +720,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     const accessToken = vkAccessToken.trim();
     if (!ownerValue || !accessToken) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: "Укажите ID и ключ доступа сообщества VK.",
         variant: "destructive",
       });
@@ -756,13 +757,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось сохранить подключение VK');
       setVkAccessToken('');
-      toast({ title: t.success, description: 'Ключ сообщества сохранён. LocalOS проверяет право на публикацию.' });
+      toast({ title: t.common.success, description: 'Ключ сообщества сохранён. LocalOS проверяет право на публикацию.' });
       await loadAccounts();
       await loadSocialReadiness();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
-        title: t.error,
-        description: e.message || "Проверьте ID и ключ сообщества VK.",
+        title: t.common.error,
+        description: errorMessage(e) || "Проверьте ID и ключ сообщества VK.",
         variant: "destructive",
       });
     } finally {

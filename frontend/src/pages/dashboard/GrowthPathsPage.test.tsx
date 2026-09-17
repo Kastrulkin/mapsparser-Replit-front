@@ -7,7 +7,7 @@ import { newAuth } from '@/lib/auth_new';
 import { GrowthPathsPage } from './GrowthPathsPage';
 
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));
-vi.mock('@/i18n/LanguageContext', () => ({ useLanguage: () => ({ language: 'ru' }) }));
+vi.mock('@/i18n/LanguageContext.logic', () => ({ useLanguage: () => ({ language: 'ru' }) }));
 
 const Context = () => <Outlet context={{ currentBusinessId: 'business-1' }} />;
 

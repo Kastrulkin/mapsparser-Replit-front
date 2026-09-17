@@ -1,22 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { voiceHeaders } from '@/components/operator/OperatorVoice';
+import { useEffect, useRef, useState } from 'react';
+import { diskRequest } from './DiskImportPanel.logic';
 
 type Source = { id: string; provider: string; root_name: string; root_url: string; state: string; version: number; last_checked_at?: string; error_code?: string; scan_id?: string; counts: { status: string; count: number; error_code?: string }[] };
 type Status = { enabled: boolean; can_configure: boolean; sources: Source[]; google?: { configured: boolean; client_email: string } };
 const stateNames: Record<string, string> = { awaiting_proof: 'Подтвердите папку', ready: 'Готов к включению', active: 'Импорт включён', paused: 'Приостановлен', needs_reconnect: 'Нужна проверка доступа' };
 const reasons: Record<string, string> = { unsupported_format: 'Неподдерживаемый формат', photo_too_large: 'Фото больше 10 МБ', photo_too_many_pixels: 'Фото больше 40 мегапикселей', invalid_image: 'Повреждённое изображение', access_lost: 'Нет доступа к папке', retry_pending: 'Временная ошибка — повторим проверку' };
-
-export async function diskRequest(path: string, body?: unknown, signal?: AbortSignal) {
-  const response = await fetch('/api/media-intelligence/disk-import' + path, { method: body === undefined ? 'GET' : 'POST',
-    headers: { ...voiceHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-    body: body === undefined ? undefined : JSON.stringify(body), signal });
-  const data = await response.json(); signal?.throwIfAborted();
-  if (response.status === 404 && body === undefined) return { enabled: false, can_configure: false, sources: [] };
-  if (!response.ok) throw new Error(response.status === 403 ? 'Нет доступа к импорту' : data.error || 'Не удалось выполнить действие');
-  return data;
-}
 
 export function DiskImportPanel({ businessId, onImported }: { businessId: string; onImported?: () => void }) {
   const lifetime = useRef(new AbortController());

@@ -1,52 +1,59 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckSquare, Globe, Lock, MapPinned, MoreHorizontal, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
-import type {
-  ScopeOption, ContextPayload, PlanItem, PlanPayload, SocialPost, SocialPublishEvidence,
-  SocialPublishRehearsal, SocialPublishRehearsalBulk, SocialOpenClawCapabilityStatus, SocialOpenClawReadiness, SocialSupervisedSafetyContract, SocialPostMetadata,
-  SocialPostsSummary, SocialRecommendationPayload, SocialLearningReadiness, SocialRecommendationTopicInsight, SocialRecommendationChannelInsight, SocialRecommendationTextSuggestion,
-  SocialQueueGroup, SocialDispatchPreview, SocialDispatchExecutionReport, SocialFirstCycleVerification, SocialLaunchRunbook, SocialMetricsLearningPacket,
-  SocialTelegramPublishTargetProbe, SocialLaunchPreflight, SocialRuntimeStatus, SocialChannelReadiness, SocialChannelTargetSetup, SocialFirstApiProofDossier,
-  SocialApiChannelPreflight, SocialChannelConnectionCheck, SocialPlanNextAction, SocialPlanNextStep, SocialGoalStage, SocialGoalProgress,
-  SocialLaunchStage, SocialAttributionEventType, LearningMetricsPayload, ActionSummary, BulkNewsReview, BulkActionReview,
-  SocialPreparePreview, SocialApprovalPreview, SocialApprovalPreviewSummary, SocialQueuePreview, SocialQueuePreviewSummary, NetworkOperatingSlice,
-  OperatorInsight, ContentPlanTabProps, ContentMixKey, ContentMixState, ItemFilterKey, SignalFilterKey,
-  ViewPresetKey, QuickActionKey, ContentPlanZone, ContentPlanMode, ContentLanguageKey
-} from './modules/types';
-import {
-  SocialLaunchChecklist, SocialOwnerLaunchPath, _isSupervisedPlatform, _isSocialPostTextLocked, _socialSupervisedPayload, _socialOpenClawReadinessDetails,
-  _socialLaunchStageStatusLabel, _normalizeSocialGoalStage, _normalizeSocialGoalStageStatus, _socialLaunchStageTone, _socialOpenClawReadinessOperational, _socialOpenClawReadinessTitle,
-  _socialOpenClawOwnerCheckSummary, _socialOpenClawCapabilityLine, _socialSupervisedHandoffStateLabel, _socialApiQueueWarnings, _socialApprovalPostText, _socialApprovalSummary,
-  _socialQueueSummary, _socialSupervisedSafetySummary, _socialSupervisedSafetyActionLabel, _normalizeSocialChannelFilter, _socialChannelFilterLabel, _matchesChannelFilter,
-  _socialPlatformLabel, _socialMetricsSourceText, _socialSettingsPathForPlatform, _socialChannelSetupSort, _socialChannelConnectionStateLabel, _socialWorkerEnvLines,
-  _socialLaunchRunbookBlock, _socialLaunchRunbookClipboardLines, _socialFirstCycleVerificationBlock, _socialPublishModeLabel, _socialStatusLabel, _socialStatusClassName,
-  _socialPublishEvidenceClassName, _socialProofQualityLabel, _socialLearningReadinessClassName, _socialLearningConfidenceLabel, _socialLearningChecklistStatusLabel, _socialNextActionLabel,
-  _socialItemQueueSummary, _socialDispatchActionLabel, _socialDispatchReasonLabel, _socialInsightMetricLine, _socialAttributionFeedback, _socialQueueGroupLabel,
-  _socialQueueGroupNextAction, _contentTypeLabel, _scopeChipLabel, _locationScopeLabel, _planTargetLabel, _itemLocationLabel,
-  _locationLabelByKey, _bulkResultText, _bulkResultDetails, _learningCapabilityLabel, _networkQualityReasonLabel, _networkRiskLabel,
-  _networkOperatingRecommendation, _itemFilterLabel, _planItemStatus, _humanizePlanTitle, _humanizePlanGoal, _cleanTechnicalPlanText,
-  _matchesItemFilter, _matchesDateRange, _signalFilterLabel, _sourceKindLabel, _seoViewsLabel, _matchesSignalFilter,
-  _matchesItemLocationFilter, _readStoredSortMode, _readStoredPreferences, _writeStoredPreferences, _isValidItemFilterKey, _isValidContentLanguageKey,
-  _normalizeContentLanguage, _isValidSignalFilterKey, _isValidViewPresetKey, _inferViewPresetKey, _shiftIsoDate, _autoScheduledDate,
-  _inputDateValue, _removeRecordKeys, _formatPlanItemDate, _itemPriorityRank, _weekBucketKey, _weekBucketLabel
-} from './modules/helpers';
 import { ContentOverviewView } from './modules/ContentOverviewView';
 import { ContentPlanView } from './modules/ContentPlanView';
 import { ContentQueueView } from './modules/ContentQueueView';
-import { useCoreActions } from './modules/createCoreActions';
-import { createSocialActions } from './modules/createSocialActions';
-import { createPlanActions } from './modules/createPlanActions';
 import {
-  PERIOD_OPTIONS, DENSITY_OPTIONS, CONTENT_MIX_OPTIONS, CONTENT_LANGUAGE_OPTIONS, ITEM_FILTER_OPTIONS, SIGNAL_FILTER_OPTIONS,
-  CONTENT_PLAN_PREFERENCES_KEY
+	ITEM_FILTER_OPTIONS, SIGNAL_FILTER_OPTIONS
 } from './modules/constants';
+import { useCoreActions } from './modules/createCoreActions';
+import { createPlanActions } from './modules/createPlanActions';
+import { createSocialActions } from './modules/createSocialActions';
+import { _inputDateValue, _itemLocationLabel, _itemPriorityRank, _matchesChannelFilter, _matchesDateRange, _matchesItemFilter, _matchesItemLocationFilter, _matchesSignalFilter, _networkOperatingRecommendation, _normalizeContentLanguage, _normalizeSocialGoalStage, _planTargetLabel, _shiftIsoDate, _socialApiQueueWarnings, _socialApprovalSummary, _socialChannelSetupSort, _socialMetricsSourceText, _socialPlatformLabel, _socialQueueSummary, _socialSettingsPathForPlatform, _weekBucketKey, _weekBucketLabel } from './modules/helpers.logic';
+import type {
+	ActionSummary,
+	BulkActionReview,
+	BulkNewsReview,
+	ContentLanguageKey,
+	ContentMixState,
+	ContentPlanMode,
+	ContentPlanTabProps,
+	ContentPlanZone,
+	ContextPayload,
+	ItemFilterKey,
+	LearningMetricsPayload,
+	NetworkOperatingSlice,
+	OperatorInsight,
+	PlanPayload,
+	QuickActionKey,
+	SignalFilterKey,
+	SocialApiChannelPreflight,
+	SocialApprovalPreview,
+	SocialChannelReadiness,
+	SocialDispatchExecutionReport,
+	SocialDispatchPreview,
+	SocialFirstApiProofDossier,
+	SocialGoalProgress,
+	SocialLaunchPreflight,
+	SocialLaunchStage,
+	SocialMetricsLearningPacket,
+	SocialOpenClawReadiness,
+	SocialPlanNextStep,
+	SocialPost,
+	SocialPostsSummary,
+	SocialPreparePreview,
+	SocialPublishRehearsal, SocialPublishRehearsalBulk,
+	SocialQueueGroup,
+	SocialQueuePreview,
+	SocialRecommendationPayload,
+	SocialRuntimeStatus,
+	SocialTelegramPublishTargetProbe,
+	ViewPresetKey
+} from './modules/types';
 
 interface KnowledgeFoundationItem {
   assertion_id: string;
@@ -916,21 +923,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       ctaEn: 'Refresh',
       count: Number(socialSummary?.total || 0),
     };
-  }, [
-    currentPlan?.items?.length,
-    selectedItems.length,
-    socialDispatchBlockedWithoutScope,
-    socialDispatchEnabled,
-    socialDispatchScopeMismatch,
-    socialSummary?.published,
-    socialSummary?.scheduled,
-    socialSummary?.total,
-    visibleItems.length,
-    visibleSocialCanQueue.length,
-    visibleSocialNeedsManual.length,
-    visibleSocialNeedsReview.length,
-    visibleSocialNeedsSupervised.length,
-  ]);
+  }, [currentPlan?.items?.length, selectedItems.length, socialDispatchBlockedWithoutScope, socialDispatchEnabled, socialDispatchScopeMismatch, socialEarlySignalCount, socialPrimaryResultCount, socialRecommendation?.learning_readiness, socialSummary?.published, socialSummary?.scheduled, socialSummary?.total, visibleItems.length, visibleSocialCanQueue.length, visibleSocialNeedsManual.length, visibleSocialNeedsReview.length, visibleSocialNeedsSupervised.length]);
   const socialReadinessSummary = useMemo(() => {
     let apiReady = 0;
     let needsAttention = 0;
@@ -1346,21 +1339,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         count: Number(socialRecommendation?.proposed_changes?.length || 0),
       },
     ];
-  }, [
-    currentPlan?.items?.length,
-    socialRecommendation?.proposed_changes?.length,
-    socialSummary?.failed,
-    socialSummary?.published,
-    socialSummary?.scheduled,
-    socialSummary?.total,
-    socialRecommendation?.learning_readiness,
-    socialEarlySignalCount,
-    socialPrimaryResultCount,
-    visibleSocialCanQueue.length,
-    visibleSocialNeedsManual.length,
-    visibleSocialNeedsReview.length,
-    visibleSocialNeedsSupervised.length,
-  ]);
+  }, [currentPlan?.items?.length, socialRecommendation?.proposed_changes?.length, socialSummary?.failed, socialSummary?.published, socialSummary?.scheduled, socialSummary?.total, visibleSocialCanQueue.length, visibleSocialNeedsManual.length, visibleSocialNeedsReview.length, visibleSocialNeedsSupervised.length]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const apiStages = Array.isArray(socialGoalProgress?.stages) ? socialGoalProgress?.stages || [] : [];
     const normalizedStages = apiStages
@@ -1718,7 +1697,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     planOperationalSummary.readyToPublish,
   ]);
 
-  const actionRefs: Record<string, (...args: any[]) => any> = {};
+  const actionRefs: Partial<ReturnType<typeof createSocialActions>> = {};
   const controllerScope = {
     businessId, navigate, language, isRu, context, setContext, plans, setPlans,
     currentPlan, setCurrentPlan, loading, setLoading, generating, setGenerating, metricsLoading, setMetricsLoading,

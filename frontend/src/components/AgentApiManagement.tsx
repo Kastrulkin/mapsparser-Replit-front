@@ -1,13 +1,14 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { Activity, AlertTriangle, Bot, CheckCircle2, Copy, KeyRound, RefreshCcw, ShieldCheck, Terminal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Bot, CheckCircle2, Copy, KeyRound, RefreshCcw, ShieldCheck, Terminal, Activity } from 'lucide-react';
+import { useToast } from '../hooks/use-toast';
+import { newAuth } from '../lib/auth_new';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { useToast } from '../hooks/use-toast';
-import { newAuth } from '../lib/auth_new';
 
 interface AgentClient {
   id: string;
@@ -227,7 +228,7 @@ export const AgentApiManagement = () => {
     return fetch(url, { ...options, headers });
   };
 
-  const loadData = async () => {
+  const loadData = useLatestCallback(async () => {
     setLoading(true);
     try {
       const [clientsResponse, ledgerResponse, discoveryResponse] = await Promise.all([
@@ -276,11 +277,11 @@ export const AgentApiManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const parseScopes = (value: string) =>
     value

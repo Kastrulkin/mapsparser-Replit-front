@@ -1,11 +1,12 @@
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { cn } from '@/lib/design-tokens';
+import { errorMessage } from '@/lib/errorMessage';
+import { Calendar, Image as ImageIcon, MessageSquare, Newspaper, Star, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { X, Calendar, Star, MessageSquare, Image as ImageIcon, Newspaper } from 'lucide-react';
-import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import { useLanguage } from '@/i18n/LanguageContext';
 
 interface AddMetricModalProps {
     isOpen: boolean;
@@ -68,8 +69,8 @@ export const AddMetricModal: React.FC<AddMetricModalProps> = ({
                 photos_count: '',
                 news_count: ''
             });
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setLoading(false);
         }

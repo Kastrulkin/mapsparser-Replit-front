@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
 import SeoMeta from "@/components/SeoMeta";
-import { useLanguage } from "@/i18n/LanguageContext";
-import { contentCopy } from "@/content/contentCopy";
 import { collectionCopy } from "@/content/collectionCopy";
+import { contentCopy } from "@/content/contentCopy";
 import { useLocalizedCases } from "@/content/useLocalizedCollections";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { useEffect, useMemo, useState } from "react";
 import {
-  Breadcrumbs,
-  FilterPills,
-  ListHero,
-  MaterialCard,
-  PageFrame,
+	Breadcrumbs,
+	FilterPills,
+	ListHero,
+	MaterialCard,
+	PageFrame,
 } from "./ContentShared";
 import { makeBreadcrumbSchema } from "./contentSeo";
 

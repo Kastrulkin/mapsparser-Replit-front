@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, Play, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
-import { useLanguage } from '@/i18n/LanguageContext';
 import type { AgentBlueprintDetails, AgentRun } from '@/pages/dashboard/agents/types';
 
 import { mapTableColumns, parsePastedTable, reportCsv, tableInputError, tableInputPayload, tableTextFromRows, type TableInput } from './compiledTable';

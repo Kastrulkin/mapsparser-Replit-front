@@ -1,13 +1,14 @@
-import { Star, Trash2, Trophy } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
-import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
 import NewsGenerator from '@/components/NewsGenerator';
+import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
 import SEOKeywordsTab from '@/components/SEOKeywordsTab';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
+import type { NewsPost } from '@/types/news';
+import { Star, Trash2, Trophy } from 'lucide-react';
 
-type ManualCompetitor = {
+export type ManualCompetitor = {
   id: string;
   name?: string;
   url: string;
@@ -15,7 +16,7 @@ type ManualCompetitor = {
   report_path?: string;
 };
 
-type Competitor = {
+export type Competitor = {
   name?: string;
   category?: string;
   rating?: string | number;
@@ -190,7 +191,7 @@ type NewsTabProps = {
   automationLockedMessage: string;
   services: Array<{ id: string; name: string }>;
   businessId?: string;
-  externalPosts: Array<{ source?: string }>;
+  externalPosts: NewsPost[];
   selectedSource: string;
   initialWorkspaceMode?: 'news' | 'plan';
 };

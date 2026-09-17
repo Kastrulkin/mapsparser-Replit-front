@@ -1,16 +1,16 @@
-import React from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { CalendarIcon } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { enUS, ru } from "date-fns/locale";
+import { CalendarIcon } from 'lucide-react';
+import React from 'react';
 import { DateRange } from "react-day-picker";
-import { cn } from "@/lib/utils";
+import { Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 interface TimelinePoint {
     date: string;
     rating: number;

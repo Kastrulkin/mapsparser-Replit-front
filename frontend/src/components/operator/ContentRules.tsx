@@ -1,8 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { voiceHeaders } from './OperatorVoice';
+import { useEffect, useId, useRef, useState } from 'react';
+import { voiceHeaders } from './OperatorVoice.logic';
 
 type Rule = { id: string; text: string; status: string; version: number; starts_at?: string; ends_at?: string; source: string; author_name?: string; updated_at: string };
 type Payload = { timezone?: string; rules?: Rule[]; can_manage?: boolean; error?: string; history?: { snapshot: Rule }[] };
@@ -20,12 +20,12 @@ export function ContentRules({ businessId, headers = voiceHeaders }: { businessI
   const [history, setHistory] = useState<Rule[]>([]);
   const generation = useRef(0);
   useEffect(() => {
-    const controller = new AbortController(); generation.current++;
+    const controller = new AbortController(); const requestGeneration = generation; requestGeneration.current++;
     setData({}); setText(''); setStartsDate('');setEndsDate('');setPeriodChanged(false);setEditing(null); setHistory([]); setError(''); setBusy(false);
     fetch(`/api/content-voice/rules?business_id=${encodeURIComponent(businessId)}`, {headers:headers(),signal:controller.signal})
       .then(async response => { const next: Payload = await response.json(); if (!response.ok) throw new Error(next.error || 'Правила недоступны'); if (!controller.signal.aborted) setData(next); })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить правила'); });
-    return () => { controller.abort(); generation.current++; };
+    return () => { controller.abort(); requestGeneration.current++; };
   },[businessId,headers,reload]);
   async function save(rule: Rule | null, cancel = false) {
     const version = generation.current; setBusy(true); setError('');

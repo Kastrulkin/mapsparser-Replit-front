@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Language } from '@/i18n/LanguageContext';
-import type { AgentTemplate } from './types';
-import {
-  agentTemplateGalleryCopy,
-  getLocalizedAgentTemplateContent,
-} from './template-gallery-copy';
+import type { Language } from '@/i18n/LanguageContext.logic';
 import { getAgentDeepCopy } from './agent-deep-copy';
+import {
+	agentTemplateGalleryCopy,
+	getLocalizedAgentTemplateContent,
+} from './template-gallery-copy';
+import type { AgentTemplate } from './types';
 
 const supportedLanguages: Language[] = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha', 'tr'];
 

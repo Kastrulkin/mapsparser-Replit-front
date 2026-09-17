@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Badge } from './ui/badge';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { errorMessage } from '@/lib/errorMessage';
+import { Bot, Edit, Plus, Save, Send, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
 import { browserAuthenticationAvailable } from '../lib/browserSessionFetch';
-import { Plus, Edit, Trash2, Save, X, Bot, Send } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { ScrollArea } from './ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Textarea } from './ui/textarea';
 
 interface WorkflowState {
   name: string;
@@ -28,6 +30,8 @@ interface WorkflowState {
   available_tools?: Record<string, string[]>;
 }
 
+type LegacyAgentState = { name?: string; prompt?: string; description?: string; next_states?: string[] };
+
 interface AIAgent {
   id: string;
   name: string;
@@ -35,11 +39,11 @@ interface AIAgent {
   description: string;
   personality?: string;
   workflow?: WorkflowState[] | string;
-  states?: Record<string, any>;
+  states?: Record<string, LegacyAgentState>;
   task?: string;
   identity?: string;
   speech_style?: string;
-  restrictions: Record<string, any>;
+  restrictions: { text?: string };
   variables: Record<string, string>;
   is_active: boolean;
   created_at: string;
@@ -67,11 +71,9 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
   const isBusinessMode = mode === 'business' && Boolean(businessId);
   const baseApiUrl = isBusinessMode ? `/api/business/${businessId}/ai-agents/manage` : '/api/admin/ai-agents';
 
-  useEffect(() => {
-    loadAgents();
-  }, [baseApiUrl]);
 
-  const loadAgents = async () => {
+
+  const loadAgents = useLatestCallback(async () => {
     setLoading(true);
     try {
       const token = await newAuth.getToken();
@@ -84,14 +86,14 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
       if (response.ok) {
         const data = await response.json();
         // Конвертируем старую структуру в новую, если нужно
-        const convertedAgents = (data.agents || []).map((agent: any) => {
+        const convertedAgents = (data.agents || []).map((agent: AIAgent) => {
           // Если есть workflow_json, используем его, иначе конвертируем states_json
           if (agent.workflow) {
             return agent;
           }
           // Конвертация старой структуры (для обратной совместимости)
           if (agent.states) {
-            const workflow: WorkflowState[] = Object.entries(agent.states).map(([key, state]: [string, any]) => ({
+            const workflow: WorkflowState[] = Object.entries(agent.states).map(([key, state]) => ({
               name: key,
               kind: 'StateConfig',
               process_name: `${agent.name}Process`,
@@ -130,10 +132,14 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadAgents();
+  }, [baseApiUrl, loadAgents]);
 
   // Функция для конвертации workflow объекта в YAML формат
-  const convertWorkflowToYAML = (workflow: any): string => {
+  const convertWorkflowToYAML = (workflow: AIAgent['workflow']): string => {
     if (typeof workflow === 'string') {
       return workflow;
     }
@@ -143,7 +149,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
     }
 
     // Конвертируем массив стейтов в YAML формат
-    return workflow.map((state: any) => {
+    return workflow.map((state) => {
       let yaml = `- name: ${state.name || ''}\n`;
       yaml += `  kind: ${state.kind || 'StateConfig'}\n`;
       yaml += `  process_name: ${state.process_name || ''}\n`;
@@ -152,7 +158,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
       if (state.state_scenarios && Array.isArray(state.state_scenarios) && state.state_scenarios.length > 0) {
         yaml += `  state_scenarios:\n`;
-        state.state_scenarios.forEach((scenario: any) => {
+        state.state_scenarios.forEach((scenario) => {
           yaml += `    - next_state: ${scenario.next_state || ''}\n`;
           yaml += `      transition_name: ${scenario.transition_name || ''}\n`;
           yaml += `      description: ${scenario.description || ''}\n`;
@@ -161,7 +167,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
       if (state.available_tools && typeof state.available_tools === 'object') {
         yaml += `  available_tools:\n`;
-        Object.entries(state.available_tools).forEach(([key, tools]: [string, any]) => {
+        Object.entries(state.available_tools).forEach(([key, tools]) => {
           yaml += `    ${key}:\n`;
           if (Array.isArray(tools)) {
             tools.forEach((tool: string) => {
@@ -304,15 +310,15 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
         const data = await response.json();
         throw new Error(data.error || 'Ошибка запроса');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось получить ответ от агента',
+        description: errorMessage(error) || 'Не удалось получить ответ от агента',
         variant: 'destructive',
       });
       setSandboxMessages(prev => [...prev, {
         sender: 'agent',
-        content: `Ошибка: ${error.message || 'Не удалось получить ответ'}`
+        content: `Ошибка: ${errorMessage(error) || 'Не удалось получить ответ'}`
       }]);
     } finally {
       setSandboxLoading(false);
@@ -354,7 +360,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
     }
   };
 
-  const updateState = (stateKey: string, field: string, value: any) => {
+  const updateState = <Field extends keyof LegacyAgentState>(stateKey: string, field: Field, value: LegacyAgentState[Field]) => {
     if (!editingAgent) return;
     const newStates = { ...editingAgent.states };
     if (!newStates[stateKey]) {
@@ -405,7 +411,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
     setEditingAgent({ ...editingAgent, workflow: newWorkflow });
   };
 
-  const updateWorkflowState = (index: number, field: keyof WorkflowState, value: any) => {
+  const updateWorkflowState = <Field extends keyof WorkflowState>(index: number, field: Field, value: WorkflowState[Field]) => {
     if (!editingAgent) return;
     const currentWorkflow = Array.isArray(editingAgent.workflow) ? editingAgent.workflow : [];
     if (index < 0 || index >= currentWorkflow.length) return;
@@ -982,7 +988,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
                                   ) : (
                                     <>
                                       <Bot className="w-4 h-4" />
-                                      <span className="text-xs font-medium">{t.dashboard.chat.roles.agent}</span>
+                                      <span className="text-xs font-medium">{t.dashboard.chats.roles.agent}</span>
                                     </>
                                   )}
                                 </div>

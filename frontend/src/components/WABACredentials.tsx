@@ -1,17 +1,18 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useState, useEffect } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageCircle, Eye, EyeOff } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import type { BusinessRecord } from '@/types/business';
+import { Eye, EyeOff, Loader2, MessageCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface WABACredentialsProps {
   businessId: string | null;
-  business: any;
+  business: Partial<Pick<BusinessRecord, 'waba_phone_id' | 'waba_access_token'>> | null;
 }
 
 export const WABACredentials = ({ businessId, business }: WABACredentialsProps) => {

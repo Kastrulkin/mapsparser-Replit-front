@@ -1,7 +1,8 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { newAuth } from '@/lib/auth_new';
+import { AlertCircle, TrendingUp } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { AlertCircle, MessageSquare, Newspaper, Camera, TrendingUp } from 'lucide-react';
-import { newAuth } from '@/lib/auth_new';
 
 interface MapParseItem {
   id: string;
@@ -24,12 +25,9 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!businessId) return;
-    loadRecommendations();
-  }, [businessId]);
 
-  const loadRecommendations = async () => {
+
+  const loadRecommendations = useLatestCallback(async () => {
     if (!businessId) return;
     setLoading(true);
     try {
@@ -48,7 +46,12 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (!businessId) return;
+    loadRecommendations();
+  }, [businessId, loadRecommendations]);
 
   const generateRecommendations = (latest: MapParseItem, allItems: MapParseItem[]): string[] => {
     const recs: string[] = [];
@@ -156,4 +159,3 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
 };
 
 export default MapRecommendations;
-

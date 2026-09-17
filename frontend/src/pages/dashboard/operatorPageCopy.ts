@@ -1,4 +1,4 @@
-import type { Language } from '@/i18n/LanguageContext';
+import type { Language } from '@/i18n/LanguageContext.logic';
 import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
 
 type AttentionCopy = { title: string; description: string };

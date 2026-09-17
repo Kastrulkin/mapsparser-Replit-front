@@ -1,265 +1,57 @@
-import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
 import {
-  Activity,
-  AlertTriangle,
-  ArrowDownUp,
-  Bot,
-  CheckCircle2,
-  Clock3,
-  Copy,
-  Database,
-  Download,
-  ExternalLink,
-  FileCheck2,
-  FileText,
-  LifeBuoy,
-  Loader2,
-  Mail,
-  MessageSquareText,
-  Play,
-  ReceiptText,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Trash2,
-  Upload,
-  Users,
-  Wrench,
-  Workflow,
-  Zap,
+	Activity,
+	AlertTriangle,
+	ArrowDownUp,
+	Clock3,
+	Database,
+	Download,
+	ExternalLink,
+	FileText,
+	LifeBuoy,
+	Loader2,
+	ReceiptText,
+	Send,
+	ShieldCheck
 } from 'lucide-react';
+import type React from 'react';
+import { useState } from 'react';
+import { buildJournalFromSections, buildStepStatusMap, compactValue, findJournalDetailValue, findJournalEntryForGenericStage, formatPayloadItem, formatPayloadValue, getGenericStageDetail, getGenericStageStatus, previewNextStepActionLabel, previewSimulationTone, toRecordOrNull } from './runs.logic';
 
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DashboardActionPanel,
-  DashboardEmptyState,
-  DashboardPageHeader,
-  DashboardSection,
+	DashboardEmptyState
 } from '@/components/dashboard/DashboardPrimitives';
-import { newAuth } from '@/lib/auth_new';
-import { api } from '@/services/api';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type {
-  DashboardContext,
-  AgentBlueprint,
-  AgentVoicePersona,
-  ProductAgentView,
-  AgentApproval,
-  AgentArtifact,
-  AgentRunStep,
-  AgentRunBillingAction,
-  AgentRunObservability,
-  AgentRun,
-  AgentRunInputField,
-  AgentRunInputSchema,
-  AgentServerTodaySummary,
-  AgentMetricsSummary,
-  AgentBillingBreakdownItem,
-  AgentUnifiedBillingLedger,
-  AgentBlueprintDetails,
-  AgentVersionDiff,
-  AgentLearningLoop,
-  AgentLearningEvent,
-  AgentVersionEvent,
-  AgentSource,
-  AgentSourceCatalogItem,
-  AgentIntegration,
-  AgentExternalAuthOption,
-  AgentIntegrationCatalogItem,
-  AgentIntegrationBindingStatus,
-  AgentIntegrationPreflight,
-  AgentProviderAction,
-  AgentProviderRoute,
-  AgentConnectionPlanItem,
-  AgentConnectionPlan,
-  AgentConnectionDecision,
-  AgentActivationGate,
-  AgentActivationPathStep,
-  AgentPostCreateHandoff,
-  AgentReviewSection,
-  AgentJournalEntry,
-  AgentReview,
-  AgentBuilderScenario,
-  PersonaAgent,
-  LegacyMigrationPlan,
-  AgentWorkspaceMode,
-  AgentTodaySummary,
-  AgentAttentionItem,
-  AgentBusinessStatus,
-  EmployeeStatus,
-  AgentExecutionMode,
-  EmployeeNextActionKind,
-  EmployeeWorkspaceState,
-  AgentRegistryFilter,
-  AgentRunAnimation,
-  EmployeeNextAction,
-  EmployeeTestResult,
-  EmployeeResponsibility,
-  AgentScenarioStep,
-  AgentConfidenceFact,
-  FeedbackVersionNotice,
-  AgentBuilderMessage,
-  AgentBuilderQuestion,
-  AgentBuilderConnectorPreview,
-  AgentBuilderFeasibility,
-  AgentBuilderSetupStep,
-  AgentBuilderSetupFlow,
-  AgentBuilderPlannerLoop,
-  AgentCompilerPolicyItem,
-  AgentCompilerWorkflowDraft,
-  AgentCompilerPolicyReview,
-  AgentConnectorIntelligence,
-  AgentConnectionSummary,
-  AgentConnectionReadinessService,
-  AgentConnectionReadiness,
-  AgentConnectionResolverItem,
-  AgentConnectionResolver,
-  AgentServiceIntelligenceItem,
-  AgentServiceIntelligence,
-  AgentBuilderPreview,
-  AgentBuilderSession
-} from './types';
+import { api } from '@/services/api';
 import {
-  getRequestErrorMessage,
-  objectValue,
-  recordValue,
-  getBlueprintMetadata,
-  getBlueprintBuilderPreview,
-  normalizeSpreadsheetInput,
-  normalizePostCreateHandoff,
-  normalizeAgentIntegrationPreflight,
-  normalizeConnectionPlan,
-  normalizeConnectionPlanItem,
-  normalizeProviderRoute,
-  formatPreflightBlock,
-  connectorLabel,
-  userFacingAgentTechText,
-  agentFlowStatusLabel,
-  autoSelectBuilderConnectionBindings,
-  autoSelectBuilderProviderRoutes,
-  builderRouteIsUsable,
-  builderRequiredProviderRouteKeys,
-  bindingResolutionLabel,
-  bindingUserFacingRole,
-  bindingActionHint,
-  connectionResourceFacts,
-  isReadyConnectionAction,
-  buildAgentConnectionDecision,
-  buildBuilderCreationDecision,
-  builderBlockingQuestions,
-  activationBlockerText,
-  buildActivationGateDecision,
-  buildActivationPathSteps
-} from './normalization';
-import {
-  getVersionNumber,
-  getLatestVersionNumber,
-  getActiveVersionNumber,
-  getActiveVersionId,
-  getLatestVersionId,
-  getRunnableVersionId,
-  agentExecutionMode,
-  agentExecutionModeLabel,
-  agentNextRunLabel,
-  businessResultPrimaryText,
-  estimatedAgentRunCredits,
-  workflowStepsForAnimation,
-  getAgentVoiceName,
-  runStatusFilters,
-  learningTriggerOptions,
-  agentPromptExamples,
-  agentScenarios,
-  statusTone,
-  statusLabels,
-  stepLabels,
-  metaLabels,
-  resultFieldLabels,
-  outreachProgressStages,
-  genericRunStages,
-  humanizeStatus,
-  humanizeStep,
-  humanizeMeta,
-  humanizeCategory,
-  explainApproval,
-  approvalActionLabels,
-  getApprovalPreviewItems,
-  approvalDecisionTitle,
-  getAgentListStatus,
-  formatShortDate,
-  formatLastRun,
-  isWithinLastDay,
-  buildTodaySummary,
-  initialRunParameters,
-  validateRunParameters,
-  buildAgentBusinessStatus,
-  buildEmployeeDescription,
-  buildEmployeeStatus,
-  buildEmployeeWorkspaceState,
-  buildEmployeeLastActivity,
-  buildEmployeeNextAction,
-  getMissingConnectorLabel,
-  buildEmployeePrimaryAction,
-  pushUniqueResponsibility,
-  buildEmployeeResponsibilities,
-  buildEmployeeWorkspaceStory,
-  buildAgentUserMode,
-  buildReasonCard,
-  buildBuildConfidenceFacts
+	genericRunStages,
+	humanizeCategory,
+	humanizeMeta,
+	humanizeStatus,
+	learningTriggerOptions,
+	outreachProgressStages,
+	resultFieldLabels,
+	statusTone
 } from './model';
 import {
-  stringifyBusinessValue,
-  isTechnicalApprovalPayload,
-  toPlainRecord,
-  meaningfulResultKeys,
-  extractBusinessResultPayload,
-  findPreparedResultPayload,
-  hasPreparedMessageText,
-  resultPayloadStatus,
-  isBusinessBlockerPayload,
-  isBusinessBlockerApproval,
-  buildEmployeeTestResult,
-  versionHasGoogleSheetsReadStep,
-  detailsHaveGoogleSheetsReadStep,
-  needsScenarioRebuildForSourceResult,
-  needsGoogleSheetsSourceSetup,
-  needsGoogleAccessReconnect,
-  hasFreshGoogleSheetsAccessAfterResult,
-  buildEmployeeHistoryStory,
-  buildEmployeeAttentionItems,
-  buildAttentionInbox,
-  buildConfidenceFacts,
-  buildScenarioPipeline,
-  buildBusinessHistoryEvents,
-  humanizeSourceType,
-  humanizeSourceState,
-  formatSourceSize
-} from './results';
-import {
-  parseAgentConfig,
-  uploadAgentSource
-} from './api';
+	objectValue,
+	userFacingAgentTechText
+} from './normalization';
+import type {
+	AgentActivationGate,
+	AgentApproval,
+	AgentArtifact,
+	AgentJournalEntry,
+	AgentReview,
+	AgentRun,
+	AgentRunBillingAction,
+	AgentRunObservability,
+	FeedbackVersionNotice
+} from './types';
 
+import { formatBillingActualSummary, formatBillingActualValue, formatBillingEstimateSummary, formatBillingEstimateValue } from './detail.logic';
 import {
-  formatBillingEstimateSummary,
-  formatBillingActualSummary,
-  formatBillingEstimateValue,
-  formatBillingActualValue
-} from './detail';
-import {
-  AgentSourcesList
+	AgentSourcesList
 } from './workspace';
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
@@ -454,15 +246,6 @@ export const AgentRunReviewPanel = ({
   );
 };
 
-export const buildJournalFromSections = (sections: AgentReviewSection[]) => sections.map((section) => ({
-  kind: humanizeMeta(section.artifact_type || 'artifact'),
-  title: section.title || 'Результат',
-  status: section.status || 'completed',
-  summary: section.summary || '',
-  details: [],
-  payload: section.payload || {},
-}));
-
 export const GenericRunProgress = ({
   category,
   review,
@@ -539,112 +322,6 @@ export const GenericRunProgress = ({
   );
 };
 
-export const buildStepStatusMap = (steps: AgentRunStep[]) => {
-  const statuses: Record<string, string> = {};
-  steps.forEach((step) => {
-    if (step.step_key && step.status) {
-      statuses[step.step_key] = step.status;
-    }
-  });
-  return statuses;
-};
-
-export const findJournalEntryForGenericStage = (journal: AgentJournalEntry[], kind: string) => {
-  if (kind === 'approval') {
-    return journal.find((entry) => entry.kind === 'approval');
-  }
-  return journal.find((entry) => entry.kind === kind);
-};
-
-export const getGenericStageStatus = (
-  kind: string,
-  entry: AgentJournalEntry | undefined,
-  stepStatuses: Record<string, string>,
-  pendingApproval: AgentApproval | null,
-) => {
-  if (kind === 'approval' && pendingApproval) {
-    return 'waiting_approval';
-  }
-  if (entry?.status) {
-    return entry.status;
-  }
-  if (kind === 'input') {
-    return stepStatuses.collect_inputs || '';
-  }
-  if (kind === 'extraction') {
-    return stepStatuses.extract_context || '';
-  }
-  if (kind === 'output') {
-    return stepStatuses.prepare_output || '';
-  }
-  if (kind === 'approval') {
-    return stepStatuses.approve_output || '';
-  }
-  return '';
-};
-
-export const getGenericStageDetail = (
-  kind: string,
-  entry: AgentJournalEntry | undefined,
-  category: string,
-  pendingApproval: AgentApproval | null,
-) => {
-  if (kind === 'input') {
-    return findJournalDetailValue(entry, 'Подключено источников') || findJournalDetailValue(entry, 'Источники') || 'Данные агента подключены к запуску.';
-  }
-  if (kind === 'extraction') {
-    return findJournalDetailValue(entry, 'Извлечено элементов') || findJournalDetailValue(entry, 'Что обработано') || entry?.summary || 'Агент разобрал источники.';
-  }
-  if (kind === 'output') {
-    return getOutputStageDetail(entry, category);
-  }
-  if (kind === 'approval') {
-    if (pendingApproval) {
-      return explainApproval(pendingApproval);
-    }
-    return findJournalDetailValue(entry, 'Статус') || entry?.summary || 'Решения сохранены в журнале.';
-  }
-  return '';
-};
-
-export const getOutputStageDetail = (entry: AgentJournalEntry | undefined, category: string) => {
-  if (!entry) {
-    return 'Результат появится после запуска.';
-  }
-  if (category === 'documents') {
-    return compactJoin([
-      labelCount('Фактов', findJournalDetailValue(entry, 'Фактов')),
-      labelCount('Рисков', findJournalDetailValue(entry, 'Рисков')),
-      findJournalDetailValue(entry, 'Внешняя отправка'),
-    ]);
-  }
-  if (category === 'email') {
-    return compactJoin([
-      findJournalDetailValue(entry, 'Тема письма'),
-      labelCount('Пунктов чеклиста', findJournalDetailValue(entry, 'Чеклист')),
-      findJournalDetailValue(entry, 'Внешняя отправка'),
-    ]);
-  }
-  if (category === 'tables') {
-    return compactJoin([
-      labelCount('Исключений', findJournalDetailValue(entry, 'Исключений')),
-      labelCount('Строк к проверке', findJournalDetailValue(entry, 'Строк к проверке')),
-      findJournalDetailValue(entry, 'Внешняя отправка'),
-    ]);
-  }
-  if (category === 'reviews') {
-    return compactJoin([
-      labelCount('Черновиков ответов', findJournalDetailValue(entry, 'Черновиков ответов')),
-      labelCount('Причин ручной проверки', findJournalDetailValue(entry, 'Причин ручной проверки')),
-      findJournalDetailValue(entry, 'Публикация'),
-    ]);
-  }
-  return entry.summary || 'Агент подготовил результат.';
-};
-
-export const labelCount = (label: string, value: string) => (value ? `${label}: ${value}` : '');
-export const compactJoin = (items: string[]) => items.filter((item) => item.trim()).join(' · ');
-
 export const OutreachRunProgress = ({ review, activeRun }: { review: AgentReview | null; activeRun: AgentRun | null }) => {
   const journal = review?.journal && review.journal.length ? review.journal : [];
   const completedStepKeys = new Set((activeRun?.steps || []).filter((step) => step.status === 'completed').map((step) => step.step_key));
@@ -712,14 +389,6 @@ export const OutreachRunProgress = ({ review, activeRun }: { review: AgentReview
       </div>
     </div>
   );
-};
-
-export const findJournalDetailValue = (entry: AgentJournalEntry | undefined, label: string) => {
-  if (!entry || !Array.isArray(entry.details)) {
-    return '';
-  }
-  const detail = entry.details.find((item) => item.label === label);
-  return detail?.value || '';
 };
 
 export const JournalEntryCard = ({ entry }: { entry: AgentJournalEntry }) => {
@@ -790,13 +459,6 @@ export const HumanPayloadView = ({ payload }: { payload: Record<string, unknown>
       {result ? <HumanResultView result={result} /> : null}
     </div>
   );
-};
-
-export const toRecordOrNull = (value: unknown): Record<string, unknown> | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  return Object.fromEntries(Object.entries(value));
 };
 
 type HumanResultPrimaryItem = {
@@ -1078,25 +740,6 @@ export const HumanResultView = ({
       ) : null}
     </div>
   );
-};
-
-export const formatPayloadItem = (value: unknown) => {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== '' && itemValue !== null && itemValue !== undefined);
-    return entries.slice(0, 3).map(([key, itemValue]) => `${humanizeMeta(key)}: ${formatPayloadValue(itemValue)}`).join(' · ');
-  }
-  return formatPayloadValue(value);
-};
-
-export const formatPayloadValue = (value: unknown): string => {
-  if (Array.isArray(value)) {
-    return value.slice(0, 4).map((item) => formatPayloadValue(item)).join(', ');
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== '' && itemValue !== null && itemValue !== undefined);
-    return entries.slice(0, 3).map(([key, itemValue]) => `${humanizeMeta(key)}: ${formatPayloadValue(itemValue)}`).join('; ');
-  }
-  return String(value ?? '');
 };
 
 export const AgentRunObservabilityPanel = ({
@@ -1650,17 +1293,6 @@ export const OpenClawPreviewActionPlanPanel = ({
   );
 };
 
-export const previewNextStepActionLabel = (nextStep: string, fallback: string) => {
-  const labels: Record<string, string> = {
-    connect_required_integrations: 'Открыть подключения',
-    fix_preview_error: 'Открыть логику',
-    review_approvals: 'Открыть решения',
-    check_activation_gate: 'Проверить активацию',
-    review_preview: 'Открыть запуск',
-  };
-  return labels[nextStep] || fallback || 'Открыть следующий шаг';
-};
-
 export const CompiledPreviewSimulationPanel = ({
   steps,
   safePreview,
@@ -1699,19 +1331,6 @@ export const CompiledPreviewSimulationPanel = ({
     </div>
   </div>
 );
-
-export const previewSimulationTone = (status: string) => {
-  if (status === 'completed') {
-    return 'bg-emerald-50 text-emerald-800 ring-emerald-100';
-  }
-  if (status === 'waiting_approval') {
-    return 'bg-amber-50 text-amber-800 ring-amber-100';
-  }
-  if (status === 'blocked' || status === 'failed') {
-    return 'bg-rose-50 text-rose-800 ring-rose-100';
-  }
-  return 'bg-slate-50 text-slate-600 ring-slate-200';
-};
 
 export const PreviewSummaryList = ({ title, items }: { title: string; items: string[] }) => (
   <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 ring-1 ring-sky-100">
@@ -1791,19 +1410,6 @@ export const BillingActionItem = ({
       </div>
     </div>
   );
-};
-
-export const compactValue = (value: unknown) => {
-  if (Array.isArray(value)) {
-    return value.length ? value.join(', ') : 'any';
-  }
-  if (typeof value === 'number') {
-    return String(value);
-  }
-  if (typeof value === 'string' && value.trim()) {
-    return value.trim();
-  }
-  return 'any';
 };
 
 export const ArtifactSourceSummary = ({ payload }: { payload: AgentArtifact['payload_json'] }) => {

@@ -1,18 +1,18 @@
-import { useMemo, useState } from 'react';
 import { Check, ChevronsUpDown, Globe2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
 import { getAgentDeepCopy } from './agent-deep-copy';
 
 const FALLBACK_TIMEZONES = [

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { OperatorVoiceInput } from '@/components/operator/OperatorVoice';
+import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { OperatorVoiceInput, voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const defaultHeaders = voiceHeaders;
 type Entry = { author_name?: string; group_count?: number; review_status?: string; category?: string; decision?: string; assigned_to?: string; urgent?: boolean; id: string; version: number; user_id: string; can_edit?: boolean; channel: string; occurred_at: string; original_text: string; is_voided: boolean; booking_id?: string; facts_json: { event_time_known?: boolean; quote?: string; outcome?: string; reason?: string } };

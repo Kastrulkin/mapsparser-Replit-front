@@ -1,16 +1,16 @@
-import { Navigate, useParams } from "react-router-dom";
 import SeoMeta from "@/components/SeoMeta";
-import { useLanguage } from "@/i18n/LanguageContext";
-import { contentCopy } from "@/content/contentCopy";
 import { collectionCopy } from "@/content/collectionCopy";
+import { contentCopy } from "@/content/contentCopy";
 import { useLocalizedDocuments } from "@/content/useLocalizedCollections";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Navigate, useParams } from "react-router-dom";
 import {
-  BottomCta,
-  DetailHeader,
-  DownloadBlock,
-  PageFrame,
-  RelatedMaterials,
-  SectionRenderer,
+	BottomCta,
+	DetailHeader,
+	DownloadBlock,
+	PageFrame,
+	RelatedMaterials,
+	SectionRenderer,
 } from "./ContentShared";
 import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
 

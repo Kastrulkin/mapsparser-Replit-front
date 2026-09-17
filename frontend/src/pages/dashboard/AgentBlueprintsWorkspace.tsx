@@ -1,41 +1,75 @@
-import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
+import { featureFlags } from '@/config/featureFlags';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
 import { api } from '@/services/api';
-import type {
-  DashboardContext, AgentBlueprint, AgentRun, AgentServerTodaySummary, AgentBlueprintDetails, AgentLearningLoop,
-  AgentSourceCatalogItem, AgentIntegration, AgentExternalAuthOption, AgentIntegrationCatalogItem, AgentIntegrationBindingStatus, AgentProviderRoute,
-  AgentConnectionPlan, AgentPostCreateHandoff, AgentReview, AgentBuilderScenario, PersonaAgent, LegacyMigrationPlan,
-  AgentWorkspaceMode, AgentExecutionMode, AgentRegistryFilter, AgentRunAnimation, FeedbackVersionNotice, AgentBuilderSession, AgentTemplate
-} from './agents/types';
-import {
-  getRequestErrorMessage, recordValue, normalizeSpreadsheetInput, normalizePostCreateHandoff, normalizeAgentIntegrationPreflight, normalizeConnectionPlan,
-  formatPreflightBlock, connectorLabel, autoSelectBuilderConnectionBindings, autoSelectBuilderProviderRoutes
-} from './agents/normalization';
-import {
-  getPreviewVersionId, agentExecutionMode, workflowStepsForAnimation, learningTriggerOptions, agentScenarios, humanizeMeta,
-  getAgentListStatus, initialRunParameters, validateRunParameters, buildEmployeeNextAction
-} from './agents/model';
-import { isAgentWorkRun, isBusinessBlockerApproval, needsScenarioRebuildForSourceResult, needsGoogleSheetsSourceSetup, needsGoogleAccessReconnect, hasFreshGoogleSheetsAccessAfterResult } from './agents/results';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useOutletContext } from 'react-router-dom';
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
-import { featureFlags } from '@/config/featureFlags';
-import { useLanguage } from '@/i18n/LanguageContext';
 import {
-  clearAgentRunResume,
-  isWaitingForProviderResult,
-  providerResultNotice,
-  readAgentRunResume,
-  saveAgentRunResume,
-  shouldContinueAgentRunPolling,
+	agentExecutionMode,
+	agentScenarios,
+	buildEmployeeNextAction,
+	getAgentListStatus,
+	getPreviewVersionId,
+	humanizeMeta,
+	initialRunParameters,
+	learningTriggerOptions,
+	validateRunParameters
+} from './agents/model';
+import {
+	autoSelectBuilderConnectionBindings, autoSelectBuilderProviderRoutes,
+	connectorLabel,
+	formatPreflightBlock,
+	getRequestErrorMessage,
+	normalizeAgentIntegrationPreflight, normalizeConnectionPlan,
+	normalizePostCreateHandoff,
+	normalizeSpreadsheetInput,
+	recordValue
+} from './agents/normalization';
+import { hasFreshGoogleSheetsAccessAfterResult, isAgentWorkRun, isBusinessBlockerApproval, needsGoogleAccessReconnect, needsGoogleSheetsSourceSetup, needsScenarioRebuildForSourceResult } from './agents/results';
+import {
+	clearAgentRunResume,
+	isWaitingForProviderResult,
+	providerResultNotice,
+	saveAgentRunResume,
+	shouldContinueAgentRunPolling
 } from './agents/run-resume';
+import type {
+	AgentBlueprint,
+	AgentBlueprintDetails,
+	AgentBuilderScenario,
+	AgentBuilderSession,
+	AgentConnectionPlan,
+	AgentExecutionMode,
+	AgentExternalAuthOption,
+	AgentIntegration,
+	AgentIntegrationBindingStatus,
+	AgentIntegrationCatalogItem,
+	AgentLearningLoop,
+	AgentPostCreateHandoff,
+	AgentProviderRoute,
+	AgentRegistryFilter,
+	AgentReview,
+	AgentRun,
+	AgentServerTodaySummary,
+	AgentSourceCatalogItem,
+	AgentTemplate,
+	AgentWorkspaceMode,
+	DashboardContext,
+	FeedbackVersionNotice,
+	LegacyMigrationPlan,
+	PersonaAgent
+} from './agents/types';
+import { useAgentRunAnimation } from './agents/useAgentRunAnimation';
+import { useAgentRunTracking } from './agents/useAgentRunTracking';
 import {
-  employeeListDetails,
-  filterAgentBlueprints,
-  migrationStatsForPlan,
-  queuedButNotDispatchedForRun,
-  systemAgentsForConfig,
-  todaySummaryForServer,
+	employeeListDetails,
+	filterAgentBlueprints,
+	migrationStatsForPlan,
+	queuedButNotDispatchedForRun,
+	systemAgentsForConfig,
+	todaySummaryForServer,
 } from './agents/workspace-state';
 const AgentBlueprintsView = lazy(() => import('./agents/view').then((module) => ({ default: module.AgentBlueprintsView })));
 const CompiledScriptBuilder = lazy(() => import('@/components/agents/CompiledScriptBuilder').then((module) => ({ default: module.CompiledScriptBuilder })));
@@ -67,7 +101,7 @@ export const AgentBlueprintsWorkspace = () => {
   const [error, setError] = useState<string | null>(null);
   const [agentSearch, setAgentSearch] = useState('');
   const [agentRegistryFilter, setAgentRegistryFilter] = useState<AgentRegistryFilter>('all');
-  const [runAnimation, setRunAnimation] = useState<AgentRunAnimation | null>(null);
+  const { runAnimation, setRunAnimation, beginRunAnimation, finishRunAnimation, failRunAnimation, syncRunAnimation } = useAgentRunAnimation(blueprintDetails);
   const [runStatusFilter, setRunStatusFilter] = useState('all');
   const [runSource, setRunSource] = useState('dashboard');
   const [runCity, setRunCity] = useState('');
@@ -642,94 +676,9 @@ export const AgentBlueprintsWorkspace = () => {
     }).catch(() => { if (requestedDeepLinkRef.current === requestKey && requestRevision === runRequestRevisionRef.current && requestBusiness === runBusinessRef.current) setError('Запуск из ссылки не найден или недоступен.'); });
   }, [blueprints, currentBusinessId, loadBlueprintDetails, location.search]);
 
-  useEffect(() => {
-    if (!currentBusinessId || !blueprints.length || runAnimation || requestedDeepLinkRef.current.includes(':')) return;
-    const resume = readAgentRunResume(currentBusinessId);
-    if (!resume) return;
-    const resumeBlueprintExists = blueprints.some((blueprint) => blueprint.id === resume.blueprintId);
-    if (!resumeBlueprintExists) {
-      clearAgentRunResume(currentBusinessId, resume.runId);
-      return;
-    }
-    if (selectedBlueprint?.id !== resume.blueprintId) {
-      setSelectedBlueprintId(resume.blueprintId);
-      return;
-    }
-    let cancelled = false;
-    void api.get(`/agent-runs/${resume.runId}`).then((response) => {
-      if (cancelled) return;
-      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
-      if (!run || run.blueprint_id !== resume.blueprintId) {
-        clearAgentRunResume(currentBusinessId, resume.runId);
-        return;
-      }
-      setActiveRun(run);
-      if (!shouldContinueAgentRunPolling(run)) {
-        setWorkspaceMode('results');
-        if (!isWaitingForProviderResult(run)) {
-          clearAgentRunResume(currentBusinessId, resume.runId);
-        }
-        return;
-      }
-      const steps = workflowStepsForAnimation(blueprintDetails, resume.kind);
-      const total = Math.max(steps.length, Number(run.progress?.total_steps || 0), 1);
-      const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));
-      const currentIndex = Math.min(total - 1, Math.max(0, Number(run.progress?.current_step_index ?? completed)));
-      setRunAnimation({
-        kind: resume.kind,
-        blueprintId: resume.blueprintId,
-        runId: resume.runId,
-        startedAt: resume.startedAt,
-        progress: Math.max(8, Math.min(92, Math.round((completed / total) * 92))),
-        stepIndex: currentIndex,
-        steps,
-        status: 'running',
-        serverCompletedSteps: completed,
-        serverCurrentStepIndex: currentIndex,
-        queueState: String(run.progress?.state || run.status || 'queued'),
-        recoveredFromReload: true,
-      });
-    }).catch((requestError) => {
-      if (cancelled) return;
-      console.error(requestError);
-      clearAgentRunResume(currentBusinessId, resume.runId);
-      setError('Не удалось восстановить последнюю запущенную задачу. Результат остаётся в истории агента.');
-    });
-    return () => { cancelled = true; };
-  }, [blueprintDetails, blueprints, currentBusinessId, runAnimation, selectedBlueprint?.id]);
-
-  useEffect(() => {
-    if (runAnimation || !selectedBlueprint?.id || explicitRunTarget?.blueprintId === selectedBlueprint.id) return;
-    const inflight = (blueprintDetails?.runs || []).find((run) => ['queued', 'running', 'retry_wait', 'waiting_provider'].includes(String(run.status || '')) && shouldContinueAgentRunPolling(run));
-    if (!inflight?.id) return;
-    let cancelled = false;
-    void api.get(`/agent-runs/${inflight.id}`).then((response) => {
-      if (cancelled) return;
-      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
-      if (!run) return;
-      const kind: AgentRunAnimation['kind'] = isAgentWorkRun(run) ? 'work' : 'test';
-      const steps = workflowStepsForAnimation(blueprintDetails, kind);
-      const total = Math.max(steps.length, Number(run.progress?.total_steps || 0), 1);
-      const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));
-      const currentIndex = Math.min(total - 1, Math.max(0, Number(run.progress?.current_step_index ?? completed)));
-      setActiveRun(run);
-      setRunAnimation({
-        kind,
-        blueprintId: selectedBlueprint.id,
-        runId: run.id,
-        startedAt: Date.parse(String(run.queued_at || run.started_at || '')) || Date.now(),
-        progress: Math.max(8, Math.min(92, Math.round((completed / total) * 92))),
-        stepIndex: currentIndex,
-        steps,
-        status: 'running',
-        serverCompletedSteps: completed,
-        serverCurrentStepIndex: currentIndex,
-        queueState: String(run.progress?.state || run.status || 'queued'),
-        recoveredFromReload: true,
-      });
-    }).catch((requestError) => console.error(requestError));
-    return () => { cancelled = true; };
-  }, [blueprintDetails, explicitRunTarget?.blueprintId, runAnimation, selectedBlueprint?.id]);
+  const { waitForAgentRun } = useAgentRunTracking({ currentBusinessId, blueprints, blueprintDetails, selectedBlueprint, runAnimation, compiledRunContext, explicitRunTarget,
+  requestedDeepLinkRef, setSelectedBlueprintId, setRunAnimation, setActiveRun, setWorkspaceMode, setError,
+  syncRunAnimation, finishRunAnimation, failRunAnimation, loadBlueprintDetails, loadBlueprintReview, loadBlueprints });
 
   useEffect(() => {
     const latestRun = blueprintDetails?.runs?.[0];
@@ -1087,85 +1036,6 @@ export const AgentBlueprintsWorkspace = () => {
     }
   };
 
-  const runAnimationBlueprintId = runAnimation?.blueprintId;
-  const runAnimationStartedAt = runAnimation?.startedAt;
-  const runAnimationStatus = runAnimation?.status;
-  useEffect(() => {
-    if (runAnimationStatus !== 'running') {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      setRunAnimation((current) => {
-        if (!current || current.status !== 'running') {
-          return current;
-        }
-        const total = Math.max(current.steps.length, 1);
-        const completed = Math.max(0, current.serverCompletedSteps || 0);
-        const cap = current.queueState === 'queued'
-          ? 12
-          : Math.min(92, Math.round(((completed + 0.85) / total) * 92));
-        const progress = Math.min(cap, current.progress + 3);
-        return { ...current, progress, stepIndex: Math.min(total - 1, current.serverCurrentStepIndex ?? completed) };
-      });
-    }, 500);
-    return () => window.clearInterval(timer);
-  }, [runAnimationBlueprintId, runAnimationStartedAt, runAnimationStatus]);
-
-  const beginRunAnimation = (blueprintId: string, kind: AgentRunAnimation['kind']) => {
-    const animation: AgentRunAnimation = {
-      kind,
-      blueprintId,
-      startedAt: Date.now(),
-      progress: 8,
-      stepIndex: 0,
-      steps: workflowStepsForAnimation(blueprintDetails, kind),
-      status: 'running',
-      serverCompletedSteps: 0,
-      serverCurrentStepIndex: 0,
-      queueState: 'queued',
-    };
-    setRunAnimation(animation);
-    return animation.startedAt;
-  };
-
-  const finishRunAnimation = useCallback(async (startedAt: number) => {
-    const waitMs = Math.max(0, 6500 - (Date.now() - startedAt));
-    if (waitMs > 0) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, waitMs));
-    }
-    setRunAnimation((current) => current ? {
-      ...current,
-      progress: 100,
-      stepIndex: Math.max(0, current.steps.length - 1),
-      status: 'finishing',
-    } : current);
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 360));
-  }, []);
-
-  const failRunAnimation = useCallback((message: string) => {
-    setRunAnimation((current) => current ? { ...current, status: 'error', error: message } : current);
-  }, []);
-
-  const syncRunAnimation = useCallback((run: AgentRun | null) => {
-    if (!run) return;
-    setRunAnimation((current) => {
-      if (!current || current.blueprintId !== run.blueprint_id) return current;
-      const total = Math.max(current.steps.length, Number(run.progress?.total_steps || 0), 1);
-      const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));
-      const currentIndex = Math.min(total - 1, Math.max(0, Number(run.progress?.current_step_index ?? completed)));
-      const floor = Math.min(92, Math.round((completed / total) * 92));
-      return {
-        ...current,
-        runId: run.id,
-        queueState: String(run.progress?.state || run.status || 'queued'),
-        serverCompletedSteps: completed,
-        serverCurrentStepIndex: currentIndex,
-        stepIndex: currentIndex,
-        progress: Math.max(current.progress, floor),
-      };
-    });
-  }, []);
-
   const validatedRunParameters = (preview: boolean, parameterOverrides?: Record<string, unknown>) => {
     const schema = preview
       ? blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema
@@ -1180,101 +1050,6 @@ export const AgentBlueprintsWorkspace = () => {
     }
     return parameters;
   };
-
-  const waitForAgentRun = useCallback(async (runId: string) => {
-    for (let attempt = 0; attempt < 600; attempt += 1) {
-      const response = await api.get(`/agent-runs/${runId}`);
-      const run = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
-      if (run) {
-        setActiveRun(run);
-        syncRunAnimation(run);
-        if (!shouldContinueAgentRunPolling(run)) {
-          return run;
-        }
-      }
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
-    }
-    throw new Error('Агент продолжает работу дольше ожидаемого. Результат появится в истории после завершения.');
-  }, [syncRunAnimation]);
-
-  useEffect(() => {
-    if (!compiledRunContext?.runId || !selectedBlueprint?.id || compiledRunContext.blueprintId !== selectedBlueprint.id
-      || (explicitRunTarget?.runId && explicitRunTarget.runId !== compiledRunContext.runId)) {
-      return;
-    }
-    let cancelled = false;
-    const runId = compiledRunContext.runId;
-    const blueprintId = compiledRunContext.blueprintId;
-    const pollCompiledRun = async () => {
-      for (let attempt = 0; attempt < 600 && !cancelled; attempt += 1) {
-        try {
-          const response = await api.get(`/agent-runs/${runId}`);
-          const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
-          if (!run || run.blueprint_id !== blueprintId || cancelled) {
-            return;
-          }
-          setActiveRun(run);
-          if (!shouldContinueAgentRunPolling(run)) {
-            setWorkspaceMode('results');
-            await loadBlueprintDetails(blueprintId);
-            await loadBlueprintReview(blueprintId);
-            return;
-          }
-        } catch (requestError) {
-          if (!cancelled) {
-            console.error(requestError);
-            setError('Не удалось обновить состояние проверки таблицы. Попробуйте открыть запуск из истории.');
-          }
-          return;
-        }
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
-      }
-    };
-    void pollCompiledRun();
-    return () => { cancelled = true; };
-  }, [compiledRunContext?.blueprintId, compiledRunContext?.runId, explicitRunTarget?.runId, loadBlueprintDetails, loadBlueprintReview, selectedBlueprint?.id]);
-
-  useEffect(() => {
-    if (!runAnimation?.recoveredFromReload || !runAnimation.runId) return;
-    let cancelled = false;
-    const runId = runAnimation.runId;
-    const startedAt = runAnimation.startedAt;
-    void waitForAgentRun(runId).then(async (run) => {
-      if (cancelled) return;
-      if (run?.status === 'failed') {
-        failRunAnimation(run.error_text || 'Агент не смог завершить задачу.');
-        return;
-      }
-      if (isWaitingForProviderResult(run)) {
-        setRunAnimation(null);
-        setWorkspaceMode('results');
-        if (selectedBlueprint?.id) await loadBlueprintDetails(selectedBlueprint.id);
-        await loadBlueprints();
-        return;
-      }
-      await finishRunAnimation(startedAt);
-      if (cancelled) return;
-      setRunAnimation(null);
-      setWorkspaceMode('results');
-      clearAgentRunResume(currentBusinessId, runId);
-      if (selectedBlueprint?.id) await loadBlueprintDetails(selectedBlueprint.id);
-      await loadBlueprints();
-    }).catch((requestError) => {
-      if (!cancelled) failRunAnimation(getRequestErrorMessage(requestError, 'Не удалось продолжить отслеживание задачи.'));
-    });
-    return () => { cancelled = true; };
-  }, [
-    currentBusinessId,
-    failRunAnimation,
-    finishRunAnimation,
-    loadBlueprintDetails,
-    loadBlueprints,
-    runAnimation?.recoveredFromReload,
-    runAnimation?.runId,
-    runAnimation?.startedAt,
-    selectedBlueprint?.id,
-    waitForAgentRun,
-  ]);
 
   const startRun = async (
     blueprintToRun?: AgentBlueprint | null,

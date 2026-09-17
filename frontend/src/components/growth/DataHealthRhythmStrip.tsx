@@ -1,7 +1,7 @@
 import { ArrowRight, CheckCircle2, Clock3, DatabaseZap, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 
 export type GrowthDataHealth = {

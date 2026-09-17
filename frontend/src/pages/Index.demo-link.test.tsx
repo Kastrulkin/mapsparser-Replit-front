@@ -10,7 +10,7 @@ vi.mock('@/components/SeoMeta', () => ({ default: () => null }));
 vi.mock('@/content/useLocalizedCollections', () => ({
   useLocalizedCases: () => ({ cases: [], isLoading: false }),
 }));
-vi.mock('@/i18n/LanguageContext', () => ({
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: 'ru' }),
 }));
 

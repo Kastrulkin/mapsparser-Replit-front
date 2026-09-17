@@ -1,15 +1,15 @@
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Download, Loader2, Sparkles } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 import Footer from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { ContentSection, RelatedLink } from "@/content/contentTypes";
-import { formatContentDate } from "./contentSeo";
-import { useLanguage } from "@/i18n/LanguageContext";
 import { contentCopy } from "@/content/contentCopy";
+import type { ContentSection, RelatedLink } from "@/content/contentTypes";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Download, Loader2, Sparkles } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { formatContentDate } from "./contentSeo";
 
 type PageFrameProps = {
   children: ReactNode;

@@ -1,13 +1,12 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { FileText, Image as ImageIcon, Upload, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { getApiEndpoint } from '../config/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Upload, FileText, Image as ImageIcon, X } from 'lucide-react';
-import { getApiEndpoint } from '../config/api';
+import { Textarea } from './ui/textarea';
 
 interface TransactionFormProps {
   onSuccess?: () => void;

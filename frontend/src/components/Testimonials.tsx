@@ -1,6 +1,6 @@
-import { Bot, MessageSquare, TrendingUp, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Bot, MessageSquare, TrendingUp, Users } from "lucide-react";
 
 const Testimonials = () => {
   const { t } = useLanguage();

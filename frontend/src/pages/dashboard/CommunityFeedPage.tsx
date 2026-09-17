@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, BarChart3, CircleAlert, MessageSquareText, Radio, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 
 import type { ControlScope } from '@/components/DashboardLayout';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
-import { communityFeedTimeLabel, type CommunityFeedPayload } from '@/lib/communityFeed';
 import { newAuth } from '@/lib/auth_new';
+import { communityFeedTimeLabel, type CommunityFeedPayload } from '@/lib/communityFeed';
 import { cn } from '@/lib/utils';
 
 type FeedContext = {
@@ -44,19 +44,20 @@ export const CommunityFeedPage = () => {
   const [error, setError] = useState('');
   const [trendPeriod, setTrendPeriod] = useState('month');
 
+  const scopeParams = feedQuery(currentBusinessId || '', controlScope).toString();
   const load = useCallback(async () => {
     if (!currentBusinessId) return;
     setLoading(true);
     setError('');
     try {
-      const result = await newAuth.makeRequest(`/operator/feed?${feedQuery(currentBusinessId, controlScope).toString()}`);
+      const result = await newAuth.makeRequest(`/operator/feed?${scopeParams}`);
       setPayload(result);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить ленту.');
     } finally {
       setLoading(false);
     }
-  }, [controlScope?.id, controlScope?.kind, currentBusinessId]);
+  }, [scopeParams, currentBusinessId]);
 
   useEffect(() => { void load(); }, [load]);
 

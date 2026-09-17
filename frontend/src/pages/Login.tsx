@@ -1,12 +1,12 @@
+import { featureFlags } from '@/config/featureFlags';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { countryOptionsFor, loginCopyFor } from '@/i18n/loginCopy';
+import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, resolveStoredLeadJourney, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
 import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Footer from "../components/Footer";
 import { Button } from "../components/ui/button";
 import { newAuth } from "../lib/auth_new";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useLanguage } from "@/i18n/LanguageContext";
-import { countryOptionsFor, loginCopyFor } from '@/i18n/loginCopy';
-import { getLeadJourneyDirection, isLeadJourneyKey, readLeadJourneyToken, resolveStoredLeadJourney, saveLeadJourneyIntent, saveLeadJourneyToken } from "@/lib/leadJourney";
-import { featureFlags } from '@/config/featureFlags';
 
 const Login = () => {
   const [searchParams] = useSearchParams();

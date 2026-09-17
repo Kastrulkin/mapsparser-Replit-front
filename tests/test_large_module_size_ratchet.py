@@ -8,7 +8,8 @@ LEGACY_FILE_LIMITS = {
     "frontend/src/components/content-plan/ContentPlanTab.tsx": 2000,
     # These two modules still need lifecycle-driven extraction. Their current
     # size is frozen so unrelated changes cannot make the debt worse.
-    "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx": 2314,
+    "frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx": 2087,
+    "frontend/src/pages/telegram/TelegramControlWorkspace.tsx": 1007,
     "src/api/prospecting/outreach_routes.py": 2159,
     "src/api/prospecting/analytics_routes.py": 2069,
     # Current transitional sizes are frozen; follow-up extraction must lower
@@ -17,7 +18,7 @@ LEGACY_FILE_LIMITS = {
     "src/api/prospecting/delivery_runtime.py": 2015,
     "src/services/social_posts/recommendations_handoff.py": 2094,
     "src/services/social_posts/launch_proof.py": 2012,
-    "frontend/src/pages/dashboard/agents/employee.tsx": 2440,
+    "frontend/src/pages/dashboard/agents/employee.tsx": 2233,
     "tests/test_agent_blueprint_layer.py": 11824,
 }
 
@@ -27,6 +28,7 @@ EXTRACTED_MODULE_ROOTS = (
     "src/legacy_routes",
     "frontend/src/components/content-plan/modules",
     "frontend/src/pages/dashboard/agents",
+    "frontend/src/features/telegram",
 )
 
 

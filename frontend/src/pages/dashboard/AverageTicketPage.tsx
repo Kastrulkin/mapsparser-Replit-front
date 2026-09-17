@@ -1,53 +1,53 @@
+import {
+	BadgeCheck,
+	CalendarDays,
+	CircleDollarSign,
+	Edit3,
+	Loader2,
+	MessageSquareText,
+	PackageCheck,
+	Plus,
+	RefreshCcw,
+	Save,
+	Sparkles,
+	TrendingUp,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import {
-  BadgeCheck,
-  CalendarDays,
-  CircleDollarSign,
-  Edit3,
-  Loader2,
-  MessageSquareText,
-  PackageCheck,
-  Plus,
-  RefreshCcw,
-  Save,
-  Sparkles,
-  TrendingUp,
-} from 'lucide-react';
 
+import {
+	DashboardCompactMetricsRow,
+	DashboardEmptyState,
+	DashboardPageHeader,
+	DashboardSection,
+} from '@/components/dashboard/DashboardPrimitives';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  DashboardCompactMetricsRow,
-  DashboardEmptyState,
-  DashboardPageHeader,
-  DashboardSection,
-} from '@/components/dashboard/DashboardPrimitives';
 import { useToast } from '@/hooks/use-toast';
-import { newAuth } from '@/lib/auth_new';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
+import { newAuth } from '@/lib/auth_new';
 
 type OutletContext = {
   currentBusinessId?: string | null;

@@ -1,6 +1,6 @@
 export const SITE_URL = "https://localos.pro";
 
-import type { Language } from "@/i18n/LanguageContext";
+import type { Language } from '@/i18n/LanguageContext.logic';
 
 const dateLocales: Record<Language, string> = {
   ru: "ru-RU",

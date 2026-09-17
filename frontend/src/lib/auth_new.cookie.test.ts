@@ -163,6 +163,17 @@ describe('browser cookie authentication', () => {
     await expect(auth.makeRequest('/operator/today')).rejects.toMatchObject({ name: 'HttpError', status: null, code: 'NETWORK_ERROR', message: 'Ошибка соединения с сервером: Failed to fetch' });
   });
 
+  it('passes cancellation to fetch without reporting it as a network failure', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchMock = vi.fn().mockRejectedValue(controller.signal.reason);
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(new NewAuth().makeRequest('/agent-runs/cancelled', { signal: controller.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/agent-runs/cancelled'),
+      expect.objectContaining({ signal: controller.signal }));
+  });
+
   it.each([403, 502])('retains status %s when a JSON response is malformed', async (status) => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{broken', {
       status, headers: { 'Content-Type': 'application/json' },

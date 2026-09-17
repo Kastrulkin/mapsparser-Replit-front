@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Button } from './ui/button';
-import { useApiData } from '../hooks/useApiData';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { YandexBusinessReport } from './YandexBusinessReport';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { CheckCircle2, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { useApiData } from '../hooks/useApiData';
+import { YandexBusinessReport } from './YandexBusinessReport';
+import { Button } from './ui/button';
 
 interface MapParseItem {
   id: string;
@@ -38,7 +38,7 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId, refreshKey = 
   const [viewHtml, setViewHtml] = useState<string | null>(null);
   const [viewData, setViewData] = useState<MapParseItem | null>(null);
 
-  const { data, loading, refreshing, error } = useApiData<MapParseItem[]>(
+  const { data, loading, refreshing, error } = useApiData<MapParseItem[], { items?: MapParseItem[] }>(
     businessId ? `${window.location.origin}/api/business/${businessId}/map-parses?refresh=${refreshKey}` : null,
     {
       transform: (data) => data.items || [],

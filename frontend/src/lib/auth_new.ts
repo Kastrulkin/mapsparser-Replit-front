@@ -1,10 +1,13 @@
+import type { BusinessRecord } from '@/types/business';
+import { errorMessage } from './errorMessage';
+import { isRecord } from './record';
 export interface User {
   id: string;
   email: string;
   name?: string;
   phone?: string;
   is_superadmin?: boolean;
-  businesses?: any[];
+  businesses?: BusinessRecord[];
   session_kind?: 'standard' | 'demo';
   demo_mode?: boolean;
   demo_scope_business_id?: string | null;
@@ -107,6 +110,8 @@ export class NewAuth {
     this.currentUser = null;
   }
 
+  // Legacy transport boundary: callers use endpoint-specific response shapes.
+  // Migrate those contracts together before changing this return type to unknown.
   public async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.apiBaseUrl}${endpoint}`;
     let responseReceived = false;
@@ -147,7 +152,7 @@ export class NewAuth {
       const contentType = response.headers.get('content-type');
       const isJson = contentType && contentType.includes('application/json');
 
-      let data: any = {};
+      let data: unknown = {};
 
       if (isJson) {
         const text = await response.text();
@@ -167,14 +172,15 @@ export class NewAuth {
       }
 
       if (!response.ok) {
-        const errorBody = data && typeof data === 'object' ? data : {};
+        const errorBody = isRecord(data) ? data : {};
         const code = typeof errorBody.code === 'string' ? errorBody.code : typeof errorBody.error_code === 'string' ? errorBody.error_code : 'HTTP_ERROR';
         if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, code);
-        throw new HttpError(errorBody.message || errorBody.error || `Ошибка запроса (${response.status})`, response.status, code, errorBody);
+        throw new HttpError(String(errorBody.message || errorBody.error || `Ошибка запроса (${response.status})`), response.status, code, errorBody);
       }
 
       return data;
-    } catch (error) {
+    } catch (error: unknown) {
+      if (options.signal?.aborted) throw error;
       // Если сервер ответил, показываем его прикладную ошибку без маскировки под сетевой сбой.
       if (responseReceived || error instanceof HttpError || (error instanceof Error && error.message.includes('Ошибка'))) {
         throw error;
@@ -185,7 +191,7 @@ export class NewAuth {
     }
   }
 
-  async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string, personalDataConsent?: boolean): Promise<{ user: User | null; error: any }> {
+  async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string, personalDataConsent?: boolean): Promise<{ user: User | null; error: string | null }> {
     this.deactivateDemoSession();
     try {
       const response = await this.makeRequest('/auth/register', {
@@ -219,8 +225,8 @@ export class NewAuth {
       }
 
       return { user: this.currentUser, error: null };
-    } catch (error) {
-      return { user: null, error: error.message };
+    } catch (error: unknown) {
+      return { user: null, error: errorMessage(error) };
     }
   }
 
@@ -234,7 +240,7 @@ export class NewAuth {
     business_city?: string,
     business_country?: string,
     personalDataConsent?: boolean
-  ): Promise<{ user: User | null; business: any | null; error: any }> {
+  ): Promise<{ user: User | null; business: BusinessRecord | null; error: string | null }> {
     this.deactivateDemoSession();
     try {
       const response = await this.makeRequest('/auth/register-with-business', {
@@ -275,12 +281,12 @@ export class NewAuth {
         business: response.business || null,
         error: null
       };
-    } catch (error) {
-      return { user: null, business: null, error: error.message };
+    } catch (error: unknown) {
+      return { user: null, business: null, error: errorMessage(error) };
     }
   }
 
-  async signIn(email: string, password: string): Promise<{ user: User | null; error: any }> {
+  async signIn(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
     this.deactivateDemoSession();
     try {
       const response = await this.makeRequest('/auth/login', {
@@ -306,8 +312,8 @@ export class NewAuth {
       }
 
       return { user: this.currentUser, error: null };
-    } catch (error) {
-      return { user: null, error: error.message };
+    } catch (error: unknown) {
+      return { user: null, error: errorMessage(error) };
     }
   }
 
@@ -319,7 +325,7 @@ export class NewAuth {
           method: 'POST',
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Ошибка при выходе:', error);
     } finally {
       if (signingOutDemo) {
@@ -355,7 +361,7 @@ export class NewAuth {
       };
 
       return this.currentUser;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Ошибка при получении пользователя:', error);
       return null;
     }
@@ -365,7 +371,7 @@ export class NewAuth {
     return this.currentUser;
   }
 
-  async updateProfile(updates: Partial<User>): Promise<{ user: User | null; error: any }> {
+  async updateProfile(updates: Partial<User>): Promise<{ user: User | null; error: string | null }> {
     if (!this.currentUser) {
       return { user: null, error: 'Пользователь не авторизован' };
     }
@@ -383,12 +389,12 @@ export class NewAuth {
       // Обновляем локальные данные
       this.currentUser = { ...this.currentUser, ...updates };
       return { user: this.currentUser, error: null };
-    } catch (error) {
-      return { user: null, error: error.message };
+    } catch (error: unknown) {
+      return { user: null, error: errorMessage(error) };
     }
   }
 
-  async changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean; error: any }> {
+  async changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean; error: string | null }> {
     try {
       const response = await this.makeRequest('/users/change-password', {
         method: 'POST',
@@ -400,30 +406,30 @@ export class NewAuth {
       }
 
       return { success: true, error: null };
-    } catch (error) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      return { success: false, error: errorMessage(error) };
     }
   }
 
-  async getUserReports(): Promise<{ reports: any[]; error: any }> {
+  async getUserReports(): Promise<{ reports: unknown[]; error: string | null }> {
     try {
       const response = await this.makeRequest('/users/reports');
       return { reports: response.reports, error: null };
-    } catch (error) {
-      return { reports: [], error: error.message };
+    } catch (error: unknown) {
+      return { reports: [], error: errorMessage(error) };
     }
   }
 
-  async getUserQueue(): Promise<{ queue: any[]; error: any }> {
+  async getUserQueue(): Promise<{ queue: unknown[]; error: string | null }> {
     try {
       const response = await this.makeRequest('/users/queue');
       return { queue: response.queue, error: null };
-    } catch (error) {
-      return { queue: [], error: error.message };
+    } catch (error: unknown) {
+      return { queue: [], error: errorMessage(error) };
     }
   }
 
-  async addToQueue(url: string): Promise<{ queue_id: string; error: any }> {
+  async addToQueue(url: string): Promise<{ queue_id: string; error: string | null }> {
     try {
       const response = await this.makeRequest('/users/add-to-queue', {
         method: 'POST',
@@ -435,12 +441,12 @@ export class NewAuth {
       }
 
       return { queue_id: response.queue_id, error: null };
-    } catch (error) {
-      return { queue_id: '', error: error.message };
+    } catch (error: unknown) {
+      return { queue_id: '', error: errorMessage(error) };
     }
   }
 
-  async createInvite(email: string): Promise<{ invite: any; error: any }> {
+  async createInvite(email: string): Promise<{ invite: Record<string, unknown> | null; error: string | null }> {
     try {
       const response = await this.makeRequest('/users/invite', {
         method: 'POST',
@@ -452,21 +458,21 @@ export class NewAuth {
       }
 
       return { invite: response, error: null };
-    } catch (error) {
-      return { invite: null, error: error.message };
+    } catch (error: unknown) {
+      return { invite: null, error: errorMessage(error) };
     }
   }
 
-  async verifyInvite(token: string): Promise<{ email: string; error: any }> {
+  async verifyInvite(token: string): Promise<{ email: string; error: string | null }> {
     try {
       const response = await this.makeRequest(`/auth/verify-invite/${token}`);
       return { email: response.email, error: null };
-    } catch (error) {
-      return { email: '', error: error.message };
+    } catch (error: unknown) {
+      return { email: '', error: errorMessage(error) };
     }
   }
 
-  async acceptInvite(token: string, password: string, name?: string): Promise<{ user: User | null; error: any }> {
+  async acceptInvite(token: string, password: string, name?: string): Promise<{ user: User | null; error: string | null }> {
     try {
       const response = await this.makeRequest('/auth/accept-invite', {
         method: 'POST',
@@ -490,8 +496,8 @@ export class NewAuth {
       }
 
       return { user: this.currentUser, error: null };
-    } catch (error) {
-      return { user: null, error: error.message };
+    } catch (error: unknown) {
+      return { user: null, error: errorMessage(error) };
     }
   }
 
@@ -501,7 +507,7 @@ export class NewAuth {
     token?: string,
     personalDataConsent?: boolean,
     consentVersion?: string
-  ): Promise<{ user: User | null; error: any }> {
+  ): Promise<{ user: User | null; error: string | null }> {
     try {
       const response = await this.makeRequest('/auth/set-password', {
         method: 'POST',
@@ -531,8 +537,8 @@ export class NewAuth {
       }
 
       return { user: this.currentUser, error: null };
-    } catch (error) {
-      return { user: null, error: error.message };
+    } catch (error: unknown) {
+      return { user: null, error: errorMessage(error) };
     }
   }
 

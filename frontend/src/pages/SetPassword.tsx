@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { newAuth } from '../lib/auth_new';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { newAuth } from '../lib/auth_new';
 
 const SetPassword: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -27,12 +27,12 @@ const SetPassword: React.FC = () => {
         : '';
       const userEmail = urlParams.get('email') || stateEmail;
       const userToken = urlParams.get('token');
-      
+
       if (userEmail) {
         setEmail(userEmail);
         console.log('Email получен из URL параметров:', userEmail);
       }
-      
+
       if (userToken) {
         setToken(userToken);
         console.log('Токен получен из URL параметров:', userToken);
@@ -52,7 +52,7 @@ const SetPassword: React.FC = () => {
     };
 
     checkUser();
-  }, [location.state]);
+  }, [isResetFlow, location.state]);
 
   const handleSetPassword = async () => {
     if (!email) {
@@ -81,7 +81,7 @@ const SetPassword: React.FC = () => {
 
     try {
       let result;
-      
+
       // Если это восстановление пароля, используем reset-token
       if (isResetFlow) {
         const response = await fetch('/api/auth/confirm-reset', {
@@ -95,9 +95,9 @@ const SetPassword: React.FC = () => {
             password: password
           })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
           setInfo('Пароль успешно изменен! Выполняется вход...');
           setTimeout(() => {
@@ -117,7 +117,7 @@ const SetPassword: React.FC = () => {
           personalDataConsent,
           'localos-personal-data-v1-2026-05-11'
         );
-        
+
         if (result.error) {
           setError(result.error);
         } else if (result.user) {
@@ -146,7 +146,7 @@ const SetPassword: React.FC = () => {
       <h2 className="text-2xl font-bold mb-2">
         {isResetFlow ? 'Восстановление пароля' : 'Установите пароль для входа'}
       </h2>
-      
+
       {!isAuthorized && !error && (
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
@@ -189,7 +189,7 @@ const SetPassword: React.FC = () => {
           </Button>
         </form>
       )}
-      
+
       {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3">
           <p className="text-red-600 text-sm mb-3">{error}</p>
@@ -214,13 +214,13 @@ const SetPassword: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {info && (
         <div className="bg-green-50 border border-green-200 rounded p-3">
           <p className="text-green-600 text-sm">{info}</p>
         </div>
       )}
-      
+
       {!error && !isAuthorized && (
         <div className="border-t pt-4">
           <p className="text-sm text-gray-600 mb-3">

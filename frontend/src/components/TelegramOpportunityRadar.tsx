@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
-import { BellRing, CheckCircle2, Lightbulb, MessageSquareReply, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { api } from '@/services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
+import { api } from '@/services/api';
+import { BellRing, CheckCircle2, Lightbulb, MessageSquareReply, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 type RadarSource = {
   id: string;
@@ -79,7 +80,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
     return result;
   };
 
-  const loadRadar = async () => {
+  const loadRadar = useLatestCallback(async () => {
     if (!businessId) return;
     if (demoMode) {
       setSources([]);
@@ -107,11 +108,11 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     loadRadar();
-  }, [businessId, demoMode]);
+  }, [businessId, demoMode, loadRadar]);
 
   useEffect(() => {
     if (sources.length === 0) setKeywords(copy.keywordsPlaceholder);

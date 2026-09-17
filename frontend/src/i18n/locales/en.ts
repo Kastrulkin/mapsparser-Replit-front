@@ -1,4 +1,25 @@
 export const en = {
+  networkOverview: {
+    "title": "Network overview",
+    "subtitle": "Monitor performance across locations",
+    "status": "Status",
+    "allLocations": "All locations",
+    "activeOnly": "Active only",
+    "problems": "Needs attention",
+    "offline": "Offline",
+    "region": "Region",
+    "allRegions": "All regions",
+    "spb": "Saint Petersburg",
+    "moscow": "Moscow",
+    "pickDate": "Choose a date",
+    "toggleTheme": "Switch theme",
+    "performanceHistory": "Network performance history",
+    "performanceHistorySubtitle": "Average rating and review volume over the last 7 days.",
+    "rating": "Rating",
+    "reviews": "Reviews",
+    "reviewVolume": "Review volume",
+    "avgRating": "Average rating"
+  },
   common: {
     success: "Success",
     error: "Error",

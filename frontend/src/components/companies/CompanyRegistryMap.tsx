@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clusterer, Map, Placemark, YMaps, ZoomControl } from '@pbe/react-yandex-maps';
 import { Building2, Layers3, MapPin } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  buildCompanyMapViewport,
-  COMPANY_MAP_ROLE_PRIORITY,
-  COMPANY_MAP_ROLE_STYLES,
-  getCompanyHeatmapColor,
-  getCompanyMapRole,
-  type CompanyMapPoint,
+	COMPANY_MAP_ROLE_PRIORITY,
+	COMPANY_MAP_ROLE_STYLES,
+	buildCompanyMapViewport,
+	getCompanyHeatmapColor,
+	getCompanyMapRole,
+	type CompanyMapPoint,
 } from './companyRegistryMapModel';
 
 type CompanyRegistryMapProps = {
@@ -153,9 +153,10 @@ export const CompanyRegistryMap = ({ items, expanded = false, loading, error, tr
   useEffect(() => {
     const handleResize = () => setHeatmapRevision((revision) => revision + 1);
     window.addEventListener('resize', handleResize);
+    const redrawTimer = heatmapRedrawTimerRef;
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (heatmapRedrawTimerRef.current !== null) window.clearTimeout(heatmapRedrawTimerRef.current);
+      if (redrawTimer.current !== null) window.clearTimeout(redrawTimer.current);
     };
   }, []);
 

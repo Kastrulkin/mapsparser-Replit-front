@@ -1,11 +1,12 @@
+import type { LucideIcon } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { Alert, AlertDescription } from './ui/alert';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { AlertTriangle, Image, MapPin, MessageCircle, Newspaper, Star, TrendingUp } from 'lucide-react';
 import { useApiData } from '../hooks/useApiData';
-import { Star, AlertTriangle, TrendingUp, MapPin, MessageCircle, Image, Newspaper } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '../lib/utils';
+import { Alert, AlertDescription } from './ui/alert';
+import { Badge } from './ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 
 interface NetworkHealthData {
     locations_count: number;
@@ -88,7 +89,7 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
     }: {
         title: string;
         value: number | string;
-        icon: any;
+        icon: LucideIcon;
         variant?: 'default' | 'warning' | 'success';
     }) => (
         <Card className={cn(

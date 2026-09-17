@@ -5,6 +5,7 @@ type ApiOptions = {
     params?: Record<string, string | number | boolean | null | undefined>;
     headers?: Record<string, string>;
     body?: unknown;
+    signal?: AbortSignal;
 };
 
 const buildUrl = (url: string, params?: ApiOptions["params"]) => {
@@ -32,21 +33,24 @@ export const api = {
     get: async (url: string, options: ApiOptions = {}) => {
         const data = await newAuth.makeRequest(buildUrl(url, options.params), {
             method: 'GET',
+            signal: options.signal,
             headers: options.headers,
         });
         return { data };
     },
-    post: async (url: string, body: any = {}, options: ApiOptions = {}) => {
+    post: async (url: string, body: unknown = {}, options: ApiOptions = {}) => {
         const data = await newAuth.makeRequest(url, {
             method: 'POST',
+            signal: options.signal,
             headers: options.headers,
             body: JSON.stringify(body)
         });
         return { data };
     },
-    put: async (url: string, body: any, options: ApiOptions = {}) => {
+    put: async (url: string, body: unknown, options: ApiOptions = {}) => {
         const data = await newAuth.makeRequest(url, {
             method: 'PUT',
+            signal: options.signal,
             headers: options.headers,
             body: JSON.stringify(body)
         });
@@ -55,6 +59,7 @@ export const api = {
     patch: async (url: string, body: unknown, options: ApiOptions = {}) => {
         const data = await newAuth.makeRequest(url, {
             method: 'PATCH',
+            signal: options.signal,
             headers: options.headers,
             body: JSON.stringify(body)
         });
@@ -63,6 +68,7 @@ export const api = {
     delete: async (url: string, options: ApiOptions = {}) => {
         const data = await newAuth.makeRequest(buildUrl(url, options.params), {
             method: 'DELETE',
+            signal: options.signal,
             headers: options.headers,
             body: options.body === undefined ? undefined : JSON.stringify(options.body),
         });

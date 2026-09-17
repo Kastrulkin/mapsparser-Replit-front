@@ -1,15 +1,15 @@
-import { subscriptionPlanCopy } from "@/content/subscriptionPlanCopy";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
-import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, Truck, Wrench } from "lucide-react";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { aboutStoryCopy } from "@/content/aboutStoryCopy";
+import { subscriptionPlanCopy } from "@/content/subscriptionPlanCopy";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from "@/lib/auth_new";
 import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
-import { aboutStoryCopy } from "@/content/aboutStoryCopy";
+import { ArrowUpRight, BriefcaseBusiness, Clock3, Factory, PackageCheck, Store, Truck, Wrench } from "lucide-react";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const About = () => {
   const navigate = useNavigate();
@@ -334,4 +334,4 @@ const About = () => {
   );
 };
 
-export default About; 
+export default About;

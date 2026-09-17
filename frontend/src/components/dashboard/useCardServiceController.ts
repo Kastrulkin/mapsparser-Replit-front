@@ -1,17 +1,18 @@
-import { useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import type { ServiceTableItem } from '@/components/dashboard/CardServicesTable';
 import {
-  createCardService,
-  enrichProblematicServiceKeywords,
-  enrichServiceKeywords,
-  loadProblematicServicesRegenerationJob,
-  optimizeCardService,
-  removeCardService,
-  startProblematicServicesRegeneration,
-  updateCardService,
+	createCardService,
+	enrichProblematicServiceKeywords,
+	enrichServiceKeywords,
+	loadProblematicServicesRegenerationJob,
+	optimizeCardService,
+	removeCardService,
+	startProblematicServicesRegeneration,
+	updateCardService,
 } from '@/components/dashboard/cardOverviewApi';
 import { getServiceQuality } from '@/components/dashboard/cardServicesLogic';
+import { errorMessage } from '@/lib/errorMessage';
+import type { Dispatch, SetStateAction } from 'react';
+import { useState } from 'react';
 
 type ServiceFormValue = {
   category: string;
@@ -23,7 +24,7 @@ type ServiceFormValue = {
 
 type CardServiceControllerArgs = {
   userServices: ServiceTableItem[];
-  setUserServices: Dispatch<SetStateAction<any[]>>;
+  setUserServices: Dispatch<SetStateAction<ServiceTableItem[]>>;
   currentBusinessId?: string;
   automationAllowed: boolean;
   automationLockedMessage: string;
@@ -121,7 +122,7 @@ export function useCardServiceController({
   const [optimizedNameDrafts, setOptimizedNameDrafts] = useState<Record<string, string>>({});
   const [optimizedDescriptionDrafts, setOptimizedDescriptionDrafts] = useState<Record<string, string>>({});
 
-  const patchServiceInState = (serviceId: string, patch: Record<string, any>) => {
+  const patchServiceInState = (serviceId: string, patch: Partial<ServiceTableItem>) => {
     const nowIso = new Date().toISOString();
     setUserServices((prev) =>
       prev.map((item) => (
@@ -144,7 +145,7 @@ export function useCardServiceController({
   const createLocalServiceDraft = async (
     sourceServiceId: string,
     service: ServiceTableItem,
-    updateData: Record<string, any>
+    updateData: Partial<ServiceTableItem>
   ) => {
     const keywords = normalizeKeywords(service.keywords);
     const { response, data } = await createCardService({
@@ -186,7 +187,7 @@ export function useCardServiceController({
 
   const updateService = async (
     serviceId: string,
-    updatedData: Record<string, any>,
+    updatedData: Partial<ServiceTableItem>,
     options?: { reload?: boolean; showSuccess?: boolean }
   ) => {
     const { response, data } = await updateCardService(serviceId, updatedData);
@@ -231,8 +232,8 @@ export function useCardServiceController({
       } else {
         setError(data.error || copy.error);
       }
-    } catch (error: any) {
-      setError(`${copy.error}: ${error.message}`);
+    } catch (error: unknown) {
+      setError(`${copy.error}: ${errorMessage(error)}`);
     }
   };
 
@@ -296,8 +297,8 @@ export function useCardServiceController({
                 setSuccess('SEO-вариант готов. Создана LocalOS-копия услуги для редактирования и принятия.');
               }
               return 'ok';
-            } catch (createError: any) {
-              if (!options?.silent) setError(`${copy.error}: ${createError.message}`);
+            } catch (createError: unknown) {
+              if (!options?.silent) setError(`${copy.error}: ${errorMessage(createError)}`);
               return 'error';
             }
           }
@@ -308,8 +309,8 @@ export function useCardServiceController({
 
       if (!options?.silent) setError(data.error || copy.error);
       return isRateLimited ? 'rate_limited' : 'error';
-    } catch (error: any) {
-      const text = String(error?.message || '');
+    } catch (error: unknown) {
+      const text = String(errorMessage(error) || '');
       const isRateLimited = text.includes('429') || text.toLowerCase().includes('rate limit');
       if (!options?.silent) setError(`${copy.error}: ${text}`);
       return isRateLimited ? 'rate_limited' : 'error';
@@ -449,8 +450,8 @@ export function useCardServiceController({
         setSuccess(`Повторно оптимизировано: ${fixed}. Осталось проблемных: ${remaining}.`);
       }
       setProblemRegenerationStatus(null);
-    } catch (error: any) {
-      setError(`${copy.error}: ${error.message}`);
+    } catch (error: unknown) {
+      setError(`${copy.error}: ${errorMessage(error)}`);
       setProblemRegenerationStatus(null);
     }
     setRegeneratingProblematic(false);
@@ -475,8 +476,8 @@ export function useCardServiceController({
       } else {
         setError('Безопасные запросы не найдены. Нужна ручная проверка.');
       }
-    } catch (error: any) {
-      setError(`${copy.error}: ${error.message}`);
+    } catch (error: unknown) {
+      setError(`${copy.error}: ${errorMessage(error)}`);
     } finally {
       setEnrichingServiceId(null);
     }
@@ -501,8 +502,8 @@ export function useCardServiceController({
       } else {
         setError('Безопасные запросы автоматически не найдены. Проверьте спорные услуги вручную.');
       }
-    } catch (error: any) {
-      setError(`${copy.error}: ${error.message}`);
+    } catch (error: unknown) {
+      setError(`${copy.error}: ${errorMessage(error)}`);
     } finally {
       setEnrichingProblematic(false);
     }
@@ -519,8 +520,8 @@ export function useCardServiceController({
       } else {
         setError(data.error || copy.error);
       }
-    } catch (error: any) {
-      setError(`${copy.error}: ${error.message}`);
+    } catch (error: unknown) {
+      setError(`${copy.error}: ${errorMessage(error)}`);
     }
   };
 

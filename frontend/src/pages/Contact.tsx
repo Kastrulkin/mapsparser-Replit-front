@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, MapPin, Loader2 } from "lucide-react";
-import Footer from "@/components/Footer";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Loader2, Mail } from "lucide-react";
+import { useState } from 'react';
 
 const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,20 +19,20 @@ const Contact = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isSubmitting) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       const response = await fetch('/api/public/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-      
+
       const result = await response.json();
-      
+
       if (response.ok) {
         alert(t.contact.success);
         setFormData({ name: '', email: '', phone: '', message: '' });
@@ -75,7 +75,7 @@ const Contact = () => {
             {/* Contact Info */}
             <div>
               <h2 className="text-2xl font-bold text-foreground mb-6">{t.contact.contactsTitle}</h2>
-              
+
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -89,7 +89,7 @@ const Contact = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-8 p-6 bg-muted/50 rounded-xl">
                 <h3 className="font-semibold text-foreground mb-2">{t.contact.workingHoursTitle}</h3>
                 <p className="text-muted-foreground">{t.contact.workingDays1}</p>
@@ -113,7 +113,7 @@ const Contact = () => {
                       required
                     />
                   </div>
-                  
+
                   <div>
                     <Input
                       name="email"
@@ -124,7 +124,7 @@ const Contact = () => {
                       required
                     />
                   </div>
-                  
+
                   <div>
                     <Input
                       name="phone"
@@ -134,7 +134,7 @@ const Contact = () => {
                       onChange={handleChange}
                     />
                   </div>
-                  
+
                   <div>
                     <Textarea
                       name="message"
@@ -145,7 +145,7 @@ const Contact = () => {
                       required
                     />
                   </div>
-                  
+
                   <Button
                     type="submit"
                     size="lg"

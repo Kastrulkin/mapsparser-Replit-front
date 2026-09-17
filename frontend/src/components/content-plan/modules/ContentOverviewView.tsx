@@ -1,7 +1,7 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles } from 'lucide-react';
-import { SocialLaunchChecklist, SocialOwnerLaunchPath, _socialPlatformLabel, _socialSettingsPathForPlatform, _socialPublishModeLabel } from './helpers';
+import { SocialLaunchChecklist, SocialOwnerLaunchPath } from './helpers';
+import { _socialPlatformLabel, _socialPublishModeLabel, _socialSettingsPathForPlatform } from './helpers.logic';
 
 export const ContentOverviewView = ({ scope }) => {
   const {

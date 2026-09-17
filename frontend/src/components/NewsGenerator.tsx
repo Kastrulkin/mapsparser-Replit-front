@@ -1,40 +1,43 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useLanguage } from '@/i18n/LanguageContext';
-import {
-  Newspaper,
-  Sparkles,
-  Plus,
-  Trash2,
-  Copy,
-  Edit3,
-  Check,
-  Globe,
-  Briefcase,
-  CreditCard,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Calendar,
-  Search
-} from 'lucide-react';
-import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
 import { getNewsWorkspaceCopy } from '@/i18n/newsWorkspaceCopy';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { errorMessage } from '@/lib/errorMessage';
+import type { DashboardOutletContext } from '@/types/business';
+import type { NewsPost, NewsTransaction } from '@/types/news';
+import {
+	Briefcase,
+	Calendar,
+	Check,
+	ChevronLeft,
+	ChevronRight,
+	CreditCard,
+	Edit3,
+	ExternalLink,
+	FileText,
+	Globe,
+	Newspaper,
+	Plus,
+	Search,
+	Sparkles,
+	Trash2
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
 type NewsWorkspaceMode = 'news' | 'plan';
 
-export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
+export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: NewsPost[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
   const navigate = useNavigate();
-  const { user } = useOutletContext<any>();
+  const { user } = useOutletContext<DashboardOutletContext>();
   const [workspaceMode, setWorkspaceMode] = useState<NewsWorkspaceMode>(initialWorkspaceMode);
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
@@ -44,13 +47,13 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const [loadingSeoKeywords, setLoadingSeoKeywords] = useState(false);
   const [serviceId, setServiceId] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<NewsTransaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [rawInfo, setRawInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [generated, setGenerated] = useState<string>('');
-  const [news, setNews] = useState<any[]>([]);
+  const [news, setNews] = useState<NewsPost[]>([]);
   const [exampleInput, setExampleInput] = useState('');
   const [examples, setExamples] = useState<{ id: string, text: string }[]>([]);
   const { language: interfaceLanguage, t } = useLanguage();
@@ -81,7 +84,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     { value: 'zh', label: '中文' },
   ];
 
-  const loadNews = async () => {
+  const loadNews = useLatestCallback(async () => {
     // Сбрасываем страницу при загрузке новых новостей
     setCurrentPage(1);
     if (user?.demo_mode) {
@@ -100,10 +103,12 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       });
       const data = await res.json();
       if (data.success) setNews(user?.demo_mode ? getDemoShowcaseData(interfaceLanguage).news : (data.news || []));
-    } catch { }
-  };
+    } catch (error) {
+      console.error('Failed to load optional saved content:', error);
+    }
+  });
 
-  useEffect(() => { loadNews(); }, [interfaceLanguage, user?.demo_mode]);
+  useEffect(() => { loadNews(); }, [businessId, interfaceLanguage, loadNews, user?.demo_mode]);
   useEffect(() => {
     if (user?.demo_mode) {
       setAbModeAllowed(false);
@@ -136,13 +141,15 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         const token = browserBearerToken();
         const res = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await res.json();
-        if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
-      } catch { }
+        if (data.success) setExamples((data.examples || []).map((e: { id: string; text: string }) => ({ id: e.id, text: e.text })));
+      } catch (error) {
+        console.error('Failed to load news examples:', error);
+      }
     })();
   }, [user?.demo_mode]);
 
   // Загрузка транзакций
-  const loadTransactions = async () => {
+  const loadTransactions = useLatestCallback(async () => {
     if (!businessId) return;
     setLoadingTransactions(true);
     try {
@@ -159,15 +166,15 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     } finally {
       setLoadingTransactions(false);
     }
-  };
+  });
 
   useEffect(() => {
     if (useTransaction && businessId) {
       loadTransactions();
     }
-  }, [useTransaction, businessId]);
+  }, [useTransaction, businessId, loadTransactions]);
 
-  const loadSeoKeywords = async () => {
+  const loadSeoKeywords = useLatestCallback(async () => {
     if (!businessId) return;
     setLoadingSeoKeywords(true);
     try {
@@ -186,13 +193,13 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     } finally {
       setLoadingSeoKeywords(false);
     }
-  };
+  });
 
   useEffect(() => {
     if (useSeoKeywords && businessId) {
       loadSeoKeywords();
     }
-  }, [useSeoKeywords, businessId]);
+  }, [useSeoKeywords, businessId, loadSeoKeywords]);
 
   const generate = async () => {
     setError('');
@@ -224,8 +231,8 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       } else {
         setError(data?.error || 'Не удалось сгенерировать новость');
       }
-    } catch (e: any) {
-      setError(e?.message || 'Ошибка сети при генерации новости');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Ошибка сети при генерации новости');
     } finally {
       setLoading(false);
     }
@@ -277,7 +284,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       setExampleInput('');
       const list = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
       const json = await list.json();
-      if (json.success) setExamples((json.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
+      if (json.success) setExamples((json.examples || []).map((e: { id: string; text: string }) => ({ id: e.id, text: e.text })));
     }
   };
 
@@ -288,7 +295,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
     if (data.success) {
       const list = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
       const json = await list.json();
-      if (json.success) setExamples((json.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
+      if (json.success) setExamples((json.examples || []).map((e: { id: string; text: string }) => ({ id: e.id, text: e.text })));
     }
   };
 
@@ -382,9 +389,9 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                     ) : (
                       <select className="w-full rounded-lg border-gray-200 text-sm focus:ring-blue-500/20" value={transactionId} onChange={(e) => setTransactionId(e.target.value)}>
                         <option value="">— {t.common.select} —</option>
-                        {transactions.map(t => (
-                          <option key={t.id} value={t.id}>
-                            {t.transaction_date} - {t.services?.join(', ') || t.dashboard.card.services} - {t.amount}₽
+                        {transactions.map(transaction => (
+                          <option key={transaction.id} value={transaction.id}>
+                            {transaction.transaction_date} - {transaction.services?.join(', ') || t.dashboard.card.services} - {transaction.amount}₽
                           </option>
                         ))}
                       </select>
@@ -671,13 +678,13 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
           </div>
         ) : (() => {
           // Объединяем все новости в один список для пагинации
-          const allNews: any[] = [];
+          const allNews: Array<NewsPost & { isExternal: boolean }> = [];
           if (externalPosts && externalPosts.length > 0) {
-            externalPosts.forEach((post: any) => {
+            externalPosts.forEach((post) => {
               allNews.push({ ...post, isExternal: true });
             });
           }
-          news.forEach((n: any) => {
+          news.forEach((n) => {
             allNews.push({ ...n, isExternal: false });
           });
           const totalItems = allNews.length;
@@ -686,7 +693,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
           return (
             <div className="space-y-6">
               <div className="space-y-4">
-                {paginatedNews.map((item: any) => {
+                {paginatedNews.map((item) => {
                   if (item.isExternal) {
                     // Спарсенные публикации из внешних источников
                     return (
@@ -812,7 +819,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   );
 }
 
-function MapsPublicationsWidget({ externalPosts, onOpenContent }: { externalPosts?: any[]; onOpenContent: () => void }) {
+function MapsPublicationsWidget({ externalPosts, onOpenContent }: { externalPosts?: NewsPost[]; onOpenContent: () => void }) {
   const visiblePosts = Array.isArray(externalPosts) ? externalPosts.slice(0, 3) : [];
   const fallbackPosts = [
     { id: 'sample-published', date: '3 июля', title: 'Публикация опубликована', state: 'done' },

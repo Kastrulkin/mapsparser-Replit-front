@@ -1,19 +1,20 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { ArrowRight, Bot, CheckCircle2, ChevronDown, Clock3, Radio, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { ArrowRight, Bot, CheckCircle2, ChevronDown, Clock3, Radio, RefreshCw, TriangleAlert } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { DashboardEmptyState, DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
-import { newAuth } from '@/lib/auth_new';
-import { cn } from '@/lib/utils';
 import type { ControlScope } from '@/components/DashboardLayout';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
-import { fillTodayTemplate, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
-import { clearLeadJourneyIntent, getLeadJourneyDirection, readLeadJourneyIntent, readLeadJourneyToken, resolveStoredLeadJourney } from '@/lib/leadJourney';
-import { localizedFocusAction, localizedGrowthText } from './progressPageCopy';
+import { DashboardEmptyState, DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
 import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { Button } from '@/components/ui/button';
 import { featureFlags } from '@/config/featureFlags';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
+import { fillTodayTemplate, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
+import { newAuth } from '@/lib/auth_new';
 import type { JourneyAction } from '@/lib/leadJourney';
+import { clearLeadJourneyIntent, getLeadJourneyDirection, readLeadJourneyIntent, readLeadJourneyToken, resolveStoredLeadJourney } from '@/lib/leadJourney';
+import { cn } from '@/lib/utils';
+import { localizedFocusAction, localizedGrowthText } from './progressPageCopy';
 
 type DashboardContext = { currentBusinessId?: string | null; controlScope?: ControlScope | null; onControlScopeChange?: (scope: ControlScope) => void; onBusinessChange?: (businessId: string) => void };
 
@@ -171,7 +172,7 @@ export const TodayPage = () => {
   // Guard the first render of a new scope, before effects clear cached state.
   const overview = loadedScope.current === scopeKey ? cachedOverview : null;
 
-  const load = () => {
+  const load = useLatestCallback(() => {
     const requestId = requestSequence.current + 1;
     requestSequence.current = requestId;
     const requestedScopeKey = scopeKey;
@@ -212,9 +213,9 @@ export const TodayPage = () => {
       .finally(() => {
         if (requestSequence.current === requestId && currentScopeKey.current === requestedScopeKey) setLoading(false);
       });
-  };
+  });
 
-  useEffect(() => { load(); }, [currentBusinessId, controlScope?.id, controlScope?.kind]);
+  useEffect(() => { load(); }, [currentBusinessId, controlScope?.id, controlScope?.kind, load]);
 
   useEffect(() => {
     preferenceRequestSequence.current += 1;
@@ -235,7 +236,7 @@ export const TodayPage = () => {
       .catch(() => {
         // Keep the token so a temporary API or connectivity failure can be retried.
       });
-  }, [currentBusinessId]);
+  }, [currentBusinessId, navigate]);
 
   const openItem = (itemMission?: Mission | null, businessId?: string, businessName?: string, url?: string) => {
     if (businessId && controlScope?.kind === 'network') {

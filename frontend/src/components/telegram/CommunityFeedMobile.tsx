@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUpRight, BarChart3, CircleAlert, Loader2, MessageSquareText, Plus, Radio, RefreshCw, Send } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { mobileAuthHeaders, mobileScopeQuery, readMobileJson } from '@/lib/mobileDataClient';
 import {
-  communityFeedTimeLabel,
-  type CommunityFeedItem,
-  type CommunityFeedPayload,
-  type CommunityFeedTopic,
-  type CommunityFeedTrend,
+	communityFeedTimeLabel,
+	type CommunityFeedItem,
+	type CommunityFeedPayload
 } from '@/lib/communityFeed';
-import type { MobileScope } from './ScopeProvider';
+import { mobileAuthHeaders, mobileScopeQuery, readMobileJson } from '@/lib/mobileDataClient';
+import type { MobileScope } from './ScopeProvider.logic';
 
 export type { CommunityFeedItem, CommunityFeedPayload, CommunityFeedTopic, CommunityFeedTrend } from '@/lib/communityFeed';
 
@@ -94,13 +92,15 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources, openT
   const [error, setError] = useState('');
   const [trendPeriod, setTrendPeriod] = useState('month');
 
+  const scopeParams = mobileScopeQuery(scope).toString();
+  const feedItems = payload?.items;
   const fetchFeed = useCallback(async (cursor = '') => {
     if (preview) return previewPayload;
-    const params = mobileScopeQuery(scope);
+    const params = new URLSearchParams(scopeParams);
     params.set('limit', '20');
     if (cursor) params.set('cursor', cursor);
     return fetch(`/api/operator/mobile/feed?${params.toString()}`, { headers: mobileAuthHeaders() }).then(readMobileJson<CommunityFeedPayload>);
-  }, [preview, scope?.kind, scope?.id]);
+  }, [preview, scopeParams]);
 
   useEffect(() => {
     let active = true;
@@ -114,18 +114,18 @@ export const CommunityFeedMobile = ({ scope, preview = false, openSources, openT
   }, [fetchFeed]);
 
   useEffect(() => {
-    if (preview || !payload) return;
+    if (preview || !feedItems) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       void fetchFeed().then((result) => {
-        const known = new Set((payload.items || []).map((item) => item.id));
+        const known = new Set(feedItems.map((item) => item.id));
         const next = (result.items || []).filter((item) => !known.has(item.id));
         setPending(next);
         setPayload((current) => current ? { ...current, topics: result.topics, topic_trends: result.topic_trends, as_of: result.as_of, freshness: result.freshness } : result);
       }).catch(() => undefined);
     }, 30000);
     return () => window.clearInterval(timer);
-  }, [fetchFeed, payload?.items]);
+  }, [fetchFeed, feedItems, preview]);
 
   const topics = payload?.topics || [];
   const topicTrends = payload?.topic_trends || [];

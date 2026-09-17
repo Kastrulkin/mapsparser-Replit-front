@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
-import { Building2, ChevronDown, MapPin } from 'lucide-react';
-import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { localizeDemoBusinessName, operatorPageCopyForLanguage } from '@/pages/dashboard/operatorPageCopy';
+import { Building2, ChevronDown, MapPin } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface NetworkLocation {
     id: string;
@@ -61,11 +62,9 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
         return rawAddress;
     };
 
-    useEffect(() => {
-        loadNetworkLocations();
-    }, [currentBusinessId]);
 
-    const loadNetworkLocations = async () => {
+
+    const loadNetworkLocations = useLatestCallback(async () => {
         if (!currentBusinessId) {
             setLoading(false);
             return;
@@ -95,7 +94,11 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
         } finally {
             setLoading(false);
         }
-    };
+    });
+
+    useEffect(() => {
+        loadNetworkLocations();
+    }, [currentBusinessId, loadNetworkLocations]);
 
     const handleLocationSelect = (location: NetworkLocation) => {
         setSelectedLocation(location);

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { newAuth } from '@/lib/auth_new';
 import { GrowthPathsPage } from './GrowthPathsPage';
 
-vi.mock('@/i18n/LanguageContext', () => ({
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: 'es' }),
 }));
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));

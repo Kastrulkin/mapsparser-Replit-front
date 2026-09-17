@@ -61,9 +61,9 @@ export const confirmMobileAction = (actionId: string, scope?: MobileScopeRef) =>
   },
 ).then(readMobileJson<{ success?: boolean; idempotent?: boolean; operator_result?: MobileActionResult }>);
 
-export const loadMobileJob = (jobId: string, scope?: MobileScopeRef) => {
+export const loadMobileJob = (jobId: string, scope?: MobileScopeRef, signal?: AbortSignal) => {
   const params = mobileScopeQuery(scope);
-  return fetch(`/api/operator/mobile/jobs/${jobId}?${params.toString()}`, { headers: mobileAuthHeaders() })
+  return fetch(`/api/operator/mobile/jobs/${jobId}?${params.toString()}`, { headers: mobileAuthHeaders(), signal })
     .then(readMobileJson<{ success?: boolean; job?: MobileJob }>);
 };
 

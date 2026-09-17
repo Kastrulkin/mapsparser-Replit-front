@@ -1,3 +1,6 @@
+import type { BusinessRecord } from '@/types/business';
+
+type SubscriptionBusiness = Pick<BusinessRecord, 'subscription_tier' | 'subscription_status' | 'subscription_ends_at'> & { subscription_access?: Omit<SubscriptionAccessPayload, 'capabilities'> & { capabilities: string[] } };
 export type SubscriptionCapability =
   | 'maps' | 'maps.audit' | 'maps.services' | 'maps.reviews' | 'maps.news'
   | 'maps.photos' | 'maps.competitors' | 'progress' | 'telegram_radar' | 'web_analytics'
@@ -49,8 +52,8 @@ const isSubscriptionExpired = (value: unknown) => {
   return !Number.isNaN(date.getTime()) && date.getTime() < Date.now();
 };
 
-export const getCapabilityAccessForBusiness = (business: any, capability: SubscriptionCapability): BusinessCapabilityAccess => {
-  const serverAccess: SubscriptionAccessPayload | undefined = business?.subscription_access;
+export const getCapabilityAccessForBusiness = (business: SubscriptionBusiness | null | undefined, capability: SubscriptionCapability): BusinessCapabilityAccess => {
+  const serverAccess = business?.subscription_access;
   if (serverAccess && Array.isArray(serverAccess.capabilities)) {
     const requiredTier = CAPABILITY_TIER[capability];
     const requiredTierName: BusinessCapabilityAccess['requiredTierName'] = requiredTier === 'starter'
@@ -83,7 +86,7 @@ export const getCapabilityAccessForBusiness = (business: any, capability: Subscr
   return { allowed, capability, tier, tierName: TIER_NAMES[tier] || 'Без тарифа', requiredTier, requiredTierName, message: allowed ? null : `Функция входит в тариф «${requiredTierName}».` };
 };
 
-export function getAutomationAccessForBusiness(business: any): SubscriptionAutomationAccess {
+export function getAutomationAccessForBusiness(business: SubscriptionBusiness | null | undefined): SubscriptionAutomationAccess {
   const access = getCapabilityAccessForBusiness(business, 'automation');
   return { automationAllowed: access.allowed, message: access.message };
 }

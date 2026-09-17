@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
-import { Input } from './ui/input';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { errorMessage } from '@/lib/errorMessage';
+import { Copy, History, Loader2, RefreshCcw, Save } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
-import { Save, Loader2, History, RefreshCcw, Copy } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { Button } from './ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
 } from './ui/dialog';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 
 interface Prompt {
   type: string;
@@ -193,11 +195,9 @@ export const PromptsManagement: React.FC = () => {
   const [editedPrompts, setEditedPrompts] = useState<Record<string, { text: string; description: string }>>({});
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadPrompts();
-  }, []);
 
-  const loadPrompts = async () => {
+
+  const loadPrompts = useLatestCallback(async () => {
     try {
       setLoading(true);
       const data = await newAuth.makeRequest('/admin/prompts', {
@@ -218,17 +218,21 @@ export const PromptsManagement: React.FC = () => {
       setEditedPrompts(initial);
       void loadPromptInsights();
       void loadAbConfig();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка загрузки промптов:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить промпты',
+        description: errorMessage(error) || 'Не удалось загрузить промпты',
         variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadPrompts();
+  }, [loadPrompts]);
 
   const loadAbConfig = async () => {
     try {
@@ -261,10 +265,10 @@ export const PromptsManagement: React.FC = () => {
       toast({ title: 'Успешно', description: 'A/B конфигурация обновлена' });
       await loadPromptInsights();
       await loadAbConfig();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось сохранить A/B конфигурацию',
+        description: errorMessage(error) || 'Не удалось сохранить A/B конфигурацию',
         variant: 'destructive'
       });
     } finally {
@@ -335,11 +339,11 @@ export const PromptsManagement: React.FC = () => {
         description: 'Промпт сохранён'
       });
       await loadPrompts(); // Перезагружаем для получения обновлённых данных
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка сохранения промпта:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось сохранить промпт',
+        description: errorMessage(error) || 'Не удалось сохранить промпт',
         variant: 'destructive'
       });
     } finally {
@@ -367,11 +371,11 @@ export const PromptsManagement: React.FC = () => {
         ...prev,
         [promptType]: data.versions || []
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка загрузки истории версий:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить историю версий',
+        description: errorMessage(error) || 'Не удалось загрузить историю версий',
         variant: 'destructive'
       });
     } finally {
@@ -428,11 +432,11 @@ export const PromptsManagement: React.FC = () => {
       });
       await loadPrompts();
       await loadPromptVersions(promptType);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка применения версии:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось применить версию',
+        description: errorMessage(error) || 'Не удалось применить версию',
         variant: 'destructive'
       });
     } finally {

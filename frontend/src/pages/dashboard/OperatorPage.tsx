@@ -1,30 +1,31 @@
-import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission, waitForOperatorResult, voiceHeaders } from '@/components/operator/OperatorVoice';
-import { OperatorWorkdayInput } from '@/components/operator/OperatorWorkdayInput';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
+import { OperatorSpeech, OperatorVoiceInput, VoiceSubmission } from '@/components/operator/OperatorVoice';
+import { voiceHeaders, waitForOperatorResult } from '@/components/operator/OperatorVoice.logic';
+import { OperatorWorkdayInput } from '@/components/operator/OperatorWorkdayInput';
+import {
+	Bot,
+	CheckCircle2,
+	ChevronDown,
+	Copy,
+	ExternalLink,
+	Loader2,
+	MessageSquareText,
+	RefreshCw,
+	Send,
+} from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import {
-  Bot,
-  CheckCircle2,
-  ChevronDown,
-  Copy,
-  ExternalLink,
-  Loader2,
-  MessageSquareText,
-  RefreshCw,
-  Send,
-} from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
+import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { api } from '@/services/api';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { api } from '@/services/api';
 import {
-  localizeDemoBusinessName,
-  operatorPageCopyForLanguage,
+	localizeDemoBusinessName,
+	operatorPageCopyForLanguage,
 } from './operatorPageCopy';
 
 type DashboardContext = {

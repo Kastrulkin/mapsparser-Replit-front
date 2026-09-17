@@ -1,6 +1,6 @@
-import type { Language } from './LanguageContext';
-import { growthPathsCopyFor } from './growthPathsCopy';
 import type { LeadJourneyDirection } from '@/lib/leadJourney';
+import type { Language } from './LanguageContext.logic';
+import { growthPathsCopyFor } from './growthPathsCopy';
 
 export type PublicLeadJourneyCopy = {
   seoTitle: string;

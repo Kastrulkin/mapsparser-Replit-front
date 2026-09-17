@@ -1,8 +1,9 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
+import { errorMessage } from '@/lib/errorMessage';
+import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 
 type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
 
@@ -36,8 +37,8 @@ const languageOptions = [
   { value: 'zh', label: '中文' },
 ] as const;
 
-export default function ServiceOptimizer({ 
-  businessName, 
+export default function ServiceOptimizer({
+  businessName,
   businessId,
   tone: externalTone,
   language: externalLanguage,
@@ -46,8 +47,8 @@ export default function ServiceOptimizer({
   instructions: externalInstructions,
   hideTextInput = false,
   onServicesImported
-}: { 
-  businessName?: string; 
+}: {
+  businessName?: string;
   businessId?: string;
   tone?: Tone;
   language?: 'ru' | 'en' | 'es' | 'de' | 'fr' | 'it' | 'pt' | 'zh';
@@ -65,7 +66,7 @@ export default function ServiceOptimizer({
   const [instructions, setInstructions] = useState(externalInstructions || '');
   const [region, setRegion] = useState(externalRegion || '');
   const [length, setLength] = useState(externalLength || 150);
-  
+
   // Обновляем значения при изменении пропсов
   useEffect(() => {
     if (externalTone) setTone(externalTone);
@@ -96,9 +97,11 @@ export default function ServiceOptimizer({
       });
       const data = await res.json();
       if (data.success) {
-        setExamples((data.examples || []).map((e:any)=>({ id: e.id, text: e.text })));
+        setExamples((data.examples || []).map((e: { id: string; text: string })=>({ id: e.id, text: e.text })));
       }
-    } catch {}
+    } catch (error) {
+      console.error('Failed to load service examples:', error);
+    }
   };
 
   useEffect(()=>{ loadExamples(); }, []);
@@ -120,8 +123,8 @@ export default function ServiceOptimizer({
       } else {
         setError(data.error || 'Ошибка добавления примера');
       }
-    } catch (e:any) {
-      setError(e.message || 'Ошибка добавления примера');
+    } catch (e:unknown) {
+      setError(errorMessage(e) || 'Ошибка добавления примера');
     }
   };
 
@@ -138,8 +141,8 @@ export default function ServiceOptimizer({
       } else {
         setError(data.error || 'Ошибка удаления примера');
       }
-    } catch (e:any) {
-      setError(e.message || 'Ошибка удаления примера');
+    } catch (e:unknown) {
+      setError(errorMessage(e) || 'Ошибка удаления примера');
     }
   };
 
@@ -202,8 +205,8 @@ export default function ServiceOptimizer({
           setError('В файле не найдены подходящие услуги. Проверьте содержание и формат файла.');
         }
       }
-    } catch (e: any) {
-      setError(e.message || 'Ошибка запроса');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Ошибка запроса');
     } finally {
       setLoading(false);
     }
@@ -255,7 +258,7 @@ export default function ServiceOptimizer({
     const service = result[serviceIndex];
     const accepted = acceptedOptimizations.get(serviceIndex) || {};
     const editable = editableValues.get(serviceIndex) || {};
-    
+
     try {
       const token = browserBearerToken();
       // Получаем business_id из пропсов или из localStorage
@@ -264,7 +267,7 @@ export default function ServiceOptimizer({
         setError('Не выбран бизнес для сохранения услуг');
         return false;
       }
-      
+
       // Шаг "Распознать -> записать": сохраняем оригинальные названия.
       const finalName = preferOriginal
         ? (service.original_name || service.optimized_name || '').trim()
@@ -277,7 +280,7 @@ export default function ServiceOptimizer({
         : (accepted.description
           ? (editable.description !== undefined ? editable.description : service.seo_description)
           : (service.original_description || service.seo_description));
-      
+
       const response = await fetch(`${window.location.origin}/api/services/add`, {
         method: 'POST',
         headers: {
@@ -293,7 +296,7 @@ export default function ServiceOptimizer({
           business_id: currentBusinessId
         })
       });
-      
+
       const data = await response.json();
       if (response.ok && data.success) {
         setAddedServices(prev => new Set([...prev, serviceIndex]));
@@ -304,8 +307,8 @@ export default function ServiceOptimizer({
         setError(data.error || 'Ошибка добавления услуги');
         return false;
       }
-    } catch (e: any) {
-      setError('Ошибка добавления услуги: ' + e.message);
+    } catch (e: unknown) {
+      setError('Ошибка добавления услуги: ' + errorMessage(e));
       return false;
     }
   };
@@ -342,8 +345,8 @@ export default function ServiceOptimizer({
       } else {
         setSuccess(`Успешно сохранено услуг: ${savedCount}`);
       }
-    } catch (e: any) {
-      setError(e?.message || 'Ошибка записи распознанных услуг');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Ошибка записи распознанных услуг');
     } finally {
       setSavingRecognized(false);
     }
@@ -448,7 +451,7 @@ export default function ServiceOptimizer({
           placeholder={"Например: Стрижка волос, укладка, окрашивание...\n\nСовет: Укажите желаемый тон и нюансы (материалы, УТП, район/метро)."}
         />
       )}
-      
+
       {(!hideTextInput && mode === 'file') || hideTextInput ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -459,9 +462,9 @@ export default function ServiceOptimizer({
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="hidden"
             />
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => document.getElementById(hideTextInput ? "file-upload-compact" : "file-upload")?.click()}
             >
               {hideTextInput ? 'Загрузка файла' : 'Выберите файл'}
@@ -471,7 +474,7 @@ export default function ServiceOptimizer({
           {!hideTextInput && (
           <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
             <p className="text-xs text-amber-800">
-              <strong>⚠️ Важно:</strong> Для оптимального распознавания рекомендуется загружать файлы с <strong>до 10 услугами</strong> на фото. 
+              <strong>⚠️ Важно:</strong> Для оптимального распознавания рекомендуется загружать файлы с <strong>до 10 услугами</strong> на фото.
               Файлы с 14-15 услугами могут не распознаться полностью. Большее количество услуг, сомнительно, что подойдут для обработки.
             </p>
           </div>
@@ -583,13 +586,13 @@ export default function ServiceOptimizer({
                 {result.map((s, i) => {
                   const accepted = acceptedOptimizations.get(i) || {};
                   const editable = editableValues.get(i) || {};
-                  const displayName = accepted.name 
+                  const displayName = accepted.name
                     ? (editable.name !== undefined ? editable.name : s.optimized_name)
                     : s.original_name;
                   const displayDescription = accepted.description
                     ? (editable.description !== undefined ? editable.description : s.seo_description)
                     : (s.original_description || s.seo_description);
-                  
+
                   return (
                     <tr key={i} className="border-t">
                       <td className="p-2 align-top min-w-0">
@@ -674,9 +677,9 @@ export default function ServiceOptimizer({
                         {addedServices.has(i) ? (
                           <span className="text-green-600 text-sm">✓ Добавлено</span>
                         ) : (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => addServiceToList(i)}
                             className="text-xs"
                           >

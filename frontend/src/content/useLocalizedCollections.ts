@@ -1,7 +1,7 @@
+import type { Language } from '@/i18n/LanguageContext.logic';
 import { useEffect, useState } from "react";
-import type { Language } from "@/i18n/LanguageContext";
-import type { CaseContent, DocumentContent } from "./contentTypes";
 import { publishedCases } from "./cases";
+import type { CaseContent, DocumentContent } from "./contentTypes";
 import { publishedDocuments } from "./documents";
 
 const loadDocuments = async (language: Language): Promise<DocumentContent[]> => {

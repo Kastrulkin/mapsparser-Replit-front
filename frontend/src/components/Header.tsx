@@ -1,12 +1,12 @@
-import { Button } from "./ui/button";
-import { ChevronDown, LogIn, Menu, X } from "lucide-react";
-import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { newAuth } from "../lib/auth_new";
-import { Language, useLanguage } from "../i18n/LanguageContext";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 import logo from "@/assets/images/logo.png"; // Импортируем логотип
 import { contentCopy } from "@/content/contentCopy";
+import { ChevronDown, LogIn, Menu, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Language, useLanguage } from '../i18n/LanguageContext.logic';
+import { newAuth } from "../lib/auth_new";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { Button } from "./ui/button";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

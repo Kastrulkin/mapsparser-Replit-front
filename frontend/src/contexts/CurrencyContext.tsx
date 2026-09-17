@@ -1,22 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-export type Currency = 'RUB' | 'USD' | 'EUR';
-
-interface CurrencyContextType {
-  currency: Currency;
-  setCurrency: (curr: Currency) => void;
-  formatCurrency: (amount: number) => string;
-}
-
-const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
-
-export const useCurrency = () => {
-  const context = useContext(CurrencyContext);
-  if (!context) {
-    throw new Error('useCurrency must be used within a CurrencyProvider');
-  }
-  return context;
-};
+import React, { ReactNode, useEffect, useState } from 'react';
+import { CurrencyContext, type Currency } from './CurrencyContext.logic';
 
 interface CurrencyProviderProps {
   children: ReactNode;
@@ -89,3 +72,5 @@ export const CurrencyProvider: React.FC<CurrencyProviderProps> = ({ children }) 
   );
 };
 
+
+export type { Currency } from './CurrencyContext.logic';

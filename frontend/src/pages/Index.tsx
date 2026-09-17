@@ -1,34 +1,34 @@
-import { useEffect, useState } from "react";
 import {
-  ArrowRight,
-  ArrowUpRight,
-  BarChart3,
-  Building2,
-  CalendarClock,
-  Check,
-  CircleCheck,
-  CircleDollarSign,
-  ClipboardCheck,
-  Clock3,
-  Eye,
-  FileCheck2,
-  Layers3,
-  Loader2,
-  MapPinned,
-  MessageSquareText,
-  Network,
-  ShieldCheck,
-  Sparkles,
-  Users,
+	ArrowRight,
+	ArrowUpRight,
+	BarChart3,
+	Building2,
+	CalendarClock,
+	Check,
+	CircleCheck,
+	CircleDollarSign,
+	ClipboardCheck,
+	Clock3,
+	Eye,
+	FileCheck2,
+	Layers3,
+	Loader2,
+	MapPinned,
+	MessageSquareText,
+	Network,
+	ShieldCheck,
+	Sparkles,
+	Users,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import Footer from "@/components/Footer";
-import SeoMeta from "@/components/SeoMeta";
 import { PublicBrandBackdrop } from "@/components/PublicBrandBackdrop";
+import SeoMeta from "@/components/SeoMeta";
 import { Button } from "@/components/ui/button";
 import { useLocalizedCases } from "@/content/useLocalizedCollections";
-import { Language, useLanguage } from "@/i18n/LanguageContext";
+import { Language, useLanguage } from '@/i18n/LanguageContext.logic';
 import landingTranslations from "@/i18n/homeLandingTranslations.json";
 
 type TaskCard = {

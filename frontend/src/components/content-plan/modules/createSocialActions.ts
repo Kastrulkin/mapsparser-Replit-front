@@ -1,6 +1,6 @@
 import { newAuth } from '@/lib/auth_new';
-import { _socialAttributionFeedback } from './helpers';
-import type { PlanItem, SocialRecommendationPayload, SocialDispatchPreview, SocialDispatchExecutionReport, SocialLaunchPreflight, SocialAttributionEventType } from './types';
+import { _socialAttributionFeedback } from './helpers.logic';
+import type { PlanItem, SocialAttributionEventType, SocialDispatchExecutionReport, SocialDispatchPreview, SocialLaunchPreflight, SocialRecommendationPayload } from './types';
 
 export const createSocialActions = (scope) => {
   const {

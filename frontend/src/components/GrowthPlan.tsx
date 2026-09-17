@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, ArrowRight, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { ArrowRight, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { newAuth } from '../lib/auth_new';
 
 interface GrowthStage {
@@ -34,7 +34,7 @@ export const GrowthPlan: React.FC<GrowthPlanProps> = ({ businessId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(['1']));
-  const [progressData, setProgressData] = useState<Record<string, any>>({});
+  const [progressData, setProgressData] = useState<Record<string, { percentage?: number }>>({});
 
   useEffect(() => {
     loadBusinessTypes();
@@ -46,21 +46,23 @@ export const GrowthPlan: React.FC<GrowthPlanProps> = ({ businessId }) => {
     }
   }, [selectedTypeId]);
 
-  useEffect(() => {
-    if (businessId) {
-      loadProgressData();
-    }
-  }, [businessId]);
 
-  const loadProgressData = async () => {
+
+  const loadProgressData = useLatestCallback(async () => {
     if (!businessId) return;
     try {
       const data = await newAuth.makeRequest(`/business/${businessId}/progress`, { method: 'GET' });
       setProgressData(data.progress || {});
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading progress data:', error);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (businessId) {
+      loadProgressData();
+    }
+  }, [businessId, loadProgressData]);
 
   const getStageProgress = (stageNumber: number): number => {
     const key = `stage_${stageNumber}`;
@@ -93,7 +95,7 @@ export const GrowthPlan: React.FC<GrowthPlanProps> = ({ businessId }) => {
       if (!data.types || data.types.length === 0) {
         setLoading(false);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading business types:', error);
       setError('Не удалось загрузить типы бизнеса');
       setLoading(false);
@@ -109,7 +111,7 @@ export const GrowthPlan: React.FC<GrowthPlanProps> = ({ businessId }) => {
       if (data.stages && data.stages.length > 0) {
         setExpandedStages(new Set([data.stages[0].id]));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading stages:', error);
       setError('Не удалось загрузить этапы');
     } finally {

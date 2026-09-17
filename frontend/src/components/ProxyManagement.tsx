@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { AlertCircle, CheckCircle2, Network, Plus, Power, Trash2, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
-import { Plus, Trash2, Network, CheckCircle2, XCircle, Power, AlertCircle } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 } from './ui/select';
 
 interface Proxy {
@@ -45,11 +46,9 @@ export const ProxyManagement = () => {
     password: '',
   });
 
-  useEffect(() => {
-    loadProxies();
-  }, []);
 
-  const loadProxies = async () => {
+
+  const loadProxies = useLatestCallback(async () => {
     setLoading(true);
     try {
       const token = await newAuth.getToken();
@@ -80,7 +79,11 @@ export const ProxyManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadProxies();
+  }, [loadProxies]);
 
   const handleAddProxy = async () => {
     if (!formData.host || !formData.port) {
@@ -301,7 +304,7 @@ export const ProxyManagement = () => {
           {proxies.map((proxy) => {
             let statusColor: string;
             let StatusIcon: typeof CheckCircle2 | typeof XCircle | typeof Power;
-            
+
             if (!proxy.is_active) {
               statusColor = 'bg-muted text-muted-foreground border-border';
               StatusIcon = Power;
@@ -494,4 +497,3 @@ export const ProxyManagement = () => {
     </div>
   );
 };
-

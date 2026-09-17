@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
+import { guidedTourCopyForLanguage } from '@/components/guided-tour/guidedTourCopy';
 import { Button } from '@/components/ui/button';
 import { API_URL } from '@/config/api';
-import { guidedTourCopyForLanguage } from '@/components/guided-tour/guidedTourCopy';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 
 

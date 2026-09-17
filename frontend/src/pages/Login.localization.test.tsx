@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import Login from './Login';
 
 vi.mock('@/components/Footer', () => ({ default: () => null }));
-vi.mock('@/i18n/LanguageContext', () => ({
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: 'es' }),
 }));
 vi.mock('@/lib/auth_new', () => ({

@@ -1,8 +1,6 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
-import { _itemLocationLabel, _networkQualityReasonLabel, _networkRiskLabel, _sourceKindLabel, _inputDateValue, _formatPlanItemDate } from './helpers';
+import { _formatPlanItemDate, _inputDateValue, _itemLocationLabel, _networkQualityReasonLabel, _networkRiskLabel, _sourceKindLabel } from './helpers.logic';
 
 export const QueueSummary = ({ scope }) => {
   const {

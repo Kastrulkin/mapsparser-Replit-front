@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/components/ui/use-toast";
 import { newAuth } from "@/lib/auth_new";
 import { browserAuthenticationAvailable } from "@/lib/browserSessionFetch";
-import { useToast } from "@/components/ui/use-toast";
+import { errorMessage } from '@/lib/errorMessage';
 import { Loader2, MessageCircleMore, RefreshCcw, Send, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 interface ChannelStatus {
   channel_id: string;
@@ -60,10 +61,10 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
       setChannels(Array.isArray(data.channels) ? data.channels : []);
       setRecommendedRoute(Array.isArray(data.recommended_route) ? data.recommended_route : []);
       setBusinessName(data.business_name || "");
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Ошибка",
-        description: e.message || "Не удалось загрузить статус каналов",
+        description: errorMessage(e) || "Не удалось загрузить статус каналов",
         variant: "destructive",
       });
     } finally {
@@ -115,10 +116,10 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
         title: "Тест отправлен",
         description: "Проверьте указанный канал. Сообщение уже ушло.",
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Тест не отправлен",
-        description: e.message || "Не удалось выполнить тестовую отправку",
+        description: errorMessage(e) || "Не удалось выполнить тестовую отправку",
         variant: "destructive",
       });
     } finally {
@@ -156,10 +157,10 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
         title: "Авто-маршрут сработал",
         description: `Сообщение ушло через ${data.channel_id}.`,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Авто-маршрут не сработал",
-        description: e.message || "Не удалось пройти по цепочке fallback",
+        description: errorMessage(e) || "Не удалось пройти по цепочке fallback",
         variant: "destructive",
       });
     } finally {

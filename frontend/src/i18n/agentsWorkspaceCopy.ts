@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 type AgentsWorkspaceCopy = {
   title: string; description: string; refresh: string; create: string; signalTitle: string; signalDescription: string;

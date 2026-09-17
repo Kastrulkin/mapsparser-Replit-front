@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Clock, FileText, History, RefreshCcw, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '../hooks/use-toast';
+import { newAuth } from '../lib/auth_new';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { newAuth } from '../lib/auth_new';
-import { useToast } from '../hooks/use-toast';
 
 type PatternTab = 'matrix' | 'pending' | 'active' | 'revision' | 'impact';
 
@@ -136,8 +136,12 @@ type ConfirmAction = {
   onConfirm: () => void;
 };
 
+type PatternImpact = { totals?: Record<string, number>; effective?: PatternHealth[]; questionable?: PatternHealth[] };
+type PatternSummary = { proposal_counts?: Record<string, number>; version_counts?: Record<string, number>; impact?: PatternImpact; safety?: PatternSafety };
+type PatternApiResponse = PatternSummary & { events?: PatternAdminEvent[]; proposals?: PatternProposal[]; versions?: PatternVersion[]; health?: PatternHealth[]; rows?: MatrixRow[]; industries?: MatrixOption[]; objectives?: MatrixOption[]; detail?: PatternDetail; preview?: RollbackPreview };
+
 export type IndustryPatternsApiClient = {
-  makeRequest: (endpoint: string, options?: RequestInit) => Promise<any>;
+  makeRequest: (endpoint: string, options?: RequestInit) => Promise<PatternApiResponse>;
 };
 
 export type IndustryPatternsManagementProps = {
@@ -208,7 +212,7 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
   const [patternType, setPatternType] = useState('all');
   const [matrixObjective, setMatrixObjective] = useState('all');
   const [query, setQuery] = useState('');
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<PatternSummary | null>(null);
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
   const [matrixIndustries, setMatrixIndustries] = useState<MatrixOption[]>([]);
   const [matrixObjectives, setMatrixObjectives] = useState<MatrixOption[]>([]);
@@ -792,7 +796,7 @@ const BusinessEffectPanel: React.FC<{
     manualEdits: number | string;
     accepted: number | string;
   };
-  report: any;
+  report: PatternImpact;
 }> = ({ totals, report }) => {
   const effective = report.effective || [];
   const questionable = report.questionable || [];

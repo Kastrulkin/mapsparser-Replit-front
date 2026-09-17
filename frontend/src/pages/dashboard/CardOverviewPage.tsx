@@ -1,81 +1,87 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
-import {
-  ArrowRight,
-  Network,
-  Star,
-  MessageSquare,
-  TrendingUp,
-  Plus,
-  AlertCircle,
-  CheckCircle2,
-  MapPin,
-  LayoutGrid,
-  List,
-  Newspaper,
-  Trophy,
-  RefreshCw,
-  FileSearch,
-  Info,
-  Sparkles,
-  Search,
-  Wand2,
-  ChevronDown,
-  ChevronUp,
-  X
-} from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import { getCapabilityAccessForBusiness } from '@/lib/subscriptionAccess';
-import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
-import { CardServicesTable } from '@/components/dashboard/CardServicesTable';
+import type { Competitor, ManualCompetitor } from '@/components/dashboard/CardOverviewTabs';
 import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/dashboard/CardOverviewTabs';
 import {
-  CardServiceAddForm,
-  CardServiceCatalogCompressionDialog,
-  CardServiceEditDialog,
-  CardServiceOptimizerPanel,
-  CardServicesFilterBar,
-  CardServicesMetaStrip,
+	CardServiceAddForm,
+	CardServiceCatalogCompressionDialog,
+	CardServiceEditDialog,
+	CardServiceOptimizerPanel,
+	CardServicesFilterBar,
+	CardServicesMetaStrip,
 } from '@/components/dashboard/CardServicesControls';
+import type { ServiceTableItem } from '@/components/dashboard/CardServicesTable';
+import { CardServicesTable } from '@/components/dashboard/CardServicesTable';
 import {
-  formatMapSourceTab,
-  formatServiceSource,
-  buildServiceCatalogCompressionSuggestion,
-  buildServicesQualityAudit,
-  getDisplayedServiceUpdatedAt,
-  getKeywordScore,
-  getServiceQuality,
-  isDraftSimilarToCurrent,
-} from '@/components/dashboard/cardServicesLogic';
-import { useCardServiceController } from '@/components/dashboard/useCardServiceController';
-import {
-  DashboardActionPanel,
-  DashboardCompactMetricsRow,
-  DashboardPageHeader,
-  DashboardSection,
+	DashboardActionPanel,
+	DashboardCompactMetricsRow,
+	DashboardPageHeader,
+	DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
 import {
-  createManualCompetitor,
-  extractMapSources,
-  fetchManualCompetitors,
-  loadCardClientInfo,
-  loadCardExternalPosts,
-  loadCardExternalSummary,
-  loadCardParseStatus,
-  loadCardServices,
-  loadNetworkLocationsState,
-  loadOperationsLearningMetrics,
-  normalizeParseRefreshPolicy,
-  refreshCardDataFromSource,
-  removeManualCompetitor,
-  requestManualCompetitorAudit,
+	createManualCompetitor,
+	extractMapSources,
+	fetchManualCompetitors,
+	loadCardClientInfo,
+	loadCardExternalPosts,
+	loadCardExternalSummary,
+	loadCardParseStatus,
+	loadCardServices,
+	loadNetworkLocationsState,
+	loadOperationsLearningMetrics,
+	normalizeParseRefreshPolicy,
+	refreshCardDataFromSource,
+	removeManualCompetitor,
+	requestManualCompetitorAudit,
 } from '@/components/dashboard/cardOverviewApi';
+import {
+	buildServiceCatalogCompressionSuggestion,
+	buildServicesQualityAudit,
+	formatMapSourceTab,
+	formatServiceSource,
+	getDisplayedServiceUpdatedAt,
+	getKeywordScore,
+	getServiceQuality,
+	isDraftSimilarToCurrent,
+} from '@/components/dashboard/cardServicesLogic';
+import { useCardServiceController } from '@/components/dashboard/useCardServiceController';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { errorMessage } from '@/lib/errorMessage';
+import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
+import { getCapabilityAccessForBusiness } from '@/lib/subscriptionAccess';
+import type { DashboardOutletContext } from '@/types/business';
+import type { NewsPost } from '@/types/news';
+import {
+	AlertCircle,
+	CheckCircle2,
+	ChevronDown,
+	ChevronUp,
+	FileSearch,
+	Info,
+	LayoutGrid,
+	List,
+	MessageSquare,
+	Network,
+	Newspaper,
+	Plus,
+	RefreshCw,
+	Search,
+	Sparkles,
+	Star,
+	TrendingUp,
+	Trophy,
+	Wand2,
+	X
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
+
+type OperationsLearningMetric = { accepted_raw_pct?: number; edited_before_accept_pct?: number; accepted_total?: number; prompt_version?: string };
 
 type ServicesSort = 'default' | 'name_asc' | 'name_desc' | 'updated_desc' | 'updated_asc' | 'price_asc' | 'price_desc';
 type CardTabValue = 'services' | 'reviews' | 'news' | 'keywords' | 'competitors';
@@ -106,7 +112,7 @@ export const CardOverviewPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const servicesTableScrollRef = useRef<HTMLDivElement | null>(null);
-  const context = useOutletContext<any>();
+  const context = useOutletContext<DashboardOutletContext>();
   const { user, currentBusinessId, currentBusiness, businesses, onBusinessChange } = context || {};
   const { t, language } = useLanguage();
   const isRu = language === 'ru';
@@ -130,8 +136,8 @@ export const CardOverviewPage = () => {
   const [rating, setRating] = useState<number | null>(null);
   const [reviewsTotal, setReviewsTotal] = useState<number>(0);
   const [lastParseDate, setLastParseDate] = useState<string | null>(null);
-  const [competitors, setCompetitors] = useState<any[]>([]);
-  const [manualCompetitors, setManualCompetitors] = useState<any[]>([]);
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [manualCompetitors, setManualCompetitors] = useState<ManualCompetitor[]>([]);
   const [manualCompetitorUrl, setManualCompetitorUrl] = useState('');
   const [manualCompetitorName, setManualCompetitorName] = useState('');
   const [addingManualCompetitor, setAddingManualCompetitor] = useState(false);
@@ -140,7 +146,7 @@ export const CardOverviewPage = () => {
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // Состояния для услуг
-  const [userServices, setUserServices] = useState<any[]>([]);
+  const [userServices, setUserServices] = useState<ServiceTableItem[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [servicesLastParseDate, setServicesLastParseDate] = useState<string | null>(null);
   const [servicesNoNewFromParse, setServicesNoNewFromParse] = useState(false);
@@ -181,7 +187,7 @@ export const CardOverviewPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
-  const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
+  const [operationsLearning, setOperationsLearning] = useState<Record<string, OperationsLearningMetric>>({});
   const [isOperationsLearningExpanded, setIsOperationsLearningExpanded] = useState(false);
   const previousParseStatusRef = useRef(parseStatus);
 
@@ -210,7 +216,7 @@ export const CardOverviewPage = () => {
       return false;
     }
 
-    const sameNetworkBusinesses = businesses.filter((item: any) => String(item?.network_id || '').trim() === networkId);
+    const sameNetworkBusinesses = businesses.filter((item) => String(item?.network_id || '').trim() === networkId);
     if (sameNetworkBusinesses.length === 0) {
       return false;
     }
@@ -220,7 +226,7 @@ export const CardOverviewPage = () => {
   }, [businesses, currentBusiness, currentBusinessId]);
 
   // Загрузка сводки (рейтинг, количество отзывов)
-  const loadSummary = async () => {
+  const loadSummary = useLatestCallback(async () => {
     if (!currentBusinessId) return;
     setLoadingSummary(true);
     try {
@@ -247,13 +253,13 @@ export const CardOverviewPage = () => {
     } finally {
       setLoadingSummary(false);
     }
-  };
+  });
 
   // Состояния для вкладки новостей
-  const [externalPosts, setExternalPosts] = useState<any[]>([]);
+  const [externalPosts, setExternalPosts] = useState<NewsPost[]>([]);
 
   // Загрузка услуг
-  const loadUserServices = async () => {
+  const loadUserServices = useLatestCallback(async () => {
     if (!currentBusinessId) {
       setUserServices([]);
       return;
@@ -272,7 +278,7 @@ export const CardOverviewPage = () => {
         // Объединяем пользовательские и внешние услуги
         const services = [...(data.services || [])];
         if (data.external_services) {
-          services.push(...data.external_services.map((service: any) => ({
+          services.push(...data.external_services.map((service: ServiceTableItem) => ({
             ...service,
             source: service.source || 'external',
           })));
@@ -284,9 +290,9 @@ export const CardOverviewPage = () => {
     } finally {
       setLoadingServices(false);
     }
-  };
+  });
 
-  const loadExternalPosts = async () => {
+  const loadExternalPosts = useLatestCallback(async () => {
     if (!currentBusinessId) return;
     try {
       const { data } = await loadCardExternalPosts(currentBusinessId, isNetworkRepresentative);
@@ -296,9 +302,9 @@ export const CardOverviewPage = () => {
     } catch (e) {
       console.error('Ошибка загрузки постов:', e);
     }
-  };
+  });
 
-  const loadParseStatus = async () => {
+  const loadParseStatus = useLatestCallback(async () => {
     if (!currentBusinessId) {
       setParseStatus('idle');
       return;
@@ -317,9 +323,9 @@ export const CardOverviewPage = () => {
     } catch (e) {
       console.error('Ошибка загрузки статуса парсинга:', e);
     }
-  };
+  });
 
-  const loadManualCompetitors = async () => {
+  const loadManualCompetitors = useLatestCallback(async () => {
     if (!currentBusinessId) return;
     if (isDemoMode) {
       setManualCompetitors(demoShowcase.manualCompetitors);
@@ -333,7 +339,7 @@ export const CardOverviewPage = () => {
     } catch (e) {
       console.error('Ошибка загрузки ручных конкурентов:', e);
     }
-  };
+  });
 
   const addManualCompetitor = async () => {
     if (!currentBusinessId) return;
@@ -356,8 +362,8 @@ export const CardOverviewPage = () => {
       setManualCompetitorName('');
       setSuccess('Конкурент добавлен');
       await loadManualCompetitors();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось добавить конкурента');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось добавить конкурента');
     } finally {
       setAddingManualCompetitor(false);
     }
@@ -374,8 +380,8 @@ export const CardOverviewPage = () => {
       }
       setSuccess('Запрос на аудит отправлен суперадмину');
       await loadManualCompetitors();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось отправить запрос на аудит');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось отправить запрос на аудит');
     } finally {
       setRequestingAuditId(null);
     }
@@ -393,8 +399,8 @@ export const CardOverviewPage = () => {
       }
       setSuccess('Конкурент удалён');
       await loadManualCompetitors();
-    } catch (e: any) {
-      setError(e.message || 'Не удалось удалить конкурента');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось удалить конкурента');
     } finally {
       setDeletingManualCompetitorId(null);
     }
@@ -405,7 +411,7 @@ export const CardOverviewPage = () => {
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [hasConfiguredMapLink, setHasConfiguredMapLink] = useState(false);
 
-  const loadMapSources = async () => {
+  const loadMapSources = useLatestCallback(async () => {
     if (!currentBusinessId) return;
     try {
       const { data } = await loadCardClientInfo(currentBusinessId);
@@ -413,9 +419,9 @@ export const CardOverviewPage = () => {
       setMapSources(mapState.sources);
       setHasConfiguredMapLink(mapState.hasConfiguredMapLink);
     } catch (e) { console.error('Error loading map sources', e); }
-  };
+  });
 
-  const loadOperationsLearning = async () => {
+  const loadOperationsLearning = useLatestCallback(async () => {
     if (!user?.is_superadmin) {
       setOperationsLearning({});
       return;
@@ -427,7 +433,7 @@ export const CardOverviewPage = () => {
         return;
       }
       const items = Array.isArray(data.items) ? data.items : [];
-      const byCapability: Record<string, any> = {};
+      const byCapability: Record<string, OperationsLearningMetric> = {};
       for (const item of items) {
         const key = String(item?.capability || '').trim();
         if (key) byCapability[key] = item;
@@ -436,20 +442,9 @@ export const CardOverviewPage = () => {
     } catch {
       setOperationsLearning({});
     }
-  };
+  });
 
-  useEffect(() => {
-    if (currentBusinessId) {
-      loadSummary();
-      loadUserServices();
-      loadExternalPosts();
-      loadManualCompetitors();
-      loadMapSources();
-      checkIfNetworkMaster();
-      loadOperationsLearning();
-      loadParseStatus();
-    }
-  }, [currentBusinessId, selectedSource, isNetworkRepresentative, language, isDemoMode]);
+
 
   useEffect(() => {
     if (parseStatus !== 'processing' && parseStatus !== 'queued') {
@@ -461,7 +456,7 @@ export const CardOverviewPage = () => {
     }, 10000);
 
     return () => window.clearInterval(timer);
-  }, [parseStatus, currentBusinessId]);
+  }, [parseStatus, currentBusinessId, loadParseStatus]);
 
   useEffect(() => {
     const previousStatus = previousParseStatusRef.current;
@@ -474,7 +469,7 @@ export const CardOverviewPage = () => {
     loadSummary();
     loadUserServices();
     loadExternalPosts();
-  }, [parseStatus, currentBusinessId]);
+  }, [parseStatus, currentBusinessId, loadSummary, loadUserServices, loadExternalPosts]);
 
   useEffect(() => {
     setServicesCurrentPage(1);
@@ -500,7 +495,7 @@ export const CardOverviewPage = () => {
   }, [userServices, language]);
 
   const filteredServices = useMemo(() => {
-    const sourceMatches = (service: any) => {
+    const sourceMatches = (service: ServiceTableItem) => {
       if (selectedSource === 'all') return true;
       const source = String(service?.source || '').trim().toLowerCase();
       if (selectedSource === '2gis') return source === '2gis';
@@ -551,7 +546,7 @@ export const CardOverviewPage = () => {
       return list;
     }
 
-    const normalizePrice = (value: any): number => {
+    const normalizePrice = (value: unknown): number => {
       const n = Number(value);
       return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
     };
@@ -652,15 +647,15 @@ export const CardOverviewPage = () => {
         ? 'Собираем данные по всем добавленным картам. Это может занять несколько минут. После завершения аудит и показатели обновятся автоматически.'
         : 'Собираем данные по выбранной карте. Это может занять несколько минут. После завершения аудит и показатели обновятся автоматически.');
       loadParseStatus();
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось запустить обновление данных карточки');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось запустить обновление данных карточки');
       setParseStatus('error');
     } finally {
       setRefreshingCardData(false);
     }
   };
 
-  const checkIfNetworkMaster = async () => {
+  const checkIfNetworkMaster = useLatestCallback(async () => {
     if (!currentBusinessId) {
       setIsNetworkMaster(false);
       return;
@@ -681,7 +676,20 @@ export const CardOverviewPage = () => {
       console.error('Ошибка проверки сети:', error);
       setIsNetworkMaster(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (currentBusinessId) {
+      loadSummary();
+      loadUserServices();
+      loadExternalPosts();
+      loadManualCompetitors();
+      loadMapSources();
+      checkIfNetworkMaster();
+      loadOperationsLearning();
+      loadParseStatus();
+    }
+  }, [currentBusinessId, selectedSource, isNetworkRepresentative, language, isDemoMode, loadSummary, loadUserServices, loadExternalPosts, loadManualCompetitors, loadMapSources, checkIfNetworkMaster, loadOperationsLearning, loadParseStatus]);
 
   const serviceControlsCopy = {
     addService: t.dashboard.card.addService,
@@ -692,8 +700,8 @@ export const CardOverviewPage = () => {
     price: t.dashboard.card.price,
     cancel: t.dashboard.card.cancel,
     add: t.dashboard.card.add,
-    save: t.dashboard.card.save || t.dashboard.card.add,
-    edit: t.dashboard.card.edit || 'Редактирование услуги',
+    save: t.common.save,
+    edit: pageCopy.edit,
     optimizeAll: t.dashboard.card.optimizeAll,
     seoTitle: t.dashboard.card.seo.title,
     seoDescription: t.dashboard.card.seo.desc1 + ' ' + t.dashboard.card.seo.desc2,
@@ -704,7 +712,7 @@ export const CardOverviewPage = () => {
       keywords: t.dashboard.card.placeholders.keywords,
       price: t.dashboard.card.placeholders.price,
     },
-    search: t.dashboard.card.search || 'Найти услугу',
+    search: language === 'ru' ? 'Найти услугу' : 'Find a service',
   };
   const serviceLastParseDate = servicesLastParseDate || lastParseDate;
   const serviceController = useCardServiceController({
@@ -1253,7 +1261,7 @@ export const CardOverviewPage = () => {
                   accept: t.dashboard.card.seo.accept,
                   reject: t.dashboard.card.seo.reject,
                   optimize: t.dashboard.card.optimize,
-                  edit: t.dashboard.card.edit || pageCopy.edit,
+                  edit: pageCopy.edit,
                 }}
                 services={pagedServices}
                 filteredCount={filteredServices.length}

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { ArrowRight, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useLanguage } from "@/i18n/LanguageContext";
 
 const CTA = () => {
   const navigate = useNavigate();

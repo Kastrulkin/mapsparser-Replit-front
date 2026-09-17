@@ -1,24 +1,24 @@
+import {
+	Activity,
+	ArrowDownRight,
+	ArrowRight,
+	ArrowUpRight,
+	BarChart3,
+	Check,
+	Clipboard,
+	ExternalLink,
+	Globe2,
+	RefreshCw,
+	Route,
+	ShieldCheck,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useOutletContext } from 'react-router-dom';
-import {
-  Activity,
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
-  BarChart3,
-  Check,
-  Clipboard,
-  ExternalLink,
-  Globe2,
-  RefreshCw,
-  Route,
-  ShieldCheck,
-} from 'lucide-react';
 
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { formatWebAnalyticsCopy, getWebAnalyticsCopy, type WebAnalyticsCopy } from '@/i18n/webAnalyticsCopy';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';

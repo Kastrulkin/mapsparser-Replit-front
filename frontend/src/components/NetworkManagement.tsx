@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
+import { errorMessage } from '@/lib/errorMessage';
+import type { DashboardOutletContext } from '@/types/business';
+import { Building2, Link as LinkIcon, MapPin, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { NetworkXMLImport } from './NetworkXMLImport';
 import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Plus, Trash2, Building2, MapPin, Link as LinkIcon } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { NetworkXMLImport } from './NetworkXMLImport';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
 
 interface Network {
   id: string;
@@ -26,7 +29,7 @@ interface BusinessLocation {
 export const NetworkManagement: React.FC = () => {
   const { t } = useLanguage();
   const { toast } = useToast();
-  const { currentBusinessId, currentBusiness } = useOutletContext<any>();
+  const { currentBusinessId, currentBusiness } = useOutletContext<DashboardOutletContext>();
   const [isNetwork, setIsNetwork] = useState<boolean>(false);
   const [networks, setNetworks] = useState<Network[]>([]);
   const [selectedNetworkId, setSelectedNetworkId] = useState<string>('');
@@ -46,11 +49,9 @@ export const NetworkManagement: React.FC = () => {
     }
   }, [currentBusiness]);
 
-  useEffect(() => {
-    loadNetworks();
-  }, []);
 
-  const loadNetworks = async () => {
+
+  const loadNetworks = useLatestCallback(async () => {
     try {
       const token = browserBearerToken();
       const response = await fetch('/api/networks', {
@@ -66,7 +67,11 @@ export const NetworkManagement: React.FC = () => {
     } catch (error) {
       console.error('Ошибка загрузки сетей:', error);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadNetworks();
+  }, [loadNetworks]);
 
   const handleCreateNetwork = async () => {
     if (!networkName.trim()) {
@@ -155,11 +160,11 @@ export const NetworkManagement: React.FC = () => {
       } else {
         throw new Error(data.error || t.dashboard.network.create.error);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка создания сети:', error);
       toast({
         title: t.common.error,
-        description: error.message || t.dashboard.network.create.error,
+        description: errorMessage(error) || t.dashboard.network.create.error,
         variant: 'destructive'
       });
     } finally {
@@ -237,10 +242,10 @@ export const NetworkManagement: React.FC = () => {
 
       // Перезагружаем страницу для обновления списка бизнесов
       window.location.reload();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: t.common.error,
-        description: error.message || t.dashboard.network.points.error,
+        description: errorMessage(error) || t.dashboard.network.points.error,
         variant: 'destructive'
       });
     } finally {

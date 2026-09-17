@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeDollarSign, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
-import { Link, useOutletContext } from 'react-router-dom';
 import { AccessPreview, type BlockAccess } from '@/components/access/AccessBoundary';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { growthPathsCopyFor } from '@/i18n/growthPathsCopy';
 import { newAuth } from '@/lib/auth_new';
 import { journeyActionRoute, type JourneyAction } from '@/lib/leadJourney';
 import { cn } from '@/lib/utils';
+import { ArrowRight, BadgeDollarSign, Bot, FileText, MapPinned, RefreshCw, Users, WandSparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useOutletContext } from 'react-router-dom';
 
 type GrowthFlow = 'maps' | 'maps_content' | 'content' | 'influencer' | 'partnership' | 'automation' | 'average_ticket';
 
@@ -51,7 +52,7 @@ export const GrowthPathsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = async () => {
+  const load = useLatestCallback(async () => {
     if (!currentBusinessId) return;
     setLoading(true);
     setError('');
@@ -63,9 +64,9 @@ export const GrowthPathsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
-  useEffect(() => { void load(); }, [currentBusinessId]);
+  useEffect(() => { void load(); }, [currentBusinessId, load]);
 
   const paths = useMemo(() => {
     const items = (data?.paths || []).filter((path) => path.flow_type !== 'maps_content');

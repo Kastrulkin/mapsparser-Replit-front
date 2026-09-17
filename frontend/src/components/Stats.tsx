@@ -1,5 +1,5 @@
-import { TrendingUp, Users, Calendar } from "lucide-react";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Calendar, TrendingUp, Users } from "lucide-react";
 
 const Stats = () => {
   const { t } = useLanguage();

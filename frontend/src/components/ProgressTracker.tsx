@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { ScrollArea } from './ui/scroll-area';
-import { CheckCircle2, Lock, ArrowRight, TrendingUp, AlertCircle, RefreshCcw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Lock, RefreshCcw, TrendingUp } from 'lucide-react';
+import React from 'react';
 import { useApiData } from '../hooks/useApiData';
 import { cn } from '../lib/utils';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
 
 // --- Interfaces ---
 
@@ -42,7 +42,7 @@ interface ProgressTrackerProps {
 
 const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate, businessId }) => {
   // 1. Fetch Stages
-  const { data: stagesData, loading: loadingStages, error: errorStages } = useApiData<GrowthStage[]>(
+  const { data: stagesData, loading: loadingStages, error: errorStages } = useApiData<GrowthStage[], { stages?: GrowthStage[] }>(
     businessId ? `/api/business/${businessId}/stages` : null,
     {
       transform: (data) => data.stages || []
@@ -55,7 +55,7 @@ const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate, businessId 
   };
 
   // 2. Fetch Sprint
-  const { data: sprintData, loading: loadingSprint } = useApiData<{ tasks: SprintTask[] }>(
+  const { data: sprintData, loading: loadingSprint } = useApiData<{ tasks: SprintTask[] }, { sprint?: { tasks: SprintTask[] } }>(
     businessId ? `/api/business/${businessId}/sprint` : null,
     {
       transform: (data) => data.sprint || { tasks: [] }

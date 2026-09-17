@@ -1,37 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle,
-  CheckCircle2,
-  Copy,
-  ExternalLink,
-  Pause,
-  Play,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-  XCircle,
+	AlertTriangle,
+	CheckCircle2,
+	Copy,
+	ExternalLink,
+	Pause,
+	Play,
+	RefreshCw,
+	ShieldCheck,
+	Sparkles,
+	XCircle,
 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { OutreachDateTimePicker } from '@/components/prospecting/OutreachDateTimePicker';
+import { OutreachScheduleCalendar } from '@/components/prospecting/OutreachScheduleCalendar';
+import { buildProjectedOutreachTouches, defaultOutreachStartValue, outreachStartIso } from '@/components/prospecting/OutreachScheduleCalendar.logic';
+import {
+	OutreachTouchMessageEditor,
+} from '@/components/prospecting/OutreachTouchMessageEditor';
+import {
+	OutreachTouchMessageDraft,
+	outreachTouchMessageDraft,
+	outreachTouchMessageText,
+} from '@/components/prospecting/outreachTouchMessage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
-import {
-  buildProjectedOutreachTouches,
-  defaultOutreachStartValue,
-  OutreachScheduleCalendar,
-  outreachStartIso,
-} from '@/components/prospecting/OutreachScheduleCalendar';
-import {
-  OutreachTouchMessageEditor,
-} from '@/components/prospecting/OutreachTouchMessageEditor';
-import { OutreachDateTimePicker } from '@/components/prospecting/OutreachDateTimePicker';
-import {
-  OutreachTouchMessageDraft,
-  outreachTouchMessageDraft,
-  outreachTouchMessageText,
-} from '@/components/prospecting/outreachTouchMessage';
 
 type ChannelStatus =
   | 'ready'

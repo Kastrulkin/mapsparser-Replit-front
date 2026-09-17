@@ -1,268 +1,74 @@
-import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
 import {
-  Activity,
-  AlertTriangle,
-  ArrowDownUp,
-  Bot,
-  CheckCircle2,
-  Clock3,
-  Copy,
-  Database,
-  Download,
-  FileCheck2,
-  FileText,
-  LifeBuoy,
-  Loader2,
-  Mail,
-  MessageSquareText,
-  Play,
-  ReceiptText,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Trash2,
-  Upload,
-  Users,
-  Wrench,
-  Workflow,
-  Zap,
+	CheckCircle2,
+	Clock3,
+	Database,
+	FileCheck2,
+	Loader2,
+	MessageSquareText,
+	Play,
+	ShieldCheck,
+	Upload,
+	Workflow,
+	Zap
 } from 'lucide-react';
+import { humanizeLearningTrigger, humanizeVersionAction, humanizeVersionState } from './workspace.logic';
 
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DashboardActionPanel,
-  DashboardEmptyState,
-  DashboardPageHeader,
-  DashboardSection,
+	DashboardEmptyState,
+	DashboardSection
 } from '@/components/dashboard/DashboardPrimitives';
-import { newAuth } from '@/lib/auth_new';
-import { api } from '@/services/api';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type {
-  DashboardContext,
-  AgentBlueprint,
-  AgentVoicePersona,
-  ProductAgentView,
-  AgentApproval,
-  AgentArtifact,
-  AgentRunStep,
-  AgentRunBillingAction,
-  AgentRunObservability,
-  AgentRun,
-  AgentRunInputField,
-  AgentRunInputSchema,
-  AgentServerTodaySummary,
-  AgentMetricsSummary,
-  AgentBillingBreakdownItem,
-  AgentUnifiedBillingLedger,
-  AgentBlueprintDetails,
-  AgentVersionDiff,
-  AgentLearningLoop,
-  AgentLearningEvent,
-  AgentVersionEvent,
-  AgentSource,
-  AgentSourceCatalogItem,
-  AgentIntegration,
-  AgentExternalAuthOption,
-  AgentIntegrationCatalogItem,
-  AgentIntegrationBindingStatus,
-  AgentIntegrationPreflight,
-  AgentProviderAction,
-  AgentProviderRoute,
-  AgentConnectionPlanItem,
-  AgentConnectionPlan,
-  AgentConnectionDecision,
-  AgentActivationGate,
-  AgentActivationPathStep,
-  AgentPostCreateHandoff,
-  AgentReviewSection,
-  AgentJournalEntry,
-  AgentReview,
-  AgentBuilderScenario,
-  PersonaAgent,
-  LegacyMigrationPlan,
-  AgentWorkspaceMode,
-  AgentTodaySummary,
-  AgentAttentionItem,
-  AgentBusinessStatus,
-  EmployeeStatus,
-  AgentExecutionMode,
-  EmployeeNextActionKind,
-  EmployeeWorkspaceState,
-  AgentRegistryFilter,
-  AgentRunAnimation,
-  EmployeeNextAction,
-  EmployeeTestResult,
-  EmployeeResponsibility,
-  AgentScenarioStep,
-  AgentConfidenceFact,
-  FeedbackVersionNotice,
-  AgentBuilderMessage,
-  AgentBuilderQuestion,
-  AgentBuilderConnectorPreview,
-  AgentBuilderFeasibility,
-  AgentBuilderSetupStep,
-  AgentBuilderSetupFlow,
-  AgentBuilderPlannerLoop,
-  AgentCompilerPolicyItem,
-  AgentCompilerWorkflowDraft,
-  AgentCompilerPolicyReview,
-  AgentConnectorIntelligence,
-  AgentConnectionSummary,
-  AgentConnectionReadinessService,
-  AgentConnectionReadiness,
-  AgentConnectionResolverItem,
-  AgentConnectionResolver,
-  AgentServiceIntelligenceItem,
-  AgentServiceIntelligence,
-  AgentBuilderPreview,
-  AgentBuilderSession
-} from './types';
 import {
-  getRequestErrorMessage,
-  objectValue,
-  recordValue,
-  getBlueprintMetadata,
-  getBlueprintBuilderPreview,
-  normalizeSpreadsheetInput,
-  normalizePostCreateHandoff,
-  normalizeAgentIntegrationPreflight,
-  normalizeConnectionPlan,
-  normalizeConnectionPlanItem,
-  normalizeProviderRoute,
-  formatPreflightBlock,
-  connectorLabel,
-  userFacingAgentTechText,
-  agentFlowStatusLabel,
-  autoSelectBuilderConnectionBindings,
-  autoSelectBuilderProviderRoutes,
-  builderRouteIsUsable,
-  builderRequiredProviderRouteKeys,
-  bindingResolutionLabel,
-  bindingUserFacingRole,
-  bindingActionHint,
-  connectionResourceFacts,
-  isReadyConnectionAction,
-  buildAgentConnectionDecision,
-  buildBuilderCreationDecision,
-  builderBlockingQuestions,
-  activationBlockerText,
-  buildActivationGateDecision,
-  buildActivationPathSteps
-} from './normalization';
-import {
-  getVersionNumber,
-  getLatestVersionNumber,
-  getActiveVersionNumber,
-  getActiveVersionId,
-  getLatestVersionId,
-  getRunnableVersionId,
-  agentExecutionMode,
-  agentExecutionModeLabel,
-  agentNextRunLabel,
-  businessResultPrimaryText,
-  estimatedAgentRunCredits,
-  workflowStepsForAnimation,
-  getAgentVoiceName,
-  runStatusFilters,
-  learningTriggerOptions,
-  agentPromptExamples,
-  agentScenarios,
-  statusTone,
-  statusLabels,
-  stepLabels,
-  metaLabels,
-  resultFieldLabels,
-  outreachProgressStages,
-  genericRunStages,
-  humanizeStatus,
-  humanizeStep,
-  humanizeMeta,
-  humanizeCategory,
-  explainApproval,
-  approvalActionLabels,
-  getApprovalPreviewItems,
-  approvalDecisionTitle,
-  getAgentListStatus,
-  formatShortDate,
-  formatLastRun,
-  isWithinLastDay,
-  buildTodaySummary,
-  initialRunParameters,
-  validateRunParameters,
-  buildAgentBusinessStatus,
-  buildEmployeeDescription,
-  buildEmployeeStatus,
-  buildEmployeeWorkspaceState,
-  buildEmployeeLastActivity,
-  buildEmployeeNextAction,
-  getMissingConnectorLabel,
-  buildEmployeePrimaryAction,
-  pushUniqueResponsibility,
-  buildEmployeeResponsibilities,
-  buildEmployeeWorkspaceStory,
-  buildAgentUserMode,
-  buildReasonCard,
-  buildBuildConfidenceFacts
+	getAgentVoiceName,
+	getVersionNumber,
+	humanizeMeta,
+	humanizeStatus,
+	humanizeStep,
+	statusTone
 } from './model';
 import {
-  stringifyBusinessValue,
-  isTechnicalApprovalPayload,
-  toPlainRecord,
-  meaningfulResultKeys,
-  extractBusinessResultPayload,
-  findPreparedResultPayload,
-  hasPreparedMessageText,
-  resultPayloadStatus,
-  isBusinessBlockerPayload,
-  isBusinessBlockerApproval,
-  buildEmployeeTestResult,
-  versionHasGoogleSheetsReadStep,
-  detailsHaveGoogleSheetsReadStep,
-  needsScenarioRebuildForSourceResult,
-  needsGoogleSheetsSourceSetup,
-  needsGoogleAccessReconnect,
-  hasFreshGoogleSheetsAccessAfterResult,
-  buildEmployeeHistoryStory,
-  buildEmployeeAttentionItems,
-  buildAttentionInbox,
-  buildConfidenceFacts,
-  buildScenarioPipeline,
-  buildBusinessHistoryEvents,
-  humanizeSourceType,
-  humanizeSourceState,
-  formatSourceSize
+	bindingActionHint,
+	bindingUserFacingRole,
+	buildAgentConnectionDecision,
+	connectionResourceFacts,
+	connectorLabel,
+	userFacingAgentTechText
+} from './normalization';
+import {
+	formatSourceSize,
+	humanizeSourceState,
+	humanizeSourceType
 } from './results';
-import {
-  parseAgentConfig,
-  uploadAgentSource
-} from './api';
+import type {
+	AgentActivationGate,
+	AgentBlueprint,
+	AgentConnectionDecision,
+	AgentConnectionPlan,
+	AgentExternalAuthOption,
+	AgentIntegration,
+	AgentIntegrationBindingStatus,
+	AgentIntegrationCatalogItem,
+	AgentLearningEvent,
+	AgentProviderRoute,
+	AgentReview,
+	AgentRun,
+	AgentSource,
+	AgentSourceCatalogItem,
+	AgentVersionEvent,
+	PersonaAgent
+} from './types';
 
+import { ProviderActionPill } from './connections';
+import { providerActionDescription } from './connections.logic';
 import {
-  AgentSummaryPill
+	AgentSummaryPill
 } from './employee';
 import {
-  providerActionDescription,
-  ProviderActionPill
-} from './connections';
-import {
-  AgentRunObservabilityPanel,
-  RunColumn,
-  TimelineItem,
-  ArtifactItem
+	AgentRunObservabilityPanel,
+	ArtifactItem,
+	RunColumn,
+	TimelineItem
 } from './runs';
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
@@ -1545,28 +1351,3 @@ export const LearningHistoryPanel = ({
     </div>
   );
 };
-
-export const humanizeLearningTrigger = (trigger?: string) => ({
-  manual_edit: 'Ручная правка',
-  approval_rejected: 'Отклонение',
-  bad_outcome: 'Плохой результат',
-  runtime_error: 'Ошибка',
-  manual_feedback: 'Комментарий',
-  run_review: 'Проверка запуска',
-}[trigger || ''] || trigger || 'Событие обучения');
-
-export const humanizeVersionAction = (action?: string) => ({
-  created: 'Создана версия',
-  setup_updated: 'Обновлена логика',
-  activated: 'Активирована',
-  rollback: 'Откат',
-  feedback_applied: 'Обратная связь применена',
-  legacy_migration_created: 'Создано миграцией',
-}[action || ''] || action || 'Событие версии');
-
-export const humanizeVersionState = (state?: string) => ({
-  candidate: 'кандидатная версия',
-  active: 'активная',
-  rolled_back: 'откачена',
-  archived: 'в архиве',
-}[state || ''] || state || 'кандидатная версия');

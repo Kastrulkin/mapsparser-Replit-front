@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 type TelegramRadarCopy = {
   pageTitle: string; pageDescription: string; connect: string; manualTitle: string; manualDescription: string;

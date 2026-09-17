@@ -1,12 +1,13 @@
-import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { ArrowRight, Check, ExternalLink, FileText, MessageSquare, Paperclip, Pencil, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { newAuth } from '@/lib/auth_new';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy, type PublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';
+import { newAuth } from '@/lib/auth_new';
+import { ArrowRight, Check, ExternalLink, FileText, MessageSquare, Paperclip, Pencil, Send, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useParams } from 'react-router-dom';
 
 type SalesRoomAttachment = {
   id?: string;
@@ -278,7 +279,7 @@ export default function PublicSalesRoomPage() {
     localStorage.setItem(roomAuthorCompanyKey, value);
   };
 
-  const loadRoom = async () => {
+  const loadRoom = useLatestCallback(async () => {
     if (!roomSlug) return;
     try {
       setLoading(true);
@@ -310,33 +311,20 @@ export default function PublicSalesRoomPage() {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     void loadRoom();
-  }, [roomSlug, participantToken, language]);
+  }, [roomSlug, participantToken, language, loadRoom]);
 
   useEffect(() => {
     setParticipantToken(localStorage.getItem(roomParticipantTokenKey(roomSlug)) || '');
     setAuditOfferDismissed(localStorage.getItem(roomAuditOfferDismissedKey(roomSlug)) === '1');
   }, [roomSlug]);
 
-  useEffect(() => {
-    if (!roomSlug) return;
-    const params = new URLSearchParams(window.location.search);
-    const verifyToken = params.get('verify_token') || '';
-    const urlParticipantToken = params.get('participant_token') || '';
-    if (!verifyToken) return;
-    void verifyParticipantFromUrl(verifyToken, urlParticipantToken);
-  }, [roomSlug]);
 
-  useEffect(() => {
-    if (!roomSlug || !participantToken || room?.audit_offer?.status !== 'processing') return;
-    const timer = window.setInterval(() => {
-      void refreshAuditOfferStatus();
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [roomSlug, participantToken, room?.audit_offer?.status]);
+
+
 
   const participantHeaders = () => {
     const headers: Record<string, string> = {};
@@ -346,7 +334,7 @@ export default function PublicSalesRoomPage() {
     return headers;
   };
 
-  const verifyParticipantFromUrl = async (verificationToken: string, tokenFromUrl: string) => {
+  const verifyParticipantFromUrl = useLatestCallback(async (verificationToken: string, tokenFromUrl: string) => {
     if (!roomSlug || !verificationToken) return;
     setParticipantBusy(true);
     setParticipantError(null);
@@ -373,7 +361,16 @@ export default function PublicSalesRoomPage() {
     } finally {
       setParticipantBusy(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (!roomSlug) return;
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('verify_token') || '';
+    const urlParticipantToken = params.get('participant_token') || '';
+    if (!verifyToken) return;
+    void verifyParticipantFromUrl(verifyToken, urlParticipantToken);
+  }, [roomSlug, verifyParticipantFromUrl]);
 
   const registerParticipant = async () => {
     if (!roomSlug || participantBusy) return;
@@ -445,7 +442,7 @@ export default function PublicSalesRoomPage() {
     }
   };
 
-  const refreshAuditOfferStatus = async () => {
+  const refreshAuditOfferStatus = useLatestCallback(async () => {
     if (!roomSlug || !participantToken) return;
     try {
       const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/audit-offer/status`, {
@@ -456,7 +453,15 @@ export default function PublicSalesRoomPage() {
     } catch {
       // Status polling should stay quiet for the recipient.
     }
-  };
+  });
+
+  useEffect(() => {
+    if (!roomSlug || !participantToken || room?.audit_offer?.status !== 'processing') return;
+    const timer = window.setInterval(() => {
+      void refreshAuditOfferStatus();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [roomSlug, participantToken, room?.audit_offer?.status, refreshAuditOfferStatus]);
 
   const dismissAuditOffer = () => {
     setAuditOfferDismissed(true);
@@ -466,10 +471,12 @@ export default function PublicSalesRoomPage() {
     void recordEvent('audit_offer_dismissed', { source: 'public_page' });
   };
 
-  useEffect(() => {
+  // Record one view per room; background room updates are not new views.
+  const recordProposalView = useLatestCallback(() => {
     if (!roomSlug || !room) return;
     void recordEvent('proposal_viewed', { source: 'public_page' });
-  }, [roomSlug, room?.slug]);
+  });
+  useEffect(recordProposalView, [roomSlug, room?.slug, recordProposalView]);
 
   const recordEvent = async (eventType: string, metadata?: Record<string, unknown>) => {
     if (!roomSlug) return;

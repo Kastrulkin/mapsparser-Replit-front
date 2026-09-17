@@ -1,8 +1,9 @@
+import type { Competitor } from '@/components/dashboard/CardOverviewTabs';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { AlertCircle, CheckCircle2, Clock, ExternalLink, Globe, Image as ImageIcon, MapPin, MessageSquare, Newspaper, Package, Phone, Star, Trophy, Users } from 'lucide-react';
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { CheckCircle2, Phone, Globe, Clock, Package, MessageSquare, Star, Users, Image as ImageIcon, Newspaper, AlertCircle, ExternalLink, MapPin, Trophy } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 
 interface YandexBusinessReportProps {
     data: {
@@ -27,11 +28,10 @@ interface YandexBusinessReportProps {
 }
 
 export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data }) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { t } = useLanguage();
 
     // Parse JSON fields
-    const messengers = data.messengers ? JSON.parse(data.messengers) : [];
+    const messengers: Array<{ url?: string; type?: string }> = data.messengers ? JSON.parse(data.messengers) : [];
     const workingHours = data.workingHours ? JSON.parse(data.workingHours) : null;
     const scheduleItems = Array.isArray(workingHours?.schedule) ? workingHours.schedule : [];
 
@@ -208,7 +208,7 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
                                 <span className="font-medium">Мессенджеры</span>
                             </div>
                             <div className="flex flex-wrap gap-2 mt-2">
-                                {messengers.map((m: any, idx: number) => (
+                                {messengers.map((m, idx: number) => (
                                     <a
                                         key={idx}
                                         href={m.url}
@@ -308,7 +308,7 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
             {/* Competitors Analysis */}
             {data.competitors && (
                 (() => {
-                    let competitorsList = [];
+                    let competitorsList: Competitor[] = [];
                     try {
                         competitorsList = JSON.parse(data.competitors);
                     } catch (e) {
@@ -326,7 +326,7 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-4">
-                                        {competitorsList.map((comp: any, idx: number) => (
+                                        {competitorsList.map((comp, idx: number) => (
                                             <div key={idx} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-gray-50 rounded-lg gap-4">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-1">

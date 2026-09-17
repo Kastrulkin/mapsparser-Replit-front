@@ -1,19 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth, type User } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 import { fillGuidedTourTemplate, guidedTourCopyForLanguage } from './guidedTourCopy';
 import {
-  GUIDED_TOUR_KEY,
-  GUIDED_TOUR_VERSION,
-  guidedTourStepsForLanguage,
-  type GuidedTourStep,
+	GUIDED_TOUR_KEY,
+	GUIDED_TOUR_VERSION,
+	guidedTourStepsForLanguage,
+	type GuidedTourStep,
 } from './tourConfig';
 
 

@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, RotateCcw, Save, UploadCloud } from 'lucide-react';
-import { api } from '@/services/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { api } from '@/services/api';
+import { Loader2, RotateCcw, Save, UploadCloud } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type SummaryBlock = {
@@ -320,7 +321,7 @@ const AdminAuditEditorPanel: React.FC<AdminAuditEditorPanelProps> = ({
   const [response, setResponse] = useState<EditorResponse | null>(null);
   const [draft, setDraft] = useState<EditorBlocks | null>(null);
 
-  const loadEditor = async () => {
+  const loadEditor = useLatestCallback(async () => {
     if (!leadId || !enabled) {
       setResponse(null);
       setDraft(null);
@@ -341,11 +342,11 @@ const AdminAuditEditorPanel: React.FC<AdminAuditEditorPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     void loadEditor();
-  }, [leadId, enabled]);
+  }, [leadId, enabled, loadEditor]);
 
   const hasChanges = useMemo(() => {
     if (!response || !draft) return false;

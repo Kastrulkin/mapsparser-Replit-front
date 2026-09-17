@@ -1,18 +1,18 @@
-import { ReactNode, useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { ContactPresenceBadges, StatusSummaryCard } from '@/components/prospecting/LeadWorkflowBlocks';
-import { LeadDetailChipList, LeadDetailMetaList, LeadDetailSection } from '@/components/prospecting/LeadDetailSections';
 import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
+import { LeadDetailChipList, LeadDetailMetaList, LeadDetailSection } from '@/components/prospecting/LeadDetailSections';
+import { ContactPresenceBadges, StatusSummaryCard } from '@/components/prospecting/LeadWorkflowBlocks';
 import { OutreachCampaignBuilder } from '@/components/prospecting/OutreachCampaignBuilder';
 import { OutreachSenderProfileSetup } from '@/components/prospecting/OutreachSenderProfileSetup';
 import { OutreachSuppressionManager } from '@/components/prospecting/OutreachSuppressionManager';
 import {
-  addPartnershipLeadContact,
-  getPartnershipContactIntelligence,
+	addPartnershipLeadContact,
+	getPartnershipContactIntelligence,
 } from '@/components/prospecting/partnershipApi';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { ReactNode, useEffect, useState } from 'react';
 
 type PartnershipLead = {
   id: string;
@@ -93,7 +93,7 @@ type StagePresentation = {
   tone?: 'default' | 'success' | 'warning' | 'info' | 'danger';
 };
 
-type MatchData = {
+export type MatchData = {
   match_score?: number;
   overlap?: string[];
   complement?: {
@@ -111,7 +111,8 @@ type MatchData = {
   };
 };
 
-type AuditData = {
+export type AuditData = {
+  preview_meta?: { logo_url?: string; photo_urls?: string[] };
   services_preview?: unknown[];
 };
 

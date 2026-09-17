@@ -1,21 +1,21 @@
-import { Link, useParams } from "react-router-dom";
-import {
-  Bot,
-  CheckCircle2,
-  ExternalLink,
-  FileText,
-  Languages,
-  LockKeyhole,
-  Plug,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
 import Footer from "@/components/Footer";
 import SeoMeta from "@/components/SeoMeta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useLanguage, type Language } from "@/i18n/LanguageContext";
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
+import {
+	Bot,
+	CheckCircle2,
+	ExternalLink,
+	FileText,
+	Languages,
+	LockKeyhole,
+	Plug,
+	ShieldCheck,
+	Sparkles,
+} from "lucide-react";
+import { Link, useParams } from "react-router-dom";
 
 type DocItem = {
   title: string;

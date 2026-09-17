@@ -6,7 +6,7 @@ import { CompiledScriptBuilder } from './CompiledScriptBuilder';
 import { mapTableColumns, parsePastedTable, reportCsv, tableInputError } from './compiledTable';
 
 vi.mock('@/lib/auth_new', () => ({ newAuth: { makeRequest: vi.fn() } }));
-vi.mock('@/i18n/LanguageContext', () => ({ useLanguage: () => ({ language: 'ru' }) }));
+vi.mock('@/i18n/LanguageContext.logic', () => ({ useLanguage: () => ({ language: 'ru' }) }));
 
 const fixture = 'email\tamount\nanna@example.com\t1500\nanna@example.com\t1500\n\t900';
 type PendingCompile = { success?: boolean; candidate_version?: { id?: string }; artifact?: { source?: string } };

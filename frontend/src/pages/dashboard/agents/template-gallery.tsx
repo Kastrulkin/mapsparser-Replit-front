@@ -1,11 +1,11 @@
 import { Clock3, Database, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import type { Language } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
-import type { Language } from '@/i18n/LanguageContext';
-import type { AgentTemplate } from './types';
 import { connectorLabel } from './normalization';
 import { getAgentTemplateGalleryCopy, getLocalizedAgentTemplateContent } from './template-gallery-copy';
+import type { AgentTemplate } from './types';
 
 type AgentTemplateGalleryProps = {
   templates: AgentTemplate[];

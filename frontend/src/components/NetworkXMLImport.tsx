@@ -1,10 +1,10 @@
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useState } from 'react';
-import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { newAuth } from '@/lib/auth_new';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { errorMessage } from '@/lib/errorMessage';
+import { AlertCircle, CheckCircle2, FileText, Loader2, Upload } from 'lucide-react';
+import { useState } from 'react';
 
 interface NetworkXMLImportProps {
     networkId: string;
@@ -98,11 +98,11 @@ export function NetworkXMLImport({ networkId, onImportComplete }: NetworkXMLImpo
             } else {
                 setResult({ success: false, error: data.error || 'Неизвестная ошибка' });
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Import error:', error);
             setResult({
                 success: false,
-                error: error.message || 'Ошибка при импорте XML'
+                error: errorMessage(error) || 'Ошибка при импорте XML'
             });
         } finally {
             setLoading(false);

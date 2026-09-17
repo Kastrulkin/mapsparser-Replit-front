@@ -1,261 +1,32 @@
-import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
-import {
-  Activity,
-  AlertTriangle,
-  ArrowDownUp,
-  Bot,
-  CheckCircle2,
-  Clock3,
-  Copy,
-  Database,
-  Download,
-  FileCheck2,
-  FileText,
-  LifeBuoy,
-  Loader2,
-  Mail,
-  MessageSquareText,
-  Play,
-  ReceiptText,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Trash2,
-  Upload,
-  Users,
-  Wrench,
-  Workflow,
-  Zap,
-} from 'lucide-react';
+import { agentPolicyFacts, connectionActionTone, providerActionLabel, providerRouteTone } from './connections.logic';
 
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DashboardActionPanel,
-  DashboardEmptyState,
-  DashboardPageHeader,
-  DashboardSection,
-} from '@/components/dashboard/DashboardPrimitives';
-import { newAuth } from '@/lib/auth_new';
-import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
-import type {
-  DashboardContext,
-  AgentBlueprint,
-  AgentVoicePersona,
-  ProductAgentView,
-  AgentApproval,
-  AgentArtifact,
-  AgentRunStep,
-  AgentRunBillingAction,
-  AgentRunObservability,
-  AgentRun,
-  AgentRunInputField,
-  AgentRunInputSchema,
-  AgentServerTodaySummary,
-  AgentMetricsSummary,
-  AgentBillingBreakdownItem,
-  AgentUnifiedBillingLedger,
-  AgentBlueprintDetails,
-  AgentVersionDiff,
-  AgentLearningLoop,
-  AgentLearningEvent,
-  AgentVersionEvent,
-  AgentSource,
-  AgentSourceCatalogItem,
-  AgentIntegration,
-  AgentExternalAuthOption,
-  AgentIntegrationCatalogItem,
-  AgentIntegrationBindingStatus,
-  AgentIntegrationPreflight,
-  AgentProviderAction,
-  AgentProviderRoute,
-  AgentConnectionPlanItem,
-  AgentConnectionPlan,
-  AgentConnectionDecision,
-  AgentActivationGate,
-  AgentActivationPathStep,
-  AgentPostCreateHandoff,
-  AgentReviewSection,
-  AgentJournalEntry,
-  AgentReview,
-  AgentBuilderScenario,
-  PersonaAgent,
-  LegacyMigrationPlan,
-  AgentWorkspaceMode,
-  AgentTodaySummary,
-  AgentAttentionItem,
-  AgentBusinessStatus,
-  EmployeeStatus,
-  AgentExecutionMode,
-  EmployeeNextActionKind,
-  EmployeeWorkspaceState,
-  AgentRegistryFilter,
-  AgentRunAnimation,
-  EmployeeNextAction,
-  EmployeeTestResult,
-  EmployeeResponsibility,
-  AgentScenarioStep,
-  AgentConfidenceFact,
-  FeedbackVersionNotice,
-  AgentBuilderMessage,
-  AgentBuilderQuestion,
-  AgentBuilderConnectorPreview,
-  AgentBuilderFeasibility,
-  AgentBuilderSetupStep,
-  AgentBuilderSetupFlow,
-  AgentBuilderPlannerLoop,
-  AgentCompilerPolicyItem,
-  AgentCompilerWorkflowDraft,
-  AgentCompilerPolicyReview,
-  AgentConnectorIntelligence,
-  AgentConnectionSummary,
-  AgentConnectionReadinessService,
-  AgentConnectionReadiness,
-  AgentConnectionResolverItem,
-  AgentConnectionResolver,
-  AgentServiceIntelligenceItem,
-  AgentServiceIntelligence,
-  AgentBuilderPreview,
-  AgentBuilderSession
-} from './types';
 import {
-  getRequestErrorMessage,
-  objectValue,
-  recordValue,
-  getBlueprintMetadata,
-  getBlueprintBuilderPreview,
-  normalizeSpreadsheetInput,
-  normalizePostCreateHandoff,
-  normalizeAgentIntegrationPreflight,
-  normalizeConnectionPlan,
-  normalizeConnectionPlanItem,
-  normalizeProviderRoute,
-  formatPreflightBlock,
-  connectorLabel,
-  userFacingAgentTechText,
-  agentFlowStatusLabel,
-  autoSelectBuilderConnectionBindings,
-  autoSelectBuilderProviderRoutes,
-  builderRouteIsUsable,
-  builderRequiredProviderRouteKeys,
-  bindingResolutionLabel,
-  bindingUserFacingRole,
-  bindingActionHint,
-  connectionResourceFacts,
-  isReadyConnectionAction,
-  buildAgentConnectionDecision,
-  buildBuilderCreationDecision,
-  builderBlockingQuestions,
-  activationBlockerText,
-  buildActivationGateDecision,
-  buildActivationPathSteps
-} from './normalization';
-import {
-  getVersionNumber,
-  getLatestVersionNumber,
-  getActiveVersionNumber,
-  getActiveVersionId,
-  getLatestVersionId,
-  getRunnableVersionId,
-  agentExecutionMode,
-  agentExecutionModeLabel,
-  agentNextRunLabel,
-  businessResultPrimaryText,
-  estimatedAgentRunCredits,
-  workflowStepsForAnimation,
-  getAgentVoiceName,
-  runStatusFilters,
-  learningTriggerOptions,
-  agentPromptExamples,
-  agentScenarios,
-  statusTone,
-  statusLabels,
-  stepLabels,
-  metaLabels,
-  resultFieldLabels,
-  outreachProgressStages,
-  genericRunStages,
-  humanizeStatus,
-  humanizeStep,
-  humanizeMeta,
-  humanizeCategory,
-  explainApproval,
-  approvalActionLabels,
-  getApprovalPreviewItems,
-  approvalDecisionTitle,
-  getAgentListStatus,
-  formatShortDate,
-  formatLastRun,
-  isWithinLastDay,
-  buildTodaySummary,
-  initialRunParameters,
-  validateRunParameters,
-  buildAgentBusinessStatus,
-  buildEmployeeDescription,
-  buildEmployeeStatus,
-  buildEmployeeWorkspaceState,
-  buildEmployeeLastActivity,
-  buildEmployeeNextAction,
-  getMissingConnectorLabel,
-  buildEmployeePrimaryAction,
-  pushUniqueResponsibility,
-  buildEmployeeResponsibilities,
-  buildEmployeeWorkspaceStory,
-  buildAgentUserMode,
-  buildReasonCard,
-  buildBuildConfidenceFacts
+	humanizeMeta,
+	humanizeStatus,
+	statusTone
 } from './model';
 import {
-  stringifyBusinessValue,
-  isTechnicalApprovalPayload,
-  toPlainRecord,
-  meaningfulResultKeys,
-  extractBusinessResultPayload,
-  findPreparedResultPayload,
-  hasPreparedMessageText,
-  resultPayloadStatus,
-  isBusinessBlockerPayload,
-  isBusinessBlockerApproval,
-  buildEmployeeTestResult,
-  versionHasGoogleSheetsReadStep,
-  detailsHaveGoogleSheetsReadStep,
-  needsScenarioRebuildForSourceResult,
-  needsGoogleSheetsSourceSetup,
-  needsGoogleAccessReconnect,
-  hasFreshGoogleSheetsAccessAfterResult,
-  buildEmployeeHistoryStory,
-  buildEmployeeAttentionItems,
-  buildAttentionInbox,
-  buildConfidenceFacts,
-  buildScenarioPipeline,
-  buildBusinessHistoryEvents,
-  humanizeSourceType,
-  humanizeSourceState,
-  formatSourceSize
-} from './results';
-import {
-  parseAgentConfig,
-  uploadAgentSource
-} from './api';
+	bindingActionHint,
+	connectorLabel,
+	userFacingAgentTechText
+} from './normalization';
+import type {
+	AgentConnectionPlan,
+	AgentExternalAuthOption,
+	AgentIntegration,
+	AgentIntegrationBindingStatus,
+	AgentIntegrationCatalogItem,
+	AgentPostCreateHandoff,
+	AgentProviderRoute
+} from './types';
 
 import {
-  RecommendedProviderRouteNote
+	RecommendedProviderRouteNote
 } from './builder_setup';
 import {
-  AgentIntegrationsPanel
+	AgentIntegrationsPanel
 } from './workspace';
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
@@ -635,83 +406,6 @@ export const AgentConnectionPlanPanel = ({
       ) : null}
     </div>
   );
-};
-
-export const connectionActionTone = (action: string) => {
-  if (action === 'ready' || action === 'native_ready') {
-    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-  }
-  if (action === 'choose_existing' || action === 'choose_route') {
-    return 'bg-sky-50 text-sky-700 ring-sky-200';
-  }
-  if (action === 'planned_provider') {
-    return 'bg-slate-50 text-slate-600 ring-slate-200';
-  }
-  return 'bg-amber-50 text-amber-700 ring-amber-200';
-};
-
-export const agentPolicyFacts = (item: AgentConnectionPlanItem) => {
-  const rawFacts = [
-    item.autonomy_level,
-    item.execution_boundary,
-    item.credential_state,
-    item.approval_state,
-    item.next_action_label,
-  ];
-  const facts: string[] = [];
-  rawFacts.forEach((fact) => {
-    const normalized = String(fact || '').trim();
-    if (normalized && !facts.includes(normalized)) {
-      facts.push(normalized);
-    }
-  });
-  return facts.slice(0, 5);
-};
-
-export const providerRouteLabel = (state: string) => ({
-  connected: 'подключено',
-  available: 'доступно',
-  manual: 'ручной режим',
-  planned: 'позже',
-  unavailable: 'недоступно',
-}[state] || humanizeMeta(state || 'unknown'));
-
-export const providerRouteTone = (state: string) => {
-  if (state === 'connected' || state === 'available') {
-    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-  }
-  if (state === 'manual') {
-    return 'bg-sky-50 text-sky-700 ring-sky-200';
-  }
-  if (state === 'planned') {
-    return 'bg-slate-50 text-slate-600 ring-slate-200';
-  }
-  return 'bg-rose-50 text-rose-700 ring-rose-200';
-};
-
-export const providerActionLabel = (route?: AgentProviderRoute | null) => {
-  const action = route?.provider_action;
-  if (action?.label) {
-    return userFacingAgentTechText(action.label);
-  }
-  return userFacingAgentTechText(route?.primary_cta || providerRouteLabel(route?.state || route?.status || ''));
-};
-
-export const providerActionDescription = (route?: AgentProviderRoute | null) => {
-  const action = route?.provider_action;
-  if (action?.description) {
-    return userFacingAgentTechText(action.description);
-  }
-  if (route?.connect_mode === 'openclaw_policy_boundary') {
-    return 'Этот способ работает внутри правил безопасности, ручных подтверждений, журнала и лимитов LocalOS.';
-  }
-  if (route?.connect_mode === 'external_account_key') {
-    return 'Выберите сохранённый ключ доступа или добавьте его в интеграциях бизнеса.';
-  }
-  if (route?.connect_mode === 'planned_oauth_connector') {
-    return 'Подключение через OAuth запланировано, но пока не позволяет включить агента.';
-  }
-  return '';
 };
 
 export const ProviderActionPill = ({

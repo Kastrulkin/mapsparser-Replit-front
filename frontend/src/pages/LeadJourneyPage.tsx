@@ -1,26 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, BadgeDollarSign, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
-import SeoMeta from '@/components/SeoMeta';
 import { PublicBrandBackdrop } from '@/components/PublicBrandBackdrop';
+import SeoMeta from '@/components/SeoMeta';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { localizePublicLeadJourneyDirections, publicLeadJourneyCopyFor, type PublicLeadJourneyCopy } from '@/i18n/publicLeadJourneyCopy';
 import {
-  isLeadJourneyKey,
-  leadJourneyKeyForFlow,
-  leadJourneyDirections,
-  loadPublicLeadJourney,
-  preparePublicOpportunity,
-  saveLeadJourneyIntent,
-  saveLeadJourneyToken,
-  trackPublicJourneyEvent,
-  type JourneyOpportunity,
-  type LeadJourneyDirection,
-  type LeadJourneyKey,
-  type PublicLeadJourney,
+	isLeadJourneyKey,
+	leadJourneyDirections,
+	leadJourneyKeyForFlow,
+	loadPublicLeadJourney,
+	preparePublicOpportunity,
+	saveLeadJourneyIntent,
+	saveLeadJourneyToken,
+	trackPublicJourneyEvent,
+	type JourneyOpportunity,
+	type LeadJourneyDirection,
+	type LeadJourneyKey,
+	type PublicLeadJourney,
 } from '@/lib/leadJourney';
 
 const directionIcon = (key: LeadJourneyKey) => key === 'influencers' ? Megaphone : key === 'partnerships' ? Handshake : key === 'content' ? FilePenLine : key === 'automation' ? Bot : key === 'average_ticket' ? BadgeDollarSign : MapPinned;
@@ -77,7 +77,7 @@ export default function LeadJourneyPage() {
       })
       .catch((error: Error) => setJourneyError(error.message))
       .finally(() => setJourneyLoading(false));
-  }, [token]);
+  }, [setSearchParams, token]);
 
   const openDirection = (key: LeadJourneyKey) => {
     setSelectedKey(key);

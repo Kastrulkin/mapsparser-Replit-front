@@ -1,9 +1,9 @@
-import { GoogleDriveReaderSettings } from './GoogleDriveReaderSettings';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { voiceHeaders } from '@/components/operator/OperatorVoice.logic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { voiceHeaders } from '@/components/operator/OperatorVoice';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { GoogleDriveReaderSettings } from './GoogleDriveReaderSettings';
 
 type App = { provider: string; name: string; client_id: string; secret_saved: boolean; version: number; redirect_uri: string };
 type Settings = { items: App[]; encryption_ready: boolean };

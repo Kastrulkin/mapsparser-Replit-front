@@ -1,36 +1,36 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { Cable, ClipboardCheck, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
-import { Cable, ClipboardCheck, Settings } from 'lucide-react';
 
-import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
-import TelegramConnection from '@/components/TelegramConnection';
+import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
+import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
-import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
-import { Button } from '@/components/ui/button';
+import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 
 import IntegrationsPageV3 from './IntegrationsPageV3';
 import {
-  NextStepBanner,
-  ReadinessSummary,
-  SecondaryLinks,
-  SettingsDetailSheet,
-  SettingsModuleCard,
+	NextStepBanner,
+	ReadinessSummary,
+	SecondaryLinks,
+	SettingsDetailSheet,
+	SettingsModuleCard,
 } from './SettingsHubComponents';
-import { getSettingsHubCopy, SettingsHubCopy } from './settingsHubCopy';
+import { SettingsHubCopy, getSettingsHubCopy } from './settingsHubCopy';
 import {
-  SettingsHubBusiness,
-  SettingsHubCrmProvider,
-  SettingsHubExternalAccount,
-  SettingsHubRawState,
-  SettingsHubSocialReadiness,
-  mapSettingsState,
+	SettingsHubBusiness,
+	SettingsHubCrmProvider,
+	SettingsHubExternalAccount,
+	SettingsHubRawState,
+	SettingsHubSocialReadiness,
+	mapSettingsState,
 } from './settingsHubState';
 
 type SettingsHubOutletContext = {

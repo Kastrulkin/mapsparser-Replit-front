@@ -1,10 +1,11 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { getApiEndpoint } from '../config/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { getApiEndpoint } from '../config/api';
-import { useLanguage } from '@/i18n/LanguageContext';
 
 interface ROIData {
   investment_amount: number;
@@ -32,7 +33,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
   });
   const [saving, setSaving] = useState(false);
 
-  const loadROIData = async () => {
+  const loadROIData = useLatestCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -62,11 +63,11 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     loadROIData();
-  }, []);
+  }, [loadROIData]);
 
   const handleSave = async () => {
     setSaving(true);

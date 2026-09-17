@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { newAuth } from '@/lib/auth_new';
 
-import { AdminLeadRegistry, outreachDefaultsForWorkstream, workstreamLabel } from './AdminLeadRegistry';
+import { AdminLeadRegistry } from './AdminLeadRegistry';
+import { outreachDefaultsForWorkstream, workstreamLabel } from './AdminLeadRegistry.logic';
 
 const staleCampaign = {
   id: 'campaign-estem-stale',

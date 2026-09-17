@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, Lock, Unlock, ChevronDown, ChevronRight, HelpCircle, Clock, Trophy, Zap, Target } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { AnimatePresence, motion } from 'framer-motion';
+import { CheckCircle2, ChevronDown, ChevronRight, Circle, Clock, HelpCircle, Lock, Target, Trophy, Zap } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 interface GrowthTask {
     id?: string;
@@ -52,13 +53,9 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
     const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
     const [unlockingStage, setUnlockingStage] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (businessId) {
-            loadStageProgress();
-        }
-    }, [businessId]);
 
-    const loadStageProgress = async () => {
+
+    const loadStageProgress = useLatestCallback(async () => {
         if (!businessId) return;
         try {
             setLoading(true);
@@ -77,10 +74,16 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
         } finally {
             setLoading(false);
         }
-    };
+    });
+
+    useEffect(() => {
+        if (businessId) {
+            loadStageProgress();
+        }
+    }, [businessId, loadStageProgress]);
 
     const translateStage = (stage: GrowthStage): GrowthStage => {
-        const stageTranslations = (t as any).growthStages?.[stage.stage_number];
+        const stageTranslations = t.growthStages?.[stage.stage_number];
 
         if (!stageTranslations) {
             // Fallback to database values if translation doesn't exist

@@ -16,6 +16,9 @@ vi.mock('@/lib/auth_new', () => ({
 
 vi.mock('@/i18n/LanguageContext', () => ({
   LanguageProvider: ({ children }: { children: ReactNode }) => children,
+}));
+
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: 'ru', setLanguage: vi.fn(), t: {} }),
 }));
 

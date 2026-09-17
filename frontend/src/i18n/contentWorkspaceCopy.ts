@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 export type ContentWorkspaceCopy = {
   eyebrow: string; title: string; fallbackSubtitle: string; createPlan: string; calendar: string; media: string; audience: string;

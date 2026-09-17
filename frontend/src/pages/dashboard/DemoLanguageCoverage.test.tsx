@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Language } from '@/i18n/LanguageContext';
-import { GUIDED_TOUR_STEP_LAYOUTS } from '@/components/guided-tour/tourConfig';
-import { guidedTourStepsForLanguage } from '@/components/guided-tour/tourConfig';
-import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
-import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
-import { getDashboardShellCopy } from '@/i18n/dashboardShellCopy';
+import { GUIDED_TOUR_STEP_LAYOUTS, guidedTourStepsForLanguage } from '@/components/guided-tour/tourConfig';
+import type { Language } from '@/i18n/LanguageContext.logic';
+import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
 import { getContentCalendarCopy, getDemoContentCalendarThemes } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
-import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
+import { getDashboardNavigationCopy } from '@/i18n/dashboardNavigationCopy';
+import { getDashboardShellCopy } from '@/i18n/dashboardShellCopy';
+import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 import { getNewsWorkspaceCopy } from '@/i18n/newsWorkspaceCopy';
 import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';

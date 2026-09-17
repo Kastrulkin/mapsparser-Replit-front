@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { voiceHeaders } from './OperatorVoice';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { Paperclip } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { voiceHeaders } from './OperatorVoice.logic';
 
 type Config = { enabled: boolean; can_configure: boolean; recipient_user_id?: string; version: number; recipients: { id: string; name: string }[] };
 type Disk = { configured: boolean; connection: { status: string }; photos: { status: string; count: number }[] };
@@ -37,12 +38,14 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
     catch { signal.throwIfAborted(); setGoogleDrive(null); }
     setDisk(await request(`disk/status?business_id=${encodeURIComponent(businessId)}`));
   }
-  useEffect(() => {
+  // Refresh on scope/channel changes; form edits must not reload and replace the draft.
+  const refreshScope = useLatestCallback(() => {
     const controller = new AbortController(); lifetime.current = controller;
     setConfig(null); setDisk(null); setGoogleDrive(null); setError(''); setNotice(''); setBusy(false);
     void refresh().catch(() => { if (!controller.signal.aborted) setConfig(null); });
     return () => controller.abort();
-  }, [businessId, channel]);
+  });
+  useEffect(refreshScope, [businessId, channel, refreshScope]);
   async function perform(action: () => Promise<void>) {
     const signal = lifetime.current.signal;
     setBusy(true); setError('');

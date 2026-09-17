@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { confirmMobileAction, loadMobileJob, mobileJsonHeaders, readMobileJson, type MobileJob } from '@/lib/mobileDataClient';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, CircleAlert, Clock3, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
 import ActionPreviewSheet, { type MobileActionPreview } from './ActionPreviewSheet';
 import JobProgressSheet from './JobProgressSheet';
-import type { MobileScope } from './ScopeProvider';
-import { confirmMobileAction, loadMobileJob, mobileJsonHeaders, readMobileJson, type MobileJob } from '@/lib/mobileDataClient';
+import type { MobileScope } from './ScopeProvider.logic';
+import { useMobileJobPolling } from './useMobileJobPolling';
 
 type DiagnosticItem = {
   id?: string;
@@ -76,16 +77,7 @@ export default function DiagnosticsMobileModule({ items, scope, reload }: { item
     }
   };
 
-  useEffect(() => {
-    if (!job?.id || job.terminal) return;
-    const timer = window.setInterval(() => {
-      void loadMobileJob(job.id || '', scope).then((result) => {
-        setJob(result.job || null);
-        if (result.job?.terminal) void reload();
-      }).catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [job?.id, job?.terminal, scope?.kind, scope?.id, reload]);
+  useMobileJobPolling({ job, scope, onJob: setJob, onComplete: () => void reload() });
 
   if (!items.length) {
     return <section className="rounded-[24px] bg-emerald-500/[0.045] p-5 ring-1 ring-inset ring-emerald-400/10"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-emerald-400/10 text-emerald-300"><CheckCircle2 className="h-5 w-5" /></span><div><h2 className="text-balance text-base font-semibold">Критичных ошибок нет</h2><p className="mt-1 text-pretty text-sm leading-6 text-zinc-500">Очередь показывает только реальные сбои парсеров и интеграций, которые требуют вмешательства.</p></div></div></section>;

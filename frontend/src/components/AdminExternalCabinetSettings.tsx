@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { newAuth } from '@/lib/auth_new';
+import { errorMessage } from '@/lib/errorMessage';
 import { Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { AdminBusinessCardAutomation } from './AdminBusinessCardAutomation';
 
 interface ExternalAccount {
@@ -53,13 +55,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     auth_data: typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '',
   });
 
-  useEffect(() => {
-    if (businessId) {
-      loadAccounts();
-    } else {
-      setLoading(false);
-    }
-  }, [businessId]);
+
 
   const handleRunParser = async (
     source: 'yandex' | '2gis' = 'yandex',
@@ -93,11 +89,11 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       });
       // Перезагружаем данные аккаунта
       loadAccounts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка парсинга:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось запустить парсер',
+        description: errorMessage(error) || 'Не удалось запустить парсер',
         variant: 'destructive',
       });
     } finally {
@@ -119,11 +115,11 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         description: data.message || 'Apify-парсинг запущен',
       });
       await loadAccounts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка Apify-парсинга:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось запустить Apify-парсинг',
+        description: errorMessage(error) || 'Не удалось запустить Apify-парсинг',
         variant: 'destructive',
       });
     } finally {
@@ -131,7 +127,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     }
   };
 
-  const loadAccounts = async () => {
+  const loadAccounts = useLatestCallback(async () => {
     if (!businessId) {
       setLoading(false);
       return;
@@ -201,17 +197,25 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       } catch {
         setNetworkLocationsCount(0);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка загрузки аккаунтов:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить данные аккаунтов',
+        description: errorMessage(error) || 'Не удалось загрузить данные аккаунтов',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (businessId) {
+      loadAccounts();
+    } else {
+      setLoading(false);
+    }
+  }, [businessId, loadAccounts]);
 
   const testCookies = async (source: 'yandex_business' | '2gis', formData: typeof yandexForm) => {
     if (!formData.auth_data || !formData.auth_data.trim()) {
@@ -261,10 +265,10 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           variant: 'destructive',
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось протестировать cookies',
+        description: errorMessage(error) || 'Не удалось протестировать cookies',
         variant: 'destructive',
       });
     } finally {
@@ -326,10 +330,10 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось сохранить аккаунт',
+        description: errorMessage(error) || 'Не удалось сохранить аккаунт',
         variant: 'destructive',
       });
     } finally {

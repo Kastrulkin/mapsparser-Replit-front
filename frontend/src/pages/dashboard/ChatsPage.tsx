@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { newAuth } from '@/lib/auth_new';
-import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
-import { useToast } from '@/hooks/use-toast';
+import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X, FlaskConical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useToast } from '@/hooks/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { chatDateLocale, getChatsWorkspaceCopy } from '@/i18n/chatsWorkspaceCopy';
-import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
+import { newAuth } from '@/lib/auth_new';
+import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
+import { errorMessage } from '@/lib/errorMessage';
+import { Bot, FlaskConical, Pause, Play, Send, User as UserIcon } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 
 interface Conversation {
   id: string;
@@ -42,8 +44,8 @@ interface SandboxMessage {
   meta?: {
     runtime?: string;
     state?: string;
-    decisionTrace?: any;
-    toolCalls?: any[];
+    decisionTrace?: unknown;
+    toolCalls?: unknown[];
     bridgeError?: string | null;
   };
 }
@@ -62,42 +64,23 @@ export const ChatsPage: React.FC = () => {
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>('dialogs');
+  const isSandbox = workspaceMode === 'agent';
   const { toast } = useToast();
   const { language, t } = useLanguage();
   const copy = getChatsWorkspaceCopy(language);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (currentBusinessId) {
-      loadAgents();
-    }
-  }, [currentBusinessId]);
 
-  useEffect(() => {
-    if (selectedAgentId && currentBusinessId) {
-      loadConversations();
-      // Очищаем песочницу при смене агента
-      if (isSandbox) {
-        setSandboxMessages([]);
-      }
-    }
-  }, [selectedAgentId, currentBusinessId]);
 
-  useEffect(() => {
-    // Не загружаем сообщения для песочницы
-    if (selectedConversationId && selectedConversationId !== 'sandbox') {
-      loadMessages();
-      // Автообновление сообщений каждые 3 секунды
-      const interval = setInterval(loadMessages, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedConversationId]);
+
+
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const loadAgents = async () => {
+  const loadAgents = useLatestCallback(async () => {
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token)) return;
@@ -123,9 +106,15 @@ export const ChatsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
-  const loadConversations = async () => {
+  useEffect(() => {
+    if (currentBusinessId) {
+      loadAgents();
+    }
+  }, [currentBusinessId, loadAgents]);
+
+  const loadConversations = useLatestCallback(async () => {
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token) || !selectedAgentId) return;
@@ -149,9 +138,19 @@ export const ChatsPage: React.FC = () => {
     } catch (error) {
       console.error('Ошибка загрузки чатов:', error);
     }
-  };
+  });
 
-  const loadMessages = async () => {
+  useEffect(() => {
+    if (selectedAgentId && currentBusinessId) {
+      loadConversations();
+      // Очищаем песочницу при смене агента
+      if (isSandbox) {
+        setSandboxMessages([]);
+      }
+    }
+  }, [selectedAgentId, currentBusinessId, loadConversations, isSandbox]);
+
+  const loadMessages = useLatestCallback(async () => {
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token) || !selectedConversationId) return;
@@ -175,7 +174,17 @@ export const ChatsPage: React.FC = () => {
     } catch (error) {
       console.error('Ошибка загрузки сообщений:', error);
     }
-  };
+  });
+
+  useEffect(() => {
+    // Не загружаем сообщения для песочницы
+    if (selectedConversationId && selectedConversationId !== 'sandbox') {
+      loadMessages();
+      // Автообновление сообщений каждые 3 секунды
+      const interval = setInterval(loadMessages, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [loadMessages, selectedConversationId]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversationId || sending) return;
@@ -204,16 +213,16 @@ export const ChatsPage: React.FC = () => {
         setNewMessage('');
         await loadMessages();
         toast({
-          title: t.success,
+          title: t.common.success,
           description: t.dashboard.chats.messages.sent,
         });
       } else {
         throw new Error('Ошибка отправки сообщения');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: t.error,
-        description: error.message || t.dashboard.chats.messages.error,
+        title: t.common.error,
+        description: errorMessage(error) || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
     } finally {
@@ -244,13 +253,13 @@ export const ChatsPage: React.FC = () => {
           await loadMessages();
         }
         toast({
-          title: t.success,
+          title: t.common.success,
           description: pause ? t.dashboard.chats.messages.agentPaused : t.dashboard.chats.messages.agentResumed,
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.chats.messages.statusError,
         variant: 'destructive',
       });
@@ -259,7 +268,6 @@ export const ChatsPage: React.FC = () => {
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
-  const isSandbox = workspaceMode === 'agent';
 
   const handleSandboxSend = async () => {
     if (!sandboxInput.trim() || !selectedAgentId || sandboxLoading) return;
@@ -322,10 +330,10 @@ export const ChatsPage: React.FC = () => {
         const errorData = await response.json();
         throw new Error(errorData.error || t.dashboard.chats.messages.error);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: t.error,
-        description: error.message || t.dashboard.chats.messages.error,
+        title: t.common.error,
+        description: errorMessage(error) || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
       // Удаляем последнее сообщение пользователя при ошибке

@@ -1,6 +1,6 @@
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
 import React, { useEffect, useState } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
@@ -81,7 +81,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
     try {
       setLoading(true);
       const token = browserBearerToken();
-      const body: any = {
+      const body: { transaction_date: string | null; amount: number; services: string[]; notes: string; master_id?: string | null } = {
         transaction_date: form.transaction_date || null,
         amount: parseFloat(form.amount || '0') || 0,
         services: form.services
@@ -262,4 +262,3 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
 };
 
 export default TransactionTable;
-

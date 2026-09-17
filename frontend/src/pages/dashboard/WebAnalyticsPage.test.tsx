@@ -3,15 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { WebAnalyticsPage } from './WebAnalyticsPage';
 import { newAuth } from '@/lib/auth_new';
+import { WebAnalyticsPage } from './WebAnalyticsPage';
 
 
 vi.mock('@/lib/auth_new', () => ({
   newAuth: { makeRequest: vi.fn() },
 }));
 
-vi.mock('@/i18n/LanguageContext', () => ({
+vi.mock('@/i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({ language: 'ru' }),
 }));
 

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { confirmMobileAction, loadMobileJob, mobileJsonHeaders, readMobileJson, type MobileJob } from '@/lib/mobileDataClient';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bot, Check, CircleAlert, Clock3, Loader2, Play, type LucideIcon } from 'lucide-react';
+import { useState } from 'react';
 import ActionPreviewSheet, { type MobileActionPreview } from './ActionPreviewSheet';
 import JobProgressSheet from './JobProgressSheet';
-import type { MobileScope } from './ScopeProvider';
-import { confirmMobileAction, loadMobileJob, mobileJsonHeaders, readMobileJson, type MobileJob } from '@/lib/mobileDataClient';
+import type { MobileScope } from './ScopeProvider.logic';
+import { useMobileJobPolling } from './useMobileJobPolling';
 
 type AgentItem = {
   id?: string;
@@ -65,16 +66,7 @@ export default function AgentsMobileModule({ items, scope, reload, canRun }: { i
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось запустить ИИ-сотрудника.'); }
     finally { setBusy(''); }
   };
-  useEffect(() => {
-    if (!job?.id || job.terminal) return;
-    const timer = window.setInterval(() => {
-      void loadMobileJob(job.id || '', scope).then((result) => {
-        setJob(result.job || null);
-        if (result.job?.terminal) void reload();
-      }).catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [job?.id, job?.terminal, scope?.kind, scope?.id, reload]);
+  useMobileJobPolling({ job, scope, onJob: setJob, onComplete: () => void reload() });
   if (!items.length) {
     return <section className="rounded-[24px] bg-white/[0.04] p-5 text-center ring-1 ring-inset ring-white/[0.07]"><span className="mx-auto grid h-12 w-12 place-items-center rounded-[16px] bg-primary/10 text-primary"><Bot className="h-5 w-5" /></span><h2 className="mt-4 text-balance text-base font-semibold">ИИ-сотрудники ещё не настроены</h2><p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">Когда появится готовый сценарий, здесь будут видны его работа, результат и ошибки.</p></section>;
   }

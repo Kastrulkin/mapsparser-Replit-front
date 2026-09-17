@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { Button, buttonVariants } from './button';
+import { Button } from './button';
+import { buttonVariants } from './button.logic';
 
 describe('LocalOS button hierarchy', () => {
   it('uses black for the default product action', () => {

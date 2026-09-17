@@ -1,6 +1,7 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { errorMessage } from '@/lib/errorMessage';
 import { AlertTriangle, CheckCircle2, RefreshCcw, Wrench } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type HealthResponse = {
   success: boolean;
@@ -87,7 +88,7 @@ type ActionTimelineEvent = {
   source: string;
   event_type: string;
   status?: string | null;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type ActionTimelineResponse = {
@@ -190,7 +191,7 @@ type ActionIncidentSnapshotResponse = {
     event_type_breakdown?: CallbackAttemptsResponse['event_type_breakdown'];
   };
   recent_timeline?: ActionTimelineEvent[];
-  diagnostics_bundle?: any;
+  diagnostics_bundle?: unknown;
   error?: string;
 };
 
@@ -293,7 +294,7 @@ type UnifiedAuditTimelineItem = {
   status?: string;
   action_id?: string;
   event_id: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type UnifiedAuditTimelineResponse = {
@@ -434,7 +435,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         hasRestoredUiStateRef.current = true;
         return;
       }
-      const parsed = JSON.parse(raw) as Record<string, any>;
+      const parsed: Record<string, unknown> = JSON.parse(raw);
       if (typeof parsed.selectedActionId === 'string') {
         setSelectedActionId(parsed.selectedActionId);
       }
@@ -516,8 +517,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       }
       setAuditTimeline(json.items || []);
       setAuditTimelineTotal(Number(json.total_count || json.count || 0));
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить unified audit timeline');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось загрузить unified audit timeline');
     } finally {
       setAuditTimelineLoading(false);
     }
@@ -558,8 +559,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         return merged;
       });
       setAuditTimelineTotal(Number(json.total_count || json.count || 0));
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось дозагрузить unified audit timeline');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось дозагрузить unified audit timeline');
     } finally {
       setAuditTimelineLoading(false);
     }
@@ -758,8 +759,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         if (prev && items.some((x) => x.action_id === prev)) return prev;
         return items[0]?.action_id || '';
       });
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить состояние интеграции ИИ-агентов');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось загрузить состояние интеграции ИИ-агентов');
     } finally {
       setLoading(false);
     }
@@ -789,24 +790,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       }
       setTimeline(json.events || []);
       setTimelineTotal(Number(json.total_count || (json.events || []).length || 0));
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTimeline([]);
       setTimelineTotal(0);
-      setError(e?.message || 'Не удалось загрузить timeline действий');
+      setError(errorMessage(e) || 'Не удалось загрузить timeline действий');
     } finally {
       setTimelineLoading(false);
     }
-  }, [
-    businessId,
-    selectedActionId,
-    timelineSourceFilter,
-    timelineEventFilter,
-    timelineStatusFilter,
-    timelineSearch,
-    timelineOnlyProblematic,
-    timelineOffset,
-    buildTimelineParams,
-  ]);
+  }, [businessId, selectedActionId, buildTimelineParams]);
 
   useEffect(() => {
     refreshActionTimeline();
@@ -866,8 +857,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setActionStatusSnapshot(statusJson);
       setActionBillingSnapshot(billingJson);
       setActionLifecycleSummary(lifecycleJson);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить status/billing/lifecycle action');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось загрузить status/billing/lifecycle action');
       setActionStatusSnapshot(null);
       setActionBillingSnapshot(null);
       setActionLifecycleSummary(null);
@@ -927,8 +918,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           failed_attempts: Number(item.failed_attempts || 0),
         })),
       });
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить callback attempts action');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось загрузить callback attempts action');
       setActionCallbackAttempts([]);
       setActionCallbackAttemptsTotal(0);
       setActionCallbackAttemptsSummary(null);
@@ -1000,8 +991,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       );
       setRecoveryReport(String(json?.report_text || '').trim() || null);
       await Promise.all([load(), refreshActionTimeline(), refreshActionSnapshots(), refreshActionAttempts()]);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось выполнить recovery callback-доставки');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось выполнить recovery callback-доставки');
     } finally {
       setRecovering(false);
     }
@@ -1033,8 +1024,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         `Support snapshot отправлен: telegram=${Number(json?.telegram_sent_count || 0)}/${Number(json?.target_count || 0)}`
       );
       await load();
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось отправить support snapshot в Telegram');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось отправить support snapshot в Telegram');
     } finally {
       setSupportSending(false);
     }
@@ -1132,7 +1123,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     const attemptsSuccess = attempts.filter((event) => String(event.status || '').toLowerCase() === 'sent').length;
     const attemptsFailed = Math.max(attemptsTotal - attemptsSuccess, 0);
     const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-    const lastAttemptDetails = (lastAttempt?.details || {}) as Record<string, any>;
+    const lastAttemptDetails = lastAttempt?.details || {};
     return {
       attemptsTotal,
       attemptsSuccess,
@@ -1271,8 +1262,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать diagnostics bundle');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать diagnostics bundle');
     }
   }, [selectedActionId, fetchDiagnosticsBundle]);
 
@@ -1296,8 +1287,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать diagnostics markdown');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать diagnostics markdown');
     }
   }, [selectedActionId, fetchDiagnosticsBundle]);
 
@@ -1321,8 +1312,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать incident snapshot');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать incident snapshot');
     }
   }, [selectedActionId, fetchIncidentSnapshot]);
 
@@ -1421,8 +1412,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать incident report');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать incident report');
     }
   }, [selectedActionId, buildIncidentReportMarkdown]);
 
@@ -1528,8 +1519,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     try {
       const payload = await fetchAuditEventBundleExport(item, 'json');
       setSelectedAuditEventBundle(payload as AuditEventBundleResponse);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить audit event bundle');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось загрузить audit event bundle');
     } finally {
       setAuditEventLoading(false);
     }
@@ -1548,8 +1539,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать recovery history');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать recovery history');
     }
   }, [businessId, fetchRecoveryHistoryExport]);
 
@@ -1570,8 +1561,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать recovery history markdown');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать recovery history markdown');
     }
   }, [businessId, fetchRecoveryHistoryExport]);
 
@@ -1588,8 +1579,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать support bundle');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать support bundle');
     }
   }, [businessId, fetchSupportExport]);
 
@@ -1610,8 +1601,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать support bundle markdown');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать support bundle markdown');
     }
   }, [businessId, fetchSupportExport]);
 
@@ -1628,8 +1619,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать support-send history');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать support-send history');
     }
   }, [businessId, fetchSupportSendHistoryExport]);
 
@@ -1650,8 +1641,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать support-send history markdown');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать support-send history markdown');
     }
   }, [businessId, fetchSupportSendHistoryExport]);
 
@@ -1668,8 +1659,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать unified audit timeline');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать unified audit timeline');
     }
   }, [businessId, fetchAuditTimelineExport]);
 
@@ -1690,8 +1681,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать unified audit timeline markdown');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать unified audit timeline markdown');
     }
   }, [businessId, fetchAuditTimelineExport]);
 
@@ -1708,8 +1699,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать audit event bundle');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось экспортировать audit event bundle');
     }
   }, [businessId, fetchAuditEventBundleExport]);
 
@@ -1766,8 +1757,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       await navigator.clipboard.writeText(recoveryReport);
       setCopyMessage('Recovery report скопирован');
       window.setTimeout(() => setCopyMessage(null), 2500);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось скопировать recovery report');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось скопировать recovery report');
     }
   }, [recoveryReport]);
 
@@ -1778,8 +1769,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       await navigator.clipboard.writeText(markdown);
       setCopyMessage('Incident report скопирован');
       setTimeout(() => setCopyMessage(null), 2500);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось скопировать incident report');
+    } catch (e: unknown) {
+      setError(errorMessage(e) || 'Не удалось скопировать incident report');
     }
   }, [selectedActionId, buildIncidentReportMarkdown]);
 
@@ -1958,14 +1949,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const copyFullSupportPackage = useCallback(async () => {
     if (!selectedActionId || !businessId) return;
-    let serverSupportPackage: any = null;
+    let serverSupportPackage: { support_package?: { timeline?: { events?: ActionTimelineEvent[] } }; callback_attempts?: { items?: CallbackAttemptItem[] } } | null = null;
     try {
       serverSupportPackage = await fetchDiagnosticsBundle('json');
     } catch (_e) {
       // Fallback to local snapshots/timeline below.
     }
-    const fullTimeline = (serverSupportPackage?.support_package?.timeline?.events as ActionTimelineEvent[]) || filteredTimeline;
-    const fullAttempts = (serverSupportPackage?.callback_attempts?.items as CallbackAttemptItem[]) || [];
+    const fullTimeline = serverSupportPackage?.support_package?.timeline?.events || filteredTimeline;
+    const fullAttempts = serverSupportPackage?.callback_attempts?.items || [];
     const problematic = fullTimeline.filter((event) => isProblematicTimelineEvent(event));
     const diagLines: string[] = [
       `action_id: ${selectedActionId}`,
@@ -2087,27 +2078,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     } catch (_e) {
       setError('Не удалось скопировать full support package');
     }
-  }, [
-    selectedActionId,
-    businessId,
-    fetchDiagnosticsBundle,
-    filteredTimeline,
-    isProblematicTimelineEvent,
-    actionStatusSnapshot,
-    actionBillingSnapshot,
-    timeline.length,
-    timelineSourceFilter,
-    timelineEventFilter,
-    timelineStatusFilter,
-    timelineSearch,
-    timelineOnlyProblematic,
-    timelineSummary.lastRetryDlqAt,
-    timelineSummary.lastRetryDlqStatus,
-    timelineSummary.lastErrorAt,
-    timelineSummary.lastErrorText,
-    decisionStatus,
-    decisionReason,
-  ]);
+  }, [selectedActionId, businessId, fetchDiagnosticsBundle, filteredTimeline, isProblematicTimelineEvent, actionStatusSnapshot, actionBillingSnapshot, timelineSourceFilter, timelineEventFilter, timelineStatusFilter, timelineSearch, timelineOnlyProblematic, timelineSummary.lastRetryDlqAt, timelineSummary.lastRetryDlqStatus, timelineSummary.lastErrorAt, timelineSummary.lastErrorText, decisionStatus, decisionReason]);
 
   const metrics = data?.metrics;
   const checks = data?.checks;
@@ -2650,7 +2621,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
             <MetricCell label="Callback attempts" value={deliveryAttemptSummary.attemptsTotal} />
             <MetricCell label="Attempts sent/failed" value={`${deliveryAttemptSummary.attemptsSuccess}/${deliveryAttemptSummary.attemptsFailed}`} />
-            <MetricCell label="Last attempt HTTP" value={deliveryAttemptSummary.lastHttpStatus ?? '—'} />
+            <MetricCell label="Last attempt HTTP" value={String(deliveryAttemptSummary.lastHttpStatus ?? '—')} />
           </div>
           {deliveryAttemptSummary.lastError && (
             <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

@@ -1,54 +1,54 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
-  AlertTriangle,
-  ArrowRight,
-  BadgeDollarSign,
-  Bot,
-  CheckCircle2,
-  ChevronDown,
-  Circle,
-  Clock3,
-  FileText,
-  Handshake,
-  MapPinned,
-  RefreshCw,
-  X,
-  type LucideIcon,
+	AlertTriangle,
+	ArrowRight,
+	BadgeDollarSign,
+	Bot,
+	CheckCircle2,
+	ChevronDown,
+	Circle,
+	Clock3,
+	FileText,
+	Handshake,
+	MapPinned,
+	RefreshCw,
+	X,
+	type LucideIcon,
 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import CardAuditPanel from '@/components/CardAuditPanel';
+import type { ControlScope } from '@/components/DashboardLayout';
 import MapParseTable from '@/components/MapParseTable';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { ManagedCardGrowthPanel, type ManagedCardGrowth } from '@/components/growth/ManagedCardGrowthPanel';
+import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
+import type { JourneyAction } from '@/lib/leadJourney';
 import { trackProductEvent } from '@/lib/productEvents';
 import { cn } from '@/lib/utils';
-import type { ControlScope } from '@/components/DashboardLayout';
-import { JourneyActionCard } from '@/components/journey/JourneyActionCard';
-import type { JourneyAction } from '@/lib/leadJourney';
-import { useLanguage, type Language } from '@/i18n/LanguageContext';
-import {
-  localizedAnalyticsLevel,
-  localizedAnalyticsModule,
-  localizedAnalyticsNext,
-  localizedFocusAction,
-  localizedGrowthArea,
-  localizedGrowthMetric,
-  localizedGrowthMilestone,
-  localizedGrowthStatus,
-  localizedGrowthText,
-  localizedProgressBusinessName,
-  localizedRhythm,
-  progressPageCopyForLanguage,
-  progressRuntimeCopyForLanguage,
-  type ProgressPageCopy,
-} from './progressPageCopy';
 import { NetworkDashboardPage } from './network/NetworkDashboardPage';
+import {
+	localizedAnalyticsLevel,
+	localizedAnalyticsModule,
+	localizedAnalyticsNext,
+	localizedFocusAction,
+	localizedGrowthArea,
+	localizedGrowthMetric,
+	localizedGrowthMilestone,
+	localizedGrowthStatus,
+	localizedGrowthText,
+	localizedProgressBusinessName,
+	localizedRhythm,
+	progressPageCopyForLanguage,
+	progressRuntimeCopyForLanguage,
+	type ProgressPageCopy,
+} from './progressPageCopy';
 
 type GrowthAreaKey = 'maps' | 'content' | 'partnerships' | 'automation' | 'upsells';
 type GrowthAreaStatus = 'not_started' | 'in_progress' | 'healthy' | 'needs_attention' | 'unavailable';

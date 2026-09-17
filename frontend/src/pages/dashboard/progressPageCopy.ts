@@ -1,4 +1,4 @@
-import type { Language } from '@/i18n/LanguageContext';
+import type { Language } from '@/i18n/LanguageContext.logic';
 
 export type ProgressPageCopy = {
   eyebrow: string;

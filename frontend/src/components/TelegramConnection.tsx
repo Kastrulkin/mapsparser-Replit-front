@@ -1,11 +1,12 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Bot, Check, Copy, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { Alert, AlertDescription } from './ui/alert';
-import { Copy, Check, Loader2, Bot } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Input } from './ui/input';
 
 interface TelegramConnectionProps {
   currentBusinessId?: string | null;
@@ -22,16 +23,9 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
   const [copied, setCopied] = useState(false);
   const { t, language } = useLanguage();
 
-  useEffect(() => {
-    // Сбрасываем статус при смене бизнеса
-    setIsLinked(false);
 
-    if (currentBusinessId) {
-      checkStatus();
-    }
-  }, [currentBusinessId]);
 
-  const checkStatus = async () => {
+  const checkStatus = useLatestCallback(async () => {
     if (!currentBusinessId) {
       setIsLinked(false);
       return;
@@ -61,7 +55,16 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
       console.error('Status check error:', e);
       setIsLinked(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    // Сбрасываем статус при смене бизнеса
+    setIsLinked(false);
+
+    if (currentBusinessId) {
+      checkStatus();
+    }
+  }, [checkStatus, currentBusinessId]);
 
   const generateToken = async () => {
     if (!currentBusinessId) {

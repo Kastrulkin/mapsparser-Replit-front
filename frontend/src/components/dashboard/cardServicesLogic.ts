@@ -159,6 +159,7 @@ export const getServiceKeywordList = (service: ServiceLike): string[] => {
               return;
             }
           } catch {
+            // Older records may contain a literal string rather than valid JSON.
           }
         }
         appendKeyword(trimmed);
@@ -281,6 +282,7 @@ const normalizeGuardrailReasons = (value: unknown): string[] => {
         return parsed.map((item) => String(item || '').trim()).filter(Boolean);
       }
     } catch {
+      // Older records may contain a literal string rather than valid JSON.
     }
   }
   return [trimmed];

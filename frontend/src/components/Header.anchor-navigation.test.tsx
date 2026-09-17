@@ -9,7 +9,7 @@ vi.mock('../lib/auth_new', () => ({
   newAuth: { signOut: vi.fn() },
 }));
 
-vi.mock('../i18n/LanguageContext', () => ({
+vi.mock('../i18n/LanguageContext.logic', () => ({
   useLanguage: () => ({
     language: 'ru',
     t: {

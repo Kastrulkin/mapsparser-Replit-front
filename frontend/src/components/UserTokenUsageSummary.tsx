@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Coins, Calendar } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { DESIGN_TOKENS } from '@/lib/design-tokens';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { browserAuthenticationAvailable, browserBearerToken } from '@/lib/browserSessionFetch';
+import { DESIGN_TOKENS } from '@/lib/design-tokens';
+import { errorMessage } from '@/lib/errorMessage';
+import { cn } from '@/lib/utils';
+import { BarChart3, Calendar, Coins } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 type TokenUsageResponse = {
   success: boolean;
@@ -139,8 +140,8 @@ export const UserTokenUsageSummary = ({
         } else {
           setBillingNextDate(null);
         }
-      } catch (e: any) {
-        setError(e?.message || (isRu ? 'Ошибка загрузки кредитов' : 'Failed to load credits'));
+      } catch (e: unknown) {
+        setError(errorMessage(e) || (isRu ? 'Ошибка загрузки кредитов' : 'Failed to load credits'));
       } finally {
         setLoading(false);
       }

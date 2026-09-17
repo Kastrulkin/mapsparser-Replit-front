@@ -1,16 +1,16 @@
-import { Navigate, useParams } from "react-router-dom";
 import SeoMeta from "@/components/SeoMeta";
-import { useLanguage } from "@/i18n/LanguageContext";
 import { contentCopy } from "@/content/contentCopy";
-import { useLocalizedArticles } from "@/content/useLocalizedArticles";
-import {
-  BottomCta,
-  DetailHeader,
-  PageFrame,
-  RelatedMaterials,
-  SectionRenderer,
-} from "./ContentShared";
 import type { ArticleContent } from "@/content/contentTypes";
+import { useLocalizedArticles } from "@/content/useLocalizedArticles";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Navigate, useParams } from "react-router-dom";
+import {
+	BottomCta,
+	DetailHeader,
+	PageFrame,
+	RelatedMaterials,
+	SectionRenderer,
+} from "./ContentShared";
 import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
 
 const BURNOUT_ARTICLE_SLUG = "pochemu-predprinimateli-vygorayut";

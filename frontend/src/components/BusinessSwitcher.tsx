@@ -1,7 +1,7 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { ChevronDown, Building2, Users } from 'lucide-react';
-import { getNetworkRepresentativeIds, pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { getNetworkRepresentativeIds, pickNetworkRepresentative } from '@/lib/networkRepresentative';
+import { Building2, ChevronDown, Users } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Business {
   id: string;
@@ -106,8 +106,8 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
       // Но если selectedBusiness еще нет, ставим первый
       if (current) {
         setSelectedBusiness(current);
-      } else if (!selectedBusiness) {
-        setSelectedBusiness(mainBusinesses[0]);
+      } else {
+        setSelectedBusiness((selected) => selected || mainBusinesses[0]);
       }
     }
   }, [mainBusinesses, currentBusinessId, businesses]);

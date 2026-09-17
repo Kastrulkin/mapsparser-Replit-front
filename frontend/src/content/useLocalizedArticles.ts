@@ -1,7 +1,7 @@
+import type { Language } from '@/i18n/LanguageContext.logic';
 import { useEffect, useState } from "react";
-import type { Language } from "@/i18n/LanguageContext";
-import type { ArticleContent } from "./contentTypes";
 import { publishedArticles } from "./articles";
+import type { ArticleContent } from "./contentTypes";
 
 const loadArticles = async (language: Language): Promise<ArticleContent[]> => {
   switch (language) {

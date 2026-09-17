@@ -1,6 +1,6 @@
-import { Bot, Calendar, MessageSquare, TrendingUp, Users, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Calendar, MessageSquare, TrendingUp, Users, Zap } from "lucide-react";
 
 const Features = () => {
   const { t } = useLanguage();

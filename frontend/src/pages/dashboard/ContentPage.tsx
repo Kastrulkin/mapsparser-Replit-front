@@ -1,33 +1,34 @@
 import { DiskImportPanel } from '@/components/DiskImportPanel';
 import { ExternalDriveVideos } from '@/components/ExternalDriveVideos';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import {
-  AlertCircle,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Clock3,
-  Copy,
-  Download,
-  ImageIcon,
-  Eye,
-  FileText,
-  Lightbulb,
-  Loader2,
-  MessageCircleQuestion,
-  Plus,
-  Sparkles,
-  Star,
-  Trash2,
-  Upload,
-  Wand2,
+	AlertCircle,
+	CalendarDays,
+	Check,
+	CheckCircle2,
+	ChevronDown,
+	Clock3,
+	Copy,
+	Download,
+	Eye,
+	FileText,
+	ImageIcon,
+	Lightbulb,
+	Loader2,
+	MessageCircleQuestion,
+	Plus,
+	Sparkles,
+	Star,
+	Trash2,
+	Upload,
+	Wand2,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
 import { AudienceInsights } from '@/components/AudienceInsights';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -35,13 +36,13 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { API_URL } from '@/config/api';
-import { newAuth } from '@/lib/auth_new';
-import { cn } from '@/lib/utils';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { fillContentCalendarTemplate, getContentCalendarCopy, getDemoContentCalendarThemes, localizeContentCalendarStatus } from '@/i18n/contentCalendarCopy';
 import { getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
-import { localizeDemoBusinessName } from './operatorPageCopy';
+import { newAuth } from '@/lib/auth_new';
+import { cn } from '@/lib/utils';
 import { DemoContentPlanPage } from './demo/DemoContentPlanPage';
+import { localizeDemoBusinessName } from './operatorPageCopy';
 
 type DashboardBusiness = {
   id: string;
@@ -985,7 +986,7 @@ function ContentWorkspace() {
     return plan;
   };
 
-  const loadContent = async () => {
+  const loadContent = useLatestCallback(async () => {
     const loadSequence = contentLoadSequenceRef.current + 1;
     contentLoadSequenceRef.current = loadSequence;
     setCurrentPlan(null);
@@ -1025,7 +1026,7 @@ function ContentWorkspace() {
     } finally {
       if (loadSequence === contentLoadSequenceRef.current) setLoading(false);
     }
-  };
+  });
 
   const openVoiceSettings = async () => {
     if (!currentBusinessId) return;
@@ -1103,7 +1104,7 @@ function ContentWorkspace() {
 
   useEffect(() => {
     void loadContent();
-  }, [currentBusinessId, requestedContentTarget.focus, requestedContentTarget.itemId, requestedContentTarget.planId]);
+  }, [currentBusinessId, loadContent, requestedContentTarget.focus, requestedContentTarget.itemId, requestedContentTarget.planId]);
 
   useEffect(() => {
     if (requestedContentTarget.focus !== 'story_facts' || selectedItemId !== requestedContentTarget.itemId) return;
@@ -1128,11 +1129,7 @@ function ContentWorkspace() {
     setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, itemPosts, currentPlan)));
   }, [currentPlan, items, postsByItem, selectedItemId]);
 
-  useEffect(() => {
-    if (!selectedItemId || !currentBusinessId) return;
-    if (mediaRecommendations[selectedItemId]) return;
-    void loadMediaRecommendation(selectedItemId);
-  }, [selectedItemId, currentBusinessId]);
+
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1151,10 +1148,7 @@ function ContentWorkspace() {
     }
   }, [location.search]);
 
-  useEffect(() => {
-    if (section !== 'media' || !currentBusinessId) return;
-    void loadMediaAssets();
-  }, [section, currentBusinessId]);
+
 
   useEffect(() => {
     setCreateDraft((prev) => {
@@ -1182,7 +1176,7 @@ function ContentWorkspace() {
     setPublicationChannels(buildChannelSelection(resolveItemSelectedChannels(item, postsByItem[item.id] || [], currentPlan)));
   };
 
-  const loadMediaRecommendation = async (itemId: string) => {
+  const loadMediaRecommendation = useLatestCallback(async (itemId: string) => {
     if (!currentBusinessId || !itemId) return;
     setMediaLoadingItemId(itemId);
     try {
@@ -1202,7 +1196,13 @@ function ContentWorkspace() {
     } finally {
       setMediaLoadingItemId('');
     }
-  };
+  });
+
+  useEffect(() => {
+    if (!selectedItemId || !currentBusinessId) return;
+    if (mediaRecommendations[selectedItemId]) return;
+    void loadMediaRecommendation(selectedItemId);
+  }, [selectedItemId, currentBusinessId, mediaRecommendations, loadMediaRecommendation]);
 
   const photoImageSrc = (asset: PhotoAsset) => {
     const url = String(asset.original_url || '').trim();
@@ -1280,7 +1280,7 @@ function ContentWorkspace() {
     }
   };
 
-  const loadMediaAssets = async () => {
+  const loadMediaAssets = useLatestCallback(async () => {
     if (!currentBusinessId) return;
     setMediaLoading(true);
     setMediaError('');
@@ -1295,7 +1295,12 @@ function ContentWorkspace() {
     } finally {
       setMediaLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    if (section !== 'media' || !currentBusinessId) return;
+    void loadMediaAssets();
+  }, [section, currentBusinessId, loadMediaAssets]);
 
   const requestMediaAssetAnalysis = async (assetId?: string): Promise<PhotoAnalysisResult> => {
     if (!currentBusinessId || !assetId) throw new Error('Фото не выбрано');

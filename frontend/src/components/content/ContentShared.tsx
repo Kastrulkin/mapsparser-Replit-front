@@ -1,24 +1,18 @@
-import { Link } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Download, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbLink,
+	BreadcrumbList,
+	BreadcrumbPage,
+	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import type { ContentSection, RelatedLink } from "@/content/contentTypes";
-
-export const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
+import { ArrowLeft, ArrowRight, Download, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { formatDate } from './ContentShared.logic';
 
 export const ContentShell = ({ children }: { children: React.ReactNode }) => (
   <main className="min-h-screen bg-gradient-to-br from-orange-50/60 via-white to-amber-50/40">

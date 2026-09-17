@@ -1,40 +1,38 @@
-import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
 import { AuditHowToRead } from '@/components/audit/AuditDisplayPrimitives';
 import {
-  PublicAuditExperience,
-  type PublicAuditLabels,
-  type PublicAuditNews,
-  type PublicAuditProblem,
-  type PublicAuditReview,
-  type PublicAuditService,
+	PublicAuditExperience,
+	type PublicAuditLabels,
+	type PublicAuditNews,
+	type PublicAuditProblem,
+	type PublicAuditReview,
+	type PublicAuditService,
 } from '@/components/audit/PublicAuditExperience';
 import {
-  publicAuditUiTextForLanguage,
-  supportedPublicAuditLanguages,
-  type PublicAuditLanguage,
-} from '@/components/audit/publicAuditCopy';
-import {
-  auditScoreBusinessLabel,
-  compactAuditText,
+	compactAuditText
 } from '@/components/audit/auditDisplayUtils';
-import { newAuth } from '@/lib/auth_new';
 import {
-  AlertCircle,
-  Building2,
-  Camera,
-  CheckCircle2,
-  ChevronDown,
-  ExternalLink,
-  Loader2,
-  MapPinned,
-  MessageSquareText,
-  Newspaper,
-  Search,
-  ShieldCheck,
-  Sparkles,
+	publicAuditUiTextForLanguage,
+	supportedPublicAuditLanguages,
+	type PublicAuditLanguage,
+} from '@/components/audit/publicAuditCopy';
+import { newAuth } from '@/lib/auth_new';
+import { motion, useReducedMotion } from 'framer-motion';
+import {
+	AlertCircle,
+	Building2,
+	Camera,
+	CheckCircle2,
+	ChevronDown,
+	ExternalLink,
+	Loader2,
+	MapPinned,
+	MessageSquareText,
+	Newspaper,
+	Search,
+	Sparkles
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 type OfferPagePayload = {
   processing?: boolean;
@@ -185,7 +183,7 @@ type OfferPagePayload = {
   primary_language?: string;
   enabled_languages?: string[];
   available_languages?: string[];
-  audit_full?: Record<string, any>;
+  audit_full?: Record<string, unknown>;
   content_audit?: {
     title?: string;
     summary?: string;

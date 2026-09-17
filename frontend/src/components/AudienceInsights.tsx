@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, EyeOff, Lightbulb, Loader2, MessageCircleQuestion, RefreshCw, Save, Settings2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { newAuth } from '@/lib/auth_new';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { fillContentTemplate, getContentWorkspaceControlsCopy, getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
+import { newAuth } from '@/lib/auth_new';
 
 type AudienceInsight = {
   id: string;

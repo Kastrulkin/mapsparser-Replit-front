@@ -1,21 +1,24 @@
-import { ContentRules } from '@/components/operator/ContentRules';
-import { browserBearerToken } from '@/lib/browserSessionFetch';
-import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { useLocation, useOutletContext, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import { newAuth } from '@/lib/auth_new';
-import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, Plus, Trash2, Info, ExternalLink } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { cn } from '@/lib/utils';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 import { UserTokenUsageSummary } from '@/components/UserTokenUsageSummary';
-import { useToast } from '@/hooks/use-toast';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
-  DashboardPageHeader,
-  DashboardSection,
+	DashboardPageHeader,
+	DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+import { ContentRules } from '@/components/operator/ContentRules';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { newAuth } from '@/lib/auth_new';
+import { browserBearerToken } from '@/lib/browserSessionFetch';
+import { errorMessage } from '@/lib/errorMessage';
+import { cn } from '@/lib/utils';
+import type { BusinessRecord, DashboardOutletContext } from '@/types/business';
+import { AlertTriangle, ArrowRight, Building2, CheckCircle2, Clock, Edit2, ExternalLink, FileSearch, Info, Mail, MapPin, Network, Phone, Plus, ShieldCheck, Trash2, User } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 
 type ProfileStatusItem = {
   label: string;
@@ -155,7 +158,7 @@ const isGoogleMapUrl = (value: string) => {
 export const ProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<DashboardOutletContext>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
   const { t, language } = useLanguage();
@@ -227,7 +230,7 @@ export const ProfilePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingCredentials, setSendingCredentials] = useState(false);
-  const [networkLocations, setNetworkLocations] = useState<any[]>([]);
+  const [networkLocations, setNetworkLocations] = useState<BusinessRecord[]>([]);
   const [isNetwork, setIsNetwork] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [businessTypes, setBusinessTypes] = useState<Array<{ type_key: string; label: string }>>([]);
@@ -416,6 +419,26 @@ export const ProfilePage = () => {
     checkIfNetworkMaster();
   }, [currentBusinessId]);
 
+
+
+  const loadOwnerData = useLatestCallback(async () => {
+    if (!currentBusinessId) return;
+
+    try {
+      const data = await newAuth.makeRequest(`/client-info?business_id=${currentBusinessId}`);
+      if (data.owner) {
+        // Показываем данные владельца бизнеса
+        setForm({
+          email: data.owner.email || "",
+          phone: data.owner.phone || "",
+          name: data.owner.name || ""
+        });
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных владельца:', error);
+    }
+  });
+
   useEffect(() => {
     // Если есть currentBusiness и это не наш бизнес, загружаем данные владельца
     if (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
@@ -438,25 +461,7 @@ export const ProfilePage = () => {
         name: user.name || ""
       });
     }
-  }, [user, currentBusiness, currentBusinessId]);
-
-  const loadOwnerData = async () => {
-    if (!currentBusinessId) return;
-
-    try {
-      const data = await newAuth.makeRequest(`/client-info?business_id=${currentBusinessId}`);
-      if (data.owner) {
-        // Показываем данные владельца бизнеса
-        setForm({
-          email: data.owner.email || "",
-          phone: data.owner.phone || "",
-          name: data.owner.name || ""
-        });
-      }
-    } catch (error) {
-      console.error('Ошибка загрузки данных владельца:', error);
-    }
-  };
+  }, [user, currentBusiness, currentBusinessId, loadOwnerData]);
 
   useEffect(() => {
     const loadBusinessTypes = async () => {
@@ -472,7 +477,8 @@ export const ProfilePage = () => {
     loadBusinessTypes();
   }, []);
 
-  useEffect(() => {
+  // Populate the form on business selection; later account updates must not replace local edits.
+  const loadSelectedClientInfo = useLatestCallback(() => {
     const loadClientInfo = async () => {
       try {
         const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
@@ -494,7 +500,7 @@ export const ProfilePage = () => {
 
         // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
         const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks)
-          ? data.mapLinks.map((link: any) => ({
+          ? data.mapLinks.map((link: { id?: string; url?: string; mapType?: string; map_type?: string }) => ({
             id: link.id,
             url: link.url || '',
             mapType: link.mapType || link.map_type
@@ -522,9 +528,10 @@ export const ProfilePage = () => {
       }
     };
     loadClientInfo();
-  }, [currentBusinessId]);
+  });
+  useEffect(loadSelectedClientInfo, [currentBusinessId, loadSelectedClientInfo]);
 
-  const loadParseStatus = async () => {
+  const loadParseStatus = useLatestCallback(async () => {
     if (!effectiveBusinessId) {
       setParseStatus('idle');
       return;
@@ -569,11 +576,11 @@ export const ProfilePage = () => {
     } catch (loadError) {
       console.error('Ошибка загрузки статуса парсинга:', loadError);
     }
-  };
+  });
 
   useEffect(() => {
     void loadParseStatus();
-  }, [effectiveBusinessId]);
+  }, [effectiveBusinessId, loadParseStatus]);
 
   useEffect(() => {
     if (parseStatus !== 'processing' && parseStatus !== 'queued') {
@@ -585,7 +592,7 @@ export const ProfilePage = () => {
     }, 10000);
 
     return () => window.clearInterval(timer);
-  }, [parseStatus, effectiveBusinessId]);
+  }, [parseStatus, effectiveBusinessId, loadParseStatus]);
 
   useEffect(() => {
     const previousStatus = previousParseStatusRef.current;
@@ -654,9 +661,9 @@ export const ProfilePage = () => {
         setEditMode(false);
         setSuccess(t.dashboard.profile.profileUpdated);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка обновления профиля:', error);
-      setError(error.message || t.dashboard.profile.errorSave);
+      setError(errorMessage(error) || t.dashboard.profile.errorSave);
     }
   };
 
@@ -686,7 +693,7 @@ export const ProfilePage = () => {
         }
         // Если есть название бизнеса в clientInfo - ищем по имени
         else if (clientInfo.businessName) {
-          const foundBusiness = businesses.find((b: any) =>
+          const foundBusiness = businesses.find((b) =>
             b.name && b.name.toLowerCase().trim() === clientInfo.businessName.toLowerCase().trim()
           );
           if (foundBusiness) {
@@ -735,7 +742,7 @@ export const ProfilePage = () => {
         .map(link => typeof link === 'string' ? link : link.url)
         .filter(url => url && url.trim());
 
-      const payload: any = {
+      const payload: Omit<typeof clientInfo, 'mapLinks'> & { mapLinks: Array<{ url: string }>; businessId?: string } = {
         ...clientInfo,
         workingHours: clientInfo.workingHours || t.dashboard.profile.workingHoursPlaceholder,
         city: (clientInfo.city || '').trim() || undefined,
@@ -764,7 +771,7 @@ export const ProfilePage = () => {
 
       if (reloadData) {
         const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks)
-          ? reloadData.mapLinks.map((link: any) => ({
+          ? reloadData.mapLinks.map((link: { id?: string; url?: string; mapType?: string; map_type?: string }) => ({
             id: link.id,
             url: link.url || '',
             mapType: link.mapType || link.map_type
@@ -808,17 +815,17 @@ export const ProfilePage = () => {
         await reloadBusinesses();
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка сохранения информации:', error);
       // Проверяем, не истёк ли токен
-      if (error.message && error.message.includes('401')) {
+      if (errorMessage(error) && errorMessage(error).includes('401')) {
         setError(t.common.error);
         localStorage.removeItem('auth_token');
         setTimeout(() => {
           window.location.href = '/login';
         }, 2000);
       } else {
-        setError(error.message || t.dashboard.profile.errorSave);
+        setError(errorMessage(error) || t.dashboard.profile.errorSave);
       }
     } finally {
       setSavingClientInfo(false);
@@ -1144,8 +1151,8 @@ export const ProfilePage = () => {
                       method: 'POST'
                     });
                     setSuccess(data.message || 'Credentials sent');
-                  } catch (err: any) {
-                    setError(t.common.error + ': ' + err.message);
+                  } catch (err: unknown) {
+                    setError(t.common.error + ': ' + errorMessage(err));
                   } finally {
                     setSendingCredentials(false);
                   }

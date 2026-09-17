@@ -1,6 +1,7 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useState } from 'react';
+import { errorMessage } from '@/lib/errorMessage';
 import { X } from 'lucide-react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -34,7 +35,7 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
 
     try {
       const token = browserBearerToken();
-      
+
       // Создаём бизнес (API сам найдёт или создаст пользователя по email)
       const businessResponse = await fetch('/api/superadmin/businesses', {
         method: 'POST',
@@ -68,8 +69,8 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
         owner_name: '',
         owner_phone: ''
       });
-    } catch (err: any) {
-      setError(err.message || 'Ошибка создания бизнеса');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Ошибка создания бизнеса');
     } finally {
       setLoading(false);
     }
@@ -130,7 +131,7 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
 
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Владелец бизнеса</h3>
-            
+
             <div className="space-y-3">
               <div>
                 <Label htmlFor="owner_email">Email владельца *</Label>
@@ -180,4 +181,3 @@ export const CreateBusinessModal: React.FC<CreateBusinessModalProps> = ({
     </div>
   );
 };
-

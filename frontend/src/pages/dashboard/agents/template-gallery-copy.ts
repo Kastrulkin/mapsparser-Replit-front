@@ -1,4 +1,4 @@
-import type { Language } from '@/i18n/LanguageContext';
+import type { Language } from '@/i18n/LanguageContext.logic';
 import type { AgentTemplate } from './types';
 
 export type AgentTemplateGalleryCopy = {

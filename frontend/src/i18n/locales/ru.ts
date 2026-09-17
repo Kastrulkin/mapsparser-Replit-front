@@ -1,4 +1,25 @@
 export const ru = {
+  networkOverview: {
+    "title": "Обзор сети",
+    "subtitle": "Мониторинг показателей по всем точкам",
+    "status": "Статус",
+    "allLocations": "Все точки",
+    "activeOnly": "Только активные",
+    "problems": "Проблемные",
+    "offline": "Оффлайн",
+    "region": "Регион",
+    "allRegions": "Все регионы",
+    "spb": "Санкт-Петербург",
+    "moscow": "Москва",
+    "pickDate": "Выберите дату",
+    "toggleTheme": "Переключить тему",
+    "performanceHistory": "История показателей сети",
+    "performanceHistorySubtitle": "Средний рейтинг и объём отзывов за последние 7 дней.",
+    "rating": "Рейтинг",
+    "reviews": "Отзывы",
+    "reviewVolume": "Объём отзывов",
+    "avgRating": "Средний рейтинг"
+  },
   common: {
     success: "Успешно",
     error: "Ошибка",

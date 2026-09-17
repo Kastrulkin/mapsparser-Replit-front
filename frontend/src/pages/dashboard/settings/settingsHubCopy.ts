@@ -1,4 +1,4 @@
-import { Language } from '@/i18n/LanguageContext';
+import { Language } from '@/i18n/LanguageContext.logic';
 
 import { HubStatus, SettingsHubModuleKey } from './settingsHubState';
 

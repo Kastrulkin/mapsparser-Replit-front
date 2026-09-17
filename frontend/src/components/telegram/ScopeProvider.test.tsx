@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { ScopeProvider, useMobileScope } from './ScopeProvider';
+import { ScopeProvider } from './ScopeProvider';
+import { useMobileScope } from './ScopeProvider.logic';
 
 function ScopeProbe() {
   const { scope, hasSwitcher, openSwitcher } = useMobileScope();

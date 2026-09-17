@@ -1,36 +1,38 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
+import {
+	AlertTriangle,
+	Armchair,
+	ArrowRight,
+	Calculator,
+	CheckCircle2,
+	ChevronDown,
+	CircleDollarSign,
+	ClipboardList,
+	Clock3,
+	Gauge,
+	PlayCircle,
+	RefreshCw,
+	Save,
+	Scissors,
+	Target,
+	Users,
+} from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+	Area,
+	AreaChart,
+	Bar,
+	BarChart,
+	CartesianGrid,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis,
 } from 'recharts';
-import {
-  AlertTriangle,
-  Armchair,
-  ArrowRight,
-  Calculator,
-  ChevronDown,
-  CheckCircle2,
-  CircleDollarSign,
-  Clock3,
-  ClipboardList,
-  Gauge,
-  PlayCircle,
-  RefreshCw,
-  Save,
-  Scissors,
-  Target,
-  Users,
-} from 'lucide-react';
 
+import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,11 +41,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
-import { DataHealthRhythmStrip, type GrowthDataHealth } from '@/components/growth/DataHealthRhythmStrip';
-import { cn } from '@/lib/utils';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getFinanceWorkspaceCopy } from '@/i18n/financeWorkspaceCopy';
+import { cn } from '@/lib/utils';
 
 type KpiValue = number | string | null | undefined;
 

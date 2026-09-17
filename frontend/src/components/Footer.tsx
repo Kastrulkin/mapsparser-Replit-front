@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { Heart } from "lucide-react";
-import { Language, useLanguage } from "@/i18n/LanguageContext";
 import { contentCopy } from "@/content/contentCopy";
+import { Language, useLanguage } from '@/i18n/LanguageContext.logic';
+import { Heart } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const footerIndustryFallbacks: Record<Language, string[]> = {
   ru: [

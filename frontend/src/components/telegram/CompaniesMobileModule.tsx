@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Building2, ChevronRight, CircleAlert, ExternalLink, MapPin, Search, ShieldCheck } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 type Role = { key: string; label: string };
 type Company = { id: string; name?: string; city?: string; address?: string; primary_category?: string; locations_count?: number; roles?: Role[]; data_quality?: number; freshness?: { status?: string; updated_at?: string } };
@@ -71,7 +71,7 @@ export const CompaniesMobileModule = ({ businessId }: { businessId?: string | nu
       void read(`/api/companies?${query.toString()}`).then((payload) => setItems(isRecord(payload) && Array.isArray(payload.items) ? payload.items : [])).catch((reason) => setError(reason instanceof globalThis.Error ? reason.message : 'Не удалось загрузить компании')).finally(() => setLoading(false));
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [search, selectedId]);
+  }, [businessId, search, selectedId]);
 
   if (selectedId) return <AnimatePresence initial={false} mode="wait"><motion.div key={selectedId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={spring}>
     {!businessId ? <button type="button" onClick={() => { setSelectedId(''); setDetail(null); }} className="mb-4 flex min-h-11 items-center gap-2 rounded-2xl bg-white/[0.05] pl-3 pr-4 text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]"><ArrowLeft className="h-4 w-4" />Все компании</button> : null}

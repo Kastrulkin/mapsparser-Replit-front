@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { voiceHeaders } from './OperatorVoice';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { voiceHeaders } from './OperatorVoice.logic';
 
 type Entry = {
   id: string; input_summary: string; output_summary: string; status: string; reason_code?: string;
@@ -78,7 +78,7 @@ const english: Record<string, string> = {
 };
 
 export function OperatorRequestHistory({ businessId, language = 'ru' }: { businessId: string; language?: string }) {
-  const t = (text: string) => language === 'ru' ? text : text === 'История обращений' && language === 'el' ? 'Ιστορικό αιτημάτων' : english[text] || text;
+  const t = useCallback((text: string) => language === 'ru' ? text : text === 'История обращений' && language === 'el' ? 'Ιστορικό αιτημάτων' : english[text] || text, [language]);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Entry[]>([]);
   const [selected, setSelected] = useState<Entry | null>(null);
@@ -90,7 +90,8 @@ export function OperatorRequestHistory({ businessId, language = 'ru' }: { busine
   const [comment, setComment] = useState(''); const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
   const detailPanel = useRef<HTMLElement | null>(null);
-  useEffect(() => { if (selected) detailPanel.current?.focus(); }, [selected?.id]);
+  const selectedId = selected?.id;
+  useEffect(() => { if (selectedId) detailPanel.current?.focus(); }, [selectedId]);
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
@@ -103,17 +104,17 @@ export function OperatorRequestHistory({ businessId, language = 'ru' }: { busine
       .catch((failure) => { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : t("Не удалось загрузить")); })
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
-  }, [businessId, open, channel, inputType, status, date, person, offset, refresh]);
+  }, [businessId, open, channel, inputType, status, date, person, offset, refresh, t]);
   useEffect(() => { setOffset(0); }, [channel, inputType, status, date, person]);
   useEffect(() => {
-    if (!selected) return;
+    if (!selectedId) return;
     const controller = new AbortController();
-    void fetch(`/api/operator/requests/${selected.id}?business_id=${encodeURIComponent(businessId)}`, { headers: voiceHeaders(), signal: controller.signal })
+    void fetch(`/api/operator/requests/${selectedId}?business_id=${encodeURIComponent(businessId)}`, { headers: voiceHeaders(), signal: controller.signal })
       .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error(data.error || t("Обращение недоступно")); return data; })
       .then((data) => { if (!controller.signal.aborted) setSelected(data); })
       .catch((failure) => { if (!controller.signal.aborted) { setSelected(null); setItems([]); setError(failure instanceof Error ? failure.message : t("Ошибка")); } });
     return () => controller.abort();
-  }, [businessId, selected?.id]);
+  }, [businessId, selectedId, t]);
   const sendFeedback = async () => {
     if (!selected) return;
     setBusy(true); setNotice('');

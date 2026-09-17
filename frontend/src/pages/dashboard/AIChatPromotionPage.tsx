@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { CheckCircle2, Circle, ExternalLink, Copy, Check, Sparkles, AlertCircle } from 'lucide-react';
-import { useToast } from '../../hooks/use-toast';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { normalizeGeoPromotionSteps } from '@/i18n/demoWorkspaceCopy';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getAIChatPromotionCopy } from '@/i18n/aiChatPromotionCopy';
+import { normalizeGeoPromotionSteps } from '@/i18n/demoWorkspaceCopy';
+import { AlertCircle, Check, CheckCircle2, Circle, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { useToast } from '../../hooks/use-toast';
 
 export const AIChatPromotionPage = () => {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -70,7 +70,7 @@ export const AIChatPromotionPage = () => {
 
       {/* Steps */}
       <div className="space-y-6">
-        {steps.map((step: any) => {
+        {steps.map((step) => {
           const isCompleted = completedSteps.has(step.id);
           return (
             <Card
@@ -131,7 +131,7 @@ export const AIChatPromotionPage = () => {
                   <div>
                     <h4 className="font-semibold text-sm mb-2 text-foreground">{copy.links}</h4>
                     <div className="flex flex-wrap gap-2">
-                      {step.links.map((link: any, idx: number) => (
+                      {step.links.map((link, idx: number) => (
                         <Button
                           key={idx}
                           variant="outline"

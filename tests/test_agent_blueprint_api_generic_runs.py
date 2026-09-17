@@ -2384,7 +2384,8 @@ def test_agent_review_reply_analysis_replaces_future_action_without_subject():
 
 def test_agent_run_completion_refreshes_server_today_summary():
     page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx").read_text(encoding="utf-8")
-    recovered_segment = page_source[page_source.index("if (!runAnimation?.recoveredFromReload"):page_source.index("const startRun = async")]
+    tracking_source = Path("frontend/src/pages/dashboard/agents/useAgentRunTracking.ts").read_text(encoding="utf-8")
+    recovered_segment = tracking_source[tracking_source.index("if (!runAnimation?.recoveredFromReload"):]
     preview_segment = page_source[page_source.index("const startRun = async"):page_source.index("const executeRun = async")]
     work_segment = page_source[page_source.index("const executeRun = async"):page_source.index("const saveSchedule = async")]
 

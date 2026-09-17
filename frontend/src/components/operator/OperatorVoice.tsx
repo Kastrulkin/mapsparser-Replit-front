@@ -1,24 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { browserCookieAuthEnabled, browserCookieValue } from '@/lib/browserSessionFetch';
-import { newAuth } from '@/lib/auth_new';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { Mic, Square } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { jsonRequest, voiceHeaders, type HeadersProvider } from './OperatorVoice.logic';
 
 export type VoiceSubmission = { transcription_id: string; conversation_id: string; request_id: string };
-type HeadersProvider = () => Record<string, string>;
-export const voiceHeaders = (): Record<string, string> => {
-  const token = newAuth.getToken();
-  const result: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const csrf = browserCookieValue('localos_csrf');
-  if (browserCookieAuthEnabled() && csrf) result['X-CSRF-Token'] = csrf;
-  return result;
-};
-async function jsonRequest(url: string, options: RequestInit) {
-  const response = await fetch(url, options);
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error || 'Не удалось обработать аудио');
-  return body;
-}
 async function waitJob(jobId: string, businessId: string, headers: HeadersProvider, signal: AbortSignal) {
   const query = new URLSearchParams({ scope_type: 'business', scope_id: businessId });
   for (let attempt = 0; attempt < 150; attempt++) {
@@ -64,7 +50,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     void jsonRequest(`/api/operator/audio/config?business_id=${encodeURIComponent(businessId)}`, { headers: headers(), signal: controller.signal })
       .then((config) => setAvailable(Boolean(config.input_enabled))).catch(() => setAvailable(false));
     return () => { controller.abort(); if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream(); };
-  }, [businessId, channel]);
+  }, [businessId, channel, headers]);
   useEffect(() => {
     const signal=lifetime.current.signal;
     const saved=sessionStorage.getItem(pendingKey);
@@ -84,7 +70,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
       finally { if(!signal.aborted)setBusy(false); }
     }
     void restore();
-  },[pendingKey]);
+  },[pendingKey, businessId, headers]);
   useEffect(() => { if (!clip) { setClipUrl(''); return; } const url = URL.createObjectURL(clip); setClipUrl(url); return () => URL.revokeObjectURL(url); }, [clip]);
   useEffect(() => {
     if (!recording) return;
@@ -168,8 +154,8 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
     const next = new AbortController(); controller.current = next;
     void jsonRequest(`/api/operator/audio/config?business_id=${encodeURIComponent(businessId)}`, { headers: headers(), signal: next.signal }).then((config) => setAvailable(Boolean(config.output_enabled))).catch(() => undefined);
     return () => { next.abort(); URL.revokeObjectURL(objectUrl.current); };
-  }, [businessId, messageId]);
-  const load = async () => {
+  }, [businessId, messageId, headers]);
+  const load = useLatestCallback(async () => {
     if (busy || url) return; setBusy(true); const signal = controller.current.signal;
     try {
       const queued = await jsonRequest(`/api/operator/messages/${messageId}/speech`, { method: 'POST', headers: headers(), signal });
@@ -180,21 +166,8 @@ export function OperatorSpeech({ messageId, businessId, prepare = false, headers
       objectUrl.current = URL.createObjectURL(blob); setUrl(objectUrl.current);
     } catch { /* Keep the text reply and allow retry with the listen button. */ }
     finally { if (!signal.aborted) setBusy(false); }
-  };
-  useEffect(() => { if (available && prepare && !started.current) { started.current = true; void load(); } }, [available, prepare]);
+  });
+  useEffect(() => { if (available && prepare && !started.current) { started.current = true; void load(); } }, [available, prepare, load]);
   if (!available || !url) return null;
   return <div className="mt-2"><audio aria-label="Озвученный ответ" controls src={url} /></div>;
-}
-
-export async function waitForOperatorResult<T extends { async_job_id?: string }>(result: T, businessId: string, headers: HeadersProvider, isCurrent: () => boolean): Promise<T> {
-  if (!result.async_job_id) return result;
-  const query=new URLSearchParams({scope_type:'business',scope_id:businessId});
-  for(let attempt=0;attempt<150 && isCurrent();attempt++) {
-    const body=await jsonRequest(`/api/operator/mobile/jobs/${result.async_job_id}?${query}`,{headers:headers()});
-    if(!isCurrent())return result;
-    if(body.job?.status==='completed')return body.job.result;
-    if(['failed','cancelled'].includes(body.job?.status))return {...result,status:body.job.status,chat_response:'Подготовить изменение не удалось. План остался прежним. '+(body.job.error || '')};
-    await new Promise<void>(resolve=>window.setTimeout(resolve,2000));
-  }
-  return result;
 }

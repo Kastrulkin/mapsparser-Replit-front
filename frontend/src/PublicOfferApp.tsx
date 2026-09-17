@@ -1,7 +1,8 @@
 import { Suspense, useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
+import { LanguageProvider } from './i18n/LanguageContext';
+import { useLanguage } from './i18n/LanguageContext.logic';
 import PublicPartnershipOfferPage from "./pages/PublicPartnershipOfferPage";
 import PublicSalesRoomPage from "./pages/PublicSalesRoomPage";
 

@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Footer from "@/components/Footer";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { Navigate } from "react-router-dom";
 
 const Requisites = () => {

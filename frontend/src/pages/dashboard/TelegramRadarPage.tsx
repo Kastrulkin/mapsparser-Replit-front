@@ -1,11 +1,11 @@
-import { Link, useOutletContext } from 'react-router-dom';
 import { Radar } from 'lucide-react';
+import { Link, useOutletContext } from 'react-router-dom';
 
 import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
-import { Button } from '@/components/ui/button';
 import { DashboardActionPanel, DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 export const TelegramRadarPage = () => {

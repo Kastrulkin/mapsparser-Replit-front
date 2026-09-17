@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 export type TodayPageCopy = {
   title: string; description: string; loading: string; loadError: string; unavailable: string; retryHint: string; retry: string;

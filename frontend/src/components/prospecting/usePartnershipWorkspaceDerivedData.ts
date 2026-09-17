@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import type { AuditData } from './PartnershipLeadDetailDrawer';
+import type { PartnershipBatch, PartnershipDraft, PartnershipOutcomes, PartnershipRalphLoop, PartnershipReaction } from './partnershipTypes';
 
 export type PartnershipDerivedLead = {
   id: string;
@@ -14,7 +16,7 @@ export type PartnershipDerivedLead = {
   pilot_cohort?: string;
   parse_status?: string;
   deferred_until?: string;
-  search_payload_json?: Record<string, any> | null;
+  search_payload_json?: Record<string, unknown> | null;
   enrich_payload_json?: {
     provider?: string;
     found_fields?: string[];
@@ -24,37 +26,11 @@ export type PartnershipDerivedLead = {
   };
 };
 
-export type PartnershipDerivedDraft = {
-  id: string;
-  lead_id: string;
-  status?: string;
-  lead_status?: string;
-  lead_pipeline_status?: string;
-  lead_partnership_stage?: string;
-  created_at?: string;
-  updated_at?: string;
-};
+export type PartnershipDerivedDraft = PartnershipDraft;
 
-export type PartnershipDerivedBatch = {
-  id: string;
-  status: string;
-  items?: Array<{
-    id: string;
-    lead_id?: string;
-    delivery_status?: string;
-    latest_outcome?: string | null;
-    latest_human_outcome?: string | null;
-    [key: string]: any;
-  }>;
-};
+export type PartnershipDerivedBatch = PartnershipBatch;
 
-export type PartnershipDerivedReaction = {
-  id: string;
-  lead_id: string;
-  classified_outcome?: string | null;
-  human_confirmed_outcome?: string | null;
-  [key: string]: any;
-};
+export type PartnershipDerivedReaction = PartnershipReaction;
 
 type SourceDescriptor = {
   source_kind?: string;
@@ -64,19 +40,19 @@ type SourceDescriptor = {
 type PartnershipDerivedArgs<TLead extends PartnershipDerivedLead> = {
   items: TLead[];
   selectedLeadId: string | null;
-  auditData: any;
+  auditData: AuditData | null;
   leadView: string;
   leadBucket: 'active' | 'deferred';
   preferredSourceFilter: SourceDescriptor | null;
   lastGeoSearchLeadIds: string[];
-  ralphLoop: any;
+  ralphLoop: PartnershipRalphLoop | null;
   batches: PartnershipDerivedBatch[];
   drafts: PartnershipDerivedDraft[];
   reactions: PartnershipDerivedReaction[];
   draftView: string;
   queueView: string;
   reactionView: string;
-  outcomes: any;
+  outcomes: PartnershipOutcomes | null;
 };
 
 const ACTIVE_PIPELINE_STAGES = [

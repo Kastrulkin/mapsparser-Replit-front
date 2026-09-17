@@ -1,11 +1,10 @@
-import React from 'react';
-import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select } from '@/components/ui/select';
+import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { Check, CheckSquare, Globe, MapPinned, MoreHorizontal, Sparkles } from 'lucide-react';
-import { _isSupervisedPlatform, _isSocialPostTextLocked, _socialSupervisedPayload, _socialOpenClawCapabilityLine, _socialSupervisedHandoffStateLabel, _socialSupervisedSafetySummary, _socialPlatformLabel, _socialPublishModeLabel, _socialStatusLabel, _socialStatusClassName, _socialPublishEvidenceClassName, _socialProofQualityLabel, _socialNextActionLabel, _socialItemQueueSummary, _contentTypeLabel, _itemLocationLabel, _planItemStatus, _humanizePlanTitle, _humanizePlanGoal, _sourceKindLabel, _seoViewsLabel, _inputDateValue, _formatPlanItemDate } from './helpers';
+import React from 'react';
+import { _contentTypeLabel, _formatPlanItemDate, _humanizePlanGoal, _humanizePlanTitle, _inputDateValue, _isSocialPostTextLocked, _isSupervisedPlatform, _itemLocationLabel, _planItemStatus, _seoViewsLabel, _socialItemQueueSummary, _socialNextActionLabel, _socialOpenClawCapabilityLine, _socialPlatformLabel, _socialProofQualityLabel, _socialPublishEvidenceClassName, _socialPublishModeLabel, _socialStatusClassName, _socialStatusLabel, _socialSupervisedHandoffStateLabel, _socialSupervisedPayload, _socialSupervisedSafetySummary, _sourceKindLabel } from './helpers.logic';
 
 const draftSpring: Transition = { type: 'spring', duration: 0.3, bounce: 0 };
 

@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from './ui/select';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { errorMessage } from '@/lib/errorMessage';
+import { Edit2, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
-import { Plus, Trash2, Save, Loader2, Edit2, X } from 'lucide-react';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
 
 interface BusinessType {
   id: string;
@@ -45,9 +47,56 @@ export const GrowthPlanEditor: React.FC = () => {
   const [newTypeLabel, setNewTypeLabel] = useState('');
   const { toast } = useToast();
 
+
+
+
+
+  const loadBusinessTypes = useLatestCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await newAuth.makeRequest('/admin/business-types', {
+        method: 'GET'
+      });
+
+      setBusinessTypes(data.types || []);
+      if (data.types && data.types.length > 0 && !selectedTypeId) {
+        setSelectedTypeId(data.types[0].id);
+      }
+    } catch (error: unknown) {
+      console.error('Ошибка загрузки типов бизнеса:', error);
+      toast({
+        title: 'Ошибка',
+        description: errorMessage(error) || 'Не удалось загрузить типы бизнеса',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  });
+
   useEffect(() => {
     loadBusinessTypes();
-  }, []);
+  }, [loadBusinessTypes]);
+
+  const loadStages = useLatestCallback(async (typeId: string) => {
+    try {
+      setLoading(true);
+      const data = await newAuth.makeRequest(`/admin/growth-stages/${typeId}`, {
+        method: 'GET'
+      });
+
+      setStages(data.stages || []);
+    } catch (error: unknown) {
+      console.error('Ошибка загрузки этапов:', error);
+      toast({
+        title: 'Ошибка',
+        description: errorMessage(error) || 'Не удалось загрузить этапы',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  });
 
   useEffect(() => {
     if (selectedTypeId) {
@@ -55,50 +104,7 @@ export const GrowthPlanEditor: React.FC = () => {
     } else {
       setStages([]);
     }
-  }, [selectedTypeId]);
-
-  const loadBusinessTypes = async () => {
-    try {
-      setLoading(true);
-      const data = await newAuth.makeRequest('/admin/business-types', {
-        method: 'GET'
-      });
-      
-      setBusinessTypes(data.types || []);
-      if (data.types && data.types.length > 0 && !selectedTypeId) {
-        setSelectedTypeId(data.types[0].id);
-      }
-    } catch (error: any) {
-      console.error('Ошибка загрузки типов бизнеса:', error);
-      toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить типы бизнеса',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStages = async (typeId: string) => {
-    try {
-      setLoading(true);
-      const data = await newAuth.makeRequest(`/admin/growth-stages/${typeId}`, {
-        method: 'GET'
-      });
-      
-      setStages(data.stages || []);
-    } catch (error: any) {
-      console.error('Ошибка загрузки этапов:', error);
-      toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить этапы',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [loadStages, selectedTypeId]);
 
   const handleCreateType = async () => {
     if (!newTypeKey.trim() || !newTypeLabel.trim()) {
@@ -126,10 +132,10 @@ export const GrowthPlanEditor: React.FC = () => {
       setNewTypeLabel('');
       setEditingType(null);
       await loadBusinessTypes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось создать тип бизнеса',
+        description: errorMessage(error) || 'Не удалось создать тип бизнеса',
         variant: 'destructive'
       });
     } finally {
@@ -150,10 +156,10 @@ export const GrowthPlanEditor: React.FC = () => {
         setSelectedTypeId('');
       }
       await loadBusinessTypes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось удалить тип бизнеса',
+        description: errorMessage(error) || 'Не удалось удалить тип бизнеса',
         variant: 'destructive'
       });
     }
@@ -183,7 +189,7 @@ export const GrowthPlanEditor: React.FC = () => {
         tasks: stage.tasks.map(t => t.text).filter(t => t.trim())
       };
 
-      const url = stage.id 
+      const url = stage.id
         ? `/admin/growth-stages/${stage.id}`
         : '/admin/growth-stages';
       const method = stage.id ? 'PUT' : 'POST';
@@ -197,10 +203,10 @@ export const GrowthPlanEditor: React.FC = () => {
       toast({ title: 'Успешно', description: 'Этап сохранён' });
       setEditingStage(null);
       await loadStages(selectedTypeId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось сохранить этап',
+        description: errorMessage(error) || 'Не удалось сохранить этап',
         variant: 'destructive'
       });
     } finally {
@@ -218,10 +224,10 @@ export const GrowthPlanEditor: React.FC = () => {
 
       toast({ title: 'Успешно', description: 'Этап удалён' });
       await loadStages(selectedTypeId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось удалить этап',
+        description: errorMessage(error) || 'Не удалось удалить этап',
         variant: 'destructive'
       });
     }
@@ -230,8 +236,8 @@ export const GrowthPlanEditor: React.FC = () => {
   const addTask = (stageIndex: number) => {
     const newStages = [...stages];
     const stage = newStages[stageIndex];
-    const newTaskNumber = stage.tasks.length > 0 
-      ? Math.max(...stage.tasks.map(t => t.number)) + 1 
+    const newTaskNumber = stage.tasks.length > 0
+      ? Math.max(...stage.tasks.map(t => t.number)) + 1
       : 1;
     stage.tasks.push({ number: newTaskNumber, text: '' });
     setStages(newStages);
@@ -248,8 +254,8 @@ export const GrowthPlanEditor: React.FC = () => {
   };
 
   const addStage = () => {
-    const newStageNumber = stages.length > 0 
-      ? Math.max(...stages.map(s => s.stage_number)) + 1 
+    const newStageNumber = stages.length > 0
+      ? Math.max(...stages.map(s => s.stage_number)) + 1
       : 1;
     const newStage: GrowthStage = {
       stage_number: newStageNumber,
@@ -360,7 +366,7 @@ export const GrowthPlanEditor: React.FC = () => {
 
           {stages.map((stage, stageIndex) => {
             const isEditing = editingStage === stage.id || editingStage === `new_${stage.stage_number}`;
-            
+
             return (
               <div key={stage.id || `new_${stage.stage_number}`} className="bg-white rounded-lg border border-gray-200 p-6">
                 {isEditing ? (
@@ -565,4 +571,3 @@ export const GrowthPlanEditor: React.FC = () => {
     </div>
   );
 };
-

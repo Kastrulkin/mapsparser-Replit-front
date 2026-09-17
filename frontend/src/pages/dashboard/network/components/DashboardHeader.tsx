@@ -1,9 +1,9 @@
-import React from 'react';
+import { useTheme } from '@/components/theme-provider.logic';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { LayoutGrid, List, Map as MapIcon, Moon, Sun } from "lucide-react";
-import { useTheme } from "@/components/theme-provider";
-import { useLanguage } from '@/i18n/LanguageContext';
+import React from 'react';
 
 interface DashboardHeaderProps {
     viewMode: 'list' | 'map' | 'grid';

@@ -1,21 +1,24 @@
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ChevronDown, ChevronUp, Bot, Zap, Circle } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 import { browserAuthenticationAvailable } from '@/lib/browserSessionFetch';
-import { cn } from '@/lib/utils';
+import { errorMessage } from '@/lib/errorMessage';
 import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
+import { cn } from '@/lib/utils';
+import type { BusinessRecord } from '@/types/business';
+import { Bot, ChevronDown, ChevronUp, Circle, Loader2, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { AIAgentsManagement } from './AIAgentsManagement';
 
 interface AIAgentSettingsProps {
   businessId: string | null;
-  business: any;
+  business: Partial<Pick<BusinessRecord, 'ai_agents_config' | 'ai_agent_enabled' | 'ai_agent_type' | 'ai_agent_restrictions' | 'ai_agent_id' | 'ai_agent_tone' | 'ai_agent_language' | 'subscription_access' | 'subscription_tier' | 'subscription_status' | 'subscription_ends_at'>> | null;
 }
 
 interface AgentConfig {
@@ -45,8 +48,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   const automationAccess = getAutomationAccessForBusiness(business);
   const [agentsConfig, setAgentsConfig] = useState<Record<string, AgentConfig>>({});
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
-  const [availableAgents, setAvailableAgents] = useState<any[]>([]);
-  const [editingAgentForm, setEditingAgentForm] = useState<any | null>(null);
+  const [availableAgents, setAvailableAgents] = useState<Array<typeof EMPTY_AGENT_FORM>>([]);
+  const [editingAgentForm, setEditingAgentForm] = useState<typeof EMPTY_AGENT_FORM | null>(null);
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingAgentForm, setSavingAgentForm] = useState(false);
@@ -84,14 +87,9 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     { value: 'tr', label: 'Türkçe' },
   ];
 
-  useEffect(() => {
-    loadAvailableAgents();
-    if (business) {
-      loadAgentConfigs(business);
-    }
-  }, [business, interfaceLanguage]);
 
-  const loadAgentConfigs = (businessData: any) => {
+
+  const loadAgentConfigs = useLatestCallback((businessData: NonNullable<AIAgentSettingsProps['business']>) => {
     const newConfigs: Record<string, AgentConfig> = {};
 
     // Try loading from new ai_agents_config field
@@ -113,7 +111,9 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       let variables = {};
       try {
         variables = restrictions ? JSON.parse(restrictions) : {};
-      } catch { }
+      } catch {
+        // Malformed legacy restrictions fall back to an empty variable set.
+      }
 
       newConfigs[`${agentType}_agent`] = {
         enabled: true,
@@ -146,9 +146,9 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
         .map(([key]) => key)
     );
     setExpandedAgents(enabled);
-  };
+  });
 
-  const loadAvailableAgents = async () => {
+  const loadAvailableAgents = useLatestCallback(async () => {
     try {
       const token = await newAuth.getToken();
       if (!browserAuthenticationAvailable(token)) return;
@@ -167,7 +167,14 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     } catch (error) {
       console.error('Error loading agents:', error);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadAvailableAgents();
+    if (business) {
+      loadAgentConfigs(business);
+    }
+  }, [business, interfaceLanguage, loadAgentConfigs, loadAvailableAgents]);
 
   const resetAgentForm = () => {
     setEditingAgentForm({ ...EMPTY_AGENT_FORM });
@@ -178,7 +185,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     setShowAgentForm(true);
   };
 
-  const openEditAgentForm = (agent: any) => {
+  const openEditAgentForm = (agent: typeof EMPTY_AGENT_FORM) => {
     setEditingAgentForm({
       id: agent.id,
       name: agent.name || '',
@@ -227,8 +234,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       setShowAgentForm(false);
       resetAgentForm();
       await loadAvailableAgents();
-    } catch (e: any) {
-      toast({ title: t.common.error, description: e?.message || 'Не удалось сохранить агента', variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: t.common.error, description: errorMessage(e) || 'Не удалось сохранить агента', variant: 'destructive' });
     } finally {
       setSavingAgentForm(false);
     }
@@ -251,8 +258,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       }
       toast({ title: t.common.success, description: 'Агент удалён' });
       await loadAvailableAgents();
-    } catch (e: any) {
-      toast({ title: t.common.error, description: e?.message || 'Не удалось удалить агента', variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: t.common.error, description: errorMessage(e) || 'Не удалось удалить агента', variant: 'destructive' });
     }
   };
 

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
+import { errorMessage } from '@/lib/errorMessage';
+import React, { useEffect, useState } from 'react';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
 import { browserAuthenticationAvailable } from '../lib/browserSessionFetch';
@@ -43,11 +45,9 @@ export const TokenUsageStats: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadStats();
-  }, []);
 
-  const loadStats = async () => {
+
+  const loadStats = useLatestCallback(async () => {
     try {
       setLoading(true);
       const token = await newAuth.getToken();
@@ -75,17 +75,21 @@ export const TokenUsageStats: React.FC = () => {
       if (data.success) {
         setStats(data);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка загрузки статистики кредитов:', error);
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось загрузить статистику',
+        description: errorMessage(error) || 'Не удалось загрузить статистику',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  };
+  });
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('ru-RU').format(num);

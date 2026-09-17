@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 export interface ChatsWorkspaceCopy {
   tabsLabel: string;

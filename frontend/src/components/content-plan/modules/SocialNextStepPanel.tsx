@@ -1,7 +1,7 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, CheckSquare, Globe } from 'lucide-react';
-import { SocialLaunchChecklist, SocialOwnerLaunchPath, _socialPlatformLabel, _socialSettingsPathForPlatform, _socialWorkerEnvLines, _socialLaunchRunbookBlock, _socialFirstCycleVerificationBlock, _socialLearningChecklistStatusLabel, _socialDispatchActionLabel, _socialDispatchReasonLabel } from './helpers';
+import { SocialLaunchChecklist, SocialOwnerLaunchPath, SocialFirstCycleVerificationBlock, SocialLaunchRunbookBlock } from './helpers';
+import { _socialDispatchActionLabel, _socialDispatchReasonLabel, _socialLearningChecklistStatusLabel, _socialPlatformLabel, _socialSettingsPathForPlatform, _socialWorkerEnvLines } from './helpers.logic';
 
 export const SocialNextStepPanel = ({ scope }) => {
   const {
@@ -1401,8 +1401,8 @@ export const SocialNextStepPanel = ({ scope }) => {
                               {isRu ? 'Скопировать настройки запуска' : 'Copy worker env'}
                             </Button>
                           </div>
-                          {_socialFirstCycleVerificationBlock(socialLaunchPreflight.first_cycle_verification, isRu)}
-                          {_socialLaunchRunbookBlock(socialLaunchPreflight.launch_runbook, isRu)}
+                          <SocialFirstCycleVerificationBlock verification={socialLaunchPreflight.first_cycle_verification} isRu={isRu} />
+                          <SocialLaunchRunbookBlock runbook={socialLaunchPreflight.launch_runbook} isRu={isRu} />
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
                               ? 'Проверка ничего не публикует: подтверждение обязательно, карты остаются контролируемыми или ручными без финального клика.'
@@ -1859,7 +1859,7 @@ export const SocialNextStepPanel = ({ scope }) => {
                               </div>
                             </div>
                           ) : null}
-                          {_socialFirstCycleVerificationBlock(socialDispatchPreview.readiness?.first_cycle_verification, isRu)}
+                          <SocialFirstCycleVerificationBlock verification={socialDispatchPreview.readiness?.first_cycle_verification} isRu={isRu} />
                           {Number(socialDispatchPreview.readiness?.first_cycle_steps?.length || 0) > 0 ? (
                             <div className="mt-2 rounded-lg border border-sky-300/20 bg-sky-400/10 px-2 py-2 text-[11px] leading-5 text-sky-50">
                               <div className="font-semibold text-white">

@@ -1,30 +1,32 @@
-import { StorageOAuthSettings } from '@/components/StorageOAuthSettings';
-import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import TelegramConnection from '@/components/TelegramConnection';
-import WhatsAppConnection from '@/components/WhatsAppConnection';
-import { WABACredentials } from '@/components/WABACredentials';
-import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
-import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
-import { NetworkManagement } from '@/components/NetworkManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
-import { Bot, Settings } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { NetworkManagement } from '@/components/NetworkManagement';
+import { StorageOAuthSettings } from '@/components/StorageOAuthSettings';
+import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
+import TelegramConnection from '@/components/TelegramConnection';
+import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
+import { WABACredentials } from '@/components/WABACredentials';
+import WhatsAppConnection from '@/components/WhatsAppConnection';
 import {
-  DashboardActionPanel,
-  DashboardCompactMetricsRow,
-  DashboardPageHeader,
-  DashboardSection,
+	DashboardActionPanel,
+	DashboardCompactMetricsRow,
+	DashboardPageHeader,
+	DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+import { Button } from '@/components/ui/button';
 import { featureFlags } from '@/config/featureFlags';
+import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { Bot, Settings } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
 import {
-  SettingsIntegrationsPage,
-  SettingsPublicationsPage,
+	SettingsIntegrationsPage,
+	SettingsPublicationsPage,
 } from './settings/SettingsHubPage';
 
 type SettingsBusiness = {
+  whatsapp_phone?: string;
+  whatsapp_verified?: number | boolean;
   network_id?: string | number | null;
   telegram_bot_token?: string | null;
   telegram_chat_id?: string | null;

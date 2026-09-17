@@ -1,4 +1,4 @@
-import type { Language } from './LanguageContext';
+import type { Language } from './LanguageContext.logic';
 
 type DashboardShellCopy = {
   today: string; todayHint: string; profileHint: string; cardHint: string; progressHint: string; financeHint: string; chatsHint: string; settingsHint: string;
