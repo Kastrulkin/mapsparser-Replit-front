@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from psycopg2.extras import Json, RealDictCursor
 from urllib3.exceptions import HTTPError as Urllib3HTTPError
 
+from core import outbound_network
 from services.outreach_campaign_service import (
     SENDER_MODE_LOCALOS,
     SENDER_MODE_LOCALOS_FOR_PARTNER,
@@ -759,6 +760,15 @@ def _contact_pages(html: str, website_url: str, limit: int = 5) -> list[str]:
     return pages
 
 
+def _decode_website_html(body: bytes, content_type: str) -> str:
+    match = re.search(r"charset\s*=\s*[\"']?([A-Za-z0-9._-]+)", content_type or "", re.I)
+    encoding = match.group(1) if match else "utf-8"
+    try:
+        return body.decode(encoding, errors="replace")
+    except LookupError:
+        return body.decode("utf-8", errors="replace")
+
+
 def collect_public_website_intelligence(
     website: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
@@ -777,27 +787,27 @@ def collect_public_website_intelligence(
             continue
         visited.add(page_url)
         try:
-            response = requests.get(page_url, headers=headers, timeout=8, allow_redirects=False, stream=True)
-            if response.is_redirect:
+            response = outbound_network.public_pinned_get(page_url, headers=headers, timeout=8)
+            if 300 <= response.status_code < 400:
                 redirect_url = _public_http_url(urljoin(page_url, str(response.headers.get("location") or "")))
                 if redirect_url and redirect_url not in visited:
                     queue.insert(0, redirect_url)
                 continue
-            response.raise_for_status()
+            if response.status_code >= 400:
+                warnings.append(f"Не удалось проверить {page_url}")
+                continue
             if "text/html" not in str(response.headers.get("content-type") or "").lower():
                 continue
-            body = response.raw.read(1_000_001, decode_content=True)
+            body = response.body
             if len(body) > 1_000_000:
                 warnings.append(f"Страница {page_url} слишком большая и пропущена")
                 continue
-            html = body.decode(response.encoding or "utf-8", errors="replace")
-            contacts.extend(extract_contacts_from_html(html, response.url))
-            crm_observations.extend(
-                extract_booking_crm_observations_from_html(html, response.url)
-            )
+            html = _decode_website_html(body, str(response.headers.get("content-type") or ""))
+            contacts.extend(extract_contacts_from_html(html, page_url))
+            crm_observations.extend(extract_booking_crm_observations_from_html(html, page_url))
             if len(visited) == 1:
-                queue.extend(_contact_pages(html, response.url))
-        except (requests.RequestException, Urllib3HTTPError):
+                queue.extend(_contact_pages(html, page_url))
+        except (ValueError, requests.RequestException, Urllib3HTTPError):
             warnings.append(f"Не удалось проверить {page_url}")
     unique: dict[tuple[str, str], dict[str, Any]] = {}
     for contact in contacts:

@@ -393,8 +393,8 @@ def test_website_stream_timeout_becomes_warning(monkeypatch):
         lambda value: str(value),
     )
     monkeypatch.setattr(
-        "services.contact_intelligence_service.requests.get",
-        lambda *_args, **_kwargs: Response(),
+        "services.contact_intelligence_service.outbound_network.public_pinned_get",
+        lambda *_args, **_kwargs: (_ for _item in ()).throw(ReadTimeoutError(None, "https://example.ru", "timed out")),
     )
 
     contacts, warnings = collect_public_website_contacts("https://example.ru")

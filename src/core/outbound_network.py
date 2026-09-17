@@ -17,6 +17,13 @@ class OutboundHttpResponse:
     text: str
 
 
+@dataclass(frozen=True)
+class OutboundHttpFetchResponse:
+    status_code: int
+    headers: dict[str, str]
+    body: bytes
+
+
 def resolve_outbound_http_proxy() -> str:
     for key in ("OUTBOUND_HTTP_PROXY", "EXTERNAL_HTTP_PROXY"):
         value = str(os.getenv(key, "") or "").strip()
@@ -77,7 +84,10 @@ def _public_addresses_for_url(value: str) -> tuple[str, list[str], int]:
     parsed = urlsplit(clean_url)
     hostname = str(parsed.hostname or "").casefold().rstrip(".")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    try:
+        addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except OSError:
+        raise ValueError("Допустима только публичная HTTP-ссылка")
     public_addresses = []
     for address in addresses:
         raw_ip = str(address[4][0] or "").split("%", 1)[0]
@@ -135,6 +145,61 @@ def public_pinned_post(value: str, body: bytes, headers: dict[str, str], timeout
         finally:
             response.release_conn()
         return OutboundHttpResponse(status_code=int(response.status), text=response_text)
+    finally:
+        pool.close()
+
+
+def public_pinned_get(
+    value: str,
+    headers: dict[str, str],
+    timeout: int = 8,
+    max_bytes: int = 1_000_001,
+) -> OutboundHttpFetchResponse:
+    clean_url, public_addresses, port = _public_addresses_for_url(value)
+    parsed = urlsplit(clean_url)
+    hostname = str(parsed.hostname or "").casefold().rstrip(".")
+    request_path = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    default_port = 443 if parsed.scheme == "https" else 80
+    host_header_name = f"[{hostname}]" if ":" in hostname else hostname
+    request_headers = {
+        **headers,
+        "Host": host_header_name if port == default_port else f"{host_header_name}:{port}",
+    }
+    pinned_ip = public_addresses[0]
+    if parsed.scheme == "https":
+        pool = urllib3.HTTPSConnectionPool(
+            pinned_ip,
+            port=port,
+            timeout=urllib3.Timeout(total=timeout),
+            retries=False,
+            cert_reqs="CERT_REQUIRED",
+            ca_certs=certifi.where(),
+            assert_hostname=hostname,
+            server_hostname=hostname,
+        )
+    else:
+        pool = urllib3.HTTPConnectionPool(
+            pinned_ip,
+            port=port,
+            timeout=urllib3.Timeout(total=timeout),
+            retries=False,
+        )
+    try:
+        response = pool.urlopen(
+            "GET",
+            request_path,
+            headers=request_headers,
+            redirect=False,
+            preload_content=False,
+        )
+        try:
+            return OutboundHttpFetchResponse(
+                status_code=response.status,
+                headers={str(key).lower(): str(item) for key, item in response.headers.items()},
+                body=response.read(max_bytes),
+            )
+        finally:
+            response.release_conn()
     finally:
         pool.close()
 
