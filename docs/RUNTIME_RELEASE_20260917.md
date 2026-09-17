@@ -62,3 +62,14 @@ The request to finish Docker/database maintenance was reconciled against the liv
 - Local HTTP HEAD and local/public `/health` pass; unauthenticated `/api/auth/me` returns 401. Recent app logs contain no `Traceback`, `ERROR`, `WARNING` or `CRITICAL` markers in the sampled ten-minute window.
 - App, worker, operator-worker and PostgreSQL report restart count zero and no OOM. Telegram reports two restarts and no OOM; two exact polling-stall recovery messages corroborate those restarts. Its logs also contain transport `ConnectError`, `ReadError` and `RemoteProtocolError` signatures. At observation it is healthy, with a successful-poll heartbeat age of 42.4 seconds. The underlying Telegram transport instability is **not resolved** by the completed maintenance.
 - The separate local production-readiness audit and its uncommitted patches were not deployed. The distinction between runtime-snapshot maintenance and a clean canonical Dockerfile release remains in force.
+
+## Read-only reconciliation — 17 September, 23:00–23:02 UTC
+
+The repeated request to finish deferred Docker/database maintenance was checked against the live server. The maintenance above is already applied; no duplicate restart, build or migration was performed.
+
+- Server filesystem remains 50 GB total, 9.6 GB available; all eight services run. App/worker/operator-worker and bot image IDs match the recorded runtime snapshots.
+- PostgreSQL postmaster start remains `2026-09-17 20:38:18.07045+00`. Read-only SQL returned `20260907_001`; the live app's migration graph independently returned the same single head. That deployed graph has no pending upgrade.
+- Previous backup remains present: 1,736,112,836 bytes, mode `0600`. This follow-up did not reread or restore its contents.
+- Verification order: Compose status, recent app log marker count, local HTTP HEAD, targeted checks. HEAD returned 200, local/public health returned `status=ok`, anonymous auth returned 401. The sampled ten-minute app log window contained zero Traceback/ERROR/WARNING/CRITICAL lines.
+- Telegram is healthy at observation but now has six container restarts, versus two previously. The sampled two-hour log window contains transport-error signatures; log-line counts are not independent-incident counts. Connectivity remains unresolved; no diagnostic provider call or message send was initiated.
+- No production data edits, new deployment or local Docker Desktop restart occurred. Audit patches remain separate. A clean canonical-image rebuild/hardening rollout remains unfinished, as noted above.
