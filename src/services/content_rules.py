@@ -13,6 +13,12 @@ class RuleConflict(ValueError):
     pass
 
 
+class RuleViolation(ValueError):
+    def __init__(self, violations):
+        super().__init__("Текст не прошёл проверку правил бизнеса")
+        self.violations=violations
+
+
 def can_manage(cursor, user_id, business_id):
     actor, _ = authorize_actor(cursor, user_id, business_id, check_subscription=False)
     if actor.get('is_superadmin') or actor.get('role') == 'business_owner':
@@ -187,7 +193,7 @@ def validate(cursor,business_id,user_id,text,generate,source_facts=''):
     raw=generate(instruction,business_id=business_id,user_id=user_id)
     result=json.loads(str(raw).strip().removeprefix('```json').removesuffix('```').strip())
     if not isinstance(result,dict) or result.get('valid') is not True or result.get('violations')!=[]:
-        raise ValueError('Текст не прошёл проверку правил бизнеса')
+        raise RuleViolation(result.get('violations',[]) if isinstance(result,dict) else [])
     return text
 
 
@@ -196,9 +202,11 @@ def enforce(cursor,business_id,user_id,text,generate,source_facts=''):
     try:
         return validate(cursor,business_id,user_id,text,generate,source_facts)
     except ValueError:
+        import sys
+        violations=getattr(sys.exception(),'violations',[]) or [str(sys.exception())]
         rules=active_rules(cursor,business_id)
         raw=generate('Исправь черновик, соблюдая ограничения. Не добавляй факты. Верни только JSON {"post":"готовый текст"}.\n'+
-            json.dumps({'draft':text,'rules':[r['text'] for r in rules],'facts':evidence(cursor,business_id),'owner_input':source_facts,'instruction':'Убери неподтверждённые цены и скидки; не заменяй их выдуманными.'},ensure_ascii=False,default=str),business_id=business_id,user_id=user_id)
+            json.dumps({'draft':text,'violations':violations,'rules':[r['text'] for r in rules],'facts':evidence(cursor,business_id),'owner_input':source_facts,'instruction':'Полностью исключи неподтверждённые и запрещённые утверждения. Если правило запрещает упоминание услуги без подтверждения, убери упоминание целиком: смягчить обещание недостаточно. Построй текст только на подтверждённых услугах из facts. Убери неподтверждённые цены и скидки; не заменяй их выдуманными.'},ensure_ascii=False,default=str),business_id=business_id,user_id=user_id)
         repaired=json.loads(str(raw).strip().removeprefix('```json').removesuffix('```').strip()).get('post')
         if not isinstance(repaired,str) or len(repaired.strip())<30:
             raise ValueError('Не удалось исправить текст по правилам бизнеса')

@@ -76,3 +76,22 @@ def test_network_errors_do_not_keep_receiver_healthy(monkeypatch):
     monkeypatch.setattr(telegram_polling.os,'_exit',exit_process)
     import pytest
     with pytest.raises(SystemExit):request._watch()
+
+
+def test_bot_startup_retry_replaces_closed_event_loop():
+    import ast
+    from pathlib import Path
+    from types import SimpleNamespace
+    module=ast.parse(Path('src/telegram_bot.py').read_text())
+    entry=next(node for node in module.body if isinstance(node,ast.FunctionDef) and node.name=='main')
+    attempts=[]
+    def run():
+        loop=asyncio.get_event_loop()
+        assert not loop.is_closed()
+        attempts.append(loop)
+        loop.close()
+        if len(attempts)==1:raise RuntimeError('first startup failed')
+    namespace={'TELEGRAM_BOT_TOKEN':'test','asyncio':asyncio,'_run_bot_once':run,'time':SimpleNamespace(sleep=lambda _:None)}
+    exec(compile(ast.Module(body=[entry],type_ignores=[]),'<bot-main-test>','exec'),namespace)
+    namespace['main']()
+    assert len(attempts)==2 and attempts[0] is not attempts[1]

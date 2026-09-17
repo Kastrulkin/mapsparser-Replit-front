@@ -6383,6 +6383,10 @@ def main():
         return
     retry_delay = 5
     while True:
+        # run_polling closes its event loop, including after a failed startup.
+        # Each retry must have a fresh loop and fresh transports.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
             _run_bot_once()
             return
@@ -6392,6 +6396,9 @@ def main():
             print(f"⏳ Повторное подключение к Telegram через {retry_delay} сек.")
             time.sleep(retry_delay)
             retry_delay = min(retry_delay * 2, 300)
+        finally:
+            if not loop.is_closed():
+                loop.close()
 
 if __name__ == "__main__":
     main()
