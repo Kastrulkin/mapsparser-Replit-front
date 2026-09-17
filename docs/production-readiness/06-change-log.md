@@ -66,3 +66,13 @@ The canonical Dockerfile now builds `build:all` and copies `frontend/public-dist
 - Fix built from a separate clean baseline archive containing only this packaging patch: **39.493 s** with cached dependencies, image `sha256:3dc995eb73758128a56c4c1e42e43f3ca61c9c6725c70b3f12329958b12276f7` (ARM64). Both image HTML entrypoints are nonempty, runtime UID10001, source nonwritable, debug directory writable.
 - Isolated app returns **HTTP200** for public audit; synthetic seed and five-flow API smoke pass. Capture: task `raw/docker-public-{build,runtime}-green.json`; smoke log `/tmp/localos-readiness-staging-smoke.log`, exit0.
 - Fresh reviewer passed both Docker contract tests and inspected independent runtime evidence. This does not claim final whole-product patched-image proof, AMD64 compatibility, browser-worker packaging or dependency upgrades; those remain separate gates.
+
+## TEST-FIXTURE-01a — Restore PostgreSQL test preconditions
+
+Status: **FIX_PROVEN for these fixture groups**, independently reviewed. Runtime code unchanged.
+
+- Client-info's test-only schema now contains the business projection/access columns and membership tables actually read by the route. Seven baseline failures were setup drift, not seven product defects.
+- CAPTCHA/expiry/resume tests use their own migrated PostgreSQL testcontainers instead of arbitrary environment DSNs/minimal shadow queue tables; they seed valid users and required `parsequeue.user_id`. The successful resume fixture satisfies the current parsed-card validator. Expected `delayed_auto` and final `completed` states were checked against the actual worker branches, not broadened into an allowed-status list. Test name now describes automatic CAPTCHA retry accurately.
+- Sheets recovery tests reconnect using the same explicit `LOCALOS_TEST_DATABASE_URL` used by their isolated schema fixture. `connection.dsn` omits its password and caused five authentication failures before the provider-boundary assertions.
+- Client-info/worker combined: **11 passed in 35.44s**. Independent worker rerun: **3 passed in 30.31s**, raw `worker-fixture-review.json`. Sheets recovery/queue: **16 passed in 2.68s**, raw `sheet-provider-fixture-green.json`; reviewer approved DSN/schema isolation.
+- No application validation/permissions/schema changes, new skips, provider writes or production access. Remaining baseline hook/Telegram/browser/migration failures and final full-suite rerun are still open.

@@ -1,4 +1,5 @@
 """External success without a local commit never authorizes an automatic resend."""
+import os
 import time
 
 import psycopg2
@@ -12,6 +13,7 @@ from tests.test_agent_sheet_provider_queue_pg import sheet_queue_db, _insert_bou
 @pytest.fixture
 def provider_connections(sheet_queue_db, monkeypatch):
     first, _second = sheet_queue_db
+    database_url = os.environ["LOCALOS_TEST_DATABASE_URL"]
     cursor = first.cursor()
     cursor.execute("SELECT current_schema() schema")
     schema = cursor.fetchone()["schema"]
@@ -20,7 +22,7 @@ def provider_connections(sheet_queue_db, monkeypatch):
 
     class Database:
         def __init__(self):
-            self.conn = psycopg2.connect(first.dsn, cursor_factory=RealDictCursor)
+            self.conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
             self.conn.cursor().execute(f'SET search_path TO "{schema}"')
             self.conn.commit()
             connections.append(self.conn)

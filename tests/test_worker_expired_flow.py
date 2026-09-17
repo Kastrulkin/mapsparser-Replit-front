@@ -1,65 +1,38 @@
-import os
 import uuid
 
-import pytest
-
-
-def test_worker_marks_captcha_expired_after_ttl(monkeypatch):
+def test_worker_marks_captcha_expired_after_ttl(monkeypatch, postgres_container, run_migrations):
     """
     Проверяет, что при истёкшем TTL воркер помечает captcha-задачу как expired
     и очищает captcha_* поля, а также закрывает сессию в ACTIVE_CAPTCHA_SESSIONS.
     """
-    if "TEST_DATABASE_URL" not in os.environ:
-        pytest.skip("TEST_DATABASE_URL is not set")
-
-    os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+    raw_url = postgres_container.get_connection_url()
+    database_url = raw_url.replace("postgresql+psycopg2://", "postgresql://", 1)
+    monkeypatch.setenv("DATABASE_URL", database_url)
 
     import worker
 
     task_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
 
-    # Вставляем задачу старше TTL
+    # Вставляем канонически валидную задачу старше TTL.
     conn = worker.get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS parsequeue (
-            id TEXT PRIMARY KEY,
-            url TEXT,
-            status TEXT,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP,
-            retry_after TIMESTAMP NULL,
-            captcha_required INT DEFAULT 0,
-            captcha_url TEXT,
-            captcha_session_id TEXT,
-            captcha_started_at TEXT,
-            captcha_status TEXT,
-            resume_requested INT DEFAULT 0,
-            error_message TEXT,
-            business_id TEXT,
-            task_type TEXT DEFAULT 'parse_card',
-            account_id TEXT,
-            source TEXT,
-            user_id TEXT
-        );
-        """
-    )
+    cur.execute("INSERT INTO users (id, email) VALUES (%s, %s)", (user_id, "expired@test.local"))
     cur.execute("DELETE FROM parsequeue WHERE id = %s", (task_id,))
     # captcha_started_at делаем старше TTL (строка ISO)
     cur.execute(
         """
         INSERT INTO parsequeue (
-            id, url, status, created_at,
+            id, url, user_id, status, created_at,
             captcha_required, captcha_url, captcha_session_id,
             captcha_started_at, captcha_status, resume_requested
         )
-        VALUES (%s, %s, 'captcha', NOW(),
+        VALUES (%s, %s, %s, 'captcha', NOW(),
                 1, %s, %s,
                 to_char(NOW() - INTERVAL '60 minutes', 'YYYY-MM-DD\"T\"HH24:MI:SS'),
                 'waiting', 0)
         """,
-        (task_id, "https://yandex.ru/maps/org/123/", "https://captcha.test/", "S1"),
+        (task_id, "https://yandex.ru/maps/org/123/", user_id, "https://captcha.test/", "S1"),
     )
     conn.commit()
     cur.close()
@@ -123,4 +96,3 @@ def test_worker_marks_captcha_expired_after_ttl(monkeypatch):
     assert captcha_session_id is None
     assert captcha_started_at is None
     assert resume_requested == 0
-

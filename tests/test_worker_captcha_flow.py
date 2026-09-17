@@ -1,57 +1,29 @@
-import os
 import uuid
 
-import pytest
-
-
-def test_worker_sets_captcha_waiting(monkeypatch):
+def test_worker_schedules_automatic_captcha_retry(monkeypatch, postgres_container, run_migrations):
     """
     Проверяет, что при captcha_detected воркер переводит задачу
-    в status='captcha' с корректными полями.
+    в status='captcha', captcha_status='delayed_auto' с корректными полями.
     """
-    if "TEST_DATABASE_URL" not in os.environ:
-        pytest.skip("TEST_DATABASE_URL is not set")
-
-    # Настраиваем DATABASE_URL для слоя БД проекта
-    os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+    raw_url = postgres_container.get_connection_url()
+    database_url = raw_url.replace("postgresql+psycopg2://", "postgresql://", 1)
+    monkeypatch.setenv("DATABASE_URL", database_url)
 
     import worker
 
-    # Готовим таблицу ParseQueue и вставляем pending-задачу
+    # Вставляем канонически валидную pending-задачу в схему миграций.
     task_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
     conn = worker.get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS parsequeue (
-            id TEXT PRIMARY KEY,
-            url TEXT,
-            status TEXT,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP,
-            retry_after TIMESTAMP NULL,
-            captcha_required INT DEFAULT 0,
-            captcha_url TEXT,
-            captcha_session_id TEXT,
-            captcha_started_at TEXT,
-            captcha_status TEXT,
-            resume_requested INT DEFAULT 0,
-            error_message TEXT,
-            business_id TEXT,
-            task_type TEXT DEFAULT 'parse_card',
-            account_id TEXT,
-            source TEXT,
-            user_id TEXT
-        );
-        """
-    )
+    cur.execute("INSERT INTO users (id, email) VALUES (%s, %s)", (user_id, "captcha@test.local"))
     cur.execute("DELETE FROM parsequeue WHERE id = %s", (task_id,))
     cur.execute(
         """
-        INSERT INTO parsequeue (id, url, status, created_at)
-        VALUES (%s, %s, %s, NOW())
+        INSERT INTO parsequeue (id, url, user_id, status, created_at)
+        VALUES (%s, %s, %s, %s, NOW())
         """,
-        (task_id, "https://yandex.ru/maps/org/123/", "pending"),
+        (task_id, "https://yandex.ru/maps/org/123/", user_id, "pending"),
     )
     conn.commit()
     cur.close()
@@ -102,8 +74,7 @@ def test_worker_sets_captcha_waiting(monkeypatch):
 
     assert status == "captcha"
     assert captcha_required == 1
-    assert captcha_status == "waiting"
+    assert captcha_status == "delayed_auto"
     assert captcha_session_id == "S1"
     assert captcha_started_at is not None
     assert resume_requested == 0
-
