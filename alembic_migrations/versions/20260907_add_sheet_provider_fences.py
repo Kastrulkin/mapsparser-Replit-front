@@ -1,14 +1,14 @@
 """Fence approved Google Sheets provider handoffs.
 
 Revision ID: 20260907_001
-Revises: 20260906_012
+Revises: 20260915_disk_import, 20260917_content_rules
 """
 
 from alembic import op
 
 
 revision = "20260907_001"
-down_revision = "20260906_012"
+down_revision = ("20260915_disk_import", "20260917_content_rules")
 branch_labels = None
 depends_on = None
 

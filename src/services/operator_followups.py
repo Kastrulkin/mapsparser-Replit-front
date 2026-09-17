@@ -37,6 +37,15 @@ def route(cursor, *, business_id, user_id, channel, message, history, conversati
     from services.operator_core import standardize_operator_result, operator_subscription_block
     from services.operator_tool_billing import run_paid_operator_tool_loop
     command=re.sub(r'^\s*(?:пожалуйста[,\s]*|(?:можешь|можете|можно)\s+(?:пожалуйста[,\s]*)?)','',message,flags=re.I)
+    from services import operator_voice_followups
+    try:
+        corrected=operator_voice_followups.route(cursor,business_id=business_id,user_id=user_id,channel=channel,
+            message=message,history=history,request_id=str(payload.get('request_id') or conversation_id)+':correction')
+    except (ValueError,PermissionError):
+        import sys
+        corrected={'status':'clarification_required','chat_response':str(sys.exception())}
+    if corrected is not None:
+        return standardize_operator_result(corrected,corrected.get('capability') or 'content.item.edit'), {}
     if work_journal.enabled(business_id):
         correction=re.match(r'\s*(исправь|измени|отмени|удали)\s+(?:эту\s+)?(?:заметку|запись)\b[:.,\s]*(.*)',command,re.I)
         if correction:

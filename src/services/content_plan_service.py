@@ -5330,6 +5330,13 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             generation_error_reason = "ai_exception"
             fallback_preview = "" if generation_v2 else _fallback_draft_text(business_name, item, business_facts, normalized_language)
             generated_text = ""
+        if generated_text:
+            from services.content_rules import enforce
+            from services.operator_social_post_generation import _default_social_post_generator
+            try:
+                generated_text=enforce(cursor,str(item.get('business_id') or ''),user_id,generated_text,_default_social_post_generator)
+            except Exception:
+                raise ValueError('Текст не прошёл проверку правил бизнеса. Предыдущий черновик сохранён.') from None
         if generated_text and _looks_like_ice_rink_hallucination(generated_text, business_facts):
             generation_source = "failed" if generation_v2 else "fallback"
             generation_error_reason = "hallucination_filter"
@@ -5570,6 +5577,10 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
             if _content_generation_v2_enabled():
                 raise ValueError("Сначала добавьте факты и подготовьте текст публикации")
             generated_text = _fallback_draft_text("Бизнес", item, language=normalized_language)
+        from services.content_rules import validate
+        from services.operator_social_post_generation import _default_social_post_generator
+        validate(cursor, str(item.get('business_id') or item.get('root_business_id')), user_id,
+            generated_text, _default_social_post_generator)
         item_metadata = _item_metadata(item)
         generation_bundle = item_metadata.get("content_generation_v2") if isinstance(item_metadata.get("content_generation_v2"), dict) else {}
         brief_metadata = item_metadata.get("content_brief_v1") if isinstance(item_metadata.get("content_brief_v1"), dict) else {}

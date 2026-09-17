@@ -11,7 +11,7 @@ from typing import Any
 JOB_STATUSES = {"queued", "running", "waiting_for_review", "completed", "failed", "cancelled"}
 TERMINAL_JOB_STATUSES = {"completed", "failed", "cancelled"}
 RETRYABLE_JOB_KINDS = {
-    "audio_transcription", "audio_speech",
+    "audio_transcription", "audio_speech", "voice_receive", "voice_execute",
     "content_plan_generate", "content_plan_revision",
     "content_draft_generate",
     "finance_document_recognize",
@@ -19,7 +19,7 @@ RETRYABLE_JOB_KINDS = {
     "diagnostics_retry",
 }
 CANCELLABLE_JOB_KINDS = {
-    "audio_transcription", "audio_speech",
+    "audio_transcription", "audio_speech", "voice_receive", "voice_execute",
     "content_plan_generate", "content_plan_revision",
     "content_draft_generate",
     "finance_document_recognize",
@@ -80,6 +80,8 @@ def _public_job(row: dict[str, Any]) -> dict[str, Any]:
         "updated_at": _iso(row.get("updated_at")),
         "completed_at": _iso(row.get("completed_at")),
         "terminal": status in TERMINAL_JOB_STATUSES,
+        "execution_status": status,
+        "delivery_status": _json(row.get("result_json"), {}).get("delivery_status", "pending" if kind in {"voice_receive", "voice_execute"} else "not_applicable"),
         "available_actions": [
             *(["retry"] if status == "failed" and kind in RETRYABLE_JOB_KINDS else []),
             *(["cancel"] if status in {"queued", "running", "waiting_for_review"} and kind in CANCELLABLE_JOB_KINDS else []),
@@ -487,7 +489,11 @@ def process_next_operator_async_job(*, background: bool = False) -> dict[str, An
     heartbeat = _OperatorJobHeartbeat(job_id, lease_token)
     heartbeat.start()
     try:
-        if kind in {"audio_transcription", "audio_speech"}:
+        if kind in {"voice_receive", "voice_execute"}:
+            from services.operator_voice_queue import process_job
+            result = process_job(claimed)
+            status, stage, progress = "completed", "Обработка завершена", 100
+        elif kind in {"audio_transcription", "audio_speech"}:
             from services.operator_audio import process_audio_job
             result = process_audio_job(claimed)
             status, stage, progress = "completed", "Аудио обработано", 100
@@ -565,6 +571,10 @@ def process_next_operator_async_job(*, background: bool = False) -> dict[str, An
                 error=str(exc),
                 lease_token=lease_token,
             )
+            if failed_update and kind in {"voice_receive", "voice_execute"} and int(claimed.get('attempt_count') or 0) < int(claimed.get('max_attempts') or 3) and not isinstance(exc, PermissionError):
+                fail_db.conn.cursor().execute("UPDATE operator_async_jobs SET status='queued',next_attempt_at=NOW()+INTERVAL '15 seconds',completed_at=NULL WHERE id=%s AND status='failed'",(job_id,))
+            elif failed_update and kind == 'voice_execute':
+                fail_db.conn.cursor().execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || %s::jsonb WHERE id=%s",(json.dumps({'operator_payload':{'text':'Не удалось выполнить команду. Откройте диалог для проверки результата.','result':{'status':'failed'}}}),payload['asset_id']))
             if failed_update and kind=="content_plan_revision":
                 from services.operator_plan_revision import record_failure
                 record_failure(fail_db.conn.cursor(),claimed)

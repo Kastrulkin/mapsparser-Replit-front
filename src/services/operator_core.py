@@ -109,6 +109,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("content_plan.generate", "Контент-план", "available", "write_internal", "explicit_command", "/dashboard/content", ("Сделай контент-план на 30 дней",), "content_plan.item.create_draft"),
     OperatorCapability("content.create_plan", "Черновик контент-плана", "draft_only", "write_internal", "explicit_command", "/dashboard/content", ("Подготовь контент-план",), "content_plan.item.create_draft"),
     OperatorCapability("content.item.edit", "Правка темы поста", "available", "write_internal", "explicit_command", "/dashboard/content", ("Измени тему поста на 15 сентября",)),
+    OperatorCapability("content.rules.network", "Правила контента для сети", "available", "bulk_write", "separate_confirmation", "/dashboard/profile", ("Применить ограничение ко всей сети",)),
     OperatorCapability("content.plan.refocus", "Изменение акцента плана", "available", "bulk_write", "separate_confirmation", "/dashboard/content", ("В этом месяце делаем акцент на новой услуге",)),
     OperatorCapability("content.memory.add", "Факты, история и тон бизнеса", "available", "write_internal", "explicit_command", "/dashboard/content", ("Запомни для будущих текстов историю компании",)),
     OperatorCapability("content.history", "История контента и черновиков", "available", "read_only", "none", "/dashboard/content", ("Покажи последние черновики",)),
@@ -1958,13 +1959,14 @@ def route_operator_message(
         return followup
     if pending.get('capability') == 'settings.input':
         pending = {}
-    from services import operator_workday_router
-    workday_result = operator_workday_router.route(cursor,business_id=business_id,user_id=user_id,
-        message=clean_message,channel=channel,payload=action_payload or {},pending=pending_context or {},
-        conversation_id=conversation_id,conversation_history=conversation_history,actor_context=actor_context,
-        pending_approvals=pending_approvals,orchestrator=action_orchestrator,planner=tool_planner)
-    if workday_result:
-        return workday_result
+    if business_id in {value.strip() for value in os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS','').split(',') if value.strip()}:
+        from services import operator_workday_router
+        workday_result = operator_workday_router.route(cursor,business_id=business_id,user_id=user_id,
+            message=clean_message,channel=channel,payload=action_payload or {},pending=pending_context or {},
+            conversation_id=conversation_id,conversation_history=conversation_history,actor_context=actor_context,
+            pending_approvals=pending_approvals,orchestrator=action_orchestrator,planner=tool_planner)
+        if workday_result:
+            return workday_result
     from services import work_journal, operator_work_journal
     if tool_planner is None and work_journal.enabled(business_id):
         ban=operator_work_journal.ban_request(cursor,business_id,user_id,channel,clean_message,action_orchestrator)
@@ -2420,6 +2422,11 @@ def confirm_pending_operator_action(
         if result.get('status') == 'completed':
             finish_operator_action(cursor,action_id=action_id,result=result)
         return result, False
+    if capability == 'content.rules.network':
+        from services.content_rules import apply_network
+        result=standardize_operator_result(apply_network(cursor,business_id,user_id,envelope),capability)
+        if result.get('status')=='completed':finish_operator_action(cursor,action_id=action_id,result=result)
+        return result,False
     if capability == 'content.plan.refocus':
         from services.operator_editorial import apply_focus
         result = standardize_operator_result(apply_focus(cursor,business_id,user_id,envelope),capability)

@@ -616,17 +616,22 @@ def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        from services.content_rules import enforce
+        from services.operator_social_post_generation import _default_social_post_generator
+        generated_text = enforce(cursor, tenant_id, str(user_data.get('user_id') or ''), generated_text,
+            _default_social_post_generator, raw_info)
         assert_schema_columns(cursor, "usernews", (
-            "id", "user_id", "service_id", "source_text", "generated_text", "approved", "created_at",
+            "id", "user_id", "business_id", "service_id", "source_text", "generated_text", "approved", "created_at",
         ))
         cursor.execute(
             """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO UserNews (id, user_id, business_id, service_id, source_text, generated_text)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
                 news_id,
                 str(user_data.get("user_id") or ""),
+                tenant_id,
                 None,
                 raw_info,
                 generated_text,
@@ -2081,7 +2086,6 @@ def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarku
             InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}"),
             InlineKeyboardButton("❌ Отклонить", callback_data=f"operator_reject:{action_id}"),
         ])
-    rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -3825,7 +3829,8 @@ async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 f"✅ Аккаунт успешно привязан!\n\n"
                 f"👤 Пользователь: {data.get('user', {}).get('name', 'Не указано')}\n"
                 f"📧 Email: {data.get('user', {}).get('email', 'Не указано')}\n\n"
-                f"Теперь вы можете использовать все функции бота!"
+                "Выберите бизнес и отправьте голосовое или текст.\n\n"
+                "Например:\n• Покажи ближайший пост.\n• Запомни для будущих текстов: …\n• Есть пожелание клиента: …"
             )
             await show_main_menu(update, context, telegram_id, data.get('user', {}).get('id'))
         else:
@@ -6414,6 +6419,10 @@ def main():
         return
     retry_delay = 5
     while True:
+        # run_polling closes its event loop, including after a failed startup.
+        # Each retry must have a fresh loop and fresh transports.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
             _run_bot_once()
             return
@@ -6422,7 +6431,10 @@ def main():
         except Exception:
             print(f"⏳ Повторное подключение к Telegram через {retry_delay} сек.")
             time.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, 300)
+            retry_delay = min(retry_delay * 2, 30)
+        finally:
+            if not loop.is_closed():
+                loop.close()
 
 if __name__ == "__main__":
     main()

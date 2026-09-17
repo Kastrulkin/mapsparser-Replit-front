@@ -301,6 +301,13 @@ def update_content_voice(actor: AuthContext | str, business_id: str, payload: di
     cursor = db.conn.cursor()
     try:
         _verify_access(cursor, auth, business_id)
+        # Rules have their own versioned write boundary. Legacy style edits cannot overwrite them.
+        cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('editorial-profile:'+business_id,))
+        cursor.execute('SELECT preferences_json FROM content_voice_profiles WHERE business_id=%s',(business_id,))
+        latest=_row_to_dict(cursor,cursor.fetchone()).get('preferences_json') or {}
+        preferences.pop('content_rules',None)
+        if 'content_rules' in latest:
+            preferences['content_rules']=latest['content_rules']
         cursor.execute(
             """
             INSERT INTO content_voice_profiles (

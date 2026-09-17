@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
 
-test('Mini App sends transcribed voice directly and keeps a text response', async ({ page }, testInfo) => {
+test('Mini App submits recognized voice once and keeps a text response', async ({ page }, testInfo) => {
   let chatCalls = 0;
   await page.route('https://telegram.org/js/telegram-web-app.js*', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
   await page.addInitScript(() => { localStorage.setItem('localos-mini-onboarding-v3:voice-user', 'completed'); Object.defineProperty(window, 'Telegram', { configurable: true, value: { WebApp: { initData: 'signed-test', ready: () => {}, expand: () => {} } } }); });
@@ -39,7 +39,7 @@ test('Mini App sends transcribed voice directly and keeps a text response', asyn
   expect(chatCalls).toBe(1);
 });
 
-test('web Operator sends transcribed voice through the same chat contract', async ({ page }, testInfo) => {
+test('web Operator submits voice through the same chat contract', async ({ page }, testInfo) => {
   let calls = 0;
   await page.addInitScript(() => {
     localStorage.setItem('auth_token', 'voice-test'); localStorage.setItem('selectedBusinessId', 'voice-business'); localStorage.setItem('language', 'ru');

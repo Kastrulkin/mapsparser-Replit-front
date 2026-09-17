@@ -986,6 +986,11 @@ Write all generated text in {language_name}.
         user_id=owner_id,
     )
     generated_text = _extract_json_field(generated, "news").strip()
+    from services.content_rules import enforce
+    from services.operator_social_post_generation import _default_social_post_generator
+    generated_text = enforce(conn.cursor(), business_id, owner_id, generated_text,
+        _default_social_post_generator, raw_info)
+
     if not generated_text:
         raise ValueError("AI не вернул текст новости")
     if active_news_patterns:

@@ -59,6 +59,8 @@ class FakeCursor:
                 self.reservation["released_credits"] = params[2] if len(params or ()) > 2 else 0
 
     def fetchone(self):
+        if "information_schema.columns" in self.last_query:
+            return {"columns": self.last_params[1]}
         query = self.last_query
         params = self.last_params
         if "information_schema.columns" in query:

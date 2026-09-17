@@ -1370,6 +1370,13 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
+        from services.content_rules import validate
+        from services.operator_social_post_generation import _default_social_post_generator
+        try:
+            validate(cursor,str(post['business_id']),user_id,
+                str(post.get('platform_text') or post.get('base_text') or ''),_default_social_post_generator)
+        except Exception:
+            raise ValueError('Публикация остановлена: текст не прошёл проверку актуальных правил бизнеса. Исправьте и подтвердите черновик заново.') from None
         platform = str(post.get("platform") or "").strip()
         publish_mode = str(post.get("publish_mode") or "").strip()
         metadata = _json_dict(post.get("metadata_json"))

@@ -7,11 +7,14 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from contextvars import ContextVar
 
 from core.auth_helpers import verify_business_access
 from services.operator_conversations import _row, get_or_create_operator_conversation, find_latest_operator_conversation
 from services.operator_async_jobs import create_operator_async_job
 from subscription_manager import build_subscription_capabilities, capability_access_payload
+
+VOICE_EXECUTION_CONTEXT = ContextVar('voice_execution_context',default=None)
 
 MAX_BYTES = 10 * 1024 * 1024
 MAX_SECONDS = 120
@@ -22,6 +25,16 @@ def authorize_actor(cursor, user_id, business_id, check_subscription=True):
     user = _row(cursor, cursor.fetchone())
     if not user or not user.get('is_active'):
         raise PermissionError('Аккаунт недоступен')
+    execution=VOICE_EXECUTION_CONTEXT.get()
+    if execution:
+        cursor.execute('SELECT telegram_id FROM users WHERE id=%s',(user_id,))
+        binding=_row(cursor,cursor.fetchone())
+        if execution['user_id']!=user_id or str(binding.get('telegram_id'))!=str(execution['telegram_id']):
+            raise PermissionError('Контекст голосовой команды изменился')
+        cursor.execute('SELECT scope_type,scope_id FROM telegramcontrolpreferences WHERE user_id=%s',(user_id,))
+        current_scope=_row(cursor,cursor.fetchone())
+        if current_scope and (current_scope.get('scope_type')!='business' or current_scope.get('scope_id')!=execution['business_id']):
+            raise PermissionError('Выбранный бизнес изменился. Команда остановлена.')
     user['user_id'] = user_id
     allowed, owner = verify_business_access(cursor, business_id, user)
     if not allowed:
@@ -216,6 +229,9 @@ def process_audio_job(claimed):
         if asset['status'] in {'ready','submitted'}:
             if asset['kind'] == 'speech':
                 return {'asset_id':asset['id'],'audio_url':'/api/operator/audio/'+asset['id'],'message_id':asset['message_id']}
+            from services.operator_voice_queue import enqueue_execution
+            enqueue_execution(cursor, asset)
+            db.conn.commit()
             return finance_transcription_result(cursor,asset,asset.get('transcript'))
         if asset['status'] == 'cancelled':
             raise ValueError('Запись отменена')
@@ -254,6 +270,8 @@ def process_audio_job(claimed):
             if asset.get('path'):
                 consumed_source = private_path(asset['path'])
             result=finance_transcription_result(cursor,asset,text)
+            from services.operator_voice_queue import enqueue_execution
+            enqueue_execution(cursor, asset)
         else:
             cursor.execute('SELECT content FROM operatormessages WHERE id=%s AND user_id=%s',(asset['message_id'],asset['user_id']))
             text = str(_row(cursor,cursor.fetchone()).get('content') or '')[:1000]
