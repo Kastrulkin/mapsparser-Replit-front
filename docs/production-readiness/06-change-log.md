@@ -18,3 +18,18 @@ Evidence:
 - Focused Ruff F821 and `git diff --check` pass.
 
 Limits: full backend/PostgreSQL suite and deployed behavior not yet verified. This fix does not close the separate role/tenant audit. Source rollback is possible but would reopen revoked-session access and therefore is not a recommended security mitigation.
+
+## CI-TS-01 — Real app and tooling typecheck in both CI entrypoints
+
+Status: **FIX_PROVEN locally**, independent review passed; no CI deployment or remote change.
+
+Both fast/nightly scripts now invoke the canonical `npm --prefix frontend run typecheck`. Their former root `tsc --noEmit` command exited zero without checking referenced app/Node projects.
+
+Regression tests use actual locked TypeScript, tiny isolated referenced projects, real npm and the current package.json typecheck script. They inject errors separately into app and Node code, prove the former bare invocation misses them, and verify both gates fail; healthy fixtures pass. Non-typecheck gate phases are stubbed, so this is not an execution of the entire nightly job.
+
+- Red baseline: six failing contract cases (healthy invocation contract plus swallowed app/Node errors).
+- Initial green / independent rerun: 6 passed in 73.34 s / 70.03 s.
+- Independent review recommended exercising the real package script instead of reproducing it inside the stub. Implemented; strengthened suite **6 passed in 84.02 s**. Root inspected the revised fixture and bounded subprocesses.
+- `bash -n` and `git diff --check` pass. Canonical actual frontend typecheck separately passed the clean baseline and the finance patch check.
+
+No application behavior, schema or provider effects changed.

@@ -41,10 +41,7 @@ echo "== Frontend lint =="
 npm --prefix frontend run lint
 
 echo "== Frontend typecheck =="
-(
-  cd frontend
-  npm exec tsc -- --noEmit
-)
+npm --prefix frontend run typecheck
 
 echo "== Frontend production builds =="
 npm --prefix frontend run build:all
