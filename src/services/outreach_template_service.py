@@ -7,12 +7,15 @@ current.  Callers must still run the normal human-language and quality gates.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 from urllib.parse import urlparse
 
 
 TEMPLATE_LIBRARY_VERSION = "localos_outreach_templates_v9"
+CREATOR_INVITATION_TEMPLATE_KEY = "creator_invitation_v1"
+CREATOR_INVITATION_TEMPLATE_VERSION = 1
 
 OUTREACH_TEMPLATES = (
     {
@@ -149,6 +152,99 @@ _RECIPIENT_GENITIVE_OVERRIDES = {
 
 def _text(value: Any) -> str:
     return " ".join(str(value or "").replace("—", "-").replace("«", '"').replace("»", '"').split())
+
+
+def _creator_invitation_identity_text(bridge: dict[str, Any]) -> str:
+    return " ".join(
+        _text(bridge.get(key))
+        for key in (
+            "channel_identity_description",
+            "channel_identity_title",
+            "creator_description",
+            "creator_display_name",
+        )
+        if _text(bridge.get(key))
+    )
+
+
+def _creator_invitation_recipient(identity_text: str) -> str | None:
+    pair = re.search(
+        r"\b([А-ЯЁ][а-яё]{2,})\s+и\s+([А-ЯЁ][а-яё]{2,})\s+[А-ЯЁ][а-яё-]{2,}\b",
+        identity_text,
+    )
+    if pair:
+        return f"{pair.group(1)} и {pair.group(2)}"
+    person = re.search(
+        r"\b(?:автор|ведущ[а-яё]*|эколог)\s+([А-ЯЁ][а-яё]{2,})\s+[А-ЯЁ][а-яё-]{2,}\b",
+        identity_text,
+        flags=re.IGNORECASE,
+    )
+    if person:
+        return person.group(1).capitalize()
+    return None
+
+
+def _creator_invitation_topic(identity_text: str, evidence_text: str) -> str | None:
+    normalized_identity = _text(identity_text).lower()
+    normalized_all = f"{normalized_identity} {_text(evidence_text).lower()}"
+    if "природ" in normalized_identity and "экскурс" in normalized_identity:
+        return "природе и экскурсиях"
+    if (
+        "петербург" in normalized_all
+        and "экскурс" in normalized_identity
+        and any(marker in normalized_all for marker in ("мам", "дочер", "ребён", "семейн"))
+    ):
+        return "Петербурге и семейных прогулках"
+    return None
+
+
+def render_creator_invitation_template(bridge: dict[str, Any]) -> dict[str, Any] | None:
+    """Render approved author-invitation bytes from current public source slots."""
+
+    if (
+        bridge.get("status") != "ready"
+        or bridge.get("constraints", {}).get("invitation_only") is not True
+        or int(bridge.get("terms_version") or 0) <= 0
+        or not bridge.get("approved_at")
+        or not _text(bridge.get("channel_id"))
+        or not _text(bridge.get("evidence_id"))
+    ):
+        return None
+    identity_text = _creator_invitation_identity_text(bridge)
+    recipient = _creator_invitation_recipient(identity_text)
+    topic = _creator_invitation_topic(
+        identity_text,
+        _text(bridge.get("public_observed_fact")),
+    )
+    if not recipient or not topic:
+        return None
+    subject = f"{recipient} | LocalOS | сотрудничество"
+    body = (
+        f"{recipient}, здравствуйте!\n\n"
+        f"Я Александр Демьянов, LocalOS. Нашёл ваш канал о {topic}.\n\n"
+        "Приглашаем авторов сотрудничать с местными бизнесами по бартеру: "
+        "вы рассказываете о компании, а она предоставляет услугу, если по вашей "
+        "рекомендации приходит оговорённое число клиентов. Например, стрижка за "
+        "трёх новых клиентов.\n\n"
+        "Вам интересен такой формат? Если да, подскажите, в каком районе вы чаще "
+        "бываете и какие услуги вам были бы интересны.\n\n"
+        "Александр Демьянов\n"
+        "LocalOS"
+    )
+    return {
+        "status": "selected",
+        "library_version": TEMPLATE_LIBRARY_VERSION,
+        "key": CREATOR_INVITATION_TEMPLATE_KEY,
+        "version": CREATOR_INVITATION_TEMPLATE_VERSION,
+        "subject": subject,
+        "body": body,
+        "subject_sha256": hashlib.sha256(subject.encode("utf-8")).hexdigest(),
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "recipient": recipient,
+        "topic": topic,
+        "channel_id": _text(bridge.get("channel_id")),
+        "evidence_id": _text(bridge.get("evidence_id")),
+    }
 
 
 def _service_word(count: int) -> str:

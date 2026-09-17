@@ -12,6 +12,7 @@ export type InfluencerCreator = {
   description?: string;
   profile_type?: string;
   platform?: string;
+  platforms?: string[];
   public_url?: string;
   city?: string;
   area?: string;

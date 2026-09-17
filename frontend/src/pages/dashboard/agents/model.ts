@@ -333,6 +333,7 @@ export const runStatusFilters = [
   { value: 'all', label: 'Все' },
   { value: 'running', label: 'В работе' },
   { value: 'waiting_approval', label: 'Ждёт решения' },
+  { value: 'waiting_provider', label: 'Ожидает записи' },
   { value: 'completed', label: 'Готово' },
   { value: 'failed', label: 'Ошибка' },
 ];
@@ -475,6 +476,14 @@ export const statusTone: Record<string, string> = {
   ready: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   running: 'bg-sky-50 text-sky-700 ring-sky-200',
+  waiting_provider: 'bg-sky-50 text-sky-700 ring-sky-200',
+  provider_request_queued: 'bg-sky-50 text-sky-700 ring-sky-200',
+  provider_executing: 'bg-sky-50 text-sky-700 ring-sky-200',
+  applied: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  provider_unavailable: 'bg-amber-50 text-amber-700 ring-amber-200',
+  provider_failed: 'bg-rose-50 text-rose-700 ring-rose-200',
+  provider_reconciliation_required: 'bg-amber-50 text-amber-700 ring-amber-200',
+  approval_invalid: 'bg-amber-50 text-amber-700 ring-amber-200',
   waiting_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   needs_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   failed: 'bg-rose-50 text-rose-700 ring-rose-200',
@@ -496,6 +505,14 @@ export const statusLabels: Record<string, string> = {
   ready: 'Готово',
   completed: 'Готово',
   running: 'В работе',
+  waiting_provider: 'Ожидает записи',
+  provider_request_queued: 'Ожидает записи',
+  provider_executing: 'Запись выполняется',
+  applied: 'Запись выполнена',
+  provider_unavailable: 'Запись пока недоступна',
+  provider_failed: 'Ошибка записи',
+  provider_reconciliation_required: 'Результат требует сверки',
+  approval_invalid: 'Подтверждение недействительно',
   waiting_approval: 'Ждёт решения',
   needs_approval: 'Нужно решение',
   failed: 'Ошибка',
@@ -999,6 +1016,16 @@ export const buildEmployeeStatus = (
   pendingApproval?: AgentApproval | null,
 ): EmployeeStatus => {
   const workspaceState = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+  const providerAttention = sheetProviderAttentionState(details?.runs?.[0]);
+  if (providerAttention) {
+    return {
+      label: 'Нужно проверить',
+      tone: 'amber',
+      summary: providerAttention === 'provider_reconciliation_required'
+        ? 'Запись могла выполниться. Сверьте Google Sheets перед следующим запуском.'
+        : 'Запись в Google Sheets требует проверки перед следующим запуском.',
+    };
+  }
   if (workspaceState === 'blocked_result') {
     return {
       label: 'Нужно проверить',
@@ -1011,6 +1038,13 @@ export const buildEmployeeStatus = (
       label: 'Ждёт решения',
       tone: 'amber',
       summary: 'Сотрудник подготовил результат и остановился, чтобы вы его проверили.',
+    };
+  }
+  if (workspaceState === 'waiting_provider') {
+    return {
+      label: 'Ожидает записи',
+      tone: 'amber',
+      summary: 'Подтверждённая запись в Google Sheets ожидает результата. Откройте последний запуск, чтобы увидеть статус.',
     };
   }
   if (workspaceState === 'error') {
@@ -1097,6 +1131,12 @@ export const buildEmployeeWorkspaceState = (
   const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
   const hasCandidateVersion = Boolean(details?.candidate_version_id || blueprint.latest_version_id || blueprint.latest_version_number);
   const latestRun = details?.runs?.[0] || null;
+  if (sheetProviderAttentionState(latestRun)) {
+    return 'needs_attention';
+  }
+  if (latestRun?.status === 'waiting_provider' || blueprint.last_run_status === 'waiting_provider') {
+    return 'waiting_provider';
+  }
   const latestResult = findPreparedResultPayload(latestRun, pendingApproval);
   if (isBusinessBlockerPayload(latestResult)) {
     return 'blocked_result';
@@ -1126,6 +1166,21 @@ export const buildEmployeeWorkspaceState = (
   return 'working';
 };
 
+const providerAttentionStates = new Set([
+  'provider_reconciliation_required',
+  'provider_unavailable',
+  'provider_failed',
+]);
+
+export const sheetProviderAttentionState = (run?: AgentRun | null) => {
+  const requests = run?.observability?.domain_requests?.items || [];
+  return requests.find((item) => item.kind?.includes('sheet') && providerAttentionStates.has(item.apply_state || ''))?.apply_state || '';
+};
+
+export const isAgentRunProviderPollingActive = (run?: AgentRun | null) => (
+  run?.status === 'waiting_provider' && !sheetProviderAttentionState(run)
+);
+
 export const buildEmployeeLastActivity = (
   blueprint: AgentBlueprint,
   details?: AgentBlueprintDetails | null,
@@ -1142,6 +1197,9 @@ export const buildEmployeeLastActivity = (
     }
     if (latestRun.status === 'waiting_approval') {
       return `Подготовил результат и ждёт решения${time ? ` · ${time}` : ''}`;
+    }
+    if (latestRun.status === 'waiting_provider') {
+      return `Ожидает записи${time ? ` · ${time}` : ''}`;
     }
     if (latestRun.status === 'failed') {
       return `Остановился с ошибкой${time ? ` · ${time}` : ''}`;
@@ -1190,6 +1248,17 @@ export const buildEmployeePrimaryAction = ({
   const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
   const latestResult = findPreparedResultPayload(details?.runs?.[0] || null, pendingApproval);
   const userMode = buildAgentUserMode(blueprint, details);
+  const providerAttention = sheetProviderAttentionState(details?.runs?.[0]);
+  if (providerAttention) {
+    return {
+      kind: 'open_result',
+      label: providerAttention === 'provider_reconciliation_required' ? 'Сверить таблицу' : 'Открыть статус записи',
+      description: providerAttention === 'provider_reconciliation_required'
+        ? 'Запись могла выполниться; сверьте таблицу перед следующим запуском.'
+        : 'Проверьте статус записи в Google Sheets перед следующим запуском.',
+      targetMode: 'results',
+    };
+  }
   if (state === 'needs_mode') {
     return {
       kind: 'confirm_mode',
@@ -1261,6 +1330,14 @@ export const buildEmployeePrimaryAction = ({
       kind: 'approve',
       label: approvalActionLabels(pendingApproval).approve,
       description: 'Проверьте подготовленный результат и решите, можно ли использовать его дальше.',
+      targetMode: 'results',
+    };
+  }
+  if (state === 'waiting_provider') {
+    return {
+      kind: 'open_result',
+      label: 'Открыть статус записи',
+      description: 'Запись в Google Sheets ещё не получила окончательный результат. Повторный запуск пока недоступен.',
       targetMode: 'results',
     };
   }
@@ -1499,6 +1576,12 @@ export const buildReasonCard = (
       description: pendingApproval
         ? explainApproval(pendingApproval)
         : 'Сотрудник остановился, потому что следующий шаг требует решения владельца.',
+    };
+  }
+  if (state === 'waiting_provider') {
+    return {
+      title: 'Что происходит сейчас',
+      description: 'Подтверждённая запись выполняется отдельно. Откройте статус записи; пока нет результата, новый запуск не нужен.',
     };
   }
   if (state === 'needs_connection') {

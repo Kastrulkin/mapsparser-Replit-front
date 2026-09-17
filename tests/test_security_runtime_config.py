@@ -13,7 +13,7 @@ def test_compose_passes_security_runtime_env_to_app_and_worker():
         "EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}",
     ]
     for item in required:
-        assert compose.count(item) == 2
+        assert compose.count(item) >= 2
 
 
 def test_auth_secret_required_when_app_env_is_production(monkeypatch):

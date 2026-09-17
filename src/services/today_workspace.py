@@ -88,16 +88,38 @@ def influencer_work(cursor, scope, now):
 
 
 def automation_work(cursor, scope, now):
-    cursor.execute("""SELECT r.id,r.blueprint_id,r.business_id,r.status,r.updated_at,b.name
+    cursor.execute("""SELECT r.id,r.blueprint_id,r.business_id,r.status,r.updated_at,b.name,
+            sheet.apply_state provider_state
         FROM agent_runs r JOIN agent_blueprints b ON b.id=r.blueprint_id
+        LEFT JOIN LATERAL (
+            SELECT s.apply_state FROM agent_sheet_operation_requests s
+            WHERE s.bound_run_id=r.id AND s.business_id=r.business_id
+              AND r.status='waiting_provider' AND s.apply_state<>'applied'
+            ORDER BY CASE WHEN s.apply_state IN ('provider_reconciliation_required','provider_failed','provider_unavailable','approval_invalid') THEN 0 ELSE 1 END,
+                s.updated_at DESC LIMIT 1
+        ) sheet ON TRUE
         WHERE r.business_id=ANY(%s) AND r.status NOT IN ('cancelled')
-        ORDER BY CASE WHEN r.status IN ('failed','waiting_approval','awaiting_approval') THEN 0 ELSE 1 END,
+        ORDER BY CASE WHEN r.status IN ('failed','waiting_approval','awaiting_approval')
+            OR sheet.apply_state IN ('provider_reconciliation_required','provider_failed','provider_unavailable','approval_invalid') THEN 0 ELSE 1 END,
             r.updated_at DESC LIMIT 20""", (scope["business_ids"],))
-    return [work_item(entity_type="agent_run",entity_id=row["id"],flow="automation",business_id=row["business_id"],
-        title=row["name"],status=row["status"],
-        url="/dashboard/agents?"+urlencode({"blueprint_id":row["blueprint_id"],"run_id":row["id"],"business_id":row["business_id"]}),
-        now=now,updated_at=row["updated_at"],urgent=row["status"]=="failed")
-        for row in [_row(cursor,value) for value in cursor.fetchall()]]
+    result = []
+    descriptions = {
+        "waiting_provider": "Запись в таблицу подтверждена и ожидает выполнения.",
+        "provider_request_queued": "Запись в таблицу подтверждена и ожидает выполнения.",
+        "provider_executing": "Выполняется запись в таблицу.",
+        "provider_reconciliation_required": "Результат записи неизвестен. Сверьте таблицу перед следующими действиями.",
+        "provider_failed": "Запись требует внимания. Откройте результат, чтобы проверить причину.",
+        "provider_unavailable": "Для записи нужен доступ к таблице. Откройте результат, чтобы проверить подключение.",
+        "approval_invalid": "Подтверждение записи больше не действует. Откройте результат для проверки.",
+    }
+    attention = {"failed", "provider_reconciliation_required", "provider_failed", "provider_unavailable", "approval_invalid"}
+    for row in [_row(cursor, value) for value in cursor.fetchall()]:
+        status = (row.get("provider_state") or row["status"]) if row["status"] == "waiting_provider" else row["status"]
+        result.append(work_item(entity_type="agent_run",entity_id=row["id"],flow="automation",business_id=row["business_id"],
+            title=row["name"],status=status,description=descriptions.get(status, ""),
+            url="/dashboard/agents?"+urlencode({"blueprint_id":row["blueprint_id"],"run_id":row["id"],"business_id":row["business_id"]}),
+            now=now,updated_at=row["updated_at"],urgent=status in attention))
+    return result
 
 
 def section_items(items, primary_flow, *, limit=8):

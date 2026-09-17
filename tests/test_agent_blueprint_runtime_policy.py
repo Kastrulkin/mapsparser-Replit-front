@@ -60,6 +60,22 @@ def test_runner_blocks_custom_agent_start_when_required_external_binding_missing
     assert cursor.tables["agent_runs"] == {}
 
 
+def test_start_run_preserves_unresolved_waiting_provider_run():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {"id": "bp1", "business_id": "biz1", "metadata_json": {}}
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {"id": "ver1", "blueprint_id": "bp1", "steps_json": [], "capability_allowlist_json": []}
+    cursor.tables["agent_runs"]["pending"] = {"id": "pending", "blueprint_id": "bp1", "status": "waiting_provider"}
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {}, {"user_id": "user1"})
+
+    assert result["success"] is False
+    assert result["code"] == "AGENT_RUN_ALREADY_IN_PROGRESS"
+    assert result["run_id"] == "pending"
+    assert list(cursor.tables["agent_runs"]) == ["pending"]
+
+
 def test_runner_creates_openclaw_preview_observations_from_route_contract():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 

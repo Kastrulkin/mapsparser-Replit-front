@@ -16,6 +16,7 @@ import base64
 import logging
 import requests
 import sys
+import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -5300,8 +5301,17 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
+async def handle_operator_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from services.operator_telegram_inputs import receive
+    if not await receive(update,context,sys.modules[__name__]):
+        await update.message.reply_text('Выберите доступный бизнес в LocalOS. Приём файлов Оператором доступен в рабочем пилоте.')
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик фото"""
+    from services.operator_telegram_inputs import receive
+    if await receive(update,context,sys.modules[__name__]):
+        return
     user_id = str(update.effective_user.id)
     
     if user_id not in user_states:
@@ -6321,14 +6331,7 @@ async def _configure_bot_commands(application: Application):
     )
 
 
-def main():
-    """Запуск бота"""
-    if not TELEGRAM_BOT_TOKEN:
-        print("⚠️  TELEGRAM_BOT_TOKEN не установлен. Бот не будет запущен.")
-        print("💡 Установите токен: export TELEGRAM_BOT_TOKEN='ваш_токен'")
-        print("💡 Или добавьте в .env файл: TELEGRAM_BOT_TOKEN=ваш_токен")
-        return
-    
+def _run_bot_once():
     try:
         proxy_url = resolve_telegram_http_proxy()
         builder = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(_configure_bot_commands).post_shutdown(_stop_operator_voice)
@@ -6384,6 +6387,7 @@ def main():
         application.add_handler(CallbackQueryHandler(button_callback))
         application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        application.add_handler(MessageHandler(filters.Document.ALL, handle_operator_document))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         application.add_error_handler(_telegram_error_handler)
         
@@ -6399,6 +6403,26 @@ def main():
         print(f"   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
         print(f"   3. Доступность интернета для подключения к Telegram API")
         raise
+
+
+def main():
+    """Запуск бота с ограниченным повтором при сбоях Telegram-маршрута."""
+    if not TELEGRAM_BOT_TOKEN:
+        print("⚠️  TELEGRAM_BOT_TOKEN не установлен. Бот не будет запущен.")
+        print("💡 Установите токен: export TELEGRAM_BOT_TOKEN='ваш_токен'")
+        print("💡 Или добавьте в .env файл: TELEGRAM_BOT_TOKEN=ваш_токен")
+        return
+    retry_delay = 5
+    while True:
+        try:
+            _run_bot_once()
+            return
+        except KeyboardInterrupt:
+            raise
+        except Exception:
+            print(f"⏳ Повторное подключение к Telegram через {retry_delay} сек.")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 300)
 
 if __name__ == "__main__":
     main()

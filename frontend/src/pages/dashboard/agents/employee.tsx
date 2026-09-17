@@ -1700,6 +1700,7 @@ export const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
   ready_for_test: 'Готов к проверке',
   running_test: 'Проверка идёт',
   waiting_for_review: 'Ждёт вашего решения',
+  waiting_provider: 'Ожидает записи',
   blocked_result: 'Нужен следующий шаг',
   working: 'Работает',
   completed: 'Выполнено',

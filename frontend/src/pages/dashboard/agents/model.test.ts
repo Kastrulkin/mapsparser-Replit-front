@@ -50,3 +50,66 @@ describe('paused agent presentation', () => {
       .toBe('Автоматические запуски приостановлены');
   });
 });
+
+describe('provider write presentation', () => {
+  const waitingProviderAgent: AgentBlueprint = {
+    ...pausedScheduledAgent,
+    id: 'agent-sheets-write',
+    status: 'active',
+    lifecycle_state: 'active',
+    last_run_status: 'waiting_provider',
+  };
+  const waitingProviderDetails: AgentBlueprintDetails = {
+    ...pausedDetails,
+    lifecycle_state: 'active',
+    runs: [{
+      id: 'run-sheets-write',
+      blueprint_id: 'agent-sheets-write',
+      status: 'waiting_provider',
+      observability: {
+        domain_requests: {
+          items: [{
+            kind: 'google_sheets_update_cells',
+            approval_state: 'approved',
+            apply_state: 'provider_request_queued',
+          }],
+        },
+      },
+    }],
+  };
+
+  it('keeps an approved write open until its provider result is known', () => {
+    expect(buildEmployeeWorkspaceState(waitingProviderAgent, waitingProviderDetails)).toBe('waiting_provider');
+    expect(buildEmployeeStatus(waitingProviderAgent, waitingProviderDetails)).toMatchObject({
+      label: 'Ожидает записи',
+      tone: 'amber',
+    });
+    expect(buildEmployeePrimaryAction({ blueprint: waitingProviderAgent, details: waitingProviderDetails })).toMatchObject({
+      kind: 'open_result',
+      label: 'Открыть статус записи',
+    });
+  });
+
+  it('marks an unknown provider result as attention instead of a healthy wait', () => {
+    const reconciliationDetails: AgentBlueprintDetails = {
+      ...waitingProviderDetails,
+      runs: [{
+        ...waitingProviderDetails.runs[0],
+        observability: {
+          domain_requests: {
+            items: [{
+              kind: 'google_sheets_update_cells',
+              approval_state: 'approved',
+              apply_state: 'provider_reconciliation_required',
+            }],
+          },
+        },
+      }],
+    };
+    expect(buildEmployeeWorkspaceState(waitingProviderAgent, reconciliationDetails)).toBe('needs_attention');
+    expect(buildEmployeePrimaryAction({ blueprint: waitingProviderAgent, details: reconciliationDetails })).toMatchObject({
+      kind: 'open_result',
+      label: 'Сверить таблицу',
+    });
+  });
+});

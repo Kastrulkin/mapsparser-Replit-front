@@ -1,5 +1,24 @@
 import pytest
-from services.partnership_results import change_agreement, instruction_draft
+from services.partnership_results import change_agreement, instruction_draft, is_confirmed_partner, result_counts
+
+
+def test_existing_partner_counts_without_approving_unknown_terms():
+    partner = {'id': 'w1', 'company_id': 'c1', 'agreement_json': {'relationship_status': 'confirmed', 'status': 'needs_confirmation'}}
+    assert is_confirmed_partner(partner)
+    counts = result_counts([partner, {**partner, 'id': 'w2'}, {'id': 'candidate', 'agreement_json': {}}])
+    assert counts['partners'] == 1
+    assert counts['launched'] == 0
+    assert counts['launch_unrecorded'] == 2
+    assert counts['needs_decision'] == 2
+    with pytest.raises(ValueError):
+        change_agreement(partner['agreement_json'], 'prepare_instruction', {'revision': 0}, 'owner')
+
+
+def test_editing_terms_does_not_erase_existing_partnership():
+    old = {'status': 'confirmed', 'revision': 1, 'terms_version': 1, 'terms': {'details': 'Old'}}
+    updated = change_agreement(old, 'save', {'revision': 1, 'terms': {'details': 'New'}}, 'owner')
+    assert is_confirmed_partner({'agreement_json': updated})
+    assert updated['status'] == 'needs_confirmation'
 
 
 def test_confirmation_is_explicit_and_replay_safe():

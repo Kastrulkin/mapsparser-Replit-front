@@ -34,6 +34,14 @@ TECHNICAL_CLASSIFICATIONS = {
 SUPPRESSION_CLASSIFICATIONS = {"not_interested", "unsubscribe", "complaint"}
 SENDER_BLOCKING_HEALTH = {"paused", "blocked"}
 
+AUTHOR_DAILY_LIMIT = 200
+AUTHOR_CHANNEL_DAILY_LIMITS = {
+    "email": 150,
+    "telegram": 25,
+    "vk": 25,
+}
+AUTHOR_POLICY_VERSION = "localos-author-daily-v1"
+
 PARTNERSHIP_ACTIVE_LIFECYCLES = {"converted"}
 PARTNERSHIP_REPLY_LIFECYCLES = {"replied", "responded"}
 PARTNERSHIP_SUPPRESSED_LIFECYCLES = {
@@ -201,6 +209,307 @@ def recipient_key(lead_id: str, normalized_contacts: list[dict[str, Any]] | None
         if item.get("contact_type") and item.get("normalized_value")
     )
     return stable_hash(contact_keys, "recipient:") if contact_keys else ""
+
+
+def is_localos_author_lane(item: dict[str, Any]) -> bool:
+    """Return whether the item belongs to LocalOS' platform-sender author lane."""
+    policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
+    sender_mode = str(policy.get("sender_mode") or item.get("sender_mode") or "").strip().lower()
+    return (
+        str(item.get("workstream_type") or "").strip().lower() == "creator_collaboration"
+        and sender_mode == "localos_for_partner"
+    )
+
+
+def _author_policy_reason(item: dict[str, Any]) -> str | None:
+    policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
+    channel_limits = (
+        policy.get("channel_daily_limits")
+        if isinstance(policy.get("channel_daily_limits"), dict)
+        else {}
+    )
+    try:
+        policy_limit = int(policy.get("daily_limit") or 0)
+        channel_policy_matches = (
+            set(channel_limits) == set(AUTHOR_CHANNEL_DAILY_LIMITS)
+            and all(
+                int(channel_limits.get(channel) or 0) == limit
+                for channel, limit in AUTHOR_CHANNEL_DAILY_LIMITS.items()
+            )
+        )
+    except (TypeError, ValueError):
+        policy_limit = 0
+        channel_policy_matches = False
+    if (
+        str(policy.get("author_policy_version") or "") != AUTHOR_POLICY_VERSION
+        or policy_limit != AUTHOR_DAILY_LIMIT
+        or not channel_policy_matches
+    ):
+        return "author_daily_policy_not_approved"
+    if not item.get("creator_profile_id"):
+        return "author_canonical_profile_missing"
+    channel = str(item.get("channel") or "").strip().lower()
+    if channel not in AUTHOR_CHANNEL_DAILY_LIMITS:
+        return "author_channel_unsupported"
+    if (
+        item.get("sender_scope_type") != "platform"
+        or item.get("sender_business_id")
+        or str(item.get("sender_channel") or "").strip().lower() != channel
+    ):
+        return "author_sender_lane_invalid"
+    return None
+
+
+def reserve_localos_author_daily_slot(
+    cursor: Any,
+    *,
+    queue_id: str,
+    item: dict[str, Any],
+) -> dict[str, Any]:
+    """Serialize and account for one unique creator across all sender channels.
+
+    Existing queue rows are the durable reservation ledger. ``sending`` rows and
+    failed sends with an uncertain provider outcome keep their slot until an
+    operator verifies them. Manual sends are read from the immutable campaign
+    event journal instead of the mutable touch timestamp.
+    """
+    policy_reason = _author_policy_reason(item)
+    if policy_reason:
+        return {"allowed": False, "reason_code": policy_reason, "item": item}
+
+    cursor.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+        ("localos:author-daily:Europe/Moscow",),
+    )
+    cursor.execute(
+        """
+        WITH automatic_activity AS (
+            SELECT creator.id::text AS creator_profile_id,
+                   CASE
+                       WHEN NULLIF(lower(regexp_replace(COALESCE(contact.normalized_value, queue.recipient_value, ''), '\\s+', '', 'g')), '') IS NOT NULL
+                       THEN 'contact:' || lower(regexp_replace(COALESCE(contact.normalized_value, queue.recipient_value, ''), '\\s+', '', 'g'))
+                       ELSE 'profile:' || creator.id::text
+                   END AS person_key,
+                   lower(regexp_replace(COALESCE(contact.normalized_value, queue.recipient_value, ''), '\\s+', '', 'g')) AS normalized_contact,
+                   queue.channel,
+                   queue.id AS queue_id,
+                   CASE
+                       WHEN queue.delivery_status = 'sending' THEN 'reservation'
+                       ELSE 'consumed'
+                   END AS accounting_state,
+                   COALESCE(queue.sent_at, queue.dispatch_started_at, queue.updated_at) AS occurred_at
+            FROM outreachsendqueue queue
+            JOIN prospectingleads lead ON lead.id = queue.lead_id
+            JOIN creator_profiles creator
+              ON lead.source_external_id = 'creator:' || creator.id::text
+            JOIN lead_workstreams workstream ON workstream.id = queue.workstream_id
+            JOIN outreach_campaign_touches touch ON touch.id = queue.campaign_touch_id
+            JOIN outreach_campaigns campaign ON campaign.id = touch.campaign_id
+            JOIN outreach_sender_accounts sender ON sender.id = queue.sender_account_id
+            LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
+            WHERE workstream.workstream_type = 'creator_collaboration'
+              AND campaign.sender_mode = 'localos_for_partner'
+              AND sender.scope_type = 'platform'
+              AND sender.business_id IS NULL
+              AND sender.channel = queue.channel
+              AND (
+                    queue.delivery_status IN ('sending', 'sent', 'delivered')
+                    OR (
+                        queue.delivery_status IN ('failed', 'retry', 'dlq')
+                        AND lower(COALESCE(queue.error_text, '')) LIKE '%%send_uncertain%%'
+                    )
+              )
+              AND (
+                    queue.delivery_status = 'sending'
+                    OR lower(COALESCE(queue.error_text, '')) LIKE '%%send_uncertain%%'
+                    OR (queue.sent_at AT TIME ZONE 'Europe/Moscow')::date =
+                       (NOW() AT TIME ZONE 'Europe/Moscow')::date
+              )
+        ),
+        manual_activity AS (
+            SELECT creator.id::text AS creator_profile_id,
+                   CASE
+                       WHEN NULLIF(lower(regexp_replace(COALESCE(contact.normalized_value, ''), '\\s+', '', 'g')), '') IS NOT NULL
+                       THEN 'contact:' || lower(regexp_replace(contact.normalized_value, '\\s+', '', 'g'))
+                       ELSE 'profile:' || creator.id::text
+                   END AS person_key,
+                   lower(regexp_replace(COALESCE(contact.normalized_value, ''), '\\s+', '', 'g')) AS normalized_contact,
+                   touch.channel,
+                   NULL::text AS queue_id,
+                   'consumed'::text AS accounting_state,
+                   CASE
+                       WHEN pg_input_is_valid(
+                           event.payload_json->>'occurred_at',
+                           'timestamp with time zone'
+                       ) THEN (event.payload_json->>'occurred_at')::timestamptz
+                       ELSE event.created_at
+                   END AS occurred_at
+            FROM outreach_campaign_events event
+            JOIN outreach_campaign_touches touch ON touch.id = event.touch_id
+            JOIN outreach_campaigns campaign ON campaign.id = event.campaign_id
+            JOIN lead_workstreams workstream ON workstream.id = campaign.workstream_id
+            JOIN prospectingleads lead ON lead.id = campaign.lead_id
+            JOIN creator_profiles creator
+              ON lead.source_external_id = 'creator:' || creator.id::text
+            LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
+            WHERE workstream.workstream_type = 'creator_collaboration'
+              AND campaign.sender_mode = 'localos_for_partner'
+              AND event.event_type IN ('manual_sent', 'manual_reply')
+              AND (
+                  CASE
+                      WHEN pg_input_is_valid(
+                          event.payload_json->>'occurred_at',
+                          'timestamp with time zone'
+                      ) THEN (event.payload_json->>'occurred_at')::timestamptz
+                      ELSE event.created_at
+                  END AT TIME ZONE 'Europe/Moscow'
+              )::date = (NOW() AT TIME ZONE 'Europe/Moscow')::date
+        ),
+        legacy_creator_evidence AS (
+            SELECT collaboration.creator_profile_id,
+                   lower(BTRIM(collaboration.agreed_terms_json->'outreach'->>'sender')) AS sender_identity,
+                   CASE regexp_replace(
+                       lower(BTRIM(collaboration.agreed_terms_json->'outreach'->>'channel')),
+                       '[_ -]+', '', 'g'
+                   )
+                       WHEN 'email' THEN 'email'
+                       WHEN 'mail' THEN 'email'
+                       WHEN 'smtp' THEN 'email'
+                       WHEN 'tg' THEN 'telegram'
+                       WHEN 'telegramdm' THEN 'telegram'
+                       WHEN 'telegramuser' THEN 'telegram'
+                       WHEN 'telegramusername' THEN 'telegram'
+                       WHEN 'telegram' THEN 'telegram'
+                       WHEN 'vkmessages' THEN 'vk'
+                       WHEN 'vkdm' THEN 'vk'
+                       WHEN 'vkmanual' THEN 'vk'
+                       WHEN 'vk' THEN 'vk'
+                       ELSE NULL
+                   END AS channel,
+                   collaboration.status,
+                   collaboration.agreed_terms_json,
+                   collaboration.updated_at
+            FROM creator_collaborations collaboration
+            WHERE NULLIF(
+                  collaboration.agreed_terms_json->'outreach'->>'provider_message_id',
+                  ''
+              ) IS NOT NULL
+        ),
+        legacy_creator_activity AS (
+            SELECT evidence.creator_profile_id::text AS creator_profile_id,
+                   CASE
+                       WHEN NULLIF(lower(regexp_replace(COALESCE(evidence.agreed_terms_json->'outreach'->>'recipient', ''), '\\s+', '', 'g')), '') IS NOT NULL
+                       THEN 'contact:' || lower(regexp_replace(evidence.agreed_terms_json->'outreach'->>'recipient', '\\s+', '', 'g'))
+                       ELSE 'profile:' || evidence.creator_profile_id::text
+                   END AS person_key,
+                   lower(regexp_replace(COALESCE(evidence.agreed_terms_json->'outreach'->>'recipient', ''), '\\s+', '', 'g')) AS normalized_contact,
+                   evidence.channel,
+                   NULL::text AS queue_id,
+                   'consumed'::text AS accounting_state,
+                   CASE
+                       WHEN pg_input_is_valid(
+                           evidence.agreed_terms_json->'outreach'->>'provider_verified_at',
+                           'timestamp with time zone'
+                       ) THEN (
+                           evidence.agreed_terms_json->'outreach'->>'provider_verified_at'
+                       )::timestamptz
+                       ELSE NULL
+                   END AS occurred_at
+            FROM legacy_creator_evidence evidence
+            WHERE evidence.channel IS NOT NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM outreach_sender_accounts sender
+                  WHERE sender.scope_type = 'platform'
+                    AND sender.business_id IS NULL
+                    AND sender.channel = evidence.channel
+                    AND lower(BTRIM(sender.sender_identity)) = evidence.sender_identity
+              )
+              AND (
+                  NOT COALESCE(
+                      pg_input_is_valid(
+                          evidence.agreed_terms_json->'outreach'->>'provider_verified_at',
+                          'timestamp with time zone'
+                      ),
+                      FALSE
+                  )
+                  OR (CASE
+                      WHEN pg_input_is_valid(
+                          evidence.agreed_terms_json->'outreach'->>'provider_verified_at',
+                          'timestamp with time zone'
+                      ) THEN (
+                          evidence.agreed_terms_json->'outreach'->>'provider_verified_at'
+                      )::timestamptz
+                      ELSE NULL
+                  END AT TIME ZONE 'Europe/Moscow'
+                  )::date = (NOW() AT TIME ZONE 'Europe/Moscow')::date
+              )
+        ),
+        activity AS (
+            SELECT * FROM automatic_activity
+            UNION ALL
+            SELECT * FROM manual_activity
+            UNION ALL
+            SELECT * FROM legacy_creator_activity
+        ),
+        current_reservation AS (
+            SELECT COALESCE(dispatch_started_at, updated_at) AS occurred_at
+            FROM outreachsendqueue
+            WHERE id = %s
+        ),
+        admitted_activity AS (
+            SELECT activity.*
+            FROM activity
+            CROSS JOIN current_reservation current
+            WHERE activity.accounting_state = 'consumed'
+               OR activity.queue_id IS NULL
+               OR activity.queue_id = %s
+               OR (activity.occurred_at, activity.queue_id) < (current.occurred_at, %s)
+        )
+        SELECT
+            COUNT(DISTINCT person_key)::int AS total_count,
+            COUNT(DISTINCT person_key) FILTER (WHERE channel = %s)::int AS channel_count,
+            COALESCE(BOOL_OR(
+                (
+                    creator_profile_id = %s
+                    OR (%s <> '' AND normalized_contact = %s)
+                )
+                AND COALESCE(queue_id, '') <> %s
+            ), FALSE) AS duplicate_author
+        FROM admitted_activity
+        """,
+        (
+            queue_id,
+            queue_id,
+            queue_id,
+            str(item.get("channel") or "").strip().lower(),
+            str(item.get("creator_profile_id") or ""),
+            re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+            re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+            queue_id,
+        ),
+    )
+    counts = _dict(cursor.fetchone())
+    if counts.get("duplicate_author"):
+        return {"allowed": False, "reason_code": "author_already_reserved_today", "item": item}
+    if int(counts.get("total_count") or 0) > AUTHOR_DAILY_LIMIT:
+        return {"allowed": False, "reason_code": "author_daily_limit_reached", "item": item}
+    channel = str(item.get("channel") or "").strip().lower()
+    channel_limit = AUTHOR_CHANNEL_DAILY_LIMITS[channel]
+    if int(counts.get("channel_count") or 0) > channel_limit:
+        return {
+            "allowed": False,
+            "reason_code": "author_channel_daily_limit_reached",
+            "channel": channel,
+            "item": item,
+        }
+    return {
+        "allowed": True,
+        "reason_code": "author_daily_slot_reserved",
+        "author_daily_count": int(counts.get("total_count") or 0),
+        "author_channel_daily_count": int(counts.get("channel_count") or 0),
+        "item": item,
+    }
 
 
 def strategy_fingerprint(strategy: dict[str, Any]) -> str:
@@ -504,7 +813,12 @@ def wilson_lower_bound(success_count: int, total_count: int, z_score: float = 1.
     return max(0.0, min(1.0, (center - margin) / denominator))
 
 
-def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
+def run_dispatch_preflight(
+    cursor: Any,
+    queue_id: str,
+    *,
+    author_reply_sync_started_at: datetime | None = None,
+) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT q.id, q.lead_id, q.workstream_id, q.campaign_touch_id,
@@ -515,9 +829,13 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
                c.business_id, c.recipient_key AS campaign_recipient_key,
                c.version, c.workstream_id AS campaign_workstream_id,
                c.sender_profile_id, c.approved_at, c.approved_snapshot_hash, c.last_reply_at,
-               c.policy_json, s.scope_type AS sender_scope_type,
+               c.policy_json, c.sender_mode, ws.workstream_type,
+               creator.id AS creator_profile_id,
+               s.scope_type AS sender_scope_type, s.channel AS sender_channel,
+               s.sender_identity,
                s.business_id AS sender_business_id, s.status AS sender_status,
                s.health_status, s.external_account_id, s.outreach_enabled AS sender_outreach_enabled,
+               s.last_reply_sync_at, s.reply_sync_error,
                s.capabilities_json AS sender_capabilities_json,
                permission.outreach_enabled AS telegram_outreach_enabled,
                contact.contact_type, contact.normalized_value,
@@ -525,6 +843,10 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
         FROM outreachsendqueue q
         LEFT JOIN outreach_campaign_touches t ON t.id = q.campaign_touch_id
         LEFT JOIN outreach_campaigns c ON c.id = t.campaign_id
+        LEFT JOIN lead_workstreams ws ON ws.id = q.workstream_id
+        LEFT JOIN prospectingleads lead ON lead.id = q.lead_id
+        LEFT JOIN creator_profiles creator
+          ON lead.source_external_id = 'creator:' || creator.id::text
         LEFT JOIN outreach_sender_accounts s ON s.id = q.sender_account_id
         LEFT JOIN telegram_account_permissions permission ON permission.account_id = s.external_account_id
         LEFT JOIN lead_contact_points contact ON contact.id = t.contact_point_id
@@ -569,17 +891,32 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
         for touch in current_touches
     ):
         return {"allowed": False, "reason_code": "generation_contract_outdated", "item": item}
-    cursor.execute(
-        """
-        SELECT evidence_json, signals_json, report_hash
-        FROM lead_workstream_research
-        WHERE workstream_id = %s
-        ORDER BY researched_at DESC, created_at DESC
-        LIMIT 1
-        """,
-        (item.get("campaign_workstream_id"),),
-    )
-    current_source_fingerprint = research_source_fact_fingerprint(_dict(cursor.fetchone()))
+    if is_localos_author_lane(item):
+        # Local import avoids a module cycle while keeping preview, approval,
+        # and dispatch on the same creator-campaign bridge resolver.
+        from services.outreach_campaign_service import (
+            current_outreach_source_fact_fingerprint,
+        )
+
+        current_source_fingerprint = current_outreach_source_fact_fingerprint(
+            cursor,
+            str(item.get("campaign_workstream_id") or ""),
+            str(item.get("sender_mode") or ""),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT evidence_json, signals_json, report_hash
+            FROM lead_workstream_research
+            WHERE workstream_id = %s
+            ORDER BY researched_at DESC, created_at DESC
+            LIMIT 1
+            """,
+            (item.get("campaign_workstream_id"),),
+        )
+        current_source_fingerprint = research_source_fact_fingerprint(
+            _dict(cursor.fetchone())
+        )
     if (
         not current_source_fingerprint
         or any(
@@ -771,6 +1108,116 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
     if cursor.fetchone():
         return {"allowed": False, "reason_code": "conflicting_active_campaign", "item": item}
 
+    author_lane = is_localos_author_lane(item)
+    if author_lane:
+        cursor.execute(
+            """
+            SELECT reason_code
+            FROM (
+                SELECT 'suppressed_contact'::text AS reason_code,
+                       suppression.created_at AS occurred_at
+                FROM outreach_suppressions suppression
+                JOIN prospectingleads suppressed_lead ON suppressed_lead.id = suppression.lead_id
+                WHERE (suppression.expires_at IS NULL OR suppression.expires_at > NOW())
+                  AND (
+                      suppressed_lead.source_external_id = 'creator:' || %s
+                      OR (%s <> '' AND suppression.normalized_contact_hash = %s)
+                  )
+                UNION ALL
+                SELECT 'recipient_replied'::text AS reason_code,
+                       inbound.occurred_at
+                FROM outreach_inbound_events inbound
+                JOIN prospectingleads inbound_lead ON inbound_lead.id = inbound.lead_id
+                LEFT JOIN outreach_campaign_touches inbound_touch ON inbound_touch.id = inbound.touch_id
+                LEFT JOIN lead_contact_points inbound_contact ON inbound_contact.id = inbound_touch.contact_point_id
+                WHERE inbound.stops_campaign = TRUE
+                  AND (
+                      inbound_lead.source_external_id = 'creator:' || %s
+                      OR (
+                          %s <> ''
+                          AND lower(regexp_replace(COALESCE(inbound_contact.normalized_value, ''), '\\s+', '', 'g')) = %s
+                      )
+                  )
+                UNION ALL
+                SELECT 'channel_permanently_unavailable'::text AS reason_code,
+                       failed.occurred_at
+                FROM outreach_inbound_events failed
+                JOIN prospectingleads failed_lead ON failed_lead.id = failed.lead_id
+                LEFT JOIN outreach_campaign_touches failed_touch ON failed_touch.id = failed.touch_id
+                LEFT JOIN lead_contact_points failed_contact ON failed_contact.id = failed_touch.contact_point_id
+                WHERE failed.channel = %s
+                  AND failed.classification IN ('permanent_delivery_failure', 'bounce')
+                  AND (
+                      failed_lead.source_external_id = 'creator:' || %s
+                      OR (
+                          %s <> ''
+                          AND lower(regexp_replace(COALESCE(failed_contact.normalized_value, ''), '\\s+', '', 'g')) = %s
+                      )
+                  )
+                UNION ALL
+                SELECT 'author_already_contacted'::text AS reason_code,
+                       COALESCE(
+                           CASE
+                               WHEN COALESCE(pg_input_is_valid(
+                                   collaboration.agreed_terms_json->'outreach'->>'provider_verified_at',
+                                   'timestamp with time zone'
+                               ), FALSE)
+                               THEN (collaboration.agreed_terms_json->'outreach'->>'provider_verified_at')::timestamptz
+                               ELSE NULL
+                           END,
+                           collaboration.created_at,
+                           collaboration.updated_at
+                       ) AS occurred_at
+                FROM creator_collaborations collaboration
+                WHERE NULLIF(
+                    collaboration.agreed_terms_json->'outreach'->>'provider_message_id',
+                    ''
+                ) IS NOT NULL
+                  AND (
+                      collaboration.creator_profile_id::text = %s
+                      OR (
+                          %s <> ''
+                          AND lower(regexp_replace(
+                              COALESCE(collaboration.agreed_terms_json->'outreach'->>'recipient', ''),
+                              '\\s+', '', 'g'
+                          )) = %s
+                      )
+                  )
+            ) blocked_author
+            ORDER BY occurred_at DESC
+            LIMIT 1
+            """,
+            (
+                str(item.get("creator_profile_id") or ""),
+                contact_hash,
+                contact_hash,
+                str(item.get("creator_profile_id") or ""),
+                re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+                re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+                str(item.get("channel") or "").strip().lower(),
+                str(item.get("creator_profile_id") or ""),
+                re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+                re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+                str(item.get("creator_profile_id") or ""),
+                re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+                re.sub(r"\s+", "", str(item.get("normalized_value") or "").strip().lower()),
+            ),
+        )
+        author_block = _dict(cursor.fetchone())
+        if author_block:
+            return {
+                "allowed": False,
+                "reason_code": str(author_block.get("reason_code") or "suppressed_contact"),
+                "item": item,
+            }
+        author_admission = reserve_localos_author_daily_slot(
+            cursor,
+            queue_id=queue_id,
+            item=item,
+        )
+        if not author_admission.get("allowed"):
+            return author_admission
+
     policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
     daily_limit = max(1, int(policy.get("daily_limit") or 10))
     cursor.execute(
@@ -822,6 +1269,103 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
             "retry_after_hours": cadence_hours,
             "item": item,
         }
+    if author_lane:
+        normalized_recipient = re.sub(
+            r"\s+", "", str(item.get("normalized_value") or "").strip().lower()
+        )
+        cursor.execute(
+            """
+            SELECT previous.id
+            FROM outreachsendqueue previous
+            JOIN outreach_campaign_touches previous_touch
+              ON previous_touch.id = previous.campaign_touch_id
+            JOIN outreach_campaigns previous_campaign
+              ON previous_campaign.id = previous_touch.campaign_id
+            JOIN lead_workstreams previous_workstream
+              ON previous_workstream.id = previous.workstream_id
+            JOIN prospectingleads previous_lead ON previous_lead.id = previous.lead_id
+            JOIN creator_profiles previous_creator
+              ON previous_lead.source_external_id = 'creator:' || previous_creator.id::text
+            LEFT JOIN lead_contact_points previous_contact
+              ON previous_contact.id = previous_touch.contact_point_id
+            WHERE previous.id <> %s
+              AND previous.sent_at > NOW() - (%s * INTERVAL '1 hour')
+              AND previous.delivery_status IN ('sent', 'delivered')
+              AND previous_workstream.workstream_type = 'creator_collaboration'
+              AND previous_campaign.sender_mode = 'localos_for_partner'
+              AND (
+                  previous_creator.id::text = %s
+                  OR (
+                      %s <> ''
+                      AND lower(regexp_replace(COALESCE(previous_contact.normalized_value, previous.recipient_value, ''), '\\s+', '', 'g')) = %s
+                  )
+              )
+            LIMIT 1
+            """,
+            (
+                queue_id,
+                cadence_hours,
+                str(item.get("creator_profile_id") or ""),
+                normalized_recipient,
+                normalized_recipient,
+            ),
+        )
+        if cursor.fetchone():
+            return {
+                "allowed": False,
+                "reason_code": "cross_channel_cooldown",
+                "retry_after_hours": cadence_hours,
+                "item": item,
+            }
+        # A caller timestamp is only a cutoff. Permission comes from a fresh,
+        # complete, sender-identity and exact-recipient scoped DB receipt.
+        if author_reply_sync_started_at is None:
+            return {
+                "allowed": False,
+                "reason_code": "author_reply_preflight_unverified",
+                "gap": "current_reply_sync_cycle_cutoff_missing",
+                "item": item,
+            }
+        if item.get("channel") != "email":
+            return {
+                "allowed": False,
+                "reason_code": "author_reply_preflight_unverified",
+                "gap": "complete_sender_window_reply_sync_receipt_missing",
+                "item": item,
+            }
+        recipient_email = str(item.get("normalized_value") or "").strip().lower()
+        if str(item.get("contact_type") or "").strip().lower() != "email" or not recipient_email:
+            return {
+                "allowed": False,
+                "reason_code": "author_reply_preflight_unverified",
+                "gap": "exact_recipient_scope_missing",
+                "item": item,
+            }
+        from services.outreach_reply_sync_receipt import (
+            load_trusted_email_reply_sync_receipt,
+        )
+
+        receipt = load_trusted_email_reply_sync_receipt(
+            cursor,
+            str(item.get("sender_account_id") or ""),
+            required_recipient_emails=[recipient_email],
+            required_covered_through=author_reply_sync_started_at,
+            max_age_seconds=120,
+        )
+        if not receipt:
+            return {
+                "allowed": False,
+                "reason_code": "author_reply_preflight_unverified",
+                "gap": "complete_sender_window_reply_sync_receipt_missing",
+                "item": item,
+            }
+        return {
+            "allowed": True,
+            "reason_code": "preflight_passed",
+            "recipient_key": current_recipient_key,
+            "author_reply_sync_receipt_version": receipt.get("receipt_version"),
+            "item": item,
+        }
     return {
         "allowed": True,
         "reason_code": "preflight_passed",
@@ -871,6 +1415,7 @@ def block_queue_item_after_preflight(cursor: Any, queue_id: str, result: dict[st
         "conflicting_active_campaign",
         "active_partnership",
         "prior_partner_conversation",
+        "author_already_contacted",
         "suppressed_partnership",
         "closed_partnership",
     }

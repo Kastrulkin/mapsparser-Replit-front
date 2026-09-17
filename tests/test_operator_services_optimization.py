@@ -96,7 +96,7 @@ class FakeCursor:
         query = self.last_query
         params = self.last_params
         if "information_schema.columns" in query:
-            return {"?column?": 1}
+            return {"columns": list(params[1])}
         if "to_regclass" in query:
             return {"to_regclass": str(params[0]).replace("public.", "")}
         if "from operatorconsentpolicies" in query:

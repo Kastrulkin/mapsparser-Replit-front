@@ -61,6 +61,9 @@ class AccessDatabase:
     def close(self):
         return None
 
+    def rollback_and_close(self):
+        return None
+
 
 def _network_member_session(_token):
     return {"user_id": "member-1", "id": "member-1", "is_superadmin": False}

@@ -77,6 +77,14 @@ function deferredResponse<T>() {
   return { promise, resolve };
 }
 
+const diskImportStatusResponse = () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ enabled: false, can_configure: false, sources: [] }),
+});
+
+const isDiskImportRequest = (input: RequestInfo | URL) => String(input).includes('/media-intelligence/disk-import');
+
 describe('Content page DOM ownership', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -105,8 +113,8 @@ describe('Content page DOM ownership', () => {
     }
 
     renderContentPage();
-    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
-    const generateButton = await screen.findByRole('button', { name: 'Сгенерировать заново' });
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }, { timeout: 5000 }));
+    const generateButton = await screen.findByRole('button', { name: 'Сгенерировать заново' }, { timeout: 5000 });
 
     if (!generateButton.closest('[translate="no"]')) {
       const textNode = Array.from(generateButton.childNodes).find((node) => (
@@ -124,7 +132,8 @@ describe('Content page DOM ownership', () => {
   it('shows the credits charged after a batch photo upload', async () => {
     let uploadIndex = 0;
     let analysisIndex = 0;
-    vi.stubGlobal('fetch', vi.fn(async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (isDiskImportRequest(input)) return diskImportStatusResponse();
       uploadIndex += 1;
       return {
         ok: true,
@@ -168,7 +177,8 @@ describe('Content page DOM ownership', () => {
   it('explains exhausted photo credits without presenting a technical upload failure', async () => {
     let uploadIndex = 0;
     let analysisIndex = 0;
-    vi.stubGlobal('fetch', vi.fn(async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (isDiskImportRequest(input)) return diskImportStatusResponse();
       uploadIndex += 1;
       return {
         ok: true,
@@ -209,13 +219,16 @@ describe('Content page DOM ownership', () => {
   });
 
   it('translates an upstream photo size response into a readable message', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: false,
-      status: 413,
-      json: async () => {
-        throw new SyntaxError("Unexpected token '<'");
-      },
-    })));
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (isDiskImportRequest(input)) return diskImportStatusResponse();
+      return {
+        ok: false,
+        status: 413,
+        json: async () => {
+          throw new SyntaxError("Unexpected token '<'");
+        },
+      };
+    }));
     vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
       if (path.startsWith('/content-plans/context')) return { context: {} };
       if (path.startsWith('/content-plans?')) return { plans: [plan] };
@@ -240,7 +253,8 @@ describe('Content page DOM ownership', () => {
 
   it('retries a photo upload after a temporary storage timeout', async () => {
     let uploadAttempt = 0;
-    vi.stubGlobal('fetch', vi.fn(async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (isDiskImportRequest(input)) return diskImportStatusResponse();
       uploadAttempt += 1;
       if (uploadAttempt === 1) {
         return {

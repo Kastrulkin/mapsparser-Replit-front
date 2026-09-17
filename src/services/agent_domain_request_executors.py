@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from core.agent_api_security import log_agent_action
 from core.db_helpers import assert_schema_columns
+from services.agent_sheet_provider_executor import sheet_request_hash, sheet_snapshot_hash
 
 
 APPROVED_EXECUTOR_REASON = "HUMAN_APPROVED_CONTROLLED_EXECUTOR"
@@ -16,6 +17,7 @@ def execute_approved_domain_requests(
     *,
     run: Dict[str, Any],
     step: Dict[str, Any],
+    step_id: str = "",
     orchestrator_result: Dict[str, Any],
     user_data: Dict[str, Any],
     apply_finance: bool = True,
@@ -34,7 +36,18 @@ def execute_approved_domain_requests(
     run_id = str(run.get("id") or "").strip()
     step_key = str(step.get("key") or "").strip()
     items: List[Dict[str, Any]] = []
-    items.extend(_approve_sheet_requests(cursor, business_id, user_id, run_id, step_key, refs))
+    items.extend(
+        _approve_sheet_requests(
+            cursor,
+            business_id,
+            user_id,
+            run_id,
+            step_key,
+            step_id,
+            str(step.get("required_approval_type") or ""),
+            refs,
+        )
+    )
     items.extend(_approve_communication_requests(cursor, business_id, user_id, run_id, step_key, refs))
     items.extend(_approve_review_publish_requests(cursor, business_id, user_id, run_id, step_key, refs))
     items.extend(_approve_service_optimization_requests(cursor, business_id, user_id, run_id, step_key, refs))
@@ -107,34 +120,75 @@ def _fetch_rows(cursor: Any, table_name: str, query: str, params: tuple[Any, ...
     return [dict(row) for row in (cursor.fetchall() or [])]
 
 
-def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id: str, step_key: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+def _approve_sheet_requests(
+    cursor: Any,
+    business_id: str,
+    user_id: str,
+    run_id: str,
+    step_key: str,
+    step_id: str,
+    required_approval_type: str,
+    refs: Dict[str, List[str]],
+) -> List[Dict[str, Any]]:
     rows = _fetch_rows(
         cursor,
         "agent_sheet_operation_requests",
         """
-        SELECT id, action_id, status, approval_state, apply_state, operation, sheet_name,
-               integration_id, spreadsheet_id, provider_write_performed
+        SELECT id, action_id, business_id, status, approval_state, apply_state, operation, sheet_name,
+               integration_id, spreadsheet_id, provider_write_performed, row_values_json,
+               mapping_json, source_event_json, limits_json
         FROM agent_sheet_operation_requests
         WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
         """,
         (business_id, refs.get("request_ids") or [], refs.get("action_ids") or []),
         bool(refs.get("request_ids") or refs.get("action_ids")),
     )
+    if not rows:
+        return []
+    if not step_id:
+        # Compatibility callers cannot create a runnable provider handoff.
+        # The provider worker will place this unbound legacy record in visible
+        # attention rather than guessing an approval.
+        return []
+    # A generic earlier approval cannot authorize an external spreadsheet
+    # write. Until the approval step carries an exact immutable snapshot, an
+    # old blueprint remains visible but cannot enter the provider queue.
+    approval = _bound_approval(cursor, run_id)
+    if not approval:
+        return []
     items = []
     for row in rows:
         if bool(row.get("provider_write_performed")):
             continue
+        if sheet_snapshot_hash(row) != str(approval.get("snapshot_hash") or ""):
+            cursor.execute("UPDATE agent_sheet_operation_requests SET apply_state='approval_invalid', provider_state='approval_invalid', error_text='approved sheet snapshot does not match request', updated_at=NOW() WHERE id=%s AND apply_state='not_applied'", (row.get("id"),))
+            continue
         cursor.execute(
             """
             UPDATE agent_sheet_operation_requests
-            SET status = 'approved_for_execution',
+            SET status = 'provider_pending',
                 approval_state = 'approved',
                 apply_state = 'provider_request_queued',
+                bound_run_id = %s,
+                bound_step_id = %s,
+                bound_approval_id = %s,
+                request_hash = %s,
+                provider_state = 'queued',
                 updated_at = NOW()
             WHERE id = %s AND business_id = %s AND provider_write_performed = FALSE
+              AND status = 'request_created' AND apply_state = 'not_applied'
             """,
-            (row.get("id"), business_id),
+            (
+                run_id,
+                step_id,
+                approval.get("id"),
+                sheet_request_hash({**row, "bound_run_id": run_id, "bound_step_id": step_id, "bound_approval_id": approval.get("id")}),
+                row.get("id"),
+                business_id,
+            ),
         )
+        if not cursor.rowcount:
+            continue
         provider_handoff = _build_sheet_provider_handoff(row)
         ledger_id = _record_executor_ledger(
             cursor,
@@ -157,7 +211,7 @@ def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id:
                 "kind": "sheet_operation_request",
                 "id": row.get("id"),
                 "action_id": row.get("action_id"),
-                "status": "approved_for_execution",
+                "status": "provider_pending",
                 "approval_state": "approved",
                 "apply_state": "provider_request_queued",
                 "provider_handoff": provider_handoff,
@@ -166,6 +220,22 @@ def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id:
             }
         )
     return items
+
+
+def _bound_approval(cursor: Any, run_id: str) -> Dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT id, payload_json->'sheet_write_snapshot'->>'hash' AS snapshot_hash FROM agent_approvals
+        WHERE run_id = %s AND status = 'approved' AND approval_type = 'sheet_update'
+          AND payload_json ? 'sheet_write_snapshot'
+        ORDER BY decided_at DESC NULLS LAST, id DESC LIMIT 1
+        """,
+        (run_id,),
+    )
+    row = cursor.fetchone() or {}
+    if not row:
+        return {}
+    return dict(row) if isinstance(row, dict) else {"id": row[0], "snapshot_hash": row[1]}
 
 
 def _build_sheet_provider_handoff(row: Dict[str, Any]) -> Dict[str, Any]:

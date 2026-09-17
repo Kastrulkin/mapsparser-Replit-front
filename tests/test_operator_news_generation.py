@@ -62,7 +62,7 @@ class FakeCursor:
         query = self.last_query
         params = self.last_params
         if "information_schema.columns" in query:
-            return {"?column?": 1}
+            return {"columns": list(params[1])}
         if "to_regclass" in query:
             table_ref = str(params[0] if params else "")
             if "operatorcreditreservations" in table_ref:

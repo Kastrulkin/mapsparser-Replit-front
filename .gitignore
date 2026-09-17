@@ -46,11 +46,32 @@ frontend/test-results/
 # Local document rendering and connector working directories
 .agent/google-docs/
 .agent/google-docs-trusted-read/
+.agent/docs-trusted-read/
 .agent/outputs/
 .agent/tmp/
+.agent/tmp-*
+.agent/riderra_*/
+.agent/original-unsent-*
 .agent/tasks/partner-touches-20260823/
+.agent/tasks/*/raw/
+.agent/tasks/*/live/
+.agent/tasks/*/release/
+.agent/tasks/*/deployment/
+.agent/tasks/operator-finance-daily-20260912/
+.agent/tasks/organika-voice-functions/
+.agent/tasks/voice-working-pilot-20260913/
+.agent/tasks/work-journal-20260912/
 .codex/google-docs/
 .codex-docs/
+
+# Generated audit, outreach and document-rendering artifacts. Existing tracked
+# fixtures remain tracked; new run output must be promoted to source explicitly.
+outputs/
+output/
+artifacts/
+reports/
+tmp-google-docs-*/
+frontend/tsconfig.*.tsbuildinfo
 
 # Reproducible local audit snapshots and inspection renders
 outputs/*_public_reviews_*.json

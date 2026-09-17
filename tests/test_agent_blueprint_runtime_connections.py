@@ -1548,6 +1548,9 @@ def test_activation_gate_requires_safe_preview_run(monkeypatch):
         def fetchall(self):
             return self.rows
 
+        def fetchone(self):
+            return {"compiled_state": "compiled", "compiled_preview_json": {}}
+
     monkeypatch.setattr(
         agent_blueprints_api,
         "validate_compiled_artifact_candidate",
@@ -1606,6 +1609,9 @@ def test_activation_gate_accepts_completed_safe_preview_run(monkeypatch):
         def fetchall(self):
             return self.rows
 
+        def fetchone(self):
+            return {"compiled_state": "compiled", "compiled_preview_json": {}}
+
     monkeypatch.setattr(
         agent_blueprints_api,
         "validate_compiled_artifact_candidate",
@@ -1661,6 +1667,9 @@ def test_activation_gate_blocks_autonomous_write_limits_even_after_preview(monke
 
         def fetchall(self):
             return self.rows
+
+        def fetchone(self):
+            return {"compiled_state": "compiled", "compiled_preview_json": {}}
 
     monkeypatch.setattr(
         agent_blueprints_api,

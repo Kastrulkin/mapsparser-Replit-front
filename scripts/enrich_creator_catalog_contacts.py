@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import subprocess
@@ -11,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 from psycopg2.extras import Json, RealDictCursor
 
@@ -20,6 +22,13 @@ from database_manager import DatabaseManager
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/127 Safari/537.36"
 EMAIL_PATTERN = re.compile(r"(?<![\w.+-])([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})(?![\w.-])", re.IGNORECASE)
 TELEGRAM_PATTERN = re.compile(r"(?<![\w@])@([a-zA-Z][a-zA-Z0-9_]{4,31})(?![\w])")
+URL_PATTERN = re.compile(
+    r"(?<![@\w])((?:https?://)?(?:www\.)?(?:[a-z0-9а-яё-]+\.)+"
+    r"(?:ru|com|net|org|me|io|pro|рф|ee|fi|club|online|site|info|biz)"
+    r"(?:/[^\s<>\"']*)?)",
+    re.IGNORECASE,
+)
+CONTACT_LINK_PATTERN = re.compile(r"(?:contact|contacts|about|feedback|контакт|связ|о нас)", re.IGNORECASE)
 CONTACT_CONTEXT = re.compile(r"(\u0440\u0435\u043a\u043b\u0430\u043c|\u0441\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u0447|\u043f\u0430\u0440\u0442\u043d[\u0435\u0451]р|\u0440\u0430\u0437\u043c\u0435\u0449|\u043f\u043e \u0432\u043e\u043f\u0440\u043e\u0441|\u0441\u0432\u044f\u0437|\u043a\u043e\u043d\u0442\u0430\u043a\u0442|advertis|collab|business|media[ -]?kit|booking)", re.IGNORECASE)
 MANUAL_DM_PLATFORMS = {"instagram", "threads", "tiktok"}
 PRIORITY = {
@@ -27,6 +36,7 @@ PRIORITY = {
     "explicit_telegram": 95,
     "email": 100,
     "telegram": 95,
+    "whatsapp": 90,
     "vk_messages": 85,
     "existing_contact": 80,
     "existing": 80,
@@ -36,6 +46,7 @@ PRIORITY = {
     "threads_dm": 40,
     "cross_platform": 30,
 }
+CONTACT_RESEARCH_VERSION = "creator-contact-v2"
 
 
 def fetch(url: str) -> str:
@@ -62,7 +73,7 @@ def json_value(value: Any, fallback: Any) -> Any:
 
 
 def canonical(value: str) -> str:
-    return value.strip().rstrip("/\n\r\t .,;:)")
+    return value.strip().rstrip("/\n\r\t .,;:)]}")
 
 
 def add_contact(
@@ -75,6 +86,7 @@ def add_contact(
     status: str,
     confidence: float,
     researched_at: str | None = None,
+    source_channel_verified: bool = False,
 ) -> None:
     normalized = canonical(value)
     if not normalized:
@@ -90,6 +102,7 @@ def add_contact(
         "status": status,
         "confidence": confidence,
         "researched_at": researched_at or datetime.now(timezone.utc).isoformat(),
+        "source_channel_verified": source_channel_verified,
     })
 
 
@@ -103,6 +116,7 @@ def merge_contact(contacts: list[dict[str, Any]], contact: dict[str, Any]) -> No
         status=str(contact["status"]),
         confidence=float(contact["confidence"]),
         researched_at=str(contact.get("researched_at") or "") or None,
+        source_channel_verified=contact.get("source_channel_verified") is True,
     )
 
 
@@ -138,6 +152,65 @@ def extract_explicit_contacts(
     return contacts
 
 
+def normalized_public_url(value: str) -> str:
+    candidate = html.unescape(value).replace("\\u0026", "&").replace("\\/", "/")
+    candidate = canonical(candidate)
+    if not candidate.lower().startswith(("http://", "https://")):
+        candidate = f"https://{candidate}"
+    return candidate
+
+
+def public_routes(text: str) -> list[str]:
+    routes: list[str] = []
+    decoded = html.unescape(text).replace("\\u0026", "&").replace("\\/", "/")
+    for match in URL_PATTERN.findall(decoded):
+        route = normalized_public_url(match)
+        hostname = (urlparse(route).hostname or "").lower().removeprefix("www.")
+        if hostname in {
+            "youtube.com", "youtu.be", "google.com", "google.ru", "gstatic.com",
+            "schema.org", "ytimg.com", "w3.org",
+        }:
+            continue
+        routes.append(route)
+    return list(dict.fromkeys(routes))
+
+
+def route_kind(route: str) -> str:
+    lowered = route.lower()
+    if "t.me/" in lowered or "telegram.me/" in lowered:
+        return "telegram"
+    if "wa.me/" in lowered or "api.whatsapp.com/" in lowered:
+        return "whatsapp"
+    if "vk.me/" in lowered:
+        return "vk_messages"
+    if "instagram.com/" in lowered:
+        return "instagram_dm"
+    if "tiktok.com/" in lowered:
+        return "tiktok_dm"
+    if "threads.net/" in lowered or "threads.com/" in lowered:
+        return "threads_dm"
+    return "website_contact"
+
+
+def website_documents(url: str) -> list[tuple[str, str]]:
+    homepage = fetch(url)
+    if not homepage:
+        return []
+    documents = [(url, homepage)]
+    hostname = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    links: list[str] = []
+    for href in re.findall(r'href=["\']([^"\']+)["\']', homepage, flags=re.IGNORECASE):
+        absolute = urljoin(url, html.unescape(href))
+        link_hostname = (urlparse(absolute).hostname or "").lower().removeprefix("www.")
+        if link_hostname == hostname and CONTACT_LINK_PATTERN.search(absolute):
+            links.append(absolute)
+    for contact_url in list(dict.fromkeys(links))[:2]:
+        document = fetch(contact_url)
+        if document:
+            documents.append((contact_url, document))
+    return documents
+
+
 def same_as_routes(document: str) -> list[str]:
     routes: list[str] = []
     for raw in re.findall(r'"sameAs":\[(.*?)\]', document, flags=re.DOTALL):
@@ -165,6 +238,7 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
         url = str(channel.get("canonical_url") or "")
         channel_id = str(channel.get("id") or "") or None
         metadata = json_value(channel.get("metadata_json"), {})
+        source_channel_verified = str(channel.get("verification_status") or "") == "verified"
         observed_identity = json_value(metadata.get("observed_identity"), {})
         stored_text = " ".join([
             description,
@@ -172,17 +246,21 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
             str(metadata.get("description") or ""),
         ])
         for contact in extract_explicit_contacts(stored_text, source_url=url, source_channel_id=channel_id):
+            contact["source_channel_verified"] = source_channel_verified
             merge_contact(contacts, contact)
+        stored_routes = public_routes(stored_text)
         if platform == "telegram":
             document = fetch(url)
             for contact in extract_explicit_contacts(document, source_url=url, source_channel_id=channel_id):
+                contact["source_channel_verified"] = source_channel_verified
                 merge_contact(contacts, contact)
         elif platform == "youtube":
             about_url = f"{url.rstrip('/')}/about?hl=en"
             document = fetch(about_url)
             for contact in extract_explicit_contacts(document, source_url=about_url, source_channel_id=channel_id):
+                contact["source_channel_verified"] = source_channel_verified
                 merge_contact(contacts, contact)
-            for route in same_as_routes(document):
+            for route in list(dict.fromkeys([*same_as_routes(document), *stored_routes])):
                 lowered = route.lower()
                 if any(marker in lowered for marker in ("youtube.com", "youtu.be", "boosty.to", "patreon.com", "donationalerts.com")):
                     continue
@@ -198,14 +276,30 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
                 elif "vk.com/" in lowered or "vk.me/" in lowered:
                     route_type = "vk_messages"
                 if route_type == "website_contact":
-                    linked_document = fetch(route)
-                    linked_contacts = extract_explicit_contacts(
-                        linked_document,
-                        source_url=route,
-                        source_channel_id=channel_id,
-                    )
-                    for contact in linked_contacts:
-                        merge_contact(contacts, contact)
+                    for document_url, linked_document in website_documents(route):
+                        linked_contacts = extract_explicit_contacts(
+                            linked_document,
+                            source_url=document_url,
+                            source_channel_id=channel_id,
+                        )
+                        for contact in linked_contacts:
+                            contact["source_channel_verified"] = source_channel_verified
+                            merge_contact(contacts, contact)
+                        for linked_route in public_routes(linked_document):
+                            linked_kind = route_kind(linked_route)
+                            if linked_kind == "website_contact":
+                                continue
+                            add_contact(
+                                contacts,
+                                kind=linked_kind,
+                                value=linked_route,
+                                source_url=document_url,
+                                source_channel_id=channel_id,
+                                status="public_message_route" if linked_kind in {"telegram", "whatsapp", "vk_messages"} else "cross_platform_needs_confirmation",
+                                confidence=0.82,
+                                source_channel_verified=source_channel_verified,
+                            )
+                    continue
                 add_contact(
                     contacts,
                     kind=route_type,
@@ -214,10 +308,12 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
                     source_channel_id=channel_id,
                     status="cross_platform_needs_confirmation",
                     confidence=0.7,
+                    source_channel_verified=source_channel_verified,
                 )
         elif platform == "vk":
             document = fetch(url)
             for contact in extract_explicit_contacts(document, source_url=url, source_channel_id=channel_id):
+                contact["source_channel_verified"] = source_channel_verified
                 merge_contact(contacts, contact)
             vk_handle = str(channel.get("username") or "").strip()
             if vk_handle and re.search(r"(\u043d\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435|community_messages|vk\.me/)", document, flags=re.IGNORECASE):
@@ -229,6 +325,7 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
                     source_channel_id=channel_id,
                     status="public_message_route",
                     confidence=0.82,
+                    source_channel_verified=source_channel_verified,
                 )
         elif platform in MANUAL_DM_PLATFORMS:
             add_contact(
@@ -239,6 +336,7 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
                 source_channel_id=channel_id,
                 status="manual_dm_needs_confirmation",
                 confidence=0.55,
+                source_channel_verified=source_channel_verified,
             )
     contacts.sort(key=lambda item: (-PRIORITY.get(str(item["type"]), 0), -float(item["confidence"]), str(item["value"])))
     preferred = contacts[0] if contacts else None
@@ -253,9 +351,24 @@ def research_profile(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_profiles(cursor: Any, limit: int, offset: int = 0) -> list[dict[str, Any]]:
+def load_profiles(
+    cursor: Any,
+    limit: int,
+    offset: int = 0,
+    only_without_contact: bool = False,
+    only_unresearched_version: bool = False,
+) -> list[dict[str, Any]]:
+    contact_filter = "AND NULLIF(BTRIM(commercial.preferred_contact), '') IS NULL" if only_without_contact else ""
+    version_filter = (
+        "AND COALESCE(commercial.metadata_json#>>'{contact_research,version}', '') <> %s"
+        if only_unresearched_version else ""
+    )
+    params: list[Any] = []
+    if only_unresearched_version:
+        params.append(CONTACT_RESEARCH_VERSION)
+    params.extend((limit, offset))
     cursor.execute(
-        """
+        f"""
         SELECT profile.id, profile.display_name, profile.description,
                commercial.preferred_contact,
                commercial.metadata_json->>'contact_source_url' AS contact_source_url,
@@ -264,6 +377,7 @@ def load_profiles(cursor: Any, limit: int, offset: int = 0) -> list[dict[str, An
                    'platform', channel.platform,
                    'canonical_url', channel.canonical_url,
                    'username', channel.username,
+                   'verification_status', channel.verification_status,
                    'metadata_json', channel.metadata_json
                ) ORDER BY channel.platform) FILTER (WHERE channel.id IS NOT NULL), '[]'::jsonb) AS channels_json
         FROM creator_profiles profile
@@ -272,13 +386,15 @@ def load_profiles(cursor: Any, limit: int, offset: int = 0) -> list[dict[str, An
         LEFT JOIN creator_commercial_profiles commercial ON commercial.creator_profile_id = profile.id
         WHERE relationship.stage IN ('discovered', 'contact_ready')
           AND profile.brand_safety_status <> 'blocked'
+          {contact_filter}
+          {version_filter}
         GROUP BY profile.id, commercial.creator_profile_id, commercial.preferred_contact, commercial.metadata_json
         ORDER BY
             CASE WHEN NULLIF(BTRIM(commercial.preferred_contact), '') IS NULL THEN 0 ELSE 1 END,
             profile.id
         LIMIT %s OFFSET %s
         """,
-        (limit, offset),
+        params,
     )
     return [dict(row) for row in cursor.fetchall()]
 
@@ -295,18 +411,26 @@ def apply_results(cursor: Any, results: list[dict[str, Any]]) -> dict[str, int]:
         existing = str(existing_row["preferred_contact"] or "").strip() if existing_row else ""
         preferred_reachable = bool(preferred and json_value(preferred.get("validation"), {}).get("reachable") is True)
         preferred_usable = bool(
-            preferred_reachable
-            and preferred
+            preferred
+            and (
+                preferred_reachable
+                or (
+                    preferred.get("source_channel_verified") is True
+                    and preferred.get("status") == "manual_dm_needs_confirmation"
+                )
+            )
             and preferred.get("status") in {
                 "public_explicit",
                 "public_message_route",
                 "existing_needs_periodic_confirmation",
+                "manual_dm_needs_confirmation",
+                "cross_platform_needs_confirmation",
             }
         )
         preferred_value = str(preferred["value"]) if preferred and preferred_usable else None
         metadata = {
             "contact_research": {
-                "version": "creator-contact-v1",
+                "version": CONTACT_RESEARCH_VERSION,
                 "researched_at": datetime.now(timezone.utc).isoformat(),
                 "state": result["state"],
                 "preferred": preferred,
@@ -367,6 +491,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("outputs/creator-contact-research-20260825.json"))
     parser.add_argument("--input-report", type=Path)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--only-without-contact", action="store_true")
+    parser.add_argument("--only-unresearched-version", action="store_true")
     arguments = parser.parse_args()
     database = DatabaseManager()
     cursor = database.conn.cursor(cursor_factory=RealDictCursor)
@@ -391,6 +517,8 @@ def main() -> int:
             cursor,
             max(1, min(arguments.limit, 20000)),
             max(0, arguments.offset),
+            arguments.only_without_contact,
+            arguments.only_unresearched_version,
         )
         results: list[dict[str, Any]] = []
         executor = ThreadPoolExecutor(max_workers=max(1, min(arguments.workers, 64)))

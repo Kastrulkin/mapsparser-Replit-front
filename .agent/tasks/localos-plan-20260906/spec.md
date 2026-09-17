@@ -276,3 +276,19 @@ User approved implementation of the entire referenced plan. Historical release f
 Ownership at start: today_state owns Today/auth files; compiled_builder owns CompiledScriptBuilder and narrow frontend helpers; run_transactions owns admission/agent queue/runner/worker and migration 20260906_001; root owns compiled artifact/runtime/snapshots and migration 20260906_002, aggregate evidence/integration. Each preserves other changes.
 
 Production database/schema changes require a concrete backup/migration review before execution. No external sends, publications or payments are authorized. Build/test/isolated DB mutations are authorized by the detailed implementation request. Existing unrelated work is never included by blanket git staging.
+
+## Frozen continuation contract (2026-09-07): R3 Sheets and R6 security schema
+
+The September 6 production package passed its separately authorized acceptance. It is not the completion of R0–R7. This continuation changes local code and isolated test databases only; the previous production migration and twelve-GET approvals have already been consumed by that release.
+
+- R3 baseline: one committed sheet request produces two fake provider writes across two real PostgreSQL connections; the losing finisher still reports applied. The first connection remains idle in transaction during a 169 ms synthetic provider wait (`raw/r3-sheet-baseline.json`).
+- For sheet capabilities, runner approval creates a durable request/step/approval/payload binding and stops at `waiting_provider`. The caller commits normally; no mid-savepoint commit and no provider call from runner or HTTP approval transaction.
+- A separate worker claims one bound approved request in a short transaction, closes database access before calling the provider, and finalizes with an attempt fence. Success atomically completes the checkpoint and requeues the run; completed steps/history and existing billing ownership are preserved.
+- A crash, stale lease, timeout or uncertain external result must require reconciliation, never automatic resend. Unbound legacy requests and invalid/revoked/mutated approvals cannot trigger a provider write. A new run cannot bypass an unresolved earlier external effect.
+- User projections distinguish pending external work from completion and attention. Pending work is polled, while unknown outcomes do not offer an unsafe automatic repeat. The main user action is to inspect the affected run and sheet request.
+- Real PostgreSQL/fake-provider tests cover competing workers, database transaction and row-lock release during provider wait, stale finish/recovery, binding and approval failure, checkpoint/resume and preserved billing/history. No real provider credentials or writes are used.
+- R6: replace runtime DDL in agent API security with schema assertions against the three existing canonical migration tables. Verify all ten indexes and actual client/discovery/ledger DML under a role without DDL rights; fail clearly for missing schema. No new migration is needed for this R6 slice.
+- The Sheets precondition check must distinguish an explicitly approved empty range from an absent expected-value snapshot; changed nonempty data cannot be overwritten under an empty snapshot.
+- This slice does not finish all legacy transaction transfers, enable compiled/personalization flags, implement a manual reconciliation product, or prove the real-user/14-day pilots.
+
+Ownership: r3_sheet_execution owns Sheets queue/migration, runner/domain handoff, queue and worker integration plus backend queue tests; r6_security_ddl owns agent_api_security and focused security tests. Root owns status projections/frontend, adapter precondition regression, CI integration and evidence. All preserve unrelated user work.

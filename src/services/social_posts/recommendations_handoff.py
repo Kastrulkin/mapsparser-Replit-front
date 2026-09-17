@@ -364,6 +364,9 @@ def _social_supervised_openclaw_max_attempts() -> int:
         return 5
 
 def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    from services.disk_import_media import selected
+    if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
+        return {"status": "needs_manual_publish", "last_error": "Видео с Диска размещается вручную.", "metadata_json": {"external_video_manual": True}}
     platform = str(post.get("platform") or "").strip()
     if platform == "telegram":
         return _publish_telegram_post(cursor, post)

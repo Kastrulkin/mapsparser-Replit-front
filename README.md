@@ -88,6 +88,8 @@ LocalOS помогает владельцам и управляющим лока
 - Проверка новых правил идёт этапами `1 treatment → 10 treatment → 10 control → 10 treatment → 10 control → 50 → 100`. Внутри подходящей выборки сначала берутся лиды с уже созданными устаревшими draft-цепочками: LocalOS сохраняет исправленный текст новой версией, не перезаписывая историю. Переход между этапами только ручной; подготовка не вызывает approve, queue или dispatch. До пилота контур выключен флагами `OUTREACH_CORPUS_PATTERNS_ENABLED=false` и `OUTREACH_EXPERIMENTS_ENABLED=false`.
 
 ### Operator и Telegram control surface
+
+- Голосовой ввод и озвучивание Оператора подготовлены как выключенная по умолчанию beta для бота, Mini App и веба. Расшифровка проверяется перед отправкой; защищённые действия подтверждаются отдельно. Настройки и ограничения: [голосовое управление](docs/OPERATOR_VOICE.md).
 - `/dashboard/operator` собирает в одну очередь действия по отзывам, новостям, услугам, партнёрствам, refresh jobs, approvals и billing visibility.
 - Operator доступен через web dashboard и Telegram owner-bot как разные поверхности одного governed core.
 - Утренняя сводка суперадмина показывает конкретные публикации и касания аутрича на день, разделяет реально поставленные в автоматическую очередь действия и ручные шаги и даёт прямые ссылки в рабочие разделы. Синхронизация ответов работает независимо от включения новых автоматических отправок. Человеческий ответ на касание создаёт отдельное оперативное уведомление с исходным сообщением и текстом ответа; stop-on-reply применяется до уведомления.
@@ -114,9 +116,10 @@ LocalOS помогает владельцам и управляющим лока
 - Приоритет главной хранится отдельно для пользователя и business/network. Срочная работа выше предпочтения. Наблюдение использования только предлагает изменение; применить, отложить, отклонить или отменить его может пользователь. Сбор сигналов и показ предложений включаются отдельными флагами.
 
 ### Интеграции и внешние write-действия
-- Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
+- Google Business Profile подключается через OAuth; проект `localos-gbp` (`649313441761`) одобрен Google для Basic API Access с квотой `300 QPM`, API включены, новый OAuth-клиент установлен в production env, а live-статус конкретного capability зависит от OAuth-подключения бизнеса и read-only smoke-проверки.
 - Для повторной заявки создан отдельный Google Cloud project `localos-gbp` (`649313441761`) и агентская организация `LocalOS`. В группу `Клиенты LocalOS` добавлена подтверждённая карточка клиента «Веселая расческа», проспект Энгельса, 154, с ролью менеджера без передачи основного владения.
-- Basic API Access пока не одобрен. Последняя заявка была отклонена из-за буквального несовпадения URL сайта в заявке и публичной карточке LocalOS. Следующая подача должна выбирать verified-профиль `LocalOS` и указывать company website точно как в карточке: `https://localos.pro/`. Номера обращений, дата последней проверки и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. До подтверждённого одобрения новый OAuth-клиент не заменяет текущий production-клиент.
+- Basic API Access одобрен 2026-09-03 для проекта `localos-gbp` (`649313441761`) с квотой `300 QPM`. Номера обращений, дата последней проверки, Google policy reminder и post-approval checklist зафиксированы в `docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`. Production server-side OAuth smoke пройден; до real-business smoke внешние write-действия остаются за ручным подтверждением.
+- В публичных материалах LocalOS описывает это только как интеграцию с Google Business Profile API. Нельзя заявлять партнёрство, спонсорство или endorsement со стороны Google без отдельного письменного разрешения Google.
 - AI-agent webhooks для Telegram и WhatsApp Business API используют business-level настройки и не обходят policy/approval.
 - Любой publish/send/payment/delete/bulk mutation/provider write требует явного review/approval и должен быть описан как поддержанный только после реализации, тестов и deployment checks.
 
@@ -638,13 +641,13 @@ curl -I http://localhost:8000
 │   │   ├── db_helpers.py  # Helper функции для БД
 │   │   ├── telegram_network.py # Telegram-only proxy routing helpers
 │   │   └── helpers.py     # Общие helper функции
-│   ├── reports.db         # База данных SQLite (51 таблица на сервере, 46 локально)
-│   └── migrate_*.py       # Миграции БД (оптимизация структуры)
+│   ├── reports.db         # Legacy SQLite-снимок для разовых миграций и отладки
+│   └── migrate_*.py       # Legacy-скрипты; runtime-миграции хранятся в alembic_migrations/
 ├── frontend/              # Веб-интерфейс (React + Vite)
 │   ├── src/              # Исходники React
 │   └── dist/             # Собранный фронтенд
-├── migrations/            # Миграции базы данных
-├── db_backups/            # Резервные копии БД (автоматические бэкапы перед миграциями)
+├── alembic_migrations/    # Канонические PostgreSQL-миграции
+├── backups/               # Резервные копии; храним отдельно от кэшей и не удаляем при очистке
 ├── prompts/              # Промпты для AI
 ├── .cursor/              # Документация и правила проекта
 │   └── docs/             # Архитектурные решения, верификация, упрощение
@@ -654,7 +657,7 @@ curl -I http://localhost:8000
 ### Структура базы данных
 
 **Текущее состояние:**
-- **51 таблица** на сервере / **46 таблиц** локально
+- Runtime source of truth — PostgreSQL в Docker Compose. Актуальную схему проверяем по Alembic-ревизиям и текущей PostgreSQL, а не по устаревающему числу таблиц в README.
 - **Основные категории таблиц:**
   - **Пользователи и авторизация**: Users, UserSessions, UserLoginHistory
   - **Бизнесы**: Businesses, Networks, BusinessMapLinks
@@ -665,13 +668,6 @@ curl -I http://localhost:8000
   - **Бронирования**: Bookings, StripePayments, CRMIntegrations
   - **Telegram**: TelegramBindTokens, ReviewExchangeParticipants
   - **Оптимизация**: BusinessOptimizationWizard, PricelistOptimizations, GrowthStages, GrowthTasks
-
-**План оптимизации (3 этапа):**
-1. ✅ **Добавление индексов** - ускорение запросов в 5-10 раз (`migrate_add_missing_indexes.py`)
-2. ⏳ **Удаление дублирующих таблиц** - ClientInfo, GigaChatTokenUsage, Cards (`migrate_remove_duplicate_tables.py`)
-3. ⏳ **Объединение похожих таблиц** - UserExamples уже объединены (`migrate_merge_examples_tables.py`)
-
-**Ожидаемый результат:** 40-41 таблица (упрощение схемы, устранение дублирования)
 
 **Принципы:**
 - Все данные привязаны к `business_id` (не к `user_id`)
@@ -684,7 +680,7 @@ curl -I http://localhost:8000
 - **Браузер**: Для парсинга требуется установленный Google Chrome или Chromium
 - **Капча**: Если Яндекс.Карты требуют капчу — попробуйте сменить прокси или User-Agent
 - **Воркер**: Обрабатывает задачи из таблицы **parsequeue** каждые 5 минут; результаты парсинга пишутся в **cards** (PostgreSQL)
-- **База данных**: SQLite — для продакшена рекомендуется PostgreSQL
+- **База данных**: PostgreSQL — единственная runtime-БД; SQLite допустим только для разовых legacy-миграций и отладки
 - **Память**: Playwright требует достаточно памяти для запуска браузера
 
 ## Обновление проекта

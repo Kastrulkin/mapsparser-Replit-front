@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +12,34 @@ const response = (payload: unknown) => Promise.resolve(new Response(JSON.stringi
 
 describe('PartnershipsMobileModule destructive actions', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('applies a changed status immediately and ignores an older pending search', async () => {
+    let finishOld: ((value: Response) => void) | undefined;
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input); calls.push(url);
+      if (url.includes('/leads?') && url.includes('pipeline_status=replied')) return new Promise<Response>(resolve => { finishOld = resolve; });
+      if (url.includes('/leads?')) return response({ items: [{ id: 'lead-1', name: url.includes('business_id=business-2') ? 'Новый результат' : 'Исходный', pipeline_status: 'converted' }] });
+      return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
+    }));
+    const user = userEvent.setup();
+    const view = render(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-1' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Кандидаты' }));
+    await user.selectOptions(await screen.findByLabelText('Статус работы с партнёром'), 'replied');
+    expect(calls.some(url => url.includes('pipeline_status=replied'))).toBe(true);
+    // Another scope load supersedes the pending filter; the old response must not leak.
+    const resolveOld = finishOld;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/leads?')) return response({ items: [{ id: 'lead-2', name: 'Новый результат', pipeline_status: 'replied' }] });
+      return response({ drafts: [], batches: [], items: [], counts: { partners: 0, launched: 0, preparing: 0, needs_decision: 0 } });
+    }));
+    view.rerender(<PartnershipsMobileModule scope={{ kind: 'business', id: 'business-2' }} />);
+    expect(await screen.findByRole('button', { name: /Новый результат/ })).toBeVisible();
+    await act(async () => { resolveOld?.(new Response(JSON.stringify({ items: [{ id: 'old', name: 'Устаревший результат' }] }), { status: 200 })); });
+    expect(screen.queryByText('Устаревший результат')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Новый результат/ })).toBeVisible();
+  });
 
   it('shows the complete safe catalog and shortlist without loading private workflow data', async () => {
     const calls: string[] = [];

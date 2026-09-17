@@ -242,7 +242,7 @@ def test_auth_me_returns_network_member_businesses(monkeypatch):
         "status": "inactive",
         "active": False,
         "subscription_expired": False,
-        "capabilities": [],
+            "capabilities": ["operator"],
         "groups": {"maps": False, "acquisition": False, "management": False},
     }
     assert calls == ["member-1"]

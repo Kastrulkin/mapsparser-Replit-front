@@ -40,7 +40,6 @@ def test_public_sales_room_rejects_file_with_fake_signature(monkeypatch, filenam
 
     monkeypatch.setattr(sales_rooms_api, "_check_public_sales_room_rate_limit", lambda *_args: None)
     monkeypatch.setattr(sales_rooms_api, "get_db_connection", lambda: connection)
-    monkeypatch.setattr(sales_rooms_api, "_ensure_sales_room_tables", lambda _connection: None)
     monkeypatch.setattr(
         sales_rooms_api,
         "_load_sales_room_by_slug",

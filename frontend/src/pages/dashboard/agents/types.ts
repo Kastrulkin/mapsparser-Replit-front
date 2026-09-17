@@ -901,7 +901,7 @@ export type AgentBusinessStatus = {
 };
 
 export type EmployeeStatus = {
-  label: 'Работает' | 'Выполнено' | 'Нужны данные' | 'Ждёт решения' | 'Нужно проверить' | 'Ошибка' | 'Черновик' | 'Пауза';
+  label: 'Работает' | 'Выполнено' | 'Нужны данные' | 'Ждёт решения' | 'Ожидает записи' | 'Нужно проверить' | 'Ошибка' | 'Черновик' | 'Пауза';
   tone: 'emerald' | 'amber' | 'rose' | 'slate';
   summary: string;
 };
@@ -910,7 +910,7 @@ export type AgentExecutionMode = 'one_off' | 'manual' | 'scheduled';
 
 export type EmployeeNextActionKind = 'approve' | 'connect' | 'confirm_mode' | 'run_test' | 'run_work' | 'run_similar' | 'enable' | 'configure_schedule' | 'open_result' | 'view_history';
 
-export type EmployeeWorkspaceState = 'draft' | 'needs_mode' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'paused' | 'completed' | 'needs_attention' | 'error';
+export type EmployeeWorkspaceState = 'draft' | 'needs_mode' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'waiting_provider' | 'blocked_result' | 'working' | 'paused' | 'completed' | 'needs_attention' | 'error';
 
 export type AgentRegistryFilter = 'all' | 'working' | 'attention' | 'completed';
 

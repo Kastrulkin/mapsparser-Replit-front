@@ -46,7 +46,7 @@ Status: `beta`
 
 Use when a business wants LocalOS to read or publish through external map systems.
 
-Confirmed code includes external account storage, Google Business Profile OAuth, location binding, sync, Google publish endpoints, Yandex sync/admin endpoints, and 2GIS sync/admin endpoints. Contract stability varies by provider. Google Business Profile remains `beta / Google approval pending`.
+Confirmed code includes external account storage, Google Business Profile OAuth, location binding, sync, Google publish endpoints, Yandex sync/admin endpoints, and 2GIS sync/admin endpoints. Contract stability varies by provider. Google Business Profile remains `beta`; Google approved Basic API Access for project `localos-gbp` (`649313441761`) on 2026-09-03 with `300 QPM`, API and production OAuth credentials are configured, and one real business OAuth/read-only sync smoke is still required before external writes are treated as live.
 
 ## 7. Manage Multiple Locations
 

@@ -75,6 +75,7 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
         FROM journey_actions action
         JOIN telegramcontrolpreferences preference ON preference.user_id = action.user_id
         WHERE action.status IN ('ready', 'waiting', 'blocked')
+          AND action.entity_type <> 'operator_colleague'
           AND (%s OR action.flow_type='work_journal')
           AND (action.entity_type <> 'service' OR EXISTS (
               SELECT 1 FROM business_members member JOIN users recipient ON recipient.id=member.user_id
@@ -116,6 +117,7 @@ def collect_due_journey_action_notifications(conn: Any) -> list[dict[str, Any]]:
         FROM journey_action_notification_deliveries delivery
         JOIN journey_actions action ON action.id = delivery.action_id
         WHERE delivery.sent_at IS NULL
+          AND action.entity_type <> 'operator_colleague'
           AND (%s OR action.flow_type='work_journal')
           AND action.version = delivery.action_version
           AND (action.entity_type <> 'service' OR EXISTS (

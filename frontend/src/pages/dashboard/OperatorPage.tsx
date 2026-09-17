@@ -1,4 +1,5 @@
 import { OperatorVoiceInput, OperatorSpeech, VoiceSubmission, waitForOperatorResult, voiceHeaders } from '@/components/operator/OperatorVoice';
+import { OperatorWorkdayInput } from '@/components/operator/OperatorWorkdayInput';
 import { OperatorRequestHistory } from '@/components/operator/OperatorRequestHistory';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
@@ -715,6 +716,7 @@ export const OperatorPage = () => {
 
         <div className="border-t border-slate-200 bg-white px-4 py-4">
           {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+          {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
 
           <div className="flex flex-col gap-3 lg:flex-row">
             <textarea

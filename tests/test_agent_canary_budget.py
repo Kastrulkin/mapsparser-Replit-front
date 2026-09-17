@@ -93,7 +93,6 @@ def test_due_scheduler_stops_canary_before_approved_start(monkeypatch):
 
     blueprint = _blueprint()
     blueprint.update({"business_id": "business-1", "status": "active"})
-    monkeypatch.setattr(agent_trigger_runtime, "_ensure_trigger_event_table", lambda cursor: None)
     monkeypatch.setattr(
         agent_trigger_runtime,
         "_load_scheduled_blueprints",

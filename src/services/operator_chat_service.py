@@ -77,6 +77,9 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         digest=hashlib.sha256((digest+json.dumps([payload.get("work_entry_id"),payload.get("work_action_id")])).encode()).hexdigest()
     if payload.get("work_change_hash"):
         digest = hashlib.sha256((digest + str(payload["work_change_hash"])).encode()).hexdigest()
+    if any(key in payload for key in ('attachment_ids','selected_object','clear_input_context')):
+        digest = hashlib.sha256((digest + json.dumps({key:payload.get(key) for key in
+            ('attachment_ids','selected_object','clear_input_context')},sort_keys=True,ensure_ascii=False)).encode()).hexdigest()
     if request_id:
         cursor.execute("SELECT * FROM operator_chat_requests WHERE user_id=%s AND business_id=%s AND channel=%s AND request_id=%s FOR UPDATE",
                        (user_id, business_id, channel, request_id))
@@ -86,6 +89,11 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
                 raise ValueError("Идентификатор запроса уже использован для другого текста")
             return {**previous.get("result_json", {}), "idempotent": True}
     transcript = payload.get("transcription_id")
+    from services import operator_workday, operator_workday_router
+    if operator_workday.enabled(business_id):
+        payload = dict(payload)
+        payload['_verified_input_context'] = operator_workday_router.input_context(
+            cursor,business_id,user_id,conversation_id,payload)
     if transcript:
         from services.operator_audio import consume_transcription
         consume_transcription(cursor, transcript, user_id, business_id, conversation_id, message)
@@ -113,7 +121,7 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
         approval["action_id"] = str(action.get("id") or "")
         result["approval"] = approval
         cursor.execute("UPDATE operatoractions SET expires_at=COALESCE(expires_at,NOW()+INTERVAL '30 minutes') WHERE id=%s", (approval['action_id'],))
-        cursor.execute("UPDATE operatoractions SET status='rejected',updated_at=NOW() WHERE conversation_id=%s AND capability=%s AND status='pending_approval' AND id<>%s", (conversation_id,result.get('capability') or result.get('intent') or 'unknown',approval['action_id']))
+        cursor.execute("UPDATE operatoractions SET status='rejected',updated_at=NOW() WHERE conversation_id=%s AND capability=%s AND status IN ('pending','pending_approval') AND id<>%s", (conversation_id,result.get('capability') or result.get('intent') or 'unknown',approval['action_id']))
     set_operator_pending_context(cursor, conversation_id, pending)
     result["input_type"] = "voice" if transcript else "text"
     message_id = append_operator_message(cursor, conversation_id=conversation_id, business_id=business_id,

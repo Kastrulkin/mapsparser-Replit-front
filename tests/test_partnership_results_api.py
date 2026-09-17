@@ -45,7 +45,8 @@ def test_network_counts_companies_not_candidates_or_duplicate_locations(monkeypa
     assert response.status_code == 200
     assert response.json['counts']['partners'] == 1
     assert response.json['counts']['launched'] == 1
-    assert response.json['counts']['preparing'] == 1
+    assert response.json['counts']['preparing'] == 0
+    assert response.json['counts']['launch_unrecorded'] == 1
 
 
 def test_scope_and_object_tampering_are_denied(monkeypatch):

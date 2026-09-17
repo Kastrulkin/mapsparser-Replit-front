@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from core.db_helpers import assert_schema_columns
+
 
 AGENT_CLIENT_STATUSES = {"sandbox", "live", "suspended"}
 
@@ -129,89 +131,22 @@ def normalize_telegram_bot_username(value: Any) -> str:
 
 
 def ensure_agent_security_tables(cursor) -> None:
-    # Existing production schemas are managed by Alembic. Even CREATE INDEX IF
-    # NOT EXISTS takes relation locks until commit and can block durable receipts
-    # written through a second connection during an Operator request.
-    cursor.execute("SELECT to_regclass('agent_clients') clients, to_regclass('agent_action_ledger') ledger, to_regclass('agent_discovery_events') discovery")
-    existing = cursor.fetchone()
-    values = list(existing.values()) if isinstance(existing, dict) else existing
-    if values and len(values) == 3 and all(values):
-        return
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_clients (
-            id TEXT PRIMARY KEY,
-            owner_user_id TEXT NOT NULL,
-            organization_name TEXT NOT NULL,
-            contact_email TEXT NOT NULL,
-            key_hash TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'sandbox',
-            allowed_scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
-            rate_limits JSONB NOT NULL DEFAULT '{}'::jsonb,
-            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW(),
-            last_seen_at TIMESTAMPTZ
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_action_ledger (
-            id TEXT PRIMARY KEY,
-            agent_client_id TEXT,
-            business_id TEXT,
-            action_type TEXT NOT NULL,
-            capability TEXT,
-            required_scope TEXT,
-            risk_level TEXT NOT NULL,
-            input_summary TEXT,
-            output_summary TEXT,
-            approval_id TEXT,
-            status TEXT NOT NULL,
-            reason_code TEXT,
-            ip TEXT,
-            user_agent TEXT,
-            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS agent_discovery_events (
-            id TEXT PRIMARY KEY,
-            event_type TEXT NOT NULL,
-            path TEXT NOT NULL,
-            method TEXT NOT NULL,
-            status_code INT,
-            agent_family TEXT NOT NULL DEFAULT 'unknown',
-            ip_hash TEXT,
-            user_agent TEXT,
-            referrer TEXT,
-            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_clients_key_hash ON agent_clients(key_hash)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_clients_owner ON agent_clients(owner_user_id, created_at DESC)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_clients_status ON agent_clients(status)")
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_action_ledger_client_created ON agent_action_ledger(agent_client_id, created_at DESC)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_action_ledger_business_created ON agent_action_ledger(business_id, created_at DESC)"
-    )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_action_ledger_risk ON agent_action_ledger(risk_level, created_at DESC)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_action_ledger_status ON agent_action_ledger(status, created_at DESC)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_discovery_events_created ON agent_discovery_events(created_at DESC)")
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_discovery_events_family_created ON agent_discovery_events(agent_family, created_at DESC)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_discovery_events_type_created ON agent_discovery_events(event_type, created_at DESC)"
-    )
+    """Check the schema owned by Alembic revision 20260514_001."""
+    assert_schema_columns(cursor, "agent_clients", (
+        "id", "owner_user_id", "organization_name", "contact_email", "key_hash",
+        "status", "allowed_scopes", "rate_limits", "metadata_json", "created_at",
+        "updated_at", "last_seen_at",
+    ))
+    assert_schema_columns(cursor, "agent_action_ledger", (
+        "id", "agent_client_id", "business_id", "action_type", "capability",
+        "required_scope", "risk_level", "input_summary", "output_summary",
+        "approval_id", "status", "reason_code", "ip", "user_agent",
+        "metadata_json", "created_at",
+    ))
+    assert_schema_columns(cursor, "agent_discovery_events", (
+        "id", "event_type", "path", "method", "status_code", "agent_family",
+        "ip_hash", "user_agent", "referrer", "metadata_json", "created_at",
+    ))
 
 
 def _cursor_row_to_dict(cursor, row: Any) -> dict[str, Any]:

@@ -1,3 +1,5 @@
+import { DiskImportPanel } from '@/components/DiskImportPanel';
+import { ExternalDriveVideos } from '@/components/ExternalDriveVideos';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
@@ -2419,6 +2421,7 @@ function ContentWorkspace() {
 
   const renderMediaLibrary = () => (
     <div className="space-y-5">
+      {currentBusinessId && <><DiskImportPanel key={currentBusinessId} businessId={currentBusinessId} onImported={() => { void loadMediaAssets(); }} /><ExternalDriveVideos key={`videos-${currentBusinessId}`} businessId={currentBusinessId} /></>}
       <main className="space-y-5">
         <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -2855,6 +2858,7 @@ function ContentWorkspace() {
                         {mediaLoadingItemId === item.id ? 'Проверяем...' : 'Обновить'}
                       </Button>
                     </div>
+                    {currentBusinessId && <ExternalDriveVideos key={`${currentBusinessId}-${item.id}`} businessId={currentBusinessId} itemId={item.id} onChanged={() => { void loadContent(); }} />}
                     {selectedPhoto?.original_url ? (
                       <div className="mt-4 grid gap-4 sm:grid-cols-[140px_1fr]">
                         <AuthenticatedImage src={photoImageSrc(selectedPhoto)} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />

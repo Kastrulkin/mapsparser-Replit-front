@@ -6,6 +6,7 @@ the large admin route module without changing behavior.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from services.outreach_safety_service import (
@@ -27,11 +28,13 @@ def dispatch_due_outreach_queue(
     allow_platform: bool = False,
     max_daily_outreach_batch: int | None = None,
     blocked_sender_ids: list[str] | None = None,
+    author_reply_sync_started_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Dispatch queued/retry outreach items to the configured outbound provider."""
     from api import admin_prospecting as p
 
-    safe_batch_size = max(1, min(int(batch_size or 20), 200))
+    requested_batch_size = max(1, min(int(batch_size or 20), 200))
+    safe_batch_size = requested_batch_size
     cohort_business_ids = sorted({
         str(item or "").strip()
         for item in (allowed_business_ids or [])
@@ -63,9 +66,21 @@ def dispatch_due_outreach_queue(
         cur.execute(
             """
             SELECT COUNT(*) AS count
-            FROM outreachsendqueue
-            WHERE sent_at >= CURRENT_DATE
-              AND delivery_status IN (%s, %s)
+            FROM outreachsendqueue queue
+            LEFT JOIN outreach_campaign_touches touch ON touch.id = queue.campaign_touch_id
+            LEFT JOIN outreach_campaigns campaign ON campaign.id = touch.campaign_id
+            LEFT JOIN lead_workstreams workstream ON workstream.id = queue.workstream_id
+            LEFT JOIN prospectingleads lead ON lead.id = queue.lead_id
+            LEFT JOIN creator_profiles creator
+              ON lead.source_external_id = 'creator:' || creator.id::text
+            WHERE queue.sent_at >= CURRENT_DATE
+              AND queue.delivery_status IN (%s, %s)
+              AND NOT COALESCE(
+                  workstream.workstream_type = 'creator_collaboration'
+                  AND campaign.sender_mode = 'localos_for_partner'
+                  AND creator.id IS NOT NULL,
+                  FALSE
+              )
             """,
             (p.QUEUE_STATUS_SENT, p.QUEUE_STATUS_DELIVERED),
         )
@@ -81,22 +96,10 @@ def dispatch_due_outreach_queue(
                 200,
             ),
         )
-        safe_batch_size = min(safe_batch_size, max(0, supervised_daily_cap - sent_today))
-        if safe_batch_size <= 0:
-            return {
-                "success": True,
-                "batch_id": batch_id,
-                "queue_id": queue_id,
-                "picked": 0,
-                "sent": 0,
-                "delivered": 0,
-                "retry": 0,
-                "dlq": 0,
-                "failed": 0,
-                "blocked": 0,
-                "results": [],
-                "reason_code": "daily_limit_reached",
-            }
+        legacy_remaining = max(0, supervised_daily_cap - sent_today)
+        author_only_due = legacy_remaining <= 0
+        if not author_only_due:
+            safe_batch_size = min(requested_batch_size, legacy_remaining)
         query = """
             WITH due AS (
                 SELECT
@@ -142,6 +145,21 @@ def dispatch_due_outreach_queue(
             placeholders = ",".join(["%s"] * len(blocked_senders))
             query += f" AND q.sender_account_id IS NOT NULL AND q.sender_account_id NOT IN ({placeholders})"
             params.extend(blocked_senders)
+        if author_only_due:
+            query += """
+                AND EXISTS (
+                    SELECT 1
+                    FROM outreach_campaign_touches author_touch
+                    JOIN outreach_campaigns author_campaign ON author_campaign.id = author_touch.campaign_id
+                    JOIN lead_workstreams author_workstream ON author_workstream.id = q.workstream_id
+                    JOIN prospectingleads author_lead ON author_lead.id = q.lead_id
+                    JOIN creator_profiles author_creator
+                      ON author_lead.source_external_id = 'creator:' || author_creator.id::text
+                    WHERE author_touch.id = q.campaign_touch_id
+                      AND author_workstream.workstream_type = 'creator_collaboration'
+                      AND author_campaign.sender_mode = 'localos_for_partner'
+                )
+            """
         if campaign_only:
             query += " AND q.campaign_touch_id IS NOT NULL"
             cohort_clauses: list[str] = []
@@ -292,7 +310,11 @@ def dispatch_due_outreach_queue(
             preflight_conn = p.get_db_connection()
             try:
                 preflight_cur = preflight_conn.cursor()
-                preflight = run_dispatch_preflight(preflight_cur, queue_id)
+                preflight = run_dispatch_preflight(
+                    preflight_cur,
+                    queue_id,
+                    author_reply_sync_started_at=author_reply_sync_started_at,
+                )
                 persist_preflight_result(preflight_cur, queue_id, preflight)
                 if not preflight.get("allowed"):
                     block_queue_item_after_preflight(preflight_cur, queue_id, preflight)
@@ -322,7 +344,10 @@ def dispatch_due_outreach_queue(
             provider_account_id = dispatch_result.get("provider_account_id")
             recipient_kind = dispatch_result.get("recipient_kind")
             recipient_value = dispatch_result.get("recipient_value")
+            error_code = str(dispatch_result.get("error_code") or "").strip().lower()
             error_text = str(dispatch_result.get("error_text") or "").strip()[:500] or None
+            if error_code.endswith("send_uncertain"):
+                error_text = f"{error_code}: {error_text or 'provider outcome requires verification'}"[:500]
             retryable = bool(dispatch_result.get("retryable", True))
 
             update_conn = p.get_db_connection()

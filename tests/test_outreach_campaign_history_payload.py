@@ -250,6 +250,7 @@ class DraftCampaignReviewCursor:
                     "message_brief_json": {
                         "human_edited": True,
                         "manual_edit_review_required": True,
+                        "source_fact_fingerprint": "facts:creator-current",
                     },
                 }
                 for index in range(4)
@@ -466,9 +467,14 @@ def test_successful_manual_edit_review_removes_the_review_blocker_from_every_tou
         assert "manual_edit_requires_review" not in gate["blocking_reasons"]
         assert "MANUAL_EDIT_REQUIRES_REVIEW" not in gate["reason_codes"]
         assert "MANUAL_EDIT_REQUIRES_REVIEW" not in gate["canonical_reason_codes"]
+        assert gate["manual_review"]["source"] == "saved_draft_review"
+        assert gate["manual_review"]["reviewed_at"]
     for brief in cursor.updated_message_briefs:
         assert brief["manual_edit_review_required"] is False
         assert brief["manual_edit_review_passed"] is True
+        assert brief["manual_edit_reviewed_by"] == "user-1"
+        assert brief["manual_edit_reviewed_at"]
+        assert brief["source_fact_fingerprint"] == "facts:creator-current"
 
 
 def test_successful_manual_edit_review_makes_current_draft_approvable_without_regeneration():

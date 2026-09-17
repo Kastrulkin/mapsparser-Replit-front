@@ -44,7 +44,7 @@ const outcomes: Outcome[] = [
   { key: 'cards', title: 'Привести карточки в порядок', description: 'Проверить услуги и цены, фото, рейтинг, отзывы и запись. Понять, что поправить первым.', icon: MapPinned, secondaryKey: 'reviews', secondaryLabel: 'Ответить на отзывы' },
   { key: 'content', title: 'Контент без рутины', description: 'Работать с планом и готовить публикации.', icon: FileText },
   { key: 'influencers', title: 'Найти местных блогеров', description: 'Подобрать авторов рядом и следить за визитами и публикациями.', icon: Sparkles },
-  { key: 'partnerships', title: 'Найти бизнесы для взаимных рекомендаций', description: 'Увидеть, с кем рядом можно обмениваться клиентами и какое предложение сделать.', icon: Users },
+  { key: 'partnerships', title: 'Партнёры и переписка', description: 'Найти партнёра, посмотреть, кому написали, что ответили и какой следующий шаг.', icon: Users },
   { key: 'finance', title: 'Больше выручки', description: 'Видеть продажи, загрузку и точки роста.', icon: CreditCard, secondaryKey: 'services', secondaryLabel: 'Улучшить меню услуг' },
   { key: 'agents', title: 'Снять с себя повторяющиеся задачи', description: 'Выбрать регулярную работу и видеть, что сделано и где требуется ваше решение.', icon: Bot },
 ];

@@ -44,6 +44,14 @@ services:
     restart: unless-stopped
     environment:
       OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
+      DISK_IMPORT_BUSINESS_IDS: ${DISK_IMPORT_BUSINESS_IDS:-}
+      OPERATOR_WORKDAY_BUSINESS_IDS: ${OPERATOR_WORKDAY_BUSINESS_IDS:-}
+      GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_REDIRECT_URI: ${GOOGLE_DRIVE_REDIRECT_URI:-https://localos.pro/api/operator/google-drive/callback}
+      YANDEX_DISK_CLIENT_ID: ${YANDEX_DISK_CLIENT_ID:-}
+      YANDEX_DISK_CLIENT_SECRET: ${YANDEX_DISK_CLIENT_SECRET:-}
+      YANDEX_DISK_REDIRECT_URI: ${YANDEX_DISK_REDIRECT_URI:-https://localos.pro/api/operator/disk/callback}
       OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS: ${OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS:-}
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
@@ -185,6 +193,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_CLOUD_PROJECT_ID: ${GOOGLE_CLOUD_PROJECT_ID:-}
       GOOGLE_SHEETS_CLIENT_ID: ${GOOGLE_SHEETS_CLIENT_ID:-}
       GOOGLE_SHEETS_CLIENT_SECRET: ${GOOGLE_SHEETS_CLIENT_SECRET:-}
       GOOGLE_SHEETS_REDIRECT_URI: ${GOOGLE_SHEETS_REDIRECT_URI:-}
@@ -281,6 +290,7 @@ services:
       - ./data/legacy.sqlite:/app/legacy.sqlite:ro
       - ./debug_data:/app/debug_data
       - ./src:/app/src:ro
+      - ./debug_data/media_uploads:/app/debug_data/media_uploads
       - ./data/operator_audio:/app/operator_audio
       - ./entrypoint.sh:/app/entrypoint.sh:ro
       - ./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro
@@ -312,6 +322,14 @@ services:
         required: false
     environment:
       OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
+      DISK_IMPORT_BUSINESS_IDS: ${DISK_IMPORT_BUSINESS_IDS:-}
+      OPERATOR_WORKDAY_BUSINESS_IDS: ${OPERATOR_WORKDAY_BUSINESS_IDS:-}
+      GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_REDIRECT_URI: ${GOOGLE_DRIVE_REDIRECT_URI:-https://localos.pro/api/operator/google-drive/callback}
+      YANDEX_DISK_CLIENT_ID: ${YANDEX_DISK_CLIENT_ID:-}
+      YANDEX_DISK_CLIENT_SECRET: ${YANDEX_DISK_CLIENT_SECRET:-}
+      YANDEX_DISK_REDIRECT_URI: ${YANDEX_DISK_REDIRECT_URI:-https://localos.pro/api/operator/disk/callback}
       OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS: ${OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS:-}
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
@@ -438,6 +456,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_CLOUD_PROJECT_ID: ${GOOGLE_CLOUD_PROJECT_ID:-}
       GOOGLE_SHEETS_CLIENT_ID: ${GOOGLE_SHEETS_CLIENT_ID:-}
       GOOGLE_SHEETS_CLIENT_SECRET: ${GOOGLE_SHEETS_CLIENT_SECRET:-}
       GOOGLE_SHEETS_REDIRECT_URI: ${GOOGLE_SHEETS_REDIRECT_URI:-}
@@ -552,6 +571,7 @@ services:
     volumes:
       - ./debug_data:/app/debug_data
       - ./src:/app/src:ro
+      - ./debug_data/media_uploads:/app/debug_data/media_uploads
       - ./data/operator_audio:/app/operator_audio
       - ./entrypoint.sh:/app/entrypoint.sh:ro
       - ./scripts/localos_migrator.py:/app/scripts/localos_migrator.py:ro
@@ -578,7 +598,16 @@ services:
     # The app service owns schema migrations. The lean Telegram image starts the bot directly.
     entrypoint: []
     environment:
+      EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}
       OPERATOR_WORK_REVIEW_BUSINESS_IDS: ${OPERATOR_WORK_REVIEW_BUSINESS_IDS:-}
+      DISK_IMPORT_BUSINESS_IDS: ${DISK_IMPORT_BUSINESS_IDS:-}
+      OPERATOR_WORKDAY_BUSINESS_IDS: ${OPERATOR_WORKDAY_BUSINESS_IDS:-}
+      GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_REDIRECT_URI: ${GOOGLE_DRIVE_REDIRECT_URI:-https://localos.pro/api/operator/google-drive/callback}
+      YANDEX_DISK_CLIENT_ID: ${YANDEX_DISK_CLIENT_ID:-}
+      YANDEX_DISK_CLIENT_SECRET: ${YANDEX_DISK_CLIENT_SECRET:-}
+      YANDEX_DISK_REDIRECT_URI: ${YANDEX_DISK_REDIRECT_URI:-https://localos.pro/api/operator/disk/callback}
       OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS: ${OPERATOR_PLAN_REVISION_ASYNC_BUSINESS_IDS:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       PYTHONPATH: /app:/app/src
@@ -623,6 +652,7 @@ services:
       CRYPTO_PAY_API_BASE: ${CRYPTO_PAY_API_BASE:-}
     volumes:
       - ./src:/app/src:ro
+      - ./debug_data/media_uploads:/app/debug_data/media_uploads
       - ./data/operator_audio:/app/operator_audio
       - ./alembic_migrations:/app/alembic_migrations:ro
     extra_hosts:

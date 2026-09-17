@@ -4,9 +4,11 @@ import { newAuth } from '@/lib/auth_new';
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
 
 type Scope = { kind?: string; id?: string | null };
-type Agreement = { revision?: number; status?: string; terms?: Record<string, string>; terms_version?: number; instruction?: string; instruction_terms_version?: number; instruction_draft?: string; history?: Array<{ command: string; at: string; previous?: { instruction?: string; terms?: Record<string, string> } }> };
+type Agreement = { relationship_status?: string; source_summary?: string; launch_status?: string; revision?: number; status?: string; terms?: Record<string, string>; terms_version?: number; instruction?: string; instruction_terms_version?: number; instruction_draft?: string; history?: Array<{ command: string; at: string; previous?: { instruction?: string; terms?: Record<string, string> } }> };
 type Partner = { id: string; name: string; business_name: string; client_business_id: string; company_id?: string; agreement_json: Agreement; partnership_launched_at?: string; partnership_outcome_json?: { mechanic?: string; result?: unknown } };
-type Results = { items: Partner[]; locations?: Array<{ id: string; name: string }>; counts: { partners: number; launched: number; preparing: number; needs_decision: number } };
+type Results = { items: Partner[]; locations?: Array<{ id: string; name: string }>; counts: { partners: number; launched: number; preparing: number; launch_unrecorded?: number; needs_decision: number } };
+const isPartner = (item: Partner) => item.agreement_json?.relationship_status === 'confirmed' || item.agreement_json?.status === 'confirmed';
+const launchLabel = (item: Partner) => item.partnership_launched_at ? 'Запущено' : item.agreement_json?.launch_status === 'preparing' ? 'Готовится к запуску' : 'Запуск не отмечен';
 const fields = [
   ['details', 'О чём договорились'], ['our_actions', 'Что делаем мы'], ['partner_actions', 'Что делает партнёр'],
   ['client_benefit', 'Выгода клиента'], ['validity', 'Сроки действия'], ['responsible', 'Ответственный'], ['contact', 'Контакт ответственного'],
@@ -23,6 +25,7 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [chooseLocation, setChooseLocation] = useState(false);
+  const [search, setSearch] = useState('');
   const version = useRef(0);
   const query = new URLSearchParams({ scope_type: scope.kind || 'business', scope_id: scope.id || '' });
   const request = async (path: string, options: RequestInit = {}) => mobile
@@ -39,6 +42,7 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
   };
   useEffect(() => {
     version.current += 1; setResult(null); setSelected(''); setTerms({}); setInstruction(''); setError(''); setBusy(false); setLoading(true); setChooseLocation(false);
+    setSearch('');
     void load();
     return () => { version.current += 1; };
   }, [scope.kind, scope.id]);
@@ -57,8 +61,10 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
     finally { if (current === version.current) setBusy(false); }
   };
   useEffect(() => { setInstruction(agreement.instruction_draft || ''); }, [selected, agreement.revision]);
-  const confirmed = (result?.items || []).filter(item => item.agreement_json?.status === 'confirmed');
-  const pending = (result?.items || []).filter(item => item.agreement_json?.status !== 'confirmed');
+  const normalize = (value: string) => value.toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
+  const matching = (result?.items || []).filter(item => normalize([item.name, item.business_name, item.agreement_json?.terms?.details, item.agreement_json?.terms?.contact].filter(Boolean).join(' ')).includes(normalize(search)));
+  const confirmed = matching.filter(isPartner);
+  const pending = matching.filter(item => !isPartner(item));
   const stale = agreement.status !== 'confirmed' || agreement.instruction_terms_version !== agreement.terms_version;
   return <section className="space-y-4 rounded-2xl bg-background p-4 text-foreground shadow-sm" aria-label="Результаты партнёрств">
     {error ? <div role="alert">{error}<Button variant="outline" onClick={() => void load()}>Повторить</Button></div> : null}
@@ -67,7 +73,8 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
     {partner ? <>
       <Button variant="ghost" className="min-h-11" onClick={() => setSelected('')}>Назад к партнёрам</Button>
       <h2 className="text-xl font-semibold text-balance">{partner.name}</h2><p>{partner.business_name}</p>
-      <p>{agreement.status === 'confirmed' ? 'Договорённость подтверждена' : 'Условия требуют подтверждения'}. Это внутренняя запись, не подписание договора.</p>
+      <p>{agreement.status === 'confirmed' ? 'Договорённость подтверждена' : isPartner(partner) ? 'Партнёр подтверждён. Условия нужно уточнить' : 'Условия требуют подтверждения'}. Это внутренняя запись, не подписание договора.</p>
+      {agreement.source_summary ? <p className="text-sm text-muted-foreground text-pretty">{agreement.source_summary}</p> : null}
       {editing ? <div className="space-y-3">{fields.map(([key, label]) => <label key={key} className="block text-sm">{label}<textarea className="mt-1 min-h-20 w-full rounded-md border bg-background p-3" value={terms[key] || ''} onChange={event => setTerms({ ...terms, [key]: event.target.value })} /></label>)}<Button disabled={busy} onClick={() => void change('save')}>Сохранить условия</Button></div> : <>
         <dl className="space-y-3">{fields.filter(([key]) => Boolean(agreement.terms?.[key])).map(([key, label]) => <div key={key}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="whitespace-pre-wrap text-pretty">{agreement.terms?.[key] || 'Не указано'}</dd></div>)}</dl>
         <Button variant="outline" disabled={busy} onClick={() => setEditing(true)}>Изменить условия</Button>
@@ -80,10 +87,13 @@ export function PartnershipResults({ scope, mobile = false, openWork }: { scope:
       <details><summary className="min-h-11 cursor-pointer py-3">История и результаты</summary>{partner.partnership_launched_at ? <p>Запущено: {partner.partnership_launched_at}</p> : <p>Запуск ещё не отмечен</p>}{partner.partnership_outcome_json?.result ? <pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify(partner.partnership_outcome_json.result, null, 2)}</pre> : <p>Результаты ещё не внесены</p>}{agreement.history?.map((entry, index) => <div key={index} className="py-2"><p>{entry.at}</p>{entry.previous?.terms?.details ? <p>{entry.previous.terms.details}</p> : null}{entry.previous?.instruction ? <p className="whitespace-pre-wrap">{entry.previous.instruction}</p> : null}</div>)}<Button variant="outline" onClick={() => openWork(partner.client_business_id)}>Перейти к рабочим вкладкам</Button></details>
     </> : result ? <>
       <h2 className="text-xl font-semibold"><span className="tabular-nums">{result.counts.partners}</span> подтверждённых партнёров</h2>
-      <p className="tabular-nums">Запущено: {result.counts.launched} · Готовится к запуску: {result.counts.preparing} · Требуют решения: {result.counts.needs_decision}</p>
+      <p className="tabular-nums">Запущено: {result.counts.launched} · Готовится к запуску: {result.counts.preparing} · Запуск не отмечен: {result.counts.launch_unrecorded || 0} · Требуют решения: {result.counts.needs_decision}</p>
+      <label className="block text-sm">Найти партнёра или договорённость<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Название, точка, контакт или условие" className="mt-2 min-h-11 w-full rounded-md border bg-background px-3" /></label>
+      {search.trim() && !matching.length ? <p role="status">Ничего не найдено. Измените запрос или откройте переписку по точке.</p> : null}
+      <Button variant="outline" className="min-h-11" onClick={() => scope.kind === 'network' ? setChooseLocation(true) : openWork()}>Переписка и статусы работы</Button>
       {scope.kind === 'network' ? <><Button variant="outline" onClick={() => setChooseLocation(!chooseLocation)}>Работа по точкам</Button>{chooseLocation ? <div>{result.locations?.map(location => <Button key={location.id} variant="ghost" className="block min-h-11" onClick={() => openWork(location.id)}>{location.name}</Button>)}</div> : null}</> : null}
-      {!confirmed.length ? <div><p>Подтверждённых партнёрств пока нет.</p><Button className="mt-3" onClick={() => scope.kind === 'network' ? setChooseLocation(true) : openWork()}>Перейти к поиску и переговорам</Button></div> : confirmed.map(item => <button key={item.id} className="block min-h-11 w-full border-b py-4 text-left active:scale-[0.96]" onClick={() => open(item)}><b>{item.name}</b><p className="text-sm text-muted-foreground">{item.business_name} · {item.partnership_launched_at ? 'Запущено' : 'Готовится к запуску'}</p><p className="text-pretty">{item.agreement_json.terms?.details}</p><span className="text-sm underline">Условия и инструкция</span></button>)}
-      {pending.length ? <details><summary className="min-h-11 cursor-pointer py-3">Зафиксировать договорённость ({pending.length})</summary>{pending.map(item => <Button key={item.id} variant="ghost" className="block min-h-11" onClick={() => open(item)}>{item.name} · {item.business_name}</Button>)}</details> : null}
+      {!confirmed.length && !search.trim() ? <div><p>Подтверждённых партнёрств пока нет.</p><Button className="mt-3" onClick={() => scope.kind === 'network' ? setChooseLocation(true) : openWork()}>Перейти к поиску и переговорам</Button></div> : confirmed.map(item => <button key={item.id} className="block min-h-11 w-full border-b py-4 text-left active:scale-[0.96]" onClick={() => open(item)}><b>{item.name}</b><p className="text-sm text-muted-foreground">{item.business_name} · {launchLabel(item)}</p><p className="text-pretty">{item.agreement_json.terms?.details || 'Условия пока не внесены'}</p>{item.agreement_json.status !== 'confirmed' ? <p className="text-sm text-muted-foreground">Уточнить условия и инструкцию</p> : null}<span className="text-sm underline">Условия и инструкция</span></button>)}
+      {pending.length ? <details open={search.trim() ? true : undefined}><summary className="min-h-11 cursor-pointer py-3">Зафиксировать договорённость ({pending.length})</summary>{pending.map(item => <Button key={item.id} variant="ghost" className="block min-h-11" onClick={() => open(item)}>{item.name} · {item.business_name}</Button>)}</details> : null}
     </> : null}
   </section>;
 }

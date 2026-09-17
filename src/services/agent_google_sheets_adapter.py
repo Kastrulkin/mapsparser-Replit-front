@@ -79,7 +79,7 @@ class GoogleSheetsAppendAdapter:
         current_values = self.read_range_values(spreadsheet_id, range_value)
         if _contains_formula(current_values):
             raise GoogleSheetsAdapterError("Existing formulas cannot be overwritten.")
-        if expected_values and _normalized_matrix(current_values) != _normalized_matrix(expected_values):
+        if isinstance(request.get("expected_values"), list) and _normalized_matrix(current_values) != _normalized_matrix(expected_values):
             raise GoogleSheetsAdapterError("GOOGLE_SHEETS_VALUES_CHANGED")
         return {
             "success": True,

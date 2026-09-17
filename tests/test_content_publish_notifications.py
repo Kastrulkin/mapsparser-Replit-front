@@ -96,6 +96,22 @@ def test_formats_copy_ready_message_and_link():
     assert reply_markup["inline_keyboard"][0][0]["text"] == "Открыть публикацию"
 
 
+def test_formats_max_handoff_as_max():
+    message, _ = format_content_publish_handoff(
+        {
+            "platform": "max",
+            "business_name": "Весёлая расчёска",
+            "business_address": "проспект Энгельса, 154",
+            "platform_text": "Готовый текст для MAX",
+            "business_id": "biz-1",
+            "content_plan_item_id": "item-1",
+            "scheduled_for": datetime(2026, 9, 15, tzinfo=timezone.utc),
+        }
+    )
+    assert "MAX · 15.09.2026" in message
+    assert "Готовый текст для MAX" in message
+
+
 def test_marks_delivery_in_post_metadata():
     connection = Connection()
     assert mark_content_publish_handoff_sent(

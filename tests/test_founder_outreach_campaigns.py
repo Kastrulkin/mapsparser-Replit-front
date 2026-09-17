@@ -9,6 +9,7 @@ from flask import Flask
 from services.outreach_campaign_service import (
     DEFAULT_SEQUENCE,
     _aggregate_quality_gate,
+    _apply_creator_invitation_template_contract,
     _contact_outreach_rank,
     _email_subject,
     _format_channel_outreach_message,
@@ -22,6 +23,9 @@ from services.outreach_campaign_service import (
     build_personalization_candidates,
     channel_availability,
     _localos_representative_profile,
+    _creator_email_contact_matches_bridge,
+    _load_creator_outreach_bridge,
+    _merge_creator_outreach_bridge_research,
     _merge_recent_research_rows,
     _normalize_touch_overrides,
     _publication_capability_snapshot,
@@ -32,6 +36,7 @@ from services.outreach_campaign_service import (
 from services.outreach_template_service import (
     _render_outreach_template_body,
     attach_public_audit_link,
+    render_creator_invitation_template,
     select_outreach_template,
 )
 
@@ -88,6 +93,469 @@ def test_recent_research_history_keeps_latest_contract_and_older_public_signals(
         "https://t.me/example/42",
     ]
     assert merged["research_history_rows_merged"] == 2
+
+
+class CreatorOutreachBridgeCursor:
+    def __init__(self, row):
+        self.row = row
+        self.calls = []
+
+    def execute(self, query, params=None):
+        self.calls.append((query, params))
+
+    def fetchone(self):
+        return self.row
+
+
+def test_creator_outreach_bridge_requires_current_approved_campaign_and_preserves_sources():
+    observed_at = datetime(2026, 9, 7, 18, 48, 36, tzinfo=timezone.utc)
+    cursor = CreatorOutreachBridgeCursor({
+        "candidate_id": "candidate-1",
+        "candidate_updated_at": observed_at,
+        "selected_contact_point_id": "contact-1",
+        "selected_contact_type": "email",
+        "selected_contact_value": "author@example.test",
+        "selected_contact_verification": "verified",
+        "selected_contact_source_url": "https://author.example.test/contact",
+        "creator_profile_id": "profile-1",
+        "contact_confirmation": {
+            "confirmed": True,
+            "note": "channel-1 links evidence-1 and the official author site to this email",
+            "source_url": "https://author.example.test/contact",
+        },
+        "creator_campaign_id": "creator-campaign-1",
+        "business_id": "business-1",
+        "terms_version": 3,
+        "approved_at": observed_at,
+        "approved_offer_current": True,
+        "bridge_match_count": 1,
+        "offer_json": {
+            "barter": True,
+            "details": "Конкретная компания и результат обсуждаются отдельно до участия",
+        },
+        "formats_json": ["обзор локального бизнеса"],
+        "budget_json": {"type": "barter"},
+        "period_json": {"timing": "по согласованию"},
+        "constraints_json": {"invitation_only": True},
+        "channel_id": "channel-1",
+        "platform": "youtube",
+        "channel_url": "https://youtube.test/@author",
+        "channel_observed_at": "2026-09-07T18:48:36Z",
+        "evidence_id": "evidence-1",
+        "evidence_type": "manual_public_source",
+        "evidence_source_url": "https://youtube.test/watch?v=1",
+        "evidence_summary": "YouTube About links the author site; its contact page publishes the email.",
+        "evidence_confidence": 0.9,
+        "evidence_observed_at": observed_at,
+        "evidence_stale_after": datetime(2099, 12, 6, tzinfo=timezone.utc),
+    })
+
+    bridge = _load_creator_outreach_bridge(cursor, {
+        "id": "workstream-1",
+        "lead_id": "lead-1",
+        "workstream_type": "creator_collaboration",
+        "source_external_id": "creator:profile-1",
+        "source_url": "https://youtube.test/@author",
+        "email": "author@example.test",
+    })
+
+    query, params = cursor.calls[0]
+    assert "candidate.status = 'invitation_ready'" in query
+    assert "campaign.approved_terms_version = campaign.terms_version" in query
+    assert "COUNT(*) OVER ()" in query
+    assert "item.observed_at IS NOT NULL" in query
+    assert "item.stale_after IS NOT NULL" in query
+    assert "COALESCE(item.confidence, 0) >= 0.7" in query
+    assert "LIKE '%%' || channel.id::text || '%%'" in query
+    assert "LIKE '%%' || item.id::text || '%%'" in query
+    assert "pg_input_is_valid" in query
+    assert "contact_confirmation'->>'confirmed'" in query
+    assert "commercial.preferred_contact" in query
+    assert "selected_contact.id = selected_workstream.selected_contact_point_id" in query
+    assert "'verified', 'confirmed_source', 'valid_format'" in query
+    assert "selected_contact.normalized_value" in query
+    assert params == (
+        "https://youtube.test/@author",
+        "https://youtube.test/@author",
+        "workstream-1",
+        "lead-1",
+        "creator:profile-1",
+        "author@example.test",
+    )
+    assert bridge["creator_campaign_id"] == "creator-campaign-1"
+    assert bridge["terms_version"] == 3
+    assert bridge["channel_id"] == "channel-1"
+    assert bridge["evidence_id"] == "evidence-1"
+    assert bridge["source_fact_fingerprint"].startswith("facts:")
+
+    changed_offer_row = dict(cursor.row)
+    changed_offer_row["offer_json"] = {
+        "barter": True,
+        "details": "Другой заново одобренный формат приглашения",
+    }
+    changed_offer = _load_creator_outreach_bridge(
+        CreatorOutreachBridgeCursor(changed_offer_row),
+        {
+            "id": "workstream-1",
+            "lead_id": "lead-1",
+            "workstream_type": "creator_collaboration",
+            "source_external_id": "creator:profile-1",
+            "source_url": "https://youtube.test/@author",
+            "email": "author@example.test",
+        },
+    )
+    assert changed_offer["source_fact_fingerprint"] != bridge["source_fact_fingerprint"]
+
+    changed_contact_row = dict(cursor.row)
+    changed_contact_row["contact_confirmation"] = {
+        **changed_contact_row["contact_confirmation"],
+        "note": "channel-1 links evidence-1 to a newly reviewed ownership chain",
+    }
+    changed_contact = _load_creator_outreach_bridge(
+        CreatorOutreachBridgeCursor(changed_contact_row),
+        {
+            "id": "workstream-1",
+            "lead_id": "lead-1",
+            "workstream_type": "creator_collaboration",
+            "source_external_id": "creator:profile-1",
+            "source_url": "https://youtube.test/@author",
+            "email": "author@example.test",
+        },
+    )
+    assert changed_contact["source_fact_fingerprint"] != bridge["source_fact_fingerprint"]
+
+    changed_selected_contact_row = dict(cursor.row)
+    changed_selected_contact_row["selected_contact_value"] = "changed@example.test"
+    changed_selected_contact = _load_creator_outreach_bridge(
+        CreatorOutreachBridgeCursor(changed_selected_contact_row),
+        {
+            "id": "workstream-1",
+            "lead_id": "lead-1",
+            "workstream_type": "creator_collaboration",
+            "source_external_id": "creator:profile-1",
+            "source_url": "https://youtube.test/@author",
+            "email": "author@example.test",
+        },
+    )
+    assert (
+        changed_selected_contact["source_fact_fingerprint"]
+        != bridge["source_fact_fingerprint"]
+    )
+
+
+def test_creator_outreach_bridge_fails_closed_for_ambiguous_or_unapproved_source():
+    ambiguous = CreatorOutreachBridgeCursor({"bridge_match_count": 2})
+    bridge = _load_creator_outreach_bridge(ambiguous, {
+        "workstream_type": "creator_collaboration",
+    })
+    assert bridge == {
+        "status": "blocked",
+        "blocking_reason": "creator_campaign_ambiguous",
+    }
+
+    unapproved = CreatorOutreachBridgeCursor({
+        "bridge_match_count": 1,
+        "approved_offer_current": False,
+    })
+    bridge = _load_creator_outreach_bridge(unapproved, {
+        "workstream_type": "creator_collaboration",
+    })
+    assert bridge == {"status": "blocked", "blocking_reason": "approved_offer"}
+
+
+def test_creator_outreach_bridge_does_not_promote_zero_confidence_or_stale_evidence():
+    observed_at = datetime(2026, 9, 7, tzinfo=timezone.utc)
+    row = {
+        "bridge_match_count": 1,
+        "approved_offer_current": True,
+        "offer_json": {"details": "Одобренное приглашение"},
+        "evidence_observed_at": observed_at,
+        "evidence_stale_after": datetime(2020, 1, 1, tzinfo=timezone.utc),
+        "evidence_confidence": 0,
+    }
+    bridge = _load_creator_outreach_bridge(
+        CreatorOutreachBridgeCursor(row),
+        {"workstream_type": "creator_collaboration"},
+    )
+    assert bridge == {
+        "status": "blocked",
+        "blocking_reason": "creator_evidence_stale_or_ownership_unverified",
+    }
+
+
+def test_creator_bridge_requires_the_exact_selected_email_contact_point():
+    bridge = {
+        "selected_contact_point_id": "contact-owned",
+        "preferred_contact": "author@example.test",
+    }
+    assert _creator_email_contact_matches_bridge(
+        {"email": {
+            "contact_point_id": "contact-owned",
+            "recipient": "Author@Example.Test",
+        }},
+        bridge,
+    ) is True
+    assert _creator_email_contact_matches_bridge(
+        {"email": {
+            "contact_point_id": "contact-other",
+            "recipient": "other@example.test",
+        }},
+        bridge,
+    ) is False
+
+
+@pytest.mark.parametrize(
+    ("identity_description", "public_fact", "expected_subject", "expected_opening"),
+    [
+        (
+            "Экскурсии со специалистами в области живой природы. Эколог Алексей Коткин.",
+            "Дом Природы Алексея Коткина в Сестрорецке.",
+            "Алексей | LocalOS | сотрудничество",
+            "Алексей, здравствуйте!\n\nЯ Александр Демьянов, LocalOS. "
+            "Нашёл ваш канал о природе и экскурсиях.",
+        ),
+        (
+            "Авторские экскурсии от мамы с дочерью, влюблённых в Петербург. "
+            "Татьяна и Яна Митяевы.",
+            "Куда пойти с ребёнком в Петербурге?",
+            "Татьяна и Яна | LocalOS | сотрудничество",
+            "Татьяна и Яна, здравствуйте!\n\nЯ Александр Демьянов, LocalOS. "
+            "Нашёл ваш канал о Петербурге и семейных прогулках.",
+        ),
+    ],
+)
+def test_creator_invitation_template_is_server_rendered_from_public_identity(
+    identity_description,
+    public_fact,
+    expected_subject,
+    expected_opening,
+):
+    rendered = render_creator_invitation_template({
+        "status": "ready",
+        "constraints": {"invitation_only": True},
+        "terms_version": 1,
+        "approved_at": "2026-09-07T18:52:02Z",
+        "channel_id": "channel-1",
+        "evidence_id": "evidence-1",
+        "channel_identity_description": identity_description,
+        "public_observed_fact": public_fact,
+    })
+
+    assert rendered["subject"] == expected_subject
+    assert rendered["body"].startswith(expected_opening)
+    assert rendered["body"].endswith("Александр Демьянов\nLocalOS")
+
+
+def test_creator_invitation_contract_accepts_only_exact_server_copy_and_current_terms():
+    bridge = {
+        "status": "ready",
+        "constraints": {"invitation_only": True},
+        "terms_version": 1,
+        "approved_at": "2026-09-07T18:52:02Z",
+        "channel_id": "channel-1",
+        "evidence_id": "evidence-1",
+        "channel_identity_description": (
+            "Экскурсии со специалистами в области живой природы. "
+            "Эколог Алексей Коткин."
+        ),
+        "public_observed_fact": "Дом Природы Алексея Коткина в Сестрорецке.",
+    }
+    rendered = render_creator_invitation_template(bridge)
+    gate = {
+        "checks": {"removal": False, "bridge": False, "specificity": False},
+        "diagnostic_codes": ["removal", "bridge", "specificity"],
+        "reason_codes": ["DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"],
+        "canonical_reason_codes": ["DECORATIVE_PERSONALIZATION", "WEAK_OFFER_BRIDGE"],
+        "blocking_reasons": ["decorative_personalization"],
+        "passed": False,
+    }
+
+    exact = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge=bridge,
+        manual_review_context="saved_draft_review",
+        manual_reviewer_role="superadmin",
+    )
+    assert exact["passed"] is True
+    assert exact["creator_invitation_copy_contract"]["exact_server_copy"] is True
+
+    altered = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"] + "\nНепроверенное обещание.",
+        bridge=bridge,
+        manual_review_context="saved_draft_review",
+        manual_reviewer_role="superadmin",
+    )
+    assert altered["passed"] is False
+
+    stale_terms = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge={**bridge, "status": "blocked", "blocking_reason": "approved_offer"},
+        manual_review_context="saved_draft_review",
+        manual_reviewer_role="superadmin",
+    )
+    assert stale_terms["passed"] is False
+
+    preview_only = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge=bridge,
+        manual_review_context="",
+        manual_reviewer_role="superadmin",
+    )
+    assert preview_only["passed"] is False
+    assert preview_only["creator_invitation_copy_contract"]["authorized_saved_review"] is False
+    assert "MANUAL_EDIT_REQUIRES_REVIEW" in preview_only["reason_codes"]
+    assert "manual_edit_requires_review" in preview_only["blocking_reasons"]
+
+    business_reviewer = _apply_creator_invitation_template_contract(
+        gate,
+        subject=rendered["subject"],
+        body=rendered["body"],
+        bridge=bridge,
+        manual_review_context="saved_draft_review",
+        manual_reviewer_role="business_user",
+    )
+    assert business_reviewer["passed"] is False
+
+
+def test_creator_outreach_bridge_supplies_existing_decision_offer_and_evidence_contracts():
+    bridge = {
+        "status": "ready",
+        "version": "creator-outreach-bridge-v1",
+        "creator_campaign_id": "creator-campaign-1",
+        "candidate_id": "candidate-1",
+        "creator_profile_id": "profile-1",
+        "terms_version": 3,
+        "approved_at": "2026-09-07T18:52:02Z",
+        "channel_id": "channel-1",
+        "channel_url": "https://youtube.test/@author",
+        "evidence_id": "evidence-1",
+        "approved_reason": "Конкретная компания и результат обсуждаются отдельно до участия",
+        "offer": {"barter": True},
+        "formats": ["обзор локального бизнеса"],
+        "budget": {"type": "barter"},
+        "period": {"timing": "по согласованию"},
+        "constraints": {"invitation_only": True},
+        "source_fact_fingerprint": "facts:source-1",
+        "evidence": {
+            "evidence_id": "evidence-1",
+            "id": "evidence-1",
+            "kind": "creator_public_evidence",
+            "observed_fact": "YouTube About links the author site; its contact page publishes the email.",
+            "fact": "YouTube About links the author site; its contact page publishes the email.",
+            "source_url": "https://youtube.test/watch?v=1",
+            "observed_at": "2026-09-07T18:48:36Z",
+            "freshness": "current_snapshot",
+            "confidence": 0.9,
+            "usable_for_outreach": True,
+            "source_type": "manual_public_source",
+            "evidence_kind": "creator_campaign_bridge",
+            "provider_key": "channel-1",
+        },
+        "ownership_evidence": {
+            "evidence_id": "creator-contact-ownership:candidate-1",
+            "id": "creator-contact-ownership:candidate-1",
+            "kind": "creator_contact_ownership",
+            "observed_fact": "The selected channel links the official site to this email.",
+            "fact": "The selected channel links the official site to this email.",
+            "source_url": "https://author.example.test/contact",
+            "observed_at": "2026-09-07T18:50:00Z",
+            "freshness": "current_snapshot",
+            "confidence": 1.0,
+            "usable_for_outreach": True,
+            "source_type": "operator_confirmed_creator_contact",
+            "evidence_kind": "creator_contact_ownership",
+            "provider_key": "channel-1",
+        },
+        "approval_evidence": {
+            "evidence_id": "creator-campaign:creator-campaign-1:terms:3",
+            "id": "creator-campaign:creator-campaign-1:terms:3",
+            "kind": "operator_approved_partnership_reason",
+            "observed_fact": "Конкретная компания и результат обсуждаются отдельно до участия",
+            "fact": "Конкретная компания и результат обсуждаются отдельно до участия",
+            "source_url": "https://youtube.test/@author",
+            "observed_at": "2026-09-07T18:52:02Z",
+            "freshness": "current_snapshot",
+            "confidence": 1.0,
+            "usable_for_outreach": True,
+            "status": "approved",
+            "source_type": "creator_campaign",
+            "evidence_kind": "creator_invitation_approved",
+            "provider_key": "channel-1",
+        },
+        "provenance_evidence": {
+            "evidence_id": "creator-bridge-provenance:candidate-1",
+            "id": "creator-bridge-provenance:candidate-1",
+            "kind": "creator_bridge_provenance",
+            "observed_fact": "creator-bridge:contract-1",
+            "fact": "creator-bridge:contract-1",
+            "source_url": "https://youtube.test/@author",
+            "observed_at": "2026-09-07T18:52:02Z",
+            "freshness": "current_snapshot",
+            "confidence": 1.0,
+            "usable_for_outreach": True,
+            "source_type": "creator_campaign_contract",
+            "evidence_kind": "creator_bridge_provenance",
+            "provider_key": "channel-1",
+        },
+    }
+    research = _merge_creator_outreach_bridge_research({}, bridge)
+    context = {
+        "workstream_type": "creator_collaboration",
+        "lifecycle_status": "active",
+        "lead_name": "Авторский канал",
+        "source_url": "https://youtube.test/@author",
+        "updated_at": "2026-09-07T18:48:36Z",
+        "contacts": [{"verification_status": "verified"}],
+        "sender_mode": "localos_for_partner",
+        "sender_profile": {},
+        "business_sender_profile": {},
+        "partnership_match": {},
+        "research": research,
+    }
+
+    evidence = build_evidence_ledger(context)
+    offers = offer_candidates(context, "localos_for_partner")
+    decision = build_outreach_decision(
+        context,
+        evidence,
+        {"email": {"status": "ready"}},
+        {"suppressed": False},
+        sender_mode="localos_for_partner",
+        profile_ready=True,
+    )
+
+    assert {item["id"] for item in evidence} == {
+        "creator-campaign:creator-campaign-1:terms:3",
+        "evidence-1",
+    }
+    assert len(evidence) == 2
+    assert all(item["id"] != "creator-contact-ownership:candidate-1" for item in evidence)
+    assert all(item["id"] != "creator-bridge-provenance:candidate-1" for item in evidence)
+    assert offers[0]["text"] == bridge["approved_reason"]
+    assert offers[0]["source"] == "operator_input"
+    assert decision["action"] == "write_now"
+    assert decision["reason_codes"] == ["operator_approved_partnership_reason"]
+    assert research["message_brief_json"] == {
+        "operator_approved_reason": bridge["approved_reason"],
+        "operator_approved_at": bridge["approved_at"],
+        "operator_approved_source": "creator_campaign",
+        "creator_outreach_bridge_version": bridge["version"],
+        "creator_campaign_id": bridge["creator_campaign_id"],
+        "creator_candidate_id": bridge["candidate_id"],
+        "creator_profile_id": bridge["creator_profile_id"],
+        "creator_terms_version": bridge["terms_version"],
+        "creator_channel_id": bridge["channel_id"],
+        "creator_evidence_id": bridge["evidence_id"],
+        "source_fact_fingerprint": bridge["source_fact_fingerprint"],
+    }
 
 
 def test_current_map_service_catalog_is_evidence_without_overstating_total_catalog():
@@ -2642,6 +3110,18 @@ def test_manual_touch_overrides_preserve_paragraph_breaks():
 
     assert normalized[0]["text"] == message
     assert normalized[0]["original_text"] == message
+
+
+def test_author_touch_override_retains_exact_signature_line_break_for_preview():
+    message = "Алексей, здравствуйте!\n\nАлександр Демьянов\nLocalOS"
+    normalized = _normalize_touch_overrides([{
+        "sequence_index": 0,
+        "subject": "Алексей | LocalOS | сотрудничество",
+        "text": message,
+        "human_edited": True,
+    }])
+    assert normalized[0]["exact_text"] == message
+    assert normalized[0]["exact_subject"] == "Алексей | LocalOS | сотрудничество"
 
 
 def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():

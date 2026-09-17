@@ -1147,6 +1147,7 @@ export const AgentRunObservabilityPanel = ({
         : 'результат не собран';
   const ledgerItems = observability.action_ledger?.items || [];
   const domainRequests = observability.domain_requests?.items || [];
+  const hasPostApprovalSheetRequest = domainRequests.some((item) => item.kind?.includes('sheet') && ['provider_request_queued', 'provider_executing', 'applied', 'provider_unavailable', 'provider_failed', 'provider_reconciliation_required', 'approval_invalid'].includes(item.apply_state || ''));
   const errors = observability.errors || [];
   const recoveryActions = observability.recovery_actions || [];
   const runInput = run.input_json && typeof run.input_json === 'object' ? run.input_json : {};
@@ -1240,7 +1241,7 @@ export const AgentRunObservabilityPanel = ({
             />
           ))}
         </RunColumn>
-        <RunColumn title="Ожидают подтверждения" icon={ShieldCheck}>
+        <RunColumn title={hasPostApprovalSheetRequest ? 'Действия и статус' : 'Ожидают подтверждения'} icon={ShieldCheck}>
           {domainRequests.map((item) => (
             <DomainRequestItem
               key={`${item.kind || 'request'}-${item.id || item.action_id || item.review_id || item.title}`}
@@ -1287,7 +1288,11 @@ export const DomainRequestItem = ({
   onApplyFinanceRequests: (runId: string) => void;
 }) => {
   const isFinanceRequest = item.kind === 'finance_transaction_request';
+  const isSheetRequest = Boolean(item.kind?.includes('sheet'));
   const canApplyFinance = isFinanceRequest && item.can_apply === true && item.apply_state === 'apply_ready';
+  const providerState = isSheetRequest ? item.apply_state : '';
+  const displayStatus = providerState || item.approval_state || item.delivery_state || item.status || 'pending';
+  const requiresReconciliation = providerState === 'provider_reconciliation_required';
   const detailEntries = [
     item.why_waiting ? ['why_waiting', item.why_waiting] : null,
     isFinanceRequest ? ['finance_rows', {
@@ -1313,8 +1318,13 @@ export const DomainRequestItem = ({
           <div className="truncate text-sm font-medium text-slate-900">{item.title || humanizeMeta(item.kind || 'domain request')}</div>
           <div className="mt-1 text-xs text-slate-500">{item.summary || item.id || 'domain request'}</div>
         </div>
-        <StatusBadge status={item.approval_state || item.apply_state || item.delivery_state || item.status || 'pending'} />
+        <StatusBadge status={displayStatus} />
       </div>
+      {requiresReconciliation ? (
+        <p className="mt-2 text-sm leading-6 text-amber-900">
+          Запись могла выполниться; сверьте таблицу.
+        </p>
+      ) : null}
       {detailEntries.length ? (
         <div className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
           {detailEntries.slice(0, 3).map(([key, value]) => (
@@ -1488,7 +1498,7 @@ export const PreviewRunSummaryPanel = ({
           Подробности теста
         </summary>
         <div className="mt-3 space-y-3">
-          <CompiledPreviewSimulationPanel steps={simulationSteps} safePreview={safePreview} externalActionsPerformed={Boolean(summary?.external_actions_performed)} />
+          <CompiledPreviewSimulationPanel steps={simulationSteps} safePreview={safePreview} externalActionsPerformed={Boolean(summary?.external_actions_performed)} externalActionsUncertain={waitingActions.some((item) => ['provider_executing', 'provider_reconciliation_required'].includes(String(item.state || '')))} />
 
           <OpenClawPreviewActionPlanPanel
             actions={openClawActionPlan}
@@ -1655,10 +1665,12 @@ export const CompiledPreviewSimulationPanel = ({
   steps,
   safePreview,
   externalActionsPerformed,
+  externalActionsUncertain = false,
 }: {
   steps: Array<{ key: string; title: string; status: string; detail: string }>;
   safePreview: boolean;
   externalActionsPerformed: boolean;
+  externalActionsUncertain?: boolean;
 }) => (
   <div className="mt-3 rounded-xl bg-white px-3 py-3 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1668,8 +1680,8 @@ export const CompiledPreviewSimulationPanel = ({
           Тест показывает, как агент пройдёт входные данные, проверку доступов, шаги, подтверждения и готовность к включению.
         </div>
       </div>
-      <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', safePreview && !externalActionsPerformed ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200')}>
-        {safePreview && !externalActionsPerformed ? 'внешних действий не было' : 'проверьте внешние действия'}
+      <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', safePreview && !externalActionsPerformed && !externalActionsUncertain ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200')}>
+        {externalActionsUncertain ? 'результат внешнего действия не подтверждён' : safePreview && !externalActionsPerformed ? 'внешних действий не было' : 'проверьте внешние действия'}
       </span>
     </div>
     <div className="mt-3 grid gap-2 md:grid-cols-5">

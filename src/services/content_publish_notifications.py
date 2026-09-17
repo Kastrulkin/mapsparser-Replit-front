@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 TELEGRAM_MINI_APP_URL = "https://localos.pro/telegram/control"
-HANDOFF_PLATFORMS = {"telegram", "vk"}
+HANDOFF_PLATFORMS = {"telegram", "vk", "max"}
 HANDOFF_STATUSES = {"approved", "needs_manual_publish"}
 
 
@@ -166,7 +166,11 @@ def collect_due_content_publish_handoffs(
 
 def format_content_publish_handoff(item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     platform = str(item.get("platform") or "").strip()
-    platform_label = "Telegram" if platform == "telegram" else "VK"
+    platform_label = {
+        "telegram": "Telegram",
+        "vk": "VK",
+        "max": "MAX",
+    }.get(platform, platform)
     business_name = str(item.get("business_name") or "Бизнес").strip()
     address = str(item.get("business_address") or "").strip()
     text = str(item.get("platform_text") or item.get("base_text") or "").strip()

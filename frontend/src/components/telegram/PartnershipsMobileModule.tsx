@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PartnershipResults } from '../prospecting/PartnershipResults';
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -207,6 +207,10 @@ const pipelineLabel = (value?: string) =>
     replied: "Ответил",
     converted: "Партнёр",
     not_relevant: "Не подходит",
+    closed_lost: "Отказ / завершено",
+    suppressed: "Не писать",
+    needs_attention: "Нужна проверка",
+    needs_contact: "Нужен контакт",
   })[String(value || "").toLowerCase()] ||
   value ||
   "Новый";
@@ -289,8 +293,10 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
   const [links, setLinks] = useState("");
   const [access, setAccess] = useState<PartnershipAccess>({ allowed: true });
   const [totalCandidates, setTotalCandidates] = useState(0);
+  const loadVersion = useRef(0);
 
-  const load = async (silent = false) => {
+  const load = async (silent = false, filters = { query, stage }) => {
+    const current = ++loadVersion.current;
     if (!businessId) return;
     if (!silent) setLoading(true);
     setError("");
@@ -299,14 +305,15 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
         business_id: businessId,
         limit: "200",
       });
-      if (query.trim()) params.set("q", query.trim());
-      if (stage !== "all") params.set("pipeline_status", stage);
+      if (filters.query.trim()) params.set("q", filters.query.trim());
+      if (filters.stage !== "all") params.set("pipeline_status", filters.stage);
       const leadData = await request<{
         items?: Lead[];
         count?: number;
         access?: PartnershipAccess;
         preview?: PartnershipPreview;
       }>(`/api/partnership/leads?${params.toString()}`);
+      if (current !== loadVersion.current) return;
       const nextLeads = leadData.items || [];
       setLeads(nextLeads);
       setAccess(leadData.access || { allowed: true });
@@ -350,6 +357,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
           `/api/partnership/blockers-summary?business_id=${encodeURIComponent(businessId)}&window_days=30`,
         ),
       ]);
+      if (current !== loadVersion.current) return;
       setDrafts(draftData.drafts || []);
       setBatches(batchData.batches || []);
       setReadyDrafts(batchData.ready_drafts || []);
@@ -370,17 +378,21 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
             null,
         );
     } catch (requestError) {
+      if (current !== loadVersion.current) return;
       setError(
         requestError instanceof Error
           ? requestError.message
           : "Не удалось загрузить партнёрства.",
       );
     } finally {
-      if (!silent) setLoading(false);
+      if (current === loadVersion.current) setLoading(false);
     }
   };
   useEffect(() => {
+    setSelectedLead(null);
+    setSelectedLeads([]);
     void load();
+    return () => { loadVersion.current += 1; };
   }, [businessId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const action = async (
@@ -798,6 +810,10 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
       {!loading && tab === "overview" ? (
         <div className="space-y-3">
           <PartnershipResults scope={scope || {}} mobile openWork={() => setTab('leads')} />
+          <button type="button" onClick={() => setTab('leads')} className="min-h-12 w-full rounded-[15px] bg-white/[0.06] px-4 py-3 text-left ring-1 ring-inset ring-white/[0.08]">
+            <b className="block text-sm">Кому написали и что ответили</b>
+            <span className="text-xs text-zinc-400">Найдите компанию, выберите статус и откройте историю общения.</span>
+          </button>
           <details><summary className="min-h-11 cursor-pointer py-3">Работа с кандидатами и отправками</summary>
           <section className="rounded-[24px] bg-gradient-to-br from-orange-500/[0.14] to-white/[0.035] p-5 ring-1 ring-inset ring-orange-400/20">
             <small className="font-semibold uppercase tracking-[0.13em] text-orange-400">
@@ -864,19 +880,24 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                aria-label="Поиск партнёра"
                 placeholder="Компания или ссылка"
                 className="min-h-11 w-full rounded-[14px] bg-white/[0.04] pl-9 pr-3 text-xs ring-1 ring-inset ring-white/[0.07]"
               />
             </label>
-            <button className="btn-iridescent grid h-11 w-11 place-items-center rounded-[14px]">
+            <button aria-label="Найти партнёра" className="btn-iridescent grid h-11 w-11 place-items-center rounded-[14px]">
               <Search className="h-4 w-4" />
             </button>
           </form>
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <select
+              aria-label="Статус работы с партнёром"
               value={stage}
               onChange={(event) => {
                 setStage(event.target.value);
+                setSelectedLead(null);
+                setSelectedLeads([]);
+                void load(false, { query, stage: event.target.value });
               }}
               className="min-h-11 rounded-[14px] bg-zinc-900 px-3 text-xs ring-1 ring-inset ring-white/[0.07]"
             >
@@ -886,6 +907,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
               <option value="postponed">Отложенные</option>
               <option value="contacted">Связались</option>
               <option value="replied">Ответили</option>
+              <option value="converted">Стали партнёрами</option>
               <option value="not_relevant">Не подходят</option>
             </select>
             <button
@@ -896,6 +918,7 @@ export const PartnershipsMobileModule = ({ scope, openBusiness }: { scope?: Scop
               Добавить
             </button>
           </div>
+          <p role="status" className="text-xs text-zinc-400">Найдено: {totalCandidates}. Откройте компанию, чтобы посмотреть письма и ответы.</p>
           <AnimatePresence initial={false}>
             {showIntake ? (
               <motion.section
@@ -1669,6 +1692,8 @@ const LeadSheet = ({
           </div>
         ) : (
           <>
+            <p className="mt-4 text-sm text-zinc-300">Статус: {pipelineLabel(lead.pipeline_status)}</p>
+            {lead.sales_room_slug ? <button type="button" onClick={() => window.location.assign(`/room/${lead.sales_room_slug}`)} className="mt-3 min-h-12 w-full rounded-[13px] bg-white/[0.06] px-3 text-left text-sm ring-1 ring-inset ring-white/[0.08]">Переписка и ответы партнёра</button> : null}
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Info
                 icon={MapPin}

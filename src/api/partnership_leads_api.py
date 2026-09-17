@@ -9,7 +9,7 @@ from flask import jsonify, request, current_app
 from api.content_plans_api import _require_auth
 from database_manager import DatabaseManager
 from services.telegram_control_scope import resolve_control_scope
-from services.partnership_results import read_results, save_agreement
+from services.partnership_results import read_results, save_agreement, result_counts
 from core.auth_helpers import verify_business_access
 
 partnership_leads_bp = Blueprint("partnership_leads_api", __name__)
@@ -48,13 +48,7 @@ def partnership_results(workstream_id=None):
         items = read_results(cursor, ids)
         cursor.execute('SELECT id, name FROM businesses WHERE id=ANY(%s) ORDER BY name, id', (list(ids),))
         locations = [dict(row) if hasattr(row, 'keys') else {'id': row[0], 'name': row[1]} for row in cursor.fetchall()]
-        confirmed = [item for item in items if (item.get('agreement_json') or {}).get('status') == 'confirmed']
-        launched = [item for item in confirmed if item.get('partnership_launched_at')]
-        return jsonify(success=True, scope=scope, items=items, locations=locations, counts={
-            'partners': len({str(item.get('company_id') or item['id']) for item in confirmed}),
-            'launched': len(launched), 'preparing': len(confirmed) - len(launched),
-            'needs_decision': sum(bool(item.get('agreement_json')) and (item['agreement_json'].get('status') != 'confirmed' or item['agreement_json'].get('instruction_terms_version') != item['agreement_json'].get('terms_version')) for item in items),
-        })
+        return jsonify(success=True, scope=scope, items=items, locations=locations, counts=result_counts(items))
     except PermissionError:
         db.conn.rollback()
         return jsonify(error='Партнёр недоступен'), 403

@@ -53,7 +53,7 @@ import {
   SheetTitle,
 } from '../ui/sheet';
 
-type WorkstreamType = 'localos_sales' | 'client_partnership';
+type WorkstreamType = 'localos_sales' | 'client_partnership' | 'creator_collaboration';
 type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
 type RegistryView = 'leads' | 'messages' | 'results';
 type ScopeFilter = 'all' | 'localos_sales' | 'client_partnership';

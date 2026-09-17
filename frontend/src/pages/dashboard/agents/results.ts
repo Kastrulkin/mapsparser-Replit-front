@@ -750,6 +750,10 @@ export const buildBusinessHistoryEvents = (
       add(`run-${run.id}`, run.started_at, 'Ждёт решения человека', 'Агент остановился перед действием, которое нужно подтвердить.');
       return;
     }
+    if (run.status === 'waiting_provider') {
+      add(`run-${run.id}`, run.started_at, 'Ожидает записи в Google Sheets', 'Подтверждённая запись выполняется отдельно. Откройте статус записи, чтобы увидеть итог.');
+      return;
+    }
     if (run.status === 'failed') {
       add(`run-${run.id}`, run.completed_at || run.started_at, 'Запуск остановился с ошибкой', run.error_text || 'Откройте технические подробности, если нужна диагностика.');
       return;

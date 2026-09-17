@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Mail, Plus, RefreshCw, ShieldCheck, Unplug } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,11 @@ type MailboxForm = {
   imap_security: 'ssl' | 'starttls';
 };
 
+type PreflightValidation = {
+  formRevision: number;
+  scopeKey: string;
+};
+
 const emptyForm: MailboxForm = {
   email: '',
   display_name: '',
@@ -54,6 +59,50 @@ const emptyForm: MailboxForm = {
   imap_host: '',
   imap_port: '993',
   imap_security: 'ssl',
+};
+
+const failureStageCopy = new Map([
+  ['smtp_connect', 'подключение к SMTP'],
+  ['smtp_auth', 'вход в SMTP'],
+  ['imap_connect', 'подключение к IMAP'],
+  ['imap_auth', 'вход в IMAP'],
+  ['imap_folder', 'проверка папки входящих'],
+]);
+
+const providerReasonCopy = new Map([
+  ['authentication_rejected', 'провайдер отклонил вход'],
+  ['connection_failed', 'не удалось подключиться'],
+  ['connection_timeout', 'время подключения истекло'],
+  ['dns_unresolvable', 'адрес сервера не найден'],
+  ['folder_unavailable', 'папка входящих недоступна'],
+  ['host_not_public', 'укажите публичный почтовый сервер'],
+  ['provider_rejected', 'провайдер отклонил запрос'],
+  ['temporarily_unavailable', 'сервис временно недоступен'],
+  ['tls_failed', 'не удалось установить защищённое соединение'],
+]);
+
+const mailboxFailure = (requestError: unknown, fallback: string) => {
+  const details = typeof requestError === 'object' && requestError !== null
+    ? Reflect.get(requestError, 'details')
+    : null;
+  const body = typeof details === 'object' && details !== null ? details : null;
+  const errorValue = body ? Reflect.get(body, 'error') : null;
+  const nextActionValue = body ? Reflect.get(body, 'next_action') : null;
+  const stageValue = body ? Reflect.get(body, 'stage') : null;
+  const statusValue = body ? Reflect.get(body, 'provider_status') : null;
+  const reasonValue = body ? Reflect.get(body, 'provider_reason') : null;
+  const technical = [
+    typeof stageValue === 'string' ? failureStageCopy.get(stageValue) : null,
+    typeof statusValue === 'number' && statusValue >= 100 && statusValue <= 599 ? `код ${statusValue}` : null,
+    typeof reasonValue === 'string' ? providerReasonCopy.get(reasonValue) : null,
+  ].filter(Boolean).join(' · ');
+  return {
+    message: typeof errorValue === 'string' && errorValue.trim()
+      ? errorValue
+      : requestError instanceof Error ? requestError.message : fallback,
+    nextAction: typeof nextActionValue === 'string' ? nextActionValue.trim() : '',
+    technical,
+  };
 };
 
 const accountStatusCopy = (account: SenderAccount) => {
@@ -75,12 +124,26 @@ export const OutreachEmailSetup = ({
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [errorTitle, setErrorTitle] = useState('');
+  const [errorNextAction, setErrorNextAction] = useState('');
+  const [errorTechnical, setErrorTechnical] = useState('');
   const [form, setForm] = useState<MailboxForm>(emptyForm);
-  const [preflightReady, setPreflightReady] = useState(false);
+  const [preflightValidation, setPreflightValidation] = useState<PreflightValidation | null>(null);
   const [enableOutreachOnConnect, setEnableOutreachOnConnect] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
+  const [serverDetailsOpen, setServerDetailsOpen] = useState(false);
+  const formRevisionRef = useRef(0);
+  const requestVersionRef = useRef(0);
+  const accountsRequestVersionRef = useRef(0);
+  const scopeKey = `${scopeType}:${businessId || ''}`;
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
+  const preflightReady = preflightValidation?.scopeKey === scopeKey
+    && preflightValidation.formRevision === formRevisionRef.current;
 
   const loadAccounts = useCallback(async () => {
+    const requestVersion = ++accountsRequestVersionRef.current;
+    const requestedScopeKey = scopeKey;
     if (scopeType === 'business' && !businessId) {
       setAccounts([]);
       setLoading(false);
@@ -88,18 +151,44 @@ export const OutreachEmailSetup = ({
     }
     setLoading(true);
     setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
     try {
       const query = new URLSearchParams({ scope_type: scopeType });
       if (businessId) query.set('business_id', businessId);
       const payload = await newAuth.makeRequest(`/outreach/sender-accounts?${query.toString()}`);
+      if (requestVersion !== accountsRequestVersionRef.current || requestedScopeKey !== scopeKeyRef.current) return;
       const nextAccounts = Array.isArray(payload?.sender_accounts) ? payload.sender_accounts : [];
       setAccounts(nextAccounts.filter((item: SenderAccount) => item.channel === 'email'));
     } catch (requestError) {
+      if (requestVersion !== accountsRequestVersionRef.current || requestedScopeKey !== scopeKeyRef.current) return;
+      setErrorTitle('Не удалось загрузить состояние email');
       setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить email');
     } finally {
-      setLoading(false);
+      if (requestVersion === accountsRequestVersionRef.current && requestedScopeKey === scopeKeyRef.current) {
+        setLoading(false);
+      }
     }
-  }, [businessId, scopeType]);
+  }, [businessId, scopeKey, scopeType]);
+
+  useEffect(() => {
+    requestVersionRef.current += 1;
+    accountsRequestVersionRef.current += 1;
+    formRevisionRef.current += 1;
+    setAccounts([]);
+    setBusy('');
+    setNotice('');
+    setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
+    setForm(emptyForm);
+    setPreflightValidation(null);
+    setEnableOutreachOnConnect(false);
+    setShowConnectForm(false);
+    setServerDetailsOpen(false);
+  }, [scopeKey]);
 
   useEffect(() => {
     void loadAccounts();
@@ -107,10 +196,25 @@ export const OutreachEmailSetup = ({
 
   const account = accounts.find((item) => item.status === 'connected') || accounts[0] || null;
 
+  const showFailure = (title: string, requestError: unknown, fallback: string) => {
+    const failure = mailboxFailure(requestError, fallback);
+    setErrorTitle(title);
+    setError(failure.message);
+    setErrorNextAction(failure.nextAction);
+    setErrorTechnical(failure.technical);
+  };
+
   const updateField = (key: keyof MailboxForm, value: string) => {
+    formRevisionRef.current += 1;
+    requestVersionRef.current += 1;
     setForm((current) => ({ ...current, [key]: value }));
-    setPreflightReady(false);
+    setPreflightValidation(null);
+    setBusy((current) => current === 'preflight-new' ? '' : current);
     setNotice('');
+    setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
   };
 
   const mailboxPayload = () => ({
@@ -121,8 +225,14 @@ export const OutreachEmailSetup = ({
   });
 
   const runNewPreflight = async () => {
+    const requestVersion = ++requestVersionRef.current;
+    const requestedFormRevision = formRevisionRef.current;
+    const requestedScopeKey = scopeKey;
     setBusy('preflight-new');
     setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
     setNotice('');
     try {
       await newAuth.makeRequest('/outreach/sender-accounts/email/preflight', {
@@ -133,20 +243,35 @@ export const OutreachEmailSetup = ({
           mailbox: mailboxPayload(),
         }),
       });
-      setPreflightReady(true);
+      if (
+        requestVersion !== requestVersionRef.current
+        || requestedFormRevision !== formRevisionRef.current
+        || requestedScopeKey !== scopeKeyRef.current
+      ) return;
+      setPreflightValidation({ formRevision: requestedFormRevision, scopeKey: requestedScopeKey });
       setNotice('SMTP и проверка ответов работают. Письмо не отправлялось.');
     } catch (requestError) {
-      setPreflightReady(false);
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить почту');
+      if (requestVersion !== requestVersionRef.current || requestedScopeKey !== scopeKeyRef.current) return;
+      setPreflightValidation(null);
+      showFailure('Проверка подключения не пройдена', requestError, 'Не удалось проверить почту');
     } finally {
-      setBusy('');
+      if (requestVersion === requestVersionRef.current && requestedScopeKey === scopeKeyRef.current) setBusy('');
     }
   };
 
   const connect = async () => {
-    if (!preflightReady) return;
+    if (
+      !preflightReady
+      || preflightValidation?.formRevision !== formRevisionRef.current
+      || preflightValidation?.scopeKey !== scopeKeyRef.current
+    ) return;
+    const requestVersion = ++requestVersionRef.current;
+    const requestedScopeKey = scopeKey;
     setBusy('connect');
     setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
     setNotice('');
     try {
       await newAuth.makeRequest('/outreach/sender-accounts/email', {
@@ -158,18 +283,23 @@ export const OutreachEmailSetup = ({
           mailbox: mailboxPayload(),
         }),
       });
+      if (requestVersion !== requestVersionRef.current || requestedScopeKey !== scopeKeyRef.current) return;
       setForm(emptyForm);
-      setPreflightReady(false);
+      formRevisionRef.current += 1;
+      setPreflightValidation(null);
+      setEnableOutreachOnConnect(false);
       setShowConnectForm(false);
+      setServerDetailsOpen(false);
       setNotice(enableOutreachOnConnect
         ? 'Email подключён. LocalOS сможет отправлять только подтверждённые цепочки и остановит их после ответа.'
         : 'Email подключён без права отправки. Разрешение можно включить отдельно.');
       await loadAccounts();
       onChanged?.();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось подключить email');
+      if (requestVersion !== requestVersionRef.current || requestedScopeKey !== scopeKeyRef.current) return;
+      showFailure('Email не подключён', requestError, 'Не удалось подключить email');
     } finally {
-      setBusy('');
+      if (requestVersion === requestVersionRef.current && requestedScopeKey === scopeKeyRef.current) setBusy('');
     }
   };
 
@@ -177,6 +307,9 @@ export const OutreachEmailSetup = ({
     if (!account) return;
     setBusy('preflight-existing');
     setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
     setNotice('');
     try {
       await newAuth.makeRequest(`/outreach/sender-accounts/${encodeURIComponent(account.id)}/preflight`, {
@@ -185,7 +318,7 @@ export const OutreachEmailSetup = ({
       setNotice('Отправка и проверка ответов доступны. Тестовое письмо не отправлялось.');
       await loadAccounts();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Проверка не пройдена');
+      showFailure('Проверка подключения не пройдена', requestError, 'Проверка не пройдена');
     } finally {
       setBusy('');
     }
@@ -195,6 +328,9 @@ export const OutreachEmailSetup = ({
     if (!account) return;
     setBusy('permission');
     setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
     setNotice('');
     try {
       await newAuth.makeRequest(`/outreach/sender-accounts/${encodeURIComponent(account.id)}/permission`, {
@@ -207,7 +343,7 @@ export const OutreachEmailSetup = ({
       await loadAccounts();
       onChanged?.();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось изменить разрешение');
+      showFailure('Разрешение не изменено', requestError, 'Не удалось изменить разрешение');
     } finally {
       setBusy('');
     }
@@ -217,6 +353,9 @@ export const OutreachEmailSetup = ({
     if (!account || !window.confirm('Отключить email? Будущие касания этого отправителя будут поставлены на паузу.')) return;
     setBusy('disconnect');
     setError('');
+    setErrorTitle('');
+    setErrorNextAction('');
+    setErrorTechnical('');
     setNotice('');
     try {
       await newAuth.makeRequest(`/outreach/sender-accounts/${encodeURIComponent(account.id)}`, {
@@ -226,7 +365,7 @@ export const OutreachEmailSetup = ({
       await loadAccounts();
       onChanged?.();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось отключить email');
+      showFailure('Email не отключён', requestError, 'Не удалось отключить email');
     } finally {
       setBusy('');
     }
@@ -311,7 +450,7 @@ export const OutreachEmailSetup = ({
           </div>
         </div>
       ) : (
-        <div className="mt-5 space-y-4">
+        <fieldset disabled={busy === 'connect'} className="mt-5 min-w-0 space-y-4">
           {account ? (
             <div className="flex flex-col gap-3 rounded-xl bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-pretty text-sm leading-6 text-slate-700">
@@ -325,33 +464,37 @@ export const OutreachEmailSetup = ({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="outreach-email-address">Email отправителя</Label>
-              <Input id="outreach-email-address" type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} placeholder="founder@company.ru" className="mt-2 h-11" autoComplete="email" />
+              <Input id="outreach-email-address" type="email" value={form.email} onInput={(event) => updateField('email', event.currentTarget.value)} placeholder="founder@company.ru" className="mt-2 h-11" autoComplete="email" />
             </div>
             <div>
               <Label htmlFor="outreach-email-name">Имя отправителя</Label>
-              <Input id="outreach-email-name" value={form.display_name} onChange={(event) => updateField('display_name', event.target.value)} placeholder="Имя и роль" className="mt-2 h-11" />
+              <Input id="outreach-email-name" value={form.display_name} onInput={(event) => updateField('display_name', event.currentTarget.value)} placeholder="Имя и роль" className="mt-2 h-11" />
             </div>
             <div>
               <Label htmlFor="outreach-email-login">Логин почты</Label>
-              <Input id="outreach-email-login" value={form.username} onChange={(event) => updateField('username', event.target.value)} placeholder="Обычно совпадает с email" className="mt-2 h-11" autoComplete="username" />
+              <Input id="outreach-email-login" value={form.username} onInput={(event) => updateField('username', event.currentTarget.value)} placeholder="Обычно совпадает с email" className="mt-2 h-11" autoComplete="username" />
             </div>
             <div>
               <Label htmlFor="outreach-email-password">Пароль приложения</Label>
-              <Input id="outreach-email-password" type="password" value={form.password} onChange={(event) => updateField('password', event.target.value)} placeholder="Хранится в зашифрованном виде" className="mt-2 h-11" autoComplete="new-password" />
+              <Input id="outreach-email-password" type="password" value={form.password} onInput={(event) => updateField('password', event.currentTarget.value)} placeholder="Хранится в зашифрованном виде" className="mt-2 h-11" autoComplete="new-password" />
             </div>
           </div>
 
-          <details className="rounded-xl bg-slate-50 px-4 py-3">
+          <details
+            open={serverDetailsOpen}
+            onToggle={(event) => setServerDetailsOpen(event.currentTarget.open)}
+            className="rounded-xl bg-slate-50 px-4 py-3"
+          >
             <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-800">Серверы отправки и входящих писем</summary>
             <div className="grid gap-4 pt-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="outreach-smtp-host">SMTP-сервер</Label>
-                <Input id="outreach-smtp-host" value={form.smtp_host} onChange={(event) => updateField('smtp_host', event.target.value)} placeholder="smtp.provider.ru" className="mt-2 h-11 bg-white" />
+                <Input id="outreach-smtp-host" value={form.smtp_host} onInput={(event) => updateField('smtp_host', event.currentTarget.value)} placeholder="smtp.provider.ru" className="mt-2 h-11 bg-white" />
               </div>
               <div className="grid grid-cols-[1fr_1.25fr] gap-2">
                 <div>
                   <Label htmlFor="outreach-smtp-port">Порт</Label>
-                  <Input id="outreach-smtp-port" inputMode="numeric" value={form.smtp_port} onChange={(event) => updateField('smtp_port', event.target.value)} className="mt-2 h-11 bg-white tabular-nums" />
+                  <Input id="outreach-smtp-port" inputMode="numeric" value={form.smtp_port} onInput={(event) => updateField('smtp_port', event.currentTarget.value)} className="mt-2 h-11 bg-white tabular-nums" />
                 </div>
                 <div>
                   <Label htmlFor="outreach-smtp-security">Защита</Label>
@@ -363,12 +506,12 @@ export const OutreachEmailSetup = ({
               </div>
               <div>
                 <Label htmlFor="outreach-imap-host">IMAP-сервер</Label>
-                <Input id="outreach-imap-host" value={form.imap_host} onChange={(event) => updateField('imap_host', event.target.value)} placeholder="imap.provider.ru" className="mt-2 h-11 bg-white" />
+                <Input id="outreach-imap-host" value={form.imap_host} onInput={(event) => updateField('imap_host', event.currentTarget.value)} placeholder="imap.provider.ru" className="mt-2 h-11 bg-white" />
               </div>
               <div className="grid grid-cols-[1fr_1.25fr] gap-2">
                 <div>
                   <Label htmlFor="outreach-imap-port">Порт</Label>
-                  <Input id="outreach-imap-port" inputMode="numeric" value={form.imap_port} onChange={(event) => updateField('imap_port', event.target.value)} className="mt-2 h-11 bg-white tabular-nums" />
+                  <Input id="outreach-imap-port" inputMode="numeric" value={form.imap_port} onInput={(event) => updateField('imap_port', event.currentTarget.value)} className="mt-2 h-11 bg-white tabular-nums" />
                 </div>
                 <div>
                   <Label htmlFor="outreach-imap-security">Защита</Label>
@@ -399,11 +542,18 @@ export const OutreachEmailSetup = ({
               Подключить email
             </Button>
           </div>
-        </div>
+        </fieldset>
       )}
 
       {notice ? <div aria-live="polite" className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-pretty text-sm leading-6 text-emerald-900">{notice}</div> : null}
-      {error ? <div role="alert" className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-pretty text-sm leading-6 text-rose-900">{error}</div> : null}
+      {error ? (
+        <div role="alert" className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-pretty text-sm leading-6 text-rose-900">
+          <div className="font-semibold">{errorTitle || 'Не удалось выполнить действие'}</div>
+          <p className="mt-1">{error}</p>
+          {errorNextAction ? <p className="mt-2"><span className="font-semibold">Что сделать:</span> {errorNextAction}</p> : null}
+          {errorTechnical ? <p className="mt-2 text-xs text-rose-700">Технически: {errorTechnical}</p> : null}
+        </div>
+      ) : null}
     </section>
   );
 };

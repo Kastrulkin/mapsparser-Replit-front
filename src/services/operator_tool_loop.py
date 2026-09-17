@@ -250,7 +250,7 @@ def run_operator_tool_loop(
     pending_approvals: Any = None,
     planner: OperatorPlanner | None = None,
     max_steps: int = MAX_OPERATOR_TOOL_STEPS,
-    business_timezone: str | None = "UTC",
+    business_timezone: str | None = "Europe/Moscow",
 ) -> dict[str, Any]:
     tool_map = {
         str(tool.get("name") or ""): tool

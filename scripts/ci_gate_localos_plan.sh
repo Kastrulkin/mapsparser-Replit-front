@@ -16,6 +16,7 @@ TASK_PYTHON="${PYTHON_BIN:-python3}"
   tests/test_operator_async_jobs.py \
   tests/test_agent_blueprint_async_contracts.py \
   tests/test_agent_blueprint_capabilities.py \
+  tests/test_agent_blueprint_runtime_policy.py \
   tests/test_compiled_script_api.py \
   tests/test_compiled_script_artifact.py \
   tests/test_compiled_table_pilot.py \
@@ -24,6 +25,12 @@ TASK_PYTHON="${PYTHON_BIN:-python3}"
   tests/test_compiled_deployment_contract.py \
   tests/test_plan_compose_contract.py \
   tests/test_agent_run_fences_pg.py \
+  tests/test_agent_sheet_provider_queue_pg.py \
+  tests/test_agent_sheet_provider_recovery_pg.py \
+  tests/test_google_sheets_preconditions.py \
+  tests/test_sheet_provider_projections_pg.py \
+  tests/test_agent_api_security.py \
+  tests/test_agent_api_security_runtime_pg.py \
   tests/test_agent_run_admission_pg.py \
   tests/test_compiled_run_claim_pg.py \
   tests/test_compiled_generation_admission_pg.py \

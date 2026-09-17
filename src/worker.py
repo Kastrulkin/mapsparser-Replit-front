@@ -4,7 +4,7 @@ import json
 import re
 import os
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import signal
 import sys
 import multiprocessing
@@ -71,6 +71,7 @@ from services.content_publish_notifications import (
 )
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run, execute_claimed_compiled_agent_run
+from services.agent_sheet_provider_executor import process_next_sheet_provider_request
 from services.worker_ownership import worker_role_enabled
 from services.operator_async_jobs import process_next_operator_async_job
 from services.social_post_service import (
@@ -1556,13 +1557,19 @@ def _run_yookassa_renewals_if_due() -> None:
 def _sync_outreach_replies_if_due() -> dict[str, Any]:
     global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_STATE
     if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
-        return {"healthy": True, "global_block": False, "blocked_sender_ids": []}
+        return {
+            "healthy": False,
+            "global_block": False,
+            "blocked_sender_ids": [],
+            "cycle_started_at": None,
+        }
 
     now = time.time()
     interval_sec = max(10, int(os.getenv("OUTREACH_REPLY_SYNC_INTERVAL_SEC", "60")))
     if now - _LAST_OUTREACH_REPLY_SYNC_AT < interval_sec:
-        return dict(_OUTREACH_REPLY_SYNC_STATE)
+        return {**_OUTREACH_REPLY_SYNC_STATE, "cycle_started_at": None}
     _LAST_OUTREACH_REPLY_SYNC_AT = now
+    cycle_started_at = datetime.now(timezone.utc)
 
     try:
         from api.admin_prospecting import _sync_telegram_app_replies
@@ -1629,6 +1636,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             "healthy": reply_sync_failed <= 0,
             "global_block": bool(fail_closed and unscoped_failures > 0),
             "blocked_sender_ids": failed_sender_ids if fail_closed else [],
+            "cycle_started_at": cycle_started_at,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
     except Exception as e:
@@ -1638,6 +1646,7 @@ def _sync_outreach_replies_if_due() -> dict[str, Any]:
             "healthy": False,
             "global_block": fail_closed,
             "blocked_sender_ids": [],
+            "cycle_started_at": None,
         }
         return dict(_OUTREACH_REPLY_SYNC_STATE)
 
@@ -1695,6 +1704,7 @@ def _dispatch_outreach_queue_if_due() -> None:
             allowed_business_ids=allowed_business_ids,
             allow_platform=allow_platform,
             blocked_sender_ids=list(reply_sync_ready.get("blocked_sender_ids") or []),
+            author_reply_sync_started_at=reply_sync_ready.get("cycle_started_at"),
         )
         picked = int(result.get("picked") or 0)
         if picked > 0:
@@ -2161,6 +2171,19 @@ def _process_agent_run_queue_if_due() -> None:
             pass
 
 
+def _process_sheet_provider_queue_if_due() -> None:
+    if not _env_bool("AGENT_ASYNC_RUNS_ENABLED", False):
+        return
+    try:
+        result = process_next_sheet_provider_request()
+        if result:
+            print("[AGENT_SHEET_PROVIDER] request_id=%s state=%s" % (result.get("request_id"), result.get("apply_state")), flush=True)
+    except Exception:
+        print("[AGENT_SHEET_PROVIDER] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
 def _process_operator_async_job_if_due() -> None:
     global _LAST_OPERATOR_ASYNC_JOB_AT
     if not _env_bool("OPERATOR_ASYNC_JOBS_ENABLED", True):
@@ -2171,7 +2194,9 @@ def _process_operator_async_job_if_due() -> None:
         return
     _LAST_OPERATOR_ASYNC_JOB_AT = now
     try:
-        result = process_next_operator_async_job()
+        from services.disk_import import schedule_due
+        schedule_due()
+        result = process_next_operator_async_job(background=True)
         if result:
             print(
                 "[OPERATOR_ASYNC_JOB] "
@@ -4762,8 +4787,33 @@ except ModuleNotFoundError:
     from src.two_gis_maps_scraper import parse_2gis_card
 from gigachat_analyzer import analyze_business_data
 
-def process_queue():
-    """Обрабатывает очередь парсинга из SQLite базы данных"""
+
+def _special_queue_handlers() -> Dict[str, Any]:
+    """Return handlers for queue tasks that bypass map-card parsing."""
+    return {
+        "reviews_delta": _process_yandex_reviews_delta_task,
+        "reviews_full": _process_yandex_reviews_delta_task,
+        "sync_yandex_business": _process_sync_yandex_business_task,
+        "parse_cabinet_fallback": _process_cabinet_fallback_task,
+        "sync_2gis": _process_sync_2gis_task,
+    }
+
+
+def _dispatch_special_queue_task(queue_dict: Dict[str, Any]) -> bool:
+    """Dispatch a non-map task and report whether it was handled."""
+    task_type = str(queue_dict.get("task_type") or "parse_card")
+    handler = _special_queue_handlers().get(task_type)
+    if handler is not None:
+        handler(queue_dict)
+        return True
+    if task_type == "sync_google_business":
+        print(f"⚠️ Тип задачи {task_type} пока не реализован")
+        _handle_worker_error(queue_dict["id"], f"Тип задачи {task_type} пока не реализован")
+        return True
+    return False
+
+def _claim_next_queue_task() -> Optional[Dict[str, Any]]:
+    """Maintain queue guardrails and atomically claim the next runnable task."""
     queue_dict = None
     
     # ШАГ 1: Получаем задачу из очереди и обновляем статус (закрываем соединение сразу)
@@ -5034,9 +5084,13 @@ def process_queue():
         cursor.close()
         conn.close()
     
-    if not queue_dict:
-        return
-    
+    return queue_dict
+
+
+def _prepare_queue_task(
+    queue_dict: Dict[str, Any],
+) -> tuple[bool, Optional[Dict[str, Any]]]:
+    """Apply TTL and CAPTCHA retry policy before task dispatch."""
     status = queue_dict.get("status") or "pending"
     task_type = queue_dict.get("task_type") or "parse_card"
     preparsed_card_data: Optional[Dict[str, Any]] = None
@@ -5062,8 +5116,7 @@ def process_queue():
             f"task_age_hours={task_age_h:.2f}; ttl_hours={task_ttl_h}",
             clear_captcha_fields=True,
         )
-        return
-    
+        return False, None
     print(f"Обрабатываю заявку: {queue_dict.get('id')}, тип: {task_type}, статус: {status}")
     
     # Если задача в статусе captcha — обрабатываем HITL-flow (resume/expired)
@@ -5114,8 +5167,7 @@ def process_queue():
             finally:
                 cursor.close()
                 conn.close()
-            return
-
+            return False, None
         # 2) Resume по запросу оператора
         if resume_requested and url:
             print(f"▶️ RESUME CAPTCHA для задачи {task_id}, session_id={captcha_session_id}")
@@ -5165,8 +5217,7 @@ def process_queue():
                     cursor.close()
                     conn.close()
                 ACTIVE_CAPTCHA_SESSIONS.pop(str(captcha_session_id), None)
-                return
-
+                return False, None
             if card_data.get("error") == "captcha_detected":
                 # Капча не решена или появилась заново — остаёмся в waiting с новым session_id (если есть)
                 new_session_id = card_data.get("captcha_session_id") or captcha_session_id
@@ -5198,8 +5249,7 @@ def process_queue():
                     conn.close()
                 if _is_mass_network_task(queue_dict):
                     _pause_network_batch_for_captcha(task_id, captcha_comment, timedelta(minutes=max(5, CAPTCHA_TTL_MINUTES)))
-                return
-
+                return False, None
             # Иначе — капча решена, продолжаем как обычный успешный парсинг
             print(f"✅ CAPTCHA решена для задачи {task_id}, продолжаем обработку")
             queue_dict["status"] = "processing"
@@ -5239,8 +5289,7 @@ def process_queue():
             auto_retry_enabled = _env_bool("CAPTCHA_AUTO_RETRY_ENABLED", True)
             if not auto_retry_enabled or not url:
                 print(f"⏳ Задача {queue_dict.get('id')} в статусе CAPTCHA/waiting, действий не требуется")
-                return
-
+                return False, None
             retry_after_dt = _parse_retry_after(queue_dict.get("retry_after"))
             now_dt = datetime.now()
             if retry_after_dt and retry_after_dt > now_dt:
@@ -5248,8 +5297,7 @@ def process_queue():
                     f"⏳ CAPTCHA auto-retry ещё не наступил для {task_id}: "
                     f"retry_after={retry_after_dt.isoformat()}"
                 )
-                return
-
+                return False, None
             attempt_no = _captcha_retry_attempt_from_error(queue_dict.get("error_message")) + 1
             max_captcha_attempts = max(1, int(os.getenv("CAPTCHA_AUTO_RETRY_MAX_ATTEMPTS", "4")))
             if attempt_no > max_captcha_attempts:
@@ -5264,7 +5312,7 @@ def process_queue():
                     f"attempt={attempt_no}; max_attempts={max_captcha_attempts}; source=captcha_status",
                     clear_captcha_fields=True,
                 )
-                return
+                return False, None
             print(f"🔁 CAPTCHA auto-retry attempt={attempt_no} task_id={task_id}")
             retry_source = _detect_map_source(queue_dict, url)
             if retry_source == "2gis":
@@ -5329,12 +5377,10 @@ def process_queue():
                 )
                 if _is_mass_network_task(queue_dict):
                     _pause_network_batch_for_captcha(task_id, captcha_comment, retry_delay)
-                return
-
+                return False, None
             if card_data.get("error"):
                 _handle_worker_error(task_id, f"captcha_auto_retry_failed:{card_data.get('error')}")
-                return
-
+                return False, None
             print(f"✅ CAPTCHA auto-retry succeeded for task_id={task_id}")
             queue_dict["status"] = "processing"
             queue_dict["resume_requested"] = 0
@@ -5364,28 +5410,14 @@ def process_queue():
                 cursor.close()
                 conn.close()
 
-    # Обрабатываем в зависимости от типа задачи
-    if task_type in {"reviews_delta", "reviews_full"}:
-        _process_yandex_reviews_delta_task(queue_dict)
-        return
-    if task_type == "sync_yandex_business":
-        # Синхронизация Яндекс.Бизнес
-        _process_sync_yandex_business_task(queue_dict)
-        return
-    elif task_type == "parse_cabinet_fallback":
-        # Fallback парсинг через кабинет
-        _process_cabinet_fallback_task(queue_dict)
-        return
-    elif task_type == "sync_2gis":
-        # Синхронизация 2ГИС API
-        _process_sync_2gis_task(queue_dict)
-        return
-    elif task_type == "sync_google_business":
-        # Другие источники (будущее)
-        print(f"⚠️ Тип задачи {task_type} пока не реализован")
-        _handle_worker_error(queue_dict["id"], f"Тип задачи {task_type} пока не реализован")
-        return
-    
+    return True, preparsed_card_data
+
+
+def _execute_map_card_task(
+    queue_dict: Dict[str, Any],
+    preparsed_card_data: Optional[Dict[str, Any]],
+) -> None:
+    """Execute and settle the map-card parsing path."""
     # Обычный парсинг карт (task_type = 'parse_card' или NULL)
     # ШАГ 2: Парсим данные (БЕЗ открытого соединения с БД)
     # Устанавливаем таймаут 10 минут
@@ -6814,6 +6846,22 @@ def process_queue():
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
 
+
+def process_queue() -> None:
+    """Claim, prepare, dispatch, execute, and settle one runnable task."""
+    queue_dict = _claim_next_queue_task()
+    if not queue_dict:
+        return
+
+    should_execute, preparsed_card_data = _prepare_queue_task(queue_dict)
+    if not should_execute:
+        return
+
+    if _dispatch_special_queue_task(queue_dict):
+        return
+
+    _execute_map_card_task(queue_dict, preparsed_card_data)
+
 def map_card_services(
     card_data: Dict[str, Any],
     business_id: str,
@@ -7677,6 +7725,7 @@ if __name__ == "__main__":
             if _worker_role_enabled("agent"):
                 _dispatch_agent_schedules_if_due()
                 _process_agent_run_queue_if_due()
+                _process_sheet_provider_queue_if_due()
             if _worker_role_enabled("operator"):
                 _process_operator_async_job_if_due()
         except Exception as e:

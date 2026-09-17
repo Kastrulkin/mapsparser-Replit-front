@@ -830,6 +830,7 @@ def _admin_agent_runtime_overview(cursor, *, now: datetime | None = None) -> dic
                COUNT(*) FILTER (WHERE status = 'running') running,
                COUNT(*) FILTER (WHERE status = 'retry_wait') retry_wait,
                COUNT(*) FILTER (WHERE status = 'waiting_approval') waiting_approval,
+               COUNT(*) FILTER (WHERE status = 'waiting_provider') waiting_provider,
                COUNT(*) FILTER (
                    WHERE status = 'running'
                      AND COALESCE(heartbeat_at, started_at, updated_at) < NOW() - INTERVAL '5 minutes'
@@ -852,7 +853,7 @@ def _admin_agent_runtime_overview(cursor, *, now: datetime | None = None) -> dic
         """
         SELECT COUNT(DISTINCT r.id) FILTER (
                    WHERE b.status = 'archived'
-                     AND r.status IN ('queued', 'retry_wait', 'waiting_approval')
+                     AND r.status IN ('queued', 'retry_wait', 'waiting_approval', 'waiting_provider')
                ) archived_unfinished_runs,
                COUNT(DISTINCT a.id) FILTER (
                    WHERE b.status = 'archived'
@@ -1191,6 +1192,7 @@ def _admin_agent_runtime_overview(cursor, *, now: datetime | None = None) -> dic
             "running": int(run_state.get("running") or 0),
             "retry_wait": int(run_state.get("retry_wait") or 0),
             "waiting_approval": int(run_state.get("waiting_approval") or 0),
+            "waiting_provider": int(run_state.get("waiting_provider") or 0),
             "stale_running": int(run_state.get("stale_running") or 0),
             "failed_24h": int(run_state.get("failed_24h") or 0),
             "completed_24h": int(run_state.get("completed_24h") or 0),
@@ -4755,7 +4757,7 @@ def archive_agent_blueprint(blueprint_id: str):
                     WHERE COALESCE(input_json->>'preview_mode', 'false') <> 'true'
                       AND status = 'completed'
                 ) AS completed_work_runs,
-                COUNT(*) FILTER (WHERE status = 'running') AS running_runs,
+                COUNT(*) FILTER (WHERE status IN ('running', 'waiting_provider')) AS running_runs,
                 COUNT(*) FILTER (
                     WHERE COALESCE(input_json->>'preview_mode', 'false') = 'true'
                       AND status <> 'superseded'
@@ -4784,7 +4786,7 @@ def archive_agent_blueprint(blueprint_id: str):
         archive_snapshot = dict(cursor.fetchone() or {})
         if int(archive_snapshot.get("running_runs") or 0) > 0:
             return _json_error(
-                "Дождитесь завершения текущей работы агента, затем архивируйте его.",
+                "Завершите текущую работу и сверку записи в таблицу, затем архивируйте сотрудника.",
                 409,
                 "AGENT_RUN_ALREADY_IN_PROGRESS",
             )

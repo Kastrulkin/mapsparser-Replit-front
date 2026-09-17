@@ -6,6 +6,23 @@ from psycopg2.extras import Json
 TERM_FIELDS = ("details", "our_actions", "partner_actions", "client_benefit", "validity", "responsible", "contact", "trigger", "record_result", "promo_code")
 
 
+def is_confirmed_partner(item):
+    agreement = item.get('agreement_json') or {}
+    return agreement.get('relationship_status') == 'confirmed' or agreement.get('status') == 'confirmed'
+
+
+def result_counts(items):
+    partners = [item for item in items if is_confirmed_partner(item)]
+    launched = [item for item in partners if item.get('partnership_launched_at')]
+    return {
+        'partners': len({str(item.get('company_id') or item['id']) for item in partners}),
+        'launched': len(launched),
+        'preparing': sum(not item.get('partnership_launched_at') and (item.get('agreement_json') or {}).get('launch_status') == 'preparing' for item in partners),
+        'launch_unrecorded': sum(not item.get('partnership_launched_at') and (item.get('agreement_json') or {}).get('launch_status') != 'preparing' for item in partners),
+        'needs_decision': sum(bool(item.get('agreement_json')) and (item['agreement_json'].get('status') != 'confirmed' or not item['agreement_json'].get('instruction') or item['agreement_json'].get('instruction_terms_version') != item['agreement_json'].get('terms_version')) for item in items),
+    }
+
+
 def instruction_draft(terms):
     def field(key):
         return terms.get(key) or "Не указано в договорённости — уточните перед применением."
@@ -28,6 +45,8 @@ def change_agreement(previous, command, payload, user_id):
             return data
         raise ValueError("Договорённость изменилась. Откройте её заново.")
     now = datetime.now(timezone.utc).isoformat()
+    if data.get('status') == 'confirmed':
+        data.setdefault('relationship_status', 'confirmed')
     if command == "save":
         if not isinstance(payload.get("terms"), dict):
             raise ValueError("Укажите условия договорённости")
@@ -46,7 +65,7 @@ def change_agreement(previous, command, payload, user_id):
             raise ValueError("Сначала сохраните условия")
         if data.get("status") == "confirmed":
             return data
-        data.update(status="confirmed", confirmed_at=now, confirmed_by=user_id)
+        data.update(status="confirmed", relationship_status="confirmed", confirmed_at=now, confirmed_by=user_id)
     elif command == "prepare_instruction":
         if data.get("status") != "confirmed":
             raise ValueError("Сначала подтвердите условия")

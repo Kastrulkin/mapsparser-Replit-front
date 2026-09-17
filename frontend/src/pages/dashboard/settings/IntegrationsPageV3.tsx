@@ -134,7 +134,7 @@ const typeCopy: Record<ConnectionType, string> = {
 const serviceDescriptions: Record<string, string> = {
   telegram: 'Привяжите бот LocalOS для управления аккаунтом и отдельно выберите канал/чат, куда будут уходить согласованные посты.',
   whatsapp: 'Сохраните номер и WABA-доступ, когда канал готов к отправке сообщений клиентам.',
-  outreach_email: 'Один mailbox используется для отправки одобренных писем и обязательной проверки ответов.',
+  outreach_email: 'С этой почты LocalOS отправляет одобренные письма и проверяет ответы',
   outreach_vk: 'VK-сообщество используется только для одобренных сообщений и проверки ответов по кампаниям LocalOS.',
   outreach_max: 'LocalOS готовит MAX-сообщения, а владелец аккаунта отправляет их и отмечает ответы вручную.',
   google_sheets: 'Агенты могут читать таблицы и готовить изменения. Запись выполняется только после вашего подтверждения.',
@@ -1256,7 +1256,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
               <TabsTrigger value="safety" className="min-h-10 rounded-xl">Безопасность</TabsTrigger>
               <TabsTrigger value="support" className="min-h-10 rounded-xl">Для поддержки</TabsTrigger>
             </TabsList>
-            <TabsContent value="setup" className="space-y-4">
+            <TabsContent value="setup" forceMount className="space-y-4 data-[state=inactive]:hidden">
               {renderSetup(selectedService)}
               {renderHelp(selectedService)}
             </TabsContent>

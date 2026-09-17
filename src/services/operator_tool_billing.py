@@ -58,7 +58,7 @@ def run_paid_operator_tool_loop(
     conversation_history: Any = None,
     actor_context: Any = None,
     pending_approvals: Any = None,
-    business_timezone: str | None = "UTC",
+    business_timezone: str | None = "Europe/Moscow",
     planner=None,
 ) -> dict[str, Any]:
     preflight = build_paid_action_preflight(

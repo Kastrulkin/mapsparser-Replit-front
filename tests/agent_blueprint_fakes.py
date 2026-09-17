@@ -33,6 +33,9 @@ class FakeCursor:
         params = params or ()
         if normalized_query.startswith(("savepoint ", "rollback to savepoint ", "release savepoint ", "select pg_advisory_xact_lock")):
             return None
+        if "array_agg(column_name::text)" in normalized_query:
+            self.last_result = {"columns": list(params[1])}
+            return None
         if normalized_query.startswith("select to_regclass"):
             table_name = params[0]
             self.last_result = {"table_name": table_name if table_name in self.tables else None}
@@ -197,6 +200,10 @@ class FakeCursor:
             return None
         if normalized_query.startswith("select * from agent_runs where id"):
             self.last_result = self.tables["agent_runs"].get(params[0])
+            return None
+        if normalized_query.startswith("select id from agent_runs where blueprint_id") and "waiting_provider" in normalized_query:
+            blueprint_id = params[0]
+            self.last_result = next(({"id": row.get("id")} for row in self.tables["agent_runs"].values() if row.get("blueprint_id") == blueprint_id and row.get("status") == "waiting_provider"), None)
             return None
         if normalized_query.startswith("select * from agent_runs where business_id"):
             business_id, blueprint_id, idempotency_key = params
@@ -818,6 +825,8 @@ class FakeCapabilityCursor:
 class FakeApprovedDomainExecutorCursor:
     def __init__(self):
         self.tables = {
+            "agent_clients": {},
+            "agent_discovery_events": {},
             "agent_sheet_operation_requests": {},
             "agent_communication_requests": {},
             "reviewreplydrafts": {},
@@ -855,7 +864,7 @@ class FakeApprovedDomainExecutorCursor:
             }.get(table_name, [])
             self.last_results = [(column,) for column in columns]
             return None
-        if normalized_query.startswith("select id, action_id, status, approval_state"):
+        if normalized_query.startswith("select id, action_id, business_id, status, approval_state"):
             business_id = params[0]
             request_ids = set(params[1])
             action_ids = set(params[2])

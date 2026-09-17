@@ -52,6 +52,14 @@ done
 
 cd "${repo_root}"
 
+dependency_changes="$(git status --short -- Dockerfile 'Dockerfile.*' 'requirements*.txt' pyproject.toml poetry.lock)"
+if [[ -n "${dependency_changes}" ]]; then
+  echo "Backend hot-sync is blocked because runtime dependency files changed:" >&2
+  echo "${dependency_changes}" >&2
+  echo "Build and deploy a new application image instead of syncing only src/." >&2
+  exit 1
+fi
+
 python3 -m py_compile "${src_dir}/main.py" "${src_dir}/worker.py"
 bash -n "${entrypoint_file}"
 

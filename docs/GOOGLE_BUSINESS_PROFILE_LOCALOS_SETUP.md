@@ -1,38 +1,32 @@
 # Google Business Profile For LocalOS
 
-Status: `beta / Google Basic API Access rejected / ready to resubmit`.
+Status: `beta / Google Basic API Access approved`.
 
-Last verified: 27 August 2026. Google rejected the 14 August request because
-the website URL in the application did not exactly match the URL publicly shown
-on the LocalOS Business Profile. The public profile URL is recorded as
-`https://localos.pro/`, while the application used `https://localos.pro`.
+Last verified: 4 September 2026. Google approved the allowlist request for
+project `649313441761` on 2026-09-03 and granted the default `300 QPM` quota.
 
 ## Current Decision
 
-LocalOS has two Google Cloud/OAuth contexts during the review period:
+LocalOS has two Google Cloud/OAuth contexts in history:
 
-1. the current production OAuth client, which must remain unchanged while the
-   new application is under review;
-2. the new `localos-gbp` project submitted for Google Business Profile Basic
-   API Access.
+1. the previous production OAuth client under `totemic-union-440908-s8`;
+2. the current production OAuth client under the approved `localos-gbp` project.
 
-Do not replace production credentials with the new client until Google approves
-the new project and the post-approval smoke checklist below passes.
+The production server switched to the approved `localos-gbp` OAuth client on
+2026-09-04. Keep the previous `.env` backup available until a real business
+OAuth connection and read-only sync pass.
 
 ## Production Source Of Truth
 
 Production LocalOS currently uses this OAuth client:
 
-`304042072643-cpvhm8toat1aag3lc2enudfclfouhhod.apps.googleusercontent.com`
+`649313441761-bht1r6b8r1qt8viqa3k06kcnlgkj5ltq.apps.googleusercontent.com`
 
-This is the account binding that matters for runtime checks. Do not confuse it
-with older project-number notes. In Google Cloud Console the client is visible
-under project `totemic-union-440908-s8`, while the project selector displays
-`510204060`. Runtime errors and OAuth credentials may also include the numeric
-client prefix `304042072643`; treat that prefix as the active LocalOS OAuth
-client identifier, not as a separate LocalOS integration.
+This is the account binding that matters for runtime checks. In Google Cloud
+Console the client is visible under project `localos-gbp`, while the project
+selector displays `LocalOS GBP`.
 
-## Google Cloud Project
+## Previous Google Cloud Project
 
 - Project ID: `totemic-union-440908-s8`
 - Google Cloud project selector / project number shown in Console: `510204060`
@@ -49,9 +43,9 @@ Do not commit the OAuth client secret. Store it only in production environment v
 ## New GBP Allowlist Project
 
 The repeat application uses a separate project for Google Business Profile API
-approval. The next access request must use the verified LocalOS Business Profile
-as the applicant evidence profile and must submit the company website exactly as
-shown on the public profile: `https://localos.pro/`.
+approval. The active request uses the verified LocalOS Business Profile as the
+applicant evidence profile and submits the company website exactly as shown on
+the public profile: `https://localos.pro/`.
 
 - Google Cloud project name: `LocalOS GBP`
 - Project ID: `localos-gbp`
@@ -97,6 +91,7 @@ Set these on the server/app runtime:
 GOOGLE_CLIENT_ID=304042072643-cpvhm8toat1aag3lc2enudfclfouhhod.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
 GOOGLE_REDIRECT_URI=https://localos.pro/api/google/oauth/callback
+GOOGLE_CLOUD_PROJECT_ID=localos-gbp
 FRONTEND_URL=https://localos.pro
 ```
 
@@ -111,7 +106,7 @@ Submit the access request from Google Business Profile Help:
 
 `https://support.google.com/business/workflow/16726127?hl=en`
 
-The next repeat application should be submitted with:
+The approved repeat application was submitted with:
 
 - request type: `Application For Basic API Access`;
 - signed-in account: `Demyanovap@gmail.com`;
@@ -121,19 +116,30 @@ The next repeat application should be submitted with:
 - use case: authorized owners and agencies connect their own Business Profiles
   to LocalOS to manage business information, services, approved posts, reviews,
   and performance data. External writes remain subject to explicit approval.
+- submitted on 2026-09-01;
+- approved on 2026-09-03;
+- approval email support case ID: `1-0494000040762`;
+- Google Cloud project number approved: `649313441761`;
+- granted quota: `300 QPM`.
 
-Rejected application superseded by the next request:
+### Google Policy Reminder
+
+LocalOS must describe this as an integration with Google Business Profile APIs.
+Do not make public statements that imply LocalOS is a Google partner, is
+sponsored by Google, or is endorsed by Google unless Google grants separate
+written approval.
+
+Earlier response in the same support thread:
 
 - submitted on 2026-08-14;
 - Google support case ID: `1-0494000040762`;
 - selected evidence profile: `LocalOS`;
 - profile website shown publicly: `https://localos.pro/`;
 - company website submitted in the form: `https://localos.pro`;
-- result on 2026-08-27: rejected because the application website URL did not
-  exactly match the Business Profile website URL.
-
-Google-stated review time for a new request is typically approximately 7-10
-business days.
+- result on 2026-08-27: Google reported a URL mismatch because the application
+  website omitted the trailing slash shown on the public Business Profile URL;
+- final result on 2026-09-03: Google approved the project after the corrected
+  application used `https://localos.pro/` exactly.
 
 Rejected application superseded by the LocalOS-profile request:
 
@@ -191,22 +197,30 @@ curl -I http://localhost:8000
 
 ## Current Limitations
 
-- The new `localos-gbp` client is not installed in production while review is pending.
-- GBP API calls for the new project may fail until Google approves Basic API Access.
+- The new `localos-gbp` client is installed in production, but one real business
+  OAuth connection and read-only sync still need to pass before external writes
+  are treated as live.
+- GBP API services were confirmed enabled in Google Cloud Console on
+  2026-09-04 for project `649313441761`: My Business Account Management API,
+  My Business Business Information API, Google My Business API, and Business
+  Profile Performance API.
 - Service and price-list writes depend on GBP category support. LocalOS must keep preview and manual approval before any external write.
 
 ## Post-Approval Checklist
 
-1. Confirm that the relevant GBP API quota for project `localos-gbp` is no
-   longer `0 QPM` and matches the approved allowance.
-2. Back up the current production environment values.
-3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to the new OAuth client;
-   keep `GOOGLE_REDIRECT_URI=https://localos.pro/api/google/oauth/callback`.
-4. Restart only `app` and `worker`.
-5. Complete OAuth for one LocalOS business and verify account/location listing.
-6. Bind the LocalOS business to the correct GBP location.
-7. Run a read-only sync and verify reviews/profile data.
-8. Prepare one post, require explicit approval, publish it, and store the Google
+1. Done 2026-09-04: confirm that the relevant GBP API quota for project
+   `localos-gbp` is `300 QPM`.
+2. Done 2026-09-04: back up the current production environment values.
+3. Done 2026-09-04: set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to the
+   new OAuth client; keep
+   `GOOGLE_REDIRECT_URI=https://localos.pro/api/google/oauth/callback`.
+4. Done 2026-09-04: recreate `app` and `worker` with the new environment.
+5. Done 2026-09-04: server-side OAuth URL smoke confirms the new client ID,
+   `business.manage` scope, and production redirect URI.
+6. Complete OAuth for one LocalOS business and verify account/location listing.
+7. Bind the LocalOS business to the correct GBP location.
+8. Run a read-only sync and verify reviews/profile data.
+9. Prepare one post, require explicit approval, publish it, and store the Google
    provider result/ID.
-9. Keep the previous OAuth credentials available for rollback until the live
+10. Keep the previous OAuth credentials available for rollback until the live
    proof succeeds.

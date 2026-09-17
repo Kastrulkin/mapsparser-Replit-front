@@ -112,6 +112,20 @@ def _parse_campaign_start_at(value: Any) -> datetime | None:
     return utc_value
 
 
+def _parse_manual_event_occurred_at(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    normalized = f"{raw[:-1]}+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError("occurred_at must be a valid ISO-8601 date-time") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("occurred_at must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
 def _outreach_sandbox_enabled() -> bool:
     return str(os.getenv("OUTREACH_SANDBOX_ENABLED") or "true").strip().lower() in {
         "1", "true", "yes", "on",
@@ -1329,6 +1343,7 @@ def review_campaign_touch_edits(campaign_id: str):
             manual_reviewer_role=(
                 "superadmin" if user_data.get("is_superadmin") else "business_user"
             ),
+            manual_review_context="saved_draft_review",
         )
         reviewed_touches = [
             {
@@ -1457,6 +1472,7 @@ def manual_touch_event(campaign_id: str, touch_id: str):
             event_type,
             user_id=str(user_data.get("user_id") or ""),
             note=str(payload.get("note") or "").strip()[:1000],
+            occurred_at=_parse_manual_event_occurred_at(payload.get("occurred_at")),
         )
         conn.commit()
         return jsonify({"success": True, "event": result})
@@ -1665,6 +1681,7 @@ def pilot_dispatch_first_touch(campaign_id: str):
     from services.outreach_email_reply_service import sync_email_replies
     from services.outreach_vk_reply_service import sync_vk_replies
 
+    reply_sync_cycle_started_at = datetime.now(timezone.utc)
     if first_touch.get("channel") == "telegram":
         reply_sync = _sync_telegram_app_replies(
             limit=50,
@@ -1696,6 +1713,7 @@ def pilot_dispatch_first_touch(campaign_id: str):
         batch_size=1,
         batch_id=batch_id,
         queue_id=queue_id,
+        author_reply_sync_started_at=reply_sync_cycle_started_at,
     )
     messages_sent = int(dispatch.get("sent") or 0) + int(dispatch.get("delivered") or 0)
     audit_conn = get_db_connection()

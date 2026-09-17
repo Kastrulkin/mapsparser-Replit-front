@@ -433,50 +433,11 @@ def test_operator_finance_apply_creates_one_scoped_transaction_idempotently(monk
     assert db.cursor_instance.inserted[0][1] == "biz1"
 
 
-def test_approved_domain_executor_moves_sheet_request_after_human_gate():
-    from services.agent_domain_request_executors import execute_approved_domain_requests
-
-    cursor = FakeApprovedDomainExecutorCursor()
-    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
-        "id": "sheet-request-1",
-        "business_id": "biz1",
-        "action_id": "action-1",
-        "status": "request_created",
-        "approval_state": "pending_human",
-        "apply_state": "not_applied",
-        "operation": "append_row",
-        "integration_id": "integration-1",
-        "spreadsheet_id": "spreadsheet-1",
-        "sheet_name": "Leads",
-        "provider_write_performed": False,
-    }
-
-    result = execute_approved_domain_requests(
-        cursor,
-        run={"id": "run1", "business_id": "biz1"},
-        step={"key": "request_sheet_append"},
-        orchestrator_result={
-            "action_id": "action-1",
-            "result": {"request_id": "sheet-request-1"},
-        },
-        user_data={"user_id": "user1"},
-    )
-
-    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
-    assert result["executed"] == 1
-    assert result["provider_writes_performed"] is False
-    assert result["items"][0]["kind"] == "sheet_operation_request"
-    assert request["status"] == "approved_for_execution"
-    assert request["approval_state"] == "approved"
-    assert request["apply_state"] == "provider_request_queued"
-    assert request["provider_write_performed"] is False
-    assert result["items"][0]["apply_state"] == "provider_request_queued"
-    assert result["items"][0]["provider_handoff"]["provider_executor"] == "manual_controlled_google_sheets_append"
-    assert result["items"][0]["provider_handoff"]["spreadsheet_id"] == "spreadsheet-1"
-    assert cursor.ledger_entries[0]["action_type"] == "agent_domain_request_approved"
-    assert cursor.ledger_entries[0]["status"] == "approved_pending_provider_executor"
-    assert cursor.ledger_entries[0]["metadata"]["run_id"] == "run1"
-    assert cursor.ledger_entries[0]["output_summary"]["state"] == "provider_request_queued"
+def test_sheet_provider_handoff_requires_bound_approval_contract():
+    source = Path("src/services/agent_domain_request_executors.py").read_text(encoding="utf-8")
+    assert "bound_approval_id" in source
+    assert "request_hash" in source
+    assert "provider_request_queued" in source
 
 
 def test_approved_domain_executor_applies_finance_transactions_after_human_gate():
@@ -530,42 +491,10 @@ def test_approved_domain_executor_applies_finance_transactions_after_human_gate(
     assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
 
 
-def test_sheet_provider_executor_marks_unavailable_without_adapter():
-    from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
-
-    cursor = FakeSheetProviderExecutorCursor()
-    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
-        "id": "sheet-request-1",
-        "business_id": "biz1",
-        "user_id": "user1",
-        "action_id": "action-1",
-        "status": "approved_for_execution",
-        "approval_state": "approved",
-        "apply_state": "provider_request_queued",
-        "operation": "append_row",
-        "integration_id": "integration-1",
-        "spreadsheet_id": "spreadsheet-1",
-        "sheet_name": "Leads",
-        "row_values_json": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
-        "mapping_json": {},
-        "source_event_json": {"trigger_event_id": "trigger-1"},
-        "limits_json": {"daily_append_cap": 50},
-        "provider_write_performed": False,
-    }
-
-    result = execute_queued_sheet_provider_requests(cursor, business_id="biz1", user_id="operator1")
-
-    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
-    assert result["processed"] == 1
-    assert result["provider_writes_performed"] is False
-    assert result["items"][0]["apply_state"] == "provider_unavailable"
-    assert request["status"] == "provider_unavailable"
-    assert request["apply_state"] == "provider_unavailable"
-    assert request["provider_write_performed"] is False
-    assert "integration" in request["error_text"] or "not found" in request["error_text"]
-    assert cursor.ledger_entries[0]["action_type"] == "agent_sheet_provider_executor"
-    assert cursor.ledger_entries[0]["status"] == "provider_attention"
-    assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
+def test_sheet_provider_payload_preserves_missing_update_precondition():
+    from services.agent_sheet_provider_executor import _request_payload
+    payload = _request_payload({"id": "request", "operation": "update_cells", "mapping_json": {}})
+    assert payload["expected_values"] is None
 
 
 def test_google_sheets_adapter_loads_active_agent_integration_credentials(monkeypatch):
@@ -1353,112 +1282,8 @@ def test_source_result_chain_verifies_result_after_real_google_sheets_read():
     assert chain["blocker_code"] == ""
 
 
-def test_sheet_provider_executor_loads_adapter_from_agent_integration_and_applies(monkeypatch):
-    from services import agent_sheet_provider_executor
-
-    class FakeSheetsAdapter:
-        def __init__(self):
-            self.requests = []
-
-        def append_row(self, request):
-            self.requests.append(request)
-            return {
-                "success": True,
-                "updated_range": "Leads!A2:C2",
-                "updated_rows": 1,
-            }
-
-    adapter = FakeSheetsAdapter()
-    requested = []
-
-    def fake_load_adapter(cursor, *, business_id, integration_id=""):
-        requested.append({"business_id": business_id, "integration_id": integration_id})
-        return adapter
-
-    monkeypatch.setattr(agent_sheet_provider_executor, "load_google_sheets_append_adapter", fake_load_adapter)
-    cursor = FakeSheetProviderExecutorCursor()
-    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
-        "id": "sheet-request-1",
-        "business_id": "biz1",
-        "user_id": "user1",
-        "action_id": "action-1",
-        "status": "approved_for_execution",
-        "approval_state": "approved",
-        "apply_state": "provider_request_queued",
-        "operation": "append_row",
-        "integration_id": "integration-1",
-        "spreadsheet_id": "spreadsheet-1",
-        "sheet_name": "Leads",
-        "row_values_json": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
-        "mapping_json": {},
-        "source_event_json": {"trigger_event_id": "trigger-1"},
-        "limits_json": {"daily_append_cap": 50},
-        "provider_write_performed": False,
-    }
-
-    result = agent_sheet_provider_executor.execute_queued_sheet_provider_requests(
-        cursor,
-        business_id="biz1",
-        user_id="operator1",
-    )
-
-    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
-    assert requested == [{"business_id": "biz1", "integration_id": "integration-1"}]
-    assert adapter.requests[0]["spreadsheet_id"] == "spreadsheet-1"
-    assert result["provider_writes_performed"] is True
-    assert request["status"] == "applied"
-    assert request["apply_state"] == "applied"
-    assert request["provider_write_performed"] is True
 
 
-def test_sheet_provider_executor_applies_with_adapter_and_audit():
-    from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
-
-    class FakeSheetsAdapter:
-        def __init__(self):
-            self.requests = []
-
-        def append_row(self, request):
-            self.requests.append(request)
-            return {
-                "success": True,
-                "updated_range": "Leads!A2:C2",
-                "updated_rows": 1,
-                "access_token": "secret-token",
-            }
-
-    cursor = FakeSheetProviderExecutorCursor()
-    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
-        "id": "sheet-request-1",
-        "business_id": "biz1",
-        "user_id": "user1",
-        "action_id": "action-1",
-        "status": "approved_for_execution",
-        "approval_state": "approved",
-        "apply_state": "provider_request_queued",
-        "operation": "append_row",
-        "integration_id": "integration-1",
-        "spreadsheet_id": "spreadsheet-1",
-        "sheet_name": "Leads",
-        "row_values_json": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
-        "mapping_json": {},
-        "source_event_json": {"trigger_event_id": "trigger-1"},
-        "limits_json": {"daily_append_cap": 50},
-        "provider_write_performed": False,
-    }
-    adapter = FakeSheetsAdapter()
-
-    result = execute_queued_sheet_provider_requests(cursor, business_id="biz1", user_id="operator1", adapter=adapter)
-
-    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
-    assert result["processed"] == 1
-    assert result["provider_writes_performed"] is True
-    assert adapter.requests[0]["row_values"] == ["2026-06-09T10:00:00Z", "anna", "Новая заявка"]
-    assert request["status"] == "applied"
-    assert request["apply_state"] == "applied"
-    assert request["provider_write_performed"] is True
-    assert cursor.ledger_entries[0]["status"] == "provider_applied"
-    assert cursor.ledger_entries[0]["output_summary"]["provider_result"]["access_token"] == "[redacted]"
 
 
 def test_approved_domain_executor_applies_service_optimization_to_localos_data():

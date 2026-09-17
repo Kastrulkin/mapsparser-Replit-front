@@ -1692,7 +1692,7 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "initialRunParameters(schema, selectedResultRun?.input_json)" in source
     assert "Запуски агента" in source
     assert "onClick={() => void loadRun(run.id)}" in source
-    assert "if (!latestRun?.id || activeRun)" in source
+    assert "if (!latestRun?.id || activeRun || explicitRunTarget?.blueprintId" in source
     assert "Google-доступ обновлён. Запустите тест ещё раз" in source
     assert "Почему нельзя подтвердить результат" in source
 
@@ -2383,7 +2383,7 @@ def test_agent_review_reply_analysis_replaces_future_action_without_subject():
 
 
 def test_agent_run_completion_refreshes_server_today_summary():
-    page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
+    page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx").read_text(encoding="utf-8")
     recovered_segment = page_source[page_source.index("if (!runAnimation?.recoveredFromReload"):page_source.index("const startRun = async")]
     preview_segment = page_source[page_source.index("const startRun = async"):page_source.index("const executeRun = async")]
     work_segment = page_source[page_source.index("const executeRun = async"):page_source.index("const saveSchedule = async")]
@@ -2556,7 +2556,7 @@ def test_agent_ui_treats_only_explicit_preview_runs_as_tests():
 
 
 def test_agent_selection_clears_stale_run_and_details_before_loading_new_agent():
-    source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
+    source = Path("frontend/src/pages/dashboard/AgentBlueprintsWorkspace.tsx").read_text(encoding="utf-8")
 
     selection_effect = source.split("if (selectedBlueprint?.id) {", 1)[1].split("} else {", 1)[0]
     assert "setBlueprintDetails(null);" in selection_effect

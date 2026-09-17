@@ -256,7 +256,7 @@ def list_photo_assets(cursor: Any, business_id: str) -> list[dict[str, Any]]:
         """
         SELECT *
         FROM photo_assets
-        WHERE business_id = %s
+        WHERE business_id = %s AND metadata_json->>'disk_import_available' IS DISTINCT FROM 'false'
         ORDER BY quality_score DESC, updated_at DESC
         LIMIT 200
         """,

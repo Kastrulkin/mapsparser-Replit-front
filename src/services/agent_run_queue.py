@@ -14,7 +14,7 @@ from services.compiled_script_artifact import validate_artifact as validate_comp
 from services.compiled_script_runtime import CompiledRuntimeUnavailable, execute_in_attested_sandbox
 
 
-ACTIVE_EXECUTION_STATUSES = ("queued", "running", "retry_wait")
+ACTIVE_EXECUTION_STATUSES = ("queued", "running", "retry_wait", "waiting_provider")
 TRANSIENT_ERROR_MARKERS = ("timeout", "timed out", "connection", "temporar", "429", "502", "503", "504")
 
 
@@ -102,7 +102,7 @@ def enqueue_agent_run(
     cursor.execute(
         """
         SELECT id FROM agent_runs
-        WHERE blueprint_id = %s AND status IN ('queued', 'running', 'retry_wait')
+        WHERE blueprint_id = %s AND status IN ('queued', 'running', 'retry_wait', 'waiting_provider')
         ORDER BY COALESCE(queued_at, started_at, updated_at) DESC
         LIMIT 1
         """,
@@ -611,6 +611,20 @@ def execute_claimed_agent_run(cursor: Any, run: dict[str, Any]) -> dict[str, Any
     if str(current.get("status") or "") == "failed" and _is_transient_error(str(current.get("error_text") or "")):
         _schedule_agent_run_retry(cursor, {**run, **current}, str(current.get("error_text") or "temporary agent run failure"))
         current = runner.load_run(run_id, user_data) or current
+
+    if str(current.get("status") or "") == "waiting_provider":
+        # The runner committed a durable provider checkpoint. It is no longer
+        # owned by this run worker; a fenced provider worker will resume it.
+        cursor.execute(
+            """
+            UPDATE agent_runs SET lease_token = NULL, heartbeat_at = NOW(), updated_at = NOW()
+            WHERE id = %s AND status = 'waiting_provider' AND lease_token = %s
+            """,
+            (run_id, lease_token),
+        )
+        if lease_token and not cursor.rowcount:
+            return {"success": False, "code": "AGENT_RUN_LEASE_LOST", "run_id": run_id}
+        return {"success": True, "run": current}
 
     if str(current.get("status") or "") in {"completed", "failed", "superseded", "rejected"}:
         if lease_token and not finish_agent_run_claim(

@@ -4,17 +4,26 @@
 
 ### Google Business Profile
 
-Status: `beta / Google Basic API Access rejected / ready to resubmit`
+Status: `beta / Google Basic API Access approved`
 
 Current review context:
 
 - project: `localos-gbp` (`649313441761`);
 - agency account: `info@localos.pro`;
-- applicant verified profile for the next request: `LocalOS`;
-- exact company website for the next request: `https://localos.pro/`;
-- latest rejected support case: `1-0494000040762`, submitted 2026-08-14 and rejected 2026-08-27 because the application URL did not exactly match the public Business Profile URL;
+- approved support thread: `1-0494000040762`, approved 2026-09-03;
+- submitted request: `6-7241000041686`, submitted 2026-09-01;
+- approved quota: `300 QPM`;
+- applicant verified profile for the active request: `LocalOS`;
+- exact company website for the active request: `https://localos.pro/`;
+- earlier response in the same support thread rejected the application because the submitted URL did not exactly match the public Business Profile URL;
 - first managed verified client profile: `Веселая расческа`, Проспект Энгельса, 154;
-- the new OAuth client is not installed in production until approval and smoke verification.
+- the new OAuth client is installed in production and server-side OAuth URL
+  smoke passed on 2026-09-04; one real business OAuth connection and read-only
+  sync still need to pass before external writes are treated as live.
+
+Public positioning policy: describe LocalOS as integrating with Google Business
+Profile APIs only. Do not state or imply a Google partnership, sponsorship, or
+endorsement without separate written approval from Google.
 
 Setup runbook: [`docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`](./GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md)
 
