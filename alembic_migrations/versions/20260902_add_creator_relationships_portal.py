@@ -269,5 +269,59 @@ def upgrade():
 
 
 def downgrade():
-    # The portal contains creator communication history. Keep it on rollback.
-    pass
+    # A portal with evidence must be rolled back through backup/restore rather
+    # than deleting communication history to make an application rollback pass.
+    # Keep the DML locks in a stable order until all destructive DDL completes.
+    for table_name in (
+        "creator_accounts",
+        "creator_collaborations",
+        "creator_contact_events",
+        "creator_invites",
+        "creator_notification_outbox",
+        "creator_offer_messages",
+        "creator_profile_change_events",
+        "creator_relationships",
+        "creator_sessions",
+    ):
+        op.execute(f"LOCK TABLE {table_name} IN SHARE ROW EXCLUSIVE MODE")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM creator_relationships)
+               OR EXISTS (SELECT 1 FROM creator_contact_events)
+               OR EXISTS (SELECT 1 FROM creator_accounts)
+               OR EXISTS (SELECT 1 FROM creator_invites)
+               OR EXISTS (SELECT 1 FROM creator_sessions)
+               OR EXISTS (SELECT 1 FROM creator_profile_change_events)
+               OR EXISTS (SELECT 1 FROM creator_offer_messages)
+               OR EXISTS (SELECT 1 FROM creator_notification_outbox)
+               OR EXISTS (
+                   SELECT 1
+                   FROM creator_collaborations
+                   WHERE review_status <> 'draft'
+                      OR reviewed_by IS NOT NULL
+                      OR reviewed_at IS NOT NULL
+                      OR creator_notified_at IS NOT NULL
+               ) THEN
+                RAISE EXCEPTION
+                    'Cannot downgrade 20260902_001 while creator portal data exists; use backup/restore rollback';
+            END IF;
+        END $$
+        """
+    )
+    op.execute("DROP TRIGGER IF EXISTS trg_creator_contact_events_append_only ON creator_contact_events")
+    op.execute("DROP TABLE IF EXISTS creator_notification_outbox")
+    op.execute("DROP TABLE IF EXISTS creator_offer_messages")
+    op.execute("DROP TABLE IF EXISTS creator_sessions")
+    op.execute("DROP TABLE IF EXISTS creator_invites")
+    op.execute("DROP TABLE IF EXISTS creator_profile_change_events")
+    op.execute("DROP TABLE IF EXISTS creator_contact_events")
+    op.execute("DROP TABLE IF EXISTS creator_accounts")
+    op.execute("DROP TABLE IF EXISTS creator_relationships")
+    op.execute("DROP FUNCTION IF EXISTS prevent_creator_contact_event_mutation()")
+    op.execute("ALTER TABLE creator_collaborations DROP CONSTRAINT IF EXISTS ck_creator_collaboration_review")
+    op.execute("ALTER TABLE creator_collaborations DROP COLUMN IF EXISTS creator_notified_at")
+    op.execute("ALTER TABLE creator_collaborations DROP COLUMN IF EXISTS reviewed_at")
+    op.execute("ALTER TABLE creator_collaborations DROP COLUMN IF EXISTS reviewed_by")
+    op.execute("ALTER TABLE creator_collaborations DROP COLUMN IF EXISTS review_status")

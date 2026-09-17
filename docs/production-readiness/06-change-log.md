@@ -97,3 +97,13 @@ Status: **FIX_PROVEN locally**, independent scoped review passed. Not deployed.
 - Before patch: **3 failed / 25 passed** in `ingress_hardening_red`; duplicate reached legacy processing, HTTPError exposed synthetic token/PII, and outer traceback exposed secret text.
 - Fresh independent current suite: **89 passed in 0.73s**, `/tmp/localos-secwh0304-review.log`, exit0. Reviewer identified a test-observation gap: capsys alone does not capture logging records. Root strengthened tests with INFO-level `caplog`, individual sentinel absence and fixed event/type assertions; final **89 passed in 0.62s**, 1.016s capture (`raw/webhook-replay-log-final.json`).
 - Remaining scope: complete WhatsApp replay/idempotency and malformed event-ID behavior are not established by this Telegram route fix; downstream approval and whole-system logging audit remain open.
+
+## DB-MIG-03 — Safely reverse an empty creator portal
+
+Status: **FIX_PROVEN locally**, independent scoped review approved. No production migration.
+
+The former no-op downgrade retained creator-portal foreign keys into older collaboration tables. The replacement locks all affected tables in a stable order, refuses rollback if any portal table or non-default collaboration review field contains evidence, and removes only this revision's empty objects in dependency order. Populated portal rollback requires backup/restore planning; no CASCADE or silent history deletion.
+
+- Real PostgreSQL: empty rollback, retained relationship data, retained review evidence, and a writer racing between the guard and DROP. Root final run **4 passed in 19.35s** (19.936s captured wall), `raw/creator-portal-rollback-final.json`.
+- Independent reviewer checked all eight new-table guards, all four lossy collaboration fields, predecessor constraint ownership, lock lifetime, trigger/function removal order and UUID-test-database cleanup. No blocker; broader guard-branch test parametrization remains a nonblocking coverage opportunity.
+- This package fixes one dependency layer. The separately edited offer-distribution downgrade is required for the complete historical chain and is not signed off by this commit.
