@@ -169,3 +169,17 @@ Founder outreach's source assertion now locates the actual `restoreTouchEdits` e
 ## Browser verification checkpoint after the frontend fixes
 
 Both committed frontend assets rebuilt without .env (32.856s) and copied only into the verified isolated local staging app. **33real-API browser checks passed in94.759s** across desktop, laptop and mobile:15registration/email/action-continuity and18authenticated-page quality cases. This closes the original navigation and mobile geometry reproductions for this local build. Other staging specs, compiled runner fixture and final backend-inclusive image still need final aggregate verification.
+
+## TEST-SAFE-01 — Quarantine the retired live API script
+
+Status: **FIX_PROVEN locally**, independently reviewed. No application change or test-network effects.
+
+Default pytest discovery explicitly excludes `tests/legacy`. The archived print-only API script no longer contacts an arbitrary localhost application for registration/login: both direct invocation and calling its old entry point fail closed with guidance toward isolated API tests. This intentionally retires an unsafe manual script; it does not turn a real failing assertion into a skip/pass.
+
+- Four regression checks prove default exclusion, direct-entry refusal, in-process refusal and a no-egress sentinel. **4passed in3.14s**, `/tmp/testsafe01_hardened.log`.
+- Root review identified that the first regression subprocess would itself call localhost if old source were restored. Child audit hooks now block connections before collection/runpy, and in-process tests block imports/socket calls before evaluating legacy source. Independent reviewer approved the strengthened boundary.
+- Explicit pytest invocation of the retired file fails intentionally; the observed1failure is the expected fail-closed contract, not a pre-patch red reproduction. Remaining archived files are not counted as validated tests.
+
+## Frontend aggregate checkpoint
+
+Fresh committed frontend source, reused locked install: **570unit tests /122files passed**,176.591s captured wall; lint0errors/1existing warning14.728s; app+Node typecheck36.781s. Captures `raw/frontend-patched-{unit,lint,typecheck}.json`. Existing intentional error-boundary/jsdom console diagnostics remain; no unit failures. This aggregate plus both builds and33real-API checks is not a whole-project readiness sign-off.
