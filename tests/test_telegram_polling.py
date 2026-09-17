@@ -95,3 +95,18 @@ def test_bot_startup_retry_replaces_closed_event_loop():
     exec(compile(ast.Module(body=[entry],type_ignores=[]),'<bot-main-test>','exec'),namespace)
     namespace['main']()
     assert len(attempts)==2 and attempts[0] is not attempts[1]
+
+
+def test_unused_transport_does_not_start_restart_watchdog(monkeypatch):
+    started=[]
+    monkeypatch.setattr(telegram_polling.threading.Thread,'start',lambda self:started.append(True))
+    monkeypatch.setattr(telegram_polling.HTTPXRequest,'do_request',AsyncMock(return_value=(200,b'{"ok":true,"result":[]}')))
+    async def check():
+        request=telegram_polling.PollingRequest()
+        assert not started
+        await request.do_request('https://test/getMe','POST')
+        assert not started
+        await request.do_request('https://test/getUpdates','POST')
+        assert len(started)==1
+        await request.shutdown()
+    asyncio.run(check())

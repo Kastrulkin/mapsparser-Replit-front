@@ -28,7 +28,7 @@ class PollingRequest(HTTPXRequest):
         self._last_success=time.monotonic()
         self._last_activity=self._last_success
         self._stop_watch=threading.Event()
-        threading.Thread(target=self._watch,daemon=True,name='telegram-poll-watch').start()
+        self._watch_started=False
 
     def _watch(self):
         while not self._stop_watch.wait(10):
@@ -38,6 +38,12 @@ class PollingRequest(HTTPXRequest):
                 os._exit(1)
 
     async def do_request(self,url,method,**kwargs):
+        if url.rsplit('/',1)[-1].lower()=='getupdates' and not self._watch_started:
+            # Failed initialization can abandon a transport without shutdown.
+            # Only the transport that actually starts receiving may restart the process.
+            self._watch_started=True
+            self._last_success=time.monotonic()
+            threading.Thread(target=self._watch,daemon=True,name='telegram-poll-watch').start()
         self._last_activity=time.monotonic()
         try:
             result=await asyncio.wait_for(super().do_request(url,method,**kwargs),timeout=65)
