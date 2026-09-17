@@ -114,7 +114,7 @@ def get_user_info():
         if not token:
             return jsonify({"error": "Требуется авторизация"}), 401
 
-        user_data = verify_session(token)
+        user_data = verify_session(token, include_inactive=True)
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 

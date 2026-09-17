@@ -1,4 +1,7 @@
 import auth_system
+import pytest
+from flask import Flask, jsonify, request
+from api import auth_user_api
 from core.email_delivery import build_password_setup_link
 
 
@@ -298,3 +301,199 @@ def test_verify_session_falls_back_for_legacy_session_schema(monkeypatch):
     assert session["user_id"] == "user-1"
     assert session["session_kind"] == "standard"
     assert session["scope_business_id"] is None
+
+
+def _session_row(*, is_active=True, expires_at="2099-01-01T00:00:00"):
+    return (
+        "user-1",
+        expires_at,
+        "user@example.com",
+        "User",
+        None,
+        is_active,
+        False,
+        "session-1",
+        "standard",
+        None,
+    )
+
+
+def _protected_mutation_app():
+    app = Flask(__name__)
+    writes = []
+
+    @app.post("/protected-mutation")
+    def protected_mutation():
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+        if not auth_system.verify_session(token):
+            return jsonify({"error": "invalid_token"}), 401
+        writes.append("mutation")
+        return jsonify({"success": True})
+
+    return app, writes
+
+
+def test_verify_session_rejects_inactive_bearer_before_protected_mutation(monkeypatch):
+    cursor = FakeCursor([_session_row(is_active=False)])
+    connection = FakeConnection(cursor)
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+    app, writes = _protected_mutation_app()
+
+    response = app.test_client().post(
+        "/protected-mutation",
+        headers={"Authorization": "Bearer inactive-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "invalid_token"}
+    assert writes == []
+
+
+def test_verify_session_keeps_active_bearer_usable_for_protected_mutation(monkeypatch):
+    cursor = FakeCursor([_session_row(is_active=True)])
+    connection = FakeConnection(cursor)
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+    app, writes = _protected_mutation_app()
+
+    response = app.test_client().post(
+        "/protected-mutation",
+        headers={"Authorization": "Bearer active-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"success": True}
+    assert writes == ["mutation"]
+
+
+class SessionLookupCursor(FakeCursor):
+    def __init__(self, rows_by_token):
+        super().__init__([])
+        self.rows_by_token = rows_by_token
+        self.params = None
+
+    def execute(self, query, params=None):
+        super().execute(query, params)
+        self.params = params
+
+    def fetchone(self):
+        token, expires_after = self.params
+        row = self.rows_by_token.get(token)
+        if row is None or row[1] <= expires_after:
+            return None
+        return row
+
+
+def test_verify_session_rejects_missing_or_expired_bearer(monkeypatch):
+    cursor = SessionLookupCursor(
+        {"expired-token": _session_row(expires_at="2000-01-01T00:00:00")}
+    )
+    connection = FakeConnection(cursor)
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+
+    assert auth_system.verify_session("missing-token") is None
+    assert auth_system.verify_session("expired-token") is None
+    assert "s.expires_at >" in cursor.queries[0][0]
+
+
+def test_auth_me_keeps_account_blocked_contract_without_enabling_mutations(monkeypatch):
+    calls = []
+
+    def fake_verify_session(token, *, include_inactive=False):
+        calls.append((token, include_inactive))
+        if include_inactive:
+            return {"user_id": "user-1", "is_active": False}
+        return None
+
+    monkeypatch.setattr(auth_user_api, "verify_session", fake_verify_session)
+    app = Flask(__name__)
+    app.register_blueprint(auth_user_api.auth_user_bp)
+
+    response = app.test_client().get(
+        "/api/auth/me",
+        headers={"Authorization": "Bearer inactive-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == "account_blocked"
+    assert calls == [("inactive-token", True)]
+
+
+@pytest.mark.parametrize("inactive_value", [False, 0, "0"])
+def test_auth_me_blocks_all_legacy_inactive_values_without_profile_lookup(
+    monkeypatch,
+    inactive_value,
+):
+    cursor = FakeCursor([_session_row(is_active=inactive_value)])
+    connection = FakeConnection(cursor)
+    profile_lookup_calls = []
+
+    class ProfileLookupMustNotRun:
+        def __init__(self):
+            profile_lookup_calls.append("created")
+
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(auth_user_api, "DatabaseManager", ProfileLookupMustNotRun)
+    app = Flask(__name__)
+    app.register_blueprint(auth_user_api.auth_user_bp)
+
+    response = app.test_client().get(
+        "/api/auth/me",
+        headers={"Authorization": "Bearer inactive-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "error": "account_blocked",
+        "message": "user is blocked",
+    }
+    assert profile_lookup_calls == []
+
+
+def test_auth_me_keeps_real_active_session_usable(monkeypatch):
+    cursor = FakeCursor([_session_row(is_active=True)])
+    connection = FakeConnection(cursor)
+
+    class ActiveProfileDatabase:
+        def is_superadmin(self, _user_id):
+            return False
+
+        def get_businesses_for_user_access(self, _user_id):
+            return [{"id": "business-1", "name": "Active business"}]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(auth_user_api, "DatabaseManager", ActiveProfileDatabase)
+    app = Flask(__name__)
+    app.register_blueprint(auth_user_api.auth_user_bp)
+
+    response = app.test_client().get(
+        "/api/auth/me",
+        headers={"Authorization": "Bearer active-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["user"]["id"] == "user-1"
+
+
+def test_login_keeps_account_blocked_contract(monkeypatch):
+    import main
+
+    monkeypatch.setattr(
+        main,
+        "authenticate_user",
+        lambda _email, _password: {"error": "account_blocked"},
+    )
+
+    response = main.app.test_client().post(
+        "/api/auth/login",
+        json={"email": "inactive@example.com", "password": "secret-password"},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "error": "account_blocked",
+        "message": "user is blocked",
+    }

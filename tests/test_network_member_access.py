@@ -216,7 +216,7 @@ def test_auth_me_returns_network_member_businesses(monkeypatch):
     monkeypatch.setattr(
         auth_user_api,
         "verify_session",
-        lambda token: {
+        lambda token, **_kwargs: {
             "user_id": "member-1",
             "email": "member@example.com",
             "name": "Member",
@@ -267,7 +267,7 @@ def test_auth_me_exposes_web_tracking_only_for_pilot_business(monkeypatch):
     monkeypatch.setattr(
         auth_user_api,
         "verify_session",
-        lambda token: {
+        lambda token, **_kwargs: {
             "user_id": "member-1",
             "email": "member@example.com",
             "is_active": True,

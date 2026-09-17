@@ -54,7 +54,7 @@ def test_authenticated_get_accepts_browser_session_cookie(monkeypatch):
     monkeypatch.setattr(
         auth_user_api,
         "verify_session",
-        lambda token: {
+        lambda token, **_kwargs: {
             "user_id": "user-1",
             "email": "cookie@example.com",
             "is_active": True,

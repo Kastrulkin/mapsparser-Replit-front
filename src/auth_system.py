@@ -448,8 +448,12 @@ def create_password_setup_token(user_id: str) -> Dict[str, Any]:
     finally:
         conn.close()
 
-def verify_session(token: str) -> Optional[Dict[str, Any]]:
-    """Проверить сессию пользователя"""
+def verify_session(
+    token: str,
+    *,
+    include_inactive: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Verify a non-expired session, rejecting inactive users by default."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -512,12 +516,16 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 scope_business_id = session[9] if len(session) > 9 else None
             
             normalized_session_kind = str(session_kind or "standard")
+            is_active = is_active_val not in (False, 0, "0")
+            if not is_active and not include_inactive:
+                logger.info("Session verification rejected inactive account")
+                return None
             return {
                 "user_id": user_id,
                 "email": email,
                 "name": name,
                 "phone": phone,
-                "is_active": bool(is_active_val) if is_active_val is not None else True,
+                "is_active": is_active,
                 "is_superadmin": (
                     False
                     if normalized_session_kind == "demo"
