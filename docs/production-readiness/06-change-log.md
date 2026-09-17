@@ -107,3 +107,13 @@ The former no-op downgrade retained creator-portal foreign keys into older colla
 - Real PostgreSQL: empty rollback, retained relationship data, retained review evidence, and a writer racing between the guard and DROP. Root final run **4 passed in 19.35s** (19.936s captured wall), `raw/creator-portal-rollback-final.json`.
 - Independent reviewer checked all eight new-table guards, all four lossy collaboration fields, predecessor constraint ownership, lock lifetime, trigger/function removal order and UUID-test-database cleanup. No blocker; broader guard-branch test parametrization remains a nonblocking coverage opportunity.
 - This package fixes one dependency layer. The separately edited offer-distribution downgrade is required for the complete historical chain and is not signed off by this commit.
+
+## UX-SCOPE-01 — Clear revoked dashboard context
+
+Status: **FIX_PROVEN locally**, independently reviewed; not deployed.
+
+Membership refresh now replaces a removed selected business with an accessible one, or clears current business/control scope and mode-specific storage on empty access / the existing API 403 contract. Route-private state remounts on business or network scope identity changes. Transient errors preserve the current context with a visible retry action; revision fencing rejects obsolete and overlapping refresh responses.
+
+- Five tests cover A→B/private-state reset, empty membership, 403, transient failure/retry and late refresh after manual switch. Worker final **5 passed in 2.79s**; independent rerun **5 passed in 3.04s**. Corrected independent ESLint invocation exit0 (`/tmp/localos-ux-scope-01-lint.log`); its first combined command had a wrong lint working directory, not a test failure.
+- Root aggregate app/Node typecheck exit0 in **39.149s** (`raw/frontend-scope-typecheck.json`); focused root lint exit0. Reviewer checked network→business fallback and backend response contract.
+- Backend authorization remains authoritative; this does not replace server tenant/role checks or establish every child callback's safety.

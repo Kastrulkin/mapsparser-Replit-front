@@ -2,13 +2,26 @@ import { useLatestCallback } from '@/hooks/useLatestCallback';
 import type { BusinessRecord } from '@/types/business';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { newAuth, type User } from '../lib/auth_new';
+import { HttpError, newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DashboardHeader } from './DashboardHeader';
 import { DashboardSidebar } from './DashboardSidebar';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
 
 type DashboardBusiness = BusinessRecord;
+
+const selectedBusinessStorageKey = (demoMode: boolean) => (
+  demoMode ? 'demo_selectedBusinessId' : 'selectedBusinessId'
+);
+
+const controlScopeStorageKey = (demoMode: boolean) => (
+  demoMode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope'
+);
+
+const clearStoredDashboardScope = (demoMode: boolean) => {
+  window.localStorage.removeItem(selectedBusinessStorageKey(demoMode));
+  window.localStorage.removeItem(controlScopeStorageKey(demoMode));
+};
 
 export type ControlScope = {
   kind: 'business' | 'network';
@@ -83,6 +96,7 @@ export const DashboardLayout = () => {
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusiness, setCurrentBusiness] = useState<DashboardBusiness | null>(null);
   const [controlScope, setControlScope] = useState<ControlScope | null>(null);
+  const [membershipReloadError, setMembershipReloadError] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') {
@@ -90,6 +104,7 @@ export const DashboardLayout = () => {
     }
     return window.localStorage.getItem('dashboard_sidebar_collapsed') === 'true';
   });
+  const scopeRevisionRef = useRef(0);
   const isLeadBusiness = useCallback((business: DashboardBusiness) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
     const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
@@ -135,7 +150,7 @@ export const DashboardLayout = () => {
           }
 
           if (!businessToSelect) {
-            const businessStorageKey = currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId';
+            const businessStorageKey = selectedBusinessStorageKey(Boolean(currentUser.demo_mode));
             const savedBusinessId = localStorage.getItem(businessStorageKey);
             businessToSelect = savedBusinessId
               ? businessesData.find((business) => business.id === savedBusinessId) || businessesData[0]
@@ -144,7 +159,7 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          const savedScopeValue = localStorage.getItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope');
+          const savedScopeValue = localStorage.getItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)));
           let restoredScope: ControlScope = { kind: 'business', id: businessToSelect.id, name: businessToSelect.name };
           if (savedScopeValue) {
             try {
@@ -153,13 +168,17 @@ export const DashboardLayout = () => {
                 restoredScope = { kind: 'network', id: parsed.id, name: parsed.name || businessToSelect.network_name || 'Сеть' };
               }
             } catch {
-              localStorage.removeItem(currentUser.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope');
+              localStorage.removeItem(controlScopeStorageKey(Boolean(currentUser.demo_mode)));
             }
           }
           setControlScope(restoredScope);
-          localStorage.setItem(currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessToSelect.id);
+          localStorage.setItem(selectedBusinessStorageKey(Boolean(currentUser.demo_mode)), businessToSelect.id);
         } else {
           setBusinesses([]);
+          setCurrentBusinessId(null);
+          setCurrentBusiness(null);
+          setControlScope(null);
+          clearStoredDashboardScope(Boolean(currentUser.demo_mode));
         }
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);
@@ -186,12 +205,13 @@ export const DashboardLayout = () => {
   const handleBusinessChange = useLatestCallback(async (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
+      scopeRevisionRef.current += 1;
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
       const nextScope: ControlScope = { kind: 'business', id: business.id, name: business.name };
       setControlScope(nextScope);
-      localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
-      localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
+      localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
+      localStorage.setItem(selectedBusinessStorageKey(Boolean(user?.demo_mode)), businessId);
     }
   });
 
@@ -223,29 +243,60 @@ export const DashboardLayout = () => {
   };
 
   const selectControlScope = (nextScope: ControlScope) => {
+    scopeRevisionRef.current += 1;
     setControlScope(nextScope);
-    localStorage.setItem(user?.demo_mode ? 'demo_dashboard_control_scope' : 'dashboard_control_scope', JSON.stringify(nextScope));
+    localStorage.setItem(controlScopeStorageKey(Boolean(user?.demo_mode)), JSON.stringify(nextScope));
   };
 
   const reloadBusinesses = async () => {
+    scopeRevisionRef.current += 1;
+    const requestScopeRevision = scopeRevisionRef.current;
+    const demoMode = Boolean(user?.demo_mode);
+    setMembershipReloadError(false);
     try {
-      const data = await newAuth.makeRequest('/auth/me') as { businesses?: DashboardBusiness[] };
+      const data: { businesses?: DashboardBusiness[] } = await newAuth.makeRequest('/auth/me');
+      if (scopeRevisionRef.current !== requestScopeRevision) return;
 
       const businessesData = filterOutLeads(data.businesses || []);
       if (Array.isArray(businessesData) && businessesData.length > 0) {
         setBusinesses(businessesData);
-        // Обновляем текущий бизнес, если он был изменен
-        if (currentBusinessId) {
-          const updatedBusiness = businessesData.find((business) => business.id === currentBusinessId);
-          if (updatedBusiness) {
-            setCurrentBusiness(updatedBusiness);
+        const updatedBusiness = businessesData.find((business) => business.id === currentBusinessId);
+        if (updatedBusiness) {
+          setCurrentBusinessId(updatedBusiness.id);
+          setCurrentBusiness(updatedBusiness);
+          if (controlScope?.kind === 'network' && controlScope.id !== updatedBusiness.network_id) {
+            const nextScope: ControlScope = { kind: 'business', id: updatedBusiness.id, name: updatedBusiness.name };
+            setControlScope(nextScope);
+            localStorage.setItem(controlScopeStorageKey(demoMode), JSON.stringify(nextScope));
           }
+        } else {
+          const replacementBusiness = businessesData[0];
+          const nextScope: ControlScope = { kind: 'business', id: replacementBusiness.id, name: replacementBusiness.name };
+          setCurrentBusinessId(replacementBusiness.id);
+          setCurrentBusiness(replacementBusiness);
+          setControlScope(nextScope);
+          localStorage.setItem(selectedBusinessStorageKey(demoMode), replacementBusiness.id);
+          localStorage.setItem(controlScopeStorageKey(demoMode), JSON.stringify(nextScope));
         }
       } else {
         setBusinesses([]);
+        setCurrentBusinessId(null);
+        setCurrentBusiness(null);
+        setControlScope(null);
+        clearStoredDashboardScope(demoMode);
       }
     } catch (error) {
+      if (scopeRevisionRef.current !== requestScopeRevision) return;
+      if (error instanceof HttpError && error.status === 403) {
+        setBusinesses([]);
+        setCurrentBusinessId(null);
+        setCurrentBusiness(null);
+        setControlScope(null);
+        clearStoredDashboardScope(demoMode);
+        return;
+      }
       console.error('Ошибка перезагрузки бизнесов:', error);
+      setMembershipReloadError(true);
     }
   };
 
@@ -300,6 +351,14 @@ export const DashboardLayout = () => {
         <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
+              {membershipReloadError ? (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
+                  <span>Не удалось обновить доступ. Текущий бизнес сохранён — повторите попытку.</span>
+                  <button type="button" onClick={() => void reloadBusinesses()} className="min-h-10 rounded-lg border border-amber-300 bg-white px-3 font-semibold transition-[background-color] hover:bg-amber-100">
+                    Повторить
+                  </button>
+                </div>
+              ) : null}
               {shouldLockPaidSection && lockedPaidSection ? (
                 <LockedSectionPreview
                   section={lockedPaidSection}
@@ -307,7 +366,7 @@ export const DashboardLayout = () => {
                   paywallHref={paywallHref}
                 />
               ) : (
-                <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+                <Outlet key={`${currentBusinessId || 'none'}:${controlScope?.kind || 'none'}:${controlScope?.id || 'none'}`} context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
               )}
             </div>
           </div>
