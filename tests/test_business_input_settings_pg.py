@@ -192,7 +192,8 @@ def test_full_router_leaves_settings_for_reviews(daily, monkeypatch):
     cursor.execute('DELETE FROM business_finance_settings')
     monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
     monkeypatch.setattr(operator_core, '_operator_tool_loop_enabled', lambda: False)
-    monkeypatch.setattr(operator_core, 'get_unanswered_reviews_status', lambda *args, **kwargs: {'status':'completed','chat_response':'Есть отзывы без ответа'})
+    from services import operator_query
+    monkeypatch.setattr(operator_query, 'execute_operator_query', lambda *args, **kwargs: {'status':'completed','capability':'operator.query','chat_response':'Есть отзывы без ответа'})
     result, pending = operator_core.route_operator_message(cursor, business_id='b', user_id='u', channel='telegram', message='Покажи отзывы без ответа', pending_context={'capability':'settings.input','source_message':'Когда следующий пост'})
     assert result['status'] == 'completed'
     assert result['capability'] != 'settings.input'
@@ -222,3 +223,32 @@ def test_settings_endpoint_checks_business_access(daily, monkeypatch, allowed):
         assert response.json['timezone'] == 'Europe/Tallinn'
     else:
         assert 'timezone' not in response.json
+
+
+@pytest.mark.parametrize('amount', ['350 р', '350 ₽', '350 EUR', '350 руб.', '350 рублей'])
+@pytest.mark.parametrize('channel', ['web', 'telegram_mini_app', 'telegram'])
+def test_audited_finance_explicit_currency_does_not_ask_for_default(daily, monkeypatch, amount, channel):
+    _, cursor = daily
+    cursor.execute("UPDATE business_finance_settings SET currency=NULL")
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    message = 'Сегодня 10 чеков, выручка ' + amount
+    assert 'currency' not in business_input_settings.required_settings(message)
+    assert business_input_settings.route_setup(cursor, 'b', 'u', channel, message, {}, 'c', None) is None
+
+
+@pytest.mark.parametrize('message', [
+    'Что предложить клиентам сегодня? Составь план допродаж для администратора.',
+    'Клиент отказался от допродажи, передай руководителю.',
+    'Составь чеклист встречи клиента.',
+    'Как оформить возврат клиенту?',
+    'Как записать расход?',
+    'Подскажи, как увеличить продажи',
+    'Клиентка попросила возврат, передай руководителю.',
+    'Клиент пожаловался на ошибку в чеке вчера. Передай администратору.',
+])
+def test_recommendations_and_notes_do_not_require_currency(daily, monkeypatch, message):
+    _, cursor = daily
+    cursor.execute("UPDATE business_finance_settings SET currency=NULL")
+    monkeypatch.setenv('OPERATOR_REQUEST_AUDIT_BUSINESS_IDS', 'b')
+    assert 'currency' not in business_input_settings.required_settings(message)
+    assert business_input_settings.route_setup(cursor, 'b', 'u', 'web', message, {}, 'c', None) is None

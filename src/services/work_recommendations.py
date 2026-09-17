@@ -105,7 +105,11 @@ def recommend(cursor,business_id,user_id,args,preview_rules=None):
         items.append({'booking_id':row.get('id') if visits else None,'service_id':service['id'],'service_name':service.get('name'),
             'time':row.get('booking_time_local') or row.get('booking_time'),'master_id':row.get('master_id'),'count':row.get('count') if not visits else None,
             'recommendations':recommendations,'results':events})
-    return {'status':'completed','items':items,'policy_version':current['version'],'message':'Нет доступных записей. Можно назвать услуги без создания визитов.' if not items else 'Рекомендации по действующим связкам и правилам.'}
+    message='Нет доступных записей. Можно назвать услуги без создания визитов.' if not items else 'Рекомендации по действующим связкам и правилам.'
+    configured_matrix=current.get('matrix_json') if current.get('matrix_json') is not None else current_matrix.get('matrix_json')
+    if not configured_matrix:
+        message+=' Связки услуг для допродаж пока не настроены. Владелец может подготовить и проверить их в разделе «Средний чек». До этого подходящие дополнения не утверждены.'
+    return {'status':'completed','items':items,'policy_version':current['version'],'message':message,'setup_required':not bool(configured_matrix)}
 
 
 def validate_rules(cursor,business_id,rules):

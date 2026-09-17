@@ -63,13 +63,21 @@ def parse_settings(message):
 def required_settings(message):
     """Only intercept operations whose meaning depends on missing defaults."""
     from services.operator_core import _content_read_request
-    if _content_read_request(message):
+    from services.operator_followups import directed_note
+    if _content_read_request(message) or directed_note(message):
         return []
     relative = bool(re.search(r'сегодня|завтра|вчера|недел|месяц|следующ', message, re.I))
-    read = bool(re.search(r'покажи|выдай|како|когда|есть ли|сколько|посмотр', message, re.I))
-    money_write = not read and bool(re.search(r'выруч|продаж|чек|расход|возврат|доход|(?:добав|созда).*услуг', message, re.I))
+    read = bool(re.search(r'покажи|выдай|како|когда|есть ли|сколько|посмотр|\bкак\b|подскажи', message, re.I))
+    money_write = not read and bool(re.search(r'\b(?:выруч|продаж|чек(?:а|ов|и)?\b|расход|возврат|доход)|(?:добав|созда).*услуг', message, re.I))
     fields = []
-    if money_write and not parse_settings(message).get('currency'):
+    from services.operator_finance_amounts import verify_currency
+    try:
+        explicit_currency = verify_currency(message, {}).get('currency') or parse_settings(message).get('currency')
+    except ValueError:
+        # The financial handler explains mixed currencies; settings must not
+        # intercept and silently select one of the explicitly supplied units.
+        explicit_currency = True
+    if money_write and not explicit_currency:
         fields.append('currency')
     dated = money_write or bool(re.search(r'пост|контент|визит|клиент|финанс', message, re.I))
     if relative and dated:
@@ -134,7 +142,7 @@ def route_setup(cursor, business_id, user_id, channel, message, pending, convers
         return {'status': 'clarification_required', 'capability': 'settings.input', 'chat_response': str(sys.exception())}, next_context
     from services.operator_core import _prepare_registered_capability_approval
     preview = 'Сохранить настройки бизнеса: ' + settings_summary(envelope['data']) + '?'
-    result = _prepare_registered_capability_approval(capability='settings.input', tool_name='settings.input',
+    result = _prepare_registered_capability_approval(cursor=cursor, capability='settings.input', tool_name='settings.input',
         business_id=business_id, user_id=user_id, channel=channel, message=preview + '\n' + finance_daily.fingerprint(envelope),
         payload=envelope, backend_capability='finance.daily.apply_operator', orchestrator=orchestrator)
     if result.get('status') == 'approval_required':

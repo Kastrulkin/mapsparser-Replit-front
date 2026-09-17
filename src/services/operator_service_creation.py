@@ -108,10 +108,15 @@ def create(cursor,business_id,user_id,message,request_key,args):
     business=_row(cursor,cursor.fetchone()).get('data') or {}
     from services.business_input_settings import resolve
     business.update(resolve(cursor, business_id))
+    from services.operator_finance_amounts import verify_currency
+    try:
+        args=verify_currency(message, args)
+    except ValueError:
+        return result('Укажите стоимость услуги в одной валюте.', 'clarification_required')
     currency=(args.get('currency') or business.get('currency') or '').upper()
     if currency not in {'RUB','EUR','USD','KZT','BYN','GBP','GEL','AMD','AED','UZS','KGS','TRY'}:
         return result('Уточните валюту стоимости услуги.','clarification_required')
-    aliases={'RUB':r'руб|₽','EUR':r'евро|€','USD':r'доллар|\$','KZT':r'тенге','BYN':r'белорусск.*руб',
+    aliases={'RUB':r'руб|₽|\d\s*р\b','EUR':r'евро|€','USD':r'доллар|\$','KZT':r'тенге','BYN':r'белорусск.*руб',
              'GBP':r'фунт|£','GEL':r'лари','AMD':r'драм','AED':r'дирхам','UZS':r'сум','KGS':r'сом','TRY':r'лир'}
     if currency!=(business.get('currency') or '').upper() and not re.search(r'\b'+currency+r'\b|'+aliases[currency],message,re.I):
         return result('Уточните валюту: она не указана в команде или настройках бизнеса.','clarification_required')

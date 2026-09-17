@@ -417,3 +417,24 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any) -> 
         "external_writes_performed": False,
         "paid_actions_performed": False,
     }
+
+
+def read_reviews_request(cursor, business_id, message):
+    """Read requests must never be routed to paid draft generation."""
+    import re
+    if not re.search(r'отзыв',message,re.I) or not re.search(r'покажи|сколько|показать|какие|истори',message,re.I):
+        return None
+    if re.search(r'подготовь|создай|сгенер|опубликуй|отправь',message,re.I):return None
+    if re.search(r'черновик|подготовлен|истори\w*\s+ответ',message,re.I):
+        cursor.execute('''SELECT id,review_id,author_name,generated_text,status,created_at,updated_at FROM reviewreplydrafts
+            WHERE business_id=%s ORDER BY updated_at DESC LIMIT 50''',(business_id,))
+        items=[{key:_iso(value) for key,value in _row(cursor,row).items()} for row in cursor.fetchall()]
+        text='Сохранённых черновиков ответов на отзывы пока нет.' if not items else 'Сохранённые ответы на отзывы:\n'+'\n\n'.join(str(i+1)+'. '+str(item.get('author_name') or 'Клиент')+' — '+str(item.get('status') or 'черновик')+'\n'+str(item.get('generated_text') or '') for i,item in enumerate(items[:10]))
+        return {'status':'completed','chat_response':text,'items':items,'resource':'reviews','result_ref':{'href':RESOURCE_HREFS['reviews'],'label':'Открыть отзывы'},'external_writes_performed':False}
+    filters=[]
+    for word,value in [('google','google'),('гугл','google'),('яндекс','yandex')]:
+        if re.search(word,message,re.I):filters.append({'field':'source','operator':'contains','value':value});break
+    if re.search(r'без ответа|не отвеч|неотвеч',message,re.I):filters.append({'field':'has_response','operator':'eq','value':False})
+    if re.search(r'негатив|плох|низк',message,re.I):filters.append({'field':'rating','operator':'lte','value':3})
+    if re.search(r'положитель|хорош|высок',message,re.I):filters.append({'field':'rating','operator':'gte','value':4})
+    return execute_operator_query(cursor,business_id=business_id,arguments={'resource':'reviews','filters':filters,'limit':10,'sort_by':'published_at','sort_direction':'desc','view':'count' if re.search('сколько',message,re.I) else 'full'})

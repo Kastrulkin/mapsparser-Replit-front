@@ -7,7 +7,8 @@ from services import operator_followups, operator_chat_service, operator_tool_bi
 
 @pytest.mark.parametrize('channel',['web','telegram','telegram_mini_app'])
 @pytest.mark.parametrize('voice',[False,True])
-def test_selected_post_followup_persists_and_deduplicates(editorial,monkeypatch,channel,voice):
+@pytest.mark.parametrize('prefix',['','Пожалуйста, '])
+def test_selected_post_followup_persists_and_deduplicates(editorial,monkeypatch,channel,voice,prefix):
     conn,c=editorial
     from services import operator_social_post_generation,operator_news_generation,work_journal
     monkeypatch.setattr(work_journal,'enabled',lambda b:False)
@@ -26,14 +27,18 @@ def test_selected_post_followup_persists_and_deduplicates(editorial,monkeypatch,
     assert first['selected_item']['item_id']=='i'
     payload={'request_id':'rewrite','conversation_id':first['conversation_id']}
     if voice:payload['transcription_id']='fixture-transcript'
-    result=operator_chat_service._process_chat(c,**common,message='Придумай вместо него рекламный пост про Пхукет',payload=payload)
+    result=operator_chat_service._process_chat(c,**common,message=prefix+'Придумай вместо него рекламный пост про Пхукет',payload=payload)
     assert result['status']=='completed'
     assert result['selected_item']['item_id']=='i'
-    duplicate=operator_chat_service._process_chat(c,**common,message='Придумай вместо него рекламный пост про Пхукет',payload=payload)
+    duplicate=operator_chat_service._process_chat(c,**common,message=prefix+'Придумай вместо него рекламный пост про Пхукет',payload=payload)
     assert duplicate['idempotent'] is True
     c.execute("SELECT draft_text,metadata_json FROM contentplanitems WHERE id='i'")
     row=c.fetchone();assert 'Пхукет' in row['draft_text']
     assert len(row['metadata_json']['operator_edit_history'])==1
+    restored=operator_chat_service._process_chat(c,**common,message=prefix+'Верни предыдущую версию этого поста',payload={'request_id':'restore','conversation_id':first['conversation_id']})
+    assert restored['status']=='completed'
+    c.execute("SELECT draft_text FROM contentplanitems WHERE id='i'")
+    assert c.fetchone()['draft_text']=='Предыдущий текст'
 
 
 def test_selection_version_rejects_concurrent_edit(editorial,monkeypatch):
@@ -69,3 +74,18 @@ def test_rewrite_preserves_booking_url_in_saved_draft(editorial,monkeypatch):
     saved=c.fetchone()
     assert url in saved['draft_text'] and '[ссылка' not in saved['draft_text']
     assert url in saved['metadata_json']['operator_edit_history'][0]['draft_text']
+
+
+def test_translation_retry_writes_one_version(editorial,monkeypatch):
+    from services import operator_editorial,operator_social_post_generation,operator_news_generation
+    _,c=editorial
+    monkeypatch.setattr(operator_news_generation,'_load_business_context',lambda *a:{})
+    answers=iter(['Русский текст вместо перевода, это неверный язык и это должно быть отвергнуто.', 'Book your appointment with our beauty salon and discover a carefully selected treatment.'])
+    monkeypatch.setattr(operator_social_post_generation,'_default_social_post_generator',lambda *a,**kw:json.dumps({'post':next(answers)}))
+    row=operator_editorial._items(c,'b','p',item_id='i')[0]
+    value=operator_editorial.rewrite_item(c,'b','u','Переведи этот пост на английский язык',{'item_id':'i','plan_id':'p','version':operator_editorial._version(row)})
+    assert value['status']=='completed'
+    c.execute("SELECT draft_text,metadata_json FROM contentplanitems WHERE id='i'")
+    saved=c.fetchone()
+    assert saved['draft_text'].startswith('Book your')
+    assert len(saved['metadata_json']['operator_edit_history'])==1

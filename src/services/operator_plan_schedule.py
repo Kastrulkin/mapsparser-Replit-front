@@ -10,12 +10,15 @@ MONTHS=['января','февраля','марта','апреля','мая','и
 def extract(message):
     text=str(message or '').lower()
     for word,number in WORDS.items():text=re.sub(r'\b'+word+r'\b',number,text)
+    text=re.sub(r'\b(?:раз|еженедельно)\s+в\s+неделю\b','1 пост в неделю',text)
+    text=re.sub(r'\bна\s+неделю\b','на 1 неделю',text)
     frequency=re.search(r'\b(\d+)\s+пост\w*\s+в\s+недел',text)
     if not frequency:
         if re.search(r'\bс\s+\d|\bна\s+\d+\s+(?:недел|пост)',text):
             raise PlanClarification('Как часто публиковать посты в указанном периоде? Например: один пост в неделю.')
         return None
-    if int(frequency[1])!=1:raise PlanClarification('Для точного расписания укажите даты постов или интервал в днях. Сейчас поддерживается один пост в неделю.')
+    per_week=int(frequency[1])
+    if not 1<=per_week<=7:raise PlanClarification('Укажите от одного до семи постов в неделю или точные даты публикаций.')
     start_match=re.search(r'\bс\s+(\d{4}-\d{2}-\d{2})',text)
     try:
         if start_match:start=date.fromisoformat(start_match[1])
@@ -27,14 +30,16 @@ def extract(message):
     weeks=re.search(r'(?:на\s+)?\b(\d+)\s+недел',text)
     days=re.search(r'(?:на\s+)?\b(\d+)\s+дн',text)
     count_match=re.search(r'(?:всего\s+|на\s+)(\d+)\s+пост',text)
-    period=int(weeks[1])*7 if weeks else int(days[1]) if days else int(count_match[1])*7 if count_match else None
+    period=int(weeks[1])*7 if weeks else int(days[1]) if days else ((int(count_match[1])+per_week-1)//per_week)*7 if count_match else None
     if not period:raise PlanClarification('На сколько недель подготовить план?')
     if not 1<=period<=90:raise PlanClarification('Укажите период от 1 до 90 дней.')
-    count=(period+6)//7
-    if count_match and int(count_match[1])!=count:raise PlanClarification('Количество постов не совпадает с периодом и частотой один раз в неделю. Что изменить?')
+    offsets=[week+slot*7//per_week for week in range(0,period,7) for slot in range(per_week) if week+slot*7//per_week<period]
+    count=len(offsets)
+    if count>30:raise PlanClarification('В одном плане поддерживается до 30 постов. Сократите период или частоту.')
+    if count_match and int(count_match[1])!=count:raise PlanClarification('Количество постов не совпадает с периодом и указанной частотой. Что изменить?')
     groups=[]
     for m in re.finditer(r'\b(\d+)\s+(?:пост\w*\s+)?(?:про|о)\s+(.+?)(?=\s+\d+\s+(?:пост\w*\s+)?(?:про|о)\s+|[,.;]|$)',text):
         groups.append({'label':m[2].strip(),'mode':'count','value':int(m[1])})
     if groups and sum(g['value'] for g in groups)!=count:
         raise PlanClarification('Количество постов по темам не совпадает с расписанием. Уточните распределение или период.')
-    return {'start':start,'period_days':period,'dates':[(start+timedelta(days=i*7)).isoformat() for i in range(count)],'groups':groups}
+    return {'start':start,'period_days':period,'dates':[(start+timedelta(days=offset)).isoformat() for offset in offsets],'groups':groups}

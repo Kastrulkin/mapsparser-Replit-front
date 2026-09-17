@@ -20,7 +20,7 @@ class PlannerContext:
     def tools(self, tools):
         if not self.domains:
             return tools
-        selected = [tool for tool in tools if tool['name'].split('.')[0] in self.domains or tool['name'].startswith(('operator.', 'settings.'))]
+        selected = [tool for tool in tools if tool['name'].split('.')[0] in self.domains or tool['name'].startswith(('operator.', 'settings.', 'localos.'))]
         return selected or tools
 
     def encode(self, value):

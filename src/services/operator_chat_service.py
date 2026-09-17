@@ -1,6 +1,9 @@
 """Channel-neutral conversation transaction. Callers own commit/rollback."""
 import hashlib
 import json
+from contextvars import ContextVar
+
+current_request_key = ContextVar("operator_request_key", default="")
 
 from services.operator_conversations import (
     _row, append_operator_message, conversation_pending_context,
@@ -100,15 +103,19 @@ def _process_chat(cursor, *, business_id, user_id, channel, message, router,
     user_message_id = append_operator_message(cursor, conversation_id=conversation_id, business_id=business_id,
                             user_id=user_id, role="user", content=message,
                             result={"input_type": "voice" if transcript else "text", "transcription_id": transcript, 'input_origin': input_origin})
-    result, pending = router(
-        cursor, business_id=business_id, user_id=user_id, channel=channel, message=message,
-        conversation_id=conversation_id, pending_context=conversation_pending_context(conversation),
-        conversation_history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12),
-        pending_approvals=list_pending_operator_actions(cursor, conversation_id=conversation_id, business_id=business_id, user_id=user_id),
-        actor_context=actor_context, subscription_access=subscription_access,
-        action_payload=payload, explicit_url=payload.get("url"), limit=payload.get("limit") or 5,
-        refresh_handler=refresh_handler, ai_router_handler=ai_router_handler, manual_review_handler=manual_review_handler,
-    )
+    request_token = current_request_key.set(f"{conversation_id}:{request_id or user_message_id}")
+    try:
+        result, pending = router(
+            cursor, business_id=business_id, user_id=user_id, channel=channel, message=message,
+            conversation_id=conversation_id, pending_context=conversation_pending_context(conversation),
+            conversation_history=list_operator_messages(cursor, conversation_id=conversation_id, business_id=business_id, limit=12),
+            pending_approvals=list_pending_operator_actions(cursor, conversation_id=conversation_id, business_id=business_id, user_id=user_id),
+            actor_context=actor_context, subscription_access=subscription_access,
+            action_payload=payload, explicit_url=payload.get("url"), limit=payload.get("limit") or 5,
+            refresh_handler=refresh_handler, ai_router_handler=ai_router_handler, manual_review_handler=manual_review_handler,
+        )
+    finally:
+        current_request_key.reset(request_token)
     from services.operator_followups import remember_selection
     remember_selection(cursor, business_id, result)
     result["conversation_id"] = conversation_id

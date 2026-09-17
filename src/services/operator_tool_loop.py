@@ -292,6 +292,8 @@ def run_operator_tool_loop(
             decision = {"action": "error", "message": "Модель вернула неверный план."}
         action = str(decision.get("action") or "").strip().lower()
         requires_write = bool(re.match(r'\s*(?:измени|перепиши|замени|сохрани|создай|добавь|переделай)\b', message, re.I)) or bool(re.match(r'\s*придумай\b', message, re.I) and re.search(r'пост|вместо', message, re.I))
+        if re.search(r'не предлагайте|не предлагай|сначала предлагайте|сначала предлагай|запрети.{0,30}предлаг',message,re.I) and not re.search(r'\?|\b(?:если|например|допустим)\b',message,re.I):
+            requires_write = True
         if action == "final" and requires_write and last_outcome.get("status") not in {"queued", "approval_required"} and not any(
             item.get('risk_class') not in {'read_only','privileged_read','support_read'}
             and item.get('status') == 'completed' for item in trace
@@ -356,7 +358,7 @@ def run_operator_tool_loop(
                 and not bool(last_outcome.get("external_writes_performed"))
             )
             if successful_read:
-                unfinished_change = last_tool_name == 'content.editorial_context' or bool(re.search(
+                unfinished_change = requires_write or last_tool_name == 'content.editorial_context' or bool(re.search(
                     r'\b(?:измени|изменить|передел|обнови|созда|сдела|делать|добав|удали|замени|перенеси|сохрани|исправ)', message, re.I))
                 if unfinished_change:
                     only_reads = all(item.get('risk_class') in {'read_only', 'privileged_read', 'support_read'} for item in trace)

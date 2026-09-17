@@ -15,13 +15,15 @@ OPERATOR_TOOL_PLAN_CREDITS = 1
 def _is_technical_planner_failure(result: dict[str, Any]) -> bool:
     if bool(result.get("planner_failed")):
         return True
-    if str(result.get("status") or "").strip().lower() != "blocked":
+    if str(result.get("status") or "").strip().lower() not in {"blocked", "failed", "error", "partial"}:
         return False
     reasons = {
         str(reason or "").strip().lower()
         for reason in result.get("blocked_reasons") or []
         if str(reason or "").strip()
     }
+    if result.get("error_code"):
+        reasons.add(str(result["error_code"]).strip().lower())
     exact_reasons = {
         "operator_planner_failed",
         "provider_timeout",
