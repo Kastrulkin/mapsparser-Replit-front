@@ -1,5 +1,9 @@
 # Production-readiness change log
 
+## TEST-SAFE-01 follow-up — nested no-egress guards
+
+The ca8bdf0b whole-backend rerun exposed a test assertion error, not an escaped network request: the inherited read-only audit guard denied port8000 before the child guard could emit its own message. The test now independently proves the child's audit hook with an explicit `sys.audit` event (no connection), while the actual socket attempt must fail with one of the two exact approved guard messages. Arbitrary subprocess failure is not accepted. Normal and outer-guarded runs each passed5tests (2.89s/2.45s), `/tmp/localos-safe01-causal-fix.log`; main independently reviewed the diff. No runtime or guard was weakened.
+
 ## SEC-AUTH-01 — Inactive session revocation
 
 Status: **FIX_PROVEN locally**, independent review passed. Not deployed in this audit.

@@ -84,6 +84,19 @@ def test_legacy_api_entry_point_raises_before_any_request(monkeypatch):
         namespace["test_api"]()
 
 
+def test_child_no_egress_guard_receives_an_explicit_socket_audit_event():
+    result = _run_child_without_egress(
+        """
+import socket
+import sys
+sys.audit("socket.connect", socket.socket(), ("127.0.0.1", 48123))
+"""
+    )
+
+    assert result.returncode != 0
+    assert "network disabled by TEST-SAFE-01 child guard" in result.stderr
+
+
 def test_child_no_egress_guard_blocks_legacy_style_loopback_request():
     result = _run_child_without_egress(
         """
@@ -93,4 +106,7 @@ socket.socket().connect(("127.0.0.1", 8000))
     )
 
     assert result.returncode != 0
-    assert "network disabled by TEST-SAFE-01 child guard" in result.stderr
+    assert (
+        "network disabled by TEST-SAFE-01 child guard" in result.stderr
+        or "Readiness harness: external or unrelated local connection blocked" in result.stderr
+    )
