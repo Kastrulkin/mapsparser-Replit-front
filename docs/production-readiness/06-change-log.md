@@ -55,3 +55,14 @@ File, mapping, preview, confirmation, history and status are cleared on a busine
 - Deterministic deferred-preview and completed-preview/history tests reproduce the original cross-business stale state. Independent review of the first patch found the remaining native file input; its regression was red **2 failed / 2 passed**, then green **4 passed** after the input reset.
 - Fresh independent run: `npm --prefix frontend test -- --run src/components/FinanceImportPanel.test.tsx` → **4 passed**, 4.31 s test-command duration. Worker app/Node typecheck and lint pass, with the pre-existing `auth_new.ts:115` warning.
 - No backend write contract, money calculation or product layout changes. Other content/services/operator scope candidates are not closed by this fix. Final aggregate frontend and real-API scope checks remain required.
+
+## DOCKER-PUBLIC-01 — Include both frontend builds in clean images
+
+Status: **FIX_PROVEN locally**, independent scoped review passed. No production rollout.
+
+The canonical Dockerfile now builds `build:all` and copies `frontend/public-dist` alongside the main `dist`. Both host artifact directories are excluded from Docker context, so a stale local public build cannot hide this failure.
+
+- Baseline clean image lacked `/app/frontend/public-dist/public-audit/index.html`; the real public entrypoint returned404. New static regression was red2, then green with the existing context tests (4 passed).
+- Fix built from a separate clean baseline archive containing only this packaging patch: **39.493 s** with cached dependencies, image `sha256:3dc995eb73758128a56c4c1e42e43f3ca61c9c6725c70b3f12329958b12276f7` (ARM64). Both image HTML entrypoints are nonempty, runtime UID10001, source nonwritable, debug directory writable.
+- Isolated app returns **HTTP200** for public audit; synthetic seed and five-flow API smoke pass. Capture: task `raw/docker-public-{build,runtime}-green.json`; smoke log `/tmp/localos-readiness-staging-smoke.log`, exit0.
+- Fresh reviewer passed both Docker contract tests and inspected independent runtime evidence. This does not claim final whole-product patched-image proof, AMD64 compatibility, browser-worker packaging or dependency upgrades; those remain separate gates.

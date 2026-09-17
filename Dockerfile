@@ -19,7 +19,7 @@ COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /app/frontend
 RUN npm ci --legacy-peer-deps
 COPY frontend/ .
-RUN npm run build
+RUN npm run build:all
 
 # Этап 2: backend + worker
 # Базовый образ Python 3.11 на Debian bookworm (стабильный apt-канал).
@@ -107,6 +107,7 @@ RUN set -eux; \
 COPY . .
 # Подставляем собранный фронтенд из первого этапа (поле «Город» и прочие правки всегда актуальны)
 COPY --chown=localos:localos --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --chown=localos:localos --from=frontend-builder /app/frontend/public-dist ./frontend/public-dist
 
 # Entrypoint: ждёт Postgres, выполняет flask db upgrade, затем exec CMD
 COPY entrypoint.sh /app/entrypoint.sh
