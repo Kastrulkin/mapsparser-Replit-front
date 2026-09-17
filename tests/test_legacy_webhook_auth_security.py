@@ -130,6 +130,12 @@ def _install_whatsapp_side_effect_spies(monkeypatch):
         "send_whatsapp_message",
         lambda **kwargs: calls.append(("send", kwargs)) or True,
     )
+    monkeypatch.setattr(
+        ai_agent_webhooks,
+        "admit_whatsapp_message",
+        lambda **_kwargs: {"state": "admitted", "event_id": "synthetic-event"},
+    )
+    monkeypatch.setattr(ai_agent_webhooks, "mark_whatsapp_message_completed", lambda *_args: True)
     return calls
 
 
@@ -282,6 +288,28 @@ def test_whatsapp_outer_failures_keep_json_error_and_logs_secret_free(monkeypatc
     assert response.get_json() == {"error": "Webhook processing failed"}
     assert "synthetic-secret" not in output.out + output.err + caplog.text
     assert "whatsapp_webhook_failed error_type=RuntimeError" in caplog.text
+
+
+def test_whatsapp_admission_failure_has_no_ai_or_provider_side_effects(monkeypatch) -> None:
+    secret = "test-app-secret"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    calls = _install_whatsapp_side_effect_spies(monkeypatch)
+    monkeypatch.setattr(
+        ai_agent_webhooks,
+        "admit_whatsapp_message",
+        lambda **_kwargs: (_ for _item in ()).throw(RuntimeError("ledger unavailable")),
+    )
+    raw_body = _whatsapp_payload_bytes(_whatsapp_message())
+
+    response = _client().post(
+        "/api/webhooks/whatsapp",
+        data=raw_body,
+        content_type="application/json",
+        headers={"X-Hub-Signature-256": _whatsapp_signature(secret, raw_body)},
+    )
+
+    assert response.status_code == 409
+    assert calls == []
 
 
 def test_whatsapp_verification_never_accepts_the_public_fallback_token(monkeypatch) -> None:

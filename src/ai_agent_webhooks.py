@@ -18,12 +18,18 @@ from core.telegram_webhook_auth import (
     TELEGRAM_WEBHOOK_SECRET_HEADER,
     has_valid_telegram_webhook_secret,
 )
+from core.auth_helpers import require_auth_from_request
 from core.telegram_network import build_requests_proxy_kwargs
 from core.telegram_agent_transport import (
     evaluate_and_record_telegram_agent_transport,
 )
 from services.agent_legacy_migration import business_agent_enabled_for_channel
 from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
+from services.whatsapp_webhook_admission import (
+    admit_whatsapp_message,
+    mark_whatsapp_message_completed,
+    mark_whatsapp_message_reconciliation,
+)
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 logger = logging.getLogger(__name__)
@@ -128,6 +134,74 @@ def find_business_by_waba_phone_id(phone_id: str) -> dict:
         db.close()
 
 
+@ai_webhooks_bp.route('/api/webhooks/whatsapp/events', methods=['GET'])
+def whatsapp_webhook_events():
+    """Expose a redacted, support-only view of durable WhatsApp admission state."""
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"error": "authentication_required"}), 401
+    if not user_data.get("is_superadmin"):
+        return jsonify({"error": "superadmin_required"}), 403
+    allowed_statuses = {"processing", "completed", "needs_reconciliation"}
+    status = str(request.args.get("status") or "").strip()
+    if status and status not in allowed_statuses:
+        return jsonify({"error": "invalid_status"}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        query = """
+            SELECT id, business_id, status, reason_code, created_at, updated_at
+            FROM agent_trigger_events
+            WHERE source = 'whatsapp'
+        """
+        params: tuple[str, ...] = ()
+        if status:
+            query += " AND status = %s"
+            params = (status,)
+        else:
+            query += " AND status IN ('processing', 'needs_reconciliation')"
+        query += " ORDER BY created_at DESC LIMIT 100"
+        cursor.execute(query, params)
+        events = []
+        for row in cursor.fetchall() or []:
+            item = dict(row)
+            events.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "business_id": str(item.get("business_id") or ""),
+                    "status": str(item.get("status") or ""),
+                    "reason_code": str(item.get("reason_code") or ""),
+                    "created_at": str(item.get("created_at") or ""),
+                    "updated_at": str(item.get("updated_at") or ""),
+                }
+            )
+        return jsonify({"events": events, "count": len(events)}), 200
+    finally:
+        db.close()
+
+
+def _valid_whatsapp_message_identifiers(
+    sender_phone: str,
+    provider_message_id: str,
+) -> bool:
+    return (
+        isinstance(sender_phone, str)
+        and sender_phone.isdigit()
+        and 6 <= len(sender_phone) <= 32
+        and isinstance(provider_message_id, str)
+        and 1 <= len(provider_message_id) <= 256
+        and provider_message_id == provider_message_id.strip()
+        and all(character.isprintable() and not character.isspace() for character in provider_message_id)
+    )
+
+
+def _mark_whatsapp_reconciliation(event_id: str, reason_code: str) -> None:
+    try:
+        mark_whatsapp_message_reconciliation(event_id, reason_code)
+    except Exception:
+        _log_webhook_failure("whatsapp_reconciliation_record_failed")
+
+
 @ai_webhooks_bp.route('/api/webhooks/whatsapp', methods=['POST', 'GET'])
 def whatsapp_webhook():
     """Webhook для получения сообщений от WhatsApp Business API"""
@@ -171,6 +245,8 @@ def whatsapp_webhook():
         if not entry:
             return jsonify({"status": "ok"}), 200
 
+        invalid_message_seen = False
+        reconciliation_required = False
         for entry_item in entry:
             if not isinstance(entry_item, dict):
                 continue
@@ -198,7 +274,12 @@ def whatsapp_webhook():
                     )
                     message_id = message.get('id', '')
                     
-                    if not message_text or not from_number:
+                    if (
+                        not isinstance(message_text, str)
+                        or not message_text
+                        or not _valid_whatsapp_message_identifiers(from_number, message_id)
+                    ):
+                        invalid_message_seen = True
                         continue
                     
                     logger.info("whatsapp_message_received")
@@ -222,23 +303,81 @@ def whatsapp_webhook():
                     if not business or not business['ai_agent_enabled']:
                         logger.warning("whatsapp_agent_unavailable")
                         continue
-                    
-                    # Обрабатываем сообщение через ИИ агента
-                    result = process_message(
-                        business_id=business['id'],
-                        client_phone=from_number,
-                        client_name=None,  # WABA не всегда предоставляет имя
-                        message=message_text
-                    )
-                    
-                    if result.get('success') and result.get('response'):
-                        # Отправляем ответ через WABA
-                        send_whatsapp_message(
+
+                    try:
+                        admission = admit_whatsapp_message(
+                            business_id=str(business['id']),
+                            sender_phone=from_number,
+                            provider_message_id=message_id,
+                        )
+                    except Exception:
+                        _log_webhook_failure("whatsapp_admission_failed")
+                        reconciliation_required = True
+                        continue
+                    admission_state = str(admission.get("state") or "")
+                    if admission_state == "duplicate_completed":
+                        logger.info("whatsapp_message_duplicate_completed")
+                        continue
+                    if admission_state == "duplicate_processing":
+                        reconciliation_required = True
+                        continue
+                    if admission_state != "admitted":
+                        reconciliation_required = True
+                        continue
+
+                    event_id = str(admission.get("event_id") or "")
+                    try:
+                        result = process_message(
+                            business_id=business['id'],
+                            client_phone=from_number,
+                            client_name=None,
+                            message=message_text,
+                        )
+                    except Exception:
+                        _mark_whatsapp_reconciliation(
+                            event_id,
+                            "WHATSAPP_PROCESSING_UNCONFIRMED",
+                        )
+                        reconciliation_required = True
+                        continue
+
+                    if not isinstance(result, dict) or not result.get('success') or not result.get('response'):
+                        _mark_whatsapp_reconciliation(
+                            event_id,
+                            "WHATSAPP_PROCESSING_UNCONFIRMED",
+                        )
+                        reconciliation_required = True
+                        continue
+
+                    try:
+                        sent = send_whatsapp_message(
                             phone_id=business['waba_phone_id'],
                             access_token=business['waba_access_token'],
                             to=from_number,
-                            message=result['response']
+                            message=result['response'],
                         )
+                    except Exception:
+                        sent = False
+                    if not sent:
+                        _mark_whatsapp_reconciliation(
+                            event_id,
+                            "WHATSAPP_SEND_UNCONFIRMED",
+                        )
+                        reconciliation_required = True
+                        continue
+
+                    try:
+                        completed = mark_whatsapp_message_completed(event_id)
+                    except Exception:
+                        completed = False
+                    if not completed:
+                        reconciliation_required = True
+                        continue
+
+        if reconciliation_required:
+            return jsonify({"error": "Webhook delivery requires reconciliation"}), 409
+        if invalid_message_seen:
+            return jsonify({"error": "Invalid WhatsApp message identifiers"}), 400
         
         return jsonify({"status": "ok"}), 200
         
