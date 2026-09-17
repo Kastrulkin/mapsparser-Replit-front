@@ -1,6 +1,6 @@
 # Voice usability release — 2026-09-17
 
-Status: implementation tested; deployment verification recorded below after release.
+Status: deployed to production on 2026-09-17. Runtime commit: 4124b7ef, branch codex/voice-usability-20260917 (pushed to GitVerse).
 
 ## Delivered behavior
 
@@ -18,6 +18,16 @@ Status: implementation tested; deployment verification recorded below after rele
 - 9 frontend component tests passed; frontend build passed (existing large-chunk warning).
 - 6 Playwright cases passed: web and Mini App at desktop, 360px and 393px widths. Providers/API mocked; these are browser emulations, not physical-device proof.
 - Database backup completed; pg_restore archive listing succeeded. Full restore was not performed.
+
+## Production verification
+
+- Additive migration head: `20260917_content_rules`. Backup: `/opt/seo-app/.deploy/voice-usability-20260917/before.dump` (1.7 GB); archive listing verified, no full restore.
+- Partial release of app/worker/operator-worker/telegram-bot and tested frontend. Existing hashed frontend assets retained for open tabs. Runtime source hashes matched all 21 release files before the final focused polling fix.
+- HTTP 200, anonymous rules API 401, schema health check passed. Live Profile UI showed the migrated restriction and its history at the Engelsa 154 pilot location; the network parent is a different business and intentionally has no copied rule.
+- Real model rejected the prohibited cartoon claim. First repair failed safely; after passing concrete violations to the repair request, a new repair passed validation. Real check/repair run: 9.5 seconds. No post was saved or published by these probes.
+- Real SpeechKit synthesis → asynchronous STT passed with synthetic test speech: 2.9 seconds. This is provider integration, not a physical-device test.
+- GigaChat primary returned HTTP 402; the existing configured DeepSeek fallback completed the checks. Primary-provider funding remains an operational issue.
+- Intermittent Telegram proxy errors exposed two startup defects: retries reused a closed event loop, and an abandoned pre-poll transport could retain a restart watchdog. Both fixed; final polling tests: 8 passed. Network errors remain possible; saved voice work is independent of delivery.
 
 ## Pilot restrictions and unverified items
 
