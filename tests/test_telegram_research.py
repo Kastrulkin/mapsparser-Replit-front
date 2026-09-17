@@ -298,6 +298,16 @@ def test_shared_audience_decision_does_not_leak_between_businesses(run_migration
         )
         cursor.execute(
             """
+            INSERT INTO knowledge_source_subscriptions (
+                business_id, source_id, purposes_json, is_active
+            ) VALUES
+                ('business-a', %s, '["community_pulse"]'::jsonb, TRUE),
+                ('business-b', %s, '["community_pulse"]'::jsonb, TRUE)
+            """,
+            (source_id, source_id),
+        )
+        cursor.execute(
+            """
             INSERT INTO knowledge_concepts (
                 id, concept_type, canonical_key, label, industry, business_id,
                 sensitivity_class, allowed_uses

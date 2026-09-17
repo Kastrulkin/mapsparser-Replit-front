@@ -3708,7 +3708,7 @@ def test_persisted_server_touch_is_not_restored_as_an_unsaved_device_edit():
     admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
 
     restore_start = admin_source.index("const storedValue = localStorage.getItem(outreachTouchEditsStorageKey)")
-    restore_end = admin_source.index("\n  }, [outreachTouchEditsStorageKey", restore_start)
+    restore_end = admin_source.index("\n  useEffect(restoreTouchEdits, [", restore_start)
     restore_block = admin_source[restore_start:restore_end]
 
     assert "savedOutreachCampaign?.touches" in restore_block
