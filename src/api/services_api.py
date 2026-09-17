@@ -406,14 +406,16 @@ def _ensure_business_access(db, cursor, business_id, user_data):
     return None, None
 
 
-def _load_compression_request(cursor, request_id):
+def _load_compression_request(cursor, request_id, for_update=False):
+    lock_clause = " FOR UPDATE" if for_update else ""
     cursor.execute(
-        """
+        f"""
         SELECT id, business_id, user_id, status, before_count, after_count,
                groups_json, diff_json, created_service_ids, archived_service_ids,
                created_at, updated_at, applied_at
         FROM service_catalog_compression_requests
         WHERE id = %s
+        {lock_clause}
         """,
         (request_id,),
     )
@@ -2338,7 +2340,7 @@ def apply_service_compression_draft(request_id):
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        draft = _load_compression_request(cursor, request_id)
+        draft = _load_compression_request(cursor, request_id, for_update=True)
         if not draft:
             db.close()
             return jsonify({"error": "Черновик не найден"}), 404

@@ -1,5 +1,9 @@
 # Production-readiness change log
 
+## DATA-SVC-01 — serialize compression-draft apply
+
+Two concurrent applies read the same unclaimed draft and created two active replacement services (real PostgreSQL red:1failed4.12s, `/tmp/datasvc01-red.log`). Apply now locks only the draft row before reading status or mutating services; the second request waits, then returns the existing idempotent result. Other draft reads are unchanged. Final portable testcontainer test holds the first real lock, observes the second PostgreSQL session waiting, then asserts two HTTP200s, exactly one `already_applied`, and one active replacement. Independent review rejected the initial host-specific fixture/weak green barrier; both were corrected before commit. Final builder1passed26.76s; main combined data+finance11passed12.78s (`raw/data-concurrency-root-green.json`,13.285s captured), with inherited no-egress guard preserved. Scope is same-draft concurrency; distinct drafts sharing services remain a separate contract question.
+
 ## TEST-SAFE-01 follow-up — nested no-egress guards
 
 The ca8bdf0b whole-backend rerun exposed a test assertion error, not an escaped network request: the inherited read-only audit guard denied port8000 before the child guard could emit its own message. The test now independently proves the child's audit hook with an explicit `sys.audit` event (no connection), while the actual socket attempt must fail with one of the two exact approved guard messages. Arbitrary subprocess failure is not accepted. Normal and outer-guarded runs each passed5tests (2.89s/2.45s), `/tmp/localos-safe01-causal-fix.log`; main independently reviewed the diff. No runtime or guard was weakened.
