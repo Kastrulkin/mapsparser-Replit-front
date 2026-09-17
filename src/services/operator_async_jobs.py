@@ -80,6 +80,8 @@ def _public_job(row: dict[str, Any]) -> dict[str, Any]:
         "updated_at": _iso(row.get("updated_at")),
         "completed_at": _iso(row.get("completed_at")),
         "terminal": status in TERMINAL_JOB_STATUSES,
+        "execution_status": status,
+        "delivery_status": _json(row.get("result_json"), {}).get("delivery_status", "pending" if kind in {"voice_receive", "voice_execute"} else "not_applicable"),
         "available_actions": [
             *(["retry"] if status == "failed" and kind in RETRYABLE_JOB_KINDS else []),
             *(["cancel"] if status in {"queued", "running", "waiting_for_review"} and kind in CANCELLABLE_JOB_KINDS else []),
@@ -488,6 +490,18 @@ def process_next_operator_async_job() -> dict[str, Any] | None:
             from services.operator_audio import process_audio_job
             result = process_audio_job(claimed)
             status, stage, progress = "completed", "Аудио обработано", 100
+        elif kind == "operator_colleague_send":
+            from services.operator_colleagues import process_job
+            result = process_job(claimed)
+            status, stage, progress = "completed", "Проверен результат отправки", 100
+        elif kind == "google_drive_sync":
+            from services.google_drive import process_job
+            result = process_job(claimed)
+            status, stage, progress = "completed", "Проверено сохранение фото Google Диска", 100
+        elif kind == "yandex_disk_sync":
+            from services.yandex_disk import process_job
+            result = process_job(claimed)
+            status, stage, progress = "completed", "Проверено сохранение фото", 100
         elif kind == "content_plan_revision":
             from services.operator_plan_revision import process_job
             result = process_job(claimed)

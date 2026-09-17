@@ -109,6 +109,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("content_plan.generate", "Контент-план", "available", "write_internal", "explicit_command", "/dashboard/content", ("Сделай контент-план на 30 дней",), "content_plan.item.create_draft"),
     OperatorCapability("content.create_plan", "Черновик контент-плана", "draft_only", "write_internal", "explicit_command", "/dashboard/content", ("Подготовь контент-план",), "content_plan.item.create_draft"),
     OperatorCapability("content.item.edit", "Правка темы поста", "available", "write_internal", "explicit_command", "/dashboard/content", ("Измени тему поста на 15 сентября",)),
+    OperatorCapability("content.rules.network", "Правила контента для сети", "available", "bulk_write", "separate_confirmation", "/dashboard/profile", ("Применить ограничение ко всей сети",)),
     OperatorCapability("content.plan.refocus", "Изменение акцента плана", "available", "bulk_write", "separate_confirmation", "/dashboard/content", ("В этом месяце делаем акцент на новой услуге",)),
     OperatorCapability("content.memory.add", "Факты, история и тон бизнеса", "available", "write_internal", "explicit_command", "/dashboard/content", ("Запомни для будущих текстов историю компании",)),
     OperatorCapability("content.history", "История контента и черновиков", "available", "read_only", "none", "/dashboard/content", ("Покажи последние черновики",)),
@@ -122,6 +123,8 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.google.add", "Добавление услуги в Google", "approval_required", "external_write", "separate_confirmation", "/dashboard/card?tab=services", ("Обнови новую услугу в Google",)),
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("work.journal", "Рабочий журнал", "available", "internal_observation_write", "none", "/dashboard/work-journal", ("Клиент отказался от ухода, дорого",)),
+    OperatorCapability("work.schedule", "Планёрка и расписание", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Проведи планёрку на сегодня",)),
+    OperatorCapability("work.colleague", "Сообщение по планёрке", "approval_required", "external_send", "separate_confirmation", "/dashboard/operator", ("Подготовь сообщение коллеге",)),
     OperatorCapability("work.policy", "Правила рекомендаций", "approval_required", "owner_policy_write", "separate_confirmation", "/dashboard/work-journal", ("Не предлагайте домашний набор",), "work.policy.apply"),
     OperatorCapability("settings.input", "Город, валюта и часовой пояс бизнеса", "approval_required", "internal_write", "separate_confirmation", "/dashboard/operator", ("Укажи валюту и часовой пояс бизнеса",), "finance.daily.apply_operator"),
     OperatorCapability("finance.daily.write", "Дневные итоги и финансовые операции", "approval_required", "financial", "separate_confirmation", "/dashboard/finance", ("Сегодня 10 продаж, 2 допа, выручка 350 евро",), "finance.daily.apply_operator"),
@@ -172,6 +175,7 @@ MANUAL_MATCHERS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 OPERATOR_ACTION_MARKERS = (
+    "проведи",
     "добав",
     "измени",
     "поменя",
@@ -230,6 +234,9 @@ def operator_capability_catalog(business_id=None, subscription_access=None) -> l
             from services import finance_daily, work_journal, operator_request_history
             disabled = ((item.name.startswith('work.') and not work_journal.enabled(business_id))
                         or (item.name == 'finance.daily.write' and not finance_daily.enabled(business_id)))
+            if item.name in {'work.schedule','work.colleague'}:
+                from services import operator_workday
+                disabled = disabled or not operator_workday.enabled(business_id)
             if disabled:
                 serialized['status'] = 'disabled'
                 serialized['unavailable_reason'] = 'Пилот не включён для этого бизнеса'
@@ -1918,6 +1925,14 @@ def route_operator_message(
         return followup
     if pending.get('capability') == 'settings.input':
         pending = {}
+    if business_id in {value.strip() for value in os.getenv('OPERATOR_WORKDAY_BUSINESS_IDS','').split(',') if value.strip()}:
+        from services import operator_workday_router
+        workday_result = operator_workday_router.route(cursor,business_id=business_id,user_id=user_id,
+            message=clean_message,channel=channel,payload=action_payload or {},pending=pending_context or {},
+            conversation_id=conversation_id,conversation_history=conversation_history,actor_context=actor_context,
+            pending_approvals=pending_approvals,orchestrator=action_orchestrator,planner=tool_planner)
+        if workday_result:
+            return workday_result
     from services import work_journal, operator_work_journal
     from services.operator_context import PlannerContext
     incoming_domains=PlannerContext(clean_message).domains
@@ -2181,6 +2196,13 @@ def route_operator_message(
         return _manual_result(manual_capability), {}
 
     if tool_loop_active:
+        from services import finance_daily
+        business_timezone = "Europe/Moscow"
+        if callable(getattr(cursor, "execute", None)):
+            try:
+                business_timezone = finance_daily.settings(cursor, business_id).get("timezone") or business_timezone
+            except Exception:
+                pass
         work_saved=[]
         work_message_id=next((r.get('id') for r in reversed(conversation_history or []) if r.get('role')=='user'),None)
         tools = _operator_tool_catalog(
@@ -2205,6 +2227,7 @@ def route_operator_message(
                 conversation_history=conversation_history,
                 actor_context=actor_context,
                 pending_approvals=pending_approvals,
+                business_timezone=business_timezone,
                 tools=tools,
             )
         else:
@@ -2216,6 +2239,7 @@ def route_operator_message(
                 conversation_history=conversation_history,
                 actor_context=actor_context,
                 pending_approvals=pending_approvals,
+                business_timezone=business_timezone,
                 tools=tools,
                 planner=tool_planner,
             )
@@ -2328,6 +2352,12 @@ def confirm_pending_operator_action(
     if isinstance(envelope, str):
         envelope = json.loads(envelope)
     envelope = envelope if isinstance(envelope, dict) else {}
+    if capability == 'work.schedule':
+        from services import operator_workday
+        result = standardize_operator_result(operator_workday.apply(cursor,business_id,user_id,envelope,action_id),capability)
+        if result.get('status') == 'completed':
+            finish_operator_action(cursor,action_id=action_id,result=result)
+        return result, False
     if capability == 'services.existing_price':
         from services.operator_service_creation import apply_existing_price
         result = standardize_operator_result(apply_existing_price(cursor,business_id,user_id,envelope),capability)
@@ -2340,6 +2370,11 @@ def confirm_pending_operator_action(
         if result.get('status') == 'completed':
             finish_operator_action(cursor,action_id=action_id,result=result)
         return result, False
+    if capability == 'content.rules.network':
+        from services.content_rules import apply_network
+        result=standardize_operator_result(apply_network(cursor,business_id,user_id,envelope),capability)
+        if result.get('status')=='completed':finish_operator_action(cursor,action_id=action_id,result=result)
+        return result,False
     if capability == 'content.plan.refocus':
         from services.operator_editorial import apply_focus
         result = standardize_operator_result(apply_focus(cursor,business_id,user_id,envelope),capability)

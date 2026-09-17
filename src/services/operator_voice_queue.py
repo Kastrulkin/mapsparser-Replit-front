@@ -55,10 +55,11 @@ def process_job(job):
         payload = job['payload_json']
         if job['kind'] == 'voice_receive':
             content = download(payload['file_id'])
-            cursor.execute("SELECT status,lease_token FROM operator_async_jobs WHERE id=%s FOR UPDATE",(job['id'],))
+            cursor.execute("SELECT status,lease_token,payload_json FROM operator_async_jobs WHERE id=%s FOR UPDATE",(job['id'],))
             state=_row(cursor,cursor.fetchone())
             if state.get('status')!='running' or state.get('lease_token')!=job.get('lease_token'):
                 raise ValueError('Приём записи отменён')
+            payload=state.get('payload_json') or payload
             result = create_transcription(cursor, content=content, user_id=job['user_id'],
                 business_id=job['business_id'], channel='telegram', conversation_id=None,
                 request_id=job['idempotency_key'], metadata=payload['metadata'])
@@ -77,10 +78,15 @@ def process_job(job):
         else:
             db.conn.commit()
             from services.telegram_dashboard import build_operator_chat_payload
-            result = build_operator_chat_payload({'user_id': job['user_id'], 'business_id': job['business_id'],
-                'business_name': metadata.get('business_name'), 'telegram_id': str(metadata['chat_id']),
-                'operator_payload': {'conversation_id': asset['conversation_id'], 'transcription_id': asset['id'],
-                                     'request_id': 'voice:'+asset['id']}}, asset['transcript'])
+            from services.operator_audio import VOICE_EXECUTION_CONTEXT
+            execution_token=VOICE_EXECUTION_CONTEXT.set({'user_id':job['user_id'],'business_id':job['business_id'],'telegram_id':metadata['chat_id']})
+            try:
+                result = build_operator_chat_payload({'user_id': job['user_id'], 'business_id': job['business_id'],
+                    'business_name': metadata.get('business_name'), 'telegram_id': str(metadata['chat_id']),
+                    'operator_payload': {'conversation_id': asset['conversation_id'], 'transcription_id': asset['id'],
+                                         'request_id': 'voice:'+asset['id']}}, asset['transcript'])
+            finally:
+                VOICE_EXECUTION_CONTEXT.reset(execution_token)
         cursor.execute('UPDATE operator_audio_assets SET metadata_json=metadata_json || %s::jsonb WHERE id=%s',
             (json.dumps({'operator_payload': result, 'execution_status': result['result'].get('status', 'completed')}), asset['id']))
         db.conn.commit()

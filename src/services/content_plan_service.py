@@ -5577,6 +5577,10 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
             if _content_generation_v2_enabled():
                 raise ValueError("Сначала добавьте факты и подготовьте текст публикации")
             generated_text = _fallback_draft_text("Бизнес", item, language=normalized_language)
+        from services.content_rules import validate
+        from services.operator_social_post_generation import _default_social_post_generator
+        validate(cursor, str(item.get('business_id') or item.get('root_business_id')), user_id,
+            generated_text, _default_social_post_generator)
         item_metadata = _item_metadata(item)
         generation_bundle = item_metadata.get("content_generation_v2") if isinstance(item_metadata.get("content_generation_v2"), dict) else {}
         brief_metadata = item_metadata.get("content_brief_v1") if isinstance(item_metadata.get("content_brief_v1"), dict) else {}

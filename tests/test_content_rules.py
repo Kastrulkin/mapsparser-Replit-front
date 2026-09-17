@@ -52,3 +52,31 @@ def test_unverified_price_rejected_before_model(monkeypatch):
 def test_explicit_owner_price_is_evidence(monkeypatch):
     monkeypatch.setattr(content_rules,'active_rules',lambda *args:[])
     assert content_rules.validate(None,'b','u','Цена 500 ₽',lambda *a,**kw:'{"valid":true,"violations":[]}',source_facts='Цена 500 ₽')=='Цена 500 ₽'
+
+
+def test_conflicting_rule_requires_specific_question(monkeypatch):
+    from services import operator_social_post_generation
+    monkeypatch.setattr(operator_social_post_generation,'_default_social_post_generator',lambda *a,**kw:'{"conflicts":["r"]}')
+    with pytest.raises(content_rules.RuleConflict,match='Заменить его новым'):
+        content_rules.check_conflicts([{'id':'r','text':'Не обещать любые мультфильмы'}],'Обещать любые мультфильмы','b','u')
+
+
+def test_network_denies_restricted_web_session(monkeypatch):
+    from flask import Flask
+    from core import auth_helpers
+    monkeypatch.setattr(auth_helpers,'require_auth_from_request',lambda:{'user_id':'u','session_kind':'demo','scope_business_id':'b'})
+    app=Flask(__name__)
+    with app.test_request_context('/api/operator/chat'):
+        with pytest.raises(PermissionError):content_rules.verify_network_session('u')
+
+
+def test_relative_period_requires_timezone_only_for_temporary_rule(monkeypatch):
+    monkeypatch.setattr(content_rules,'business_timezone',lambda *args:None)
+    assert content_rules.spoken_period(None,'b','Не обещать любые мультфильмы')==(None,None)
+    with pytest.raises(ValueError,match='часовой пояс'):
+        content_rules.spoken_period(None,'b','На этой неделе акцент на уходе')
+
+
+def test_date_period_uses_business_timezone_and_inclusive_end(monkeypatch):
+    monkeypatch.setattr(content_rules,'business_timezone',lambda *args:'Europe/Moscow')
+    assert content_rules.dated_period(None,'b','2026-09-17','2026-09-20')==('2026-09-17T00:00:00+03:00','2026-09-21T00:00:00+03:00')

@@ -200,3 +200,16 @@ def test_month_focus_never_silently_changes_only_subset(editorial):
     result=operator_editorial.prepare_focus(c,'b','u','акцент на семейных поездках',args)
     assert result['status']=='clarification_required'
     assert target(c)['theme']=='Тема А'
+
+
+def test_move_date_and_undo_preserve_text(editorial,monkeypatch):
+    from services import operator_voice_followups
+    conn,c=editorial
+    monkeypatch.setattr(operator_core,'operator_subscription_block',lambda *a:None)
+    selected=target(c)
+    history=[{'role':'operator','result_json':{'selected_item':{'item_id':selected['id'],'plan_id':'p','version':selected['version']}}}]
+    moved=operator_voice_followups.route(c,business_id='b',user_id='u',channel='web',message='Перенеси на 2099-09-20',history=history,request_id='move')
+    row=target(c);assert str(row['scheduled_for'])=='2099-09-20';assert row['draft_text']=='Предыдущий текст'
+    result=operator_editorial.restore_item(c,'b','u','Отмени последнее изменение',moved['selected_item'])
+    assert result['status']=='completed'
+    restored=target(c);assert str(restored['scheduled_for'])=='2099-09-12';assert restored['draft_text']=='Предыдущий текст'

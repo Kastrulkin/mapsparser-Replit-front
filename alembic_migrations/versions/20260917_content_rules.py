@@ -11,8 +11,9 @@ def upgrade():
         id TEXT PRIMARY KEY, business_id TEXT NOT NULL REFERENCES businesses(id),
         rule_id TEXT NOT NULL, actor_id TEXT NOT NULL REFERENCES users(id),
         request_id TEXT NOT NULL, request_hash TEXT NOT NULL, version INTEGER NOT NULL,
-        snapshot JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        snapshot JSONB NOT NULL, event_type TEXT NOT NULL DEFAULT 'changed', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(business_id, actor_id, request_id))''')
+    op.execute("ALTER TABLE content_rule_history ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT 'changed'")
     op.execute('CREATE INDEX IF NOT EXISTS content_rule_history_lookup ON content_rule_history(business_id,rule_id,created_at)')
 
     # Only the explicitly approved rule; never reinterpret other editorial notes.

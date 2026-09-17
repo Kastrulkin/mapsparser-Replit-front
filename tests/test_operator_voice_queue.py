@@ -53,3 +53,18 @@ def test_repeated_delivery_does_not_run_completed_command(monkeypatch):
     monkeypatch.setattr(operator_telegram_voice,'queue_reply_speech',AsyncMock())
     asyncio.run(operator_telegram_voice.submit_recognized_voice(app,host,asset))
     app.bot.send_message.assert_not_called()
+
+
+def test_successful_long_result_not_failed_by_status_update(monkeypatch):
+    host=SimpleNamespace(_build_operator_result_markup=lambda _:None)
+    app=SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(),edit_message_text=AsyncMock(side_effect=RuntimeError('offline'))))
+    asset={'user_id':'u','business_id':'b','id':'a','metadata_json':{'chat_id':1,'status_message_id':2,'durable_execution':True,
+        'operator_payload':{'text':'Результат '*500,'result':{'status':'completed'}}}}
+    monkeypatch.setattr(operator_telegram_voice,'transaction',lambda fn:None)
+    monkeypatch.setattr(operator_telegram_voice,'queue_reply_speech',AsyncMock())
+    from services import operator_request_history
+    deliveries=[]
+    monkeypatch.setattr(operator_request_history,'mark_delivery',lambda audit,status:deliveries.append(status))
+    asyncio.run(operator_telegram_voice.submit_recognized_voice(app,host,asset))
+    assert deliveries==['delivered']
+    app.bot.send_message.assert_awaited_once()

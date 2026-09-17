@@ -206,3 +206,79 @@ def test_changed_preview_and_expired_approval_cannot_execute(pg):
     assert expired['blocked_reasons']==['approval_expired']
     renewed=operator_chat_service.process_chat(cursor,business_id='b',user_id='u',channel='web',message='2000',payload={'request_id':'p3'},router=router)
     assert renewed['approval']['action_id'] != second['approval']['action_id']
+
+
+def test_durable_execution_replay_reuses_saved_result(pg,monkeypatch):
+    from services import operator_voice_queue,telegram_dashboard,telegram_control_scope
+    conn,c=pg
+    c.execute('ALTER TABLE users ADD COLUMN telegram_id TEXT')
+    c.execute("UPDATE users SET telegram_id='123'")
+    queued=operator_audio.create_transcription(c,content=b'test',user_id='u',business_id='b',channel='telegram',conversation_id=None,request_id='tg:123:1',
+        metadata={'chat_id':123,'durable_execution':True,'auto_submit':True})
+    c.execute("UPDATE operator_audio_assets SET status='ready',transcript='Покажи пост' WHERE id=%s",(queued['asset_id'],));conn.commit()
+    class Connection:
+        def __init__(self):self.conn=conn
+        def close(self):pass
+    monkeypatch.setattr(operator_voice_queue,'DatabaseManager',Connection)
+    monkeypatch.setattr(operator_voice_queue,'authorize_actor',lambda *a:({},{}))
+    monkeypatch.setattr(telegram_control_scope,'resolve_control_scope',lambda *a,**kw:{'kind':'business','id':'b'})
+    calls=[]
+    monkeypatch.setattr(telegram_dashboard,'build_operator_chat_payload',lambda ctx,text:calls.append(ctx['operator_payload']['request_id']) or {'text':'Сохранено','result':{'status':'completed'}})
+    job={'kind':'voice_execute','user_id':'u','business_id':'b','payload_json':{'asset_id':queued['asset_id']}}
+    first=operator_voice_queue.process_job(job);second=operator_voice_queue.process_job(job)
+    assert first==second
+    assert calls==['voice:'+queued['asset_id']]
+
+
+def test_execution_cancelled_when_business_changed(pg,monkeypatch):
+    from services import operator_voice_queue,telegram_dashboard,telegram_control_scope
+    conn,c=pg
+    c.execute('ALTER TABLE users ADD COLUMN telegram_id TEXT');c.execute("UPDATE users SET telegram_id='123'")
+    queued=operator_audio.create_transcription(c,content=b'test',user_id='u',business_id='b',channel='telegram',conversation_id=None,request_id='tg:123:1',metadata={'chat_id':123,'durable_execution':True})
+    c.execute("UPDATE operator_audio_assets SET status='ready',transcript='Измени пост' WHERE id=%s",(queued['asset_id'],));conn.commit()
+    class Connection:
+        def __init__(self):self.conn=conn
+        def close(self):pass
+    monkeypatch.setattr(operator_voice_queue,'DatabaseManager',Connection)
+    monkeypatch.setattr(operator_voice_queue,'authorize_actor',lambda *a:({},{}))
+    monkeypatch.setattr(telegram_control_scope,'resolve_control_scope',lambda *a,**kw:{'kind':'business','id':'other'})
+    monkeypatch.setattr(telegram_dashboard,'build_operator_chat_payload',lambda *a:pytest.fail('changed scope executed'))
+    result=operator_voice_queue.process_job({'kind':'voice_execute','user_id':'u','business_id':'b','payload_json':{'asset_id':queued['asset_id']}})
+    assert result['result']['status']=='cancelled'
+
+
+def test_worker_pipeline_runs_without_telegram_delivery(pg,monkeypatch):
+    import database_manager
+    from services import operator_voice_queue,operator_async_jobs,operator_speechkit,telegram_dashboard,telegram_control_scope
+    conn,c=pg
+    c.execute('ALTER TABLE users ADD COLUMN telegram_id TEXT');c.execute("UPDATE users SET telegram_id='123'")
+    class Connection:
+        def __init__(self):self.conn=conn
+        def close(self):pass
+    monkeypatch.setattr(database_manager,'DatabaseManager',Connection)
+    monkeypatch.setattr(operator_voice_queue,'DatabaseManager',Connection)
+    monkeypatch.setattr(operator_voice_queue,'authorize_actor',lambda *a:({},{}))
+    monkeypatch.setattr(operator_async_jobs._OperatorJobHeartbeat,'start',lambda *a:None)
+    monkeypatch.setattr(operator_async_jobs._OperatorJobHeartbeat,'stop',lambda *a:None)
+    monkeypatch.setattr(operator_voice_queue,'download',lambda _:b'test')
+    def normalize(source,target):target.write_bytes(b'normalized');return 1
+    monkeypatch.setattr(operator_audio,'normalize_audio',normalize)
+    class Speech:
+        def start(self,data):return 'operation'
+        def result(self,operation):return 'Покажи пост'
+    monkeypatch.setattr(operator_speechkit,'SpeechKit',Speech)
+    monkeypatch.setattr(telegram_control_scope,'resolve_control_scope',lambda *a,**kw:{'kind':'business','id':'b'})
+    executions=[]
+    monkeypatch.setattr(telegram_dashboard,'build_operator_chat_payload',lambda ctx,text:executions.append(text) or {'text':'Результат','result':{'status':'completed'}})
+    operator_async_jobs.create_operator_async_job(c,user_id='u',business_id='b',action_id=None,kind='voice_receive',
+        payload={'file_id':'file','metadata':{'chat_id':123,'durable_execution':True,'auto_submit':True,'delivery':'pending'}},
+        idempotency_key='tg:123:1',stage='Голосовое получено');conn.commit()
+    stages=[operator_async_jobs.process_next_operator_async_job() for _ in range(3)]
+    assert [r['kind'] for r in stages]==['voice_receive','audio_transcription','voice_execute']
+    assert [r['status'] for r in stages]==['completed']*3
+    assert executions==['Покажи пост']
+    assert operator_async_jobs.process_next_operator_async_job() is None
+    c.execute('SELECT metadata_json FROM operator_audio_assets')
+    metadata=c.fetchone()['metadata_json']
+    assert metadata['operator_payload']['text']=='Результат'
+    assert metadata['delivery']=='pending'  # Computation did not need a Telegram connection.

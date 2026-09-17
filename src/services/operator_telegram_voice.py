@@ -55,6 +55,11 @@ async def receive_voice(update, context, host):
             stage='Голосовое получено', payload={'file_id': voice.file_id, 'metadata': {
                 'chat_id': update.effective_chat.id, 'business_name': business['business_name'],
                 'delivery': 'pending', 'auto_submit': True, 'durable_execution': True}}))
+        def acknowledged(cursor):
+            cursor.execute('SELECT payload_json FROM operator_async_jobs WHERE id=%s',(receipt['id'],))
+            return ((_row(cursor,cursor.fetchone()).get('payload_json') or {}).get('metadata') or {}).get('status_message_id')
+        if await asyncio.to_thread(transaction,acknowledged):
+            return
         notice = await update.message.reply_text('Голосовое получено. Распознаю и обработаю команду.')
         await asyncio.to_thread(transaction,lambda cursor:cursor.execute(
             "UPDATE operator_async_jobs SET payload_json=jsonb_set(payload_json,'{metadata,status_message_id}',to_jsonb(%s::bigint)) WHERE id=%s",(notice.message_id,receipt['id'])))
@@ -144,10 +149,16 @@ async def submit_recognized_voice(application, host, asset):
     metadata = asset['metadata_json']
     chat_id = metadata['chat_id']
     if metadata.get('durable_execution'):
+        if not metadata.get('status_message_id') and asset.get('request_id'):
+            def receipt_metadata(cursor):
+                cursor.execute('SELECT payload_json FROM operator_async_jobs WHERE user_id=%s AND idempotency_key=%s',(asset['user_id'],asset['request_id']))
+                return (_row(cursor,cursor.fetchone()).get('payload_json') or {}).get('metadata') or {}
+            receipt=await asyncio.to_thread(transaction,receipt_metadata)
+            metadata={**metadata,'status_message_id':receipt.get('status_message_id')}
         payload = metadata.get('operator_payload')
         if not payload:
             return False
-        business = {'user_id': asset['user_id'], 'business_id': asset['business_id']}
+        business = {'user_id': asset['user_id'], 'business_id': asset['business_id'], 'telegram_id': str(chat_id)}
     else:
         business = await asyncio.to_thread(host._control_scope_business_context, str(chat_id))
         if not business or business['business_id'] != asset['business_id'] or business['user_id'] != asset['user_id']:
@@ -164,15 +175,27 @@ async def submit_recognized_voice(application, host, asset):
         from services.operator_request_history import mark_delivery
         try:
             if metadata.get('durable_execution') and metadata.get('status_message_id') and len(payload['text'])<=3500:
-                await application.bot.edit_message_text(chat_id=chat_id,message_id=metadata['status_message_id'],text=payload['text'],reply_markup=host._build_operator_result_markup(payload['result']))
+                await edit_progress(application,chat_id,metadata['status_message_id'],payload['text'],host._build_operator_result_markup(payload['result']))
             else:
                 await application.bot.send_message(chat_id=chat_id, text=payload['text'], reply_markup=host._build_operator_result_markup(payload['result']))
+
         except Exception:
             await asyncio.to_thread(mark_delivery, payload['result'].get('request_audit_id'), 'failed')
             raise
         await asyncio.to_thread(mark_delivery, payload['result'].get('request_audit_id'), 'delivered')
+        if metadata.get('durable_execution'):
+            await asyncio.to_thread(transaction,lambda cursor:cursor.execute(
+                "UPDATE operator_async_jobs SET result_json=COALESCE(result_json,'{}'::jsonb)||'{\"delivery_status\":\"delivered\"}'::jsonb WHERE user_id=%s AND idempotency_key=%s",
+                (asset['user_id'],'voice-execute:'+asset['id'])))
         await asyncio.to_thread(transaction, lambda cursor: cursor.execute(
             "UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"result_delivered\":true}'::jsonb WHERE id=%s", (asset['id'],)))
+        if metadata.get('durable_execution') and metadata.get('status_message_id') and len(payload['text'])>3500:
+            try:
+                await edit_progress(application,chat_id,metadata['status_message_id'],'Обработка завершена. Результат ниже.')
+            except Exception:
+                # The result is already delivered. A failed cosmetic status update must not resend it.
+                logger.warning('Voice completion status update pending')
+
     if not payload['result'].get('error_code'):
         await queue_reply_speech(payload['result'], business, application)
 
@@ -201,6 +224,14 @@ async def delivery_loop(application, host):
                         await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"blocked\"}'::jsonb WHERE id=%s",(asset['id'],)))
                         continue
                     metadata=asset['metadata_json']; chat_id=metadata['chat_id']
+                    def binding_matches(cursor):
+                        cursor.execute('SELECT telegram_id FROM users WHERE id=%s',(asset['user_id'],))
+                        return str(_row(cursor,cursor.fetchone()).get('telegram_id'))==str(chat_id)
+                    if not await asyncio.to_thread(transaction,binding_matches):
+                        await asyncio.to_thread(transaction,lambda cursor:cursor.execute(
+                            "UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"blocked\"}'::jsonb WHERE id=%s",(asset['id'],)))
+                        continue
+
                     if asset['job_status']!='completed':
                         if asset['kind']=='speech':
                             await asyncio.to_thread(transaction,lambda cursor:cursor.execute("UPDATE operator_audio_assets SET metadata_json=metadata_json || '{\"delivery\":\"sent\"}'::jsonb WHERE id=%s",(asset['id'],)))
@@ -254,7 +285,7 @@ async def deliver_voice_progress(application):
     def pending(cursor):
         cursor.execute("""SELECT j.id,j.user_id,j.business_id,j.status,j.payload_json,
             EXTRACT(EPOCH FROM NOW()-j.created_at) elapsed,
-            a.metadata_json audio_metadata FROM operator_async_jobs j
+            a.metadata_json audio_metadata,a.status audio_status FROM operator_async_jobs j
             LEFT JOIN operator_audio_assets a ON a.user_id=j.user_id AND a.business_id=j.business_id
                 AND a.request_id=j.idempotency_key AND a.kind='transcription' AND a.channel='telegram'
             WHERE j.kind='voice_receive' AND j.created_at>NOW()-INTERVAL '24 hours'
@@ -265,7 +296,7 @@ async def deliver_voice_progress(application):
         try:
             metadata=job['payload_json']['metadata']
             audio=job.get('audio_metadata') or {}
-            if audio.get('result_delivered'):
+            if audio.get('result_delivered') or audio.get('delivery')=='sent':
                 await asyncio.to_thread(transaction,lambda cursor:cursor.execute(
                     "UPDATE operator_async_jobs SET payload_json=payload_json || '{\"progress_done\":true}'::jsonb WHERE id=%s",(job['id'],)))
                 continue
@@ -277,12 +308,12 @@ async def deliver_voice_progress(application):
                 continue
             failed=job['status'] in {'failed','cancelled'}
             message=('Не удалось получить запись из Telegram. Отправьте команду текстом или повторите запись.' if failed else
-                     'Задание сохранено, ещё выполняется. Повторять сообщение не нужно.' if job['elapsed']>=15 else 'Голосовое получено. Распознаю запись.')
+                     'Задание сохранено, ещё выполняется. Повторять сообщение не нужно.' if job['elapsed']>=15 else 'Обрабатываю команду.' if job.get('audio_status') in {'ready','submitted'} else 'Голосовое получено. Распознаю запись.')
             if job['payload_json'].get('progress_text')==message:
                 continue
             message_id=metadata.get('status_message_id')
             if message_id:
-                await application.bot.edit_message_text(chat_id=metadata['chat_id'],message_id=message_id,text=message)
+                await edit_progress(application,metadata['chat_id'],message_id,message)
             else:
                 sent=await application.bot.send_message(chat_id=metadata['chat_id'],text=message)
                 message_id=sent.message_id
@@ -291,3 +322,13 @@ async def deliver_voice_progress(application):
                 (message_id,json.dumps({'progress_text':message,'progress_done':failed}),job['id'])))
         except Exception:
             logger.warning('Voice progress delivery pending')
+
+
+async def edit_progress(application,chat_id,message_id,text,reply_markup=None):
+    from telegram.error import BadRequest
+    try:
+        await application.bot.edit_message_text(chat_id=chat_id,message_id=message_id,text=text,reply_markup=reply_markup)
+    except BadRequest:
+        import sys
+        if 'message is not modified' not in str(sys.exception()).lower():
+            raise

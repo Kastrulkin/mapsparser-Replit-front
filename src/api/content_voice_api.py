@@ -112,11 +112,14 @@ def content_rules():
             cursor.execute('SELECT id,name FROM users WHERE id=ANY(%s)',(ids,))
             names={row['id']:row['name'] for row in cursor.fetchall()}
             rules=[{**rule,'author_name':names.get(rule.get('author_id')) or 'Пользователь'} for rule in rules]
-            return jsonify({'rules':rules,'can_manage':content_rules.can_manage(cursor,auth.user_id,business_id)})
+            return jsonify({'rules':rules,'can_manage':content_rules.can_manage(cursor,auth.user_id,business_id),'timezone':content_rules.business_timezone(cursor,business_id)})
+        starts_at,ends_at=data.get('starts_at'),data.get('ends_at')
+        if 'starts_date' in data or 'ends_date' in data:
+            starts_at,ends_at=content_rules.dated_period(cursor,business_id,data.get('starts_date'),data.get('ends_date'))
         rule=content_rules.change(cursor,business_id=business_id,user_id=auth.user_id,
             request_id=str(data.get('request_id') or ''),text=str(data.get('text') or ''),
             rule_id=data.get('rule_id'),expected_version=data.get('expected_version'),
-            status=data.get('status','active'),starts_at=data.get('starts_at'),ends_at=data.get('ends_at'))
+            status=data.get('status','active'),starts_at=starts_at,ends_at=ends_at)
         db.conn.commit()
         return jsonify({'rule':rule})
     except content_rules.RuleConflict:
@@ -143,7 +146,7 @@ def content_rule_history(rule_id):
     try:
         cursor=db.conn.cursor();business_id=request.args.get('business_id','')
         _verify_access(cursor,AuthContext.from_session(user),business_id)
-        cursor.execute('SELECT snapshot,created_at FROM content_rule_history WHERE business_id=%s AND rule_id=%s ORDER BY created_at DESC',(business_id,rule_id))
+        cursor.execute("SELECT snapshot,created_at FROM content_rule_history WHERE business_id=%s AND rule_id=%s AND event_type='changed' ORDER BY created_at DESC",(business_id,rule_id))
         return jsonify({'history':[_row(cursor,row) for row in cursor.fetchall()]})
     except PermissionError:
         return jsonify({'error':'Нет доступа к правилам бизнеса'}),403

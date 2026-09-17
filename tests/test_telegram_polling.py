@@ -46,6 +46,7 @@ def test_watchdog_exits_on_stale_receiver(monkeypatch):
     monkeypatch.setattr(telegram_polling.threading.Thread,'start',lambda self:None)
     request=telegram_polling.PollingRequest()
     request._last_success=0
+    request._last_activity=0
     monkeypatch.setattr(telegram_polling.time,'monotonic',lambda:181)
     class Stop:
         def wait(self,seconds):return False
@@ -61,3 +62,17 @@ def test_startup_preserves_pending_updates():
     source=Path('src/telegram_bot.py').read_text()
     assert 'drop_pending_updates=True' not in source
     assert 'drop_pending_updates=False' in source
+
+
+def test_network_errors_do_not_keep_receiver_healthy(monkeypatch):
+    monkeypatch.setattr(telegram_polling.threading.Thread,'start',lambda self:None)
+    request=telegram_polling.PollingRequest()
+    request._last_success=0;request._last_activity=301
+    monkeypatch.setattr(telegram_polling.time,'monotonic',lambda:301)
+    class Stop:
+        def wait(self,seconds):return False
+    request._stop_watch=Stop()
+    def exit_process(code):raise SystemExit(code)
+    monkeypatch.setattr(telegram_polling.os,'_exit',exit_process)
+    import pytest
+    with pytest.raises(SystemExit):request._watch()

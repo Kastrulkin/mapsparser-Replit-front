@@ -16,7 +16,7 @@ def pg(monkeypatch):
     conn=psycopg2.connect(dsn,cursor_factory=RealDictCursor);cursor=conn.cursor();schema='rules_'+uuid.uuid4().hex
     cursor.execute('CREATE SCHEMA '+schema);cursor.execute('SET search_path TO '+schema)
     cursor.execute('CREATE TABLE users(id TEXT PRIMARY KEY)');cursor.execute("INSERT INTO users VALUES ('owner'),('manager'),('employee')")
-    cursor.execute('CREATE TABLE businesses(id TEXT PRIMARY KEY,network_id TEXT)');cursor.execute("INSERT INTO businesses VALUES ('b','n'),('other','other')")
+    cursor.execute("CREATE TABLE businesses(id TEXT PRIMARY KEY,network_id TEXT,name TEXT DEFAULT '',is_active BOOLEAN DEFAULT TRUE)");cursor.execute("INSERT INTO businesses VALUES ('b','n'),('other','other')")
     cursor.execute('CREATE TABLE networks(id TEXT,owner_id TEXT)')
     cursor.execute('CREATE TABLE business_members(business_id TEXT,user_id TEXT,status TEXT,role TEXT)')
     cursor.execute("INSERT INTO business_members VALUES ('b','manager','active','manager'),('b','employee','active','employee')")
@@ -94,3 +94,27 @@ def test_foreign_rule_cannot_be_modified(pg):
     with pytest.raises(content_rules.RuleConflict):
         content_rules.change(pg,business_id='other',user_id='owner',request_id='foreign',text='Перезаписать чужое',rule_id=rule['id'],expected_version=1)
     assert content_rules.active_rules(pg,'b')[0]==rule
+
+
+def test_undo_restores_previous_rule_not_cancels_it(pg):
+    rule=save(pg)
+    content_rules.change(pg,business_id='b',user_id='owner',request_id='edit',rule_id=rule['id'],expected_version=1,text='Новая редакция')
+    restored=content_rules.undo(pg,business_id='b',user_id='owner',request_id='undo',rule_id=rule['id'],expected_version=2,source='web')
+    assert restored['text']==rule['text'] and restored['status']=='active' and restored['version']==3
+
+
+def test_network_requires_preview_and_changes_atomically(pg):
+    pg.execute("INSERT INTO businesses(id,network_id,name) VALUES ('b2','n','Вторая')")
+    preview=content_rules.prepare_network(pg,'b','owner','Для всей сети: не обещаем гарантированный результат','Не обещаем гарантированный результат')
+    assert preview['status']=='approval_required'
+    assert content_rules.active_rules(pg,'b')==[]
+    content_rules.apply_network(pg,'b','owner',preview['approval']['envelope'])
+    assert len(content_rules.active_rules(pg,'b'))==len(content_rules.active_rules(pg,'b2'))==1
+
+
+def test_network_rejects_changed_preview_without_partial_write(pg):
+    pg.execute("INSERT INTO businesses(id,network_id,name) VALUES ('b2','n','Вторая')")
+    preview=content_rules.prepare_network(pg,'b','owner','Для всей сети: ограничение','Ограничение')
+    content_rules.change(pg,business_id='b2',user_id='owner',request_id='other',text='Изменение после preview')
+    with pytest.raises(content_rules.RuleConflict):content_rules.apply_network(pg,'b','owner',preview['approval']['envelope'])
+    assert content_rules.active_rules(pg,'b')==[]
