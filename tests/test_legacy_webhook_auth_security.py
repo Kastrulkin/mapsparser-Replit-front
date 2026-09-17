@@ -9,6 +9,8 @@ import hmac
 import json
 import sys
 
+import requests
+
 from flask import Flask
 
 
@@ -233,7 +235,8 @@ def test_whatsapp_post_rejects_signed_invalid_payload_shape_without_side_effects
     assert calls == []
 
 
-def test_valid_signed_whatsapp_post_reaches_expected_side_effects(monkeypatch) -> None:
+def test_valid_signed_whatsapp_post_reaches_expected_side_effects(monkeypatch, capsys, caplog) -> None:
+    caplog.set_level("INFO", logger=ai_agent_webhooks.__name__)
     secret = "test-app-secret"
     monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
     calls = _install_whatsapp_side_effect_spies(monkeypatch)
@@ -248,6 +251,37 @@ def test_valid_signed_whatsapp_post_reaches_expected_side_effects(monkeypatch) -
 
     assert response.status_code == 200
     assert [name for name, _payload in calls] == ["ai", "send"]
+    captured = capsys.readouterr()
+    output = captured.out + captured.err + caplog.text
+    assert "79990001122" not in output
+    assert "Нужна запись" not in output
+    assert "Ответ" not in output
+    assert "whatsapp_message_received" in caplog.text
+
+
+def test_whatsapp_outer_failures_keep_json_error_and_logs_secret_free(monkeypatch, capsys, caplog) -> None:
+    caplog.set_level("INFO", logger=ai_agent_webhooks.__name__)
+    secret = "https://graph.facebook.com/v20.0/phone-id/messages?access_token=synthetic-secret"
+    raw_body = _whatsapp_payload_bytes(_whatsapp_message())
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", "test-app-secret")
+    monkeypatch.setattr(
+        ai_agent_webhooks,
+        "find_business_by_waba_phone_id",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError(secret)),
+    )
+
+    response = _client().post(
+        "/api/webhooks/whatsapp",
+        data=raw_body,
+        content_type="application/json",
+        headers={"X-Hub-Signature-256": _whatsapp_signature("test-app-secret", raw_body)},
+    )
+
+    output = capsys.readouterr()
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Webhook processing failed"}
+    assert "synthetic-secret" not in output.out + output.err + caplog.text
+    assert "whatsapp_webhook_failed error_type=RuntimeError" in caplog.text
 
 
 def test_whatsapp_verification_never_accepts_the_public_fallback_token(monkeypatch) -> None:
@@ -446,6 +480,65 @@ def test_valid_telegram_callback_dispatches_and_uses_stored_bot_token(monkeypatc
     assert calls[-1][1]["bot_token"] == BOT_TOKEN_A
     assert database.conn.committed is True
     assert database.closed is True
+
+
+def test_duplicate_telegram_agent_event_does_not_reach_legacy_reply(monkeypatch) -> None:
+    database = _TelegramDatabase({"id": BUSINESS_A, "telegram_bot_token": BOT_TOKEN_A})
+    calls: list[str] = []
+    monkeypatch.setattr(ai_agent_webhooks, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(ai_agent_webhooks, "business_agent_enabled_for_channel", lambda *_args: {"enabled": True})
+    monkeypatch.setattr(
+        ai_agent_webhooks,
+        "dispatch_telegram_message_to_agent_blueprints",
+        lambda *_args, **_kwargs: {"duplicate": True, "matched_count": 0, "legacy_reply_should_continue": False},
+    )
+    monkeypatch.setattr(ai_agent_webhooks, "process_message", lambda **_kwargs: calls.append("process"))
+    monkeypatch.setattr(ai_agent_webhooks, "send_telegram_message", lambda **_kwargs: calls.append("send"))
+
+    response = _client().post(
+        _telegram_url(BUSINESS_A), json=_telegram_update(), headers=_telegram_headers(BUSINESS_A, BOT_TOKEN_A)
+    )
+
+    assert response.status_code == 200
+    assert calls == []
+
+
+def test_webhook_transport_failures_do_not_log_provider_secrets(monkeypatch, capsys, caplog) -> None:
+    caplog.set_level("INFO", logger=ai_agent_webhooks.__name__)
+    sensitive = "https://api.telegram.org/bot111:synthetic-token/sendMessage?phone=79990001122&body=private-body"
+    monkeypatch.setattr(ai_agent_webhooks.requests, "post", lambda *_args, **_kwargs: (_ for _ in ()).throw(requests.HTTPError(sensitive)))
+
+    assert ai_agent_webhooks.send_telegram_message("111:synthetic-token", "79990001122", "private-body") is False
+    assert ai_agent_webhooks.send_whatsapp_message("phone-id", "wa-access-token", "79990001122", "private-body") is False
+
+    output = capsys.readouterr()
+    for value in ("111:synthetic-token", "79990001122", "private-body", "wa-access-token"):
+        assert value not in output.out + output.err + caplog.text
+    assert "telegram_message_send_failed error_type=HTTPError" in caplog.text
+    assert "whatsapp_message_send_failed error_type=HTTPError" in caplog.text
+
+
+def test_webhook_outer_failures_keep_json_error_and_logs_secret_free(monkeypatch, capsys, caplog) -> None:
+    caplog.set_level("INFO", logger=ai_agent_webhooks.__name__)
+    secret = "https://api.telegram.org/bot111:synthetic-token/sendMessage"
+    database = _TelegramDatabase({"id": BUSINESS_A, "telegram_bot_token": BOT_TOKEN_A})
+    monkeypatch.setattr(ai_agent_webhooks, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(ai_agent_webhooks, "business_agent_enabled_for_channel", lambda *_args: {"enabled": True})
+    monkeypatch.setattr(
+        ai_agent_webhooks,
+        "dispatch_telegram_message_to_agent_blueprints",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError(secret)),
+    )
+
+    response = _client().post(
+        _telegram_url(BUSINESS_A), json=_telegram_update(), headers=_telegram_headers(BUSINESS_A, BOT_TOKEN_A)
+    )
+
+    output = capsys.readouterr()
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Webhook processing failed"}
+    assert "111:synthetic-token" not in output.out + output.err + caplog.text
+    assert "telegram_webhook_failed error_type=RuntimeError" in caplog.text
 
 
 def test_telegram_disabled_business_does_not_dispatch_or_send(monkeypatch) -> None:

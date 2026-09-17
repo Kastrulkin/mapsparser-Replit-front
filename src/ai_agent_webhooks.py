@@ -6,9 +6,11 @@ from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 import hashlib
 import hmac
+import logging
 import os
 import requests
 import json
+import sys
 import uuid
 from ai_agent import process_message, get_business_info
 from core.telegram_token_store import decode_telegram_bot_token
@@ -24,6 +26,12 @@ from services.agent_legacy_migration import business_agent_enabled_for_channel
 from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
+logger = logging.getLogger(__name__)
+
+
+def _log_webhook_failure(event: str) -> None:
+    """Record an operational failure without serializing provider data."""
+    logger.error("%s error_type=%s", event, type(sys.exception()).__name__)
 
 
 def _has_valid_whatsapp_signature(raw_body: bytes) -> bool:
@@ -67,10 +75,10 @@ def send_whatsapp_message(phone_id: str, access_token: str, to: str, message: st
         
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
-        print(f"✅ WhatsApp сообщение отправлено на {to}")
+        logger.info("whatsapp_message_sent")
         return True
-    except Exception as e:
-        print(f"❌ Ошибка отправки WhatsApp сообщения: {e}")
+    except Exception:
+        _log_webhook_failure("whatsapp_message_send_failed")
         return False
 
 def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
@@ -85,10 +93,10 @@ def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
         
         response = requests.post(url, json=payload, timeout=10, **build_requests_proxy_kwargs())
         response.raise_for_status()
-        print(f"✅ Telegram сообщение отправлено в чат {chat_id}")
+        logger.info("telegram_message_sent")
         return True
-    except Exception as e:
-        print(f"❌ Ошибка отправки Telegram сообщения: {e}")
+    except Exception:
+        _log_webhook_failure("telegram_message_send_failed")
         return False
 
 def find_business_by_waba_phone_id(phone_id: str) -> dict:
@@ -193,7 +201,7 @@ def whatsapp_webhook():
                     if not message_text or not from_number:
                         continue
                     
-                    print(f"📱 Получено WhatsApp сообщение от {from_number}: {message_text}")
+                    logger.info("whatsapp_message_received")
                     
                     # Находим бизнес по phone_id из webhook
                     # В WABA webhook phone_number_id указывает на бизнес, который получил сообщение
@@ -212,7 +220,7 @@ def whatsapp_webhook():
                         business = find_business_by_waba_phone_id(phone_id)
                     
                     if not business or not business['ai_agent_enabled']:
-                        print(f"⚠️ Бизнес не найден или ИИ агент отключен для номера {from_number}")
+                        logger.warning("whatsapp_agent_unavailable")
                         continue
                     
                     # Обрабатываем сообщение через ИИ агента
@@ -234,11 +242,9 @@ def whatsapp_webhook():
         
         return jsonify({"status": "ok"}), 200
         
-    except Exception as e:
-        print(f"❌ Ошибка обработки WhatsApp webhook: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        _log_webhook_failure("whatsapp_webhook_failed")
+        return jsonify({"error": "Webhook processing failed"}), 500
 
 @ai_webhooks_bp.route('/api/webhooks/telegram', methods=['POST'])
 def telegram_webhook():
@@ -324,7 +330,12 @@ def telegram_webhook():
             },
         )
         database.conn.commit()
-        if trigger_result.get("matched_count"):
+        legacy_reply_should_continue = trigger_result.get("legacy_reply_should_continue", True)
+        if (
+            trigger_result.get("matched_count")
+            or trigger_result.get("duplicate")
+            or not legacy_reply_should_continue
+        ):
             return jsonify(
                 {
                     "status": "ok",
@@ -350,9 +361,7 @@ def telegram_webhook():
         return jsonify({"status": "ok"}), 200
     except Exception:
         database.conn.rollback()
-        print("❌ Ошибка обработки Telegram webhook")
-        import traceback
-        traceback.print_exc()
+        _log_webhook_failure("telegram_webhook_failed")
         return jsonify({"error": "Webhook processing failed"}), 500
     finally:
         database.close()

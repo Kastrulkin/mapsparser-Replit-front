@@ -87,3 +87,13 @@ The former no-op downgrade left `business_work_links.action_id` referencing `jou
 - Root review identified a check/drop race in the initial patch. A deterministic concurrent INSERT immediately after the guard was red without locks: **1 failed in 12.30s**, `/tmp/localos-db-mig02-red.log`. With locks the writer blocks and cannot commit into the removed table.
 - Final suite: **7 passed in 35.28s**, `/tmp/localos-db-mig02-locks-green.log`. Fresh reviewer checked transaction/lock lifetime, all lossy fields, exact predecessor constraint and scoped cleanup. Compilation/diff checks pass.
 - Existing `test_web_tracking_postgres.py` now passes the original journey-actions obstruction but fails later at `DROP creator_collaborations`, whose newer creator-portal downgrade is also no-op. This is tracked next, not hidden by weakening the test.
+
+## SEC-WH-03/04 — Respect replay admission and keep ingress logs secret-free
+
+Status: **FIX_PROVEN locally**, independent scoped review passed. Not deployed.
+
+- Telegram already had durable per-business event admission. The route ignored its `duplicate` / `legacy_reply_should_continue=False` result when `matched_count=0`, allowing a repeated callback to reach legacy AI/send. It now honors all three admission outcomes; genuinely unmatched new messages keep the existing fallback. No new inbox/table or migration.
+- Webhook/send logs use fixed event names and exception class only; no provider URL, exception value/traceback, message body, phone or chat ID. Both outer handlers return constant failure JSON. This is a module-level fix, not a claim that all application logs are clean.
+- Before patch: **3 failed / 25 passed** in `ingress_hardening_red`; duplicate reached legacy processing, HTTPError exposed synthetic token/PII, and outer traceback exposed secret text.
+- Fresh independent current suite: **89 passed in 0.73s**, `/tmp/localos-secwh0304-review.log`, exit0. Reviewer identified a test-observation gap: capsys alone does not capture logging records. Root strengthened tests with INFO-level `caplog`, individual sentinel absence and fixed event/type assertions; final **89 passed in 0.62s**, 1.016s capture (`raw/webhook-replay-log-final.json`).
+- Remaining scope: complete WhatsApp replay/idempotency and malformed event-ID behavior are not established by this Telegram route fix; downstream approval and whole-system logging audit remain open.
