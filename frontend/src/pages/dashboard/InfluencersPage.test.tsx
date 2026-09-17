@@ -56,4 +56,17 @@ describe('InfluencersPage', () => {
     expect(await screen.findByText('Подготовка сообщений доступна после оплаты.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');
   });
+
+  it('keeps every creator action at the mobile 40px touch-target minimum', async () => {
+    render(<MemoryRouter initialEntries={['/dashboard/influencers']}><Routes><Route element={<Context />}><Route path="/dashboard/influencers" element={<InfluencersPage />} /></Route></Routes></MemoryRouter>);
+
+    await screen.findByRole('heading', { name: 'Анна про Петербург' });
+    for (const control of [
+      screen.getByRole('link', { name: 'Площадка' }),
+      screen.getByRole('button', { name: 'Подходит' }),
+      screen.getByRole('button', { name: 'Не подходит' }),
+    ]) {
+      expect(control).toHaveClass('min-h-10');
+    }
+  });
 });

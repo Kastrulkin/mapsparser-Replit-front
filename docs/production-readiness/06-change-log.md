@@ -127,3 +127,12 @@ React Router's search setter changed identity after query updates, causing the j
 - Real-API baseline showed registration navigation returning to the start route. Corrected unit reproduction **2 failed / 7 passed**: four GETs instead of one, plus a late response changing `/login` query (`raw/journey-navigation-red-corrected.json`). Earlier attempts contained corrected test-selector mistakes and are not the causal evidence.
 - Final **11 passed** (6.183s captured command), including late preparation and old-token response; independent combined journey/influencer run **13 passed in 3.92s**, with full app/Node typecheck exit0. Root focused lint passes.
 - Registration parameters and approval behavior unchanged. Remaining browser failures include a stale success-copy assertion and separate compiled-staging prerequisites; neither is hidden by this runtime fix.
+
+## UX-TOUCH-01 — Restore minimum influencer action targets
+
+Status: source regression green and independently reviewed; real mobile geometry rerun remains. Not deployed.
+
+The isolated mobile browser measured the influencer table's platform link / shortlist / reject controls at 36 / 36 / 32px tall, below DESIGN's 40px minimum. Their existing Tailwind minimum-height utilities are now `min-h-10`; layout, labels and mutations are unchanged.
+
+- Targeted red **1 failed / 1 passed**, green **2 passed in 3.36s**; focused lint clean. Independent combined run **13 passed** and app/Node typecheck exit0.
+- This is a narrow three-control fix, not a claim of whole-site accessibility compliance.
