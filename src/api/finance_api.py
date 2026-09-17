@@ -819,6 +819,17 @@ def _finance_import_duplicate_exists(cursor, business_id, record_type, duplicate
 
 
 def _insert_finance_import_item(cursor, business_id, batch_id, item):
+    cursor.execute("SAVEPOINT finance_import_item")
+    try:
+        _insert_finance_import_item_without_savepoint(cursor, business_id, batch_id, item)
+    except Exception:
+        cursor.execute("ROLLBACK TO SAVEPOINT finance_import_item")
+        cursor.execute("RELEASE SAVEPOINT finance_import_item")
+        raise
+    cursor.execute("RELEASE SAVEPOINT finance_import_item")
+
+
+def _insert_finance_import_item_without_savepoint(cursor, business_id, batch_id, item):
     record_type = item.get("record_type")
     duplicate_key = item.get("duplicate_key")
     external_id = item.get("external_id") or None
