@@ -110,3 +110,18 @@ def test_unused_transport_does_not_start_restart_watchdog(monkeypatch):
         assert len(started)==1
         await request.shutdown()
     asyncio.run(check())
+
+
+def test_startup_backoff_does_not_hide_new_messages_for_five_minutes():
+    import ast
+    from pathlib import Path
+    from types import SimpleNamespace
+    entry=next(node for node in ast.parse(Path('src/telegram_bot.py').read_text()).body if isinstance(node,ast.FunctionDef) and node.name=='main')
+    attempts=[];delays=[]
+    def run():
+        attempts.append(True)
+        if len(attempts)<7:raise RuntimeError('network unavailable')
+    namespace={'TELEGRAM_BOT_TOKEN':'test','asyncio':asyncio,'_run_bot_once':run,'time':SimpleNamespace(sleep=delays.append)}
+    exec(compile(ast.Module(body=[entry],type_ignores=[]),'<bot-main-test>','exec'),namespace)
+    namespace['main']()
+    assert delays==[5,10,20,30,30,30]

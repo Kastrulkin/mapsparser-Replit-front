@@ -6395,7 +6395,7 @@ def main():
         except Exception:
             print(f"⏳ Повторное подключение к Telegram через {retry_delay} сек.")
             time.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, 300)
+            retry_delay = min(retry_delay * 2, 30)
         finally:
             if not loop.is_closed():
                 loop.close()
