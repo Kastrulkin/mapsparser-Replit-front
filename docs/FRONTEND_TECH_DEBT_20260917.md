@@ -30,6 +30,8 @@ The remaining warning is the return type of `NewAuth.makeRequest` in `frontend/s
 
 ## Reproduced correctness fixes
 
+News-selector regression status: `FIX_PROVEN` (original failing expression reproduced, regression and broader checks passed).
+
 1. News transaction selector: its callback variable shadowed the translation dictionary. A transaction without services threw `Cannot read properties of undefined (reading 'card')`. The regression test failed with the original expression and passed with the corrected variable.
 2. API data/polling: delayed results from a previous business or an unmounted screen are ignored. Tests cover cancellation, non-overlapping requests and stable polling callbacks.
 3. Agent animation: completion of an older run cannot finish the animation of a newer run. Recovered-run finish delays are cancellable.
@@ -49,4 +51,17 @@ The remaining warning is the return type of `NewAuth.makeRequest` in `frontend/s
 
 1. Type `makeRequest`/`api` per endpoint and progressively enable stricter TypeScript checks. Start with authentication and the agent-run read endpoints; keep API success/error payload contracts explicit.
 2. Further divide the agent workspace by setup, connection management and run actions. Keep current run ownership, business isolation and manual-approval behavior covered.
-3. Production capacity remains constrained: preflight reported about 2 GB free (95% used). This release does not remove database files, retained assets or backups to address it.
+
+## Storage update
+
+Initial preflight reported about 2 GB free (95% used). The user subsequently added 10 GB. Read-only verification confirmed both `/dev/sda` and its ext4 root partition expanded to 50 GB: about 12 GB free and 76% used. No partition/filesystem command, database cleanup or backup deletion was needed or performed by this release.
+
+## Production verification
+
+- Frontend source commit: `290d1d56067afc06bc03d3489cc1a8555e78251c`, pushed to `gitverse/codex/content-generation-v2`.
+- Deployed through `scripts/deploy_frontend_dist.sh` on 17 September 2026. Only built frontend files were copied; no backend source sync, migration or direct database mutation was performed.
+- Main entry asset: `/assets/index-BmALpHaF.js`; public entry asset: `/public-audit/assets/index-Cya4w__Q.js`.
+- Main HTML SHA-256: `2e1a5037340f451ebe9d94a01fce8c8247350cbecb26d7ae8d92a4f4d1e7e889`. Public HTML SHA-256: `0545e2ea9d3a58f65fe507566e0a4e0a322ae1623ba9bd419c37ca7fe0bcde94`. Local, server and live-container files matched, including the `/app/dist` main fallback.
+- All 257 staged frontend/public files matched runtime copies byte-for-byte. Reachable asset checks covered 199 main-app and 12 public-app JS files. Existing hashed assets were retained for open tabs.
+- `docker compose ps`, recent app logs, local HTTP and targeted live asset checks completed. The production login form rendered with no captured console errors. The Telegram route outside an authenticated Telegram session displayed its expected entry gate without console errors; private production workflows were not exercised with fabricated authentication.
+- Rollback entry-point copies: `/opt/seo-app/release-backups/frontend-lint-20260917.72zIzv/`. Earlier assets remain in place. Server backend Git state was deliberately not reset or pulled.
