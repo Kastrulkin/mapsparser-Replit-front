@@ -45,3 +45,13 @@ Status: **FIX_PROVEN locally**, independent scoped review passed. Not deployed o
 - Root final regression/adjacent/config suite: **83 passed in 0.63 s**, 1.078 s captured wall time (`raw/webhook-security-config-final.json`). Independent reviewer reran the same set plus two Docker tests: **85 passed in 0.74 s**; staging-isolation check passed. No scoped blocker.
 
 Residual work remains separate: replay/deduplication, legacy WhatsApp PII logging and token-bearing exception logging need their own reproduction and patch. Authentication alone does not prove idempotency or approval enforcement of every downstream action.
+
+## UX-FIN-01 — Finance import follows the selected business
+
+Status: **FIX_PROVEN locally**, fresh independent scoped review passed. Not deployed.
+
+File, mapping, preview, confirmation, history and status are cleared on a business change. Preview/import/history requests capture their business/version, and stale success, error, finally and parent-refresh completions cannot populate the newly selected scope. Successful import and scope changes also clear the native file input, allowing the same file to be selected again.
+
+- Deterministic deferred-preview and completed-preview/history tests reproduce the original cross-business stale state. Independent review of the first patch found the remaining native file input; its regression was red **2 failed / 2 passed**, then green **4 passed** after the input reset.
+- Fresh independent run: `npm --prefix frontend test -- --run src/components/FinanceImportPanel.test.tsx` → **4 passed**, 4.31 s test-command duration. Worker app/Node typecheck and lint pass, with the pre-existing `auth_new.ts:115` warning.
+- No backend write contract, money calculation or product layout changes. Other content/services/operator scope candidates are not closed by this fix. Final aggregate frontend and real-API scope checks remain required.

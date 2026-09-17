@@ -1,5 +1,5 @@
 import { browserBearerToken } from '@/lib/browserSessionFetch';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileSpreadsheet, History, Upload } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -62,19 +62,23 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   const [imports, setImports] = useState<ImportBatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scopeVersionRef = useRef(0);
 
   const token = browserBearerToken();
 
   const loadImports = useCallback(async () => {
-    if (!currentBusinessId) return;
+    const businessId = currentBusinessId;
+    const scopeVersion = scopeVersionRef.current;
+    if (!businessId) return;
     try {
-      const response = await fetch(`/api/finance/imports?business_id=${currentBusinessId}`, {
+      const response = await fetch(`/api/finance/imports?business_id=${businessId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
-      if (data.success) setImports(data.imports || []);
+      if (scopeVersion === scopeVersionRef.current && data.success) setImports(data.imports || []);
     } catch (error) {
-      setMessage('Не удалось загрузить историю импорта');
+      if (scopeVersion === scopeVersionRef.current) setMessage('Не удалось загрузить историю импорта');
     }
   }, [currentBusinessId, token]);
 
@@ -89,29 +93,47 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   }, []);
 
   useEffect(() => {
+    scopeVersionRef.current += 1;
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setFile(null);
+    setPreview(null);
+    setMapping({});
+    setMappingDirty(false);
+    setMappingConfirmed(false);
+    setImports([]);
+    setLoading(false);
+    setMessage(null);
+  }, [currentBusinessId]);
+
+  useEffect(() => {
     loadImports();
     loadTemplates();
   }, [loadImports, loadTemplates]);
 
-  const buildFormData = () => {
+  const buildFormData = (selectedFile = file, businessId = currentBusinessId, selectedMapping = mapping) => {
     const formData = new FormData();
-    if (file) formData.append('file', file);
-    if (currentBusinessId) formData.append('business_id', currentBusinessId);
-    formData.append('mapping', JSON.stringify(mapping));
+    if (selectedFile) formData.append('file', selectedFile);
+    if (businessId) formData.append('business_id', businessId);
+    formData.append('mapping', JSON.stringify(selectedMapping));
     return formData;
   };
 
   const runPreview = async () => {
     if (!file || !currentBusinessId) return;
+    const selectedFile = file;
+    const businessId = currentBusinessId;
+    const selectedMapping = mapping;
+    const scopeVersion = scopeVersionRef.current;
     setLoading(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/finance/import-preview?business_id=${currentBusinessId}`, {
+      const response = await fetch(`/api/finance/import-preview?business_id=${businessId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
-        body: buildFormData(),
+        body: buildFormData(selectedFile, businessId, selectedMapping),
       });
       const data = await response.json();
+      if (scopeVersion !== scopeVersionRef.current) return;
       if (!data.success) {
         setMessage(data.error || 'Не удалось прочитать файл');
         return;
@@ -123,9 +145,9 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
       const recognizedCount = Object.keys(data.mapping || {}).length;
       setMessage(`LocalOS распознал ${recognizedCount} колонок. Готово к импорту: ${data.valid_rows}. Ошибок: ${data.failed_rows}.`);
     } catch (error) {
-      setMessage('Ошибка соединения с сервером');
+      if (scopeVersion === scopeVersionRef.current) setMessage('Ошибка соединения с сервером');
     } finally {
-      setLoading(false);
+      if (scopeVersion === scopeVersionRef.current) setLoading(false);
     }
   };
 
@@ -147,30 +169,36 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
       setMessage('В файле нет строк, готовых к импорту. Исправьте ошибки и проверьте файл ещё раз.');
       return;
     }
+    const selectedFile = file;
+    const businessId = currentBusinessId;
+    const selectedMapping = mapping;
+    const scopeVersion = scopeVersionRef.current;
     setLoading(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/finance/import-file?business_id=${currentBusinessId}`, {
+      const response = await fetch(`/api/finance/import-file?business_id=${businessId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
-        body: buildFormData(),
+        body: buildFormData(selectedFile, businessId, selectedMapping),
       });
       const data = await response.json();
+      if (scopeVersion !== scopeVersionRef.current) return;
       if (!data.success) {
         setMessage(data.error || 'Не удалось импортировать файл');
         return;
       }
       setMessage(`Импортировано: ${data.rows_imported}. Пропущено дублей: ${data.rows_skipped}. Ошибок: ${data.rows_failed}.`);
       setPreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setFile(null);
       setMappingDirty(false);
       setMappingConfirmed(false);
       await loadImports();
-      if (onImported) onImported();
+      if (scopeVersion === scopeVersionRef.current && onImported) onImported();
     } catch (error) {
-      setMessage('Ошибка соединения с сервером');
+      if (scopeVersion === scopeVersionRef.current) setMessage('Ошибка соединения с сервером');
     } finally {
-      setLoading(false);
+      if (scopeVersion === scopeVersionRef.current) setLoading(false);
     }
   };
 
@@ -212,6 +240,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
             <div className="space-y-2">
               <Label>CSV, TSV или XLSX</Label>
               <Input
+                ref={fileInputRef}
                 type="file"
                 aria-label="Файл из CRM"
                 className="min-w-0 w-full"
