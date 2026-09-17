@@ -117,3 +117,13 @@ Membership refresh now replaces a removed selected business with an accessible o
 - Five tests cover A→B/private-state reset, empty membership, 403, transient failure/retry and late refresh after manual switch. Worker final **5 passed in 2.79s**; independent rerun **5 passed in 3.04s**. Corrected independent ESLint invocation exit0 (`/tmp/localos-ux-scope-01-lint.log`); its first combined command had a wrong lint working directory, not a test failure.
 - Root aggregate app/Node typecheck exit0 in **39.149s** (`raw/frontend-scope-typecheck.json`); focused root lint exit0. Reviewer checked network→business fallback and backend response contract.
 - Backend authorization remains authoritative; this does not replace server tenant/role checks or establish every child callback's safety.
+
+## UX-JOURNEY-01 — Keep registration navigation stable
+
+Status: **FIX_PROVEN in deterministic component tests**, independently reviewed; original real-API browser rerun is next. Not deployed.
+
+React Router's search setter changed identity after query updates, causing the journey loader effect to run repeatedly. Late load/preparation responses could then rewrite the new route's URL. Use the existing stable-callback helper, cancel obsolete load completions, version pending preparation, and key content by journey token so another journey cannot inherit the previous result.
+
+- Real-API baseline showed registration navigation returning to the start route. Corrected unit reproduction **2 failed / 7 passed**: four GETs instead of one, plus a late response changing `/login` query (`raw/journey-navigation-red-corrected.json`). Earlier attempts contained corrected test-selector mistakes and are not the causal evidence.
+- Final **11 passed** (6.183s captured command), including late preparation and old-token response; independent combined journey/influencer run **13 passed in 3.92s**, with full app/Node typecheck exit0. Root focused lint passes.
+- Registration parameters and approval behavior unchanged. Remaining browser failures include a stale success-copy assertion and separate compiled-staging prerequisites; neither is hidden by this runtime fix.

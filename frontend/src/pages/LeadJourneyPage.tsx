@@ -1,11 +1,12 @@
 import { ArrowLeft, ArrowRight, BadgeDollarSign, Bot, Check, FilePenLine, Handshake, Loader2, MapPinned, Megaphone, ShieldCheck } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
 import { PublicBrandBackdrop } from '@/components/PublicBrandBackdrop';
 import SeoMeta from '@/components/SeoMeta';
 import { Button } from '@/components/ui/button';
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { localizePublicLeadJourneyDirections, publicLeadJourneyCopyFor, type PublicLeadJourneyCopy } from '@/i18n/publicLeadJourneyCopy';
 import {
@@ -41,13 +42,19 @@ const DirectionCard = ({ direction, opportunity, onOpen, copy, secondary = false
 };
 
 export default function LeadJourneyPage() {
+  const { token = '' } = useParams();
+  return <LeadJourneyContent key={token} token={token} />;
+}
+
+function LeadJourneyContent({ token }: { token: string }) {
   const { language } = useLanguage();
   const copy = useMemo(() => publicLeadJourneyCopyFor(language), [language]);
   const localizedDirections = useMemo(() => localizePublicLeadJourneyDirections(leadJourneyDirections, language), [language]);
   const customerDirections = useMemo(() => localizedDirections.filter((direction) => direction.key === 'influencers' || direction.key === 'partnerships' || direction.key === 'maps'), [localizedDirections]);
   const workDirections = useMemo(() => localizedDirections.filter((direction) => direction.key === 'content' || direction.key === 'automation' || direction.key === 'average_ticket'), [localizedDirections]);
-  const { token = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const updateSearchParams = useLatestCallback(setSearchParams);
+  const preparationRevision = useRef(0);
   const initialKey = searchParams.get('direction');
   const [selectedKey, setSelectedKey] = useState<LeadJourneyKey | null>(isLeadJourneyKey(initialKey) ? initialKey : null);
   const [prepared, setPrepared] = useState(searchParams.get('step') === 'result' && isLeadJourneyKey(initialKey));
@@ -63,23 +70,31 @@ export default function LeadJourneyPage() {
 
   useEffect(() => {
     if (!token) return;
+    let active = true;
     saveLeadJourneyToken(token);
     void loadPublicLeadJourney(token)
       .then((value) => {
+        if (!active) return;
         setJourney(value);
         setJourneyError('');
         const selectedFromJourney = leadJourneyKeyForFlow(value.selected_flow);
         if (selectedFromJourney) {
           setSelectedKey(selectedFromJourney);
-          setSearchParams({ direction: selectedFromJourney, step: 'detail' }, { replace: true });
+          updateSearchParams({ direction: selectedFromJourney, step: 'detail' }, { replace: true });
         }
         void trackPublicJourneyEvent(token, 'lead_link_opened');
       })
-      .catch((error: Error) => setJourneyError(error.message))
-      .finally(() => setJourneyLoading(false));
-  }, [setSearchParams, token]);
+      .catch((error: Error) => { if (active) setJourneyError(error.message); })
+      .finally(() => { if (active) setJourneyLoading(false); });
+    return () => {
+      active = false;
+      preparationRevision.current += 1;
+    };
+  }, [token, updateSearchParams]);
 
   const openDirection = (key: LeadJourneyKey) => {
+    preparationRevision.current += 1;
+    setPreparing(false);
     setSelectedKey(key);
     setPrepared(false);
     setPartialPreview(null);
@@ -90,6 +105,8 @@ export default function LeadJourneyPage() {
   };
 
   const goBack = () => {
+    preparationRevision.current += 1;
+    setPreparing(false);
     setSelectedKey(null);
     setPrepared(false);
     setPartialPreview(null);
@@ -98,13 +115,16 @@ export default function LeadJourneyPage() {
 
   const prepare = async () => {
     if (!selected) return;
+    const revision = ++preparationRevision.current;
     if (token && selectedOpportunity) {
       setPreparing(true);
       try {
         const value = await preparePublicOpportunity(token, selectedOpportunity);
+        if (revision !== preparationRevision.current) return;
         setPartialPreview(value.partial_result || null);
         void trackPublicJourneyEvent(token, 'partial_result_viewed', selectedOpportunity);
       } catch (error) {
+        if (revision !== preparationRevision.current) return;
         setJourneyError(error instanceof Error ? error.message : copy.prepareError);
         setPreparing(false);
         return;

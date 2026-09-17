@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LEAD_JOURNEY_STORAGE_KEY, leadJourneyKeyForFlow } from '@/lib/leadJourney';
@@ -178,5 +178,124 @@ describe('LeadJourneyPage', () => {
     expect(await screen.findByRole('heading', { name: 'Не пропускать отзывы без ответа' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Показать сценарий автоматизации' })).toBeInTheDocument();
     expect(screen.queryByText(/prompt|capability|credential/i)).not.toBeInTheDocument();
+  });
+
+  it('loads the selected journey once and lets registration navigation finish', async () => {
+    let journeyLoads = 0;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/events')) return { ok: true, json: async () => ({ success: true }) };
+      if (url.includes('/opportunities/')) {
+        return { ok: true, json: async () => ({ success: true, preview: { partial_result: {} } }) };
+      }
+      journeyLoads += 1;
+      return { ok: true, json: async () => ({ success: true, journey: {
+        id: 'journey-maps', status: 'preview', selected_flow: 'maps',
+        business: { name: 'Синтетический бизнес' },
+        opportunities: [{ flow_type: 'maps', entity_type: 'card_audit', entity_id: 'audit-1', title: 'Исправить часы', summary: 'Первый шаг', reason: 'Проверка' }],
+      } }) };
+    }));
+    const router = createMemoryRouter([
+      { path: '/start/:token', element: <LeadJourneyPage /> },
+      { path: '/login', element: <h1>Регистрация владельца</h1> },
+    ], { initialEntries: ['/start/maps-token'] });
+    render(<RouterProvider router={router} />);
+
+    await screen.findByRole('heading', { name: 'Исправить часы' });
+    await userEvent.click(screen.getByRole('button', { name: /Показать|Подготовить/ }));
+    await userEvent.click(await screen.findByRole('link', { name: 'Продолжить в LocalOS' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+    expect(screen.getByRole('heading', { name: 'Регистрация владельца' })).toBeVisible();
+    expect(router.state.location.search).toContain('journey_token=maps-token');
+    expect(journeyLoads).toBe(1);
+  });
+
+  it('ignores a late journey response after leaving its route', async () => {
+    let resolveJourney: ((value: Response) => void) | undefined;
+    const pending = new Promise<Response>((resolve) => { resolveJourney = resolve; });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith('/events')) return Promise.resolve(new Response(JSON.stringify({ success: true })));
+      return pending;
+    }));
+    const router = createMemoryRouter([
+      { path: '/start/:token', element: <LeadJourneyPage /> },
+      { path: '/login', element: <h1>Регистрация владельца</h1> },
+    ], { initialEntries: ['/start/old-token'] });
+    render(<RouterProvider router={router} />);
+    await act(async () => { await router.navigate('/login'); });
+
+    await act(async () => {
+      resolveJourney?.(new Response(JSON.stringify({ success: true, journey: {
+        id: 'old-journey', status: 'preview', selected_flow: 'maps', opportunities: [], business: {},
+      } })));
+      await pending;
+    });
+
+    expect(router.state.location.pathname).toBe('/login');
+    expect(router.state.location.search).toBe('');
+    expect(screen.getByRole('heading', { name: 'Регистрация владельца' })).toBeVisible();
+  });
+
+  it('does not move a new route when a previous preparation finishes', async () => {
+    let resolvePreparation: ((value: Response) => void) | undefined;
+    const pending = new Promise<Response>((resolve) => { resolvePreparation = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/opportunities/')) return pending;
+      if (url.endsWith('/events')) return new Response(JSON.stringify({ success: true }));
+      return new Response(JSON.stringify({ success: true, journey: {
+        id: 'journey-maps', status: 'preview', selected_flow: 'maps', business: {},
+        opportunities: [{ flow_type: 'maps', entity_type: 'card_audit', entity_id: 'audit-1', title: 'Исправить часы', summary: 'Первый шаг', reason: 'Проверка' }],
+      } }));
+    }));
+    const router = createMemoryRouter([
+      { path: '/start/:token', element: <LeadJourneyPage /> },
+      { path: '/login', element: <h1>Регистрация владельца</h1> },
+    ], { initialEntries: ['/start/maps-token'] });
+    render(<RouterProvider router={router} />);
+    await screen.findByRole('heading', { name: 'Исправить часы' });
+    await userEvent.click(screen.getByRole('button', { name: /Показать|Подготовить/ }));
+    await act(async () => { await router.navigate('/login'); });
+
+    await act(async () => {
+      resolvePreparation?.(new Response(JSON.stringify({ success: true, preview: { partial_result: { mechanic: 'Старый результат' } } })));
+      await pending;
+    });
+
+    expect(router.state.location.pathname).toBe('/login');
+    expect(router.state.location.search).toBe('');
+    expect(screen.getByRole('heading', { name: 'Регистрация владельца' })).toBeVisible();
+  });
+
+  it('ignores the previous token response after opening a different journey', async () => {
+    let resolvePrevious: ((value: Response) => void) | undefined;
+    const pending = new Promise<Response>((resolve) => { resolvePrevious = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/events')) return new Response(JSON.stringify({ success: true }));
+      if (url.includes('previous-token')) return pending;
+      return new Response(JSON.stringify({ success: true, journey: {
+        id: 'new-journey', status: 'preview', selected_flow: 'content', business: {},
+        opportunities: [{ flow_type: 'content', entity_type: 'contentplanitem', entity_id: 'item-1', title: 'Новая тема', summary: 'Первый шаг', reason: 'Проверка' }],
+      } }));
+    }));
+    const router = createMemoryRouter([
+      { path: '/start/:token', element: <LeadJourneyPage /> },
+    ], { initialEntries: ['/start/previous-token'] });
+    render(<RouterProvider router={router} />);
+    await act(async () => { await router.navigate('/start/new-token'); });
+    await screen.findByRole('heading', { name: 'Новая тема' });
+
+    await act(async () => {
+      resolvePrevious?.(new Response(JSON.stringify({ success: true, journey: {
+        id: 'old-journey', status: 'preview', selected_flow: 'maps', opportunities: [], business: {},
+      } })));
+      await pending;
+    });
+
+    expect(router.state.location.pathname).toBe('/start/new-token');
+    expect(router.state.location.search).toBe('?direction=content&step=detail');
+    expect(screen.getByRole('heading', { name: 'Новая тема' })).toBeVisible();
   });
 });
