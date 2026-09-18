@@ -108,7 +108,7 @@ class ContentPlanAccessDatabase:
         return None
 
 
-def install_access_fixture(monkeypatch, *, allow_member: bool):
+def install_access_fixture(monkeypatch, *, allow_member: bool, allow_write_member: bool = True):
     database = ContentPlanAccessDatabase()
     monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: database)
     monkeypatch.setattr(content_plan_service, "ensure_content_plan_tables", lambda _cursor: None)
@@ -120,6 +120,14 @@ def install_access_fixture(monkeypatch, *, allow_member: bool):
         "verify_business_access",
         lambda _cursor, _business_id, user_data: (
             allow_member and user_data.get("user_id") == "member-1",
+            "owner-1",
+        ),
+    )
+    monkeypatch.setattr(
+        content_plan_service,
+        "verify_business_write_access",
+        lambda _cursor, _business_id, user_data: (
+            allow_member and allow_write_member and user_data.get("user_id") == "member-1",
             "owner-1",
         ),
     )
@@ -152,6 +160,22 @@ def test_active_network_member_can_edit_shared_content_plan_item(monkeypatch):
     assert plan["items"][0]["draft_text"] == "Обновлённый текст"
     assert database.committed is True
     assert any(query.startswith("update contentplanitems") for query, _params in database.cursor_value.executed)
+
+
+def test_viewer_can_open_but_cannot_edit_shared_content_plan_item(monkeypatch):
+    database = install_access_fixture(monkeypatch, allow_member=True, allow_write_member=False)
+
+    plan = content_plan_service.get_content_plan("member-1", "plan-1")
+
+    assert plan["id"] == "plan-1"
+    with pytest.raises(PermissionError, match="Нет доступа к элементу плана"):
+        content_plan_service.update_content_plan_item(
+            "member-1",
+            "item-1",
+            {"draft_text": "Запрещённое изменение"},
+        )
+    assert database.committed is False
+    assert not any(query.startswith("update contentplanitems") for query, _params in database.cursor_value.executed)
 
 
 def test_content_plan_item_saves_selected_channels_in_metadata(monkeypatch):

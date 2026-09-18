@@ -4,7 +4,7 @@ API для управления услугами бизнеса
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 from core.ai_learning import record_ai_learning_event
 from core.helpers import get_business_owner_id
 from core.service_keyword_scoring import build_services_quality_audit
@@ -290,7 +290,7 @@ def _get_service_regeneration_attempts(cursor, service_ids):
 def _get_user_business_id(user_data, business_id):
     db = DatabaseManager()
     cursor = db.conn.cursor()
-    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
     if not owner_id:
         db.close()
         return None, jsonify({"error": "Бизнес не найден"}), 404
@@ -398,7 +398,7 @@ def _require_services_user():
 
 
 def _ensure_business_access(db, cursor, business_id, user_data):
-    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+    has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
     if not owner_id:
         return jsonify({"error": "Бизнес не найден"}), 404
     if not has_access:
@@ -1116,7 +1116,7 @@ def add_service():
         cursor = db.conn.cursor()
         
         # Проверяем доступ
-        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
@@ -1673,7 +1673,12 @@ def enrich_service_keywords():
             return jsonify({"error": "Услуга не найдена"}), 404
         service = _service_row_to_dict(row, [d[0] for d in cursor.description])
         service_user_id = str(service.get("user_id") or "")
-        if service_user_id != str(user_data["user_id"]) and not user_data.get("is_superadmin"):
+        service_business_id = str(service.get("business_id") or "").strip()
+        if service_business_id:
+            has_access, _ = verify_business_write_access(cursor, service_business_id, user_data)
+        else:
+            has_access = service_user_id == str(user_data["user_id"]) or user_data.get("is_superadmin", False)
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
 
@@ -2059,7 +2064,11 @@ def update_service(service_id):
             "optimized_description": _cell(row, 'optimized_description', _cell(row, 5, '')),
         }
         
-        if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if service_business_id:
+            has_access, _ = verify_business_write_access(cursor, str(service_business_id), user_data)
+        else:
+            has_access = service_user_id == user_data["user_id"] or db.is_superadmin(user_data["user_id"])
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
@@ -2576,14 +2585,19 @@ def delete_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id FROM userservices WHERE id = %s", (service_id,))
+        cursor.execute("SELECT user_id, business_id FROM userservices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Услуга не найдена"}), 404
         
         service_user_id = _cell(row, 'user_id', _cell(row, 0))
-        if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        service_business_id = _cell(row, 'business_id', _cell(row, 1))
+        if service_business_id:
+            has_access, _ = verify_business_write_access(cursor, str(service_business_id), user_data)
+        else:
+            has_access = service_user_id == user_data["user_id"] or db.is_superadmin(user_data["user_id"])
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         

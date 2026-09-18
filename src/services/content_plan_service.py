@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from database_manager import DatabaseManager
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 from core.card_audit import build_card_audit_snapshot
 from core.helpers import get_business_owner_id
 from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
@@ -2209,7 +2209,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         data = _row_to_dict(cursor, row)
         previous_status = str(data.get("status") or "").strip()
         cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
-        has_access, _ = verify_business_access(
+        has_access, _ = verify_business_write_access(
             cursor,
             str(data.get("root_business_id") or data.get("business_id") or ""),
             {
