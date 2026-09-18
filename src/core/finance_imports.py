@@ -12,6 +12,11 @@ from typing import Any
 
 ENTRY_TYPES = {"revenue", "expense"}
 WORKPLACE_TYPES = {"hair_chair", "nail_place", "cosmetology_room", "massage_room", "other"}
+MAX_FINANCE_IMPORT_BYTES = 10 * 1024 * 1024
+
+
+class FinanceImportLimitError(ValueError):
+    pass
 
 RU_MONTHS_GENITIVE = {
     "января": 1,
@@ -249,6 +254,8 @@ def file_hash(content: bytes) -> str:
 
 
 def parse_finance_file(filename: str, content: bytes) -> list[dict[str, Any]]:
+    if len(content) > MAX_FINANCE_IMPORT_BYTES:
+        raise FinanceImportLimitError("finance_import_file_too_large")
     lower = filename.lower()
     if lower.endswith(".csv") or lower.endswith(".txt"):
         return _parse_csv(content)

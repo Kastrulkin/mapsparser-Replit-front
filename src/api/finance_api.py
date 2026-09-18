@@ -29,6 +29,7 @@ finance_bp = Blueprint("finance_api", __name__)
 FINANCE_READ_ONLY_POST_ENDPOINTS = {
     "finance_api.preview_finance_import",
 }
+FINANCE_IMPORT_FILE_TOO_LARGE_MESSAGE = "Файл слишком большой. Максимальный размер — 10 МБ."
 
 
 def _row_to_dict(cursor, row):
@@ -995,7 +996,9 @@ def _finance_import_payload_from_request():
     if not uploaded_file:
         raise ValueError("Файл обязателен")
     filename = uploaded_file.filename or "finance-import.csv"
-    content = uploaded_file.read()
+    content = uploaded_file.read(finance_imports.MAX_FINANCE_IMPORT_BYTES + 1)
+    if len(content) > finance_imports.MAX_FINANCE_IMPORT_BYTES:
+        raise finance_imports.FinanceImportLimitError("finance_import_file_too_large")
     if not content:
         raise ValueError("Файл пустой")
     mapping_raw = request.form.get("mapping") or "{}"
@@ -1499,6 +1502,8 @@ def preview_finance_import():
             "preview": preview_rows,
             "errors": normalized.get("errors", [])[:20],
         })
+    except finance_imports.FinanceImportLimitError:
+        return jsonify({"error": FINANCE_IMPORT_FILE_TOO_LARGE_MESSAGE}), 413
     except Exception:
         return internal_error_response("Не удалось подготовить импорт финансов")
 
@@ -1597,6 +1602,8 @@ def import_finance_file():
             "thresholds": thresholds,
             "dashboard": snapshot,
         })
+    except finance_imports.FinanceImportLimitError:
+        return jsonify({"error": FINANCE_IMPORT_FILE_TOO_LARGE_MESSAGE}), 413
     except Exception:
         return jsonify({"error": f"Ошибка импорта финансов: {str(sys.exc_info()[1])}"}), 500
 
