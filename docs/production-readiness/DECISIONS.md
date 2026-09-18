@@ -11,6 +11,12 @@ that already-completed browser runs were console-clean. Pure Node event tests
 with env files/app setup disabled are small enough for low-disk verification;
 they do not bypass the existing browser/DB/build/process-proof start guards.
 
+After the bounded fix and independent reconciliation, preserve a resource-
+blocked handoff: the same ~1GiB Mac constraint has persisted across at least
+three goal turns and the next required execution needs recovered headroom.
+Do not repeatedly rewrite status documents or invent unproven product edits.
+This does not close unchecked Stage1 scope or turn the overall FAIL into PASS.
+
 ## D-027 — Reconcile inventory without promoting missing execution evidence
 
 A coarse runtime diagram cannot stand in for all checked-in execution surfaces.
