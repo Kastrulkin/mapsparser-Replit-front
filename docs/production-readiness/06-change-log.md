@@ -1,5 +1,41 @@
 # Production-readiness change log
 
+## TEST-COMPILED-02 — propagate frontend preview flag through canonical build
+
+Committed44d597af, independent approval. Canonical Dockerfile omitted VITE_COMPILED_SCRIPT_PREVIEW_ENABLED even though the browser fixture requires compiled UI. Two contract tests failed against old Dockerfile/renderedstaging. Added ARG defaultfalse/ENV before frontend build; staging explicitly opts true. No production-default enabling, backend cohort still required. Focused+adjacent13tests pass0.79s; independent13pass1.44s. The a025 image built before this change cannot establish compiled UI proof; durable proxy/profile and real runner tests are separate ongoing work.
+
+## SEC-RBAC-03 — Operator chat denies read-only memberships before effects
+
+Committeda0253199, independent review PASS. Native stored direct/network viewers reproduced200 instead of403 (two failures, six allowed controls). POST `/api/operator/chat` now uses the separate write-role guard before capability checks, audit, processing, result writes or commit. Other routes remain unchanged. New cases cover revoked memberships, owner/network-owner/superadmin and read-only current-conversation GET. Existing fallback fixture mocks the separately verified write helper; assertions were not weakened. Agent22pass1.15s (`raw/operator-chat-rbac-green.json`); reviewer22pass1.08s, expanded44pass1.70s and adjacent24pass0.56s. This is PG15/local chat proof, not platform-wide mutation closure or deployment.
+
+## DEP-PDF-01 — pin the PDF parser with compatibility coverage
+
+Committedee777f59, independently reviewed. Host pypdf6.13.2 advisory matches and reachable uploaded PDFs motivated pinning6.16.1. New valid-text/encrypted/malformed PDF compatibility test and adjacent ingestion tests passed58cases with isolated target install and pipcheck. No shared-venv upgrade or denial-of-service exploit; this is advisory-based mitigation. The later full native suite asserted isolated6.16.1 and passed4319tests. Final image version/audit remain separate gates; temporary dependency target was lost across host interruption.
+
+## TEST-FIXTURE-03 — finance ROI read/write seam in the full suite
+
+Committed5e1ebe79, reviewed. First native aggregate91797c74 had4315pass117skip1failure because the ROI fake cursor stubbed only read authorization after production writes acquired a separate guard. Fixture now models both seams without weakening tenant queries. Added allowed read/denied write and foreign-business controls;26focused tests pass. Fresh clean5e aggregate:4319pass117skip5warnings296.79s, raw `native-full-backend-5e1ebe79.json` exit0. Skips still include safe Docker tests and seven intentionally disabled live-provider cases; this is not final PG16 image verification.
+
+## SEC-RBAC-02 — agent blueprint viewer mutation boundary
+
+Committed206c06ab, independently reviewed. Real native-PG Flask red: direct/network stored viewer creates a blueprint (201, one inserted row) instead of403/no row. Agent blueprint access now selects the existing write-role helper for mutating HTTP methods; only the exact non-persistent `/preflight` POST retains read access. Compiled/custom-process previews persist state and therefore require write authority. GET/HEAD remain read paths; stored blueprint/run business controls authorization, not just a request selector.
+
+Native17tests include actual insertion denial, member/manager/owner/network-owner/superadmin controls, revoked/foreign denial, run/approval denial before runner effects, preflight200 with fail-fast write-verifier spy and unchanged counts, custom/compiled previews denied before effects. Scoped adjacent118passed2.80s; root independent finance+network+blueprint54passed4.17s (`raw/blueprint-viewer-root.json`). This does not close generic Operator mutations or every API's role matrix.
+
+## SEC-WH-05 — WhatsApp replay admission and visible uncertainty
+
+Committed91797c74, independently reviewed. Signed identical callback red reached AI processing and send twice. Existing canonical partial unique event key now durably admits `processing` before effects; completed duplicates skip, processing duplicates do not mutate the first operation. Process failures/malformed results and false/raised provider sends require fixed-reason reconciliation. No automatic replay or exactly-once claim: a process crash after admission remains `processing` and needs investigation.
+
+Handler validates string/opaque provider identifiers without rejecting padded IDs. Per-message failures accumulate a batch response while remaining messages are processed; an early duplicate cannot starve later fresh messages. New superadmin-only GET `/api/webhooks/whatsapp/events` lists bounded attention state without payload, phone, provider key or text. It is an API/support view, not a completed operator UI or automatic provider-history reconciliation.
+
+Independent review caught active-duplicate status corruption, batch starvation, missing send-exception tests, and unsafe test DSN/schema assumptions; all corrected before commit. Native test uses explicit loopback/test-named DSN, rejects libpq host overrides, UUID schema/finally cleanup and two real connections. Root47passed0.50s (`raw/whatsapp-replay-root.json`), including auth/identifier/batch/reconciliation/immutability/concurrency/tenant cases. Provider calls are stubs; no production schema change, send or deployment.
+
+## TEST-E2E-03 — fail-closed native fixture subprocess
+
+Committed618b00b6, reviewed. Native test helper previously accepted an arbitrary DSN, overwrote the caller's Python egress-guard path and could load ambient dotenv. It now requires a literal loopback, test-named staging DB with no URL query/hash; preserves guard-first PYTHONPATH, disables dotenv and removes inherited libpq service/hostaddr/options. Docker branches are unchanged. Red7cases; unit green7, typecheck/scoped lint pass and actual native CLI verified with hostile synthetic inherited service/hostaddr.
+
+The first attempted fix blanked libpq variables; actual browser run exposed78fixture failures (`service file "" not found`) while36nonfixture scenarios passed. Those variables must be absent, not empty. Failed evidence remains; after correction the complete114-case run is111pass/3missing-runner-fixture failures. This helper hardens its subprocess, not the entire machine or arbitrary Python/C-library network access.
+
 ## SEC-RBAC-01 — finance viewer and stored-transaction write boundaries
 
 Real native PostgreSQL HTTP reproduction against the pre-fix HEAD archive returned200 for a stored viewer's ROI write where403 was required (`/tmp/sec_rbac_head_red.log`, one failed test). A second reproduction showed that authorizing requested business A was insufficient: the same actor could mutate its own transaction belonging to B, where its role was viewer (`/tmp/sec_rbac_target_red.log`, actual200). An earlier missing-helper ImportError was a test-construction failure, not authorization evidence, and is not used for the verdict.

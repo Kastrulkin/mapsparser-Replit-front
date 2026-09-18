@@ -1,6 +1,8 @@
 # Evidence Bundle: production-readiness-20260917
 
-Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-17 UTC. This is a progress checkpoint, not final independent sign-off.
+Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
+
+Latest durable results supersede the historical interruption paragraph below: clean5e1ebe79 full native backend **4319passed117skipped5warnings**,296.79s, exit0 (`raw/native-full-backend-5e1ebe79.json`); real-browser **111passed3failed**,200.079s (`raw/native-pg-real-api-browser-unset.json`). Three compiled-runner failures remain real. User-authorized Docker startup completed without reset, and fresh task-owned PostgreSQL16 storage/checkpoint/restart/dump-restore/pg_amcheck passed35.107s (`raw/docker-resume-storage-probe.json`). Canonical a0253199 build is running serially; no image success claim yet. No production changes. Older temp archives/traces/dumps/reports vanished across host interruption; repository raw captures survived. Current resources/authority are in HANDOFF's newest section, not the obsolete temp paths below.
 
 Latest interruption: full3fadbabd rerun3565passed691skipped4failed79errors and next image build/scan failed on local Docker/EXT4/PG I/O. See `docs/production-readiness/LOCAL_DOCKER_INCIDENT_20260917.md`; host2.6GiB after exact duplicate-cache cleanup, shared local Docker recovery permission requested. No heavy job is still running. Later pure harness packets a04686de/a842d648 independently reviewed and combined20passed2.14s, without Docker.
 

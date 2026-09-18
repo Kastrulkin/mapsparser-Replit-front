@@ -33,10 +33,16 @@
         "0fdd3dce contact GET connection pinning",
         "b9a146aa finance role and stored-target write gates",
         "raw/ssrf-pinned-get-root-green.json",
-        "raw/native-pg-security-final-b9a146aa.json"
+        "raw/native-pg-security-final-b9a146aa.json",
+        "206c06ab blueprint stored-role write gate",
+        "91797c74 WhatsApp durable admission/reconciliation",
+        "ee777f59 pypdf6.16.1 compatibility mitigation",
+        "a0253199 Operator chat stored-role write gate",
+        "raw/operator-chat-rbac-green.json",
+        "raw/whatsapp-replay-root.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/navigation, data, contact-GET SSRF and finance-viewer fixes are committed. Historical credential revocation unknown; generic role/object, WhatsApp replay, uncertain send and operational P1 gaps remain. No audit deployment."
+        "Reviewed local auth/webhook/scope/navigation/data/contact-GET SSRF and finance/blueprint/Operator-chat viewer fixes are committed. WhatsApp duplicate admission and uncertain outcome visibility fixed locally, not exactly-once provider delivery. Historical revocation, generic mutation role/object, wider uncertain-send and operational gaps remain. No audit deployment."
       ]
     },
     {
@@ -56,10 +62,12 @@
         "raw/frontend-patched-lint.json",
         "raw/frontend-patched-typecheck.json",
         "raw/frontend-patched-unit.json",
-        "raw/frontend-patched-mocked-e2e.json"
+        "raw/frontend-patched-mocked-e2e.json",
+        "raw/native-pg-real-api-browser-unset.json",
+        "618b00b6 native fixture subprocess isolation"
       ],
       "gaps": [
-        "Patched frontend570unit/122files,72mocked browser, lint/typecheck/build pass. Real baseline95passed19failed; targeted33passed across three viewports. Full114-test aggregate not green yet; actual compiled app/profile fixture absent despite successful standalone Docker sandbox proof."
+        "Patched frontend570unit/122files,72mocked browser, lint/typecheck/build pass. Native real-API final111passed3failed/114 across three viewports; remaining three are absent actual compiled runner fixture. Not an all-green browser suite. Raw captures survived interruption; temporary traces/screenshots were lost."
       ]
     },
     {
@@ -83,10 +91,12 @@
         "raw/native-pg-journal-network-green.json",
         "raw/native-pg-operator-fixture-green.json",
         "f1287d81",
-        "raw/native-pg-security-final-b9a146aa.json"
+        "raw/native-pg-security-final-b9a146aa.json",
+        "raw/native-full-backend-5e1ebe79.json",
+        "raw/native-full-migration-5e1ebe79.json"
       ],
       "gaps": [
-        "Full3fadbabd suite3565passed691skipped4failed79errors interrupted by Docker/PG I/O; aggregate remains non-green. Fresh nativePG15 enabled704pass4fixture failures→713pass after correction; clean b9a final28-file selection826pass54.58s. PG15 evidence does not replace PG16/full-suite verification. Full authorization/retry/scope audit remains."
+        "Clean5e1ebe79 full nativePG15 aggregate4319passed117skipped5warnings296.79s, exit0. Skips still include Docker-dependent tests, explicit live-provider exclusions and isolated migrated-DB configuration; no live providers enabled. This predates a025 chat patch and does not replace PG16/final-image aggregate verification."
       ]
     },
     {
@@ -102,10 +112,13 @@
         "raw/docker-browser-ca8-build.json",
         "raw/docker-browser-ca8-smoke.json",
         "raw/compiled-runner-docker-isolation.json",
-        "/private/tmp/localos-readiness-restore-72f33d10b62d43cb86c6900dbcfab506/evidence.json"
+        "Historical temp restore evidence was lost across interruption; see durable report limitations",
+        "raw/docker-resume-storage-probe.json",
+        "raw/docker-a0253199-build.json",
+        "raw/docker-a0253199-smoke-green.json"
       ],
       "gaps": [
-        "ARM64 browser-enabled ca8 image build/nonroot offline Chromium smoke and23real-PG rollback tests pass. Restore matches288tables data/columns/constraints/revision; full schema/grants/production backup not verified.3fadbabd build failed on containerd I/O; AMD64 pending. Restore helpera04686de and compiled harnessa842d648 independently reviewed,20purefake tests pass, real execution pending local Docker recovery."
+        "User-approved Docker startup and freshPG16 storage proof complete. Clean a025 ARM64 browser-enabled image built276.824s; offline nonroot/artifact/pypdf6.16.1/pipcheck/Chromium smoke passed3.039s. This image predates44d compiled-preview flag and later uncommitted fixes. AMD64/full schema restore/actual committed restore helper and app-integrated compiled proof remain incomplete. Old temp restore dump is gone."
       ]
     },
     {
@@ -171,7 +184,7 @@
         "SECURITY.md"
       ],
       "gaps": [
-        "Reports 00,03,04,05,07,08,09,10 not yet authored; current reports remain working documents, not sign-off."
+        "Reports00,04,07,08,09,10 not yet authored;03 threat model and05 UX are working documents, not sign-off."
       ]
     },
     {
@@ -214,6 +227,7 @@
   "known_gaps": [
     "Goal remains active and incomplete; evidence is a checkpoint, not a production-ready verdict.",
     "Raw captures are local-only; inspect exit_code, timed_out and output scope, not the capture helper's exit code.",
-    "No new production release from this audit; do not publish sensitive scan files or resolved Compose configuration."
+    "No new production release from this audit; do not publish sensitive scan files or resolved Compose configuration.",
+    "Earlier temporary archives/scanner reports/traces/dumps were lost across host interruption; use durable repository raw captures and fresh resource identity checks."
   ]
 }

@@ -4,6 +4,18 @@
 
 Use a freshly created, loopback-only native PostgreSQL cluster with synthetic data to continue actual transaction/role checks while shared Docker is unavailable. Retain exact server version, data_directory, named test databases, archive commit and no-egress environment; stop only the owned cluster after checks. PG15 results can confirm SQL defects and fixes without pretending to satisfy PG16, image, compiled-runner or full production recovery requirements. Do not replace the original acceptance criteria with easier native-only checks.
 
+## D-016 — Resume from durable evidence and verify new Docker storage
+
+18 September: explicit permission covers starting local Docker without reset, not deleting volumes or certifying old storage. Fresh task-owned PG16 passed synthetic write/checkpoint/restart/dump-restore/pg_amcheck; old stopped audit volumes remain unused. Earlier temp archives/traces/dependency reports disappeared across host interruption. Preserve durable raw captures, record unavailable artifacts honestly, rebuild only what the next acceptance gate needs. Native full4319-pass evidence is already complete and need not be repeated just because its temporary runner is gone. Heavy build/scan/load jobs run serially with headroom checks.
+
+## D-015 — WhatsApp admission is not exactly-once external delivery
+
+Use existing durable agent_trigger_events unique admission before processing/sends. Completed duplicates return safely; active duplicates do not rewrite the original row. Failure or ambiguous send is visible as needs_reconciliation; crash-after-admission may remain processing. A superadmin-only bounded projection exposes status/reason/IDs/timestamps without message/phone/payload secrets and without replay controls. Mixed batches continue eligible later messages. Do not automatically retry a possibly delivered send.
+
+## D-014 — Dependency advisory mitigation must retain compatibility proof
+
+pypdf6.16.1 is pinned after reachable untrusted PDF ingestion and upstream advisory review, with valid-text/encrypted/malformed compatibility coverage. No exploit or denial-of-service was reproduced. The host121-package scan is not the production image inventory. Fresh final-image resolution/scanning remains necessary; avoid claiming all dependency findings fixed from one pin.
+
 ## D-013 — Role proof must reach real stored data and actual effects
 
 A fake role label unused by a cursor, or ImportError for a not-yet-added helper, does not prove an authorization defect. Require actual membership rows, the real guard, a reachable API request and an effect/no-effect assertion. Authorize the stored object tenant, not only the caller-selected business. Preserve documented read/preview/HEAD behavior and existing non-viewer/legacy NULL-business semantics while recording the remaining platform role matrix separately.

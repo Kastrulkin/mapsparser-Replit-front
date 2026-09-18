@@ -1,12 +1,23 @@
 # Production-readiness progress
 
-Latest phase: journal fixture, pinned contact GET and finance role/stored-target fixes are reviewed and committed (`f1287d81`, `0fdd3dce`, `b9a146aa`). Clean b9a archive selected aggregate: **826passed/5warnings54.58s** on isolated nativePG15. No Docker recovery or production deployment. The complete objective remains incomplete; this is not the full backend/PG16 suite.
+Latest phase: clean5e1ebe79 nativePG15 whole-backend aggregate **4319 passed,117 skipped**, exit0; real-browser **111/114 passed**, three genuine compiled-runner fixture failures remain. Reviewed fixes also include pypdf6.16.1 pin and Operator chat write-role gate a0253199. User explicitly approved local Docker startup without reset; daemon started and a fresh task-owned PostgreSQL16 storage/restart/restore probe passed35.107s. No production deployment, user-volume deletion or global prune. Current paths and authority are in the newest HANDOFF section.
 
-Updated: 2026-09-17 23:22 UTC / 18 September Moscow. **IN PROGRESS — not production-ready sign-off.**
+Updated: 2026-09-18 06:15 UTC / 09:15 Moscow. **IN PROGRESS — not production-ready sign-off.**
+
+06:28UTC: clean a025 ARM64 image build passed276.824s; nonroot/offline/read-only Chromium153 + pypdf6.16.1 + pipcheck + both artifacts passed3.039s. Image predates44d597af compiled-preview build flag and later uncommitted fix/profile. Unused old audit browser image and ten exact cache records removed (3.043GB Docker reclaim), no volumes/user images; currenthostfree3.1GiB. Previously Docker-skipped PG16 test groups are now running serially. Native five-flow correctness probe18steps passes after a newly reproduced legacy financial date/row-mapping correction under review; no before/after performance claim yet.
+
+Temporary artifacts from the earlier session were lost across interruption/host cleanup; checked-in source and repository raw captures survived. Earlier claims below that temp dumps/traces/caches remain describe historical checkpoints only. Full native green was recovered from its durable raw capture, not guessed or rerun. The current native cluster is new, on port35418; current Docker probe resources are separate from old stopped audit volumes.
+
+## Latest bounded evidence
+
+- Fresh nativePG15 staging schema:288tables, vector0.8.6/pgcrypto1.3, Alembic20260907_001. Synthetic users/journeys only. Gunicorn127.0.0.1:38018; blank providers/dispatch off/Python egress guard and closed external Chromium proxy. App/browser stopped after checks.
+- First native browser36pass78fail153.249s was a new harness regression: empty PGSERVICE/PGSERVICEFILE were interpreted by libpq, not unset. Raw failure retained. Corrected helper deletes override keys; actual CLI succeeds despite hostile synthetic inherited overrides; unit7pass, full frontend typecheck/scoped lint pass, independent review. Final real-API111pass3fail200.079s, not an all-green suite.
+- Installed host Python121-package pin inventory: offline cached Trivy reports48findings (21high/23medium/4low), no critical. This is **not an image or production inventory**, and exploitability is separately triaged. Direct site-packages scan recognized0manifests, so its empty result is not a clean scan. pypdf is the first isolated dependency investigation; no shared-venv update.
+- Local disk briefly fell to200MiB while swap was6.5GB. After no open scanner handles, only the audit-downloaded public Trivy vulnerability cache files (1,405,173,760-byte DB and150-byte metadata) were deleted. Reports/pins preserved; cache can be downloaded again but is no longer available offline. Initially1.5GiB free after deletion,2.6GiB after browser shutdown. No project data/backups/volumes deleted.
 
 ## Current infrastructure interruption
 
-Local Docker/EXT4 I/O errors interrupted the next image build, image scan and final backend run. Host space fell to1.3GiB; only the audit-created duplicate public scanner cache was removed (1.3GiB; identical original retained), leaving2.6GiB at that checkpoint. After bounded nativeSQL tests/clean archive, now2.4GiB free. No daemon restart, volume deletion or production action. Shared local Docker restart approval requested, not received. See [incident and recovery requirements](LOCAL_DOCKER_INCIDENT_20260917.md). Do not repeat heavy Docker work yet.
+Historical Docker/EXT4 I/O errors interrupted the previous image build/scan/backend run. Recovery startup is now explicitly approved and completed; fresh PostgreSQL16 synthetic write/restart/restore and pg_amcheck passed. Existing damaged audit volumes are not reused. Hostfree8.2GiB before the next build; heavy operations remain serial, and the deleted1.3GiB scanner cache must be budgeted anew. See [incident and recovery requirements](LOCAL_DOCKER_INCIDENT_20260917.md).
 
 ## Scope and authority
 
@@ -111,4 +122,4 @@ Production read-only follow-up confirmed eight services and9.6GB free, unchanged
 
 ## Next step
 
-Continue from the reviewed b9a checkpoint: native full-schema/app/browser fallback can progress without shared Docker; finish generic role/object, WhatsApp replay/uncertain-send and AI/tool coverage. Contact-GET SSRF and finance role fixes are complete locally, not platform-wide closure. Shared Docker recovery still needs approval/headroom, then storage verification before image/PG16/runner reruns. Five-flow measurements, remaining scans/reports/demo and final independent audit remain. Goal ACTIVE; proof overallFAIL, final verdictUNKNOWN.
+Continue current44d597af source checkpoint and a025 runtime evidence: finish PG16 subset, independently reviewed legacy read-path/harness and durable compiled staging packaging. Then build/test the actual compiled runner profile and final browser image when disk headroom permits. Generic mutation-role/AI/tool/uncertain-send coverage, five-flow measurements, scans/restore/reports/demo and final independent audit remain. Docker startup authority is already received; do not ask again or restart it unnecessarily. Goal ACTIVE; proof overallFAIL, final verdictUNKNOWN.
