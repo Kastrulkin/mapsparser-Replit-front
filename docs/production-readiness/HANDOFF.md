@@ -2,6 +2,29 @@
 
 ## Current continuation — 18 September after 15:30 UTC
 
+LATEST16:29UTC — disk stop, no running audit build/test job. HEADae80292d
+pins the verified Node/Python base indexes; f372cb84 preserves failed probes.
+Application/frontend/migrations remain identical to tested272794a4. All tracked
+changes are committed; unrelated untracked map-analysis document is untouched.
+Current Mac free1,032,540KiB (~0.985GiB), below1.5GiB runtime and2GiB native /
+4GiB Docker start guards. Do not lower guards or retry heavy jobs. Additional
+8–10GiB local Mac headroom remains requested; server expansion is independent.
+Read-only Docker check:29.2.0, own app/ingress/runner running, PG/Redis healthy.
+No Docker restart/reset/prune, user-volume changes, production or provider action.
+
+Next prepared package is TEMP-ONLY v8 process supervisor/proof, independently
+static-approved, NOT executed or integrated into benchmark/demo wrappers:
+`/private/tmp/localos-readiness-process-supervisor-v8.py`
+SHA1e849be67fdea0e83ae91f97e1cb8bdf49e1488996afede47956b991ca8bbb19;
+`/private/tmp/localos-readiness-process-supervisor-v8-proof.py`
+SHAdc68aa820036ce32fd51194a5cde231702d44ad8cdd83a6f2fdab99b9343ca10.
+It fixes the prepared proof's detached-child capture race via bounded PID read
+and parent handshake; original benchmark failure cause remainsUNKNOWN.
+After headroom recovery, first run this process-only proof with bounded capture
+and inspect child exit/stdout, then review integration into NEW one-shot wrappers.
+Do not replay old failed wrappers or call v8 FIX_PROVEN before execution.
+Exact continuation command is in COMMANDS.md; AC3/4/10PASS, others/overallFAIL.
+
 LATEST16:24UTC: f372cb84 commits reviewed failed-probe docs. Docker base-pin
 package is independently source/static approved, root14passed0.19s with real
 capture557.788ms; no app/frontend/migration change from272. DEP-LOCK-01 remains

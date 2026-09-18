@@ -1,5 +1,25 @@
 # Verified commands and evidence
 
+## Disk-stop continuation — prepared, NOT executed (18 September 16:29 UTC)
+
+Mac free1,032,540KiB: no new process/browser/DB/build launches. Read-only
+Docker info29.2.0 and project-filtered ps show own app/ingress/runner running,
+Postgres/Redis healthy. No resources changed. The task guard thresholds remain.
+
+After free space is reliably above2GiB, verify the two v8 hashes in HANDOFF,
+then run the following from the repository in a NEW named tmux session. It is
+a future process-only proof, not a completed test or authority for Docker build.
+Require a fresh output path; never overwrite previous evidence.
+
+```sh
+env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin PYTHON_DOTENV_DISABLED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/localos-readiness-resume-pg.anwDNv /usr/bin/arch -arm64 venv/bin/python /Users/alexdemyanov/.codex/skills/bug-reproducer/scripts/capture_command.py --label supervisor-v8-process-only --timeout 30 --max-output 16000 --output .agent/tasks/production-readiness-20260917/raw/supervisor-v8-process-only.json -- /usr/bin/arch -arm64 venv/bin/python /private/tmp/localos-readiness-process-supervisor-v8-proof.py --execute
+```
+
+Inspect actual child exit_code, timed_out, truncation and all ten proof rows;
+capture helper exit0 alone is not success. Check no proof-owned children remain.
+Only after passing proof/review may NEW guarded benchmark/demo wrappers use
+the controller. Neither those wrappers nor a full comparison/rehearsal exist yet.
+
 ## Docker base-pin source checks — 18 September 16:22 UTC
 
 Root executed the existing bug-reproducer capture helper with an empty

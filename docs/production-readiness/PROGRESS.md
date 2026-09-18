@@ -1,5 +1,16 @@
 # Production-readiness progress
 
+16:29 UTC: base pins committed ae80292d; tracked tree clean, unrelated map
+document preserved. Read-only check confirms Docker29.2.0 still running and
+own PG/Redis healthy; no reset/restart/prune. Local Mac headroom fell to
+1,032,540KiB (~0.985GiB), below runtime/start guards. Cause is not established;
+do not attribute it to this task or delete unknown resources. All new launches
+stopped. Prepared-only v8 controller/proof has independent staticGO but no
+execution or runtime integration; no FIX_PROVEN claim. Next step after local
+space recovery: bounded process-only proof, then NEW benchmark/demo wrappers.
+Current4728backend/117browser/240HTTP/60frontend/14base-contract results remain
+scoped evidence, not overall release readiness. AC7/9 remainFAIL; no deploy.
+
 16:24 UTC: failed-probe documentation committed locally f372cb84 after
 independent review. Node/Python Docker bases now pin verified historical OCI
 indexes; root14static tests pass0.19s/capture557.788ms, independent scoped

@@ -1,5 +1,15 @@
 # Readiness decisions
 
+## D-026 — Stop launches below local disk guards
+
+At16:29UTC the Mac has~0.985GiB free, despite the separately enlarged server
+disk. Preserve completed results and the failed comparison's partial archive/
+synthetic DB; do not lower guards, reset Docker or delete unknown user resources.
+The v8 process-only proof is independently static-approved but remains unrun.
+Require recovered headroom, bounded execution and observed child cleanup before
+integrating it into fresh one-shot benchmark/demo wrappers. Prepared code and
+successful py_compile do not prove runtime cleanup or explain the priorEPERM.
+
 ## D-025 — Preserve failed probes and pin observed Docker bases
 
 An interrupted comparison is not a partial performance PASS. Preserve the first

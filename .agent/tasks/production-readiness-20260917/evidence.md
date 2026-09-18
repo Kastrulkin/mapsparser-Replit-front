@@ -2,6 +2,13 @@
 
 Status: **FAIL / incomplete whole-goal evidence**, updated 2026-09-18 UTC. This is a progress checkpoint, not final independent sign-off.
 
+16:29UTC: Docker base pins committed ae80292d, independent static review and
+root14contracts PASS0.19s/capture557.788ms; no image/runtime claim. App/frontend
+unchanged from272. Mac free~0.985GiB blocks all new launches. TEMPv8 process
+controller/proof staticGO only, not executed/integrated/FIX_PROVEN. Docker is
+running without reset; no production effects. Original failure causeUNKNOWN,
+AC7/9 and overallFAIL unchanged; detailed continuation in HANDOFF/COMMANDS.
+
 16:08UTC: later demo probe fails content selection after154.773944s; reviews
 work but no completed rehearsal. Supplemental2d→272 comparison outer fails
 PermissionError before final inner result; partial samples do not meet50/ref
