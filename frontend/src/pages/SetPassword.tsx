@@ -30,12 +30,10 @@ const SetPassword: React.FC = () => {
 
       if (userEmail) {
         setEmail(userEmail);
-        console.log('Email получен из URL параметров:', userEmail);
       }
 
       if (userToken) {
         setToken(userToken);
-        console.log('Токен получен из URL параметров:', userToken);
       }
 
       if (!userEmail) {
