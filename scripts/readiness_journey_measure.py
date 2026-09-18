@@ -140,7 +140,7 @@ def safe_environment(database_url: str, source_root: Path, guard_pythonpath: str
     }
 
 
-def import_origins(source_root: Path, database_url: str, guard_pythonpath: str) -> dict[str, str]:
+def import_origins(source_root: Path, database_url: str, guard_pythonpath: str) -> dict[str, dict[str, str]]:
     environment = safe_environment(database_url, source_root, guard_pythonpath)
     marker = "__LOCALOS_READINESS_IMPORT_ORIGINS__"
     command = [
@@ -166,13 +166,28 @@ def import_origins(source_root: Path, database_url: str, guard_pythonpath: str) 
     if len(origin_lines) != 1:
         raise RuntimeError("archive import origin marker was not emitted exactly once")
     origins = json.loads(origin_lines[0][len(marker):])
-    expected = {
+    expected_original = {
         "database_manager": str(source_root / "src" / "database_manager.py"),
         "main": str(source_root / "src" / "main.py"),
     }
-    if origins != expected:
-        raise RuntimeError(f"archive import isolation failed: {origins}")
-    return origins
+    expected_canonical = {key: str(Path(value).resolve()) for key, value in expected_original.items()}
+    observed_canonical = {key: str(Path(value).resolve()) for key, value in origins.items()}
+    archive_root = source_root.resolve()
+    for value in observed_canonical.values():
+        try:
+            Path(value).relative_to(archive_root)
+        except ValueError:
+            raise RuntimeError(f"archive import escaped archive root: {value}")
+    if observed_canonical != expected_canonical:
+        raise RuntimeError(
+            f"archive import isolation failed: original={origins}, canonical={observed_canonical}"
+        )
+    return {
+        "observed_original": origins,
+        "observed_canonical": observed_canonical,
+        "expected_original": expected_original,
+        "expected_canonical": expected_canonical,
+    }
 
 
 def exact_measure_database_name(database_name: str) -> bool:
@@ -590,6 +605,11 @@ def main() -> int:
             invalid_runs = [run for run_list in all_runs.values() for run in run_list if not run["valid"]]
             payload["valid"] = not invalid_runs
             payload["invalid_reasons"] = [reason for run in invalid_runs for reason in run["invalid_reasons"]]
+        except Exception:
+            payload["valid"] = False
+            payload["invalid_reasons"] = [
+                f"setup_failure:{type(sys.exception()).__name__}:{sys.exception()}"
+            ]
         finally:
             shutil.rmtree(temporary_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -170,7 +170,8 @@ def test_import_origin_preflight_uses_archive_paths_only(monkeypatch, tmp_path):
         "/private/guard:/hostile/current-repository",
     )
 
-    assert origins == expected
+    assert origins["observed_original"] == expected
+    assert origins["observed_canonical"] == {key: str(Path(value).resolve()) for key, value in expected.items()}
     assert observed["PYTHONPATH"].split(":") == ["/private/guard", str(source_root / "src"), str(source_root)]
 
 
@@ -190,10 +191,84 @@ def test_import_origins_uses_real_subprocess_without_importing_app(tmp_path):
         str(guard_root),
     )
 
-    assert origins == {
+    expected = {
         "database_manager": str(source_root / "src" / "database_manager.py"),
         "main": str(source_root / "src" / "main.py"),
     }
+    assert origins["observed_original"] == expected
+    assert origins["expected_canonical"] == {key: str(Path(value).resolve()) for key, value in expected.items()}
+
+
+def test_import_origins_accepts_symlinked_temp_path_but_records_both_paths(monkeypatch, tmp_path):
+    source_root = tmp_path / "archive"
+    (source_root / "src").mkdir(parents=True)
+    expected = {
+        "database_manager": str(source_root / "src" / "database_manager.py"),
+        "main": str(source_root / "src" / "main.py"),
+    }
+    alternate_root = tmp_path / "alternate"
+    alternate_root.symlink_to(source_root, target_is_directory=True)
+    observed = {
+        "database_manager": str(alternate_root / "src" / "database_manager.py"),
+        "main": str(alternate_root / "src" / "main.py"),
+    }
+
+    class Completed:
+        returncode = 0
+        stdout = "__LOCALOS_READINESS_IMPORT_ORIGINS__" + json.dumps(observed)
+        stderr = ""
+
+    monkeypatch.setattr(measure.subprocess, "run", lambda *_args, **_kwargs: Completed())
+    origins = measure.import_origins(
+        source_root,
+        "postgresql://owner@127.0.0.1:35418/readiness_test",
+        "/private/guard",
+    )
+
+    assert origins["observed_original"] == observed
+    assert origins["observed_canonical"] == origins["expected_canonical"]
+
+
+def test_import_origins_real_subprocess_accepts_symlinked_archive_root(tmp_path):
+    canonical_root = tmp_path / "canonical-archive"
+    alias_root = tmp_path / "alias-archive"
+    guard_root = tmp_path / "guard"
+    (canonical_root / "src").mkdir(parents=True)
+    guard_root.mkdir()
+    alias_root.symlink_to(canonical_root, target_is_directory=True)
+    (canonical_root / "src" / "__init__.py").write_text("", encoding="utf-8")
+    (canonical_root / "src" / "main.py").write_text("", encoding="utf-8")
+    (canonical_root / "src" / "database_manager.py").write_text("", encoding="utf-8")
+    (guard_root / "sitecustomize.py").write_text("", encoding="utf-8")
+
+    origins = measure.import_origins(
+        alias_root,
+        "postgresql://owner@127.0.0.1:35418/readiness_test",
+        str(guard_root),
+    )
+
+    assert origins["expected_original"]["main"] == str(alias_root / "src" / "main.py")
+    assert origins["observed_canonical"] == origins["expected_canonical"]
+
+
+def test_import_origins_rejects_symlink_escaping_archive_root(tmp_path):
+    source_root = tmp_path / "archive"
+    guard_root = tmp_path / "guard"
+    external = tmp_path / "external_database_manager.py"
+    (source_root / "src").mkdir(parents=True)
+    guard_root.mkdir()
+    external.write_text("", encoding="utf-8")
+    (source_root / "src" / "__init__.py").write_text("", encoding="utf-8")
+    (source_root / "src" / "main.py").write_text("", encoding="utf-8")
+    (source_root / "src" / "database_manager.py").symlink_to(external)
+    (guard_root / "sitecustomize.py").write_text("", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="escaped archive root"):
+        measure.import_origins(
+            source_root,
+            "postgresql://owner@127.0.0.1:35418/readiness_test",
+            str(guard_root),
+        )
 
 
 def test_collision_never_starts_child_or_drops_database(monkeypatch, tmp_path):
@@ -223,3 +298,41 @@ def test_collision_never_starts_child_or_drops_database(monkeypatch, tmp_path):
 
     assert result["cleanup"]["skipped"] == "not_proven_absent_before_child"
     assert result["valid"] is False
+
+
+def test_execute_writes_bounded_setup_failure_output(monkeypatch, tmp_path):
+    output = tmp_path / "measurement.json"
+
+    class Usage:
+        free = measure.MIN_FREE_BYTES
+
+    monkeypatch.setattr(measure, "guarded_dsn", lambda _value: "postgresql://owner@127.0.0.1:35418/readiness_test")
+    monkeypatch.setattr(measure, "guard_provenance", lambda _value: {"path": "/guard/sitecustomize.py", "sha256": "f" * 64})
+    monkeypatch.setattr(measure, "resolve_ref", lambda ref: "a" * 40 if ref == "baseline" else "b" * 40)
+    monkeypatch.setattr(measure.shutil, "disk_usage", lambda _path: Usage())
+
+    def fail_archive(_ref, _destination):
+        raise RuntimeError("archive unavailable")
+
+    monkeypatch.setattr(measure, "archive_source", fail_archive)
+    monkeypatch.setattr(
+        measure.sys,
+        "argv",
+        [
+            "readiness_journey_measure.py",
+            "--baseline",
+            "baseline",
+            "--current",
+            "current",
+            "--database-url",
+            "postgresql://owner@127.0.0.1:35418/readiness_test",
+            "--output",
+            str(output),
+            "--execute",
+        ],
+    )
+
+    assert measure.main() == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["valid"] is False
+    assert payload["invalid_reasons"] == ["setup_failure:RuntimeError:archive unavailable"]
