@@ -962,63 +962,17 @@ def get_business_data(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Создаем таблицу FinancialTransactions если её нет
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS FinancialTransactions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                business_id TEXT,
-                transaction_type TEXT NOT NULL,
-                amount REAL NOT NULL,
-                description TEXT,
-                category TEXT,
-                date DATE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
-                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
-            )
-        """)
-
-        # Создаем таблицу BusinessProfiles если её нет
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS BusinessProfiles (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                contact_name TEXT,
-                contact_phone TEXT,
-                contact_email TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
-            )
-        """)
-
-        # Добавляем поле business_id в UserServices если его нет
-        try:
-            cursor.execute("ALTER TABLE UserServices ADD COLUMN business_id TEXT")
-            cursor.execute("""
-                UPDATE UserServices
-                SET business_id = (
-                    SELECT b.id FROM Businesses b
-                    WHERE b.owner_id = UserServices.user_id
-                    LIMIT 1
-                )
-                WHERE business_id IS NULL
-            """)
-        except Exception:
-            # Поле уже существует или другая ошибка
-            pass
-
-        db.conn.commit()
-
-        # Проверяем доступ к бизнесу
+        # Alembic owns these canonical tables and columns. A GET must never
+        # create, alter, backfill, or commit shared tenant data.
         business = db.get_business_by_id(business_id)
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        # Проверяем права доступа
-        if not db.is_superadmin(user_data['user_id']) and business['owner_id'] != user_data['user_id']:
+        # Read access includes active direct and network memberships; write
+        # authorization remains governed by verify_business_write_access.
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
