@@ -111,6 +111,7 @@ def test_preview_resolves_targets_and_confirm_is_idempotent():
         action_id=preview["action_id"],
         user_id="u-1",
         scope_resolver=lambda kind, scope_id: scope if (kind, scope_id) == ("network", "n-1") else None,
+        target_authorizer=lambda targets: targets == ["b-1", "b-2"],
         executors={"review_replies.generate": executor},
     )
     second, repeated = confirm_mobile_action(
@@ -118,6 +119,7 @@ def test_preview_resolves_targets_and_confirm_is_idempotent():
         action_id=preview["action_id"],
         user_id="u-1",
         scope_resolver=lambda kind, scope_id: scope,
+        target_authorizer=lambda _targets: (_ for _ in ()).throw(AssertionError("completed action must not reauthorize")),
         executors={"review_replies.generate": executor},
     )
 
@@ -154,11 +156,83 @@ def test_expired_preview_does_not_execute():
         action_id="a-1",
         user_id="u-1",
         scope_resolver=lambda kind, scope_id: {"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        target_authorizer=None,
         executors={"review_replies.generate": lambda *_args: {"status": "completed"}},
     )
 
     assert result["status"] == "blocked"
     assert result["blocked_reasons"] == ["preview_expired"]
+    assert idempotent is False
+
+
+def test_pending_action_requires_target_write_authorization_before_executor():
+    cursor = ActionCursor()
+    cursor.action = {
+        "id": "a-1", "user_id": "u-1", "status": "pending_approval", "scope_type": "business", "scope_id": "b-1",
+        "target_business_ids_json": ["b-1"], "capability": "review_replies.generate", "envelope_json": {"review_ids": ["r-1"]},
+        "expires_at": None, "result_json": {},
+    }
+    calls = []
+
+    result, idempotent = confirm_mobile_action(
+        cursor,
+        action_id="a-1",
+        user_id="u-1",
+        scope_resolver=lambda kind, scope_id: {"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        target_authorizer=lambda _targets: False,
+        executors={"review_replies.generate": lambda *_args: calls.append("executor") or {"status": "completed"}},
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocked_reasons"] == ["write_access_forbidden"]
+    assert result["access_denied"] is True
+    assert idempotent is False
+    assert calls == []
+
+
+def test_pending_action_fails_closed_without_target_authorizer():
+    cursor = ActionCursor()
+    cursor.action = {
+        "id": "a-1", "user_id": "u-1", "status": "pending_approval", "scope_type": "business", "scope_id": "b-1",
+        "target_business_ids_json": ["b-1"], "capability": "review_replies.generate", "envelope_json": {"review_ids": ["r-1"]},
+        "expires_at": None, "result_json": {},
+    }
+
+    result, idempotent = confirm_mobile_action(
+        cursor,
+        action_id="a-1",
+        user_id="u-1",
+        scope_resolver=lambda kind, scope_id: {"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        target_authorizer=None,
+        executors={"review_replies.generate": lambda *_args: {"status": "completed"}},
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocked_reasons"] == ["write_access_forbidden"]
+    assert result["access_denied"] is True
+    assert idempotent is False
+
+
+def test_pending_action_fails_closed_for_missing_or_malformed_targets():
+    cursor = ActionCursor()
+    cursor.action = {
+        "id": "a-1", "user_id": "u-1", "status": "pending_approval", "scope_type": "business", "scope_id": "b-1",
+        "target_business_ids_json": ["b-1", ""], "capability": "review_replies.generate", "envelope_json": {"review_ids": ["r-1"]},
+        "expires_at": None, "result_json": {},
+    }
+
+    result, idempotent = confirm_mobile_action(
+        cursor,
+        action_id="a-1",
+        user_id="u-1",
+        scope_resolver=lambda kind, scope_id: {"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        target_authorizer=lambda _targets: (_ for _ in ()).throw(AssertionError("malformed targets must not authorize")),
+        executors={"review_replies.generate": lambda *_args: {"status": "completed"}},
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocked_reasons"] == ["invalid_action_targets"]
+    assert result["access_denied"] is True
     assert idempotent is False
 
 

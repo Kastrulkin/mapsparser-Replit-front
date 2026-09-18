@@ -86,6 +86,7 @@ def test_concierge_opens_management_modules():
 def test_mobile_actions_map_to_the_same_capabilities_as_navigation():
     assert _mobile_capability_for_action("cards.refresh") == "maps"
     assert _mobile_capability_for_action("reviews.generate") == "maps.reviews"
+    assert _mobile_capability_for_action("review_replies.generate") == "maps.reviews"
     assert _mobile_capability_for_action("partnerships.lead.delete") == "partnerships"
     assert _mobile_capability_for_action("content.plan.generate") == "social_content"
     assert _mobile_capability_for_action("finance.sales_import") == "finance"

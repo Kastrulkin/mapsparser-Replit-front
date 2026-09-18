@@ -576,6 +576,7 @@ def confirm_mobile_action(
     action_id: str,
     user_id: str,
     scope_resolver: Callable[[str, str | None], dict[str, Any] | None],
+    target_authorizer: Callable[[list[str]], bool] | None,
     executors: dict[str, Callable[[dict[str, Any], list[str], dict[str, Any]], dict[str, Any]]],
 ) -> tuple[dict[str, Any], bool]:
     cursor.execute("SELECT * FROM operatoractions WHERE id = %s AND user_id = %s FOR UPDATE", (action_id, user_id))
@@ -590,10 +591,17 @@ def confirm_mobile_action(
     scope = scope_resolver(str(action.get("scope_type") or "business"), str(action.get("scope_id") or "") or None)
     if not scope:
         return {"status": "blocked", "blocked_reasons": ["scope_forbidden"]}, False
-    stored_targets = [str(item) for item in _json(action.get("target_business_ids_json"), [])]
+    raw_targets = _json(action.get("target_business_ids_json"), [])
+    if not isinstance(raw_targets, list):
+        return {"status": "blocked", "blocked_reasons": ["invalid_action_targets"], "access_denied": True}, False
+    stored_targets = [item.strip() for item in raw_targets if isinstance(item, str) and item.strip()]
+    if not stored_targets or len(stored_targets) != len(raw_targets) or len(set(stored_targets)) != len(stored_targets):
+        return {"status": "blocked", "blocked_reasons": ["invalid_action_targets"], "access_denied": True}, False
     allowed_targets = {str(item) for item in scope.get("business_ids") or []}
     if scope.get("kind") != "platform" and any(item not in allowed_targets for item in stored_targets):
         return {"status": "blocked", "blocked_reasons": ["targets_changed"]}, False
+    if target_authorizer is None or not target_authorizer(stored_targets):
+        return {"status": "blocked", "blocked_reasons": ["write_access_forbidden"], "access_denied": True}, False
     capability = str(action.get("capability") or "")
     executor = executors.get(capability)
     if not executor:

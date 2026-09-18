@@ -129,6 +129,7 @@ MOBILE_ACTION_CAPABILITIES = {
     "content.": "social_content",
     "finance.": "finance",
     "partnerships.": "partnerships",
+    "review_replies.": "maps.reviews",
     "agents.": "agents",
     "reviews.": "maps.reviews",
     "services.": "maps.services",
@@ -1604,7 +1605,7 @@ def operator_review_replies_generate():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message = "Нет доступа" if owner_id else "Бизнес не найден"
@@ -2257,7 +2258,7 @@ def operator_review_reply_draft_mark_manual_published(draft_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not has_access:
             status_code = 403 if owner_id else 404
             message = "Нет доступа" if owner_id else "Бизнес не найден"
@@ -3479,6 +3480,13 @@ def operator_mobile_action_confirm(action_id: str):
         def scope_resolver(kind: str, scope_id: str | None):
             return resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
 
+        def target_authorizer(targets: list[str]):
+            for business_id in targets:
+                has_access, _owner_id = verify_business_write_access(cursor, business_id, user_data)
+                if not has_access:
+                    return False
+            return True
+
         def generate_executor(envelope: dict, targets: list[str], _scope: dict):
             review_ids = [str(item) for item in envelope.get("review_ids") or []]
             drafts: list[dict] = []
@@ -4021,6 +4029,7 @@ def operator_mobile_action_confirm(action_id: str):
             action_id=action_id,
             user_id=user_id,
             scope_resolver=scope_resolver,
+            target_authorizer=target_authorizer,
             executors={
                 "review_replies.generate": generate_executor,
                 "finance.sales_import": finance_sales_executor,
@@ -4045,7 +4054,8 @@ def operator_mobile_action_confirm(action_id: str):
         )
         if result.get("status") == "blocked":
             db.conn.rollback()
-            return jsonify({"success": False, "error": "Действие не выполнено", "operator_result": result}), 400
+            status_code = 403 if result.get("access_denied") else 400
+            return jsonify({"success": False, "error": "Действие не выполнено", "operator_result": result}), status_code
         db.conn.commit()
         return jsonify({"success": True, "idempotent": idempotent, "operator_result": result})
     except Exception:
@@ -4199,7 +4209,7 @@ def operator_mobile_review_draft_update(draft_id: str):
         business_id = str((dict(row) if row else {}).get("business_id") or "")
         if not scope or (scope.get("kind") != "platform" and business_id not in [str(item) for item in scope.get("business_ids") or []]):
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
-        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Черновик не найден"}), 403 if owner_id else 404
         access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
@@ -4245,7 +4255,7 @@ def operator_mobile_review_draft_manual_publish(draft_id: str):
         business_id = str((dict(row) if row else {}).get("business_id") or "")
         if not scope or (scope.get("kind") != "platform" and business_id not in [str(item) for item in scope.get("business_ids") or []]):
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
-        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        has_access, _owner_id = verify_business_write_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Черновик недоступен"}), 403
         access = _scope_capability_access(cursor, scope, "maps.reviews", bool(user_data.get("is_superadmin")))
@@ -4390,6 +4400,9 @@ def operator_mobile_review_reply_generate(review_id: str):
                 "confirmation_required": True,
                 "idempotency_key": f"mobile:{user_id}:review_reply_generate:{review_id}",
             }})
+        has_write_access, _owner_id = verify_business_write_access(cursor, business_id, user_data)
+        if not has_write_access:
+            return jsonify({"success": False, "error": "Отзыв недоступен"}), 403
         result = generate_review_reply_drafts_for_unanswered_reviews(
             cursor,
             business_id=business_id,
