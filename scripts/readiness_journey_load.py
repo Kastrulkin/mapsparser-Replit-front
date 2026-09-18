@@ -183,6 +183,8 @@ def data_directory_identity(database_url: str, expected: str = "") -> str:
 
 
 def prepare_targets(database_url: str, target_count: int) -> list[dict[str, str]]:
+    if str(ROOT / "src") not in sys.path:
+        sys.path.insert(0, str(ROOT / "src"))
     targets: list[dict[str, str]] = []
     for _ in range(target_count):
         user_id, business_id, service_id = readiness_journey_benchmark.seed_user_and_business(database_url)

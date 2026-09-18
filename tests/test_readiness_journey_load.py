@@ -3,7 +3,9 @@ import importlib.util
 import json
 from pathlib import Path
 import argparse
+import os
 import signal
+import subprocess
 import sys
 from types import ModuleType
 
@@ -20,6 +22,55 @@ SPEC.loader.exec_module(load)
 
 def sample(target, step):
     return load.RequestSample(target, step, 200, 1.0, True)
+
+
+def test_parent_preparation_imports_source_in_a_fresh_guard_only_process(tmp_path):
+    program = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import readiness_journey_load
+
+class Cursor:
+    def execute(self, *_args):
+        pass
+    def close(self):
+        pass
+
+class Connection:
+    def cursor(self):
+        return Cursor()
+    def commit(self):
+        pass
+    def close(self):
+        pass
+
+readiness_journey_load.readiness_journey_benchmark.psycopg2.connect = lambda *_args: Connection()
+targets = readiness_journey_load.prepare_targets('unreachable-fixture-only', 2)
+assert len(targets) == 2
+assert targets[0]['user_id'] != targets[1]['user_id']
+import auth_system
+assert Path(auth_system.__file__).resolve() == readiness_journey_load.ROOT / 'src' / 'auth_system.py'
+"""
+    # Do not inherit pytest/conftest's application import path. Preserve only
+    # the optional no-egress guard, never the parent application's src path.
+    guard_entry = os.environ.get("PYTHONPATH", "").split(os.pathsep)[0]
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHON_DOTENV_DISABLED": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": guard_entry if guard_entry and (Path(guard_entry) / "sitecustomize.py").is_file() else "",
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(MODULE_PATH.parent)],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_limits_target_identity_and_pair_waves_are_strict():
