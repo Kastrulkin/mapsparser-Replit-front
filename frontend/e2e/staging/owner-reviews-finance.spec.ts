@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { fixtureCommand } from './fixtureCommand';
+import { observeRuntimeErrors } from './runtimeErrors';
 
 
 const OWNER_EMAIL = 'owner@localos-e2e.invalid';
@@ -34,20 +35,8 @@ const loginOwner = async (page: import('@playwright/test').Page) => {
   return businessId;
 };
 
-const observeRuntimeErrors = (page: import('@playwright/test').Page) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => {
-    const sourceUrl = message.location().url;
-    if (message.type() === 'error' && (!sourceUrl || sourceUrl.startsWith('http://127.0.0.1:18000'))) {
-      errors.push(message.text());
-    }
-  });
-  return errors;
-};
-
-test('owner reviews: unanswered review opens with a prepared manual draft', async ({ page }) => {
-  const runtimeErrors = observeRuntimeErrors(page);
+test('owner reviews: unanswered review opens with a prepared manual draft', async ({ page, baseURL }) => {
+  const runtimeErrors = observeRuntimeErrors(page, baseURL);
   await loginOwner(page);
 
   await page.goto('/dashboard/card?tab=reviews&review_filter=needs_reply');
@@ -65,9 +54,9 @@ test('owner reviews: unanswered review opens with a prepared manual draft', asyn
   expect(runtimeErrors).toEqual([]);
 });
 
-test('owner finance: preview, explicit import, and duplicate retry stay consistent', async ({ page }) => {
+test('owner finance: preview, explicit import, and duplicate retry stay consistent', async ({ page, baseURL }) => {
   fixtureCommand('reset-finance');
-  const runtimeErrors = observeRuntimeErrors(page);
+  const runtimeErrors = observeRuntimeErrors(page, baseURL);
   await loginOwner(page);
 
   await page.goto('/dashboard/finance?tab=import');

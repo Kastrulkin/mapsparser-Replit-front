@@ -76,8 +76,10 @@ Current AC4 is PASS after exact272794a4 aggregate above. Native117 real-API
 browser now passes117/117, capture261.027621s exit0/untruncated. First
 114pass3map-source environment failures remain retained with DB5761996;
 successful retryDB5768975 removed. Three compiled-runner cases remain
-separately historical. Dynamic-port review/finance console filter limitation
-is documented; no blanket clean-console claim.
+separately historical. TEST-E2E-04 now fixes the dynamic-port review/finance
+collector: causalRED8fail/7pass, GREEN21pass, scoped strictTS/lint and independent
+reviewPASS. No browser rerun occurred; the historical117-case result retains
+its original console limitation. No blanket clean-console claim.
 The following source checkpoints explain earlier progress, not current AC4 gaps.
 
 f0cc includes service/content role and query-harness changes after green6c.

@@ -112,12 +112,15 @@
         "raw/native-real-api-117-272794a4.json (FAIL:114passed3maps-staging-env failures)",
         "raw/native-real-api-117-retry-272794a4.json",
         "raw/frontend-perf-272-retry.json",
-        "raw/frontend-perf-272-retry-command.json"
+        "raw/frontend-perf-272-retry-command.json",
+        "raw/staging-runtime-errors-red.json (8fail/7pass, extracted original collector)",
+        "raw/staging-runtime-errors-green.json (21pure unit tests, no browser)",
+        "raw/staging-runtime-errors-quality.json (scoped strictTS/lint)"
       ],
       "gaps": [],
       "scope_notes": [
-        "Current272native backend + exact unchanged built frontend passes117/117 realAPI desktop/laptop/mobile cases, capture261.027621s exit0/untruncated. FreshDB5768975 removed/reaped; first114pass3maps-env failures retained withDB5761996. Only3compiled-runner cases remain separately historical204frontend/f0ccbackend120/120; no current immutable-image/compiled claim. Owner review/finance console filter hardcodes18000, so no global clean-console guarantee on dynamicport. Exact3d frontend stages pass591unit/126files,72mockbrowser,fullTS,lint0errors/1warning,bothbuilds; original captureexit1/562.759479s wrongfinal artifactpath remains, separate artifactproofexit0/13.475289s verifies699sourceblobs/257artifacts/11+3HTMLrefs. Frontend60/60 exploratory observations now pass with zero page errors/overflow on historicalf0ccbackend; current-image/compiled runtime remains a separate release gate.",
-        "Independent exact-criterion review confirms clean install remains applicable (package manifests/lock unchanged), source-matched frontend stages and current native117 cover critical desktop/laptop/mobile flows, tenant negatives, tested offline/stale/error/empty/slow/late states and Axe/contrast/keyboard/focus. Historical three compiled cases and fixed-port console filter limits are retained; no current immutable image or universal accessibility/absence-of-console-errors claim."
+        "Current272native backend + exact unchanged built frontend passes117/117 realAPI desktop/laptop/mobile cases, capture261.027621s exit0/untruncated. FreshDB5768975 removed/reaped; first114pass3maps-env failures retained withDB5761996. Only3compiled-runner cases remain separately historical204frontend/f0ccbackend120/120; no current immutable-image/compiled claim. At that run the owner review/finance console filter hardcoded18000, so no global clean-console guarantee on dynamicport. TEST-E2E-04 now passes21pure collector tests and scoped strictTS/lint with independent review; browser rerun remains pending. Exact3d frontend stages pass591unit/126files,72mockbrowser,fullTS,lint0errors/1warning,bothbuilds; original captureexit1/562.759479s wrongfinal artifactpath remains, separate artifactproofexit0/13.475289s verifies699sourceblobs/257artifacts/11+3HTMLrefs. Frontend60/60 exploratory observations now pass with zero page errors/overflow on historicalf0ccbackend; current-image/compiled runtime remains a separate release gate.",
+        "Independent exact-criterion review confirms clean install remains applicable (package manifests/lock unchanged), source-matched frontend stages and current native117 cover critical desktop/laptop/mobile flows, tenant negatives, tested offline/stale/error/empty/slow/late states and Axe/contrast/keyboard/focus. Historical three compiled cases and original fixed-port console filter limits are retained despite the later unit-proven harness fix; no current immutable image or universal accessibility/absence-of-console-errors claim."
       ]
     },
     {

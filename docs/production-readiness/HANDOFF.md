@@ -2,6 +2,23 @@
 
 ## Current continuation — 18 September after 15:30 UTC
 
+LATEST16:54UTC: HEAD47bfcfcf plus independently reviewed TEST-E2E-04 package
+pending local commit. Only test harness/tests and evidence docs changed;
+backend/frontend application/migrations still272. New runtimeErrors.ts is
+consumed by both owner reviews/finance specs using Playwright's baseURL.
+Pure RED8fail/7pass proves the previous fixed18000 blind spot; GREEN21pass
+2.273639s and scoped strictTS/lint exit0/4.169954s. Both captures are untruncated,
+no timeout. Independent scopedPASS; no browser rerun or global-console claim.
+raw/staging-runtime-errors-{red,green,quality}.json are actual command evidence.
+All three tiny tmux checks have finished. Mac free989,552KiB (~0.94GiB), so
+heavy runtime gates remain blocked; no lowered guards, cleanup, restart,
+production/provider effects or new DB. The source-only Stage1.9 review also
+confirmed native fixture DSN/libpq/dotenv/guard protections, not their execution.
+Do not treat another source review as replacement for the pending runtime gates.
+Next: recover8–10GiB local Mac headroom, then the previously prepared v8 proof
+and newly reviewed benchmark/demo wrappers; do not replay old failed captures.
+Unrelated docs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md remains untouched/untracked.
+
 LATEST16:41UTC: HEAD644ef322 plus docs-only inventory reconciliation pending
 commit. Source runtime still272; Docker pinsae80292d unchanged. Mac remains
 ~0.985GiB, no runtime/test/build launches. Independent AC1 recheck found real

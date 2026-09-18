@@ -14,6 +14,11 @@ current-source native browser passes117/117 and bounded HTTP240/240 plus fronten
 60/60 observations have independent scoped PASS. Final image and hosted CI
 execution are not proven. Do not treat these packages as a closed release gate.
 
+TEST-E2E-04 now removes a two-journey console-filter blind spot with21pure
+regressions, scoped strictTS/lint and independent review. Its browser rerun is
+still blocked by local Mac headroom (~0.94GiB); previous117results retain their
+original limitation. No production, image or readiness score is promoted.
+
 | Risk / evidence | Priority and impact | Likelihood / temporary protection | Required next step |
 | --- | --- | --- | --- |
 | Historical privileged credential exposure; offline scan confirmed old provider keys, revocation unconfirmed |P1 before production; former credentials might still authorize access|Current validity unknown. Do not use/test/publish old values; owner confirmation requested|Authorized owner/provider revocation evidence and separately approved history policy; no unilateral rotation/rewrite|

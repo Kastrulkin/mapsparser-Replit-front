@@ -1,5 +1,21 @@
 # Production-readiness change log
 
+## TEST-E2E-04 — observe console errors at the configured staging origin
+
+Both owner reviews/finance specs now pass Playwright's baseURL to a shared
+test-only collector instead of silently accepting only port18000 sources.
+URL-origin comparison handles dynamic ports, IPv6, relative/blob URLs and
+default HTTPS ports. Page errors and unknown-source console errors remain
+visible; known foreign-origin errors and non-error console levels remain
+outside this assertion. Invalid base configuration fails before listeners.
+
+The actual extracted old collector fails8of15 pure event regressions. The
+fixed collector passes21/21; scoped strict TypeScript and zero-warning lint
+pass, independent reviewPASS. Command captures are documented in COMMANDS.
+No app code, dependency, build or database changes; no browser was launched.
+Earlier117real-API results are not retroactively promoted to clean-console
+proof. A browser rerun remains required after local disk headroom recovers.
+
 ## DEP-LOCK-01 — pin the already-observed Docker base indexes
 
 Two FROM references now use the exact Node22/Python3.11 OCI indexes resolved

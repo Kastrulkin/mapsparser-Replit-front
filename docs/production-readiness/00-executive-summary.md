@@ -31,8 +31,10 @@ writes require the documented human approval or manual boundary.
   261.028-second command capture. Three compiled-runner cases remain covered
   only by the earlier **120 of 120** checkpoint (227.301 seconds, `20431224`
   frontend over `f0cc` backend). Neither is a final current immutable image,
-  customer or production run. A fixed-port console filter limits the newer
-  suite's console-error coverage; page-error checks are still active.
+  customer or production run. A fixed-port console filter limited that run's
+  console-error coverage. It is now fixed in21focused unit tests with scoped
+  type/lint checks and independent review, but no browser rerun yet; the old
+  result is not retroactively promoted. Page-error checks remain active.
 - A clean backend aggregate at current `272794a4` recorded **4,728 passed,
   7 skipped** tests in656.63seconds, including native and Docker PostgreSQL integration.
   Only live-provider checks were intentionally skipped. Earlier environment

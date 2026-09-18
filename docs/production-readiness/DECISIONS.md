@@ -1,5 +1,16 @@
 # Readiness decisions
 
+## D-028 — Test-origin assertions follow the configured runtime
+
+A dynamic-port browser run cannot use a fixed18000 console allowlist. Extract
+the actual two-journey collector, reproduce its missed first-party events,
+then compare URL origins against Playwright's configured baseURL. Preserve
+uncaught page errors and unknown-source errors; exclude only known foreign
+origins. This is bounded test-harness repair, not a product change or evidence
+that already-completed browser runs were console-clean. Pure Node event tests
+with env files/app setup disabled are small enough for low-disk verification;
+they do not bypass the existing browser/DB/build/process-proof start guards.
+
 ## D-027 — Reconcile inventory without promoting missing execution evidence
 
 A coarse runtime diagram cannot stand in for all checked-in execution surfaces.

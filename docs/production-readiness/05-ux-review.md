@@ -1,5 +1,12 @@
 # UX and browser verification — working evidence
 
+18September16:54UTC: TEST-E2E-04 replaces the two owner-journey collectors'
+fixed18000 filter with the configured origin. Causal unit RED8fail/7pass,
+GREEN21pass, strictTS/lint and independent review pass. No browser rerun yet;
+the historical117-case checkpoint below retains its console-coverage limit.
+Warnings, known third-party console errors and request/HTTP failures without
+a console/page error are outside this collector's contract.
+
 After15:30UTC: independent exact-criterion review accepts AC3 in its bounded
 local scope. Clean install remains applicable because package manifests/lock
 are unchanged; exact-source frontend591units/72mock browser/TS/lint/bothbuild
@@ -14,8 +21,8 @@ verified unchanged frontend passes117/117 across desktop/laptop/mobile,
 capture261.027621s exit0/untruncated. Only3compiled-runner cases excluded and
 remain the separately historical proof below. Initial114pass3fail was temporary
 maps-source omission; canonical yandex_maps plus static preview fixes launcher,
-not app/tests. The owner reviews/finance console filter still hardcodes18000,
-so dynamic-port run does not establish global absence of console errors;
+not app/tests. At that run, the owner reviews/finance console filter hardcoded18000,
+so the dynamic-port result does not establish global absence of console errors;
 uncaught page errors and other existing suite assertions remain exercised.
 No real provider writes; no final immutable image, demo or capacity claim.
 

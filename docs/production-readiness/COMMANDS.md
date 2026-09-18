@@ -1,5 +1,39 @@
 # Verified commands and evidence
 
+## TEST-E2E-04 — pure collector regression, 18 September 16:54 UTC
+
+Completed named tmux sessions readiness-runtime-errors-{red,green,quality}.
+`/private/tmp/localos-readiness-runtime-errors-check.sh` invokes the existing
+capture helper in env-i with the pinned Python guard, no dotenv/bytecode and
+Node22. Temporary `localos-readiness-runtime-errors.vitest.config.mjs` explicitly
+sets envDir:false, node environment, one thread, no app setup and only the new
+`src/test/stagingRuntimeErrors.test.ts`. No browser/DB/provider/app import.
+Actual captured child:
+
+```sh
+node frontend/node_modules/vitest/vitest.mjs run --config /private/tmp/localos-readiness-runtime-errors.vitest.config.mjs
+```
+
+RED raw/staging-runtime-errors-red.json:8failed/7passed, exit1/3000.805ms.
+GREEN raw/staging-runtime-errors-green.json:21passed, exit0/2273.639ms.
+Both no timeout/truncation; red failures are assertion mismatches, not setup.
+The extracted red collector preserves the original event handlers; green adds
+origin parsing plus six unknown-source/configuration edge cases without
+weakening the original fifteen assertions.
+
+Scoped quality capture raw/staging-runtime-errors-quality.json:exit0/4169.954ms,
+empty stdout/stderr, no timeout/truncation. From frontend, with the same empty
+environment, `/private/tmp/localos-readiness-runtime-errors-quality.sh` uses
+set-e to run both commands:
+
+```sh
+node node_modules/typescript/bin/tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution bundler --skipLibCheck --types node e2e/staging/runtimeErrors.ts e2e/staging/owner-reviews-finance.spec.ts src/test/stagingRuntimeErrors.test.ts
+node node_modules/eslint/bin/eslint.js --max-warnings 0 e2e/staging/runtimeErrors.ts e2e/staging/owner-reviews-finance.spec.ts src/test/stagingRuntimeErrors.test.ts
+```
+
+Independent source/evidence reviewPASS. This is not a full frontend rerun or
+real-browser console proof. The three original raw paths must not be overwritten.
+
 ## Read-only inventory reconciliation — 18 September 16:41 UTC
 
 No tests/services were started. `git status/log`, `df -k .`, tracked-file and

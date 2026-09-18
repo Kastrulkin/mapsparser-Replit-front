@@ -1,5 +1,19 @@
 # Production-readiness progress
 
+16:54 UTC: Stage1.9 source review found a concrete test false-negative, not
+an application bug. TEST-E2E-04 replaces the owner reviews/finance collector's
+literal18000 filter with the configured Playwright origin. Behavior-preserving
+extraction first reproduced8fail/7pass; corrected collector passes21/21 pure
+event tests (2.273639s capture). Scoped strict TypeScript and zero-warning lint
+pass4.169954s; independent reviewPASS. No browser/DB/app/build was started;
+temporary Vitest config disables env files, app setup and browser environment.
+These tiny checks do not waive the heavy-runtime disk guards. Mac remains
+989,552KiB free (~0.94GiB); current backend/frontend application code and
+migrations are unchanged. Earlier117browser results retain their original
+console limitation; an actual browser rerun with the new collector is pending.
+No push/deploy; unrelated map document preserved. Next required runtime step
+remains recovered local headroom, v8 process proof, then reviewed new wrappers.
+
 16:41 UTC: continued with read-only source/evidence reconciliation while Mac
 free space remains~0.985GiB. Previous goal turn made actual progress (reviewed
 base-image pins and preserved failed probes); this turn fills a concrete AC1
