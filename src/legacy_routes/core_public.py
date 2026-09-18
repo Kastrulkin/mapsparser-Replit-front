@@ -2,6 +2,7 @@ from legacy_routes import shared as _shared
 from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 from core.auth_helpers import verify_business_access
 from core.html_head import replace_or_insert_tag as _replace_or_insert_tag
+from core.readiness import database_ready
 
 globals().update(_shared.runtime_namespace)
 
@@ -1492,6 +1493,13 @@ def analyze():
 def health():
     """Проверка здоровья сервера"""
     return jsonify({"status": "ok", "message": "SEO анализатор работает"})
+
+
+@app.route('/ready', methods=['GET'])
+def ready():
+    if database_ready():
+        return jsonify({"status": "ready"}), 200
+    return jsonify({"status": "not_ready"}), 503
 
 def _row_to_dict(cursor, row):
     """Маппинг строки в dict: dict-like row — по ключам, tuple-row — по cursor.description."""

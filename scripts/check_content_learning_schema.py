@@ -2,17 +2,16 @@
 """Read-only schema gate for the first runtime-DDL retirement slice."""
 import os
 import sys
+from pathlib import Path
 
 import psycopg2
 
 
-REQUIRED_COLUMNS = {
-    "contentplans": {"id", "business_id", "scope_type", "plan_status", "created_at", "updated_at"},
-    "contentplanitems": {"id", "plan_id", "business_id", "status", "seo_views", "metadata_json", "created_at", "updated_at"},
-    "usernews": {"id", "user_id", "generated_text", "business_id", "updated_at", "original_generated_text", "edited_before_approve", "prompt_key", "prompt_version"},
-    "ailearningevents": {"id", "capability", "event_type", "metadata_json", "created_at"},
-}
-REQUIRED_INDEXES = {"idx_ailearningevents_created_at", "idx_ailearningevents_capability_intent", "idx_ailearningevents_user_business"}
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+
+from core.readiness import content_schema_missing
 
 
 def main():
@@ -25,17 +24,9 @@ def main():
     try:
         cursor = conn.cursor()
         try:
-            cursor.execute("""SELECT table_name, column_name FROM information_schema.columns
-                WHERE table_schema=%s AND table_name = ANY(%s)""", (schema_name, list(REQUIRED_COLUMNS)))
-            found = {}
-            for table_name, column_name in cursor.fetchall():
-                found.setdefault(table_name, set()).add(column_name)
-            missing = {table: sorted(required - found.get(table, set())) for table, required in REQUIRED_COLUMNS.items() if required - found.get(table, set())}
-            cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname=%s AND indexname = ANY(%s)", (schema_name, list(REQUIRED_INDEXES)))
-            indexes = {row[0] for row in cursor.fetchall()}
+            missing, missing_indexes = content_schema_missing(cursor, schema_name)
         finally:
             cursor.close()
-        missing_indexes = sorted(REQUIRED_INDEXES - indexes)
         if missing or missing_indexes:
             print({"missing_columns": missing, "missing_indexes": missing_indexes}, file=sys.stderr)
             return 1

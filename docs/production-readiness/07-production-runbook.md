@@ -38,6 +38,14 @@ failure, inspect browser console and app logs first. Check restart/OOM state in
 Provider transport errors are not proof of a LocalOS regression: record them,
 avoid blind retries or re-sends, and preserve approval/idempotency state.
 
+Current source also exposes `/ready`: generic200 only when PostgreSQL connects,
+the Alembic revision is accepted and the existing content-learning columns/
+indexes are present; otherwise generic503. It uses bounded read-only queries,
+not migrations. `/health` remains process liveness. After an explicitly
+approved release containing this endpoint, add `curl --fail --max-time 15
+http://localhost:8000/ready` to dependency checks; do not assume the older
+production snapshot already has it. This is not a provider or full-schema check.
+
 ## Partial deployment
 
 Prefer the smallest affected update. Frontend-only changes are built locally
