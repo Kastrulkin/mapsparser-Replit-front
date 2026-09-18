@@ -1,5 +1,18 @@
 # Verified commands and evidence
 
+## Read-only inventory reconciliation — 18 September 16:41 UTC
+
+No tests/services were started. `git status/log`, `df -k .`, tracked-file and
+source inspection covered Compose variants, worker ownership, three ops timers,
+four workflows, canonical auth/membership helpers and provider entrypoints.
+`jq` inspected exit/duration/truncation metadata from every `raw/baseline-*.json`.
+`ls` on `/tmp/localos-readiness-scans.nqz3lr/trivy-source.json` and
+`/tmp/localos-readiness-staging-smoke.log` returned absent for both. The command
+capture for Trivy survives but does not contain its external detailed report.
+The full Stage0 checklist in01-system-map preserves these distinctions.
+No `.env` was loaded or environment-expanded Compose configuration printed;
+no live provider/production access or daemon mutation occurred.
+
 ## Disk-stop continuation — prepared, NOT executed (18 September 16:29 UTC)
 
 Mac free1,032,540KiB: no new process/browser/DB/build launches. Read-only

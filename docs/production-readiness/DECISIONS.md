@@ -1,5 +1,17 @@
 # Readiness decisions
 
+## D-027 — Reconcile inventory without promoting missing execution evidence
+
+A coarse runtime diagram cannot stand in for all checked-in execution surfaces.
+List exact manifests, optional worker roles, migrator/runner, timers and CI, then
+map auth, organization and provider boundaries to source. Separate declarations
+from enabled/deployed state: the base manifest and placeholder Nginx config do
+not reconstruct the eight-service production topology recorded in maintenance.
+Likewise, a successful scanner command whose detailed temporary report is lost
+cannot establish clean dependencies/licenses. Preserve missing baseline records
+and unchecked audit areas as explicit gaps; later successful tests do not backfill
+historical proof. AC1 remainsFAIL until its actual remaining evidence is obtained.
+
 ## D-026 — Stop launches below local disk guards
 
 At16:29UTC the Mac has~0.985GiB free, despite the separately enlarged server

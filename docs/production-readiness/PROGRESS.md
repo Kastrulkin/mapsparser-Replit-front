@@ -1,5 +1,16 @@
 # Production-readiness progress
 
+16:41 UTC: continued with read-only source/evidence reconciliation while Mac
+free space remains~0.985GiB. Previous goal turn made actual progress (reviewed
+base-image pins and preserved failed probes); this turn fills a concrete AC1
+inventory gap, not a new runtime check. System map now identifies all checked-in
+Compose variants, worker roles, timers/CI, auth and organization boundaries,
+concrete providers, demo audience and every Stage0 baseline item. Independent
+AC1 review stillFAIL: exact deployed topology, lost historical startup/Trivy
+details, absent locked-backend-install proof and unchecked Stage1 surfaces
+remain explicit. No status is promoted just because the inventory is longer.
+No build, browser, DB, provider or production action; unrelated map file retained.
+
 16:29 UTC: base pins committed ae80292d; tracked tree clean, unrelated map
 document preserved. Read-only check confirms Docker29.2.0 still running and
 own PG/Redis healthy; no reset/restart/prune. Local Mac headroom fell to

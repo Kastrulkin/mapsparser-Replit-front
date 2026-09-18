@@ -2,6 +2,19 @@
 
 ## Current continuation — 18 September after 15:30 UTC
 
+LATEST16:41UTC: HEAD644ef322 plus docs-only inventory reconciliation pending
+commit. Source runtime still272; Docker pinsae80292d unchanged. Mac remains
+~0.985GiB, no runtime/test/build launches. Independent AC1 recheck found real
+documentation/coverage gaps rather than treating later image gates as inventory
+completion. Root expanded01-system-map with source manifests/workers/timers/CI,
+auth-role/org/provider boundaries, demo audience and14-item baseline checklist.
+Two read-only agents supplied auth/provider source facts; root checked canonical
+helpers (including network_owner write-role SQL), Compose/CI and raw metadata.
+The exact historical Trivy output and staging startup log paths are absent.
+No replacement result is fabricated; AC1/overall stayFAIL. Next safe low-disk
+lane is bounded read-only review of the remaining Stage1 surfaces. Runtime
+continuation still requires recovered space and the v8 proof described below.
+
 LATEST16:29UTC — disk stop, no running audit build/test job. HEADae80292d
 pins the verified Node/Python base indexes; f372cb84 preserves failed probes.
 Application/frontend/migrations remain identical to tested272794a4. All tracked

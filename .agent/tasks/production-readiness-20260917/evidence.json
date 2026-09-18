@@ -12,7 +12,7 @@
         "docs/production-readiness/PROGRESS.md"
       ],
       "gaps": [
-        "Architecture/security/DevOps reconnaissance complete; full area-by-area closure remains."
+        "Independent AC1 reconciliation remains FAIL. System map now enumerates source deployment variants, role workers, runner/migrator, timers/CI, auth-role/org and provider boundaries plus demo audience and every baseline item. Formatter is explicitly not configured. Baseline clean locked backend install is absent; standalone startup log and detailed Trivy results were rechecked at their exact ephemeral paths and are missing; Docker baseline stdout is truncated. Current merged production service/topology inventory and the explicitly unchecked Stage1 areas remain unproven. Later successful tests do not recreate missing historical evidence."
       ]
     },
     {
