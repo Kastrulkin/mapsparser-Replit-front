@@ -1,0 +1,62 @@
+# Isolated browser-proof ingress. Use only with the staging, workers and
+# compiled-runner fragments; it deliberately removes the app's host port.
+services:
+  # The proof invokes its fenced executor inside app. Do not start any queue,
+  # dispatcher or bot role in this narrowly scoped staging profile.
+  worker:
+    profiles: ["compiled-staging-disabled"]
+  worker-agent:
+    profiles: ["compiled-staging-disabled"]
+  worker-operator:
+    profiles: ["compiled-staging-disabled"]
+  worker-dispatcher:
+    profiles: ["compiled-staging-disabled"]
+  worker-maintenance:
+    profiles: ["compiled-staging-disabled"]
+  operator-worker:
+    profiles: ["compiled-staging-disabled"]
+  telegram-bot:
+    profiles: ["compiled-staging-disabled"]
+
+  app:
+    ports: !override []
+    networks: [default, compiled_script_internal]
+    environment:
+      FRONTEND_URL: http://127.0.0.1:${COMPILED_STAGING_PORT:-18017}
+      ALLOWED_ORIGINS: http://127.0.0.1:${COMPILED_STAGING_PORT:-18017}
+      COMPILED_SCRIPT_PREVIEW_ENABLED: "true"
+      # Execution remains disabled until this exact synthetic cohort is supplied.
+      COMPILED_SCRIPT_EXECUTE_ENABLED: ${COMPILED_STAGING_EXECUTE_ENABLED:-false}
+      COMPILED_SCRIPT_ADVANCED_ENABLED: ${COMPILED_STAGING_ADVANCED_ENABLED:-false}
+      COMPILED_SCRIPT_PILOT_BUSINESS_IDS: ${COMPILED_STAGING_PILOT_BUSINESS_IDS:-}
+
+  audit-ingress:
+    image: python:3.12-slim
+    restart: "no"
+    read_only: true
+    user: "65534:65534"
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    entrypoint: ["python", "/opt/audit-proxy/proxy.py"]
+    volumes:
+      - ./docker/audit-ingress/proxy.py:/opt/audit-proxy/proxy.py:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    init: true
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: 0.25
+    depends_on:
+      app:
+        condition: service_started
+    networks: [default, ingress_access]
+    ports:
+      - "127.0.0.1:${COMPILED_STAGING_PORT:-18017}:8000"
+
+networks:
+  default:
+    internal: true
+  ingress_access:
+    internal: false

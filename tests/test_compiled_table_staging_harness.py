@@ -1,5 +1,4 @@
 import importlib.util
-import hashlib
 from pathlib import Path
 
 import pytest
@@ -36,7 +35,7 @@ def valid_containers(target, source):
     ingress = {
         "Config": {
             "Labels": {"com.docker.compose.project": target.compose_project, "com.docker.compose.service": "audit-ingress"},
-            "Entrypoint": ["python", "/tmp/audit_proxy.py"],
+            "Entrypoint": ["python", "/opt/audit-proxy/proxy.py"],
             "Cmd": [],
         },
         "State": {"Running": True},
@@ -44,7 +43,7 @@ def valid_containers(target, source):
             "Networks": {"internal": {"Aliases": ["audit-ingress"]}},
             "Ports": {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18017"}]},
         },
-        "Mounts": [{"Type": "bind", "Destination": "/tmp/audit_proxy.py", "RW": False, "Source": str(source)}],
+        "Mounts": [{"Type": "bind", "Destination": "/opt/audit-proxy/proxy.py", "RW": False, "Source": str(source)}],
     }
     return app, ingress
 
@@ -88,11 +87,9 @@ def test_target_identity_requires_checked_ingress_before_container_environment(s
         staging_script.verify_target_identity(target)
 
 
-def test_ingress_rejects_mismatched_project_port_or_remote_docker_context(staging_script, monkeypatch, tmp_path):
+def test_ingress_rejects_mismatched_project_port_or_remote_docker_context(staging_script, monkeypatch):
     target = staging_script.parse_target(arguments())
-    source = tmp_path / "audit_proxy.py"
-    source.write_text("proxy")
-    app, ingress = valid_containers(target, source)
+    app, ingress = valid_containers(target, staging_script.AUDIT_PROXY_SOURCE)
     monkeypatch.setattr(staging_script, "docker_context_endpoint", lambda: "tcp://remote.example:2376")
     with pytest.raises(RuntimeError, match="Unix Docker context"):
         staging_script.verify_ingress(target, app, ingress)
@@ -116,13 +113,10 @@ def test_ingress_rejects_mismatched_project_port_or_remote_docker_context(stagin
 
 def test_valid_ingress_profile_requires_internal_network_app_alias_proxy_hash_and_readonly_mount(staging_script, monkeypatch, tmp_path):
     target = staging_script.parse_target(arguments())
-    source = tmp_path / "audit_proxy.py"
-    source.write_text("proxy")
-    app, ingress = valid_containers(target, source)
+    app, ingress = valid_containers(target, staging_script.AUDIT_PROXY_SOURCE)
     monkeypatch.setenv("DOCKER_HOST", "unix:///tmp/docker.sock")
     monkeypatch.setattr(staging_script, "docker_context_endpoint", lambda: "unix:///tmp/docker.sock")
     monkeypatch.setattr(staging_script, "inspect_network", lambda _network: {"Internal": True})
-    monkeypatch.setattr(staging_script, "AUDIT_PROXY_SHA256", hashlib.sha256(source.read_bytes()).hexdigest())
 
     staging_script.verify_ingress(target, app, ingress)
 
@@ -130,7 +124,7 @@ def test_valid_ingress_profile_requires_internal_network_app_alias_proxy_hash_an
     with pytest.raises(RuntimeError, match="proxy source"):
         staging_script.verify_ingress(target, app, ingress)
 
-    monkeypatch.setattr(staging_script, "AUDIT_PROXY_SHA256", hashlib.sha256(source.read_bytes()).hexdigest())
+    monkeypatch.setattr(staging_script, "AUDIT_PROXY_SHA256", "0fd0f918a5390fdf97d51019d5e9481227e9d1410838e23c1325718b27c22798")
     ingress["Mounts"][0]["RW"] = True
     with pytest.raises(RuntimeError, match="read-only"):
         staging_script.verify_ingress(target, app, ingress)
@@ -148,6 +142,12 @@ def test_valid_ingress_profile_requires_internal_network_app_alias_proxy_hash_an
     monkeypatch.setattr(staging_script, "inspect_network", lambda _network: {"Internal": True})
     app["NetworkSettings"]["Networks"]["internal"]["Aliases"] = ["not-app"]
     with pytest.raises(RuntimeError, match="app DNS alias"):
+        staging_script.verify_ingress(target, app, ingress)
+
+    app["NetworkSettings"]["Networks"]["internal"]["Aliases"] = ["app"]
+    ingress["Mounts"][0]["Source"] = str(tmp_path / "untracked_proxy.py")
+    (tmp_path / "untracked_proxy.py").write_text(staging_script.AUDIT_PROXY_SOURCE.read_text())
+    with pytest.raises(RuntimeError, match="canonical tracked source"):
         staging_script.verify_ingress(target, app, ingress)
 
 

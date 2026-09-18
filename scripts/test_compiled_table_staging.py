@@ -42,8 +42,11 @@ SOURCE = """def process(input_payload):
 """
 AUDIT_INGRESS_SERVICE = "audit-ingress"
 APP_SERVICE = "app"
-AUDIT_PROXY_PATH = "/tmp/audit_proxy.py"
-AUDIT_PROXY_SHA256 = "5fe06d855265b1baf910bae9b2841b7f674cddadb5a2002a6a52bfa86befaece"
+ROOT = Path(__file__).resolve().parents[1]
+AUDIT_PROXY_RELATIVE_PATH = Path("docker/audit-ingress/proxy.py")
+AUDIT_PROXY_SOURCE = ROOT / AUDIT_PROXY_RELATIVE_PATH
+AUDIT_PROXY_PATH = "/opt/audit-proxy/proxy.py"
+AUDIT_PROXY_SHA256 = "0fd0f918a5390fdf97d51019d5e9481227e9d1410838e23c1325718b27c22798"
 
 
 @dataclass(frozen=True)
@@ -199,6 +202,16 @@ def proxy_mount_source(details):
     return None
 
 
+def verify_proxy_source(source):
+    if source is None or not source.is_file():
+        raise RuntimeError("audit proxy must have a read-only tracked source mount")
+    if source.resolve() != AUDIT_PROXY_SOURCE.resolve():
+        raise RuntimeError("audit proxy must mount the canonical tracked source")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    if digest != AUDIT_PROXY_SHA256:
+        raise RuntimeError("audit proxy source does not match the fixed app:8000 route")
+
+
 def verify_ingress(target, app, ingress):
     parsed = urlparse(target.base_url)
     docker_host = os.getenv("DOCKER_HOST", "")
@@ -223,12 +236,7 @@ def verify_ingress(target, app, ingress):
     config = ingress.get("Config") if isinstance(ingress.get("Config"), dict) else {}
     if config.get("Entrypoint") != ["python", AUDIT_PROXY_PATH] or config.get("Cmd") not in ([], None):
         raise RuntimeError("ingress is not the fixed audit proxy")
-    source = proxy_mount_source(ingress)
-    if source is None or not source.is_file():
-        raise RuntimeError("audit proxy must have a read-only host source mount")
-    digest = hashlib.sha256(source.read_bytes()).hexdigest()
-    if digest != AUDIT_PROXY_SHA256:
-        raise RuntimeError("audit proxy source does not match the fixed app:8000 route")
+    verify_proxy_source(proxy_mount_source(ingress))
 
 
 def verify_target_identity(target):
