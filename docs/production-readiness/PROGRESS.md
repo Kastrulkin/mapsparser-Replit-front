@@ -1,5 +1,37 @@
 # Production-readiness progress
 
+## Resumed after Mac cleanup — 19 September Moscow
+
+The preceding cleanup turn made progress: approved installer removal and exact
+unused BuildKit cache cleanup recovered about 5 GB. Fresh free space is
+6,141,224 KiB (5.86 GiB), not the historical ~1 GiB below. User data, Docker
+images/containers/volumes and production were preserved. See task raw
+`mac-storage-cleanup-20260918.md` for deletion scope and evidence.
+
+- [x] Execute previously prepared v8 process-only proof: 10/10 cases,
+  exit0, 3.590517s, no timeout/truncation; independent review PASS and no
+  proof-owned processes remaining. Raw `supervisor-v8-process-only.json`.
+- [x] Execute a new v8-supervised paired five-flow measurement:750requests and
+  150invariants per reference all pass;552.856456s. Independent raw recomputation,
+  exact110DB absence and process cleanup PASS. Mixed tail changes in report04;
+  no general speedup claim. The old PermissionError capture remains invalid.
+- [x] Add and verify direct/network queued-actor revocation/deletion regression:
+  18targeted/adjacent tests pass4.78s; independent test review, no residual schemas.
+- [x] Strict committed-source delta272..5b9:7commits/zero secret findings.
+- [ ] Run the six actual dynamic-origin reviews/finance browser cases for
+  TEST-E2E-04. First actual native6 attempt failed8.500341s before archive/DB/
+  test execution with controller group_membership_or_identity_invalid. No
+  surviving matching process; preserve evidence and diagnose before retry.
+- [ ] Complete the safe demo rehearsal, retaining the first failed evidence.
+- [ ] Current image gate still needs space: measured historical build peak
+  consumed about 6.8 GiB. The 5.86 GiB available is adequate for guarded native
+  checks but not that peak plus margin; do not launch Docker build now.
+
+HEAD at resume:5b9b9247; application source still272794a4. Existing user edits
+in the voice-review document and untracked map-analysis document are untouched.
+Overall readiness remains unproven; no production action, push or deployment.
+Current package changes only the compiled-claim regression test and audit docs.
+
 16:58UTC final scoped checkpoint: committed73c3f48a, independent docs/evidence
 reviewPASS after current-handoff commit wording correction. Docker29.2.0 is
 already available; no startup/reset required. Mac remains1,021,332KiB free.

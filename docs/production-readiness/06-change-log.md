@@ -646,3 +646,21 @@ An isolated native PostgreSQL 15.15 cluster (loopback-only, fresh synthetic data
 The journal fixture now applies canonical network/business-link and network-membership migrations. Five additional real-SQL cases check active manager/member, viewer, revoked membership and a different network; denied writes create no journal record. Existing PermissionError/HTTP403 assertions are unchanged. Independent review approved the test-only patch. The three affected files reran: **79 passed, 5 third-party deprecation warnings in 10.32s**, capture exit0 in10.958s (`raw/native-pg-journal-network-green.json`). This is PG15 evidence, not a replacement for production PG16 or the still-incomplete full backend run.
 
 The complete same 22-file selection then reran from the same fixed archive with only the committed journal fixture replaced: **713 passed, 5 warnings in 52.89s**, capture exit0 in53.629s (`raw/native-pg-operator-fixture-green.json`). This isolates the causal test-schema correction; it does not include the subsequent finance-RBAC runtime changes.
+# 19 September continuation: measured comparison and access regression coverage
+
+- No application/runtime code changed. Existing approved cleanup restored
+  native-test headroom; current Docker image remains blocked by measured peak
+  disk requirements, not merely an arbitrary start guard.
+- Executed the previously prepared v8 controller proof (10cases), then the
+  actual paired five-flow comparison (750requests+150invariants per revision,
+  all passing;552.856456s). Mixed tail changes are retained in report04;
+  no general speedup or production-capacity claim.
+- Added direct/network queued-actor membership revocation/deletion coverage in
+  `tests/test_compiled_run_claim_pg.py`. Existing implementation correctly denies
+  access; this is a regression-coverage gap, not a newly fixed vulnerability.
+  Independently reviewed;18targeted/adjacent checks pass, no leftover test schemas.
+- Strict secret delta272..5b9:7commits, zero findings,1.546069s. Historical
+  revocation, image-layer and log checks remain separate.
+- The later native6 browser attempt failed in process supervision before any
+  test/archive/DB phase. Its8.500341s capture is retained, not counted as six
+  passed tests. No product-code fix or source defect is inferred from this.

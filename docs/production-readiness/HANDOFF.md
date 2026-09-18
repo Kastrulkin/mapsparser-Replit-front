@@ -1,5 +1,62 @@
 # Readiness handoff
 
+## Current continuation — 19 September Moscow, after cleanup
+
+Goal resumed. Previous turn classified PROGRESS: exact authorized cleanup
+changed disk state. Fresh rootfree6,141,224KiB (~5.86GiB), superseding the older
+resource-blocked snapshot below. HEAD5b9b9247; branch unchanged. Application
+source remains272794a4; unrelated voice-review and map-analysis edits preserved.
+
+v8 process-only proof now executed PASS10/10, raw/supervisor-v8-process-only.json
+exit0/3.590517s/no timeout/truncation. Root inspected all rows; independent
+reviewer confirmed no proof-owned processes remain. Never replay this capture.
+This proves its bounded process cases, not the cause of the prior benchmark
+PermissionError or successful integration into long measurement wrappers.
+
+Paired measurement is now complete: raw/journey-measure-v8-2d875357-272794a4
+and its-command.json, exit0/552.856456s/no timeout/truncation. Both references
+pass750requests+150invariants;5warmups+50serial per ref. Independent reviewer
+recomputed counts/quantiles and verified0/110 exact owned DBs remaining and no
+supervised processes. New sfvw18u0 archive cleaned; old3vfs52tm failed archive
+preserved. Finance/Operator tails increased in this sample; report04 preserves
+them without a causal/speedup claim. Do not replay the completed measurement.
+
+Test-only direct/network membership revoke/delete coverage was added to
+tests/test_compiled_run_claim_pg.py, with independently reviewed restored-access
+and before-artifact-validation assertions. Actual targeted/adjacent18pass4.78s,
+raw/compiled-membership-20260919.json exit0/5.387119s, no residual test schemas.
+No application source changed. Strict7commit secret delta272..5b9 has0findings.
+
+Next: diagnose the failed native six-case TEST-E2E-04 controller, then execute
+a reviewed retry; complete the demo walkthrough plus synthetic finance companion.
+View-only evidence must not replace finance preview/apply/history requirement.
+Native6 wrapper /private/tmp/localos-readiness-native-runtime-errors-5b9b9247.py
+was corrected and statically approved at2ca728048707b30bd2d904ac4bffc70d4ab6985f486bce746b75e298d4b45d0a,
+then actually FAILED: raw/native-runtime-errors-5b9b9247-command.json exit1,
+8.500341s, no timeout/truncation; v8.refresh raised
+group_membership_or_identity_invalid. Inner raw is exit1/8.264378s with no
+summary/stdout/stderr. No archive/DB/browser-test phase was reached; ROOT only
+contains prepared components/admin-home. Escalated tmux/pgrep exact checks find
+no session or matching processes. Preserve both failed captures/task root;
+never replay them. Root cause is not yet proven; journey_benchmark_harness is
+performing bounded diagnosis. Do not weaken process identity guards for a pass.
+Demo view outer /private/tmp/localos-readiness-demo-272-retry-v8-root-capture.py
+is prepared, requires final root/reviewer inspection, and expects explicit
+observe/stop commands (never wait merely to simulate a10minute rehearsal).
+Finance companion /private/tmp/localos-readiness-demo-272-finance-v8-root-capture.py
+SHA c5cc64cbc629c0a54a21f36ccd656cf87d9d0cec0c084d20cbc71b84f84cfe9e
+is independently static-approved, NOT executed. It requires successful view
+summary, preserves prior history IDs, adds exactly2 synthetic import batches,
+checks duplicate0/2/0 and rejects ambiguous20-row history pages. No finance reset.
+Do not overlap heavy jobs. Docker rebuild remains held: measured historical
+browser-enabled build consumed~6.8GiB headroom, exceeding current free space
+before safety margin. No further cleanup or app shutdown is implicitly approved.
+
+The cleanup note records the permanently deleted approved DaVinci installer
+(4.123GB) and regenerable exact11-record build cache (889.9MB); container/image/
+volume identities stayed unchanged. Browser shutdown choice remains unanswered.
+
+
 ## Current continuation — 18 September after 15:30 UTC
 
 LATEST16:58UTC: TEST-E2E-04 committed73c3f48a; independent source and evidence

@@ -31,6 +31,29 @@ objects or actual model/provider behavior. All audit patches remain local.
 
 ## Representative abuse and failure cases
 
+### Narrow compiled identity trace and revocation regression — 19 September
+
+Source trace distinguishes the pure compiled transform from the legacy
+capability runner. `agent_blueprints_api.py` resolves the blueprint/version and
+input snapshot in the authenticated actor's business scope; `agent_run_admission.py`
+re-reads those identities; `agent_run_queue.py:compiled_run_claim` rechecks the
+stored actor, admission audit, current membership, approved version and artifact.
+The sandbox receives source/manifest/fixtures/input, not a DB handle or trusted
+tenant/approval authority. Its result is stored under the existing run lease;
+there is no compiled-result-to-capability dispatcher in this traced path.
+Compiled version approval is not the legacy provider action's per-run approval.
+This is a bounded source trace, not a complete adversarial/model-output audit.
+
+The trace found an untested existing protection, not a reproduced bypass.
+`tests/test_compiled_run_claim_pg.py` now exercises both direct and network
+membership: revoke status or delete membership after a valid queued claim,
+require `compiled_actor_access_revoked` before artifact validation, then restore
+access and require validation/success again. Account/session denials and the
+transaction-release check remain. The test-only change was independently
+reviewed. Real PostgreSQL plus adjacent artifact/runtime tests:18passed4.78s,
+capture5.387119s,exit0/no timeout/truncation. Root confirmed zero remaining
+`test_compiled_claim_%` schemas. No product code or production data changed.
+
 1. Revoked or viewer user replays a previously valid mutation. Denial must occur before SQL writes, billed generation or provider effects. Test direct and network membership, mixed roles, foreign objects and revocation, not just UI visibility.
 2. An authenticated caller supplies business A to a guard and an object from business B to a handler. Check stored object ownership as well as the request selector. A successful tenant lookup is insufficient evidence for every later statement.
 3. A signed callback is delivered concurrently or after a timeout. Signatures prove possession of a secret, not novelty. Record durable admission before side effects; distinguish completed from uncertain processing and preserve evidence for reconciliation.
@@ -40,6 +63,13 @@ objects or actual model/provider behavior. All audit patches remain local.
 7. A backup/configuration is accidentally included in an image or a restore command targets live data. Exclude sensitive build paths and require explicit validated restore targets. A readable dump is not a successful restore rehearsal.
 
 ## Secret and dependency findings
+
+19 September Moscow continuation: strict redacted Gitleaks8.30.1 history delta
+`272794a4..5b9b9247` scanned7commits/149,093bytes and reported zero findings.
+Actual capture exit0/1.546069s/no timeout/truncation, report `[]`.
+This extends the local committed-source delta check only; it does not scan
+uncommitted user documents, resolve historical credential revocation or close
+image-layer/log scanning. No live credential test or rotation was performed.
 
 Offline historical scanning confirmed former privileged credential material; revocation is unknown. Values are intentionally absent from tracked reports. Current f0cc tracked-source scan has98candidates versus94baseline: all4new candidates are inspected report prose, not credentials. Post-remediation28commit history delta has1prose false positive. This does not establish absence from image layers, resolved dependencies or logs; those final scans remain incomplete. No key was tested against a provider, rotated, or removed from history by this audit.
 

@@ -5,6 +5,44 @@ dashboard profile and tiny-fixture SQL plans are measured; capacity remains open
 Build/test wall times are engineering feedback measurements, not user latency.
 All measurements are local/synthetic; none describe production capacity.
 
+## Completed working-reference comparison — 19 September Moscow
+
+The separately reviewed v8 launcher completed the previously missing paired
+comparison: working reference `2d875357` versus application checkpoint
+`272794a4`, five warmups and50 serial samples per reference, interleaved ABBA.
+Actual capture `journey-measure-v8-2d875357-272794a4-command.json` reports
+exit0/552.856456seconds, no timeout/truncation, empty stderr; inner result is
+valid with no invalid reasons. Per reference, all750 measured requests and
+150 invariants pass; all75 warmup requests and15 warmup invariants pass.
+These counts must not be added to overlapping historical suites as unique tests.
+
+Independent review recomputed all15step distributions and all five journey
+distributions from the raw samples. Exact110unique owned database names are
+absent from the verified local cluster; no supervised process remains and the
+new source archive was cleaned. The old interrupted archive remains preserved.
+The scoped comparison passes; overall AC7 still needs its broader reconciliation.
+
+The following quantiles are recomputed from each successful run's sum of timed
+request durations for that journey, not sums of per-request percentiles.
+
+| Journey | Working reference p50 / p95 / p99, ms | Current p50 / p95 / p99, ms |
+| --- | ---: | ---: |
+| Authentication and tenant |148.8 /192.1 /245.3|148.1 /193.3 /249.0|
+| Service menu |303.6 /402.1 /467.8|310.2 /374.4 /430.8|
+| Finance import |250.8 /308.5 /365.9|248.4 /338.7 /395.6|
+| Content |472.9 /564.1 /584.0|467.8 /528.6 /555.6|
+| Operator |139.6 /165.2 /181.1|138.4 /202.9 /259.6|
+
+Medians are close and tail changes are mixed. Finance and Operator p95/p99
+increased in this sample; do not hide those observations or attribute them to
+a cause without a controlled follow-up. No overall speedup is established.
+p99 remains exploratory at50samples. Native cold Flask dispatch/real SQL with
+deterministic provider seams excludes network, browser, migrations/setup and
+human think time; these are not full user journey wall times or production SLOs.
+This supplement does not replace the original302baseline's recorded failures,
+the earlier interrupted comparison, bounded HTTP load or browser observations.
+
+
 ## Supplemental comparison interrupted — 18 September 16:05 UTC
 
 The original302 auth baseline fails50/50, leaving successful auth quantiles

@@ -1,5 +1,24 @@
 # Readiness decisions
 
+## D-029 — Resume native proof without treating recovered space as unlimited
+
+Safe approved cleanup recovered enough space for guarded native measurements.
+Execute the previously prepared process-only controller proof before using it
+in new one-shot wrappers. The actual ten-case pass and independent leftover
+check permit integration; they do not explain the original EPERM or retroactively
+validate its partial measurements. Keep that failed capture unchanged.
+
+Use measured peak storage, not only a start-floor check, for Docker readiness:
+the historical browser build consumed~6.8GiB of headroom. Current~5.86GiB does
+not cover that plus reserve. Continue independent native/demo work serially
+instead of either launching an unsafe build or calling the whole goal blocked.
+
+The ten-case process proof and successful paired measurement do not certify
+every nested process tree. A later native6 wrapper fails before tests with
+`group_membership_or_identity_invalid`; preserve the raw failure and investigate
+the controller rather than lowering identity checks or counting unrun cases.
+
+
 ## D-028 — Test-origin assertions follow the configured runtime
 
 A dynamic-port browser run cannot use a fixed18000 console allowlist. Extract

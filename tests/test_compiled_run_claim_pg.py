@@ -1,4 +1,4 @@
-"""The compiled worker must release its read transaction before sandbox work."""
+"""Compiled claims recheck access and release their read transaction before execution."""
 import os
 import uuid
 
@@ -7,7 +7,8 @@ from psycopg2.extras import RealDictCursor
 import pytest
 
 
-def test_compiled_claim_closes_its_real_postgres_transaction(monkeypatch):
+@pytest.mark.parametrize("membership_kind", ["direct", "network"])
+def test_compiled_claim_rechecks_actor_and_releases_transaction(monkeypatch, membership_kind):
     dsn = os.getenv("LOCALOS_TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("requires isolated PostgreSQL")
@@ -39,8 +40,15 @@ def test_compiled_claim_closes_its_real_postgres_transaction(monkeypatch):
             id TEXT PRIMARY KEY,run_id TEXT,artifact_type TEXT,payload_json JSONB,created_at TIMESTAMPTZ
         )""")
         cursor.execute("INSERT INTO users VALUES ('user',FALSE,TRUE,TRUE)")
-        cursor.execute("INSERT INTO businesses VALUES ('biz','owner',NULL,TRUE)")
-        cursor.execute("INSERT INTO business_members VALUES ('biz','user','active')")
+        cursor.execute("INSERT INTO businesses VALUES ('biz','owner','network',TRUE)")
+        cursor.execute("INSERT INTO networks VALUES ('network','network-owner')")
+        if membership_kind == "direct":
+            membership_table = "business_members"
+            membership_id = "biz"
+        else:
+            membership_table = "network_members"
+            membership_id = "network"
+        cursor.execute(f"INSERT INTO {membership_table} VALUES (%s,'user','active')", (membership_id,))
         cursor.execute("INSERT INTO agent_blueprints VALUES ('bp','active','version')")
         cursor.execute("""INSERT INTO agent_blueprint_versions(
             id,compiled_state,compiled_artifact_json,compiled_artifact_hash,
@@ -68,7 +76,13 @@ def test_compiled_claim_closes_its_real_postgres_transaction(monkeypatch):
                 self.conn.rollback()
 
         monkeypatch.setattr(database_manager, "DatabaseManager", Database)
-        monkeypatch.setattr(agent_run_queue, "validate_compiled_script_artifact", lambda _artifact: {"valid": True, "manifest": {}})
+        validated_artifacts = []
+
+        def validate_artifact(artifact):
+            validated_artifacts.append(artifact)
+            return {"valid": True, "manifest": {}}
+
+        monkeypatch.setattr(agent_run_queue, "validate_compiled_script_artifact", validate_artifact)
         monkeypatch.setattr("services.compiled_pilot_access.compiled_pilot_allowed", lambda *_args, **_kwargs: True)
 
         prepared = agent_run_queue.compiled_run_claim({"id": "run", "lease_token": "lease"})
@@ -78,6 +92,26 @@ def test_compiled_claim_closes_its_real_postgres_transaction(monkeypatch):
         probe.execute("SELECT id FROM agent_runs WHERE id='run' FOR UPDATE NOWAIT")
         assert probe.fetchone()["id"] == "run"
         second.rollback()
+
+        # The queued actor was valid at admission. A later membership change
+        # must be observed before its artifact/input can reach the sandbox.
+        for revoke_sql in (
+            f"UPDATE {membership_table} SET status='inactive' WHERE user_id='user'",
+            f"DELETE FROM {membership_table} WHERE user_id='user'",
+        ):
+            validated_before = len(validated_artifacts)
+            cursor.execute(revoke_sql)
+            first.commit()
+            assert agent_run_queue.compiled_run_claim({"id": "run", "lease_token": "lease"}) == {
+                "error": "compiled_actor_access_revoked"
+            }
+            assert len(validated_artifacts) == validated_before
+            cursor.execute(f"DELETE FROM {membership_table} WHERE user_id='user'")
+            cursor.execute(f"INSERT INTO {membership_table} VALUES (%s,'user','active')", (membership_id,))
+            first.commit()
+            restored = agent_run_queue.compiled_run_claim({"id": "run", "lease_token": "lease"})
+            assert restored and not restored.get("error")
+            assert len(validated_artifacts) == validated_before + 1
 
         cursor.execute("UPDATE users SET is_active=FALSE WHERE id='user'")
         first.commit()

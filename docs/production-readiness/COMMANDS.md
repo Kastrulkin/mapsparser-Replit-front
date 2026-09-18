@@ -1,5 +1,72 @@
 # Verified commands and evidence
 
+## Native six-case attempt — FAILED before tests, 19 September
+
+Named tmux `readiness-native-six-20260919` completed the one-shot
+`/private/tmp/localos-readiness-native-six-capture-20260919.sh`, pinning wrapper
+2ca728048707b30bd2d904ac4bffc70d4ab6985f486bce746b75e298d4b45d0a.
+Actual raw/native-runtime-errors-5b9b9247-command.json:exit1/8500.341ms,
+no timeout/truncation. Traceback is v8.refresh:
+`group_membership_or_identity_invalid`. Inner capture raw/native-runtime-errors-5b9b9247.json
+exit1/8264.378ms, missing inner summary and empty stdout/stderr. No browser
+count or successful collector evidence exists. Exact task root has only
+prepared components/admin-home; no archive was created. Fresh tmux/pgrep checks
+find no matching live session/process. Keep failure and root, do not overwrite
+or rerun this wrapper. Diagnosis is pending; no product failure is established.
+
+## Completed paired measurement and compiled-claim regression — 19 September
+
+`readiness-journey-v8-20260919` completed
+`/private/tmp/localos-readiness-journey-measure-v8-root-capture-20260919.sh`.
+The wrapper pins launcher SHA
+`cccbf00ccbe95c6701f103049fc158d7f73afef1363817012bfe258bdb4dbaef`,
+uses env-i/ARM64 Python/guard-first imports and captures the actual
+`/private/tmp/localos-readiness-journey-measure-v8-2d875357-272794a4.py --execute`
+with1900s outer/1800s inner bounds. The exact driver invocation is preserved
+in raw `journey-measure-v8-2d875357-272794a4.json`: distinct pinned refs,
+5warmups/50serial/0load. Command capture exit0/552856.456ms, no timeout or
+truncation. Independent counts/quantiles/provenance/110DB absence/process
+cleanup review PASS for this bounded comparison. Do not replay completed paths.
+
+`readiness-compiled-membership-20260919` then ran
+`/private/tmp/localos-readiness-compiled-membership-capture-20260919.sh`, which
+verifies the literal-loopback reference DB identity and data_directory before:
+
+```sh
+venv/bin/python -m pytest -q tests/test_compiled_run_claim_pg.py tests/test_compiled_script_artifact.py tests/test_compiled_runtime_errors.py
+```
+
+Actual raw `compiled-membership-20260919.json`:18passed4.78s,
+childexit0/5387.119ms/no timeout/truncation. Root postcheck on the same local
+cluster found0remaining `test_compiled_claim_%` schemas. Only nonce schemas
+inside the task-owned test DB were used; no production/provider operations.
+
+## Strict committed-source delta — 19 September Moscow
+
+Completed tmux `readiness-secret-delta-20260919`, wrapper
+`/private/tmp/localos-readiness-secret-delta-272-to-5b9-20260919.sh`.
+Gitleaks8.30.1 with `git --log-opts=272794a439a76204536480f158e79276ccd7b318..5b9b9247b54f5768cd0dc4c8870998e0e964212f
+--ignore-gitleaks-allow --redact=100 --no-banner --no-color --report-format=json`
+scanned7commits/149,093bytes. Raw/secret-delta-272-to-5b9-20260919.json:
+childexit0/1546.069ms/no timeout/truncation, private report
+`/private/tmp/localos-readiness-secret-delta-272-to-5b9-20260919.json` is `[]`.
+No external provider calls or credential testing; historical/image/log gates
+are separate. Do not replay this completed evidence path.
+
+## Executed v8 process proof — 19 September Moscow
+
+Completed named tmux session `readiness-supervisor-v8-20260919`, executing the
+exact env-i command under the historical prepared section below through
+`/private/tmp/localos-readiness-supervisor-v8-root-capture-20260919.sh`.
+Both helper hashes matched HANDOFF before launch. Actual capture
+`raw/supervisor-v8-process-only.json`: childexit0, duration3590.517ms,
+timed_out=false, no truncation, empty stderr; parsed stdout valid=true and all
+ten expected proof rows. Injected denial/identity changes correctly return
+invalid cleanup with zero unintended signals; these are expected negative cases.
+Independent scoped review PASS and targeted ps verified no proof-owned
+processes remain. No Docker/DB/browser/provider operation in this proof.
+The output path is now completed evidence and must not be reused.
+
 ## TEST-E2E-04 — pure collector regression, 18 September 16:54 UTC
 
 Completed named tmux sessions readiness-runtime-errors-{red,green,quality}.
