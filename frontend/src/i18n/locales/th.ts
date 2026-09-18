@@ -663,6 +663,11 @@ export const th = {
         keywords: "haircut, styling, coloring",
         price: "Example: $30"
       },
+      reviewReply: {
+        manualPublicationHint: "เผยแพร่ใน Maps ด้วยตนเอง: คัดลอกคำตอบแล้ววางในแดชบอร์ดของแพลตฟอร์ม",
+        copy: "คัดลอก",
+        copied: "คัดลอกแล้ว"
+      },
       newsGenerator: {
         title: "ตัวสร้างข่าว",
         subtitle: "สร้างข่าวธุรกิจสำหรับนามบัตรของคุณ",

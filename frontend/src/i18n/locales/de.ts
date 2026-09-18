@@ -667,6 +667,11 @@ export const de = {
         keywords: "haircut, styling, coloring",
         price: "Example: $30"
       },
+      reviewReply: {
+        manualPublicationHint: "Manuell in Maps veröffentlichen: Kopieren Sie die Antwort und fügen Sie sie im Dashboard der Plattform ein.",
+        copy: "Kopieren",
+        copied: "Kopiert"
+      },
       newsGenerator: {
         title: "Nachrichtengenerator",
         subtitle: "Erstelle Nachrichten für deine Visitenkarte",

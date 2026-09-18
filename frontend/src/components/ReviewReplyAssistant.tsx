@@ -470,7 +470,7 @@ export default function ReviewReplyAssistant({
       <div className={cn("bg-white rounded-2xl border border-gray-200 p-6 shadow-sm")}>
         <h4 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-amber-500" />
-          Quick Generator
+          {t.dashboard.card.reviewReply.generate}
         </h4>
         <Textarea
           rows={4}
@@ -723,9 +723,9 @@ export default function ReviewReplyAssistant({
                         <div className="flex flex-col h-full gap-2">
                           {reviewItem.reply_draft_id ? (
                             <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-medium leading-5 text-indigo-800">
-                              <div>Черновик LocalOS: {reviewItem.reply_draft_status || 'draft'}</div>
+                              <div>{t.dashboard.card.reviewReply.proposalLabel}</div>
                               <div className="font-normal text-indigo-700">
-                                Публикация в карты вручную: скопируйте ответ и вставьте его в кабинете площадки.
+                                {t.dashboard.card.reviewReply.manualPublicationHint}
                               </div>
                             </div>
                           ) : null}
@@ -758,11 +758,18 @@ export default function ReviewReplyAssistant({
                                 size="sm"
                                 variant="outline"
                                 className="bg-white border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg px-3"
-                                title="Скопировать ответ"
+                                title={copiedReplyId === reviewItem.id
+                                  ? t.dashboard.card.reviewReply.copied
+                                  : t.dashboard.card.reviewReply.copy}
+                                aria-label={copiedReplyId === reviewItem.id
+                                  ? t.dashboard.card.reviewReply.copied
+                                  : t.dashboard.card.reviewReply.copy}
                               >
                                 <Copy className="w-4 h-4" />
                                 <span className="ml-2 hidden sm:inline">
-                                  {copiedReplyId === reviewItem.id ? 'Скопировано' : 'Скопировать'}
+                                  {copiedReplyId === reviewItem.id
+                                    ? t.dashboard.card.reviewReply.copied
+                                    : t.dashboard.card.reviewReply.copy}
                                 </span>
                               </Button>
                             )}

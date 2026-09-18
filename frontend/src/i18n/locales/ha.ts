@@ -650,6 +650,11 @@ export const ha = {
         keywords: "haircut, styling, coloring",
         price: "Example: $30"
       },
+      reviewReply: {
+        manualPublicationHint: "Buga a Maps da hannu: kwafi amsar sannan ka manna ta a allon kula na dandali.",
+        copy: "Kwafi",
+        copied: "An kwafa"
+      },
       newsGenerator: {
         title: "Mai Hada Labarai",
         subtitle: "Ƙirƙiri labarai don katin kasuwancin ku",

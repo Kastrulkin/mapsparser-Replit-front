@@ -650,6 +650,11 @@ export const ar = {
         keywords: "haircut, styling, coloring",
         price: "Example: $30"
       },
+      reviewReply: {
+        manualPublicationHint: "انشر على الخرائط يدويًا: انسخ الرد والصقه في لوحة تحكم المنصة.",
+        copy: "نسخ",
+        copied: "تم النسخ"
+      },
       newsGenerator: {
         title: "مولد الأخبار",
         subtitle: "أنشئ أخباراً لبطاقة عملك",

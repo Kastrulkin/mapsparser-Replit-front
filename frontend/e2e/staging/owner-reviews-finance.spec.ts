@@ -41,7 +41,7 @@ test('owner reviews: unanswered review opens with a prepared manual draft', asyn
 
   await page.goto('/dashboard/card?tab=reviews&review_filter=needs_reply');
   await expect(page.getByText('Мария Тестова').first()).toBeVisible();
-  await expect(page.getByText('Черновик LocalOS: draft')).toBeVisible();
+  await expect(page.getByText('Предложение ответа:')).toBeVisible();
   const preparedReply = 'Мария, спасибо за отзыв! Напишите нам в удобном канале, и мы подберём время для повторной записи.';
   await expect.poll(() => page.locator('textarea').evaluateAll(
     (elements, expectedReply) => elements.some((element) => (
@@ -50,7 +50,7 @@ test('owner reviews: unanswered review opens with a prepared manual draft', asyn
     preparedReply,
   )).toBe(true);
   await expect(page.getByText(/Публикация в карты вручную/)).toBeVisible();
-  await expect(page.getByRole('button', { name: /Скопировать/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Копировать' })).toBeVisible();
   expect(runtimeErrors).toEqual([]);
 });
 
