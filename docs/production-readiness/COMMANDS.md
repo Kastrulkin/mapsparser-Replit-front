@@ -1,5 +1,23 @@
 # Verified commands and evidence
 
+## Current local checks — 18 September 11:25 UTC
+
+- `readiness-native-routes-schema-archive-813609cc-final-20260918.json`:
+  clean813609cc archive + exact four files now52292e6e; guarded localPG15;
+  24passed/1Alembic warning9.25s, exit0/10.005698s,no timeout/truncation.
+  Earlier dirty-worktree run23pass/1unrelated binding ratchet failure retained.
+  `readiness-transaction-readonly-diagnostic-20260918.json`: actual transaction
+  read-only=on, exit0/0.236915s; NO_BUG_PROVEN for implicit-BEGIN concern.
+- `image-dependencies-f0cc182a.json`: exactb43 read-only/nonroot/no-network
+  disposable image probe,104Python packages, exit0/2.924219s, container removed.
+  `image-python-advisories-f0cc182a.json`: exact pins, strict PyPI audit with
+  --no-deps --disable-pip, no application env/installation,104checked/0skips;
+  exit1/9.582056s from12records/6unique pip24.0 advisories, not a scan failure.
+- `dep-engine-static-root-retry-20260918.json`: four packaging/context/browser
+  contract suites,8passed0.11s,exit0/0.428798s. The earlier root capture exit4
+  names a nonexistent test file and ran no tests; it is retained, not product
+  RED. Reviewed Docker pin26.2 committed65ca8836, image confirmation pending.
+
 ## Current local checks — 18 September 10:58 UTC
 
 - `social-posts-viewer-rbac-expanded-green-20260918.json`:254passed0skipped,

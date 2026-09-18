@@ -183,7 +183,7 @@
         "raw/trivy-vulnerability-db.json"
       ],
       "gaps": [
-        "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 image reports104Python distributions with private pinned inventory; advisory audit still pending. PyMuPDF AGPL/commercial metadata needs ownerlicense confirmation, not a violation claim. TrivyDB safely refused insufficientstartingheadroom before download. Finalimage/log/OS/native/npm/license scans pending. AI/tool realPG versus doubles evidence remains scoped."
+        "Finalf0cc tracked-source98vs94baseline candidates:4delta prose false positives; post-remediation28commit delta1prose false positive. Historical privileged exposure/revocation unknown. Exactimmutableb43 strict PyPI audit checked104Python distributions/0skips,12records/6unique advisories only in pip24.0. Reviewed65ca8836 pin26.2 before requirements passes8static checks but image rebuild/version/re-audit remain. PyMuPDF AGPL/commercial metadata needs ownerlicense confirmation, not a violation claim. TrivyDB safely refused insufficientstartingheadroom before download. Finalimage/log/OS/native/npm/license scans pending. AI/tool realPG versus doubles evidence remains scoped."
       ]
     },
     {

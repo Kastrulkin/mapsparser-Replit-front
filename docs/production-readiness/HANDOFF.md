@@ -1,6 +1,43 @@
 # Readiness handoff
 
-## Current continuation — 18 September 10:58 UTC
+## Current continuation — 18 September 11:25 UTC
+
+HEAD65ca8836 contains reviewed pip26.2 Docker pin before requirements; Telegram
+inherits the app image, so no duplicate change. Unique finding ID DEP-PIP-02
+(DEP-ENGINE-01 already denotes Node22 alignment). Root exact8static checks
+pass0.11s/0.428798s capture. First root capture exit4/nonexistent test filename
+is retained as a harness error. No image rebuild or advisory closure yet.
+
+Prior52292e6e adds bounded SELECT-only `/ready`, preserves `/health`, shares
+existing content-schema predicate and standalone checker import setup, with
+README/runbook caveats. Clean813609cc archive plus four exact candidate files
+passes24tests/1Alembic warning9.25s; capture10.005698s. Guarded native route,
+migrated/missing/wrong-revision/unavailable DB, transaction-read-only, schema
+unchanged and standalone CLI checks execute. Independent final review PASS.
+First dirty-worktree24case run had1unrelated in-progress binding size-ratchet
+failure; no green claim. Separate read-only diagnostic disproves root concern.
+
+Exact image audit `image-python-advisories-f0cc182a.json` completes9.582056s,
+exit1 due findings, no timeout/truncation:104packages/0skips, pip24.0 only,
+12records representing6unique advisories, maximum fixed version26.2. Private
+inventory/audit files live under tasktemp/private-image-security. No OS/native/
+npm scan claim. Trivy not spawned due3.82GiB<4GiB. Read-only disposable-space
+inventory delegated; no new deletion. PyMuPDF license question is pending.
+
+Binding worker owns serialized native window. First reviewed-source native
+checkpoint failed13/38pass/9skip69.93s; `/private/tmp/social-approval-binding-green.log`
+is retained. Moved VK helper/facade binding raises NameError; legacy fixtures
+lack the new descriptor and a synthetic Telegram token has invalid numeric-ID
+format. Minimal helper/fixture repairs are authorized, all original receipt/
+concurrency assertions and missing-binding negative cases must stay. Relevant
+viewer skips need explicit DSN/guard correction; no complete green or current
+source PASS claimed before re-review/rerun. Do not edit worker files during
+the run. Media descriptor binds identities/DBmetadata, not
+immutable external object bytes; mutable URL/out-of-band storage checksum
+candidate is separate and not yet reproduced. Reviewer stays read-only.
+No push/deploy/production/external send. Overall goal and AC1–11 remain FAIL.
+
+## Historical continuation — 18 September 10:58 UTC
 
 HEAD `813609cc` commits exactly five social modules + legacy service unit fixture
 and new real-PG viewer matrix. Independent scoped review PASS254/0skips42.39s;

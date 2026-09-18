@@ -1,5 +1,28 @@
 # Production-readiness change log
 
+## DEP-PIP-02 — pin the image installer before dependency resolution
+
+Commit65ca8836 pins pip26.2 in the app Dockerfile before requirements, retaining
+the Python3.11 base and existing indexes. Telegram inherits that image. Exact
+b43 inventory audit checked104packages/0skips and reports12records/6unique
+advisories only in pip24.0. Independent source review and root8static tests
+pass; first root command typo/no-tests result is retained. No exploit claim,
+host install or image-level FIX_PROVEN: rebuild/version/re-audit remain.
+
+## OPS-READY-03 — bounded database-aware readiness without mutation
+
+Commit52292e6e adds `/ready` while leaving DB-free `/health` unchanged. A fresh
+connection has connect_timeout2s and transaction-local statement1500ms/lock
+250ms limits. Read-only SELECTs validate connectivity, expected/compatible
+Alembic head and existing content-learning schema columns/indexes. Response
+is generic200ready/503not_ready; no cached DB result, credentials or revision
+disclosure, provider access, migration or discovery telemetry write.
+The standalone schema checker shares its predicate and keeps direct CLI use.
+Clean archive24tests pass9.25s/10.005698s captured, including real nativePG
+read-only/schema invariants and registered routes. Independent scoped PASS;
+root implicit-BEGIN suspicion is NO_BUG_PROVEN from actual transaction mode.
+No Compose default, live image or production change. Image proof remains.
+
 ## SEC-RBAC-05 — social publication writes require a stored write role
 
 Commit `813609cc` adds a canonical write-role boundary for preparing, approving,

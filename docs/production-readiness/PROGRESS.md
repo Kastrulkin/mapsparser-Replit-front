@@ -1,5 +1,24 @@
 # Production-readiness progress
 
+11:25 UTC: `/ready` committed as52292e6e after independent review and24native/
+route/schema tests (9.25s pytest,10.005698s capture). `/health` is unchanged;
+the probe uses a bounded read-only transaction and generic200/503 responses.
+It is not yet in the staging image or production. An implicit-transaction
+read-only concern was disproved by actual `SHOW transaction_read_only=on`.
+
+Exact b43 image Python advisory audit checked all104packages,0skips: only
+pip24.0 has findings,12records/6unique advisories. DEP-PIP-02 pin26.2 before
+requirements is independently reviewed and committed65ca8836; root8static
+tests pass0.11s. First root command used a nonexistent test filename and ran
+no tests; retained. Finding closure still needs rebuilt image/version/audit.
+Trivy OS/image scan remains blocked by local headroom, not by server space.
+PyMuPDF commercial-license confirmation remains unanswered. Binding native
+checkpoint failed13/38pass/9skip69.93s: moved-helper/facade NameErrors, old
+approval fixtures and an invalid-format synthetic Telegram token need repair.
+That is a failed integration checkpoint, not a proven fix. Correction and
+complete no-skip adjacency rerun are pending. Overall readiness remains FAIL;
+no push/deploy/provider sends or production changes.
+
 10:58 UTC: social write-role package independently approved and committed
 813609cc,254tests/0skips. Post-GET SQL proof204passes7.933s:9read/0DDL versus
 9read/3DDL before; no speed claim. Approval-target causal RED7fail/1positive

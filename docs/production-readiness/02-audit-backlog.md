@@ -37,6 +37,23 @@ Updated 2026-09-18 UTC. All file evidence refers to the baseline or current loca
 
 ## Additional reproduced findings and environment gaps
 
+`DEP-PIP-02` (P2, before production; FIX_UNVERIFIED for image) — exact b43
+inventory104packages/0skips returns12records/6unique pip24.0 advisories.
+Build uses that installer; arbitrary dependency/archive/index inputs are the
+relevant boundary, not a demonstrated web exploit. Likelihood conditional on
+malicious installer input; impact build/image integrity; confidence high for
+version finding, reachability not reproduced. Reviewed65ca8836 pins26.2 before
+requirements (small patch/low compatibility risk, Python3.11 supported), root
+8static tests pass. Acceptance: clean build, exact version, dependency smoke
+and fresh image-pinned audit; OS/native/license gates remain separate.
+
+`OPS-READY-03` (P2, local implementation proven; live integration pending) —
+process-only `/health` cannot indicate DB/schema availability. New bounded
+read-only `/ready` in52292e6e preserves liveness behavior and existing schema
+contract. Independent review and24real-PG/route/CLI/ratchet checks pass9.25s.
+No migration, data or Compose/default change; actual image/live usage still
+needs verification. Generic errors avoid leaking operational configuration.
+
 `OPS-GET-DDL-01` (P1, FIX_PROVEN locally) — actual queryproof and causalRED3
 record request-time DDL before denied403. Commit2d875357 removes legacy schema
 maintenance and preserves canonical member/viewer read access; independent

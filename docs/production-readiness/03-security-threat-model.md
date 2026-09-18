@@ -57,6 +57,27 @@ Other bundled OS/npm/native components and final image/license/secret scanning
 remain open. Trivy DB acquisition safely stopped before spawn at3.82GiB free
 against4GiB start guard; this is a storage prerequisite failure, not a clean scan.
 
+### DEP-PIP-02 — exact-image installer advisories
+
+The subsequent strict PyPI advisory audit completed for all104exact image pins,
+0skips (`image-python-advisories-f0cc182a.json`,9.582056s). Exit1 means findings:
+only pip24.0 is affected, with12records representing6unique advisories, not12
+distinct defects. Fixed versions reported by the service are25.3,26.0,26.1,
+26.1,26.1.2 and26.2 respectively (CVE-2025-8869, CVE-2026-1703,
+CVE-2026-3219, CVE-2026-6357, CVE-2026-8643, CVE-2026-13346).
+No exploit or application-request reachability was reproduced. In particular,
+the tar fallback case depends on runtime PEP706 support. The installer is used
+during image construction, so a minimal pinned update is preferable to leaving
+the vulnerable tooling in the artifact. Other103packages have no returned
+Python advisory in this service/date, not a universal clean-bill claim.
+
+Reviewed65ca8836 pins pip26.2 before requirements installation and preserves
+the established indexes and Python3.11 base. [Published package metadata](https://pypi.org/project/pip/26.2/)
+supports Python>=3.10 including3.11. Telegram inherits the app image. Eight
+root static checks pass0.11s; this is FIX_UNVERIFIED at image level until a
+new immutable build reports the expected version and passes a refreshed audit.
+No host interpreter, production image or runtime dependency was upgraded.
+
 ## Existing AI/tool evidence and exact limits
 
 | Test boundary | Existing evidence | What it does not prove |
