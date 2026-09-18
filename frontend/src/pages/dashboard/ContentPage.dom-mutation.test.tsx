@@ -430,6 +430,112 @@ describe('Content page manual photo handoff', () => {
 });
 
 describe('Content page publication settings', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    { receipt: 'https://t.me/synthetic_channel/42', expected: { provider_post_url: 'https://t.me/synthetic_channel/42' } },
+    { receipt: '42', expected: { provider_post_url: '', provider_post_id: '42' } },
+  ])('reconciles an existing publication using $receipt without sending again', async ({ receipt, expected }) => {
+    vi.mocked(newAuth.makeRequest).mockClear();
+    vi.stubGlobal('fetch', vi.fn(async () => diskImportStatusResponse()));
+    window.localStorage.setItem('language', 'ru');
+    const post = {
+      id: 'uncertain-post', content_plan_item_id: 'item-1', platform: 'telegram',
+      status: 'publishing', platform_text: 'Готовый текст публикации.',
+      metadata_json: {
+        variant_status: 'stale',
+        platform_rule_readiness: { label: 'Нужно разместить', message: 'Устаревшая рекомендация' },
+      },
+    };
+    const receiptSave = deferredResponse<object>();
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path.startsWith('/content-plans?')) return { plans: [plan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-1/social-posts') return { posts: [post], summary: {} };
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      if (path === '/social-posts/uncertain-post/mark-manual-published') return receiptSave.promise;
+      return {};
+    });
+    renderContentPage();
+    expect(await screen.findAllByText('Проверить результат отправки')).not.toHaveLength(0);
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    expect(screen.queryByText('Отправка пока не запланирована')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /Каналы.*Проверить результат отправки/ }));
+    const confirmButton = await screen.findByRole('button', { name: 'Подтвердить существующую публикацию' });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.click(confirmButton);
+    expect(screen.queryByText('Устаревшая рекомендация')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Разместить вручную' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Ссылка или ID уже опубликованного поста'), { target: { value: receipt } });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Проверил на площадке: это тот же пост/ }));
+    fireEvent.click(confirmButton);
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledWith('/social-posts/uncertain-post/mark-manual-published', {
+      method: 'POST', body: JSON.stringify({ ...expected, content_confirmed: true }),
+    }));
+    expect(confirmButton).toBeDisabled();
+    const mutationPaths = vi.mocked(newAuth.makeRequest).mock.calls
+      .filter(([, options]) => options?.method === 'POST')
+      .map(([path]) => path);
+    expect(mutationPaths).toEqual(['/social-posts/uncertain-post/mark-manual-published']);
+    await act(async () => receiptSave.resolve({ post: { ...post, status: 'published' } }));
+  });
+
+  it.each(['mutation', 'reload'])('ignores an old publication %s response after business change', async (phase) => {
+    vi.mocked(newAuth.makeRequest).mockClear();
+    vi.stubGlobal('fetch', vi.fn(async () => diskImportStatusResponse()));
+    window.localStorage.setItem('language', 'ru');
+    const pendingResponse = deferredResponse<object>();
+    const nextPlan = { ...plan, id: 'plan-next', items: [{ ...plan.items[0], id: 'item-next', theme: 'Новая точка' }] };
+    const oldPost = { id: 'old-post', content_plan_item_id: 'item-1', platform: 'telegram', status: 'publishing' };
+    let initialPostsLoaded = false;
+    vi.mocked(newAuth.makeRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/content-plans/context')) return { context: {} };
+      if (path === '/content-plans?business_id=business-1') return { plans: [plan] };
+      if (path === '/content-plans?business_id=business-next') return { plans: [nextPlan] };
+      if (path === '/content-plans/plan-1') return { plan };
+      if (path === '/content-plans/plan-next') return { plan: nextPlan };
+      if (path === '/content-plans/plan-next/social-posts') return { posts: [], summary: {} };
+      if (path === '/content-plans/plan-1/social-posts') {
+        if (initialPostsLoaded && phase === 'reload') return pendingResponse.promise;
+        initialPostsLoaded = true;
+        return { posts: [oldPost], summary: {} };
+      }
+      if (path === '/social-posts/old-post/mark-manual-published') return phase === 'mutation' ? pendingResponse.promise : {};
+      if (path.startsWith('/media-intelligence/posts/')) return { recommendation: null };
+      return {};
+    });
+    const ContextRoute = () => {
+      const [businessId, setBusinessId] = useState('business-1');
+      return <>
+        <button type="button" onClick={() => setBusinessId('business-next')}>Switch business</button>
+        <Outlet context={{ currentBusinessId: businessId, currentBusiness: { id: businessId, name: businessId }, demoMode: false }} />
+      </>;
+    };
+    render(<MemoryRouter initialEntries={['/dashboard/content']}><LanguageProvider><Routes>
+      <Route element={<ContextRoute />}><Route path="/dashboard/content" element={<ContentPage />} /></Route>
+    </Routes></LanguageProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /Тестовая тема публикации/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Каналы.*Проверить результат отправки/ }));
+    fireEvent.change(screen.getByLabelText('Ссылка или ID уже опубликованного поста'), { target: { value: '42' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Проверил на площадке: это тот же пост/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить существующую публикацию' }));
+    await waitFor(() => expect(newAuth.makeRequest).toHaveBeenCalledWith('/social-posts/old-post/mark-manual-published', expect.objectContaining({ method: 'POST' })));
+    if (phase === 'reload') {
+      await waitFor(() => expect(vi.mocked(newAuth.makeRequest).mock.calls.filter(([path]) => path === '/content-plans/plan-1/social-posts')).toHaveLength(2));
+    }
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByText('Switch business'));
+    expect(await screen.findByRole('button', { name: /Новая точка/ })).toBeInTheDocument();
+    await act(async () => pendingResponse.resolve({ posts: [{ ...oldPost, status: 'published' }], summary: {} }));
+    expect(screen.queryByText(/публикация отмечена размещённой/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Тестовая тема публикации/ })).not.toBeInTheDocument();
+    if (phase === 'mutation') {
+      expect(vi.mocked(newAuth.makeRequest).mock.calls.filter(([path]) => path === '/content-plans/plan-1/social-posts')).toHaveLength(1);
+    }
+  });
+
   it('shows a direct action for reviewing channel-specific texts', async () => {
     const itemPosts = ['google_business', 'telegram'].map((platform, index) => ({
       id: `variant-${index + 1}`,

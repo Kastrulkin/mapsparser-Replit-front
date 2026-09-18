@@ -9,6 +9,7 @@ import urllib.request
 import urllib.parse
 import uuid
 from datetime import date, datetime, timezone
+from functools import wraps
 from typing import Any
 
 from auth_encryption import decrypt_auth_data
@@ -35,6 +36,47 @@ SOCIAL_POST_PLATFORMS = [
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
 BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis", "max"}
 FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
+PUBLISH_OUTCOMES = {"accepted", "not_attempted", "rejected", "uncertain"}
+
+
+def _json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return {}
+    try:
+        decoded = json.loads(value)
+    except (TypeError, ValueError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def _telegram_post_url(chat_id: str, message_id: str) -> str:
+    chat = str(chat_id or "").strip()
+    message = str(message_id or "").strip()
+    if not chat or not message:
+        return ""
+    if chat.startswith("@"):
+        return f"https://t.me/{chat[1:]}/{message}"
+    normalized = chat[4:] if chat.startswith("-100") else ""
+    return f"https://t.me/c/{normalized}/{message}" if normalized else ""
+
+
+def _vk_post_url(owner_id: str, post_id: str) -> str:
+    owner = str(owner_id or "").strip()
+    post = str(post_id or "").strip()
+    return f"https://vk.com/wall{owner}_{post}" if owner and post else ""
+
+
+def _publish_platform_label(platform: str) -> str:
+    labels = {
+        "facebook": "Facebook",
+        "google_business": "Google Business Profile",
+        "instagram": "Instagram",
+        "telegram": "Telegram",
+        "vk": "VK",
+    }
+    return labels.get(str(platform or "").strip(), "канал")
 
 SOCIAL_POST_STATUSES = {
     "draft",
@@ -363,10 +405,71 @@ def _social_supervised_openclaw_max_attempts() -> int:
     except Exception:
         return 5
 
+def _valid_provider_receipt(result: dict[str, Any]) -> bool:
+    receipt = str(result.get("provider_post_id") or "").strip()
+    if not receipt or receipt.lower() in {"0", "false", "none", "null"}:
+        return False
+    provider_status = str(_json_dict(result.get("metadata_json")).get("provider_status") or "").strip()
+    if provider_status.startswith(("telegram_", "vk_")):
+        return receipt.isdigit() and int(receipt) > 0
+    return True
+
+
+def _publish_outcome_result(result: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(result)
+    explicit_outcome = str(normalized.get("publish_outcome") or "").strip()
+    if explicit_outcome in PUBLISH_OUTCOMES:
+        if explicit_outcome == "accepted" and not _valid_provider_receipt(normalized):
+            normalized["publish_outcome"] = "uncertain"
+        return normalized
+    if _valid_provider_receipt(normalized):
+        normalized["publish_outcome"] = "accepted"
+    elif str(normalized.get("status") or "").strip() in {"needs_manual_publish", "needs_review"}:
+        normalized["publish_outcome"] = "not_attempted"
+    else:
+        normalized["publish_outcome"] = "uncertain"
+    return normalized
+
+
+def _publish_adapter(function: Any) -> Any:
+    @wraps(function)
+    def wrapped(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        result = function(*args, **kwargs)
+        if not isinstance(result, dict):
+            return {
+                "status": "failed",
+                "last_error": "Провайдер не вернул результат публикации.",
+                "metadata_json": {"provider_status": "provider_result_missing"},
+                "publish_outcome": "uncertain",
+            }
+        return _publish_outcome_result(result)
+    return wrapped
+
+
+def _http_publish_outcome(status_code: int) -> str:
+    if 400 <= int(status_code or 0) < 500 and int(status_code or 0) not in {408, 409}:
+        return "rejected"
+    return "uncertain"
+
+
+def _provider_json_object(body: str) -> tuple[dict[str, Any], bool]:
+    try:
+        value = json.loads(body)
+    except (TypeError, ValueError):
+        return {}, False
+    return (value, True) if isinstance(value, dict) else ({}, False)
+
+
+@_publish_adapter
 def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     from services.disk_import_media import selected
     if selected(cursor, post.get("business_id"), post.get("content_plan_item_id")):
-        return {"status": "needs_manual_publish", "last_error": "Видео с Диска размещается вручную.", "metadata_json": {"external_video_manual": True}}
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Видео с Диска размещается вручную.",
+            "metadata_json": {"external_video_manual": True},
+            "publish_outcome": "not_attempted",
+        }
     platform = str(post.get("platform") or "").strip()
     if platform == "telegram":
         return _publish_telegram_post(cursor, post)
@@ -380,6 +483,7 @@ def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         "status": "needs_manual_publish",
         "last_error": "Для канала не настроен API-адаптер",
         "metadata_json": {"provider_status": "unsupported_api_platform"},
+        "publish_outcome": "not_attempted",
     }
 
 def _telegram_publish_error_state(status_code: int = 0, description: str = "") -> tuple[str, str]:
@@ -548,7 +652,7 @@ def _telegram_api_call(
         response = telegram_urlopen(request, timeout=20)
         try:
             body = response.read().decode("utf-8", errors="ignore")
-            parsed = _json_dict(body)
+            parsed, parsed_ok = _provider_json_object(body)
             status_code = int(getattr(response, "status", 500) or 500)
         finally:
             response.close()
@@ -562,15 +666,38 @@ def _telegram_api_call(
         status_code = int(getattr(error, "code", 0) or 0)
         description = str(_json_dict(body).get("description") or body or str(error))[:1000]
         status, provider_status = _telegram_publish_error_state(status_code, description)
-        return {"ok": False, "status": status, "provider_status": provider_status, "error": description, "status_code": status_code}
+        return {
+            "ok": False,
+            "status": status,
+            "provider_status": provider_status,
+            "error": description,
+            "status_code": status_code,
+            "publish_outcome": _http_publish_outcome(status_code),
+        }
     except (urllib.error.URLError, TimeoutError):
-        return {"ok": False, "status": "failed", "provider_status": "telegram_network_error", "error": str(sys.exc_info()[1])}
+        return {"ok": False, "status": "failed", "provider_status": "telegram_network_error", "error": str(sys.exc_info()[1]), "publish_outcome": "uncertain"}
     except Exception:
-        return {"ok": False, "status": "failed", "provider_status": "telegram_unexpected_error", "error": str(sys.exc_info()[1])}
+        return {"ok": False, "status": "failed", "provider_status": "telegram_unexpected_error", "error": str(sys.exc_info()[1]), "publish_outcome": "uncertain"}
+    if not parsed_ok:
+        return {
+            "ok": False,
+            "status": "failed",
+            "provider_status": "telegram_response_parse_failed",
+            "error": "Telegram вернул непонятный ответ после попытки публикации.",
+            "status_code": status_code,
+            "publish_outcome": "uncertain",
+        }
     if not (200 <= status_code < 300) or not bool(parsed.get("ok")):
         description = str(parsed.get("description") or body or f"Telegram HTTP {status_code}")[:1000]
         status, provider_status = _telegram_publish_error_state(status_code, description)
-        return {"ok": False, "status": status, "provider_status": provider_status, "error": description, "status_code": status_code}
+        return {
+            "ok": False,
+            "status": status,
+            "provider_status": provider_status,
+            "error": description,
+            "status_code": status_code,
+            "publish_outcome": "rejected" if 200 <= status_code < 300 else _http_publish_outcome(status_code),
+        }
     return {"ok": True, "result": parsed.get("result"), "response": parsed}
 
 
@@ -597,6 +724,7 @@ def send_telegram_photo_message(
         "reason_code": str(response.get("provider_status") or response.get("error") or ""),
     }
 
+@_publish_adapter
 def _publish_telegram_media_post(
     *,
     bot_token: str,
@@ -616,6 +744,7 @@ def _publish_telegram_media_post(
             "status": "needs_review",
             "last_error": "Выбранное фото недоступно. Замените его или загрузите заново.",
             "metadata_json": {"provider_status": "telegram_media_unavailable"},
+            "publish_outcome": "not_attempted",
         }
 
     caption = text if len(text) <= 1024 else ""
@@ -644,6 +773,7 @@ def _publish_telegram_media_post(
             "status": str(media_result.get("status") or "failed"),
             "last_error": str(media_result.get("error") or "Telegram не принял фото."),
             "metadata_json": {"provider_status": str(media_result.get("provider_status") or "telegram_media_error")},
+            "publish_outcome": str(media_result.get("publish_outcome") or "uncertain"),
         }
 
     raw_media_result = media_result.get("result")
@@ -669,6 +799,7 @@ def _publish_telegram_media_post(
         "provider_post_id": first_message_id,
         "provider_post_url": _telegram_post_url(chat_id, first_message_id),
         "last_error": delivery_warning,
+        "publish_outcome": "accepted" if first_message_id.isdigit() and int(first_message_id) > 0 else "uncertain",
         "metadata_json": {
             "provider_status": "telegram_published" if not delivery_warning else "telegram_published_with_warning",
             "telegram_transport": transport_source,
@@ -773,6 +904,7 @@ def _resolve_telegram_publish_transport(business: dict[str, Any]) -> dict[str, A
         "token_label_en": "bot not found",
     }
 
+@_publish_adapter
 def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     business = _load_business_publish_context(cursor, str(post.get("business_id") or ""))
     transport = _resolve_telegram_publish_transport(business)
@@ -786,6 +918,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "provider_status": "telegram_connection_missing",
                 "telegram_transport": str(transport.get("token_source") or "missing"),
             },
+            "publish_outcome": "not_attempted",
         }
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     if not text:
@@ -793,6 +926,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": "Пустой текст нельзя отправить в Telegram.",
             "metadata_json": {"provider_status": "telegram_empty_text"},
+            "publish_outcome": "not_attempted",
         }
     media_assets = _selected_media_assets(cursor, post, limit=10)
     if media_assets:
@@ -820,8 +954,15 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         resp = telegram_urlopen(req, timeout=15)
         try:
             body = resp.read().decode("utf-8", errors="ignore")
-            parsed = _json_dict(body)
+            parsed, parsed_ok = _provider_json_object(body)
             status_code = int(getattr(resp, "status", 500))
+            if not parsed_ok:
+                return {
+                    "status": "failed",
+                    "last_error": "Telegram вернул непонятный ответ после попытки публикации.",
+                    "metadata_json": {"provider_status": "telegram_response_parse_failed", "status_code": status_code},
+                    "publish_outcome": "uncertain",
+                }
             if not (200 <= status_code < 300) or not bool(parsed.get("ok")):
                 description = str(parsed.get("description") or body or f"Telegram HTTP {status_code}")[:1000]
                 status, provider_status = _telegram_publish_error_state(status_code, description)
@@ -829,6 +970,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                     "status": status,
                     "last_error": description,
                     "metadata_json": {"provider_status": provider_status, "status_code": status_code},
+                    "publish_outcome": "rejected" if 200 <= status_code < 300 else _http_publish_outcome(status_code),
                 }
             result = parsed.get("result") if isinstance(parsed.get("result"), dict) else {}
             message_id = str(result.get("message_id") or "").strip()
@@ -836,6 +978,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "status": "published",
                 "provider_post_id": message_id,
                 "provider_post_url": _telegram_post_url(chat_id, message_id),
+                "publish_outcome": "accepted" if message_id.isdigit() and int(message_id) > 0 else "uncertain",
                 "metadata_json": {
                     "provider_status": "telegram_published",
                     "telegram_transport": str(transport.get("token_source") or ""),
@@ -860,6 +1003,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": status,
             "last_error": description,
             "metadata_json": {"provider_status": provider_status, "status_code": status_code},
+            "publish_outcome": _http_publish_outcome(status_code),
         }
     except (urllib.error.URLError, TimeoutError):
         error = sys.exc_info()[1]
@@ -867,6 +1011,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": str(error),
             "metadata_json": {"provider_status": "telegram_network_error"},
+            "publish_outcome": "uncertain",
         }
     except Exception:
         error = sys.exc_info()[1]
@@ -874,8 +1019,10 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": str(error),
             "metadata_json": {"provider_status": "telegram_unexpected_error"},
+            "publish_outcome": "uncertain",
         }
 
+@_publish_adapter
 def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("vk", "vk_group", "vk_business"))
     if not account:
@@ -883,6 +1030,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "needs_manual_publish",
             "last_error": "VK аккаунт/группа не подключены или не выданы права wall.post.",
             "metadata_json": {"provider_status": "vk_connection_missing"},
+            "publish_outcome": "not_attempted",
         }
     auth_data = _external_account_auth_data(account)
     auth_data = _vk_auth_data_with_fresh_token(cursor, account, auth_data)
@@ -894,6 +1042,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "provider_status": "vk_token_expired",
                 "external_account_id": account.get("id"),
             },
+            "publish_outcome": "not_attempted",
         }
     vk_binding = _vk_publish_binding(account, auth_data)
     if not vk_binding.get("ready"):
@@ -904,6 +1053,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "provider_status": str(vk_binding.get("status") or "vk_not_ready"),
                 "external_account_id": account.get("id"),
             },
+            "publish_outcome": "not_attempted",
         }
     token = str(vk_binding.get("token") or "").strip()
     owner_id = str(vk_binding.get("owner_id") or "").strip()
@@ -913,6 +1063,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": "Пустой текст нельзя отправить во VK.",
             "metadata_json": {"provider_status": "vk_empty_text"},
+            "publish_outcome": "not_attempted",
         }
     media_assets = _selected_media_assets(cursor, post, limit=10)
     attachments: list[str] = []
@@ -925,6 +1076,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "external_account_id": account.get("id"),
                 "media_attachment_count": len(media_assets),
             },
+            "publish_outcome": "not_attempted",
         }
     if media_assets:
         upload_result = _upload_vk_wall_photos(
@@ -941,6 +1093,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                     "provider_status": str(upload_result.get("status") or "vk_media_upload_failed"),
                     "external_account_id": account.get("id"),
                 },
+                "publish_outcome": "uncertain",
             }
         attachments = [str(item) for item in upload_result.get("attachments") or [] if str(item or "").strip()]
     payload = urllib.parse.urlencode(
@@ -977,6 +1130,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": body or str(error),
             "metadata_json": {"provider_status": "vk_http_error", "external_account_id": account.get("id")},
+            "publish_outcome": _http_publish_outcome(int(getattr(error, "code", 0) or 0)),
         }
     except (urllib.error.URLError, TimeoutError):
         error = sys.exc_info()[1]
@@ -984,6 +1138,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": str(error),
             "metadata_json": {"provider_status": "vk_network_error", "external_account_id": account.get("id")},
+            "publish_outcome": "uncertain",
         }
     except Exception:
         error = sys.exc_info()[1]
@@ -991,6 +1146,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": str(error),
             "metadata_json": {"provider_status": "vk_unexpected_error", "external_account_id": account.get("id")},
+            "publish_outcome": "uncertain",
         }
     if isinstance(parsed.get("error"), dict):
         vk_error = parsed.get("error") or {}
@@ -1002,6 +1158,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "external_account_id": account.get("id"),
                 "vk_error": vk_error,
             },
+            "publish_outcome": "rejected",
         }
     response = parsed.get("response") if isinstance(parsed.get("response"), dict) else {}
     post_id = str(response.get("post_id") or "").strip()
@@ -1011,11 +1168,13 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "status": "failed",
             "last_error": "VK не вернул post_id.",
             "metadata_json": {"provider_status": "vk_missing_post_id", "external_account_id": account.get("id"), "vk_response": parsed},
+            "publish_outcome": "uncertain",
         }
     return {
         "status": "published",
         "provider_post_id": post_id,
         "provider_post_url": provider_url,
+        "publish_outcome": "accepted",
         "metadata_json": {
             "provider_status": "vk_published",
             "provider_write_performed": True,
@@ -1026,6 +1185,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         },
     }
 
+@_publish_adapter
 def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("google_business",))
     if not account:
@@ -1033,6 +1193,7 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "status": "needs_manual_publish",
             "last_error": "Google Business Profile не подключен или не готов к публикации.",
             "metadata_json": {"provider_status": "google_business_connection_missing"},
+            "publish_outcome": "not_attempted",
         }
     summary = str(post.get("platform_text") or post.get("base_text") or "").strip()
     if not summary:
@@ -1040,6 +1201,7 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "status": "failed",
             "last_error": "Пустой текст нельзя отправить в Google Business Profile.",
             "metadata_json": {"provider_status": "google_business_empty_text", "external_account_id": account.get("id")},
+            "publish_outcome": "not_attempted",
         }
     post_data = {
         "topicType": "STANDARD",
@@ -1063,6 +1225,7 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "status": "needs_manual_publish",
             "last_error": f"Google Business adapter dependency is unavailable: {error}",
             "metadata_json": {"provider_status": "google_business_dependency_missing", "external_account_id": account.get("id")},
+            "publish_outcome": "not_attempted",
         }
     except Exception:
         error = sys.exc_info()[1]
@@ -1070,17 +1233,20 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "status": "failed",
             "last_error": str(error),
             "metadata_json": {"provider_status": "google_business_exception", "external_account_id": account.get("id")},
+            "publish_outcome": "uncertain",
         }
     if not provider_post_id:
         return {
             "status": "needs_manual_publish",
             "last_error": "Google Business Profile не принял публикацию. Проверьте OAuth, location и разрешения.",
             "metadata_json": {"provider_status": "google_business_publish_failed", "external_account_id": account.get("id")},
+            "publish_outcome": "uncertain",
         }
     return {
         "status": "published",
         "provider_post_id": str(provider_post_id),
         "provider_post_url": "",
+        "publish_outcome": "accepted",
         "metadata_json": {
             "provider_status": "google_business_published",
             "external_account_id": account.get("id"),
@@ -1121,12 +1287,22 @@ def _meta_graph_post(path: str, access_token: str, params: dict[str, Any]) -> di
             "error": str(graph_error.get("message") or body or error)[:1000],
             "error_code": str(graph_error.get("code") or "").strip(),
             "response": parsed_error,
+            "publish_outcome": _http_publish_outcome(int(getattr(error, "code", 0) or 0)),
         }
     except (urllib.error.URLError, TimeoutError):
-        return {"success": False, "status_code": 0, "error": str(sys.exc_info()[1]), "response": {}}
+        return {"success": False, "status_code": 0, "error": str(sys.exc_info()[1]), "response": {}, "publish_outcome": "uncertain"}
     except Exception:
-        return {"success": False, "status_code": 0, "error": str(sys.exc_info()[1]), "response": {}}
-    parsed = _json_dict(body)
+        return {"success": False, "status_code": 0, "error": str(sys.exc_info()[1]), "response": {}, "publish_outcome": "uncertain"}
+    parsed, parsed_ok = _provider_json_object(body)
+    if not parsed_ok:
+        return {
+            "success": False,
+            "status_code": status_code,
+            "error": "Meta Graph вернул непонятный ответ после попытки публикации.",
+            "error_code": "",
+            "response": {},
+            "publish_outcome": "uncertain",
+        }
     if not (200 <= status_code < 300) or isinstance(parsed.get("error"), dict):
         graph_error = _json_dict(parsed.get("error"))
         return {
@@ -1135,8 +1311,9 @@ def _meta_graph_post(path: str, access_token: str, params: dict[str, Any]) -> di
             "error": str(graph_error.get("message") or body or f"Meta Graph HTTP {status_code}")[:1000],
             "error_code": str(graph_error.get("code") or "").strip(),
             "response": parsed,
+            "publish_outcome": "rejected" if 200 <= status_code < 300 else _http_publish_outcome(status_code),
         }
-    return {"success": True, "status_code": status_code, "response": parsed}
+    return {"success": True, "status_code": status_code, "response": parsed, "publish_outcome": "uncertain"}
 
 def _meta_publish_error_result(platform: str, result: dict[str, Any], account_id: Any) -> dict[str, Any]:
     status_code = int(result.get("status_code") or 0)
@@ -1152,8 +1329,10 @@ def _meta_publish_error_result(platform: str, result: dict[str, Any], account_id
             "error_code": error_code,
             "external_account_id": account_id,
         },
+        "publish_outcome": str(result.get("publish_outcome") or "uncertain"),
     }
 
+@_publish_adapter
 def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     platform = str(post.get("platform") or "").strip()
     account = _find_active_external_account(
@@ -1171,12 +1350,21 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "provider_status": publish_status,
                 "external_account_id": account.get("id") if account else None,
             },
+            "publish_outcome": "not_attempted",
         }
     access_token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     media_assets = _selected_media_assets(cursor, post, limit=1)
     media_url = str(media_assets[0].get("public_url") or "").strip() if media_assets else ""
     account_id = account.get("id") if account else None
+
+    if not text and not media_url:
+        return {
+            "status": "failed",
+            "last_error": f"Для {_publish_platform_label(platform)} нужен текст или доступное медиа.",
+            "metadata_json": {"provider_status": "meta_empty_content", "external_account_id": account_id},
+            "publish_outcome": "not_attempted",
+        }
 
     if platform == "instagram":
         ig_user_id = str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip()
@@ -1185,6 +1373,7 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "status": "needs_review",
                 "last_error": "Instagram: выерите фото, доступное для публикации.",
                 "metadata_json": {"provider_status": "media_public_url_required", "external_account_id": account_id},
+                "publish_outcome": "not_attempted",
             }
         created = _meta_graph_post(
             f"{ig_user_id}/media",
@@ -1199,6 +1388,7 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "status": "failed",
                 "last_error": "Instagram не вернул ID подготовленной публикации.",
                 "metadata_json": {"provider_status": "instagram_creation_id_missing", "external_account_id": account_id},
+                "publish_outcome": "uncertain",
             }
         published = _meta_graph_post(
             f"{ig_user_id}/media_publish",
@@ -1226,13 +1416,15 @@ def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     if not provider_post_id:
         return {
             "status": "failed",
-            "last_error": f"{platform_label(platform)} не вернул ID публикации.",
+            "last_error": f"{_publish_platform_label(platform)} не вернул ID публикации.",
             "metadata_json": {"provider_status": "meta_post_id_missing", "external_account_id": account_id},
+            "publish_outcome": "uncertain",
         }
     return {
         "status": "published",
         "provider_post_id": provider_post_id,
         "provider_post_url": provider_post_url,
+        "publish_outcome": "accepted",
         "metadata_json": {
             "provider_status": provider_status,
             "provider_write_performed": True,
@@ -1686,7 +1878,7 @@ def _api_channel_preflight_result(
 ) -> dict[str, Any]:
     return {
         "platform": platform,
-        "platform_label": platform_label(platform),
+        "platform_label": _publish_platform_label(platform),
         "publish_mode": "api",
         "ready": bool(ready),
         "status": str(status or "").strip(),
@@ -1772,7 +1964,7 @@ def _mark_dispatch_failure(post_id: str, message: str) -> None:
                 last_error = %s,
                 updated_at = NOW()
             WHERE id = %s
-              AND status IN ('queued', 'publishing')
+              AND status = 'queued'
             """,
             (str(message or "Social post dispatch failed").strip()[:1000], post_id),
         )

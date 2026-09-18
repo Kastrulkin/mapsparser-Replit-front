@@ -78,6 +78,13 @@ SOCIAL_QUEUE_GROUPS = (
         "next_action_en": "Waiting for schedule. The worker will publish via API or create supervised placement.",
     },
     {
+        "key": "publishing",
+        "label_ru": "Нужна сверка публикации",
+        "label_en": "Publication reconciliation needed",
+        "next_action_ru": "Не повторяйте отправку: проверьте площадку и подтвердите ссылкой или ID публикации.",
+        "next_action_en": "Do not resend: verify the platform and confirm with the publication URL or ID.",
+    },
+    {
         "key": "needs_supervised_publish",
         "label_ru": "Нужно контролируемое размещение",
         "label_en": "Needs supervised placement",
@@ -802,6 +809,8 @@ def next_action_for_social_post(post: dict[str, Any]) -> str:
         return "wait_for_scheduled_supervised_publish"
     if status == "queued":
         return "wait_for_scheduled_publish"
+    if status == "publishing":
+        return "reconcile_publication"
     if status == "needs_supervised_publish":
         return "open_supervised_publish"
     if status == "needs_manual_publish":
@@ -857,6 +866,8 @@ def _queue_group_key(post: dict[str, Any]) -> str:
         return "needs_review"
     if status == "queued":
         return "scheduled"
+    if status == "publishing":
+        return "publishing"
     if status == "published":
         return "published"
     if status == "failed":
@@ -865,7 +876,7 @@ def _queue_group_key(post: dict[str, Any]) -> str:
         return "needs_manual_publish"
     if platform in BROWSER_OR_MANUAL_PLATFORMS or status == "needs_supervised_publish":
         return "needs_supervised_publish"
-    if platform in API_PLATFORMS and status in {"approved", "publishing"}:
+    if platform in API_PLATFORMS and status == "approved":
         return "api_ready"
     return "needs_review"
 
@@ -1369,7 +1380,10 @@ def _upsert_social_post(
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '[]', %s, %s, NOW(), NOW())
         ON CONFLICT (content_plan_item_id, platform)
         DO UPDATE SET
-            scheduled_for = EXCLUDED.scheduled_for,
+            scheduled_for = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.scheduled_for
+                ELSE EXCLUDED.scheduled_for
+            END,
             base_text = CASE
                 WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.base_text
                 ELSE EXCLUDED.base_text
@@ -1378,7 +1392,10 @@ def _upsert_social_post(
                 WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.platform_text
                 ELSE EXCLUDED.platform_text
             END,
-            publish_mode = EXCLUDED.publish_mode,
+            publish_mode = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.publish_mode
+                ELSE EXCLUDED.publish_mode
+            END,
             status = CASE
                 WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.status
                 WHEN social_posts.status = 'approved'
@@ -1403,7 +1420,10 @@ def _upsert_social_post(
                 THEN social_posts.approval_id
                 ELSE NULL
             END,
-            metadata_json = EXCLUDED.metadata_json,
+            metadata_json = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.metadata_json
+                ELSE EXCLUDED.metadata_json
+            END,
             updated_at = NOW()
         RETURNING *
         """,

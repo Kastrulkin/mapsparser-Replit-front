@@ -399,6 +399,7 @@ def _dispatch_live_api_preflight_block(user_id: str, post_id: str) -> dict[str, 
                 last_error = %s,
                 updated_at = NOW()
             WHERE id = %s
+              AND status = 'queued'
             RETURNING *
             """,
             (
@@ -408,6 +409,12 @@ def _dispatch_live_api_preflight_block(user_id: str, post_id: str) -> dict[str, 
             ),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
+        if not updated:
+            db.conn.rollback()
+            current = _load_post_for_user(cursor, user_id, post_id)
+            if str(current.get("status") or "").strip() == "publishing":
+                current["next_action"] = "reconcile_publication"
+            return current
         db.conn.commit()
         return updated
     except Exception:

@@ -28,6 +28,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 
 import { AudienceInsights } from '@/components/AudienceInsights';
+import { PublicationReconciliation } from '@/components/content-plan/PublicationReconciliation';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -503,6 +504,7 @@ const itemHasUsableText = (item: PlanItem) => itemHasText(item) && itemGeneratio
 const getPostStatusLabel = (status?: string) => {
   const normalized = String(status || '').toLowerCase();
   if (normalized === 'published') return 'Опубликовано';
+  if (normalized === 'publishing') return 'Проверить результат отправки';
   if (normalized === 'queued') return 'Запланировано';
   if (normalized === 'approved') return 'Утверждено';
   if (normalized === 'needs_review') return 'Нужно проверить';
@@ -517,7 +519,7 @@ const getPostNextAction = (post: SocialPost) => {
   if (normalized === 'needs_review') return 'Проверьте текст и нажмите «Утвердить».';
   if (normalized === 'approved') return 'Можно поставить в расписание.';
   if (normalized === 'queued') return 'Ждёт своей даты.';
-  if (normalized === 'publishing') return 'Публикуем сейчас.';
+  if (normalized === 'publishing') return 'Результат отправки ещё не подтверждён. Проверьте площадку; не отправляйте повторно.';
   if (normalized === 'published') return 'Публикация вышла.';
   if (normalized === 'needs_supervised_publish') return 'Откройте контролируемое размещение.';
   if (normalized === 'needs_manual_publish') return 'Нужно разместить вручную.';
@@ -541,6 +543,7 @@ const getPostQualityIssueText = (post: SocialPost) => (
 );
 
 const getChannelNextAction = (post: SocialPost) => {
+  if (String(post.status || '').toLowerCase() === 'publishing') return getPostNextAction(post);
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
   if (postNeedsEditorialRewrite(post)) {
@@ -575,6 +578,7 @@ const getPostPlatformReadiness = (post: SocialPost) => {
 };
 
 const getChannelStatusDisplay = (post: SocialPost) => {
+  if (String(post.status || '').toLowerCase() === 'publishing') return getPostStatusLabel(post.status);
   const variantStatus = String(post.metadata_json?.variant_status || '').toLowerCase();
   const variantSource = String(post.metadata_json?.variant_source || '').toLowerCase();
   if (postNeedsEditorialRewrite(post)) return 'Нужно переписать';
@@ -610,6 +614,7 @@ const isQueuedOrHandledStatus = (status?: string) => {
 };
 
 const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
+  if (posts.some((post) => String(post.status || '').toLowerCase() === 'publishing')) return 'Проверить результат отправки';
   if (posts.some((post) => String(post.status || '') === 'failed')) return 'Не удалось';
   if (posts.some((post) => String(post.status || '') === 'needs_supervised_publish' || String(post.status || '') === 'needs_manual_publish')) {
     return 'Нужно разместить';
@@ -623,6 +628,9 @@ const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
 
 const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
   const statuses = posts.map((post) => String(post.status || '').toLowerCase());
+  if (statuses.includes('publishing')) {
+    return { status: 'Проверить результат отправки', action: 'Проверить площадку' };
+  }
   if (statuses.includes('failed')) {
     return { status: 'Не удалось', action: 'Исправить' };
   }
@@ -648,6 +656,7 @@ const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
 };
 
 const getStatusClassName = (label: string) => {
+  if (label === 'Проверить результат отправки' || label === 'Проверить площадку') return 'bg-amber-50 text-amber-800 ring-amber-100';
   if (label === 'Опубликовано') return 'bg-emerald-50 text-emerald-700 ring-emerald-100';
   if (label === 'Запланировано') return 'bg-blue-50 text-blue-700 ring-blue-100';
   if (label === 'Утверждено') return 'bg-violet-50 text-violet-700 ring-violet-100';
@@ -1740,27 +1749,43 @@ function ContentWorkspace() {
     }
   };
 
-  const markPlacementPublished = async (post: SocialPost) => {
+  const isCurrentPublicationScope = useLatestCallback((planId: string, loadSequence: number) => (
+    currentPlan?.id === planId && contentLoadSequenceRef.current === loadSequence
+  ));
+
+  const markPlacementPublished = async (post: SocialPost, existingReceipt?: string) => {
     if (!currentPlan?.id) return;
-    const providerPostUrl = typeof window === 'undefined'
+    const planId = currentPlan.id;
+    const loadSequence = contentLoadSequenceRef.current;
+    const reconciliation = String(post.status || '').toLowerCase() === 'publishing';
+    if (reconciliation && !existingReceipt?.trim()) return;
+    const receipt = existingReceipt ?? (typeof window === 'undefined'
       ? ''
-      : window.prompt('Вставьте ссылку на опубликованный пост. Если площадка не даёт ссылку, оставьте поле пустым.', '') ?? '';
+      : window.prompt('Вставьте ссылку на опубликованный пост. Если площадка не даёт ссылку, оставьте поле пустым.', ''));
+    if (receipt === null) return;
+    const receiptIsId = reconciliation && !/^https?:\/\//i.test(receipt.trim());
     setBusyAction(`manual-published-${post.id}`);
     setError('');
     try {
       await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-manual-published`, {
         method: 'POST',
         body: JSON.stringify({
-          provider_post_url: providerPostUrl.trim(),
-          content_confirmed: Boolean(manualContentConfirmed[post.id]),
+          provider_post_url: receiptIsId ? '' : receipt.trim(),
+          ...(receiptIsId ? { provider_post_id: receipt.trim() } : {}),
+          content_confirmed: reconciliation || Boolean(manualContentConfirmed[post.id]),
         }),
       });
-      await loadSocialPosts(currentPlan.id);
-      setActionMessage(`${platformShortLabel(post)}: публикация отмечена размещённой.`);
+      if (!isCurrentPublicationScope(planId, loadSequence)) return;
+      await loadSocialPosts(planId, loadSequence);
+      if (isCurrentPublicationScope(planId, loadSequence)) {
+        setActionMessage(`${platformShortLabel(post)}: публикация отмечена размещённой.`);
+      }
     } catch (markError) {
-      setError(markError instanceof Error ? markError.message : 'Не удалось отметить размещение');
+      if (isCurrentPublicationScope(planId, loadSequence)) {
+        setError(markError instanceof Error ? markError.message : 'Не удалось отметить размещение');
+      }
     } finally {
-      setBusyAction('');
+      setBusyAction((currentAction) => currentAction === `manual-published-${post.id}` ? '' : currentAction);
     }
   };
 
@@ -2662,13 +2687,15 @@ function ContentWorkspace() {
     const needsReviewChannelCount = selectedPosts.filter((post) => !postNeedsEditorialRewrite(post) && getChannelStatusLabel(post.status) === 'Нужно проверить').length;
     const readyTextChannelCount = selectedPosts.filter((post) => !postNeedsEditorialRewrite(post) && getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
+    const unresolvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'publishing').length;
     const scheduledPostCount = selectedPosts.filter((post) => isQueuedOrHandledStatus(post.status)).length;
     const blockedChannelCount = selectedPosts.filter((post) => isAutomaticSendBlockedStatus(post.status)).length;
     const scheduleAlreadyHandled = scheduledPostCount > 0 && approvedPostCount === 0 && needsReviewChannelCount === 0;
-    const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0 && needsRewriteChannelCount === 0;
+    const canQueueSelectedItem = unresolvedPostCount === 0 && approvedPostCount > 0 && needsReviewChannelCount === 0 && needsRewriteChannelCount === 0;
     const queueNeedsAttention = hasPosts && !canQueueSelectedItem && !scheduleAlreadyHandled;
     const needsPlatformPreparation = hasDraftText && (!hasPosts || hasUnsavedItemChanges);
     const canApproveSelectedItem = hasDraftText
+      && unresolvedPostCount === 0
       && hasPosts
       && !hasUnsavedItemChanges
       && needsReviewChannelCount > 0
@@ -2686,7 +2713,9 @@ function ContentWorkspace() {
         ? 'Запланировано'
         : 'Запланировать отправку';
     const queueTooltip = 'Отправляет автоматически через выбранные каналы. Если канал не подключён или не выбран, LocalOS покажет, что нужно настроить.';
-    const queueHelpText = canQueueSelectedItem
+    const queueHelpText = unresolvedPostCount > 0
+      ? 'Откройте каналы и проверьте результат отправки на площадке. Не публикуйте повторно: пост уже мог выйти.'
+      : canQueueSelectedItem
       ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
       : !hasPosts
         ? 'Сначала подготовьте версии для каналов, чтобы проверить тексты для каждой площадки.'
@@ -2699,7 +2728,9 @@ function ContentWorkspace() {
             : scheduleAlreadyHandled
               ? 'Публикация уже стоит в расписании или ждёт контролируемого размещения.'
               : 'Сейчас нет каналов, готовых к отправке. Подготовьте каналы или проверьте их состояние.';
-    const channelSummary = hasPosts
+    const channelSummary = unresolvedPostCount > 0
+      ? `Проверить результат отправки: ${unresolvedPostCount}`
+      : hasPosts
       ? needsRewriteChannelCount > 0
         ? `Нужно переписать: ${needsRewriteChannelCount}`
       : needsReviewChannelCount > 0
@@ -3054,6 +3085,13 @@ function ContentWorkspace() {
                                     </span>
                                   </div>
                                   <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
+                                  {normalizedPostStatus === 'publishing' ? (
+                                    <PublicationReconciliation
+                                      key={post.id}
+                                      busy={Boolean(busyAction)}
+                                      onConfirm={(receipt) => markPlacementPublished(post, receipt)}
+                                    />
+                                  ) : null}
                                   {post.platform_text ? (
                                     <div className="mt-3 whitespace-pre-line rounded-xl bg-white px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-100 line-clamp-5">
                                       {post.platform_text}
@@ -3257,7 +3295,7 @@ function ContentWorkspace() {
                           <Button
                             type="button"
                             onClick={queueSelectedItem}
-                            disabled={Boolean(busyAction) || scheduleAlreadyHandled}
+                            disabled={Boolean(busyAction) || scheduleAlreadyHandled || unresolvedPostCount > 0}
                             className={cn(
                               'w-full rounded-2xl text-white disabled:bg-slate-200 disabled:text-slate-500',
                               canQueueSelectedItem
@@ -3277,7 +3315,7 @@ function ContentWorkspace() {
                 </div>
                 {queueNeedsAttention ? (
                   <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                    <div className="font-semibold">Отправка пока не запланирована</div>
+                    <div className="font-semibold">{unresolvedPostCount > 0 ? 'Проверить результат отправки' : 'Отправка пока не запланирована'}</div>
                     <div className="mt-1">{queueHelpText}</div>
                   </div>
                 ) : null}

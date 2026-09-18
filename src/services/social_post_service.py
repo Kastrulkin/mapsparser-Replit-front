@@ -79,6 +79,13 @@ SOCIAL_QUEUE_GROUPS = (
         "next_action_en": "Waiting for schedule. The worker will publish via API or create supervised placement.",
     },
     {
+        "key": "publishing",
+        "label_ru": "Нужна сверка публикации",
+        "label_en": "Publication reconciliation needed",
+        "next_action_ru": "Не повторяйте отправку: проверьте площадку и подтвердите ссылкой или ID публикации.",
+        "next_action_en": "Do not resend: verify the platform and confirm with the publication URL or ID.",
+    },
+    {
         "key": "needs_supervised_publish",
         "label_ru": "Нужно контролируемое размещение",
         "label_en": "Needs supervised placement",

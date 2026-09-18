@@ -361,6 +361,11 @@ class FakeManualPublishedCursor:
 
     def execute(self, query, params=None):
         normalized = " ".join(str(query).split()).lower()
+        if normalized == "select pg_try_advisory_xact_lock(hashtextextended(%s, 0))":
+            assert len(params) == 1
+            assert params[0].startswith("social-publish:")
+            self.next_row = {"pg_try_advisory_xact_lock": True}
+            return
         if "update social_posts" in normalized and "set status = 'published'" in normalized:
             self.conn.updated_row = {
                 "id": params[4],
@@ -1186,6 +1191,7 @@ def test_next_action_separates_review_api_and_supervised_states():
     assert next_action_for_social_post({"status": "approved", "platform": "telegram"}) == "wait_for_api_publish"
     assert next_action_for_social_post({"status": "approved", "platform": "yandex_maps"}) == "start_supervised_publish"
     assert next_action_for_social_post({"status": "queued", "platform": "telegram"}) == "wait_for_scheduled_publish"
+    assert next_action_for_social_post({"status": "publishing", "platform": "telegram"}) == "reconcile_publication"
     assert next_action_for_social_post({"status": "queued", "platform": "two_gis"}) == "wait_for_scheduled_supervised_publish"
     assert next_action_for_social_post({"status": "needs_supervised_publish", "platform": "two_gis"}) == "open_supervised_publish"
 
@@ -1258,6 +1264,7 @@ def test_build_social_queue_groups_matches_daily_workflow():
             {"id": "p5", "content_plan_item_id": "i4", "platform": "facebook", "status": "failed"},
             {"id": "p6", "content_plan_item_id": "i5", "platform": "telegram", "status": "queued"},
             {"id": "p7", "content_plan_item_id": "i6", "platform": "telegram", "status": "needs_manual_publish"},
+            {"id": "p8", "content_plan_item_id": "i7", "platform": "telegram", "status": "publishing"},
         ]
     )
     by_key = {group["key"]: group for group in groups}
@@ -1265,6 +1272,8 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["needs_review"]["count"] == 1
     assert by_key["api_ready"]["post_ids"] == ["p2"]
     assert by_key["scheduled"]["post_ids"] == ["p6"]
+    assert by_key["publishing"]["post_ids"] == ["p8"]
+    assert "p8" not in by_key["api_ready"]["post_ids"]
     assert by_key["needs_supervised_publish"]["post_ids"] == ["p3"]
     assert by_key["needs_manual_publish"]["post_ids"] == ["p7"]
     assert by_key["published"]["count"] == 1
@@ -3047,6 +3056,7 @@ def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):
             "publish_mode": "api",
             "status": "queued",
             "approved_at": "2026-06-19T10:00:00+00:00",
+            "approval_id": "approval-empty-copy",
             "platform_text": " ",
             "base_text": "",
         },
