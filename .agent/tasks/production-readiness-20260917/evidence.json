@@ -39,10 +39,14 @@
         "ee777f59 pypdf6.16.1 compatibility mitigation",
         "a0253199 Operator chat stored-role write gate",
         "raw/operator-chat-rbac-green.json",
-        "raw/whatsapp-replay-root.json"
+        "raw/whatsapp-replay-root.json",
+        "raw/send-amb-01-native-pg-red.json",
+        "d3ca8b1e",
+        "raw/social-publish-root-green.json",
+        "raw/send-amb-independent-pane-20260918.json"
       ],
       "gaps": [
-        "Reviewed local auth/webhook/scope/navigation/data/contact-GET SSRF and finance/blueprint/Operator-chat viewer fixes are committed. WhatsApp duplicate admission and uncertain outcome visibility fixed locally, not exactly-once provider delivery. Historical revocation, generic mutation role/object, wider uncertain-send and operational gaps remain. No audit deployment."
+        "Reviewed local auth/webhook/scope/navigation/data/contact-GET SSRF, finance/blueprint/Operator-chat viewer and social duplicate-send fixes are committed. Social package237backend tests passes, explicit receipt reconciliation; no exactly-once provider delivery or recipient/media fingerprint binding claim. Historical revocation, generic mutation role/object, new browser integration and operational gaps remain. No audit deployment."
       ]
     },
     {
@@ -64,10 +68,16 @@
         "raw/frontend-patched-unit.json",
         "raw/frontend-patched-mocked-e2e.json",
         "raw/native-pg-real-api-browser-unset.json",
-        "618b00b6 native fixture subprocess isolation"
+        "618b00b6 native fixture subprocess isolation",
+        "raw/browser-4a8e33b8-full.json",
+        "raw/compiled-4a8e33b8-proof.json",
+        "raw/browser-contrast-5c1af983-full.json",
+        "raw/frontend-employee-8ebec5ca-build.json",
+        "raw/browser-employee-8ebec5ca-full.json",
+        "raw/social-publication-ui-final.json"
       ],
       "gaps": [
-        "Patched frontend570unit/122files,72mocked browser, lint/typecheck/build pass. Native real-API final111passed3failed/114 across three viewports; remaining three are absent actual compiled runner fixture. Not an all-green browser suite. Raw captures survived interruption; temporary traces/screenshots were lost."
+        "Checkpoint8ebec5ca clean frontend build27.414s, served on isolated4a8 backend: full114/114real-API browser tests pass215.263s, including3viewports and actual compiled reports. Prior5c1 contrast fix targeted adjacent graph; red111/3capture retained. Later d3ca8b1e reconciliation UI passes19tests/lint/fullTS and independent review, but new browser integration and final same-revision frontend aggregate remain required."
       ]
     },
     {
@@ -93,10 +103,12 @@
         "f1287d81",
         "raw/native-pg-security-final-b9a146aa.json",
         "raw/native-full-backend-5e1ebe79.json",
-        "raw/native-full-migration-5e1ebe79.json"
+        "raw/native-full-migration-5e1ebe79.json",
+        "raw/pg16-resumed-skipped-groups.json",
+        "raw/creator-promotion-native-integration.json"
       ],
       "gaps": [
-        "Clean5e1ebe79 full nativePG15 aggregate4319passed117skipped5warnings296.79s, exit0. Skips still include Docker-dependent tests, explicit live-provider exclusions and isolated migrated-DB configuration; no live providers enabled. This predates a025 chat patch and does not replace PG16/final-image aggregate verification."
+        "Clean5e1ebe79 full nativePG15 aggregate4319passed117skipped5warnings296.79s, exit0. Docker/Compose skip-file groups later passed264tests177.72s on PG16; separately gated creator-promotion passed1test0.34s on fresh migrated nativePG15. Original117skip categories:104Docker+5Compose+1creator now exercised,7liveprovider intentionally excluded. Final same-revision aggregate still required."
       ]
     },
     {
@@ -115,10 +127,15 @@
         "Historical temp restore evidence was lost across interruption; see durable report limitations",
         "raw/docker-resume-storage-probe.json",
         "raw/docker-a0253199-build.json",
-        "raw/docker-a0253199-smoke-green.json"
+        "raw/docker-a0253199-smoke-green.json",
+        "raw/docker-4a8e33b8-build.json",
+        "raw/docker-4a8e33b8-smoke.json",
+        "raw/compiled-4a8e33b8-start.json",
+        "raw/compiled-4a8e33b8-proof.json",
+        "raw/restore-helper-full-schema-20260918.json"
       ],
       "gaps": [
-        "User-approved Docker startup and freshPG16 storage proof complete. Clean a025 ARM64 browser-enabled image built276.824s; offline nonroot/artifact/pypdf6.16.1/pipcheck/Chromium smoke passed3.039s. This image predates44d compiled-preview flag and later uncommitted fixes. AMD64/full schema restore/actual committed restore helper and app-integrated compiled proof remain incomplete. Old temp restore dump is gone."
+        "Clean4a8e33b8 ARM64 browser-enabled image builds61.615s, real offline/read-only/nonroot Chromium smoke3.682s passes. Actual app-integrated compiled10previews/5runs/replays pass. Actual committed helper full synthetic schema/data/grants/sequences restored and independently verified; not production backup proof. AMD64 and final release/supply-chain checks remain incomplete."
       ]
     },
     {
@@ -142,10 +159,17 @@
       "text": "Five-flow before/after performance",
       "status": "UNKNOWN",
       "proof": [
-        "docs/production-readiness/PROGRESS.md baseline command durations"
+        "docs/production-readiness/PROGRESS.md baseline command durations",
+        "raw/journey-benchmark-one-sample-final-guarded.json",
+        "raw/journey-benchmark-final-wrapper-command.json",
+        "raw/journey-measure-pilot-fa4e15b8.json",
+        "raw/journey-measure-serial-8ebec5ca.json",
+        "raw/journey-measure-serial-8ebec5ca-command.json",
+        "raw/journey-measure-cleanup-check-20260918.json",
+        "docs/production-readiness/04-performance-report.md"
       ],
       "gaps": [
-        "No five-flow p50/p95/p99 baseline/load report yet; command durations alone do not satisfy this criterion."
+        "Reviewed driver619760b4/fa4e15b8 passes32tests. Independently reconciled cold-process 50-sample comparison: baseline700/750 requests (all50 business-data HTTP500), current750/750; each150/150 invariants. Errors retained, aggregate valid=false. Report04 records descriptive request quantiles and request-work totals; no general speedup. Prepared-target bounded load, query plans and resource/queue evidence remain pending."
       ]
     },
     {
@@ -155,10 +179,11 @@
       "proof": [
         "faefef25",
         "docs/production-readiness/DECISIONS.md",
-        "docs/RUNTIME_RELEASE_20260917.md"
+        "docs/RUNTIME_RELEASE_20260917.md",
+        "docs/production-readiness/07-production-runbook.md"
       ],
       "gaps": [
-        "Operational audit and final runbook incomplete; historical runtime snapshot maintenance is not clean release proof. Telegram transport instability remains observed."
+        "Working operator runbook independently approved against real deploy/restore/schema-check helpers. Operational closure still incomplete; historical runtime snapshot maintenance is not clean release proof. Production transport and recovery risks require separate authorized checks."
       ]
     },
     {
@@ -166,10 +191,11 @@
       "text": "Rehearsed safe partner demo",
       "status": "UNKNOWN",
       "proof": [
-        "/tmp/localos-readiness-staging-smoke.log synthetic seed and five-flow API smoke"
+        "/tmp/localos-readiness-staging-smoke.log historical synthetic seed and five-flow API smoke",
+        "docs/production-readiness/08-partner-demo.md"
       ],
       "gaps": [
-        "Demo narrative, rendered rehearsal and fallback not complete."
+        "Safe synthetic demo narrative independently reviewed after correcting seed/claim/draft/CSV facts. Rendered rehearsal and fallback verification are not complete."
       ]
     },
     {
@@ -181,10 +207,16 @@
         "docs/production-readiness/HANDOFF.md",
         "docs/production-readiness/DECISIONS.md",
         "docs/production-readiness/COMMANDS.md",
-        "SECURITY.md"
+        "SECURITY.md",
+        "docs/production-readiness/00-executive-summary.md",
+        "docs/production-readiness/04-performance-report.md",
+        "docs/production-readiness/07-production-runbook.md",
+        "docs/production-readiness/08-partner-demo.md",
+        "docs/production-readiness/09-residual-risks.md",
+        "docs/production-readiness/10-production-readiness-scorecard.md"
       ],
       "gaps": [
-        "Reports00,04,07,08,09,10 not yet authored;03 threat model and05 UX are working documents, not sign-off."
+        "All requested00–10 reports exist as working evidence/drafts;00/04/07/08/10 independently reviewed. Load/query measurements, rehearsal, final evidence reconciliation and whole-diff review are still open, so documentation existence is not acceptance/sign-off."
       ]
     },
     {

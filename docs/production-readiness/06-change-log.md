@@ -1,5 +1,87 @@
 # Production-readiness change log
 
+## UX-CONTRAST-02 — actual attention heading verified in the browser
+
+Commit8ebec5ca changes only EmployeeWorkspaceSection title opacity60→80 and adds
+two rendered tests (attention and normal state). Trace identifies the observed
+heading `Готовность процесса`; it is not the nested workflow graph caption.
+Independent Vitest/ESLint/TypeScript review passed. Clean frontend build27.414s
+was copied only into the isolated local4a8 backend; full real-API browser suite
+then passed114/114 in215.263s across desktop/laptop/mobile.
+
+The earlier graph change5c1af983 was an adjacent readability change, not the
+causal fix: its rebuilt browser suite still failed3/114. Both failed captures
+remain intact. Raw `frontend-employee-8ebec5ca-build.json` and
+`browser-employee-8ebec5ca-full.json` establish the accepted local checkpoint.
+This does not certify later uncommitted publication protection or production.
+
+## SEND-AMB-01 — durable publication hold and explicit reconciliation
+
+A real isolated PostgreSQL transaction and fake Telegram transport reproduce an
+accepted post whose final DB commit fails: rollback restores `approved`, and a
+retry sends twice. The original one-test reproduction asserts that buggy
+behavior and is not a green protection test. Reviewed commit `d3ca8b1e` now
+commits intent before provider I/O; only the successful fresh claimant sends.
+Published replay returns the existing receipt. Uncertain/exception/final-commit
+failures keep a durable `publishing` hold and expose reconciliation, not retry.
+Provider outcomes distinguish accepted, rejected, not attempted and uncertain;
+success requires an actual receipt. Telegram partial media success is not resent.
+
+A per-post session advisory mutex on an autocommit connection excludes manual
+confirmation while the provider/finalizer is active, without an open SQL
+transaction across network I/O. Manual confirmation uses the matching
+transaction mutex and requires one receipt plus explicit confirmation; the
+bulk endpoint cannot apply one receipt to uncertain posts. State/attempt CAS
+protects against stale editing, approval, queue, preflight, upsert and deletion.
+The UI offers the safe reconciliation action, blocks resending and ignores
+stale callbacks; double submission stays disabled until saving settles.
+
+Independent core/provider review: 36 real-PG/adapter tests passed in32.31s
+(retained pane capture `send-amb-independent-pane-20260918.json`). Root's full
+six-file adjacent run first had234pass/3fail because the legacy manual cursor
+fixture lacked the new advisory SELECT. The exact fixture response was added,
+without weakening semantic assertions; rerun **237passed35.65s**, captured
+37.569s/exit0 in `social-publish-root-green.json`. Original failure remains in
+`social-publish-root-final.json`. UI **19passed**, focused ESLint/full app+Node
+TypeScript passed52.179s (`social-publication-ui-final.json`), reviewed.
+
+`send-amb-01-native-pg-lifecycle-final.json` is a worker-authored summary, not
+an authoritative command capture; its earlier contents were overwritten.
+Use root captures and the independent pane for the final evidence. Original
+red/green commit-failure captures remain separate.
+
+No schema change, production write or real provider call is involved. This is
+duplicate-send protection, not exactly-once delivery. Fingerprint binds
+business/platform/text, not actual recipient/media; provider target binding is
+not claimed. Explicit browser/API reconciliation and final whole-revision
+verification remain pending.
+
+## TEST-COMPILED-03 — durable isolated profile and real execution
+
+Committed4a8e33b8 after independent19-test review. Tracked bounded fixed-upstream proxy replaces the lost temporary proxy; canonical hash/read-only mount and explicit local Docker context are checked. Staging execution/advanced gates default off with empty cohort; all bot/worker variants are profile-disabled. The deliberate ingress host-access network exception is documented; app/PG/runner remain internal. No production rollout.
+
+Actual clean4a image starts a new synthetic PG16/head20260907_001 staging project in25.671s. Guarded proof then passes11.760s:10previews,5real runner executions, compile/run replay, persisted reports, runtime_ai_calls0. Nothing is pre-marked completed. Raw `compiled-4a8e33b8-{start,proof}.json`; actual browser suite remains a separate gate. Runner pinned to inspected cached local image ID for integration, not a production registry manifest; model generation/live-user pilot untested.
+
+## OPS-RESTORE-01 — actual full synthetic restoration verified
+
+Committed restore helper ran against a fresh explicitly named, Compose-labelled, loopback-only PG16 target. Trusted80896-byte synthetic SQL archive SHA6dc039e4341960441c0b5e0256b9d122c2edf9829ab63cfea03ae263ddc48718. Independent read-only rechecks prove exact schema after removing only random pg_dump restrict tokens, data in288tables with duplicate-preserving sorted INSERT statements,844indexes/19triggers/3views/160functions/2sequences, owners/grants/defaultACL and sequence1,false states. Alembic20260907_001 matches. `raw/restore-helper-full-schema-20260918.json` records full provenance.
+
+The first temporary comparison script had weak pipeline-error handling and an invalid suppressed sequence query; its empty sequence hashes are explicitly non-authoritative. Independent checked dumps/direct queries close that evidence gap. This proves controlled synthetic restoration, not any production backup's validity or a destructive production rollback.
+
+## TEST-PERF-01 — correctness harness before measurements
+
+Committed0f221803 after independent review; 15 real request checks and3untimed invariants pass on canonical migrated synthetic data with only two explicit provider/model seams. Raw `journey-benchmark-one-sample-final-guarded.json` and wrapper capture preserve provenance. This one sample is not p50/p95/p99/load evidence. Repeated-ref driver is uncommitted: review identified import contamination, missing process/time/status/ownership guarantees and migration-contaminated concurrent timing. Those must be closed before any performance claim.
+
+## DATA-LEGACY-01 — align legacy business data with migrated PostgreSQL
+
+Committed43578807 after independent review. Actual login→GET `/api/business/<id>/data` on a fresh migrated schema returned500 because the read queried nonexistent financialtransactions.date; canonical column is transaction_date. Correcting that exposed dict-like row iteration returning column names instead of service/transaction/metric values. Read methods now preserve dict-row values with tuple fallback, sort canonical dates, and retain the external legacy `date` response key. No migration/DDL workaround or tenant widening. Self-contained real-PG regression seeds actual service/two ordered transactions/metric and checks login, values/order and foreign403. Guarded fixture rejects inherited libpq overrides and URL query/hash before creating only its UUID database. Independent8tests5.59s pass. Not deployed.
+
+## OPS-IMAGE-02 — avoid duplicating installed Chromium binaries
+
+18September runtime closure: clean4a8e33b8 image builds61.615s; actual offline/read-only/nonroot Chromium153 launch passes3.682s. `.Size`1376269248→1070569043bytes,22.2% smaller than a025; ownership layer now45.1kB. Both frontend artifacts/pypdf6.16.1/pipcheck pass. This supersedes the pending runtime condition in the original source-review note below. AMD64 and image vulnerability scan remain unverified. Build records Node20/jest-dom7 engine warning and third-party PURE annotation warnings; boolean featureflag Docker secret-name warnings are not secret values.
+
+Committed6eb2d185. Docker cache inspection measured a999MB browser-install layer followed by a999.1MB recursive ownership layer. Removing only `/ms-playwright` from the final recursive chown avoids this redundant writable copy; data/cache directories remain localos-owned. Canonical Docker workers do not use the legacy host-venv install wrapper. Existing binary modes755/data644 permit nonroot reads/execution, but the previously built a025 image still had old ownership: **new image and actual Chromium launch remain required before runtime proof/size claim**. Source reviewer conditionally approves; root3contract+Compose tests0.57s pass. No recursive chmod or browser download removal.
+
 ## TEST-COMPILED-02 — propagate frontend preview flag through canonical build
 
 Committed44d597af, independent approval. Canonical Dockerfile omitted VITE_COMPILED_SCRIPT_PREVIEW_ENABLED even though the browser fixture requires compiled UI. Two contract tests failed against old Dockerfile/renderedstaging. Added ARG defaultfalse/ENV before frontend build; staging explicitly opts true. No production-default enabling, backend cohort still required. Focused+adjacent13tests pass0.79s; independent13pass1.44s. The a025 image built before this change cannot establish compiled UI proof; durable proxy/profile and real runner tests are separate ongoing work.

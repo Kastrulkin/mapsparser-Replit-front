@@ -1,5 +1,44 @@
 # Production-readiness progress
 
+08:30 UTC delta: SEND-AMB committed locally as `d3ca8b1e`, independently
+approved. Root237backend tests pass35.65s; UI19tests + lint/full TS pass52.179s.
+Original root3fake-cursor failures retained and fixed only in the exact fixture.
+New browser/API reconciliation case is being added with guarded synthetic
+fixtures; no browser success claimed yet. Final full backend from clean d3
+archive is running in `readiness-full-backend-d3ca8b1e`, including PG16 Docker
+groups and isolated creator check. No concurrent heavy job or production change.
+Report04 repeated distributions and working00/10 reports independently reviewed;
+prepared-load source failed safety/measurement review and is being corrected
+before any runtime run. Source/disk details in latest HANDOFF.
+
+08:15 UTC delta: repeated cold-request comparison completed in 543.315s,
+5 warmups + 50 measured samples per revision (baseline 30262a5b, current
+8ebec5ca). Current 750/750 requests and 150/150 invariants pass; baseline
+700/750 requests and 150/150 invariants pass, with the same business-data
+HTTP500 in all 50 measured samples. Raw result intentionally stays invalid for
+the broken baseline. All owned measurement DBs were cleaned; catalog check
+confirmed none remain. Four comparable journey medians are nearly unchanged;
+finance tails are higher. Exact distributions and limitations are in report04.
+No general speedup or production-capacity claim. Prepared-target load harness
+is under implementation/review, not executed.
+
+SEND-AMB provider adapters passed independent review (23 focused outcomes);
+frontend reconciliation passed 18 tests, focused lint and full TypeScript.
+Core publication changes remain uncommitted and NOT approved: reviewer required
+per-post advisory exclusion for active provider/manual confirmation, no SQL
+transaction during I/O, stale-state compare-and-set guards, receipt checks,
+single-post-only reconciliation and stronger guard provenance. Corrections and
+real-PostgreSQL race tests are in progress. Final whole-revision suites/scans,
+demo rehearsal and independent whole-diff review remain open. Production unchanged.
+
+07:50UTC delta: causal contrast correction8ebec5ca independently reviewed; clean frontend rebuild27.414s and fullreal-API browser **114passed/114,215.263s** on isolated4a8 backend. UX-CONTRAST-02 now FIX_PROVEN for that local checkpoint, not production. SEND-AMB backend/provider/UI protection is still uncommitted and under adversarial review. First final-commit regression passes, but concurrent and mutation-bypass matrix remains open; provider review requested408/409 ambiguity and strict VK receipt fixes. NewUI unit/integration16pass plusfocusedlint/typecheck passed58.685s before additional stale-context checks. No final readiness/sign-off claim.
+
+07:42UTC authoritative delta: clean5c1 frontend rebuild/sync into the isolated4a8 backend passed30.597s, but full browser rerun still111pass3fail224.680s. The same direct-child amber caption fails contrast: the prior workflow-graph change addressed an adjacent component, not this observed element. Exact employee-component diagnosis and regression are in progress; UX-CONTRAST-02 remains open. All original failing captures/traces retained. Corrected measurement driverfa4e15b8 independently passes32tests; real pilot correctly reports baseline14/15 requests (business-data HTTP500), current15/15, invariants3/3 each; one sample is not performance evidence. SEND-AMB-01 is now REPRODUCED on real synthetic PostgreSQL with stub transport: accepted Telegram send + local commit failure rolls back to approved, then retry sends twice. Direct published replay also lacks a terminal guard by source inspection; bounded no-DDL protection is under design review. Production runbook07 approved; demo08 factual corrections are awaiting final review. No production changes or real sends.
+
+07:23UTC delta: actual Docker full browser111pass3fail215.298s; compiled-report path nowpasses3/3, but Agents approval-step label fails axe color contrast in all3viewports. One-token correction and rendered-state regression underreview. Measurement driver619760b4 independently approved28tests; first real pilot failed before DB creation on equivalent macOS/tmp vs/private/tmp paths, so canonical-path fix is in progress and no latency report exists. Restore provenance correction finished; independent checked full-data/schema/grant/sequence proof remains PASS. Draft07operator runbook added with explicit whole-tree deployment-helper warning.
+
+Latest checkpoint (18September07:15UTC): clean4a8e33b8 ARM64 browser-enabled image61.615s and actual offline nonroot Chromium smoke3.682s pass; Docker `.Size` reduced22.2% versus a025 (1376269248→1070569043bytes). Durable compiled profile independently reviewed/committed; actual isolated app/PG16/runner proof passes10previews+5runs with replay/zero-AI checks. Full114real-browser suite is running, not yet green. Actual guarded restore helper plus full synthetic schema/data/grants/sequence verification passed independent read-only review; evidence provenance is being corrected to retain the first invalid sequence query explicitly. No production/user data changes. Five-flow measurement remains under review, no latency improvement claim. All historical checkpoints below retain their original scope/date; current resources are in newest HANDOFF.
+
 Latest phase: clean5e1ebe79 nativePG15 whole-backend aggregate **4319 passed,117 skipped**, exit0; real-browser **111/114 passed**, three genuine compiled-runner fixture failures remain. Reviewed fixes also include pypdf6.16.1 pin and Operator chat write-role gate a0253199. User explicitly approved local Docker startup without reset; daemon started and a fresh task-owned PostgreSQL16 storage/restart/restore probe passed35.107s. No production deployment, user-volume deletion or global prune. Current paths and authority are in the newest HANDOFF section.
 
 Updated: 2026-09-18 06:15 UTC / 09:15 Moscow. **IN PROGRESS — not production-ready sign-off.**
@@ -9,6 +48,8 @@ Updated: 2026-09-18 06:15 UTC / 09:15 Moscow. **IN PROGRESS — not production-r
 Temporary artifacts from the earlier session were lost across interruption/host cleanup; checked-in source and repository raw captures survived. Earlier claims below that temp dumps/traces/caches remain describe historical checkpoints only. Full native green was recovered from its durable raw capture, not guessed or rerun. The current native cluster is new, on port35418; current Docker probe resources are separate from old stopped audit volumes.
 
 ## Latest bounded evidence
+
+- Docker-resumed PG16 selected21files now **264passed177.72s**,178.657s captured, exit0/no skips (`raw/pg16-resumed-skipped-groups.json`). Covers all Docker/Compose skip-file groups identified in native5e output; not the final fullaggregate on one revision. Seven live-provider cases remain intentionally disabled; the separately gated creator-promotion integration still needs explicit migrated synthetic DB setup.
 
 - Fresh nativePG15 staging schema:288tables, vector0.8.6/pgcrypto1.3, Alembic20260907_001. Synthetic users/journeys only. Gunicorn127.0.0.1:38018; blank providers/dispatch off/Python egress guard and closed external Chromium proxy. App/browser stopped after checks.
 - First native browser36pass78fail153.249s was a new harness regression: empty PGSERVICE/PGSERVICEFILE were interpreted by libpq, not unset. Raw failure retained. Corrected helper deletes override keys; actual CLI succeeds despite hostile synthetic inherited overrides; unit7pass, full frontend typecheck/scoped lint pass, independent review. Final real-API111pass3fail200.079s, not an all-green suite.
@@ -41,8 +82,8 @@ Branch `codex/production-readiness-20260917`; baseline `30262a5bf7b468e0a6f5a0e3
 - [x] Hardened local-only restore helper and compiled fixture guards: independently reviewed; root20purefake tests passed.
 - [x] NativePG15 fallback enabled skipped Operator families:704pass4fixture failures →713pass after canonical network schema; final clean b9a security/native selection826pass.
 - [x] Contact GET DNS pinning and finance viewer/transaction-target boundaries independently reviewed and locally committed; three UI route-switch hypotheses falsified by keyed page lifecycle.
-- [ ] Actual guarded-helper execution and restore verification of remaining schema objects.
-- [ ] Full backend green: ca8 harness causes corrected; subsequent3fadbabd run3565passed691skipped4failed79errors interrupted by local Docker/PG I/O. No product-regression verdict from this environment failure.
+- [x] Actual guarded-helper execution and independently verified full synthetic schema/data/grants/sequences; not a production-backup recovery proof.
+- [x] Full native5e backend4319pass/117skip; later PG16 selected264pass plus creator1pass exercise110previously skipped cases. Final same-revision full aggregate still pending;7live-provider tests intentionally disabled.
 - [ ] Reproduce/resolve remaining data/concurrency/SSRF/RBAC/idempotency/scope candidates; confirm tenant/object/role boundaries.
 - [ ] Full current-source/history/image/log/dependency threat and supply-chain closure.
 - [ ] Five-flow before/after p50/p95/p99, bounded load and query plans.

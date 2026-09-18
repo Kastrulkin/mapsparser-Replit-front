@@ -1,5 +1,43 @@
 # Readiness decisions
 
+## D-017 — Ambiguous publication is a durable hold, not a retry
+
+18 September: commit a compare-and-set publication intent before provider I/O.
+Only the caller that freshly claimed it may send. An uncertain result or failed
+final commit remains `publishing`; no automatic retry or timer resets it.
+Manual reconciliation requires a per-post receipt and explicit confirmation;
+the bulk endpoint cannot resolve several uncertain posts with one receipt.
+
+The provider connection uses autocommit before its first query, with one
+nonblocking session advisory lock per post held through the separate finalizer.
+Manual reconciliation requests the same key as a transaction advisory lock;
+if busy, it fails closed. After acquiring the lock, provider code rechecks
+status, attempt state/ID, approval and the content/business fingerprint before
+sending. Do not replace this with a timeout lease: process pauses and partial
+network progress do not establish a safe time to assume the provider stopped.
+
+This deliberately retains one connection and one application mutex during I/O,
+but no open SQL transaction. Session locks survive transaction rollback and are
+released explicitly or on connection termination; same-key transaction locks
+conflict with them. The current connection is direct, not transaction pooled.
+Any future pooling change must revisit this contract. See the official
+[PostgreSQL advisory-lock semantics](https://www.postgresql.org/docs/16/explicit-locking.html#ADVISORY-LOCKS)
+and [Psycopg autocommit contract](https://www.psycopg.org/docs/connection.html#connection.autocommit).
+Source changes and causal concurrency tests passed independent review and the
+237-test root aggregate in d3ca8b1e. This is not exactly-once delivery or a
+production rollout; new browser integration and final whole-revision gates remain.
+
+## D-018 — Preserve failed baseline samples and separate transport claims
+
+18 September: the 50-sample baseline business-data HTTP500 remains an error,
+never a fast successful request. Quantiles use only successful requests, and
+whole-journey request-work totals require all steps successful. Cold clean
+processes, synthetic data and stubbed providers are explicit limitations.
+Prepared-target in-process Flask concurrency is a useful bounded application/SQL
+stress check, but cannot establish HTTP/Gunicorn capacity or production p99.
+Migrations, fixture setup and invariant reads stay outside latency windows.
+Keep source/guard hashes, raw errors and exact cleanup evidence with each run.
+
 ## D-012 — Native SQL proof is useful, but is not Docker/PG16 parity
 
 Use a freshly created, loopback-only native PostgreSQL cluster with synthetic data to continue actual transaction/role checks while shared Docker is unavailable. Retain exact server version, data_directory, named test databases, archive commit and no-egress environment; stop only the owned cluster after checks. PG15 results can confirm SQL defects and fixes without pretending to satisfy PG16, image, compiled-runner or full production recovery requirements. Do not replace the original acceptance criteria with easier native-only checks.

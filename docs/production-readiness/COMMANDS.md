@@ -1,10 +1,50 @@
 # Verified commands and evidence
 
+## Latest committed publication package and measurements — 18 September
+
+- `d3ca8b1e` is the independently reviewed local SEND-AMB package, not a
+  deployment. Script `social-publish-root-final.sh` in the retained taskdir
+  checks native PG data_directory and guard SHA, then runs six social/API
+  test modules with env-i, literal loopback DSNs and no providers. First raw
+  `social-publish-root-final.json`:234pass/3legacy fake-cursor failures. After
+  exact fixture correction, `social-publish-root-green.json`:237pass35.65s,
+ 37.569s captured, exit0. No red capture overwritten.
+- `publication-ui-tests.sh`:19tests, focused ESLint and full app+Node TypeScript
+  pass52.179s (`social-publication-ui-final.json`). Independent36-test backend
+  output preserved via `send-amb-independent-pane-20260918.json`; the worker
+  `send-amb-01-native-pg-lifecycle-final.json` is summary-derived, not a raw run.
+- `measure-serial-8ebec5ca.sh`: reviewed driver with baseline30262a5b/current8eb,
+ 5warmups/50serial samples perref/no load. Captured543.315s, expected exit1
+  for50baseline business HTTP500; current750/750requests+150/150invariants.
+  Independently recomputed tables in report04; p99 exploratory/cold process.
+  Post-run catalog check in `journey-measure-cleanup-check-20260918.json`.
+- `full-backend-d3ca8b1e.sh` currently runs in named tmux
+  `readiness-full-backend-d3ca8b1e`: clean tracked-source archive in
+  `/private/tmp/localos-readiness-final-d3ca8b1e.Liqulf/source`, no .env, fresh
+  `readiness_full_test_d3ca8b1e` on owned native35418; guard symlink added only
+  to the test archive so subprocesses that replace PYTHONPATH keep the hook.
+  Pure-Python pypdf6.16.1 copied from the verified local4a8 image into a private
+  dependency overlay, shared venv unchanged. Docker socket is explicit, PG16
+  testcontainers enabled, exact synthetic creator integration flag enabled,
+  real providers/dispatch disabled. Output `full-backend-d3ca8b1e.json` must
+  be checked for actual result. This one-shot create/archive script is not
+  replayable against retained directories/databases.
+
+## Current image and compiled execution — 18 September07:15UTC
+
+- Exact scripts under `/private/tmp/localos-readiness-docker-resume.NsmVen/`; all run through sanitized `env -i` in named tmux, explicit local Docker socket. `build-4a8e33b8.sh` uses clean archive, all8staging Viteflags, browser enabled; preflight4GiB/abort1.2GiB; raw `docker-4a8e33b8-build.json` exit0,61.615s. `smoke-4a8e33b8.sh` pins exact image ID, networknone/read-only/nonroot; raw smoke exit0,3.682s.
+- `compiled-start.sh` first rejects existing project containers, uses reviewed five-fragment Compose chain plus resource/image-only `compiled-runtime.yml`, no pull/build/.env; creates exactly synthetic postgres,redis,app then seeds, enables exact UUID cohort and starts app/runner/ingress. Raw `compiled-4a8e33b8-start.json` exit0,25.671s. **Do not replay this one-shot script** against retained project resources.
+- Clean archive `scripts/test_compiled_table_staging.py --base-url http://127.0.0.1:38019 --container localos-readiness-compiled-20260918-app-1 --ingress-container localos-readiness-compiled-20260918-audit-ingress-1 --compose-project localos-readiness-compiled-20260918 --app-environment staging --postgres-database localos_staging` ran with Python egress guard/explicitlocalsocket; raw `compiled-4a8e33b8-proof.json` exit0,11.760s.10previews+5realruns/replay, no fakecompletedrows.
+- `browser-4a8e33b8.sh` currently executes all114existing stagedbrowser cases, Node22, identical locked dependency tree, temporary config only adds closed external proxy/outputdir, exact appimage/container and proofblueprint. Check actual raw result before claiming completion.
+- `restore-helper-full-schema-20260918.json` records explicit trustedarchive/target/helper and independently rechecked fullschema/data proof. Source/target retained. Original `restore_compare.sh` alone is not authoritative (weak pipeline failure handling and a failed sequence query); final provenance distinguishes direct sequence/checkedpg_dump comparisons. No user DB restore.
+
 ## Resumed local Docker — 18 September06:15UTC
+
+- `creator-native-test.sh`: first verifies the exact owned native data_directory on127.0.0.1:35418, creates NEW `readiness_creator_promotion_test_20260918`, applies canonical Alembic in cleana025archive, then enables only `CREATOR_PROMOTION_INTEGRATION=1` for one test with guard/env-i/dispatchdisabled. `raw/creator-promotion-native-integration.json`, exit0,4.440s total;1passed0.34s. DB retained, not a replayable one-shot createdb script. Seven live-provider cases intentionally unrun.
 
 - Final a025 build capture exit0,276.824s; actual image sha256fd14a7bb7d7c1951139d392a72f079e238b1becaec0722e37ade72358675b50f. Smoke `raw/docker-a0253199-smoke-green.json` exit0,3.039s (UID10001, networknone, readonlyroot, pypdf6.16.1, pipcheck, Chromium). First smoke misnamed public entrypoint; preserved `docker-a0253199-smoke.json` is exit1/harnessmistake.
 - `clear-old-audit-cache.sh` removed only ten validated unused private cache IDs of obsoleteca8 image; rawcleanup exit0,3.043GB. Old taskimage9a3 was untagged first after zero-container reference check. No system/image/volume globalprune; cache allowlist is retained. Hostfree eventually3.1GiB.
-- `pg16-resumed-tests.sh` in namedtmux `readiness-pg16-resumed`:21files identified from Docker-related skips in the full5e capture; clean a025archive, explicitlocalsocket, sanitized env/provider guard, disposable PG16 testcontainers. Capture `raw/pg16-resumed-skipped-groups.json` pending; this selection is not another fullbackend aggregate.
+- `pg16-resumed-tests.sh` in namedtmux `readiness-pg16-resumed`:21files identified from Docker-related skips in the full5e capture; clean a025archive, explicitlocalsocket, sanitized env/provider guard, disposable PG16 testcontainers. Capture `raw/pg16-resumed-skipped-groups.json`:264passed177.72s/178.657s wall, exit0/no skips. This selection is not another fullbackend aggregate.
 
 Earlier temp paths below are historical: archives, scripts, traces, dumps and scanner reports disappeared across host interruption/cleanup. Repository raw captures and commits survived. Explicit user permission now covers local Docker startup without reset; no user volumes/container data were removed.
 
