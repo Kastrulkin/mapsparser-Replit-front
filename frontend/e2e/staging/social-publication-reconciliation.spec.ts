@@ -32,6 +32,33 @@ const loginOwner = async (page: import('@playwright/test').Page, businessId: str
   expect(response.status(), await response.text()).toBe(200);
 };
 
+test('calendar and publication sheet stay within the device viewport', async ({ page }, testInfo) => {
+  expect(testInfo.config.workers).toBe(1);
+  const fixture = resetFixture();
+  await loginOwner(page, fixture.business_id);
+  await page.goto(`/dashboard/content?plan_id=${encodeURIComponent(fixture.plan_id)}`);
+  const card = page.getByRole('button', { name: /E2E сверка публикации/ });
+  await expect(card).toBeVisible();
+
+  const expectBoundedViewport = async () => {
+    // innerWidth expands with mobile layout overflow and would hide this defect.
+    await expect.poll(() => page.evaluate(() => (
+      document.documentElement.scrollWidth - document.documentElement.clientWidth
+    ))).toBeLessThanOrEqual(1);
+  };
+  await expectBoundedViewport();
+  await card.click();
+  await page.getByRole('button', { name: /Тексты для каналов/ }).click();
+  await expect(page.getByLabel('Ссылка или ID уже опубликованного поста')).toBeVisible();
+  await expectBoundedViewport();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(card).toBeFocused();
+
+  await page.getByRole('button', { name: 'Список' }).click();
+  await expectBoundedViewport();
+});
+
 test('publishing hold reconciles one confirmed receipt without another provider send', async ({ page }, testInfo) => {
   expect(testInfo.config.workers).toBe(1);
   const fixture = resetFixture();

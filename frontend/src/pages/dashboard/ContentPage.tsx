@@ -849,6 +849,7 @@ function ContentWorkspace() {
   const [photoAnalysisQuota, setPhotoAnalysisQuota] = useState<PhotoAnalysisQuota | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const publicationDetailsRef = useRef<HTMLDivElement | null>(null);
+  const publicationTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
   const contentLoadSequenceRef = useRef(0);
   const [mediaUploadProgress, setMediaUploadProgress] = useState('');
@@ -1175,7 +1176,8 @@ function ContentWorkspace() {
     return () => window.clearInterval(interval);
   }, [generating]);
 
-  const openItem = (item: PlanItem) => {
+  const openItem = (item: PlanItem, trigger: HTMLButtonElement) => {
+    publicationTriggerRef.current = trigger;
     setError('');
     setActionMessage('');
     setSelectedItemId(item.id);
@@ -1616,10 +1618,10 @@ function ContentWorkspace() {
     }
   };
 
-  const openNearestReview = () => {
+  const openNearestReview = (event: React.MouseEvent<HTMLButtonElement>) => {
     const target = nearestReviewItem || nextItem || items[0];
     if (!target) return;
-    openItem(target);
+    openItem(target, event.currentTarget);
   };
 
   const approveReadyPosts = async () => {
@@ -2237,7 +2239,7 @@ function ContentWorkspace() {
       <button
         key={item.id}
         type="button"
-        onClick={() => openItem(item)}
+        onClick={(event) => openItem(item, event.currentTarget)}
         className="w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 hover:shadow-md"
       >
         <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
@@ -2312,7 +2314,7 @@ function ContentWorkspace() {
             <button
               key={item.id}
               type="button"
-              onClick={() => openItem(item)}
+              onClick={(event) => openItem(item, event.currentTarget)}
               className="flex w-full min-w-0 flex-col gap-3 overflow-hidden px-3 py-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
@@ -2746,7 +2748,17 @@ function ContentWorkspace() {
     const selectedPhoto = mediaRecommendation?.selected_asset || null;
     return (
       <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
+        <SheetContent
+          className="w-full overflow-y-auto sm:max-w-4xl"
+          onCloseAutoFocus={(event) => {
+            const trigger = publicationTriggerRef.current;
+            if (trigger?.isConnected && !trigger.disabled) {
+              event.preventDefault();
+              trigger.focus();
+            }
+            publicationTriggerRef.current = null;
+          }}
+        >
           {item ? (
             <div className="grid min-h-full gap-6 lg:grid-cols-[1fr_300px]">
               <div>
@@ -3498,7 +3510,7 @@ function ContentWorkspace() {
         </div>
       </div>
 
-      <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+      <div className="inline-flex max-w-full flex-wrap rounded-2xl bg-slate-100 p-1">
         {[
           { key: 'calendar', label: contentCopy.calendar, Icon: CalendarDays },
           { key: 'media', label: contentCopy.media, Icon: ImageIcon },
@@ -3544,7 +3556,7 @@ function ContentWorkspace() {
 
       {section === 'calendar' && !generating && (loading || items.length > 0) ? (
         <div className="grid gap-5 lg:grid-cols-[1fr_340px]" data-tour-target="content-calendar">
-          <main className="space-y-5">
+          <main className="min-w-0 space-y-5">
             <div className="rounded-[32px] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                 <div className="max-w-2xl">

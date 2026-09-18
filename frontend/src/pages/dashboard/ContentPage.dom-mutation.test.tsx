@@ -129,6 +129,20 @@ describe('Content page DOM ownership', () => {
     expect(() => fireEvent.click(generateButton)).not.toThrow();
   });
 
+  it.each(['calendar', 'list', 'nearest'])('restores the %s invoker focus when the publication sheet closes', async (source) => {
+    renderContentPage();
+    await screen.findByRole('button', { name: /Тестовая тема публикации/ });
+    if (source === 'list') fireEvent.click(screen.getByRole('button', { name: 'Список' }));
+    const trigger = source === 'nearest'
+      ? screen.getByRole('button', { name: 'Проверить ближайшие' })
+      : screen.getByRole('button', { name: /Тестовая тема публикации/ });
+    fireEvent.click(trigger);
+    await screen.findByRole('dialog');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it('shows the credits charged after a batch photo upload', async () => {
     let uploadIndex = 0;
     let analysisIndex = 0;
