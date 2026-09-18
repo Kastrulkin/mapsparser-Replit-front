@@ -12,7 +12,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from auth_encryption import decrypt_auth_data
-from core.auth_helpers import verify_business_access
+from core.auth_helpers import verify_business_access, verify_business_write_access
 from database_manager import DatabaseManager
 from core.outbound_network import outbound_urlopen
 from core.telegram_network import telegram_urlopen
@@ -306,7 +306,7 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        plan = _load_plan_for_user(cursor, user_id, plan_id)
+        plan = _load_plan_for_write(cursor, user_id, plan_id)
         recommendation_payload = recommend_next_plan_from_social_posts(user_id, plan_id)
         proposed_changes = [
             item for item in recommendation_payload.get("proposed_changes", [])
@@ -1314,12 +1314,25 @@ def _load_plan_item_for_user(cursor: Any, user_id: str, item_id: str) -> dict[st
     _require_business_access(cursor, user_id, business_id)
     return item
 
+
+def _load_plan_item_for_write(cursor: Any, user_id: str, item_id: str) -> dict[str, Any]:
+    item = _load_plan_item_for_user(cursor, user_id, item_id)
+    business_id = str(item.get("business_id") or item.get("plan_business_id") or "").strip()
+    _require_business_write_access(cursor, user_id, business_id)
+    return item
+
 def _load_plan_for_user(cursor: Any, user_id: str, plan_id: str) -> dict[str, Any]:
     cursor.execute("SELECT * FROM contentplans WHERE id = %s", (plan_id,))
     plan = _row_to_dict(cursor, cursor.fetchone())
     if not plan:
         raise ValueError("Контент-план не найден")
     _require_business_access(cursor, user_id, str(plan.get("business_id") or ""))
+    return plan
+
+
+def _load_plan_for_write(cursor: Any, user_id: str, plan_id: str) -> dict[str, Any]:
+    plan = _load_plan_for_user(cursor, user_id, plan_id)
+    _require_business_write_access(cursor, user_id, str(plan.get("business_id") or ""))
     return plan
 
 def _content_plan_item_count(cursor: Any, plan_id: str) -> int:
@@ -1333,6 +1346,12 @@ def _load_post_for_user(cursor: Any, user_id: str, post_id: str) -> dict[str, An
     if not post:
         raise ValueError("Публикация не найдена")
     _require_business_access(cursor, user_id, str(post.get("business_id") or ""))
+    return post
+
+
+def _load_post_for_write(cursor: Any, user_id: str, post_id: str) -> dict[str, Any]:
+    post = _load_post_for_user(cursor, user_id, post_id)
+    _require_business_write_access(cursor, user_id, str(post.get("business_id") or ""))
     return post
 
 def _require_business_access(cursor: Any, user_id: str, business_id: str) -> None:
@@ -1350,6 +1369,23 @@ def _require_business_access(cursor: Any, user_id: str, business_id: str) -> Non
     if has_access:
         return
     raise PermissionError("Нет доступа к бизнесу")
+
+
+def _require_business_write_access(cursor: Any, user_id: str, business_id: str) -> None:
+    cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    if hasattr(row, "keys"):
+        is_superadmin = bool(row.get("coalesce"))
+    else:
+        is_superadmin = bool(row[0]) if row else False
+    has_access, _owner_id = verify_business_write_access(
+        cursor,
+        business_id,
+        {"user_id": user_id, "is_superadmin": is_superadmin},
+    )
+    if has_access:
+        return
+    raise PermissionError("Нет прав на изменение бизнеса")
 
 def _upsert_social_post(
     cursor: Any,

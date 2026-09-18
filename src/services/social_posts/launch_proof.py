@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import hashlib
 import os
 import sys
@@ -979,7 +978,7 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
         if status in {"published", "publishing"}:
             raise ValueError("Публикация уже размещена или ожидает ручной сверки")
@@ -1068,7 +1067,7 @@ def update_social_post_text(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         current_status = str(post.get("status") or "").strip()
         if current_status in {"queued", "publishing", "published"}:
             raise ValueError("Нельзя менять текст после постановки в расписание или публикации")
@@ -1131,7 +1130,7 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
         if status == "published":
             raise ValueError("Публикация уже опубликована")
@@ -1226,7 +1225,7 @@ def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = 
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         updated = _create_supervised_publish_task(cursor, post)
         db.conn.commit()
         return updated
@@ -1431,11 +1430,12 @@ def mark_manual_published(
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        ensure_social_post_tables(cursor)
+        _load_post_for_write(cursor, user_id, post_id)
         cursor.execute("SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0))", (_publish_advisory_key(post_id),))
         if not _advisory_lock_granted(cursor.fetchone()):
             raise RuntimeError("Публикация сейчас сверяется; обновите карточку и не повторяйте отправку")
-        ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
         if status not in {"needs_supervised_publish", "needs_manual_publish", "publishing"}:
             raise ValueError("Ручная отметка публикации доступна только для ручного или контролируемого размещения")
@@ -1513,7 +1513,7 @@ def move_social_post_to_manual_publish(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         status = str(post.get("status") or "").strip()
         if status not in {
             "approved",
@@ -1571,7 +1571,7 @@ def mark_supervised_publish_blocked(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         platform = str(post.get("platform") or "").strip()
         status = str(post.get("status") or "").strip()
         if platform not in BROWSER_OR_MANUAL_PLATFORMS and status != "needs_supervised_publish":
@@ -1698,7 +1698,7 @@ def record_social_post_attribution_event(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         normalized_event_type = str(event_type or "").strip().lower()
         event, metrics = _record_social_post_attribution_event_in_cursor(
             cursor,
@@ -1744,7 +1744,7 @@ def record_social_post_attribution_events(
         posts = []
         metrics_by_post = {}
         for post_id in requested_ids:
-            post = _load_post_for_user(cursor, user_id, post_id)
+            post = _load_post_for_write(cursor, user_id, post_id)
             event, metrics = _record_social_post_attribution_event_in_cursor(
                 cursor,
                 post,
@@ -1831,11 +1831,11 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         filters = ["sp.status = 'published'"]
         params: list[Any] = []
         if post_id:
-            post = _load_post_for_user(cursor, user_id, post_id)
+            post = _load_post_for_write(cursor, user_id, post_id)
             filters.append("sp.id = %s")
             params.append(post.get("id"))
         elif business_id:
-            _require_business_access(cursor, user_id, business_id)
+            _require_business_write_access(cursor, user_id, business_id)
             filters.append("sp.business_id = %s")
             params.append(business_id)
         else:

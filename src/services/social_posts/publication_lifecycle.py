@@ -53,7 +53,7 @@ def _claim_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        post = _load_post_for_user(cursor, user_id, post_id)
+        post = _load_post_for_write(cursor, user_id, post_id)
         current_status = str(post.get("status") or "").strip()
         if current_status == "published":
             return post

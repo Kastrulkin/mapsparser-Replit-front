@@ -139,7 +139,7 @@ def prepare_social_posts_for_item(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        item = _load_plan_item_for_user(cursor, user_id, item_id)
+        item = _load_plan_item_for_write(cursor, user_id, item_id)
         requested_platforms = _normalize_platforms(platforms)
         base_text = _base_text_from_item(item)
         existing_by_platform = _existing_social_posts_for_item(cursor, item_id)

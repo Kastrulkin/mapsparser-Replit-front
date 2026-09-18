@@ -83,6 +83,16 @@ from services.social_post_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def authorize_legacy_fake_social_post_writes(monkeypatch):
+    """Legacy unit doubles model an already-authorized editor, not RBAC SQL."""
+    monkeypatch.setattr(
+        social_post_service,
+        "_require_business_write_access",
+        lambda cursor, user_id, business_id: None,
+    )
+
+
 class FakeTableCursor:
     def __init__(self, existing_tables):
         self.existing_tables = set(existing_tables)
@@ -2005,7 +2015,19 @@ def test_run_scoped_social_dispatch_once_requires_approval_before_preflight(monk
 def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatch):
     captured = {}
 
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_require_business_write_access",
+        lambda cursor, user_id, business_id: captured.setdefault(
+            "access",
+            {"user_id": user_id, "business_id": business_id},
+        ),
+    )
+
     def fake_preflight(user_id, business_id, batch_size=10):
+        assert captured["access"] == {"user_id": "user-1", "business_id": "biz-1"}
         captured["preflight"] = {"user_id": user_id, "business_id": business_id, "batch_size": batch_size}
         return {
             "business_id": business_id,
@@ -2037,11 +2059,15 @@ def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatc
     assert result["execution_report"]["browser_final_click_allowed"] is False
     assert result["browser_final_click_allowed"] is False
     assert result["external_publish_only_after_approval"] is True
+    assert captured["access"] == {"user_id": "user-1", "business_id": "biz-1"}
     assert captured["preflight"] == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50}
     assert captured["dispatch"] == {"business_id": "biz-1", "batch_size": 50}
 
 
 def test_run_scoped_social_dispatch_once_requires_phrase_for_api_publish(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+
     def fake_preflight(user_id, business_id, batch_size=10):
         return {
             "business_id": business_id,
@@ -2072,6 +2098,9 @@ def test_run_scoped_social_dispatch_once_requires_phrase_for_api_publish(monkeyp
 
 def test_run_scoped_social_dispatch_once_accepts_phrase_for_api_publish(monkeypatch):
     captured = {}
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
 
     def fake_preflight(user_id, business_id, batch_size=10):
         return {
@@ -2107,6 +2136,9 @@ def test_run_scoped_social_dispatch_once_accepts_phrase_for_api_publish(monkeypa
 
 
 def test_run_scoped_social_dispatch_once_rejects_live_api_preflight_block(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+
     def fake_preflight(user_id, business_id, batch_size=10):
         return {
             "business_id": business_id,
@@ -2171,6 +2203,9 @@ def test_api_preflight_blocked_due_posts_include_recovery_actions():
 
 
 def test_run_scoped_social_dispatch_once_respects_launch_gate(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+
     def fake_preflight(user_id, business_id, batch_size=10):
         return {
             "business_id": business_id,
@@ -2319,7 +2354,7 @@ def test_run_scoped_social_metrics_once_collects_only_requested_business(monkeyp
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
     monkeypatch.setattr(
         social_post_service,
-        "_require_business_access",
+        "_require_business_write_access",
         lambda cursor, user_id, business_id: captured.setdefault(
             "access",
             {"user_id": user_id, "business_id": business_id},

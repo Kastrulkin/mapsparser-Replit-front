@@ -436,6 +436,13 @@ def run_scoped_social_dispatch_once(
     if not normalized_business_id:
         raise ValueError("Бизнес не выбран")
     clean_batch_size = max(1, min(int(batch_size or 10), 50))
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        _require_business_write_access(cursor, user_id, normalized_business_id)
+    finally:
+        db.close()
     preflight = get_social_launch_preflight(user_id, normalized_business_id, batch_size=clean_batch_size)
     launch_gate = preflight.get("launch_gate") if isinstance(preflight.get("launch_gate"), dict) else {}
     if launch_gate and not bool(launch_gate.get("allowed")):
@@ -494,7 +501,7 @@ def run_scoped_social_metrics_once(
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        _require_business_access(cursor, user_id, normalized_business_id)
+        _require_business_write_access(cursor, user_id, normalized_business_id)
     finally:
         db.close()
     metrics_result = collect_due_social_post_metrics(
