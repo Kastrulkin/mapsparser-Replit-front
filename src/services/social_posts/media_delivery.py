@@ -402,4 +402,3 @@ def _upload_vk_wall_photos(
             return {"success": False, "status": "vk_media_save_empty", "error": "VK не вернул ID фото."}
         attachments.append(f"photo{photo_owner_id}_{photo_id}")
     return {"success": True, "attachments": attachments}
-

@@ -311,4 +311,3 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         except Exception:
             pass
         db.close()
-

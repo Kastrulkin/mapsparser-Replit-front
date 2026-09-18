@@ -45,11 +45,12 @@ test('publishing hold reconciles one confirmed receipt without another provider 
   await loginOwner(page, fixture.business_id);
 
   await page.goto(`/dashboard/content?plan_id=${encodeURIComponent(fixture.plan_id)}&item_id=${encodeURIComponent(fixture.item_id)}`);
+  await page.getByRole('button', { name: 'Список' }).click();
   await page.getByRole('button', { name: 'E2E сверка публикации' }).click();
   await page.getByRole('button', { name: /Тексты для каналов/ }).click();
   await expect(page.getByText(/не отправляйте пост повторно/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Разместить вручную' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Запланировать отправку|Запланировано/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Запланировать отправку|Запланировано/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Изменить текст/ })).toHaveCount(0);
 
   const receipt = page.getByLabel('Ссылка или ID уже опубликованного поста');
