@@ -295,6 +295,46 @@ def _worker_connection(fixture):
     return connection
 
 
+def _seed_old_uncertain_callback_tenants(fixture, count: int) -> list[str]:
+    tenant_ids = [f"fair-callback-tenant-{index:03d}" for index in range(count)]
+    connection = psycopg2.connect(fixture["database_url"], cursor_factory=RealDictCursor)
+    cursor = connection.cursor()
+    try:
+        cursor.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(fixture["schema"])))
+        cursor.executemany(
+            "INSERT INTO businesses (id, owner_id, name, is_active) VALUES (%s, %s, %s, TRUE)",
+            [
+                (tenant_id, f"fair-callback-owner-{index:03d}", f"Fair callback tenant {index:03d}")
+                for index, tenant_id in enumerate(tenant_ids)
+            ],
+        )
+        cursor.executemany(
+            """
+            INSERT INTO action_callback_outbox
+                (id, action_id, tenant_id, callback_url, event_type, payload_json, status,
+                 attempts, max_attempts, next_attempt_at, last_error, dedupe_key, created_at)
+            VALUES (%s, %s, %s, 'https://callbacks.example.test/localos', 'completed',
+                    '{"status":"completed"}'::jsonb, 'dlq', 0, 5, CURRENT_TIMESTAMP,
+                    %s, %s, CURRENT_TIMESTAMP - INTERVAL '2 days')
+            """,
+            [
+                (
+                    str(uuid.uuid4()),
+                    f"fair-callback-action-{index:03d}",
+                    tenant_id,
+                    INTERRUPTED_CLAIM_ERROR,
+                    f"fair-callback-dedupe-{index:03d}",
+                )
+                for index, tenant_id in enumerate(tenant_ids)
+            ],
+        )
+        connection.commit()
+        return tenant_ids
+    finally:
+        cursor.close()
+        connection.close()
+
+
 def test_interrupted_stale_sending_claim_is_quarantined_without_resend_or_cross_tenant_effect(
     callback_recovery_database, monkeypatch,
 ):
@@ -663,6 +703,7 @@ def test_worker_alert_scan_includes_old_uncertain_claims_and_incident_actions(ca
         lambda tenant_id, **kwargs: notified.append((tenant_id, kwargs)),
     )
     monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "", raising=False)
     monkeypatch.setattr(worker.time, "time", lambda: 1000.0)
     monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", "true")
     monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_WINDOW_MINUTES", "60")
@@ -675,3 +716,177 @@ def test_worker_alert_scan_includes_old_uncertain_claims_and_incident_actions(ca
         fixture["ids"]["action"],
         fixture["ids"]["action"],
     ]
+
+
+def test_worker_callback_alert_scan_round_robins_stable_101_tenants_with_bounded_work(callback_recovery_database, monkeypatch):
+    fixture = callback_recovery_database
+    tenant_ids = _seed_old_uncertain_callback_tenants(fixture, 101)
+
+    import worker
+
+    metric_calls = []
+
+    class MetricsOnlyOrchestrator:
+        def get_callback_metrics(self, _user_data, *, tenant_id, window_minutes):
+            metric_calls.append((tenant_id, window_minutes))
+            return {"success": True, "metrics": {}, "alerts": []}
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: _worker_connection(fixture))
+    monkeypatch.setattr(worker, "CALLBACK_DISPATCH_ORCHESTRATOR", MetricsOnlyOrchestrator())
+    monkeypatch.setattr(worker, "_notify_superadmins_callback_alerts", lambda *_args, **_kwargs: pytest.fail("no alerts means no notification"))
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "", raising=False)
+    monkeypatch.setattr(worker.time, "time", lambda: 1000.0)
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", "true")
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_WINDOW_MINUTES", "60")
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_MAX_TENANTS", "100")
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_SCAN_INTERVAL_SEC", "30")
+
+    worker._check_openclaw_callback_alerts_if_due()
+    first_scan = list(metric_calls)
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    worker._check_openclaw_callback_alerts_if_due()
+    second_scan = metric_calls[len(first_scan):]
+
+    assert len(first_scan) == 100
+    assert len(second_scan) == 100
+    assert len({tenant_id for tenant_id, _window_minutes in first_scan}) == 100
+    assert len({tenant_id for tenant_id, _window_minutes in second_scan}) == 100
+    assert {tenant_id for tenant_id, _window_minutes in metric_calls} == set(tenant_ids)
+    assert all(window_minutes == 60 for _tenant_id, window_minutes in metric_calls)
+
+
+def test_worker_callback_alert_scan_disabled_interval_and_database_error_do_not_advance_cursor(monkeypatch):
+    import worker
+
+    metric_calls = []
+    database_open_calls = []
+
+    class MetricsSpy:
+        def get_callback_metrics(self, _user_data, *, tenant_id, window_minutes):
+            metric_calls.append((tenant_id, window_minutes))
+            return {"success": True, "metrics": {}, "alerts": []}
+
+    def failing_database_connection():
+        database_open_calls.append(True)
+        raise RuntimeError("synthetic callback alert database failure")
+
+    cursor_before = "fair-callback-tenant-099"
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", cursor_before, raising=False)
+    monkeypatch.setattr(worker, "CALLBACK_DISPATCH_ORCHESTRATOR", MetricsSpy())
+    monkeypatch.setattr(worker, "get_db_connection", failing_database_connection)
+    monkeypatch.setattr(worker.time, "time", lambda: 1000.0)
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", "false")
+
+    worker._check_openclaw_callback_alerts_if_due()
+    assert metric_calls == []
+    assert database_open_calls == []
+    assert worker._LAST_CALLBACK_ALERT_SCAN_AT == 0.0
+    assert getattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "") == cursor_before
+
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", "true")
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 999.0)
+    worker._check_openclaw_callback_alerts_if_due()
+    assert database_open_calls == []
+    assert metric_calls == []
+    assert worker._LAST_CALLBACK_ALERT_SCAN_AT == 999.0
+    assert getattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "") == cursor_before
+
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    worker._check_openclaw_callback_alerts_if_due()
+    assert database_open_calls == [True]
+    assert metric_calls == []
+    assert getattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "") == cursor_before
+
+
+def test_worker_callback_alert_cursor_wraps_with_max_one_and_survives_disappearing_tenant(callback_recovery_database, monkeypatch):
+    fixture = callback_recovery_database
+    tenant_ids = _seed_old_uncertain_callback_tenants(fixture, 2)
+
+    import worker
+
+    metric_calls = []
+
+    class MetricsOnlyOrchestrator:
+        def get_callback_metrics(self, _user_data, *, tenant_id, window_minutes):
+            metric_calls.append(tenant_id)
+            return {"success": True, "metrics": {}, "alerts": []}
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: _worker_connection(fixture))
+    monkeypatch.setattr(worker, "CALLBACK_DISPATCH_ORCHESTRATOR", MetricsOnlyOrchestrator())
+    monkeypatch.setattr(worker, "_notify_superadmins_callback_alerts", lambda *_args, **_kwargs: pytest.fail("no alerts means no notification"))
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "", raising=False)
+    monkeypatch.setattr(worker.time, "time", lambda: 1000.0)
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", "true")
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_MAX_TENANTS", "1")
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_SCAN_INTERVAL_SEC", "30")
+
+    for _ in range(2):
+        monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+        worker._check_openclaw_callback_alerts_if_due()
+    assert metric_calls == tenant_ids
+
+    connection = psycopg2.connect(fixture["database_url"], cursor_factory=RealDictCursor)
+    cursor = connection.cursor()
+    try:
+        cursor.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(fixture["schema"])))
+        cursor.execute("DELETE FROM action_callback_outbox WHERE tenant_id = %s", (tenant_ids[1],))
+        connection.commit()
+    finally:
+        cursor.close()
+        connection.close()
+
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    worker._check_openclaw_callback_alerts_if_due()
+    assert metric_calls[-1] == tenant_ids[0]
+    assert worker._LAST_CALLBACK_ALERT_TENANT_CURSOR == tenant_ids[0]
+
+    connection = psycopg2.connect(fixture["database_url"], cursor_factory=RealDictCursor)
+    cursor = connection.cursor()
+    try:
+        cursor.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(fixture["schema"])))
+        cursor.execute("DELETE FROM action_callback_outbox")
+        connection.commit()
+    finally:
+        cursor.close()
+        connection.close()
+
+    cursor_before_empty_scan = worker._LAST_CALLBACK_ALERT_TENANT_CURSOR
+    calls_before_empty_scan = list(metric_calls)
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    worker._check_openclaw_callback_alerts_if_due()
+    assert metric_calls == calls_before_empty_scan
+    assert worker._LAST_CALLBACK_ALERT_TENANT_CURSOR == cursor_before_empty_scan
+
+
+def test_worker_callback_alert_metric_failure_does_not_stall_later_tenants(callback_recovery_database, monkeypatch):
+    fixture = callback_recovery_database
+    tenant_ids = _seed_old_uncertain_callback_tenants(fixture, 3)
+
+    import worker
+
+    metric_calls = []
+
+    class FailingFirstMetricsOrchestrator:
+        def get_callback_metrics(self, _user_data, *, tenant_id, window_minutes):
+            metric_calls.append(tenant_id)
+            if tenant_id == tenant_ids[0]:
+                raise RuntimeError("synthetic per-tenant metrics failure")
+            if tenant_id == tenant_ids[1]:
+                return {"success": False, "metrics": {}, "alerts": []}
+            return {"success": True, "metrics": {}, "alerts": []}
+
+    monkeypatch.setattr(worker, "get_db_connection", lambda: _worker_connection(fixture))
+    monkeypatch.setattr(worker, "CALLBACK_DISPATCH_ORCHESTRATOR", FailingFirstMetricsOrchestrator())
+    monkeypatch.setattr(worker, "_notify_superadmins_callback_alerts", lambda *_args, **_kwargs: pytest.fail("no alerts means no notification"))
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_SCAN_AT", 0.0)
+    monkeypatch.setattr(worker, "_LAST_CALLBACK_ALERT_TENANT_CURSOR", "", raising=False)
+    monkeypatch.setattr(worker.time, "time", lambda: 1000.0)
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", "true")
+    monkeypatch.setenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_MAX_TENANTS", "3")
+
+    worker._check_openclaw_callback_alerts_if_due()
+
+    assert metric_calls == tenant_ids
+    assert worker._LAST_CALLBACK_ALERT_TENANT_CURSOR == tenant_ids[-1]

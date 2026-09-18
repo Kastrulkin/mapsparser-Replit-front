@@ -93,6 +93,7 @@ curl -sS -X POST \
 - `OPENCLAW_CALLBACK_ALERT_NOTIFY_INTERVAL_SEC` (default `900`)
 - `OPENCLAW_CALLBACK_ALERT_NOTIFY_WINDOW_MINUTES` (default `60`)
 - `OPENCLAW_CALLBACK_ALERT_NOTIFY_MAX_TENANTS` (default `100`)
+
 - `OPENCLAW_BILLING_RECONCILE_ENABLED` (default `true`)
 - `OPENCLAW_BILLING_RECONCILE_INTERVAL_SEC` (default `900`)
 - `OPENCLAW_BILLING_RECONCILE_WINDOW_MINUTES` (default `120`)
@@ -102,6 +103,14 @@ curl -sS -X POST \
 - `OPENCLAW_BILLING_RECONCILE_ALERT_INTERVAL_SEC` (default `1800`)
 - `OPENCLAW_BILLING_RECONCILE_ALERT_MIN_ISSUES` (default `1`)
 - `OPENCLAW_SUPERADMIN_TELEGRAM_IDS` (optional CSV of Telegram chat IDs, fallback if `users.telegram_id` is unavailable)
+
+The callback alert scan rotates through eligible tenants, processing at most
+`OPENCLAW_CALLBACK_ALERT_NOTIFY_MAX_TENANTS` per due scan. A persistent candidate
+beyond the first batch is visited on a later scan instead of being permanently
+excluded by lexical ordering. The cursor advances after a successful nonempty
+selection; query failures preserve it and per-tenant metric failures do not
+block the remaining selected tenants. This cursor is process-local and resets
+on worker restart; it is not a durable or shared multi-worker checkpoint.
 
 ## 7) Failure triage
 

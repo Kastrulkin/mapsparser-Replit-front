@@ -154,6 +154,7 @@ _LAST_BILLING_RECONCILE_AT = 0.0
 _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
+_LAST_CALLBACK_ALERT_TENANT_CURSOR = ""
 _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
 _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
@@ -3391,7 +3392,7 @@ def _notify_superadmins_callback_alerts(
 
 
 def _check_openclaw_callback_alerts_if_due() -> None:
-    global _LAST_CALLBACK_ALERT_SCAN_AT
+    global _LAST_CALLBACK_ALERT_SCAN_AT, _LAST_CALLBACK_ALERT_TENANT_CURSOR
     if not _env_bool("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", True):
         return
 
@@ -3411,21 +3412,35 @@ def _check_openclaw_callback_alerts_if_due() -> None:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT DISTINCT tenant_id
-            FROM action_callback_outbox
-            WHERE tenant_id IS NOT NULL
-              AND (
-                    created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
-                    OR (status = 'sending' AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour'))
-                    OR (
-                        status = 'dlq'
-                        AND last_error = 'callback_delivery_uncertain_after_interrupted_claim'
-                    )
-              )
-            ORDER BY tenant_id
+            WITH candidate_tenants AS (
+                SELECT DISTINCT tenant_id
+                FROM action_callback_outbox
+                WHERE tenant_id IS NOT NULL
+                  AND (
+                        created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                        OR (status = 'sending' AND locked_at <= (CURRENT_TIMESTAMP - INTERVAL '1 hour'))
+                        OR (
+                            status = 'dlq'
+                            AND last_error = 'callback_delivery_uncertain_after_interrupted_claim'
+                        )
+                  )
+            ), ordered_tenants AS (
+                SELECT tenant_id, 0 AS scan_segment
+                FROM candidate_tenants
+                WHERE tenant_id > %s
+
+                UNION ALL
+
+                SELECT tenant_id, 1 AS scan_segment
+                FROM candidate_tenants
+                WHERE tenant_id <= %s
+            )
+            SELECT tenant_id
+            FROM ordered_tenants
+            ORDER BY scan_segment ASC, tenant_id ASC
             LIMIT %s
             """,
-            (window_minutes, max_tenants),
+            (window_minutes, _LAST_CALLBACK_ALERT_TENANT_CURSOR, _LAST_CALLBACK_ALERT_TENANT_CURSOR, max_tenants),
         )
         tenant_rows = cursor.fetchall() or []
         tenant_ids = []
@@ -3436,6 +3451,8 @@ def _check_openclaw_callback_alerts_if_due() -> None:
                 value = row[0] if len(row) > 0 else None
             if value:
                 tenant_ids.append(str(value))
+        if tenant_ids:
+            _LAST_CALLBACK_ALERT_TENANT_CURSOR = tenant_ids[-1]
     except Exception as e:
         print(f"[CALLBACK_ALERTS] tenant scan error: {e}", flush=True)
         return
