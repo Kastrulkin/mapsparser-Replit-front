@@ -73,6 +73,17 @@ RUN set -eux; \
 
 WORKDIR /app
 
+# Pin the installer before it resolves application dependencies. pip 26.2
+# supports this image's Python 3.11 and keeps the final image outside the
+# vulnerable pip 24.0 range reported by the image audit.
+RUN set -eux; \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=30 \
+    python -m pip install --no-cache-dir --retries 3 \
+    --index-url https://mirrors.aliyun.com/pypi/simple \
+    --extra-index-url https://pypi.org/simple \
+    "pip==26.2"
+
 # Python-зависимости (слой кешируется отдельно)
 COPY requirements.txt .
 RUN set -eux; \
