@@ -85,13 +85,14 @@ RUN set -eux; \
     "pip==26.2"
 
 # Python-зависимости (слой кешируется отдельно)
-COPY requirements.txt .
+COPY requirements.txt requirements.release.constraints.txt ./
 RUN set -eux; \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=30 \
-    pip install --no-cache-dir --retries 3 \
+    python -m pip install --no-cache-dir --retries 3 \
     --index-url https://mirrors.aliyun.com/pypi/simple \
     --extra-index-url https://pypi.org/simple \
+    -c requirements.release.constraints.txt \
     -r requirements.txt
 
 # Keep packaging tooling out of known-vulnerable ranges reported by the image

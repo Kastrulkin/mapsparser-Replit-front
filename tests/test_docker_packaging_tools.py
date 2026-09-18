@@ -13,7 +13,7 @@ def test_app_pins_pip_before_resolving_application_dependencies() -> None:
     assert base_image in dockerfile
     pin = '"pip==26.2"'
     pin_index = dockerfile.index(pin)
-    requirements_copy_index = dockerfile.index("COPY requirements.txt .")
+    requirements_copy_index = dockerfile.index("COPY requirements.txt requirements.release.constraints.txt ./")
     requirements_install_index = dockerfile.index("-r requirements.txt")
 
     assert "python -m pip install" in dockerfile[:pin_index]

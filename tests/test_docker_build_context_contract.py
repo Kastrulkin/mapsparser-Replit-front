@@ -19,5 +19,5 @@ def test_production_release_backups_are_excluded_from_build_context() -> None:
 
 
 def test_runtime_sources_and_migration_scripts_remain_build_inputs() -> None:
-    required_inputs = {"src", "scripts", "alembic_migrations", "requirements.txt", "entrypoint.sh"}
+    required_inputs = {"src", "scripts", "alembic_migrations", "requirements.txt", "requirements.release.constraints.txt", "entrypoint.sh"}
     assert required_inputs.isdisjoint(_patterns())
