@@ -1,5 +1,83 @@
 # Production-readiness progress
 
+## Current checkpoint — 19 September, locale browser proof complete
+
+Current HEAD993349b5 commits the reviewed13-file frontend locale package;
+latest backend change7bb9f996. Existing
+voice-review and map-analysis user files remain untouched. The repeated installer
+approval was already fulfilled; exact installer absent, no repeat deletion.
+
+- [x] Final full frontend units:615passed/127files307.53s, capture309.618819s,
+  exit0/no timeout/truncation. Expected negative-fixture/jsdom stderr retained.
+- [x] TypeScript then found four duplicate `copy` keys: exit2/37.740933s.
+  Only duplicate identical values removed. Recheck: TypeScript40.163984s,
+  focused4tests3.79s/capture5.355626s, lint14.842858s (0errors/1existingwarning).
+- [x] Application/public builds15.37s/7.26s; captures16.788649s/8.344871s.
+  Asset integrity199/12reachable JS passes. Existing vendor annotation warnings
+  and the private app-output-path notice are retained. No Docker rebuild.
+- [x] Browser first attempt exits1/1.382478s before login/browser: its guard
+  incorrectly expected compiled flagsfalse on the intentionally enabled old
+  synthetic cohort. No container flags changed. No port18017/process leftovers.
+  Retry13.470579s then fails heading; diagnostic12.932163s proves/login with no
+  browser API calls/errors. Both retained. Build configuration, not product code,
+  lacked documented cookieauth; separate cookie artifact17.371317s +199assetsPASS.
+- [x] Same strict browser scenario now passes3/3 in5.950617s: RUdesktop,
+  ENlaptop, ELmobile; exact clipboard textall3, zero page/console errors or
+  browser mutations/directstage/external requests. Three explicit synthetic
+  loginPOSTs occurred. Stage identity/flags and artifact bytes unchanged;
+  browser/server cleanupPASS, root confirms no port18017/harness/Playwright
+  process leftovers. Root viewed3screenshots; no blanket accessibility claim.
+- [x] Independent source/hash/proof reviewPASS, frontend committed993349b5;
+  exact-current focused4/4 after duplicate removal independently verified.
+- [x] Independent audit-docs reviewPASS after four evidence-wording corrections;
+  docs are a separate commit from application and user work.
+  Full current backend/image, demo fixture/rehearsal and release gates stay open.
+- [ ] Next concrete security candidate: SetPassword prints raw URL reset token
+  and email to console; current cookie-build asset retains it. Add synthetic
+  regression before deleting the logs; no real credential exposure was tested.
+
+SEC-LOG-01 follow-up has now begun: causalRED1failed/2passed4.71s,
+capture7.595154s/exit1/untruncated proves synthetic email/token console output
+after a successful mocked reset submission. Root removed only two consolelogs;
+new test uses fake timers with cleanup to isolate the2s redirect. This separate
+two-file WIP is not yet committed or FIX_PROVEN. Named tmux
+readiness-password-logging-quality-20260919 is running focused/auth adjacency,
+typecheck/lint/cookiebuild/integrity/fullunits in sequence. Do not edit its files
+or claim unstarted gates. No real reset API or production data involved.
+
+Raw evidence prefixreview-locale-*-20260919; no old result overwritten.
+Mac last4,721,072KiB available; production, providers, push and deploy untouched.
+
+## Earlier continuation — 19 September, fairness fixed / locale verification
+
+Previous installer-confirmation turn was NO_PROGRESS toward the broad audit:
+it only reconfirmed completed cleanup. This turn makes new source/test progress.
+Branchcodex/production-readiness-20260917, start72f58808, current backend commit
+7bb9f996. User voice-review/map-analysis edits remain untouched.
+
+- [x] OPS-CALLBACK-02 real-PG RED1fail/1pass0.63s reproduces skipped101sttenant.
+- [x] Process-local bounded rotation, wrap, gate/failure isolation controls;
+  GREEN29pass12.04s/capture12.858612s, compile/RuffPASS, independentPASS.
+  Root confirms0residual native schemas. Source/test/runbook committed7bb9f996.
+- [x] UX-LOCALE-05 focused checks: initial RU/EN/EL RED3fail/1pass7.35s;
+  first GREEN3fail/1pass exposed ambiguous new selector (two valid Generate
+  buttons). First full units612pass/3fail310.11s retained, stderr truncated.
+  Corrected selector then Copy RED2fail/2pass4.08s proves EN/EL hardcoded
+  button. Final focused4pass4.08s/capture7.066627s/no stderr or truncation;
+  exact clipboard text, translated feedback, no API writes, independentPASS.
+- [ ] Full frontend quality retry is running in named tmux
+  readiness-review-locale-quality-retry-20260919; actualcapturePID33517 observed.
+  Initial final-sequence launch stopped before tests on a wrong jq path;
+  causalexit1/6.73ms retained, corrected to observed/usr/bin/jq. Files frozen.
+  Typecheck/lint/two builds are sequential and stop if units fail; do not
+  claim unstarted gates. The first quality run is terminal, not live.
+- [ ] New frontend real-browser proof, demo fixture/rehearsal and full current
+  backend/image gates remain open. Old pinned641browser wrapper must not be
+  replayed for changed frontend or carry forward its obsolete HOME overrides.
+
+Mac free last5,814,132KiB; no additional deletion, Docker build, production,
+push/deploy or external notifications. Goal active; overall readiness unproven.
+
 ## Current work — 19 September, callback GREEN and completed native six
 
 Source package committed locally as4f333aa7 on branchcodex/production-readiness-20260917;

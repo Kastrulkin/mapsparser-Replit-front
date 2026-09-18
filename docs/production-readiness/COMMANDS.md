@@ -1,5 +1,74 @@
 # Verified commands and evidence
 
+## Review-copy frontend checks — 19 September
+
+Completed one-shot tmux launchers are in/private/tmp; do not replay them over
+existing output. `localos-readiness-locale-quality-final-20260919.sh` produced
+raw/review-locale-units-final-20260919.json:615passed/127files307.53s,
+capture309.618819s/exit0/no timeout or truncation. Its next TypeScript capture
+failsTS1117 in4locale files, exit2/37.740933s. The previous wrong-jq launch and
+failed new test selectors remain separate preserved failures.
+
+After removing only duplicate identical `copy` values,
+`localos-readiness-locale-quality-dedup-20260919.sh` ran the same typecheck
+(40.163984s), focused4tests(3.79s/capture5.355626s), lint(14.842858s,
+0errors/1existing auth-boundary-any warning), app/public builds
+(15.37s/7.26s; captures16.788649s/8.344871s), and canonical dist integrity
+(199/12reachableJS;0.433251s/0.143498s). All terminalexit0/untruncated.
+The full615run precedes duplicate removal; no second full run is claimed.
+App build retains vendorPURE-comment warnings/private-output notice.
+
+Default artifacts are/private/tmp/localos-readiness-locale-dist-20260919 and
+public-dist-20260919. Cookie-mode staging requires the explicit documented
+`VITE_BROWSER_COOKIE_AUTH_ENABLED=true` fromdocker-compose.staging.yml; default
+env-clean build does not enable it. A distinct
+`localos-readiness-locale-cookie-build-20260919.sh` runs that exact flag in the
+captured command with envDirfalse, no dotenv and no application-source change.
+Cookie build15.73s/capture17.371317s;199asset integrity0.284999s, bothPASS.
+Cookie artifact/private/tmp/localos-readiness-locale-cookie-dist-20260919;
+indexSHAa85e564ba551dfa3e441ead6be5f951bf23b8bfb0864bad01682987bb9d8cba0.
+
+Browser first preflight raw/review-locale-browser-20260919.json exits1 in
+1.382478s before login/browser on wrongly assumed disabledcompiledflag.
+Pinning actual historical true/true/exactcohort allows the retry to navigate,
+but raw/review-locale-browser-retry-20260919.json fails the reviewheading wait
+in13.470579s; browser/server cleanup passes, browser mutations/directstage/
+external counts0. It is not accepted browser proof. Preserve both results;
+its diagnostic follow-up below retains the same timeout and selectors.
+
+Completed diagnostic capture/review-locale-browser-diagnostic-20260919.json:
+exit1/12.932163s, sameartifact now records actual/login with no browserAPI calls
+or console/page errors. Stage and artifact failurepostchecksPASS. The separate
+cookie-enabled artifact changes only documented build configuration. Final
+one-shot localos-readiness-review-locale-browser-cookie-capture-20260919.sh
+pins harnessff118be830f032c5e484f6a4e31f6d24bba9c70188db9ff5f609616cf9de0519
+and cookieindexa85e564b above; env-i, literal localDOCKER_HOST, no HOME override.
+Raw/review-locale-browser-cookie-20260919.json is exit0/5.950617s/untruncated/
+notimedout; privatecookie-resultvalidtrue with3scenarios, exactclipboardall3,
+no console/page errors or browsermutation/directstage/external requests.
+Explicit synthetic loginPOST occurs once per context,3total. Pinned historical
+stage identity/flags and artifact manifests match after the scenarios.
+Browser and previewserver closes fulfilled; rootlsof18017 and matchingharness/
+Playwrightprofile process check find none. Three screenshots viewed byroot.
+No current backend/image, all-locale, whole-suite or production claim.
+
+## Callback fairness — committed7bb9f996, 19 September
+
+Completed named tmux RED and GREEN used
+`/bin/sh /private/tmp/localos-readiness-fairness-capture-20260919.sh` with
+`red tests/test_action_orchestrator_callback_recovery_pg.py -k worker_callback_alert_scan`
+and `green tests/test_action_orchestrator_callback_recovery_pg.py tests/test_action_orchestrator_callback_ssrf.py tests/test_outbound_network.py tests/test_openclaw_smoke_recovery_safety.py`.
+The helper pins the native guard, literal DSN/cluster/OID1935406/owner,
+requires2GiB free, records source hashes and runs compile/RuffF821 before
+exec'ing pytest. It uses env-i with no dotenv/provider credentials.
+
+Actual raw/callback-fairness-red-20260919.json:exit1,1fail/1pass0.63s,
+capture1430.475ms, missing only fair-callback-tenant-100 in the union.
+Actual raw/callback-fairness-green-20260919.json:exit0,29pass12.04s,
+capture12858.612ms, no timeout/truncation/stderr. Root native schema count0;
+independent current hash/source/evidence reviewPASS. Do not replay completed
+one-shot labels. These targeted checks do not recertify the entire backend.
+
 ## Callback final package — committed4f333aa7, 19 September
 
 Offline Gitleaks delta `5b9b9247..4f333aa7` also completed in named tmux:

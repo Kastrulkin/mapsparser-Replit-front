@@ -1,5 +1,58 @@
 # UX and browser verification — working evidence
 
+UX-LOCALE-05 is locally fixed at focused component scope. The initial locale
+RED recorded3failed/1passed in7.35s (capture10.116326s, exit1/no timeout or
+truncation): RU/EN/EL lacked the expected user-facing manual-draft heading.
+The first GREEN instead exposed a test ambiguity (two legitimate Generate
+buttons),3failed/1passed in3.73s; it is retained as a test failure, not an app
+failure. The first full unit attempt remains **not accepted**:
+612passed/3failed across127files in310.11s (capture311.826s, exit1; stderr
+truncated). A separate Copy RED then recorded2failed/2passed in4.08s, showing
+the EN/EL Copy leak while RU's existing control and clipboard behavior passed.
+The Copy-enabled pre-dedup focused component set passes4/4 in4.08s
+(capture7.066627s), with matching hashes and independent review PASS; the
+exact-current post-deduplication focused proof is recorded separately below.
+
+The current component reuses the existing localized `generate` and
+`proposalLabel` copy, and adds a localized manual-publication hint plus
+Copy/Copied feedback in all ten supported locale files. Focused runtime
+assertions cover RU/EN/EL only: persisted draft text, manual and per-review
+controls, clipboard feedback, and zero API writes. This changes no API or
+manual-publication behavior and does not verify every locale in the browser.
+
+The broader frontend unit run immediately before the four identical locale-key
+deduplications passes615tests/127files in307.53s (capture309618.819ms). It is
+not silently extended to the exact deduplicated source: a subsequent typecheck
+RED exits2 in37740.933ms with TS1117 for duplicate `copy` keys in RU/EN/EL/TR.
+After the minimal deduplication, typecheck passes40.163984s; the focused locale
+set passes4/4 in3.79s (capture5.355626s), lint has0errors and one existing
+warning in14.842858s, and app/public builds pass15.37s/7.26s
+(captures16.788649s/8.344871s). App/public artifact integrity passes199/12.
+The app build retains third-party PURE and external-outDir warnings. The first
+private browser attempt failed preflight in1.382478s before login/browser because
+the harness assumed compiled-pilot flags were false while the retained fixture
+has both true; no three-viewport or product result is claimed.
+
+The corrected cookie-auth browser check then passes **3/3 scenarios in
+5.950617s**, capture `review-locale-browser-cookie-20260919.json`, exit0 with no
+timeout or output truncation. It uses the current built frontend against the
+historical synthetic `f0cc182a` stage: desktop RU, laptop EN and mobile EL each
+show the localized draft card and exact copied draft text. All three record zero
+page and console errors, zero browser mutations/direct-stage/external requests,
+unchanged pinned artifact manifests, and fulfilled browser/Vite cleanup.
+Synthetic login is an explicit three-POST prerequisite; this is therefore not a
+claim that the run made no database writes. It does not recertify the current
+backend, image, migration state, every locale, or the rest of the review flow.
+
+The two intervening browser failures remain evidence rather than product
+regressions: `review-locale-browser-retry-20260919.json` is a 13.470579s heading
+locator failure, and `review-locale-browser-diagnostic-20260919.json` is a
+12.932163s diagnostic run that proved login while retaining the same missing
+heading/no-API result. The successful cookie build corrected only the harness's
+documented `VITE_BROWSER_COOKIE_AUTH_ENABLED` setting; its build passes17.371317s
+and subsequent 199-asset integrity check passes. It is not an application-flow
+or backend fix.
+
 19September managed-browser check: explicit business selection, loaded maps,
 review/manual-publication boundary, content sheet and finance preview/apply/
 duplicate retry were actually exercised on retained synthetic38019 staging.
@@ -8,8 +61,9 @@ Finance added two completed import-history batches, each0imported/2duplicates/
 Partnership opened but its current fixture did not expose the intended overlap
 reason, so demo08 remains incomplete. Raw `managed-browser-demo-20260919.md`
 distinguishes UI observations from DB-ID proof and tool delays from demo time.
-Current-source localization debt is confirmed in ReviewReplyAssistant:
-`Quick Generator` and raw `draft`; no language/API patch has been applied yet.
+The former mixed-language ReviewReplyAssistant labels (`Quick Generator`, raw
+`draft`, and hardcoded Copy feedback) are addressed only by the focused local
+change above; broader UX and browser evidence remains separate.
 Bounded managed-console reads returned no warning/error entries; they are
 separate from the automated collector evidence and current image proof.
 

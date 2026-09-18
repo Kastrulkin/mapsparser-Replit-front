@@ -14,6 +14,19 @@ writes require the documented human approval or manual boundary.
 
 ## What is materially stronger after this work
 
+- Callback alert selection now rotates through eligible businesses rather than
+  repeatedly selecting the same first100. A101-business reproduction fails
+  before the change and the29-test bounded set passes afterwards; independent
+  review accepts the local fix in7bb9f996. The cursor resets on worker restart;
+  durable/global scheduling and a current release image remain separate.
+- Review-draft labels and Copy/Copied feedback now use locale strings. The
+  frontend unit run passes615tests; a subsequent TypeScript check found four
+  duplicate translation keys. Removing only those identical duplicates restores
+  TypeScript and4focused locale tests; lint has0errors/1existingwarning, both
+  frontend builds and their199/12reachable-JS integrity checks pass. A separate
+  correctly configured cookie-mode build passes the review/copy scenario on
+  three viewports/languages in5.951seconds, including exact clipboard content.
+  It uses a historical synthetic backend, not current release or all-language proof.
 - Interrupted callback delivery now has a locally verified quarantine and
   explicit reconciliation path, with no alert-triggered automatic replay in
   the deployment smoke. The final focused set passes25tests; separate API/schema

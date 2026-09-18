@@ -1,6 +1,10 @@
 # Synthetic partner demo: 10–15 minutes
 
 Status: **partially exercised in the managed browser; not yet demo-ready**.
+Review-copy localization now has3/3actual browser checks across RUdesktop,
+ENlaptop and ELmobile (5.950617s), exact clipboardtext and no observed runtime
+errors. This narrow newfrontend/historicalsyntheticbackend check is not a
+complete presenter rehearsal; see05 for build-configuration failures retained.
 On 19 September Moscow, login/maps/review/content and real synthetic finance
 preview → apply → duplicate retry were exercised. Both finance attempts skipped
 two existing duplicates and retained both earlier history entries. The retained

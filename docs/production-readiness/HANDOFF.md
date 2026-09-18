@@ -1,5 +1,114 @@
 # Readiness handoff
 
+## Current checkpoint — 19 September, locale browser proof complete
+
+HEAD993349b56144ea00978175854d98be6cb00662cd; frontend13-file locale package
+is committed after independentPASS. Exact-current focused4/4 is the
+green-dedup capture, not the earlier green-final. Root owns audit docs; do not stage/revert
+user voice-review/map-analysis files listed in the historical entry below.
+
+The former tmuxquality-retry/PID33517 is terminal, NOT live:615units pass
+307.53s/capture309.618819s; subsequentTypeScript fails four duplicatecopykeys
+exit2/37.740933s. Minimal duplicate removal then passes TypeScript40.163984s,
+4focused3.79s/capture5.355626s, lint14.842858s/0errors1warning, app/publicbuilds
+15.37s/7.26s and integrity199/12reachable JS. All raw captures are untruncated
+and not timed out. The615run predates duplicate removal; exact post-fix proof
+is the focused/type/lint/build set, not a second615run.
+
+Artifacts: /private/tmp/localos-readiness-locale-dist-20260919 and
+/private/tmp/localos-readiness-locale-public-dist-20260919.
+App indexSHA081f85fad84f7a1c59061dcdda0a8b8fbc5c1a4a5d2ad255d05fea8b588f016b.
+Completed launcher/private raw contracts: quality-dedup-20260919.sh and
+review-locale-{typecheck-dedup,green-dedup,lint,build,build-public,integrity,
+integrity-public}-20260919.json. Do not replay one-shot paths.
+
+Browser first attempt is terminal RED, not live: raw/review-locale-browser-
+20260919.json exit1/1.382478s before login/browser on compiled-execute flag.
+Historical synthetic stage intentionally has execute/advanced=true and exact
+pilotbusinessd438784b-62bf-4aab-8255-1c266fafa0ae; async/schedule/dispatchfalse.
+No container modification. Root port18017/process postcheck has no leftovers.
+The second browser run failed the heading wait13.470579s; same-artifact
+diagnostic failed12.932163s with actual/login, no browserAPI/errors, unchanged
+stage/artifact. Root identified missing staging-only cookie build flag; no
+authguard/locator/timeout was weakened or bearer token injected.
+
+Separate cookie build uses documentedVITE_BROWSER_COOKIE_AUTH_ENABLED=true,
+same source/config except privateoutdir+explicitflag, capture17.371317s and
+199assetintegrityPASS. CookieindexSHAa85e564ba551dfa3e441ead6be5f951bf23b8bfb0864bad01682987bb9d8cba0.
+Terminal raw/review-locale-browser-cookie-20260919.json:exit0/5.950617s,
+validtrue/3scenarios, RU1440x1000/EN1024x768/EL393x852. Clipboardexactall3;
+page/consoleerror arrays and browsermutation/directstage/external counts0.
+Three explicit syntheticloginPOSTs did occur. Private cookie-result JSON and
+cookie-shots under/private/tmp/localos-readiness-review-locale-browser-20260919-*.
+Root inspected3screenshots, stage/manifestequality and bothcleanupfulfillments;
+no18017listener/harness/Playwrightprocess remains. All runs terminal, not live.
+FinalharnessSHAff118be830f032c5e484f6a4e31f6d24bba9c70188db9ff5f609616cf9de0519.
+Do not replay completed outputs. Scope currentfrontend/historicalbackend only.
+
+Next: audit reconciliation and docs-only commit. Then reproduce reset-token console disclosure in SetPassword
+with synthetic regression before removing logs; source/currentcookieasset
+confirm raw log exists but no real credential was exercised. No push/deploy.
+Image/headroom/fullaggregate/demo/owner secret/license decisions remain open.
+
+New SEC-LOG-01 work actually started after localecommit: raw/password-logging-
+red-20260919.json has1fail/2pass4.71s/capture7.595154s, causal console disclosure
+with exact mocked resetPOST/success assertions already passing. SourceWIP only
+removes two consolelogs; newSetPassword.logging.test.tsx uses synthetic values,
+console spies, mockedfetch and fake timers/cleanup. Static independentGO.
+Live tmuxreadiness-password-logging-quality-20260919, panePID37425, launcher
+/private/tmp/localos-readiness-password-logging-quality-20260919.sh runs
+green→typecheck→lint→cookiebuild→integrity→fullunits, with new password-logging
+rawlabels. Check actual output before claiming any gate; keep files frozen.
+This2-file source/test package is excluded from the locale evidence docs commit.
+
+## Earlier continuation — 19 September, backend fairness7bb9f996
+
+Branchcodex/production-readiness-20260917; began72f58808. User dirty files remain
+docs/releases/VOICE_WORK_REVIEW_20260914_PILOT.md and
+docs/VR_ENGELSA_MAPS_ANALYSIS_20260918.md; do not stage/revert them.
+OPS-CALLBACK-02 is committed7bb9f996 (worker/native tests/runbook).
+Raw callback-fairness-red-20260919.json is causal1fail/1pass0.63s,
+missingtenant100. Raw callback-fairness-green-20260919.json is29pass12.04s,
+exit0/capture12.858612s/no timeout/truncation/stderr; current worker/test hashes
+match. IndependentPASS and root0residual native schemas. No callback test live.
+
+Frontend locale WIP is separate: ReviewReplyAssistant, focused i18n test,
+staging label and10locale files. Raw review-locale-red-20260919.json has3fail/
+1pass7.35s. First review-locale-green-20260919.json still3fail/1pass3.73s:
+localized heading/status/hint pass, new test ambiguously selects one of two
+legitimate Generate buttons. Do not erase/relabel this failure. First full
+unit capture is terminal:612pass/3fail310.11s/capture311.826046s, exit1/no
+timeout, stderr truncated. TS/lint/build were not reached in that sequence.
+After selector correction, Copy RED2fail/2pass4.08s/capture6.805419s proves
+missing EN/EL localized Copy. Final focusedGREEN4pass4.08s/capture7.066627s,
+matching source hashes/no timeout/truncation/stderr, independentPASS. All10
+locales now have hint/copy/copied; title/aria-label/visible feedback agree.
+Tests restore fake clipboard, assert exact text and no API writes.
+
+The first final-quality launch exited before any tests because the helper
+incorrectly assumed/usr/local/bin/jq. Actual causal capture
+review-locale-quality-launch-red-20260919.json:exit1/6.73ms, missing executable.
+Fixed to observed/usr/bin/jq. Current retry tmux
+readiness-review-locale-quality-retry-20260919 runs
+/private/tmp/localos-readiness-locale-quality-final-20260919.sh;
+capturePID33517 was observed live with labelreview-locale-units-final-20260919.
+Do not edit
+frontend files while it runs. Sequence stops on nonzero unit result before
+TS/lint/build. Read raw/review-locale-units-final-20260919.json when complete;
+inspect live handle before assuming stopped. Earlier PID31730/31731/31733
+and first quality session are confirmed absent. Never overwrite old raw.
+Helper/privateconfigs: /private/tmp/localos-readiness-locale-{capture,check,
+quality,vitest,vite,public-vite}-20260919.{sh,py,mjs} as appropriate. New build
+targets/private/tmp/localos-readiness-locale-dist-20260919 and public-dist;
+no actual successful build is yet claimed.
+
+The old native6 wrapper is hard-pinned to641 and an old frontend artifact, and
+sets HOME in inherited code. Do not blindly replay it for new frontend or
+copy that environment override. New real-browser proof must pin matching
+revision/artifact and use a current allowed environment; historicalbackend+
+currentfrontend can prove only the narrowly stated UI flow, not wholeimage.
+Mac last5,814,132KiB; no imagebuild/push/deploy/production/provider action.
+
 ## Latest continuation — 19 September, managed UI and callback GREEN
 
 Source HEAD4f333aa7 (parent641ec5e32c9c7ca2b809611ccfae15551459c54f);

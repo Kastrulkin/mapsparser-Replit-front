@@ -1,5 +1,58 @@
 # Production-readiness change log
 
+## UX-LOCALE-05 — localized manual review-draft copy
+
+The review draft card had a hardcoded English `Quick Generator`, raw `draft`,
+Russian manual-publication instruction and Russian Copy/Copied feedback. The
+first locale RED is3failed/1passed7.35s; a selector-only GREEN failure and a
+Copy RED2failed/2passed are retained. The minimal component change reuses the
+existing generate/proposal labels and adds manual-publication plus Copy/Copied
+keys in all ten supported locale files; it does not alter API, clipboard payload
+or manual-publication behavior. Focused RU/EN/EL regression passes4/4 in3.79s
+(capture5.355626s) after a separate TS1117 RED found four identical `copy` keys.
+Deduplicated typecheck, lint, both builds and199app/12public artifact integrity
+pass. The615-unit pass predates that deduplication; the private browser attempt
+failed preflight before login because its flag assumption mismatched the retained
+compiled fixture. The preserved failures also include the retry heading locator
+RED13.470579s and its diagnostic RED12.932163s (login proved; no API result).
+After correcting the harness-only cookie-auth build setting,
+`review-locale-browser-cookie-20260919.json` passes3/3 current-built-frontend
+scenarios in5.950617s: desktop RU, laptop EN and mobile EL. It verifies exact
+clipboard text, records zero captured page/console errors and zero browser
+mutations/direct-stage/external requests, preserves the artifact manifest and
+cleans up browser/Vite resources. Three synthetic-login POSTs are explicitly
+in scope, so it is not a no-database-write claim. This is not all-locale,
+whole-workflow, current-backend/image or deployment evidence.
+
+## SEC-LOG-01 — raw password-reset token browser logging candidate
+
+Bounded source and built-artifact inspection found `SetPassword` reading
+`email` and `token` from URL parameters and logging both raw values on mount.
+`/reset-password` reaches that component and forwards the token to the reset
+confirmation endpoint; the backend checks it against the expiring reset-token
+column. The current cookie-build SetPassword asset retains the log literals.
+The unit output used only the synthetic `valid-token`; no real credential was
+inspected or exposed by this audit. Status is a confirmed source/build-artifact
+candidate, not a production-runtime claim. Next step: regression proving no raw
+URL credential reaches console, then remove/redact the logs and inspect the
+rebuilt target artifact.
+
+## OPS-CALLBACK-02 — rotate alert coverage beyond the first100 tenants
+
+Local commit7bb9f996. A native PostgreSQL101-tenant regression fails because
+two scans select the same100tenants, never the last one. SQL now orders the
+disjoint after-cursor and wrap segments, returns at most the configured batch,
+and advances the cursor after successful nonempty selection. Query failure
+retains it; one tenant's metric exception/failure does not block later tenants.
+
+RED1failed/1passed0.63s, capture1.430475s. GREEN29passed12.04s,
+capture12.858612s, Python compilation/RuffF821PASS, no timeout/truncation/stderr.
+Independent source/hash/evidence reviewPASS; root confirms0residual test
+schemas. This29-test set overlaps the earlier25and73sets, not29additional
+unique cases. No migration/API/publication change or production action.
+The process-local cursor resets on restart; no durable multi-worker fairness
+or query-performance improvement is claimed.
+
 ## OPS-CALLBACK-01 — interrupted callback claims become actionable
 
 A process interruption after durable `pending → sending` left the notification
@@ -35,7 +88,8 @@ through `python3 -c` restores the exact before/after incident snapshot calls.
 Final combined25tests pass11.41s/capture12.293402s, with Python compilation,
 RuffF821 and bash syntax passing. The73and25sets overlap; do not sum them.
 No new migration, external notification, production action or full aggregate/
-image claim. The fixed sorted100-tenant alert limit remains a fairness follow-up.
+image claim. The separate sorted100-tenant fairness follow-up is now fixed
+locally by OPS-CALLBACK-02 above.
 
 ## TEST-E2E-04 — observe console errors at the configured staging origin
 

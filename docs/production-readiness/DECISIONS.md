@@ -1,5 +1,28 @@
 # Readiness decisions
 
+## D-033 — Pin actual synthetic cohort; never reconfigure it for a UI proof
+
+The review browser preflight expected all compiled flagsfalse but retained
+staging was intentionally compiled-enabled for the exact synthetic business.
+That failed before login/browser and is a harness-assumption error, not a
+product defect. Do not change container flags or reseed. A reviewed narrow
+retry may pin true/true/exactcohort while preserving false async/scheduler/
+provider dispatch, exact identity, browser GET/HEAD-only routing and post-run
+identity checks. Only explicit synthetic login writes are authorized; copy is
+local clipboard behavior. This cannot certify current backend/image or imply
+that the historical stage is wholly disabled. Keep original failed evidence.
+
+## D-032 — bounded rotating alerts, without a new durable scheduler
+
+The native101-tenant reproduction proves repeated lexical-prefix starvation.
+Use a process-local last-tenant cursor and a single SQL-limited wrap selection;
+do not fetch the full tenant list into application memory or increase the
+per-scan metrics budget. Advance after successful selection independently of
+individual metric failures, retain cursor on empty/query error and preserve
+disabled/interval gates. This is continuous-worker fairness, not a durable
+or shared multi-worker checkpoint. Persistent scheduling/schema work is not
+needed to fix this reproduced defect and has not been silently introduced.
+
 ## D-031 — Recovery smoke must not authorize callback replay
 
 Independent call-chain review found the deployment smoke automatically replays

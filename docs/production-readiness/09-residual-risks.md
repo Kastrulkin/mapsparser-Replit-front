@@ -5,7 +5,12 @@ newly demonstrated exploits. Fixed local findings and their evidence remain in
 [02-audit-backlog.md](02-audit-backlog.md) and [06-change-log.md](06-change-log.md).
 The audit branch has not been deployed; local proof is not production proof.
 
-Latest runtime source is4f333aa7, the independently reviewed callback package.
+Latest backend source is7bb9f996: independently reviewed callback alert rotation
+passes29focused tests in12.04s, with no residual native test schemas. This does
+not recertify the full backend/image. Review-locale frontend work is locally
+focused FIX_PROVEN and has a narrow three-viewport RU/EN/EL browser result against
+historical synthetic staging, but does not establish all-locale or whole-workflow
+runtime coverage. Previous runtime source is4f333aa7, the callback package.
 Its final25focused tests and separate73API/schema/native tests pass; the sets
 overlap. They do not re-certify the full backend,117browser cases or image.
 Earlier additions are locally reviewed272794a4 (104stored-role/subscription
@@ -32,13 +37,17 @@ paced complete rehearsal. OPS-CALLBACK-01 has causal real-PG RED and reviewed
 local finalGREEN25/25, including10 native recovery/race/tenant cases and6shell
 cases for no implicit recovery plus incident snapshots. Its remaining
 release/image proof is separate; no production callback is claimed recovered.
-UX-LOCALE-05 remains a confirmed, unfixed display defect. See backlog02.
+UX-LOCALE-05 is locally fixed with focused RU/EN/EL proof and all-ten-locale
+source keys. Its browser confirmation now passes3/3 only against the historical
+synthetic backend/current built frontend; full workflow, all locales, current
+backend/image and deployment remain separate. See backlog02.
 
 | Risk / evidence | Priority and impact | Likelihood / temporary protection | Required next step |
 | --- | --- | --- | --- |
-| Callback alert scan fairness beyond100 tenants |P2 investigation; later tenants might not receive alerts|Existing sorted LIMIT100 can repeatedly select old uncertainty tenants; not reproduced as a live incident. Per-tenant metrics remain available|Bounded synthetic101-tenant test and a reviewed fair scan if reproduced; no notification/provider calls |
+| Alert scan rotation is process-local |P2 operational limit under frequent restarts; progress is not durable/shared|Lexical-prefix starvation is causally fixed in7bb9f996 and verified by101-tenant test; every worker restart resets its own cursor|Current-image verification, then assess durable/shared scheduling only if restart/topology evidence warrants it; no live incident or global-fairness claim |
 | Deployment smoke still has ordinary mutating phases |P2 operational scope; calling it is not a read-only diagnostic|Implicit alert-triggered replay removed and tested; nested capability/outbox smoke still creates actions/dispatches normal pending/retry|Use specific read-only metrics for diagnosis; require separate authority for full smoke, manual replay and deployment |
 | Historical privileged credential exposure; offline scan confirmed old provider keys, revocation unconfirmed |P1 before production; former credentials might still authorize access|Current validity unknown. Do not use/test/publish old values; owner confirmation requested|Authorized owner/provider revocation evidence and separately approved history policy; no unilateral rotation/rewrite|
+| Reset URL credential is logged by the SetPassword browser component |P2 before production; source/build artifact can disclose a real reset token to local console collection or screen capture|Confirmed source and current cookie-build artifact path only; synthetic unit token is not evidence of a real-secret event or bearer-token exposure|Add no-raw-console regression, remove/redact logging, rebuild and inspect the intended release artifact; do not probe real tokens|
 | Reviewed auth/webhook/role/SSRF patches remain local |P1 release gate; intended protections are not certified live|Deployment deliberately not authorized by this audit; retain explicit boundary|Approve an exact release, provider webhook rebind/configuration where required, then verify live flow; no broad dirty-tree sync|
 | App version constraints and base pins lack final image proof; apt/artifact hashes and bot/target-runtime closure remain |P1 before production; supply-chain/build drift or untriaged advisories|Exactb43 audit104packages/0skips finds only pip24.0;26.2pin and app101constraints plus3tools. Node/Python base indexes now pinned with ARM64/AMD64 metadata and14static contracts|Build/version/re-audit and OS/native/image/log scan; index availability is not an AMD64 build. PyMuPDF license basis awaits owner confirmation, not a violation claim|
 | Production backup recoverability not rehearsed |P1 before production changes; possible recovery failure|Independent local synthetic full-schema/data restore passes; production datasets/backup transport/permissions differ|Under separate authority, verify an actual backup in an isolated restore target before schema change; never overwrite live DB|

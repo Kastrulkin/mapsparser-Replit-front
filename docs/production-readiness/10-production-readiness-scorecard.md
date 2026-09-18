@@ -4,10 +4,11 @@ Updated 19 September 2026. Scores describe evidence at the stated checkpoint,
 not an average that can waive a release gate. The original Definition of Done
 and unresolved P1 items remain controlling.
 
-Latest source4f333aa7 closes bounded callback recovery/smoke defects with
-independent review,25final focused tests and73overlapping API/schema/native
-checks. This does not extend the earlier full aggregate or image proof to the
-new source. No score is raised and overall readiness remains unproven.
+Latest committed backend7bb9f996 adds bounded callback alert rotation with
+29passing tests and independent review. Earlier4f333aa7 closes callback
+recovery/smoke defects with25focused and73overlapping API/schema/native checks.
+These do not extend the earlier full aggregate or image proof to the new source.
+No score is raised and overall readiness remains unproven.
 
 Earlier local272794a4 adds104review/mobile-role/subscription tests with scoped
 independentPASS;3ac13d87 adds an isolated real-API CI definition (11contract
@@ -18,8 +19,13 @@ no additional reproduced P0/P1 in its bounded coverage; overall verdict FAIL.
 That native browser checkpoint passes117/117; hosted CI and current runtime image remain
 pending. A bounded240-read HTTP profile and60frontend timing samples have scoped
 independent PASS. No score is raised solely by these bounded additions.
-Frontend tree remains identical to tested3dca5fda. Independent criterion review
-accepted AC3/AC4/AC10 at that checkpoint; overall release remains FAIL. AC10 is documentation
+Frontend is no longer identical to3dca5fda: current review-copy localization
+passes615units before removal of four duplicate identical locale keys, then
+TypeScript/4focused tests/lint/both builds and asset integrity after that fix.
+The bounded review/copy browser follow-up passes3/3 in5.951s on a separately
+built cookie-enabled frontend over historical synthetic backend; it is not
+an updated117-case suite or currentimage. Independent criterion review
+accepted AC3/AC4/AC10 at the earlier checkpoint; overall release remains FAIL. AC10 is documentation
 completeness/current truthfulness, not a higher maturity score or release gate waiver.
 
 ## Rubric
@@ -44,11 +50,11 @@ completeness/current truthfulness, not a higher maturity score or release gate w
 | Performance | 2 | Image size fell22.2%; five-flow distributions,240current HTTP reads/64.28s and60frontend observations are captured. GET now9reads0DDL versus9reads3DDL. | Realistic server/queue capacity remains open; tiny fixtures are not capacity, comparable medians nearly unchanged and browser p99 exploratory. |
 | Frontend quality | 3 | Checkpoint272backend + unchanged built frontend passes117/117real-API desktop/laptop/mobile scenarios; historical120includes compiled runtime. Six new screenshots and60loads show no pageerror/overflow. TEST-E2E-04 has21pure tests plus6/6 actual owner reviews/finance scenarios at archived641. | Not final immutable image or117-case collector rerun; historical console limitation retained. Broader adverse-state/accessibility coverage remains. |
 | UX | 3 | Owner-oriented workflow review and contrast correction are recorded in [05-ux-review.md](05-ux-review.md). | Partner rehearsal and several adverse UI states are still open. |
-| Testing | 3 | Clean272794a4 full backend:4,728passed/7live-provider skips, including native/Docker PostgreSQL; frontend591units/72mockbrowser/TS/lint/build stages plus separate exact-source artifact proof;117native real-API cases at that checkpoint. Current4f333aa7 has25focused and73overlapping adjacent passes. | New full aggregate, combined current image/compiled runtime and broader mutation-role coverage remain. Original frontend capture retains its helper-postcondition exit1. Live-provider calls deliberately unexercised. |
+| Testing | 3 | Clean272794a4 full backend:4,728passed/7live-provider skips, including native/Docker PostgreSQL; frontend591units/72mockbrowser/TS/lint/build stages plus separate exact-source artifact proof;117native real-API cases at that checkpoint. Later4f333aa7 has25focused/73overlapping adjacent passes; current backend7bb9f996 has29focused passes and frontend993349b5 has4exact-current focused plus3browser passes, with615units before duplicate-key removal. | New full aggregate, combined current image/compiled runtime and broader mutation-role coverage remain. Original frontend capture retains its helper-postcondition exit1. Live-provider calls deliberately unexercised. |
 | Observability | 2 | Raw captures, scoped runbooks and evidence handoff exist. | No completed production log/image scan, operational dashboard closure or repeated incident rehearsal. |
 | Deployment | 1 | Local image/browser and isolated Compose evidence exist. | No audit deployment, production migration, production backup rehearsal or release verification was authorized. |
 | Documentation | 3 | System map, threat model, risk register, runbook, demo and evidence records are present. | This scorecard and reports are working drafts; final DoD reconciliation and demo rehearsal remain. |
-| Demo readiness | 1 | Script08 now has a partial managed-browser pass including actual finance preview/apply/duplicate history. | Intended partnership reason is absent from retained fixture; copy debt and a paced full rehearsal remain. Provider and customer data are deliberately out of scope. |
+| Demo readiness | 1 | Script08 now has a partial managed-browser pass including actual finance preview/apply/duplicate history. Review-copy debt is locally fixed with scoped3-view browser proof. | Intended partnership reason is absent from retained fixture and a paced full rehearsal remains. Provider and customer data are deliberately out of scope. |
 
 ## Interpretation
 
