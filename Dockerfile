@@ -1,5 +1,5 @@
 # Этап 1: сборка фронтенда (Vite/React)
-FROM node:20-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 ARG VITE_PROMOTION_HUB_ENABLED=false
 ARG VITE_CONTENT_JOURNEY_ENABLED=false
 ARG VITE_JOURNEY_ADMIN_BUILDER_ENABLED=false
