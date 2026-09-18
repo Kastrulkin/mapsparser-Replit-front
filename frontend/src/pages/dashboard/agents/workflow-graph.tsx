@@ -35,7 +35,7 @@ const stepKind = (step: AgentExecutionContractStep) => {
 const WorkflowStepNode = ({ step, index }: { step: AgentExecutionContractStep; index: number }) => (
   <div className={cn('w-56 rounded-2xl p-3 shadow-[0_12px_28px_rgba(15,23,42,0.08)] ring-1', stepTone(step))}>
     <div className="flex items-center justify-between gap-3">
-      <span className="text-[11px] font-semibold uppercase tracking-wide opacity-60">Шаг {index + 1}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Шаг {index + 1}</span>
       <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-medium ring-1 ring-current/10">
         {stepKind(step)}
       </span>
